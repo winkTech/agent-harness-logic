@@ -1,0 +1,53 @@
+{
+  "env": {
+    "ANTHROPIC_AUTH_TOKEN": "tp-cqeb7i1spl0yrjojeu1tnv715jpw7p4m8no368zxht5ooj0n",
+    "ANTHROPIC_BASE_URL": "https://token-plan-cn.xiaomimimo.com/anthropic",
+    "ANTHROPIC_DEFAULT_HAIKU_MODEL": "mimo-v2.5-pro",
+    "ANTHROPIC_DEFAULT_OPUS_MODEL": "mimo-v2.5-pro",
+    "ANTHROPIC_DEFAULT_SONNET_MODEL": "mimo-v2.5-pro",
+    "ANTHROPIC_MODEL": "mimo-v2.5",
+    "API_TIMEOUT_MS": "3000000",
+    "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC": "1"
+  },
+  "extraKnownMarketplaces": {
+    "karpathy-skills": {
+      "source": {
+        "source": "git",
+        "url": "https://github.com/forrestchang/andrej-karpathy-skills.git"
+      }
+    },
+    "Mixedbread-Grep": {
+      "source": {
+        "source": "git",
+        "url": "https://github.com/mixedbread-ai/mgrep.git"
+      }
+    }
+  },
+  "enabledPlugins": {
+    "everything-claude-code@everything-claude-code": true,
+    "andrej-karpathy-skills@karpathy-skills": true,
+    "mgrep@Mixedbread-Grep": true
+  },
+  "permissions": {
+    "defaultMode": "auto",
+    "deny": [
+      "Bash(git push origin main)",
+      "Bash(git push origin master)",
+      "Bash(git push --force:*)",
+      "Bash(git push -f:*)",
+      "Bash(git reset --hard:*)",
+      "Bash(git clean -f*:*)",
+      "Bash(git branch -D:*)",
+      "Bash(git checkout -- *:*)",
+      "Bash(rm -rf /:*)",
+      "Bash(rm -rf ~:*)"
+    ],
+    "ask": [
+      "Bash(git push:*)",
+      "Bash(gh pr merge:*)",
+      "Bash(git commit:*)"
+    ]
+  },
+  "effortLevel": "xhigh",
+  "includeCoAuthoredBy": false
+}

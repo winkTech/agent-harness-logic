@@ -1,0 +1,26 @@
+# Claude Code 运行时文件
+history.jsonl
+backups/
+sessions/
+shell-snapshots/
+telemetry/
+file-history/
+projects/
+todos/
+
+# IDE 相关
+ide/
+
+# 调试日志
+debug/
+
+# 嵌入式 Git 仓库（插件和技能）
+plugins/marketplaces/claude-plugins-official/
+skills/career-ops/
+skills/drawio-skill/
+
+# 临时文件
+*.tmp
+*.log
+.DS_Store
+Thumbs.db
