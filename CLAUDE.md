@@ -60,19 +60,8 @@
 
 ## 八、插件管理
 
-### 已安装插件
-
-everything-claude-code(日常)、superpowers(TDD)、code-review(审查)、code-simplifier(重构)、github(Git)、mgrep(搜索)、commit-commands(提交)、skill-creator(技能)、claude-md-management(配置)、coding-tutor(编程教程)、compound-engineering(复合工程)
-
-### MCP服务器
-
-mcp-pdf(PDF操作)、memory(知识图谱)、context7(文档查询)、playwright(浏览器)
-
-**原则**: 优先本地 → 按需调用 → 结果缓存 → 安全优先
-
-### 新插件详细说明
-
-`references/new-plugins.md`
+详细配置：`references/plugin-management.md`
+新插件说明：`references/new-plugins.md`
 
 ---
 
@@ -83,8 +72,26 @@ mcp-pdf(PDF操作)、memory(知识图谱)、context7(文档查询)、playwright(
 ## 十、错误恢复
 
 恢复指南：`references/error-recovery.md`
+性能基准：`references/performance-baseline.md`
 
-## 十一、参考资料索引
+### 工具脚本
+
+| 脚本 | 用途 |
+|------|------|
+| `scripts/perf-monitor.sh` | 性能监控 |
+| `scripts/kb-search.sh` | 知识库检索 |
+| `scripts/memory-cleanup.sh` | 记忆清理 |
+| `scripts/plugin-stats.sh` | 插件统计 |
+
+## 十一、知识库
+
+索引：`knowledge/INDEX.md`
+目录结构：`knowledge/data_structure.md`
+学习路径：`knowledge/primary/domains/fpga/learning-path.md`
+
+**检索方式**：使用 rag-skill 智能检索（推荐）
+
+## 十二、参考资料索引
 
 `references/reference-index.md`
 

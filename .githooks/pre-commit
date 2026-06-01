@@ -59,7 +59,7 @@ fi
 # 5. 检查仿真产物是否被暂存
 # --------------------------------------------------
 # 排除的目录（不检查这些路径下的 work/）
-EXCLUDE_DIRS="memory/work/|plugins/cache/"
+EXCLUDE_DIRS="memory/work/|plugins/cache/|knowledge/source/"
 FORBIDDEN_PATTERNS="transcript|vsim\.wlf|\.vcd$|\.wlftmp|vsim\.dump"
 MATCH=$(echo "$ALL_STAGED" | grep -E "$FORBIDDEN_PATTERNS" | grep -vE "$EXCLUDE_DIRS" | head -5)
 if [ -n "$MATCH" ]; then
