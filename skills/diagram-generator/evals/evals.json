@@ -1,0 +1,74 @@
+{
+  "skill": "diagram-generator",
+  "version": "1.5.0",
+  "description": "Diagram generator skill evals",
+  "evals": [
+    {
+      "name": "mermaid-flowchart",
+      "description": "生成 Mermaid 流程图",
+      "prompt": "画一个用户登录流程图，包含输入用户名密码、验证、成功/失败分支",
+      "expected_outputs": {
+        "has_mermaid_syntax": true,
+        "has_flowchart_keyword": true,
+        "has_nodes": true,
+        "has_connections": true
+      },
+      "assertions": [
+        {
+          "type": "content_match",
+          "pattern": "flowchart|graph",
+          "description": "包含流程图关键字"
+        },
+        {
+          "type": "content_match",
+          "pattern": "-->|-->|-",
+          "description": "包含连接线"
+        }
+      ]
+    },
+    {
+      "name": "sequence-diagram",
+      "description": "生成序列图",
+      "prompt": "画一个 API 请求的序列图，包含客户端、网关、认证服务、数据库",
+      "expected_outputs": {
+        "has_sequence_diagram": true,
+        "has_participants": true,
+        "has_messages": true
+      },
+      "assertions": [
+        {
+          "type": "content_match",
+          "pattern": "sequenceDiagram",
+          "description": "包含序列图关键字"
+        },
+        {
+          "type": "content_match",
+          "pattern": "participant",
+          "description": "包含参与者定义"
+        }
+      ]
+    },
+    {
+      "name": "drawio-architecture",
+      "description": "生成 Draw.io 架构图",
+      "prompt": "画一个微服务架构图，包含 API 网关、用户服务、订单服务、数据库",
+      "expected_outputs": {
+        "has_drawio_xml": true,
+        "has_cells": true,
+        "has_connections": true
+      },
+      "assertions": [
+        {
+          "type": "content_match",
+          "pattern": "<mxfile|<mxGraphModel",
+          "description": "包含 Draw.io XML 格式"
+        },
+        {
+          "type": "content_match",
+          "pattern": "<mxCell",
+          "description": "包含图形元素"
+        }
+      ]
+    }
+  ]
+}
