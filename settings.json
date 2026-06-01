@@ -33,16 +33,14 @@
   },
   "enabledPlugins": {
     "andrej-karpathy-skills@karpathy-skills": true,
-    "claude-md-management@claude-plugins-official": true,
     "code-review@claude-plugins-official": true,
-    "code-simplifier@claude-plugins-official": true,
-    "commit-commands@claude-plugins-official": true,
     "everything-claude-code@everything-claude-code": true,
     "github@claude-plugins-official": true,
     "mgrep@Mixedbread-Grep": true,
     "skill-creator@claude-plugins-official": true,
     "superpowers@claude-plugins-official": true,
-    "career-ops@skills-dir": true
+    "coding-tutor@coding-tutor": true,
+    "compound-engineering@compound-engineering": true
   },
   "extraKnownMarketplaces": {
     "Mixedbread-Grep": {
@@ -65,5 +63,6 @@
     }
   },
   "effortLevel": "xhigh",
-  "theme": "light"
+  "theme": "light",
+  "model": "sonnet"
 }

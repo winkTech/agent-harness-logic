@@ -76,7 +76,15 @@ mcp-pdf(PDF操作)、memory(知识图谱)、context7(文档查询)、playwright(
 
 ---
 
-## 九、参考资料索引
+## 九、Agent 机制
+
+核心原理：`references/agent-harness.md`
+
+## 十、错误恢复
+
+恢复指南：`references/error-recovery.md`
+
+## 十一、参考资料索引
 
 `references/reference-index.md`
 

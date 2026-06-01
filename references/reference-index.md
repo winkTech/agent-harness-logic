@@ -27,3 +27,7 @@
 ## 简化策略
 
 状态机合并 → 流水线优化 → 资源共享 → 逻辑简化
+
+## Agent 机制
+
+`references/agent-harness.md` — Agent 循环、权限、钩子、压缩、记忆、任务图、错误恢复
