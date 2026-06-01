@@ -1,0 +1,7 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(不需要额外安装，使用skill markdown-convert试试)"
+    ]
+  }
+}

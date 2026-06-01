@@ -14,5 +14,21 @@
     },
     "installLocation": "C:\\Users\\Lihan\\.claude\\plugins\\marketplaces\\Mixedbread-Grep",
     "lastUpdated": "2026-05-10T08:54:07.144Z"
+  },
+  "karpathy-skills": {
+    "source": {
+      "source": "git",
+      "url": "https://github.com/forrestchang/andrej-karpathy-skills.git"
+    },
+    "installLocation": "C:\\Users\\Lihan\\.claude\\plugins\\marketplaces\\karpathy-skills",
+    "lastUpdated": "2026-05-10T10:23:17.305Z"
+  },
+  "everything-claude-code": {
+    "source": {
+      "source": "git",
+      "url": "https://github.com/affaan-m/everything-claude-code.git"
+    },
+    "installLocation": "C:\\Users\\Lihan\\.claude\\plugins\\marketplaces\\everything-claude-code",
+    "lastUpdated": "2026-05-10T10:27:24.270Z"
   }
 }

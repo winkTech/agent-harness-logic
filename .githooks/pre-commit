@@ -68,9 +68,9 @@ fi
 echo "✅ 无仿真产物混入"
 
 # --------------------------------------------------
-# 6. Verilog / SystemVerilog 语法检查
+# 6. Verilog / SystemVerilog 语法检查（排除 examples/templates）
 # --------------------------------------------------
-SV_FILES=$(echo "$STAGED" | grep -E '\.(v|sv)$')
+SV_FILES=$(echo "$STAGED" | grep -E '\.(v|sv)$' | grep -v '/examples/' | grep -v '/templates/')
 if [ -n "$SV_FILES" ]; then
   if check_cmd vlog; then
     echo "--- [vlog] 检查 Verilog/SV 语法 ---"
@@ -94,9 +94,9 @@ if [ -n "$SV_FILES" ]; then
 fi
 
 # --------------------------------------------------
-# 7. VHDL 语法检查
+# 7. VHDL 语法检查（排除 examples/templates）
 # --------------------------------------------------
-VHD_FILES=$(echo "$STAGED" | grep -E '\.(vhd|vhdl)$')
+VHD_FILES=$(echo "$STAGED" | grep -E '\.(vhd|vhdl)$' | grep -v '/examples/' | grep -v '/templates/')
 if [ -n "$VHD_FILES" ]; then
   if check_cmd vcom; then
     echo "--- [vcom] 检查 VHDL 语法 ---"
@@ -120,9 +120,9 @@ if [ -n "$VHD_FILES" ]; then
 fi
 
 # --------------------------------------------------
-# 8. Python 语法和 lint 检查
+# 8. Python 语法和 lint 检查（排除外部代码和缓存）
 # --------------------------------------------------
-PY_FILES=$(echo "$STAGED" | grep -E '\.py$')
+PY_FILES=$(echo "$STAGED" | grep -E '\.py$' | grep -v '/examples/' | grep -v '/templates/' | grep -v 'node_modules/' | grep -v '/plugins/cache/' | grep -v '/skills/.*/scripts/' | grep -v '/skills/.*/tools/')
 if [ -n "$PY_FILES" ]; then
   # Windows 上 python3 可能指向微软商店，优先用 python
   PYTHON_CMD=""
@@ -188,9 +188,9 @@ if [ -n "$PY_FILES" ]; then
 fi
 
 # --------------------------------------------------
-# 9. MATLAB 代码检查（仅安装时启用，启动较慢）
+# 9. MATLAB 代码检查（仅安装时启用，启动较慢，排除 examples/templates）
 # --------------------------------------------------
-M_FILES=$(echo "$STAGED" | grep -E '\.m$')
+M_FILES=$(echo "$STAGED" | grep -E '\.m$' | grep -v '/examples/' | grep -v '/templates/')
 if [ -n "$M_FILES" ]; then
   if check_cmd matlab; then
     echo "--- [MATLAB] 代码分析 ---"

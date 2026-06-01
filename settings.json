@@ -3,33 +3,15 @@
     "ANTHROPIC_AUTH_TOKEN": "REMOVED",
     "ANTHROPIC_BASE_URL": "https://token-plan-cn.xiaomimimo.com/anthropic",
     "ANTHROPIC_DEFAULT_HAIKU_MODEL": "mimo-v2.5-pro",
-    "ANTHROPIC_DEFAULT_OPUS_MODEL": "mimo-v2.5-pro",
+    "ANTHROPIC_DEFAULT_OPUS_MODEL": "mimo-v2.5-pro[1M]",
+    "ANTHROPIC_DEFAULT_OPUS_MODEL_NAME": "mimo-v2.5-pro",
     "ANTHROPIC_DEFAULT_SONNET_MODEL": "mimo-v2.5-pro",
     "ANTHROPIC_MODEL": "mimo-v2.5",
     "API_TIMEOUT_MS": "3000000",
     "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC": "1"
   },
-  "extraKnownMarketplaces": {
-    "karpathy-skills": {
-      "source": {
-        "source": "git",
-        "url": "https://github.com/forrestchang/andrej-karpathy-skills.git"
-      }
-    },
-    "Mixedbread-Grep": {
-      "source": {
-        "source": "git",
-        "url": "https://github.com/mixedbread-ai/mgrep.git"
-      }
-    }
-  },
-  "enabledPlugins": {
-    "everything-claude-code@everything-claude-code": true,
-    "andrej-karpathy-skills@karpathy-skills": true,
-    "mgrep@Mixedbread-Grep": true
-  },
+  "includeCoAuthoredBy": false,
   "permissions": {
-    "defaultMode": "auto",
     "deny": [
       "Bash(git push origin main)",
       "Bash(git push origin master)",
@@ -46,8 +28,42 @@
       "Bash(git push:*)",
       "Bash(gh pr merge:*)",
       "Bash(git commit:*)"
-    ]
+    ],
+    "defaultMode": "auto"
+  },
+  "enabledPlugins": {
+    "andrej-karpathy-skills@karpathy-skills": true,
+    "claude-md-management@claude-plugins-official": true,
+    "code-review@claude-plugins-official": true,
+    "code-simplifier@claude-plugins-official": true,
+    "commit-commands@claude-plugins-official": true,
+    "everything-claude-code@everything-claude-code": true,
+    "github@claude-plugins-official": true,
+    "mgrep@Mixedbread-Grep": true,
+    "skill-creator@claude-plugins-official": true,
+    "superpowers@claude-plugins-official": true,
+    "career-ops@skills-dir": true
+  },
+  "extraKnownMarketplaces": {
+    "Mixedbread-Grep": {
+      "source": {
+        "source": "git",
+        "url": "https://github.com/mixedbread-ai/mgrep.git"
+      }
+    },
+    "everything-claude-code": {
+      "source": {
+        "source": "git",
+        "url": "https://github.com/affaan-m/everything-claude-code.git"
+      }
+    },
+    "karpathy-skills": {
+      "source": {
+        "source": "git",
+        "url": "https://github.com/forrestchang/andrej-karpathy-skills.git"
+      }
+    }
   },
   "effortLevel": "xhigh",
-  "includeCoAuthoredBy": false
+  "theme": "light"
 }

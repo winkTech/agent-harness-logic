@@ -1,0 +1,75 @@
+// published as part of https://github.com/pConst/basic_verilog
+// Konstantin Pavlov, pavlovconst@gmail.com
+
+
+Compilation time results for reference benchmark projects
+=========================================================
+
+
+Xeon E5-2630 v4, RAM 32GB, Windows 7
+------------------------------------
+quartus_benchmark - 4m 58s  ( Quartus Lite 17 )
+vivado_benchmark  - 5m 58s  ( Vivado 2019.2 )
+gowin_benchmark   - 4m 15s  ( Gowin_V1.9.6Beta )
+ise_benchmark     - 9m 10s  ( ISE 12.4 )
+
+
+Xeon E5-2630 v4, RAM 32GB, Windows 7,
+project files on RamDisk
+-------------------------------------
+quartus_benchmark - 4m 57s  ( Quartus Lite 17 )
+vivado_benchmark  - 5m 56s  ( Vivado 2019.2 )
+
+
+Xeon E5-2630 v4, RAM 32GB, Windows 7,
+project files on RamDisk,
+HyperThreading OFF
+-------------------------------------
+quartus_benchmark - 4m 50s  ( Quartus Lite 17 )
+vivado_benchmark  - 5m 43s  ( Vivado 2019.2 )
+
+
+AMD Ryzen 7 5700G, RAM 64GB, Xubuntu 22.04.1
+HyperThreading OFF
+------------------------------------
+quartus_benchmark - 1m 58s  ( Quartus Lite 20.1.1 )
+vivado_benchmark  - 4m 07s  ( Vivado 2021.2 )
+vivado_benchmark  - 4m 05s  ( Vivado 2022.1 )
+
+
+Intel i7 13700K, RAM 128GB, Windows 10
+------------------------------------
+quartus_benchmark - 2m 34s  ( Quartus Lite 20.1.1 )
+vivado_benchmark  - 3m 47s  ( Vivado 2022.1 )
+
+
+AMD Ryzen 9 7900X, DDR5 2x32GB 5200 МГц, MB B650, NMVe (1000 ГБ SSD M.2 Samsung 970 EVO Plus)
+------------------------------------
+vivado_benchmark  - 1m 39s  ( Vivado 2023.1.2 ) - by dxp from electronix.ru forum
+
+
+Intel Xeon W-2145, DDR4 32GB, Platform: LENOVO ThinStation P520
+------------------------------------
+vivado_benchmark  - 6m 38s  ( Vivado 2021.1 ) - by dtmf73 from electronix.ru forum
+
+
+Laptop Core i7-8750H CPU @ 2.20GHz, 32GB RAM, SSD Samsung 990, Windows 10
+------------------------------------
+quartus_benchmark - 4m 01s  ( Quartus Lite 20.1.0 )
+vivado_benchmark  - 5m 18s  ( Vivado 2023.2 )
+gowin_benchmark   - 3m 01s  ( Gowin_V1.9.9 )
+
+
+Laptop Core i7-8750H CPU @ 2.20GHz, 32GB RAM, SSD Samsung 990, Windows 10
+------------------------------------
+quartus_benchmark - 4m 01s  ( Quartus Lite 20.1.0 )
+vivado_benchmark  - 5m 18s  ( Vivado 2023.2 )
+gowin_benchmark   - 3m 01s  ( Gowin_V1.9.9 )
+
+
+Laptop Core Ultra 9 275 HX CPU, RAM 32GB, Windows 11
+------------------------------------
+quartus_benchmark - 10m 05s  ( Quartus Lite 24.1, no Affinity, NUM_PARALLEL_PROCESSORS ALL )
+quartus_benchmark - 2m 01s  ( Quartus Lite 24.1, no Affinity, NUM_PARALLEL_PROCESSORS 16 )
+vivado_benchmark  - 2m 19s  ( Vivado 2024.1, P-Core Affinity )
+gowin_benchmark   - 1m 20s  ( Gowin_V1.9.12 )

@@ -1,0 +1,4 @@
+{
+  "allowFrom": [],
+  "description": "Telegram access control - add user IDs to allowFrom array"
+}

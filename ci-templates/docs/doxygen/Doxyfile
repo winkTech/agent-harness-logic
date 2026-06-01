@@ -1,0 +1,36 @@
+# Doxygen 配置文件
+# 用于 Verilog/SystemVerilog/Python 代码文档生成
+
+# 项目信息
+PROJECT_NAME           = "FPGA Project"
+PROJECT_NUMBER         = "1.0"
+OUTPUT_DIRECTORY       = ./doxygen-output
+
+# 输入文件
+INPUT                  = ../prj
+RECURSIVE              = YES
+FILE_PATTERNS          = *.v *.sv *.py *.m
+
+# 排除文件
+EXCLUDE                = ../prj/02_sim \
+                         ../prj/04_prj \
+                         ../prj/05_bin
+
+# 输出格式
+GENERATE_HTML          = YES
+GENERATE_LATEX         = NO
+HTML_OUTPUT            = html
+
+# 代码提取
+EXTRACT_ALL            = YES
+EXTRACT_PRIVATE        = NO
+EXTRACT_STATIC         = YES
+
+# 图表生成
+HAVE_DOT               = YES
+DOT_IMAGE_FORMAT       = svg
+INTERACTIVE_SVG        = YES
+
+# 优化
+SORT_MEMBER_DOCS       = YES
+SORT_BRIEF_DOCS        = YES

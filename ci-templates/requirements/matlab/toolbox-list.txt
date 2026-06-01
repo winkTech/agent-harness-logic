@@ -1,0 +1,20 @@
+# MATLAB 工具箱列表
+# 用于记录项目依赖的 MATLAB 工具箱
+
+# 基础工具箱
+MATLAB                                    # 基础 MATLAB
+Signal_Toolbox                            # 信号处理工具箱
+Control_System_Toolbox                    # 控制系统工具箱
+
+# FPGA 相关
+HDL_Coder                                 # HDL 代码生成
+Fixed-Point_Toolbox                       # 定点运算
+DSP_System_Toolbox                        # DSP 系统工具箱
+
+# 可选工具箱
+Communication_Toolbox                     # 通信工具箱
+Image_Toolbox                             # 图像处理工具箱
+Statistics_and_Machine_Learning_Toolbox   # 统计与机器学习
+
+# 版本要求
+# MATLAB R2023b 或更高版本
