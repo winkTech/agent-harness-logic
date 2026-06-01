@@ -1,0 +1,102 @@
+{
+  "skill": "hdl-coding",
+  "version": "3.0.0",
+  "description": "HDL coding skill evals",
+  "evals": [
+    {
+      "name": "verilog-module-basic",
+      "description": "创建一个基本的 Verilog 模块",
+      "prompt": "编写一个 Verilog 模块实现 8 位计数器，带同步复位和使能信号",
+      "expected_outputs": {
+        "has_module_declaration": true,
+        "has_clock_input": true,
+        "has_reset_input": true,
+        "has_enable_input": true,
+        "has_counter_output": true,
+        "follows_naming_convention": true
+      },
+      "assertions": [
+        {
+          "type": "file_exists",
+          "pattern": "*.v",
+          "description": "Verilog 文件存在"
+        },
+        {
+          "type": "content_match",
+          "pattern": "module.*counter",
+          "description": "包含计数器模块"
+        },
+        {
+          "type": "content_match",
+          "pattern": "input.*i_clk",
+          "description": "包含时钟输入（i_ 前缀）"
+        },
+        {
+          "type": "content_match",
+          "pattern": "input.*i_rst",
+          "description": "包含复位输入（i_ 前缀）"
+        },
+        {
+          "type": "content_match",
+          "pattern": "output.*o_",
+          "description": "包含输出信号（o_ 前缀）"
+        },
+        {
+          "type": "content_match",
+          "pattern": "always @(posedge i_clk)",
+          "description": "使用同步时钟逻辑"
+        }
+      ]
+    },
+    {
+      "name": "fsm-design",
+      "description": "设计一个有限状态机",
+      "prompt": "编写一个 Verilog 状态机实现交通灯控制器，包含红、黄、绿三个状态",
+      "expected_outputs": {
+        "has_state_definition": true,
+        "has_state_transition": true,
+        "has_output_logic": true,
+        "uses_three_block_style": true
+      },
+      "assertions": [
+        {
+          "type": "content_match",
+          "pattern": "parameter.*STATE|localparam.*STATE",
+          "description": "包含状态定义"
+        },
+        {
+          "type": "content_match",
+          "pattern": "case.*state",
+          "description": "包含状态转移逻辑"
+        },
+        {
+          "type": "content_match",
+          "pattern": "always @(posedge i_clk)",
+          "description": "使用同步时钟逻辑"
+        }
+      ]
+    },
+    {
+      "name": "pipeline-design",
+      "description": "设计一个流水线模块",
+      "prompt": "编写一个 4 级流水线的加法器，每级处理 8 位数据",
+      "expected_outputs": {
+        "has_pipeline_stages": true,
+        "has_stage_registers": true,
+        "follows_timing_rules": true
+      },
+      "assertions": [
+        {
+          "type": "content_match",
+          "pattern": "reg.*stage|reg.*pipe",
+          "description": "包含流水线寄存器"
+        },
+        {
+          "type": "content_match",
+          "pattern": "always @(posedge i_clk)",
+          "description": "使用同步时钟逻辑"
+        }
+      ]
+    }
+  ]
+}

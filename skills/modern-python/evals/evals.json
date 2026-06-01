@@ -1,0 +1,99 @@
+{
+  "skill": "modern-python",
+  "version": "1.1.0",
+  "description": "Modern Python skill evals",
+  "evals": [
+    {
+      "name": "type-annotations",
+      "description": "使用现代类型注解",
+      "prompt": "编写一个函数处理用户数据，包含类型注解",
+      "expected_outputs": {
+        "has_type_hints": true,
+        "uses_modern_syntax": true,
+        "has_docstring": true
+      },
+      "assertions": [
+        {
+          "type": "content_match",
+          "pattern": "def .*\\(.*:.*\\) ->",
+          "description": "包含函数类型注解"
+        },
+        {
+          "type": "content_match",
+          "pattern": "list\\[|dict\\[|tuple\\[|str|int|float|bool",
+          "description": "使用现代类型语法"
+        }
+      ]
+    },
+    {
+      "name": "error-handling",
+      "description": "正确的错误处理",
+      "prompt": "编写一个文件读取函数，包含正确的错误处理",
+      "expected_outputs": {
+        "has_specific_exceptions": true,
+        "has_logging": true,
+        "no_bare_except": true
+      },
+      "assertions": [
+        {
+          "type": "content_match",
+          "pattern": "except.*Error|except.*Exception",
+          "description": "使用具体异常类型"
+        },
+        {
+          "type": "content_not_match",
+          "pattern": "except:",
+          "description": "不使用裸 except"
+        },
+        {
+          "type": "content_match",
+          "pattern": "logging\\.|logger\\.",
+          "description": "使用 logging 而非 print"
+        }
+      ]
+    },
+    {
+      "name": "pathlib-usage",
+      "description": "使用 pathlib 处理路径",
+      "prompt": "编写一个函数遍历目录并查找所有 Python 文件",
+      "expected_outputs": {
+        "uses_pathlib": true,
+        "has_type_hints": true
+      },
+      "assertions": [
+        {
+          "type": "content_match",
+          "pattern": "from pathlib import Path|import pathlib",
+          "description": "使用 pathlib"
+        },
+        {
+          "type": "content_match",
+          "pattern": "Path\\(|\\.glob\\(|\\.rglob\\(",
+          "description": "使用 Path 方法"
+        }
+      ]
+    },
+    {
+      "name": "dataclass-usage",
+      "description": "使用 dataclass",
+      "prompt": "创建一个用户数据类，包含姓名、邮箱、年龄",
+      "expected_outputs": {
+        "uses_dataclass": true,
+        "has_type_hints": true,
+        "has_field_definitions": true
+      },
+      "assertions": [
+        {
+          "type": "content_match",
+          "pattern": "@dataclass|@dataclasses.dataclass",
+          "description": "使用 dataclass 装饰器"
+        },
+        {
+          "type": "content_match",
+          "pattern": "name: str|email: str|age: int",
+          "description": "包含字段定义"
+        }
+      ]
+    }
+  ]
+}

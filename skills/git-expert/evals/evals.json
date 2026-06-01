@@ -1,0 +1,69 @@
+{
+  "skill": "git-expert",
+  "version": "1.2.0",
+  "description": "Git expert skill evals",
+  "evals": [
+    {
+      "name": "commit-message",
+      "description": "生成规范的提交信息",
+      "prompt": "我修改了 src/auth/login.py 文件，添加了 OAuth2 认证支持，请帮我生成提交信息",
+      "expected_outputs": {
+        "has_conventional_commit": true,
+        "has_scope": true,
+        "has_description": true,
+        "follows_format": true
+      },
+      "assertions": [
+        {
+          "type": "content_match",
+          "pattern": "feat\\(auth\\)|feat\\(login\\)",
+          "description": "包含正确的类型和范围"
+        },
+        {
+          "type": "content_match",
+          "pattern": "OAuth|oauth",
+          "description": "包含 OAuth 关键词"
+        }
+      ]
+    },
+    {
+      "name": "merge-conflict",
+      "description": "解决合并冲突",
+      "prompt": "我遇到了合并冲突，请帮我解决",
+      "code": "<<<<<<< HEAD\nfunction login(username, password) {\n  return authenticate(username, password);\n}\n=======\nfunction login(email, password) {\n  return authenticateByEmail(email, password);\n}\n>>>>>>> feature/oauth",
+      "expected_outputs": {
+        "resolves_conflict": true,
+        "preserves_both_features": true,
+        "no_conflict_markers": true
+      },
+      "assertions": [
+        {
+          "type": "content_not_match",
+          "pattern": "<<<<<<<|=======|>>>>>>>",
+          "description": "不包含冲突标记"
+        },
+        {
+          "type": "content_match",
+          "pattern": "function login",
+          "description": "保留登录函数"
+        }
+      ]
+    },
+    {
+      "name": "branch-strategy",
+      "description": "分支管理策略",
+      "prompt": "我要开始一个新功能开发，应该创建什么分支？",
+      "expected_outputs": {
+        "creates_feature_branch": true,
+        "follows_naming_convention": true
+      },
+      "assertions": [
+        {
+          "type": "content_match",
+          "pattern": "feat/|feature/",
+          "description": "使用功能分支命名"
+        }
+      ]
+    }
+  ]
+}
