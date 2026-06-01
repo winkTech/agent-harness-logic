@@ -1,0 +1,14 @@
+#------------------------------------------------------------------------------
+# .gitignore for Vitis HLS projects
+# published as part of https://github.com/pConst/basic_verilog
+# Konstantin Pavlov, pavlovconst@gmail.com
+#------------------------------------------------------------------------------
+
+# INFO ------------------------------------------------------------------------
+# rename the file to ".gitignore" and place into your HLS project directory
+#
+
+/prj
+
+vitis_hls.log
+

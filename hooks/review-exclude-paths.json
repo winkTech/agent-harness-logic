@@ -1,0 +1,7 @@
+{
+  "_comment": "代码审查排除路径 - 这些目录名在任意层级下都会跳过审查",
+  "excludePatterns": [
+    "examples",
+    "templates"
+  ]
+}
