@@ -2,7 +2,7 @@
 # 记忆关联脚本
 # 用途：建立记忆之间的关联关系
 
-MEMORY_DIR="C:/Users/Lihan/.claude/memory"
+source "$(dirname "$0")/../config.path.sh"
 LINKS_FILE="$MEMORY_DIR/links.md"
 
 if [ ! -f "$LINKS_FILE" ]; then

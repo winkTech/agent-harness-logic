@@ -6,7 +6,7 @@ SUCCESS_TYPE=$1
 SUCCESS_DESC=$2
 REUSABLE=$3
 
-MEMORY_DIR="C:/Users/Lihan/.claude/memory"
+source "$(dirname "$0")/../config.path.sh"
 DATE=$(date +%Y-%m-%d)
 TIME=$(date +%H-%M)
 

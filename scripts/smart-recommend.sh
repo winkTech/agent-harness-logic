@@ -3,8 +3,8 @@
 # 用途：基于当前任务推荐相关记忆和知识
 
 TASK=$1
-MEMORY_DIR="C:/Users/Lihan/.claude/memory"
-KB_DIR="C:/Users/Lihan/.claude/knowledge/primary"
+MEMORY_DIR="${HOME}/.claude/memory"
+KB_DIR="${HOME}/.claude/knowledge/primary"
 
 if [ -z "$TASK" ]; then
     echo "用法: ./smart-recommend.sh <当前任务描述>"

@@ -2,8 +2,8 @@
 # 记忆系统测试脚本
 # 用途：测试记忆系统的各项功能
 
-MEMORY_DIR="C:/Users/Lihan/.claude/memory"
-SCRIPTS_DIR="C:/Users/Lihan/.claude/scripts"
+source "$(dirname "$0")/../config.path.sh"
+source "$(dirname "$0")/../config.path.sh"
 
 echo "=== 记忆系统测试 ==="
 echo ""

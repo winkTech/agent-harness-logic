@@ -3,7 +3,7 @@
 # 用途：智能检索相关记忆，支持关联推荐
 
 QUERY=$1
-MEMORY_DIR="C:/Users/Lihan/.claude/memory"
+source "$(dirname "$0")/../config.path.sh"
 
 if [ -z "$QUERY" ]; then
     echo "用法: ./memory-retrieve.sh <搜索关键词>"

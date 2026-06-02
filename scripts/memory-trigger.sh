@@ -3,7 +3,7 @@
 # 用途：根据工作状态自动触发记忆记录
 
 ACTION=$1
-MEMORY_DIR="C:/Users/Lihan/.claude/memory"
+source "$(dirname "$0")/../config.path.sh"
 
 case $ACTION in
     "work-start")

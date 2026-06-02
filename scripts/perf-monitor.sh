@@ -6,39 +6,39 @@ echo "=== Agent 性能监控 ==="
 echo ""
 
 # 1. CLAUDE.md 大小
-CLAUDE_LINES=$(wc -l < "C:/Users/Lihan/.claude/CLAUDE.md" 2>/dev/null || echo "0")
+CLAUDE_LINES=$(wc -l < "${HOME}/.claude/CLAUDE.md" 2>/dev/null || echo "0")
 echo "📊 CLAUDE.md: ${CLAUDE_LINES} 行"
 
 # 2. references 文件数
-REF_COUNT=$(ls -1 "C:/Users/Lihan/.claude/references/" 2>/dev/null | wc -l)
+REF_COUNT=$(ls -1 "${HOME}/.claude/references/" 2>/dev/null | wc -l)
 echo "📚 参考文档: ${REF_COUNT} 个"
 
 # 3. 插件数量
-PLUGIN_COUNT=$(grep -c "true" "C:/Users/Lihan/.claude/settings.json" 2>/dev/null || echo "0")
+PLUGIN_COUNT=$(grep -c "true" "${HOME}/.claude/settings.json" 2>/dev/null || echo "0")
 echo "🔌 已启用插件: ${PLUGIN_COUNT} 个"
 
 # 4. 插件缓存大小
-CACHE_SIZE=$(du -sh "C:/Users/Lihan/.claude/plugins/cache/" 2>/dev/null | cut -f1 || echo "未知")
+CACHE_SIZE=$(du -sh "${HOME}/.claude/plugins/cache/" 2>/dev/null | cut -f1 || echo "未知")
 echo "💾 插件缓存: ${CACHE_SIZE}"
 
 # 5. 记忆文件数
-MEMORY_COUNT=$(find "C:/Users/Lihan/.claude/memory/" -name "*.md" 2>/dev/null | wc -l)
+MEMORY_COUNT=$(find "${HOME}/.claude/memory/" -name "*.md" 2>/dev/null | wc -l)
 echo "🧠 记忆文件: ${MEMORY_COUNT} 个"
 
 # 6. 知识库文档数
-KNOWLEDGE_COUNT=$(find "C:/Users/Lihan/.claude/knowledge/primary" -name "*.md" 2>/dev/null | wc -l)
+KNOWLEDGE_COUNT=$(find "${HOME}/.claude/knowledge/primary" -name "*.md" 2>/dev/null | wc -l)
 echo "📖 知识文档: ${KNOWLEDGE_COUNT} 个"
 
 # 7. 源文档数
-SOURCE_COUNT=$(find "C:/Users/Lihan/.claude/knowledge/primary" -name "*-source.md" 2>/dev/null | wc -l)
+SOURCE_COUNT=$(find "${HOME}/.claude/knowledge/primary" -name "*-source.md" 2>/dev/null | wc -l)
 echo "📄 源文档提取: ${SOURCE_COUNT} 个"
 
 # 8. 原始 PDF 数
-PDF_COUNT=$(find "C:/Users/Lihan/.claude/knowledge/source" -name "*.pdf" 2>/dev/null | wc -l)
+PDF_COUNT=$(find "${HOME}/.claude/knowledge/source" -name "*.pdf" 2>/dev/null | wc -l)
 echo "📑 原始 PDF: ${PDF_COUNT} 个"
 
 # 9. Git 提交数
-COMMIT_COUNT=$(git -C "C:/Users/Lihan/.claude" log --oneline 2>/dev/null | wc -l)
+COMMIT_COUNT=$(git -C "${HOME}/.claude" log --oneline 2>/dev/null | wc -l)
 echo "📝 Git 提交: ${COMMIT_COUNT} 个"
 
 # 10. 响应延迟估算（基于 CLAUDE.md 大小）
