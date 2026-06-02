@@ -73,15 +73,7 @@
 
 恢复指南：`references/error-recovery.md`
 性能基准：`references/performance-baseline.md`
-
-### 工具脚本
-
-| 脚本 | 用途 |
-|------|------|
-| `scripts/perf-monitor.sh` | 性能监控 |
-| `scripts/kb-search.sh` | 知识库检索 |
-| `scripts/memory-cleanup.sh` | 记忆清理 |
-| `scripts/plugin-stats.sh` | 插件统计 |
+工具脚本：`references/tool-scripts.md`
 
 ## 十一、知识库
 
