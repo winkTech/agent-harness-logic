@@ -62,3 +62,19 @@
 - 插件缓存大小
 - 插件文件数量
 - 插件启用状态
+
+---
+
+## 高级功能
+
+| 脚本 | 用途 | 命令 |
+|------|------|------|
+| `memory-link.sh` | 记忆关联管理 | `bash scripts/memory-link.sh <action> [参数]` |
+| `memory-test.sh` | 记忆系统测试 | `bash scripts/memory-test.sh` |
+| `semantic-search.sh` | 语义检索 | `bash scripts/semantic-search.sh "关键词"` |
+| `smart-recommend.sh` | 智能推荐 | `bash scripts/smart-recommend.sh "任务描述"` |
+
+**关联管理 actions**：
+- `add <记忆A> <记忆B> [描述]` - 添加关联
+- `show` - 显示所有关联
+- `find <关键词>` - 查找关联
