@@ -3,8 +3,8 @@
 # 用途：基于关键词扩展的语义检索
 
 QUERY=$1
-MEMORY_DIR="C:/Users/Lihan/.claude/memory"
-KB_DIR="C:/Users/Lihan/.claude/knowledge/primary"
+MEMORY_DIR="${HOME}/.claude/memory"
+KB_DIR="${HOME}/.claude/knowledge/primary"
 
 if [ -z "$QUERY" ]; then
     echo "用法: ./semantic-search.sh <搜索关键词>"

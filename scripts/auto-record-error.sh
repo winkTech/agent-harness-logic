@@ -6,7 +6,7 @@ ERROR_TYPE=$1
 ERROR_DESC=$2
 SOLUTION=$3
 
-MEMORY_DIR="C:/Users/Lihan/.claude/memory"
+source "$(dirname "$0")/../config.path.sh"
 DATE=$(date +%Y-%m-%d)
 TIME=$(date +%H-%M)
 

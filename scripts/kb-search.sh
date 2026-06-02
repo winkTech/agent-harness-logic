@@ -3,7 +3,7 @@
 # 用途：优化知识库搜索，提升检索准确率
 
 QUERY=$1
-KB_DIR="C:/Users/Lihan/.claude/knowledge/primary"
+source "$(dirname "$0")/../config.path.sh"
 
 if [ -z "$QUERY" ]; then
     echo "用法: ./kb-search.sh <搜索关键词>"

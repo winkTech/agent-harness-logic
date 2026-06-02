@@ -2,7 +2,7 @@
 # 记忆清理脚本
 # 用途：清理过期记忆，保持记忆系统健康
 
-MEMORY_DIR="C:/Users/Lihan/.claude/memory"
+source "$(dirname "$0")/../config.path.sh"
 DAYSOLD=30
 
 echo "=== 记忆系统清理 ==="
