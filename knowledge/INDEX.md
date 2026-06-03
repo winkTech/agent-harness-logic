@@ -69,6 +69,14 @@ knowledge/
 
 | 文档 | 内容 | 难度 |
 |------|------|------|
+| [lte/overview.md](primary/domains/comm/lte/overview.md) | 4G LTE 系统架构 | ⭐⭐ |
+| [lte/phy-downlink.md](primary/domains/comm/lte/phy-downlink.md) | LTE 下行物理层 | ⭐⭐⭐ |
+| [lte/phy-uplink.md](primary/domains/comm/lte/phy-uplink.md) | LTE 上行物理层 | ⭐⭐⭐ |
+| [5g-nr/oran-interface.md](primary/domains/comm/5g-nr/oran-interface.md) | ORAN 同步接口协议 | ⭐⭐⭐ |
+| [5g-nr/lowphy-architecture.md](primary/domains/comm/5g-nr/lowphy-architecture.md) | Lowphy 链路 (FFT/相位补偿) | ⭐⭐⭐ |
+| [5g-nr/dfe-architecture.md](primary/domains/comm/5g-nr/dfe-architecture.md) | DFE 处理模块 (CFR/DPD) | ⭐⭐⭐ |
+| [5g-nr/bfp-compression.md](primary/domains/comm/5g-nr/bfp-compression.md) | BFP 6bit 块浮点压缩 | ⭐⭐⭐ |
+| [5g-nr/nr-test-mode.md](primary/domains/comm/5g-nr/nr-test-mode.md) | NR 测试模式与 EVM 测试 | ⭐⭐ |
 | [ofdm/algorithm_spec.md](primary/domains/comm/ofdm/algorithm_spec.md) | OFDM 算法规格书 | ⭐⭐⭐ |
 | [ofdm/rtl_architecture.md](primary/domains/comm/ofdm/rtl_architecture.md) | OFDM RTL 架构设计 | ⭐⭐⭐ |
 | [ofdm/resource_estimate.md](primary/domains/comm/ofdm/resource_estimate.md) | OFDM 资源评估 | ⭐⭐ |
