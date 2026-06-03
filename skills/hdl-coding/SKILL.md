@@ -752,10 +752,16 @@ endmodule
 
 ## 二十、工具使用
 
-### 20.1 语法检查
+### 20.1 语法检查（必须执行）
 
-- **Verilog**: `vlog -lint <file>.v`
-- **SystemVerilog**: `vlog -sv -lint <file>.sv`
+**写/改完 RTL 代码后，提交前必须运行 lint：**
+
+- **Verilog**: `iverilog -g2012 -t null <file>.v`
+- **SystemVerilog**: `iverilog -g2012 -t null <file>.sv`
+- **Vivado**: `vlog -lint <file>.v`
+- **联合编译**: `iverilog -g2012 -t null *.v tb/*.v`
+
+> Lint 0 error 后才能提交代码。违反此规则的代码不得合并。
 
 ### 20.2 仿真验证
 

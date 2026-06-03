@@ -34,7 +34,8 @@
 - [流水线框架必须严格执行](learnings/2026-06-02-流水线框架必须严格执行.md) — 框架设计者必须第一个遵守
 - [上下文压缩规则](learnings/2026-06-02-上下文压缩规则.md) — Agent上下文超过40%必须/compact
 - [知识检索优先级规则](learnings/2026-06-02-知识检索优先级规则.md) — 优先使用 rag-skill 知识库检索
-- [Agent 自评报告](learnings/2026-06-03-agent-evaluation.md) — 基于履历的7维度评估结果（6.0/10）
+- [Agent 自评报告 v2](learnings/2026-06-03-agent-evaluation.md) — Phase1 后全面盘点：52 文档/37 模型/19 RTL/7维度评分（6.6/10）
+- [LDPC RTL 审查经验](learnings/2026-06-03-ldpc-rtl-review-lessons.md) — 3 类 Bug + RTL 可靠性 Checklist
 
 ### 工作记忆
 
