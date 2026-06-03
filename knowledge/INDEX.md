@@ -12,7 +12,8 @@ knowledge/
 ├── INDEX.md                 # 本文件
 ├── primary/                 # 主要知识（Markdown）
 │   ├── domains/            # 领域知识
-│   │   └── fpga/           # FPGA 开发知识
+│   │   ├── fpga/           # FPGA 开发知识
+│   │   └── comm/           # 通信算法知识
 │   ├── patterns/           # 设计模式
 │   ├── pitfalls/           # 常见陷阱
 │   ├── snippets/           # 代码片段
@@ -62,6 +63,16 @@ knowledge/
 | [fpga-development-workflow.md](primary/domains/fpga/fpga-development-workflow.md) | FPGA 开发工作流 | ⭐⭐ |
 
 #### 算法实现
+
+### 通信算法知识文档
+
+
+| 文档 | 内容 | 难度 |
+|------|------|------|
+| [ofdm/algorithm_spec.md](primary/domains/comm/ofdm/algorithm_spec.md) | OFDM 算法规格书 | ⭐⭐⭐ |
+| [ofdm/rtl_architecture.md](primary/domains/comm/ofdm/rtl_architecture.md) | OFDM RTL 架构设计 | ⭐⭐⭐ |
+| [ofdm/resource_estimate.md](primary/domains/comm/ofdm/resource_estimate.md) | OFDM 资源评估 | ⭐⭐ |
+| [ofdm/testbench_plan.md](primary/domains/comm/ofdm/testbench_plan.md) | OFDM 验证方案 | ⭐⭐ |
 
 | 文档 | 内容 | 难度 |
 |------|------|------|
@@ -163,3 +174,25 @@ ls ~/.claude/knowledge/primary/domains/fpga/
 - 2026-06-01: v1.2 完成知识库构建，创建 22 个知识文档
 - 2026-06-01: v1.1 调整为混合存储结构
 - 2026-06-01: v1.0 初始化知识库框架
+
+### 通信算法路径
+
+```
+comm/ofdm/algorithm_spec.md → 模板框架 → 逐算法走完7阶段全链路
+    ↓
+成形滤波 → 信道估计 → 同步 → LDPC
+```
+
+---
+
+## 模板文档
+
+| 模板 | 位置 | 用途 |
+|------|------|------|
+| [算法规格书模板](docs/templates/algorithm_spec_template.md) | 阶段1 |
+| [MATLAB 黄金模型](docs/templates/golden_model_template/) | 阶段2 |
+| [定点量化报告](docs/templates/fixed_point_report_template.md) | 阶段3 |
+| [资源评估报告](docs/templates/resource_estimate_template.md) | 阶段4 |
+| [RTL 模块模板](docs/templates/rtl_module_template.v) | 阶段5 |
+| [Testbench 模板](docs/templates/tb_template.sv) | 阶段6 |
+| [技术报告模板](docs/templates/report_template.md) | 阶段7 |
