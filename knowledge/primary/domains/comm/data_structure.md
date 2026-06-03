@@ -7,6 +7,16 @@
 ```
 comm/
 ├── data_structure.md                # 本文件
+├── lte/                             # 4G LTE 知识库 (Phase 1)
+│   ├── overview.md                  # 系统架构/帧结构/信道分类
+│   ├── phy-downlink.md              # 下行物理层 (OFDMA/PDCCH/PDSCH)
+│   └── phy-uplink.md                # 上行物理层 (SC-FDMA/PRACH/PUSCH)
+├── 5g-nr/                           # 5G NR 知识库 (Phase 1)
+│   ├── oran-interface.md            # ORAN C/U/S/M-plane 协议
+│   ├── lowphy-architecture.md       # Lowphy 链路 (FFT/相位补偿/交换)
+│   ├── dfe-architecture.md          # DFE (CFR/DPD/DDC/DUC)
+│   ├── bfp-compression.md           # BFP 6bit 块浮点压缩解压
+│   └── nr-test-mode.md              # NR 测试模式与 EVM 测试
 └── ofdm/                            # OFDM 知识包 (7阶段全部完成)
     ├── algorithm_spec.md            # 阶段1
     ├── fixed_point_report.md        # 阶段3
