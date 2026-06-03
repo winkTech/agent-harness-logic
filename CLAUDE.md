@@ -14,6 +14,17 @@
 3. **精准修改** — 只触及必须部分，匹配现有风格
 4. **目标驱动** — 定义成功标准，循环直到验证通过
 
+**五、通用执行规则**
+
+### 5.1 写完代码必须检查（Lint First）
+所有代码（Verilog/SystemVerilog/Python/MATLAB），在写完或修改后、提交前，必须运行对应的 lint/语法检查工具：
+- **Verilog/SystemVerilog**: `iverilog -g2012 -t null <file>` 或 `vlog -lint <file>`
+- **Python**: `ruff check <file>` 或 `flake8 <file>`
+- **MATLAB**: 使用 MATLAB MCP 的 `check_matlab_code` 工具
+
+> 例外: 仅修改注释、README、Markdown 文档时不需要 lint。
+> 违反此规则的代码不得提交。
+
 ---
 
 ## 二、环境配置
@@ -58,24 +69,35 @@
 
 ---
 
-## 八、插件管理
+## 八、MCP 服务器
+
+| MCP | 传输 | 用途 | 文档 |
+|:----|:---:|:----|:----|
+| `matlab` | stdio | MATLAB 脚本执行/仿真/调试 | `references/mcp-matlab-usage.md` |
+| `mcp-pdf` | stdio | PDF 文档操作 | — |
+
+**MATLAB MCP 触发条件**: 涉及 `.m` 文件执行、golden model 验证、BER/SNR 仿真、定点化分析、星座图/眼图等关键词时优先使用。
+
+---
+
+## 九、插件管理
 
 详细配置：`references/plugin-management.md`
 新插件说明：`references/new-plugins.md`
 
 ---
 
-## 九、Agent 机制
+## 十、Agent 机制
 
 核心原理：`references/agent-harness.md`
 
-## 十、错误恢复
+## 十一、错误恢复
 
 恢复指南：`references/error-recovery.md`
 性能基准：`references/performance-baseline.md`
 工具脚本：`references/tool-scripts.md`
 
-## 十一、知识库
+## 十二、知识库
 
 索引：`knowledge/INDEX.md`
 目录结构：`knowledge/data_structure.md`
@@ -83,7 +105,7 @@
 
 **检索方式**：使用 rag-skill 智能检索（推荐）
 
-## 十二、参考资料索引
+## 十三、参考资料索引
 
 `references/reference-index.md`
 

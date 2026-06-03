@@ -55,7 +55,7 @@ module ldpc_decoder_top #(
 
     wire [P_COL_ADDR_W-1:0]         w_h_col_addr;
     wire [P_SHIFT_W-1:0]            w_h_shift;
-    wire [P_CONN_CNT_W-1:0]         w_h_conn_count;
+    wire [P_CONN_CNT_W-1:0]         w_conn_count;
     wire                            w_h_valid;
 
     wire signed [P_Q_DATA_W-1:0]    w_llr_rd_data;
@@ -103,20 +103,38 @@ module ldpc_decoder_top #(
     assign s_axis_llr_tready = ~r_llr_load_done;
 
     //-----------------------------------------------------------------
-    // 输出寄存器
+    // 硬判决输出控制 (迭代完成后的回读扫描)
+    //  译码完成后需要从 LLR buffer 回读 K=324 个硬判决比特
     //-----------------------------------------------------------------
     reg                             ro_data;
     reg                             ro_valid;
+    reg [P_LLR_ADDR_W-1:0]          r_out_addr;
+    reg                             r_out_active;
 
     always @(posedge i_clk_sys) begin
         if (i_rst_sys) begin
-            ro_data  <= 1'b0;
-            ro_valid <= 1'b0;
+            ro_data      <= 1'b0;
+            ro_valid     <= 1'b0;
+            r_out_addr   <= 'd0;
+            r_out_active <= 1'b0;
         end else begin
+            // decode_done 脉冲启动输出阶段
             if (w_decode_done) begin
-                ro_data  <= w_llr_rd_data[P_Q_DATA_W-1];
-                ro_valid <= 1'b1;
-            end else if (m_axis_data_tready && ro_valid) begin
+                r_out_active <= 1'b1;
+                r_out_addr   <= 'd0;
+            end
+
+            if (r_out_active) begin
+                if (m_axis_data_tready || !ro_valid) begin
+                    ro_data  <= w_llr_rd_data[P_Q_DATA_W-1];  // 符号位 = 硬判决
+                    ro_valid <= 1'b1;
+                    if (r_out_addr == (`P_K - 1)) begin
+                        r_out_active <= 1'b0;  // 全部输出完毕
+                    end else begin
+                        r_out_addr <= r_out_addr + 1'b1;
+                    end
+                end
+            end else if (!w_decode_done) begin
                 ro_valid <= 1'b0;
             end
         end
@@ -124,6 +142,12 @@ module ldpc_decoder_top #(
 
     assign m_axis_data_tdata  = ro_data;
     assign m_axis_data_tvalid = ro_valid;
+
+    //-----------------------------------------------------------------
+    // LLR buffer 读地址选择: 迭代中 → h_matrix 地址; 输出阶段 → 回读扫描地址
+    //-----------------------------------------------------------------
+    wire [P_LLR_ADDR_W-1:0]     w_llr_rd_addr;
+    assign w_llr_rd_addr = r_out_active ? r_out_addr : w_h_col_addr;
 
     //-----------------------------------------------------------------
     // L_q 计算: L_q = LLR_total - L_r_old (组合逻辑)
@@ -150,7 +174,7 @@ module ldpc_decoder_top #(
     llr_buffer u_llr_buffer (
         .i_clk_sys      (i_clk_sys),
         .i_rst_sys      (i_rst_sys),
-        .i_rd_addr      (w_h_col_addr),
+        .i_rd_addr      (w_llr_rd_addr),
         .o_rd_data      (w_llr_rd_data),
         .i_wr_en        (w_llr_wr_en),
         .i_wr_addr      (w_llr_wr_addr),
@@ -198,6 +222,7 @@ module ldpc_decoder_top #(
         .i_valid        (w_pipe_valid),
         .i_row_start    (w_row_done),
         .i_row_done     (w_row_done),
+        .i_iter_done    (w_iter_done),
         .o_early_term   (w_early_term)
     );
 

@@ -6,6 +6,15 @@
 
 ## 审查清单
 
+### 0. 语法检查（先过门禁）
+
+- [ ] 所有源文件通过 lint: `iverilog -g2012 -t null <file>`
+- [ ] 所有 TB 文件通过 lint: `iverilog -g2012 -t null tb_<module>.v`
+- [ ] 联合编译无 error: `iverilog -g2012 -t null *.v`
+- [ ] 无 `warning` 级别的语法隐患（如隐含位宽、未声明的 wire）
+
+> Lint 未通过的代码不得进入代码审查环节。
+
 ### 1. 时序安全检查（最高优先级）
 
 #### 1.1 同步复位检查
