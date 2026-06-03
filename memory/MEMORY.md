@@ -36,6 +36,7 @@
 - [知识检索优先级规则](learnings/2026-06-02-知识检索优先级规则.md) — 优先使用 rag-skill 知识库检索
 - [Agent 自评报告 v2](learnings/2026-06-03-agent-evaluation.md) — Phase1 后全面盘点：52 文档/37 模型/19 RTL/7维度评分（6.6/10）
 - [LDPC RTL 审查经验](learnings/2026-06-03-ldpc-rtl-review-lessons.md) — 3 类 Bug + RTL 可靠性 Checklist
+- [今日复盘 0603](learnings/2026-06-03-daily-summary.md) — 成功决策/修正失误/告诫未来
 
 ### 工作记忆
 
