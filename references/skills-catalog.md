@@ -1,68 +1,83 @@
 # 辅助 Skill 目录
 
-> 详细功能列表，按需加载
+> 详细功能列表，按需加载。标注 🔀 的为重定向桩（原 skill 已合并）。
 
 ---
 
-## 文档处理
+## 文档与演示
 
 | Skill | 功能 | 场景 |
 |-------|------|------|
-| markitdown-converter | 多格式转Markdown | PDF/PPT/Word/Excel |
-| doc-generator | 文档生成 | 设计文档、测试报告 |
-| readme | README生成 | 项目说明 |
-| pptx | PPT生成 | 项目汇报 |
-| xlsx | Excel生成 | 参数表、结果表 |
-| diagram-generator | 图表生成 | 框图、流程图 |
+| `doc-gen` | 文档/README 生成 | 设计文档、API 文档、项目说明 |
+| `presentation` | 图表/PPT/Excel/HTML 幻灯片 | 架构图、汇报、数据分析 |
+| ~~doc-generator~~ | 🔀 已合并到 doc-gen | — |
+| ~~readme~~ | 🔀 已合并到 doc-gen | — |
+| ~~diagram-generator~~ | 🔀 已合并到 presentation | — |
+| ~~pptx~~ | 🔀 已合并到 presentation | — |
+| ~~xlsx~~ | 🔀 已合并到 presentation | — |
+| ~~html-ppt-skill~~ | 🔀 已合并到 presentation | — |
 
-## 代码搜索
+## 代码搜索与探索
 
 | Skill | 功能 | 场景 |
 |-------|------|------|
-| ripgrep | 快速文本搜索 | 精确匹配信号名 |
-| code-semantic-search | 语义搜索 | 按功能描述搜索 |
-| codebase-exploration | 代码探索 | 了解架构、模块关系 |
+| `code-search` | 统一搜索 — rg/pnpm + 7阶段探索 + 语义搜索 | 日常搜代码、陌生代码库分析、按意图搜索 |
+| ~~ripgrep~~ | 🔀 已合并到 code-search | — |
+| ~~code-semantic-search~~ | 🔀 已合并到 code-search | — |
+| ~~codebase-exploration~~ | 🔀 已合并到 code-search | — |
 
 ## 开发测试
 
 | Skill | 功能 | 场景 |
 |-------|------|------|
-| tdd | 测试驱动开发 | RTL/Python/MATLAB |
-| test-generator | 测试生成 | Testbench框架 |
-| debugging | 系统性调试 | 仿真异常、功能异常 |
-| smart-debug | 智能调试 | 复杂bug深度排查 |
+| `tdd` | 测试驱动开发 | RTL/Python/MATLAB |
+| `test-generator` | 测试生成 | Testbench 框架 |
+| `debugging` | 系统化调试（含高级模式） | 仿真异常、间歇性 Bug、生产环境 |
 
-## 架构规划
+## 代码审查与审计
 
 | Skill | 功能 | 场景 |
 |-------|------|------|
-| architecture-review | 架构评审 | 模块划分、接口设计 |
-| brainstorming | 头脑风暴 | 多方案对比 |
-| complexity-assessment | 复杂度评估 | 资源、时序分析 |
+| `code-inspect` | 统一审查 — 架构/复杂度/代码质量/框架审计 | 设计评审、规划评估、Clean Code、提交前检查 |
+| ~~architecture-review~~ | 🔀 已合并到 code-inspect | — |
+| ~~complexity-assessment~~ | 🔀 已合并到 code-inspect | — |
+| ~~code-quality-expert~~ | 🔀 已合并到 code-inspect | — |
+| ~~proactive-audit~~ | 🔀 已合并到 code-inspect | — |
+| `security-review` | 安全审查 | 认证、API、敏感数据 |
 
 ## 研究分析
 
 | Skill | 功能 | 场景 |
 |-------|------|------|
-| deep-research | 深度研究 | 技术调研、方案对比 |
-| modern-python | 现代Python | Python 3.12+特性 |
-| data-scientist | 数据分析 | 仿真结果、性能对比 |
+| `deep-research` | 深度研究 | 技术调研、方案对比 |
+| `modern-python` | 现代 Python | Python 3.12+ 特性 |
+| `data-scientist` | 数据分析 | 仿真结果、性能对比 |
+| `brainstorming` | 头脑风暴 | 多方案对比 |
 
-## 代码质量
+## Agent 管理
 
 | Skill | 功能 | 场景 |
 |-------|------|------|
-| code-quality-expert | 质量检查 | 提交前自检 |
-| proactive-audit | 主动审计 | 项目交付前审计 |
-| security-review | 安全审查 | 认证、API、敏感数据 |
+| `agent-management` | Skill 管理/发现/会话交接/子 Agent 编排 | 创建优化 Skill、安装社区技能、跨会话续接 |
+| ~~skill-creator~~ | 🔀 已合并到 agent-management | — |
+| ~~find-skills~~ | 🔀 已合并到 agent-management | — |
+| ~~session-handoff~~ | 🔀 已合并到 agent-management | — |
+| ~~subagent-driven-development~~ | 🔀 已合并到 agent-management | — |
+
+## 浏览器
+
+| Skill | 功能 | 场景 |
+|-------|------|------|
+| `browser` | 浏览器自动化 + 用户实时浏览器 | 网页交互/抓取/测试 & 登录态/DevTools 检查 |
+| ~~agent-browser~~ | 🔀 已合并到 browser | — |
+| ~~use-my-browser~~ | 🔀 已合并到 browser | — |
 
 ## 其他
 
 | Skill | 功能 | 场景 |
 |-------|------|------|
-| git-expert | Git操作 | 复杂Git操作、冲突解决 |
-| session-handoff | 会话交接 | 长时间任务、跨会话续接 |
-| skill-creator | 技能创建 | 创建/优化Skill |
-| find-skills | 技能发现 | 查找可安装技能 |
-| subagent-driven-development | 子代理开发 | 执行计划、并行任务 |
-| html-ppt-skill | HTML演示文稿 | 创建演示文稿 |
+| `markitdown-converter` | 多格式转 Markdown | PDF/PPT/Word/Excel |
+| `git-expert` | Git 操作 | 复杂 Git 操作、冲突解决 |
+| `rag-skill` | 知识库检索 | 本地知识库问答 |
+| `hdl-coding` | HDL 编码规范 | Verilog/SV FPGA 设计 |
+| `python-hardware-debug` | 硬件调试 | 星座图/EVM/频偏 |

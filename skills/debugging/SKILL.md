@@ -1,417 +1,235 @@
 ---
 name: debugging
-description: Systematic 4-phase debugging with root cause investigation. Use when fixing bugs to prevent random fixes.
-version: 1.1.1
+description: 系统化调试 — 4 阶段根因分析 + 高级模式（假设排名 / 观测仪器化 / 生产环境调试）
+version: 2.0.0
 model: sonnet
 invoked_by: both
 user_invocable: true
-tools: [Read, Write, Edit, Bash, Glob, Grep]
-best_practices:
-  - Investigate root cause before any fix
-  - Reproduce the bug reliably first
-  - Compare working vs broken examples
-  - Make one change at a time
-error_handling: strict
-streaming: supported
-verified: true
-lastVerifiedAt: 2026-02-22T00:00:00.000Z
-source: builtin
-trust_score: 100
-provenance_sha: c4c30b4297adcffa
+tools: [Read, Write, Edit, Bash, Glob, Grep, Task]
 ---
 
-**Mode: Cognitive/Prompt-Driven** — No standalone utility script; use via agent context.
+# 系统化调试
 
-# Systematic Debugging
+## 概览
 
-## Overview
+随机修复浪费时间和制造新 Bug。快速修补掩盖深层问题。
 
-Random fixes waste time and create new bugs. Quick patches mask underlying issues.
+**核心原则**: 修复前必须找到根因。症状修复是失败。
 
-**Core principle:** ALWAYS find root cause before attempting fixes. Symptom fixes are failure.
+---
 
-**Violating the letter of this process is violating the spirit of debugging.**
+## 快速选择
 
-## Iron Laws
+| 场景 | 模式 |
+|:----|:-----|
+| 简单可复现 Bug | 标准模式（4 阶段） |
+| 根因范围已知 | 标准模式 |
+| 静态分析/代码审查发现的 Bug | 标准模式 |
+| 间歇性/难以复现 | 高级模式（假设排名 + 仪器化） |
+| 生产环境/运行时问题 | 高级模式（观测数据驱动） |
+| 复杂多组件故障 | 高级模式 |
 
-1. **NEVER** propose or implement a fix before completing Phase 1 root cause investigation — a fix without root cause is a guess that will fail or create new bugs.
-2. **ALWAYS** reproduce the bug reliably before debugging — if you can't reproduce it consistently, you're not debugging the real issue.
-3. **NEVER** make more than one change at a time when testing a hypothesis — multiple simultaneous changes make it impossible to determine which change fixed the problem.
-4. **ALWAYS** stop and question the architecture after 3 failed fix attempts — if each fix reveals a new problem, the issue is architectural, not symptomatic.
-5. **NEVER** skip creating a failing test case before implementing the fix — without a test, you cannot verify the fix worked or that it won't regress.
+---
 
-## When to Use
+## 铁律
 
-## When to Use
+1. **未完成根因分析前，绝不提出或实施修复** — 没有根因的修复是猜测，会失败或引入新 Bug。
+2. **调试前必须能可靠复现** — 不能稳定复现，说明不是在调试真正的问题。
+3. **一次只改一个地方** — 多改无法确定哪处修复了问题。
+4. **连续 3 次修复失败，必须质疑架构** — 每次修复都揭示新问题，说明问题是架构性的。
+5. **修复前必须创建失败测试用例** — 没有测试无法验证修复是否生效、是否回归。
 
-Use for ANY technical issue:
+---
 
-- Test failures
-- Bugs in production
-- Unexpected behavior
-- Performance problems
-- Build failures
-- Integration issues
+# 标准模式：4 阶段调试
 
-**Use this ESPECIALLY when:**
+### 阶段 1：根因调查
 
-- Under time pressure (emergencies make guessing tempting)
-- "Just one quick fix" seems obvious
-- You've already tried multiple fixes
-- Previous fix didn't work
-- You don't fully understand the issue
-
-**Don't skip when:**
-
-- Issue seems simple (simple bugs have root causes too)
-- You're in a hurry (rushing guarantees rework)
-- Manager wants it fixed NOW (systematic is faster than thrashing)
-
-## When to Use: debugging vs smart-debug
-
-| Scenario                             | Use `debugging` | Use `smart-debug` |
-| ------------------------------------ | --------------- | ----------------- |
-| Simple, locally reproducible bug     | Yes             | Overkill          |
-| Root cause area already known        | Yes             | Optional          |
-| Static analysis / code review bug    | Yes             | No                |
-| Runtime / production issue           | Start here      | Preferred         |
-| Intermittent / hard-to-reproduce     | Escalate        | Yes               |
-| Needs hypothesis ranking gate        | No              | Yes (blocking)    |
-| Needs instrumentation + log analysis | No              | Yes               |
-| Observability-driven (traces, APM)   | No              | Yes               |
-
-**Rule of thumb**: Start with `debugging` for straightforward bugs. Escalate to `smart-debug` when you need hypothesis ranking, structured instrumentation, or the bug is intermittent/production-only.
-
-**See also**: `.claude/skills/smart-debug/SKILL.md`
-
-## The Four Phases
-
-You MUST complete each phase before proceeding to the next.
-
-### Phase 1: Root Cause Investigation
-
-**BEFORE attempting ANY fix:**
-
-1. **Read Error Messages Carefully**
-   - Don't skip past errors or warnings
-   - They often contain the exact solution
-   - Read stack traces completely
-   - Note line numbers, file paths, error codes
-
-2. **Reproduce Consistently**
-   - Can you trigger it reliably?
-   - What are the exact steps?
-   - Does it happen every time?
-   - If not reproducible - gather more data, don't guess
-
-3. **Check Recent Changes**
-   - What changed that could cause this?
-   - Git diff, recent commits
-   - New dependencies, config changes
-   - Environmental differences
-
-4. **Gather Evidence in Multi-Component Systems**
-
-   **WHEN system has multiple components (CI - build - signing, API - service - database):**
-
-   **BEFORE proposing fixes, add diagnostic instrumentation:**
-
-   ```
-   For EACH component boundary:
-     - Log what data enters component
-     - Log what data exits component
-     - Verify environment/config propagation
-     - Check state at each layer
-
-   Run once to gather evidence showing WHERE it breaks
-   THEN analyze evidence to identify failing component
-   THEN investigate that specific component
-   ```
-
-   **Example (multi-layer system):**
+1. **仔细读错误信息** — 栈跟踪、行号、文件路径、错误码。它们通常包含精确解法。
+2. **稳定复现** — 能可靠触发吗？每次都能？如果不行——收集更多数据，不要猜。
+3. **检查最近变更** — `git diff`、最近提交、新依赖、配置变更、环境差异。
+4. **多组件系统收集证据** — 在每个组件边界插入诊断日志：检查数据进出、环境传播。
 
    ```bash
-   # Layer 1: Workflow
-   echo "=== Secrets available in workflow: ==="
+   # 分层排查示例
+   echo "=== Workflow 层 ==="
    echo "IDENTITY: ${IDENTITY:+SET}${IDENTITY:-UNSET}"
-
-   # Layer 2: Build script
-   echo "=== Env vars in build script: ==="
-   env | grep IDENTITY || echo "IDENTITY not in environment"
-
-   # Layer 3: Signing script
-   echo "=== Keychain state: ==="
-   security list-keychains
-   security find-identity -v
-
-   # Layer 4: Actual signing
-   codesign --sign "$IDENTITY" --verbose=4 "$APP"
+   # 逐层直到找到哪层失败
    ```
 
-   **This reveals:** Which layer fails (secrets - workflow OK, workflow - build FAIL)
-
-   **For distributed/microservice systems — prefer OpenTelemetry traces:**
-
+   分布式系统优先用 OpenTelemetry 追踪:
    ```bash
-   # Query traces by component (preferred over manual echo/env logging)
-   pnpm trace:query --component <service-name> --event <event-name> --since <ISO-8601> --limit 200
-
-   # When trace ID is already known
-   pnpm trace:query --trace-id <traceId> --compact --since <ISO-8601> --limit 200
+   pnpm trace:query --component <service> --since <ISO-8601> --limit 200
    ```
 
-   **Fragmented traces** (each service has its own root span, trace IDs don't match across boundaries)
-   = broken context propagation. Fix `traceparent`/`tracestate` header forwarding before investigating business logic.
+5. **追踪数据流** — 坏值从哪来？谁传进来的？一直追溯到源头。
 
-   > **Instrumentation Gate (before hypothesis generation):** If runtime behavior remains unclear after static analysis, add targeted log statements at key decision nodes before generating hypotheses. Use session-scoped log files (`.claude/context/tmp/debug-{sessionId}.log`) to capture runtime state. Human-in-the-loop: ask the user to reproduce the bug after instrumentation is added, before analyzing results. Only proceed to Phase 2 once runtime evidence is collected.
+### 阶段 2：模式分析
 
-5. **Trace Data Flow**
+1. 找同一代码库中相似的工作代码
+2. 对照参考实现完整阅读（不要扫读）
+3. 列出工作与损坏之间的所有差异
+4. 理解依赖关系
 
-   **WHEN error is deep in call stack:**
+### 阶段 3：假设与测试
 
-   See `root-cause-tracing.md` in this directory for the complete backward tracing technique.
+1. 形成单一假设——清晰陈述"我认为 X 是根因，因为 Y"
+2. 最小化测试——只改一处来验证
+3. 验证——没通过？形成新假设
+4. 当不知道时说出来，不要假装知道
 
-   **Quick version:**
-   - Where does bad value originate?
-   - What called this with bad value?
-   - Keep tracing up until you find the source
-   - Fix at source, not at symptom
+### 阶段 4：实施
 
-### Phase 2: Pattern Analysis
+1. **先创建失败测试** — 用 `tdd` skill 编写
+2. **实施单一修复** — 只解决根因，不做"顺手优化"
+3. **验证修复** — 测试通过？其他测试没被破坏？
+4. **清理** — 移除所有调试仪器化
+5. **3 次修复失败 → 质疑架构**（见铁律 4）
 
-**Find the pattern before fixing:**
+---
 
-1. **Find Working Examples**
-   - Locate similar working code in same codebase
-   - What works that's similar to what's broken?
+# 高级模式：AI 辅助调试（原 smart-debug）
 
-2. **Compare Against References**
-   - If implementing pattern, read reference implementation COMPLETELY
-   - Don't skim - read every line
-   - Understand the pattern fully before applying
+**适用**: 间歇性 Bug、生产环境、复杂多组件、需要观测数据驱动。
 
-3. **Identify Differences**
-   - What's different between working and broken?
-   - List every difference, however small
-   - Don't assume "that can't matter"
-
-4. **Understand Dependencies**
-   - What other components does this need?
-   - What settings, config, environment?
-   - What assumptions does it make?
-
-### Phase 3: Hypothesis and Testing
-
-**Scientific method:**
-
-1. **Form Single Hypothesis**
-   - State clearly: "I think X is the root cause because Y"
-   - Write it down
-   - Be specific, not vague
-
-2. **Test Minimally**
-   - Make the SMALLEST possible change to test hypothesis
-   - One variable at a time
-   - Don't fix multiple things at once
-
-3. **Verify Before Continuing**
-   - Did it work? Yes - Phase 4
-   - Didn't work? Form NEW hypothesis
-   - DON'T add more fixes on top
-
-4. **When You Don't Know**
-   - Say "I don't understand X"
-   - Don't pretend to know
-   - Ask for help
-   - Research more
-
-### Phase 4: Implementation
-
-**Fix the root cause, not the symptom:**
-
-1. **Create Failing Test Case**
-   - Simplest possible reproduction
-   - Automated test if possible
-   - One-off test script if no framework
-   - MUST have before fixing
-   - Use the `tdd` skill for writing proper failing tests
-
-2. **Implement Single Fix**
-   - Address the root cause identified
-   - ONE change at a time
-   - No "while I'm here" improvements
-   - No bundled refactoring
-
-3. **Verify Fix**
-   - Test passes now?
-   - No other tests broken?
-   - Issue actually resolved?
-
-4. **Cleanup**
-   - Remove all instrumentation added for this debug session (log statements, temporary diagnostics)
-   - Verify cleanup: grep for the session debug ID or instrumentation markers to confirm no debug artifacts remain in production code
-   - Example: `rg "debug-{sessionId}" --type-add 'src:*.{js,ts,cjs,mjs}' -tsrc .`
-
-5. **If Fix Doesn't Work**
-   - STOP
-   - Count: How many fixes have you tried?
-   - If < 3: Return to Phase 1, re-analyze with new information
-   - **If >= 3: STOP and question the architecture (step 6 below)**
-   - DON'T attempt Fix #4 without architectural discussion
-
-6. **If 3+ Fixes Failed: Question Architecture**
-
-   **Pattern indicating architectural problem:**
-   - Each fix reveals new shared state/coupling/problem in different place
-   - Fixes require "massive refactoring" to implement
-   - Each fix creates new symptoms elsewhere
-
-   **STOP and question fundamentals:**
-   - Is this pattern fundamentally sound?
-   - Are we "sticking with it through sheer inertia"?
-   - Should we refactor architecture vs. continue fixing symptoms?
-
-   **Discuss with your human partner before attempting more fixes**
-
-   This is NOT a failed hypothesis - this is a wrong architecture.
-
-## Red Flags - STOP and Follow Process
-
-If you catch yourself thinking:
-
-- "Quick fix for now, investigate later"
-- "Just try changing X and see if it works"
-- "Add multiple changes, run tests"
-- "Skip the test, I'll manually verify"
-- "It's probably X, let me fix that"
-- "I don't fully understand but this might work"
-- "Pattern says X but I'll adapt it differently"
-- "Here are the main problems: [lists fixes without investigation]"
-- Proposing solutions before tracing data flow
-- **"One more fix attempt" (when already tried 2+)**
-- **Each fix reveals new problem in different place**
-
-**ALL of these mean: STOP. Return to Phase 1.**
-
-**If 3+ fixes failed:** Question the architecture (see Phase 4.5)
-
-## Your Human Partner's Signals You're Doing It Wrong
-
-**Watch for these redirections:**
-
-- "Is that not happening?" - You assumed without verifying
-- "Will it show us...?" - You should have added evidence gathering
-- "Stop guessing" - You're proposing fixes without understanding
-- "Ultrathink this" - Question fundamentals, not just symptoms
-- "We're stuck?" (frustrated) - Your approach isn't working
-
-**When you see these:** STOP. Return to Phase 1.
-
-## Common Rationalizations
-
-| Excuse                                       | Reality                                                                 |
-| -------------------------------------------- | ----------------------------------------------------------------------- |
-| "Issue is simple, don't need process"        | Simple issues have root causes too. Process is fast for simple bugs.    |
-| "Emergency, no time for process"             | Systematic debugging is FASTER than guess-and-check thrashing.          |
-| "Just try this first, then investigate"      | First fix sets the pattern. Do it right from the start.                 |
-| "I'll write test after confirming fix works" | Untested fixes don't stick. Test first proves it.                       |
-| "Multiple fixes at once saves time"          | Can't isolate what worked. Causes new bugs.                             |
-| "Reference too long, I'll adapt the pattern" | Partial understanding guarantees bugs. Read it completely.              |
-| "I see the problem, let me fix it"           | Seeing symptoms does not equal understanding root cause.                |
-| "One more fix attempt" (after 2+ failures)   | 3+ failures = architectural problem. Question pattern, don't fix again. |
-
-## Quick Reference
-
-| Phase                 | Key Activities                                         | Success Criteria            |
-| --------------------- | ------------------------------------------------------ | --------------------------- |
-| **1. Root Cause**     | Read errors, reproduce, check changes, gather evidence | Understand WHAT and WHY     |
-| **2. Pattern**        | Find working examples, compare                         | Identify differences        |
-| **3. Hypothesis**     | Form theory, test minimally                            | Confirmed or new hypothesis |
-| **4. Implementation** | Create test, fix, verify                               | Bug resolved, tests pass    |
-
-## When Process Reveals "No Root Cause"
-
-If systematic investigation reveals issue is truly environmental, timing-dependent, or external:
-
-1. You've completed the process
-2. Document what you investigated
-3. Implement appropriate handling (retry, timeout, error message)
-4. Add monitoring/logging for future investigation
-
-**But:** 95% of "no root cause" cases are incomplete investigation.
-
-## Supporting Techniques
-
-These techniques are part of systematic debugging and available in this directory:
-
-- **`root-cause-tracing.md`** - Trace bugs backward through call stack to find original trigger
-- **`defense-in-depth.md`** - Add validation at multiple layers after finding root cause
-- **`condition-based-waiting.md`** - Replace arbitrary timeouts with condition polling
-- **find-polluter** - For test pollution bisection (flaky tests due to shared state): run `.claude/tools/analysis/find-polluter/find-polluter.sh` (or `find-polluter.ps1` on Windows) from the project root to isolate which test pollutes the suite.
-
-**Related skills:**
-
-- **tdd** - For creating failing test case (Phase 4, Step 1)
-- **verification-before-completion** - Verify fix worked before claiming success
-
-## Real-World Impact
-
-From debugging sessions:
-
-- Systematic approach: 15-30 minutes to fix
-- Random fixes approach: 2-3 hours of thrashing
-- First-time fix rate: 95% vs 40%
-- New bugs introduced: Near zero vs common
-
-## AI-Assisted Debugging & Modern Observability (2025+)
-
-### OpenTelemetry: The New Stack Trace
-
-For distributed systems, OpenTelemetry traces replace manual `echo`/`env` evidence gathering. A trace shows the complete request journey across service boundaries via span IDs and trace IDs (W3C Trace Context standard: `traceparent`/`tracestate` headers).
-
-**Evidence hierarchy for distributed failures (prefer in order):**
+### 核心流程
 
 ```
-1. Distributed traces (OpenTelemetry spans, correlated trace IDs)
-2. Structured logs with correlation IDs
-3. Metrics with timestamps
-4. Manual instrumentation (Phase 1 Step 4 bash examples)
+无排名假设 → 不仪器化
+无日志确认 → 不修复
+无清理确认 → 不结束
 ```
 
-**Common symptom — fragmented traces:**
-Each service shows its own root span, trace IDs don't match across boundaries. This means context propagation is broken — fix header forwarding before investigating business logic.
+### 1. 初始分诊
 
-### AI-Assisted Root Cause Analysis
+解析问题描述：
+- 错误消息/栈跟踪
+- 复现步骤
+- 受影响的组件/服务
+- 环境（开发/预发布/生产）
+- 失败模式（间歇性/一致性）
 
-LLM-based debugging agents (2025 pattern) augment Phase 1 by reading production traces and correlating with codebase context to suggest minimal reproduction cases.
+### 2. 观测数据收集
 
-**Use AI assistance for:**
+生产环境：
+- 错误追踪（Sentry, Rollbar）
+- APM 指标（DataDog, New Relic）
+- 分布式追踪（Jaeger, Zipkin, Honeycomb）
+- 日志聚合（ELK, Splunk, Loki）
 
-- High-complexity distributed failures with multi-service blast radius
-- On-call incidents requiring rapid root cause identification
-- Converting production traces into deterministic test reproducers
+本地环境：
+```bash
+pnpm trace:query --component <service> --event <event> --since <ISO-8601> --limit 200
+```
 
-**Do NOT skip Phase 1** when using AI assistance. AI suggestions are hypotheses — apply Phase 3 (hypothesis testing) before implementing any AI-suggested fix. AI cannot replace systematic investigation; it accelerates evidence gathering.
+### 3. 假设生成与概率排名（阻塞门禁）
 
-## Anti-Patterns
+**仪器化代码前必须先完成此步。**
 
-| Anti-Pattern                                 | Why It Fails                                                                      | Correct Approach                                                     |
-| -------------------------------------------- | --------------------------------------------------------------------------------- | -------------------------------------------------------------------- |
-| "Quick fix for now, investigate later"       | The quick fix becomes permanent; the root cause resurfaces as a different symptom | Always complete Phase 1 before touching production code              |
-| Making multiple changes at once              | Can't determine which change fixed or broke the system; creates regressions       | One change per hypothesis test; verify before the next change        |
-| Proposing AI-suggested fixes without testing | AI suggestions are hypotheses, not facts; applying them blindly skips Phase 3     | Treat AI suggestions as hypotheses to test, not answers to implement |
-| Attempting a 4th fix after 3 failures        | N+1 fix attempts on a broken approach compound the problem                        | After 3 failed fixes, escalate to architecture review                |
-| Skipping the failing test before the fix     | You can't verify the fix worked, and regressions are invisible                    | Create the failing test first; it proves root cause and verifies fix |
+生成 3-5 条排名假设，每条包含：
 
-## Memory Protocol (MANDATORY)
+```
+H1 (65%) — [假设描述]
+  证据: 观测到的现象
+  证伪条件: 什么能证明这个假设是错的
+  测试方法: 如何仪器化来确认/否定
+  
+H2 (20%) — ...
+H3 (10%) — ...
+H4 (3%) — ...
+H5 (2%) — ...
+```
 
-**Before starting:**
-Read `.claude/context/memory/learnings.md`
+常见分类：逻辑错误、状态管理、集成失败、资源耗尽、配置漂移、数据损坏。
 
-**After completing:**
+### 4. 结构化仪器化
 
-- New pattern -> `.claude/context/memory/learnings.md`
-- Issue found -> `.claude/context/memory/issues.md`
-- Decision made -> `.claude/context/memory/decisions.md`
+每条仪器化必须针对特定的假设 ID。
 
-> ASSUME INTERRUPTION: If it's not in memory, it didn't happen.
+**日志回话文件**（避免污染生产日志）：
+```javascript
+const debugSessionId = Math.random().toString(16).slice(2, 8);
+const debugLogPath = `.claude/context/tmp/debug-${debugSessionId}.log`;
+```
+
+仪器化位置：决策节点、状态变更点、集成边界、函数入口/出口。
+
+### 5. 复现门禁
+
+默认自动复现（运行测试/脚本触达代码路径）→ 收集日志。
+
+失败时退回人工触发（HITL）。
+
+### 6. 日志分析（修复前必须）
+
+读取收集的日志，与假设对照：
+1. 哪些假设被证实或证伪？
+2. 多次复现的证据是否一致？
+3. 是否有意外条目指向新假设？
+
+**日志分析必须得出结论：**
+- 确认根因："H1 确认——每次失败查询都是 15 次 DB 调用，成功只有 1 次"
+- 证据不足：需要更多仪器化
+- 新假设：观察到意外模式
+
+### 7. 修复实施
+
+基于确认的根因实施修复。
+
+### 8. 仪器化清理（强制最终步骤）
+
+```bash
+grep -r "debug-${sessionId}" --include="*.ts" --include="*.js" .
+# 应返回 0 结果
+rm .claude/context/tmp/debug-${sessionId}.log
+```
+
+### 9. 预防
+
+- 生成回归测试
+- 更新知识库
+- 添加监控/告警
+
+---
+
+## 快速参考表
+
+| 阶段 | 关键活动 | 成功标准 |
+|:----|:---------|:---------|
+| **1. 根因** | 读错误、复现、查变更、收集证据 | 理解 WHAT 和 WHY |
+| **2. 模式** | 找工作示例、对比 | 识别差异 |
+| **3. 假设** | 形成理论、最小测试 | 确认或新假设 |
+| **4. 实施** | 创建测试、修复、验证 | Bug 解决、测试通过 |
+| **高级 3-6** | 假设排名→仪器化→复现→日志分析 | 日志确认根因 |
+
+---
+
+## 警告信号
+
+如果发现自己在想：
+- "先快速修一下，后面再查"
+- "试着改改 X 看看"
+- "一次改多个，一起跑测试"
+- "跳过测试，我手动验证"
+- "我不完全理解，但可能有效"
+- "再试一次修复"（已经试了 2+ 次）
+
+→ **全部意味着：停，回到阶段 1。**
+
+---
+
+## 反模式
+
+| 反模式 | 正确做法 |
+|:------|:---------|
+| 修复前不诊断 | 收集日志、确认根因、再写修复 |
+| 单一假设 | 生成 3-5 条排名假设 |
+| 跳过复现 | 自动复现或人工触发 |
+| 留下仪器化 | 修复后全部清理 |
+| 一次性改多处 | 一次改一处，逐个验证 |
+| 连续 4 次猜测修复 | 3 次失败后必须质疑架构 |
+
+## 关联 Skill
+
+- [tdd](../tdd/SKILL.md) — 创建失败测试用例
+- [code-search](../code-search/SKILL.md) — 代码搜索定位
