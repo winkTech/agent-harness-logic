@@ -42,6 +42,10 @@
 - [Agent 健康审查规范](learnings/2026-06-04-agent-health-audit.md)
 - [记忆积累计划](learnings/MEMORY_ACCUMULATION_PLAN.md)
 
+### 参考链接
+
+- [跨项目经验复用](references/cross-project-experience-link.md) — 新 FPGA 项目启动时参考的模板结构
+
 ### 工作记忆
 
 - [Phase 1 完成](work/2026-06-03-phase1-complete.md) — LTE/NR 知识库 8 篇 + Python 调试 Skill 6 模板 ✓
