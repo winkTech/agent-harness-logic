@@ -75,9 +75,9 @@
       "trigger": "Write/Edit"
     },
     "safety/context-monitor.cjs": {
-      "enabled": false,
-      "frequency": "low",
-      "description": "上下文监控",
+      "enabled": true,
+      "frequency": "medium",
+      "description": "上下文监控（>40% 告警）",
       "trigger": "每次工具调用"
     },
     "safety/dlp-pretool.cjs": {
