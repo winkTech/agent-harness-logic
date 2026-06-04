@@ -40,6 +40,7 @@ knowledge/
 | 文档 | 内容 | 难度 |
 |------|------|------|
 | [fpga-design-guide.md](primary/domains/fpga/fpga-design-guide.md) | FPGA 设计指南 | ⭐⭐ |
+| [learning-path.md](primary/domains/fpga/learning-path.md) | FPGA 学习路径 — 阶段划分/资源推荐/检查清单 | ⭐ |
 | [verilog-design-experience.md](primary/domains/fpga/verilog-design-experience.md) | Verilog 设计经验 | ⭐⭐ |
 | [fpga-best-practices.md](primary/domains/fpga/fpga-best-practices.md) | FPGA 设计最佳实践 | ⭐⭐ |
 
@@ -115,6 +116,21 @@ knowledge/
 | [ofdm/rtl_architecture.md](primary/domains/comm/ofdm/rtl_architecture.md) | OFDM RTL 架构设计 | ⭐⭐⭐ |
 | [ofdm/resource_estimate.md](primary/domains/comm/ofdm/resource_estimate.md) | OFDM 资源评估 | ⭐⭐ |
 | [ofdm/testbench_plan.md](primary/domains/comm/ofdm/testbench_plan.md) | OFDM 验证方案 | ⭐⭐ |
+| [ofdm/fixed_point_report.md](primary/domains/comm/ofdm/fixed_point_report.md) | OFDM 定点量化报告 | ⭐⭐⭐ |
+| [ofdm/report_ofdm_fpga_implementation.md](primary/domains/comm/ofdm/report_ofdm_fpga_implementation.md) | OFDM FPGA 实现报告 | ⭐⭐⭐ |
+| [golden_model_lessons.md](primary/domains/comm/golden_model_lessons.md) | Golden Model 开发经验总结 — 调试技巧/最佳实践 | ⭐⭐⭐ |
+| [data_structure.md](primary/domains/comm/data_structure.md) | 通信算法知识库目录结构 | ⭐ |
+
+#### 算法全链路文档（7阶段产物）
+
+每个算法目录含算法规格、定点报告、资源评估、实现报告等阶段文档：
+
+| 算法 | 包含文档 | 阶段覆盖 |
+|:----|:---------|:--------:|
+| [channel_est/](primary/domains/comm/channel_est/) | 规格/定点/资源/FPGA 实现报告 4 篇 | ①③④⑦ |
+| [ldpc/](primary/domains/comm/ldpc/) | 规格/编码规格/定点/资源/实现报告 6 篇 | ①③④⑦ |
+| [rrc/](primary/domains/comm/rrc/) | 规格/定点/资源/实现报告 4 篇 | ①③④⑦ |
+| [synch/](primary/domains/comm/synch/) | 规格/定点/资源/实现报告 4 篇 | ①③④⑦ |
 
 | 文档 | 内容 | 难度 |
 |------|------|------|
@@ -129,6 +145,7 @@ knowledge/
 |------|------|------|
 | [cross-project-experience.md](primary/cross-project-experience.md) | 跨项目经验复用 — FPGA 项目模板/目录结构/代码规范 | ⭐⭐ |
 | [matlab-fpga-image-processing.md](primary/domains/fpga/matlab-fpga-image-processing.md) | MATLAB/FPGA 图像处理 | ⭐⭐⭐ |
+| [knowledge-graph.md](primary/knowledge-graph.md) | FPGA 知识图谱 — 概念关系与学习路线 | ⭐⭐ |
 
 #### 团队协作
 
@@ -226,7 +243,7 @@ ls ~/.claude/knowledge/primary/domains/fpga/
 
 ## 更新日志
 
-- 2026-06-04: FPGA 38 个源文档归档到 archive/（-199K 行）；sources-index.md 索引；INDEX.md 补齐全部 47 篇通信文档 + 修复文档计数
+- 2026-06-04: FPGA 38 个源文档归档到 archive/（-199K 行）；sources-index.md 索引；INDEX.md 补齐孤岛文档（golden_model_lessons/data_structure/knowledge-graph/learning-path + 5 个算法子目录入口）
 - 2026-06-04: 新增 O-RAN SMO A1/O1 接口知识文档 (通信文档 35 篇)
 - 2026-06-03: v1.3 统计更新，通信文档 33+ FPGA 16 = 52 篇主文档
 - 2026-06-01: v1.2 完成知识库构建，创建 22 个知识文档
