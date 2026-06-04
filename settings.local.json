@@ -1,6 +1,7 @@
 {
   "env": {
-    "ECC_DISABLED_HOOKS": "pre:edit-write:gateguard-fact-force"
+    "ECC_DISABLED_HOOKS": "pre:edit-write:gateguard-fact-force",
+    "CLAUDE_AUTOCOMPACT_PCT_OVERRIDE": "40"
   },
   "hooks": {
     "PostStop": [
