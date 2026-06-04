@@ -127,5 +127,104 @@ learnings/YYYY-MM-DD-学习主题.md
 
 ---
 
+## 五、记忆生命周期
+
+> 每种记忆类型有不同的寿命和归宿。统一的规则保证系统不膨胀。
+
+### 5.1 过期判定标准
+
+| 类型 | 目录 | 默认寿命 | 过期条件 | 归宿 |
+|:----|:----:|:--------:|----------|:----:|
+| **工作记忆** | `work/` | **14天** | status=完成 + 文件名日期 >14天 | → `archive/` |
+| **工作记忆** | `work/` | **14天** | status=in_progress + 文件名日期 >30天且无更新 | → 提示确认 |
+| **错误记录** | `errors/` | **90天** | 教训已提取到 LESSONS.md | 可保留 or → `archive/` |
+| **学习总结** | `learnings/` | **永久** | 不自动过期 | 原地更新/合并/标注 superseded-by |
+| **项目记忆** | `projects/` | **项目完成+30天** | 项目标记完成 | → `archive/` |
+| **模板文件** | — | **永久** | 不删除 | 随系统升级更新 |
+| **已归档** | `archive/` | **永久** | 永不删除 | 保留供历史查询 |
+
+> **寿命从文件名日期 `YYYY-MM-DD` 算起，不是文件修改时间。**
+
+### 5.2 清理触发时机
+
+| 时机 | 动作 | 执行者 |
+|:----|:----|:------|
+| **每次会话启动** | 检查 `work/` 是否有文件名日期 >14天的完成条目 → 自动归档 | Claude Code 自动 |
+| **WebSearch** | 每月初浏览 `errors/` 和 `work/` 判断哪些 lessons 已固化 | 手动或 `/compact` 触发 |
+| **按需** | 主动执行 `memory-cleanup.sh` 或 `/memory-cleanup` | 用户主动 |
+
+### 5.3 清理方法（按严格程度）
+
+```
+清理五阶梯（阶梯越高越慎重）:
+                           ┌──────────┐
+                      ┌───→  ④ 删除  │ 仅重复/空文件
+                      │    └──────────┘
+              ┌───────┴┐
+         ┌───→│ ③ 合并  │ lessons → LESSONS.md → 归档原文件
+         │    └────────┘
+   ┌─────┴──┐
+──→│ ② 归档  │ 移动到 archive/，保持文件完整可查
+   │        │
+   └─────┬──┘
+         │    ┌──────────┐
+         └───→│ ① 原地更新 │ 添加 superseded-by 备注
+              └──────────┘
+```
+
+#### ① 原地更新（Update）
+适用范围: `learnings/` 中的内容需要更新时
+做法:
+```markdown
+> 此文档已被 [[newer-document]] 部分或全部取代
+> 保留以供历史参考，新项目请参阅新文档
+```
+
+#### ② 归档（Archive）— 最常用
+适用范围: `work/` 完成条目、`projects/` 已完成项目
+做法: `mv file.md memory/archive/YYYY-MM-DD-原始名.md`
+效果: 文件仍在，但不会被自动回顾加载；需要时可通过 `archive/` 或 MEMORY.md 找到
+
+#### ③ 合并（Merge）
+适用范围: 错误教训已提取到 LESSONS.md 后
+做法: 确认 lessons 已写入 LESSONS.md → 归档原文件
+时机: 创建新 lessons 后立即评估
+
+#### ④ 删除（Delete）
+适用范围: 仅用于空文件、确认的重复文件
+做法: `rm file.md`（慎用，确认无价值再删）
+
+### 5.4 执行命令
+
+```bash
+# 快速统计各类型文件
+find memory/work memory/errors memory/learnings memory/projects -name "*.md" | wc -l
+
+# 列出可归档的 work 文件（完成状态 + 文件名日期 >14天）
+grep -l "status:.*完成\|status:.*completed" memory/work/*.md \
+  | while IFS= read -r f; do
+      d=$(basename "$f" | grep -oP '^\d{4}-\d{2}-\d{2}')
+      [ -n "$d" ] && [ "$(date -d "$d" +%s 2>/dev/null)" -lt "$(date -d '14 days ago' +%s 2>/dev/null)" ] \
+        && echo "可归档: $f"
+    done
+
+# 手动归档
+mv memory/work/过期文件.md memory/archive/
+```
+
+### 5.5 健康标准
+
+| 指标 | 健康值 | 警戒线 |
+|:----|:------:|:------:|
+| `work/` 文件数 | ≤3 | ≥5 |
+| `errors/` 文件数 | ≤5 | ≥10 |
+| 记忆系统总文件数 | ≤30 | ≥50 |
+| MEMORY.md 索引准确率 | 100% | 链接断裂 |
+
+> 超过警戒线 → 触发一轮清理
+
+---
+
 *创建时间: 2026-06-01*
+*最后更新: 2026-06-04*
 *维护者: Claude Code*

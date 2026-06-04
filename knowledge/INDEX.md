@@ -12,12 +12,14 @@ knowledge/
 ├── INDEX.md                 # 本文件
 ├── primary/                 # 主要知识（Markdown）
 │   ├── domains/            # 领域知识
-│   │   ├── fpga/           # FPGA 开发知识
-│   │   └── comm/           # 通信算法知识
+│   │   ├── fpga/           # FPGA 开发知识（17 篇精炼指南）
+│   │   └── comm/           # 通信算法知识（47 篇）
 │   ├── patterns/           # 设计模式
 │   ├── pitfalls/           # 常见陷阱
 │   ├── snippets/           # 代码片段
 │   └── references/         # 参考资料
+├── archive/                 # 归档文档（原始提取，搜索时默认排除）
+│   └── sources/fpga/       # FPGA 源文档 38 篇（199K 行）
 └── source/                 # 原始文档（PDF）
     └── datasheets/         # 数据手册
         ├── fpga-design/    # FPGA 设计
@@ -40,6 +42,14 @@ knowledge/
 | [fpga-design-guide.md](primary/domains/fpga/fpga-design-guide.md) | FPGA 设计指南 | ⭐⭐ |
 | [verilog-design-experience.md](primary/domains/fpga/verilog-design-experience.md) | Verilog 设计经验 | ⭐⭐ |
 | [fpga-best-practices.md](primary/domains/fpga/fpga-best-practices.md) | FPGA 设计最佳实践 | ⭐⭐ |
+
+#### 源文档索引
+
+> **38 本书籍全文提取 → `archive/sources/fpga/`** —— 需要全文时通过此索引定位
+>
+| 文档 | 内容 |
+|:-----|:-----|
+| [sources-index.md](primary/domains/fpga/sources-index.md) | 全部 38 个源文档的摘要、行数及归档路径 |
 
 #### 编码规范
 
@@ -77,21 +87,30 @@ knowledge/
 
 ### 通信算法知识文档
 
-
 | 文档 | 内容 | 难度 |
 |------|------|------|
 | [lte/overview.md](primary/domains/comm/lte/overview.md) | 4G LTE 系统架构 | ⭐⭐ |
 | [lte/phy-downlink.md](primary/domains/comm/lte/phy-downlink.md) | LTE 下行物理层 | ⭐⭐⭐ |
 | [lte/phy-uplink.md](primary/domains/comm/lte/phy-uplink.md) | LTE 上行物理层 | ⭐⭐⭐ |
 | [5g-nr/overview.md](primary/domains/comm/5g-nr/overview.md) | 5G NR 系统架构总纲 | ⭐⭐ |
-| [5g-nr/oran-interface.md](primary/domains/comm/5g-nr/oran-interface.md) | ORAN 同步接口协议 | ⭐⭐⭐ |
+| [5g-nr/nr-frame-structure.md](primary/domains/comm/5g-nr/nr-frame-structure.md) | NR 帧结构与 Numerology（μ=0..4, SCS, 时隙格式） | ⭐⭐⭐ |
+| [5g-nr/fr2-beam-management.md](primary/domains/comm/5g-nr/fr2-beam-management.md) | FR2 波束管理（P1/P2/P3, TCI/QCL, BFR） | ⭐⭐⭐ |
+| [5g-nr/nr-prach.md](primary/domains/comm/5g-nr/nr-prach.md) | NR PRACH 前导格式与随机接入过程 | ⭐⭐⭐ |
+| [5g-nr/pdcch.md](primary/domains/comm/5g-nr/pdcch.md) | NR PDCCH（CORESET, CCE/REG, DCI 格式, 盲检） | ⭐⭐⭐ |
+| [5g-nr/nr-ldpc.md](primary/domains/comm/5g-nr/nr-ldpc.md) | NR LDPC BG1/BG2 — 与 802.11n QC-LDPC 对比 | ⭐⭐⭐ |
+| [5g-nr/pdsch.md](primary/domains/comm/5g-nr/pdsch.md) | PDSCH 物理下行共享信道（资源分配 Type 0/1, DMRS, HARQ） | ⭐⭐⭐ |
+| [5g-nr/pusch.md](primary/domains/comm/5g-nr/pusch.md) | PUSCH/PUCCH（DFT-s-OFDM, UCI 复用, SRS） | ⭐⭐⭐ |
+| [5g-nr/polar-code.md](primary/domains/comm/5g-nr/polar-code.md) | NR Polar 码（信道极化, SCL 译码, CA-Polar） | ⭐⭐⭐ |
+| [5g-nr/mimo-detection.md](primary/domains/comm/5g-nr/mimo-detection.md) | MIMO 检测与预编码（ZF/MMSE/LMMSE-IRC, SVD, 码本） | ⭐⭐⭐ |
+| [5g-nr/nru.md](primary/domains/comm/5g-nr/nru.md) | NR-U 非授权频谱（LBT Cat 1-4, COT, RB interlacing） | ⭐⭐⭐ |
+| [5g-nr/ntn.md](primary/domains/comm/5g-nr/ntn.md) | NTN 卫星 NR（LEO/GEO 多普勒, TA 预补偿） | ⭐⭐⭐ |
+| [5g-nr/oran-interface.md](primary/domains/comm/5g-nr/oran-interface.md) | ORAN C/U/S/M 四平面协议与 eCPRI | ⭐⭐⭐ |
+| [5g-nr/oran-ric.md](primary/domains/comm/5g-nr/oran-ric.md) | O-RAN RIC（Near-RT RIC, xApp, E2AP/E2SM） | ⭐⭐⭐ |
+| [5g-nr/oran-smo.md](primary/domains/comm/5g-nr/oran-smo.md) | O-RAN SMO — 服务管理与编排 / A1-O1 接口 | ⭐⭐⭐ |
 | [5g-nr/lowphy-architecture.md](primary/domains/comm/5g-nr/lowphy-architecture.md) | Lowphy 链路 (FFT/相位补偿) | ⭐⭐⭐ |
 | [5g-nr/dfe-architecture.md](primary/domains/comm/5g-nr/dfe-architecture.md) | DFE 处理模块 (CFR/DPD) | ⭐⭐⭐ |
 | [5g-nr/bfp-compression.md](primary/domains/comm/5g-nr/bfp-compression.md) | BFP 6bit 块浮点压缩 | ⭐⭐⭐ |
-| [5g-nr/oran-smo.md](primary/domains/comm/5g-nr/oran-smo.md) | O-RAN SMO — 服务管理与编排 / A1-O1 接口 | ⭐⭐⭐ |
 | [5g-nr/nr-test-mode.md](primary/domains/comm/5g-nr/nr-test-mode.md) | NR 测试模式与 EVM 测试 | ⭐⭐ |
-| [5g-nr/nr-ldpc.md](primary/domains/comm/5g-nr/nr-ldpc.md) | NR LDPC BG1/BG2 — 与 802.11n QC-LDPC 对比 | ⭐⭐⭐ |
-| [5g-nr/pdsch.md](primary/domains/comm/5g-nr/pdsch.md) | PDSCH 物理下行共享信道深度解析 | ⭐⭐⭐ |
 | [ofdm/algorithm_spec.md](primary/domains/comm/ofdm/algorithm_spec.md) | OFDM 算法规格书 | ⭐⭐⭐ |
 | [ofdm/rtl_architecture.md](primary/domains/comm/ofdm/rtl_architecture.md) | OFDM RTL 架构设计 | ⭐⭐⭐ |
 | [ofdm/resource_estimate.md](primary/domains/comm/ofdm/resource_estimate.md) | OFDM 资源评估 | ⭐⭐ |
@@ -161,8 +180,8 @@ fpga-team-collaboration.md → fpga-development-workflow.md → fpga-best-practi
 
 | 指标 | 值 |
 |------|-----|
-| **Markdown 文档** | 54 个（通信 35 + FPGA 16 + 跨域 3） |
-| **源文档提取** | 35 个 |
+| **Markdown 文档** | **69 个**（通信 47 + FPGA 18 + 跨域 4） |
+| **源文档提取** | **38 个**（已归档到 `archive/sources/fpga/`） |
 | **原始 PDF** | 35+ 个（已分类） |
 | **领域数** | 3（通信/FPGA/Python/MATLAB） |
 | **MATLAB 黄金模型** | 37 个 `.m` 文件 |
@@ -178,8 +197,11 @@ fpga-team-collaboration.md → fpga-development-workflow.md → fpga-best-practi
 ### 手动查询
 
 ```bash
-# 搜索关键词
+# 搜索关键词（仅 primary/ 知识文档，排除 archive/ 源文档）
 grep -r "关键词" ~/.claude/knowledge/primary/
+
+# 如需搜索源文档归档
+grep -r "关键词" ~/.claude/knowledge/archive/
 
 # 按标签搜索
 grep -r "tags:.*标签" ~/.claude/knowledge/primary/
@@ -198,6 +220,7 @@ ls ~/.claude/knowledge/primary/domains/fpga/
 
 ## 更新日志
 
+- 2026-06-04: FPGA 38 个源文档归档到 archive/（-199K 行）；sources-index.md 索引；INDEX.md 补齐全部 47 篇通信文档 + 修复文档计数
 - 2026-06-04: 新增 O-RAN SMO A1/O1 接口知识文档 (通信文档 35 篇)
 - 2026-06-03: v1.3 统计更新，通信文档 33+ FPGA 16 = 52 篇主文档
 - 2026-06-01: v1.2 完成知识库构建，创建 22 个知识文档
