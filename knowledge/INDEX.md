@@ -122,6 +122,12 @@ knowledge/
 | [communication-algorithms.md](primary/domains/fpga/communication-algorithms.md) | 通信算法 FPGA 实现 | ⭐⭐⭐ |
 | [rfsoc-guide.md](primary/domains/fpga/rfsoc-guide.md) | RFSoC 开发指南 | ⭐⭐⭐ |
 | [riscv-fpga-guide.md](primary/domains/fpga/riscv-fpga-guide.md) | RISC-V FPGA 嵌入式系统设计 | ⭐⭐⭐ |
+
+#### 跨域
+
+| 文档 | 内容 | 难度 |
+|------|------|------|
+| [cross-project-experience.md](primary/cross-project-experience.md) | 跨项目经验复用 — FPGA 项目模板/目录结构/代码规范 | ⭐⭐ |
 | [matlab-fpga-image-processing.md](primary/domains/fpga/matlab-fpga-image-processing.md) | MATLAB/FPGA 图像处理 | ⭐⭐⭐ |
 
 #### 团队协作
