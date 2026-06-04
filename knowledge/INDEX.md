@@ -62,6 +62,17 @@ knowledge/
 | [vivado-guide.md](primary/domains/fpga/vivado-guide.md) | Vivado 使用指南 | ⭐⭐ |
 | [fpga-development-workflow.md](primary/domains/fpga/fpga-development-workflow.md) | FPGA 开发工作流 | ⭐⭐ |
 
+#### 参考工程
+
+| 工程 | 内容 | 来源 |
+|:----|:------|:-----|
+| [async_fifo-master](primary/domains/fpga/examples/async_fifo-master/) | 异步 FIFO 设计 | hdl-coding skill |
+| [axis_udp-main](primary/domains/fpga/examples/axis_udp-main/) | AXI-Stream UDP/IP 协议栈 | hdl-coding skill |
+| [basic_verilog-master](primary/domains/fpga/examples/basic_verilog-master/) | Verilog 基础语法范例合集 | hdl-coding skill |
+| [picorv32-main](primary/domains/fpga/examples/picorv32-main/) | PicoRV32 RISC-V CPU 核 | hdl-coding skill |
+| [r22sdf-master](primary/domains/fpga/examples/r22sdf-master/) | Radix-2² SDF FFT 处理器 (含 Quartus 工程) | hdl-coding skill |
+| [verilog-pcie-master](primary/domains/fpga/examples/verilog-pcie-master/) | Verilog PCIe 实现 (含 Quartus 工程) | hdl-coding skill |
+
 #### 算法实现
 
 ### 通信算法知识文档
@@ -152,8 +163,9 @@ fpga-team-collaboration.md → fpga-development-workflow.md → fpga-best-practi
 | **领域数** | 3（通信/FPGA/Python/MATLAB） |
 | **MATLAB 黄金模型** | 37 个 `.m` 文件 |
 | **RTL 设计模块** | 19 个 `.sv` 文件 |
+| **FPGA 参考工程** | 7 个（自 hdl-coding skill 移入） |
 | **Skill 注册数** | 5 个 |
-| **最后更新** | 2026-06-03 |
+| **最后更新** | 2026-06-04 |
 
 ---
 
