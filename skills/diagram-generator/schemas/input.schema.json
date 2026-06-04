@@ -1,9 +1,0 @@
-{
-  "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "title": "diagram-generator Input Schema",
-  "description": "Input validation schema for diagram-generator skill",
-  "type": "object",
-  "required": [],
-  "properties": {},
-  "additionalProperties": true
-}
