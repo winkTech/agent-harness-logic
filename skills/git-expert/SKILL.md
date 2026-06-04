@@ -302,7 +302,7 @@ GIT_TRACE_PERFORMANCE=1 git status
 
 ## Related Skills
 
-- [`gitflow`](../gitflow/SKILL.md) - Branch workflow patterns (feature, release, hotfix branches)
+- [`git-expert`](../git-expert/SKILL.md) — Git flow 支持在 Skill 自身命令/规则中
 
 ## Local References
 

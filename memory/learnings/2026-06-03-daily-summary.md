@@ -108,7 +108,7 @@ metadata:
 - **时序竞争**：同一信号既清零又置位 → 查所有 if-else 优先级
 - **数据量不匹配**：输出 1 拍但数据有 N 个 → 查状态机覆盖
 
-每次写 RTL 前对照 [RTL 可靠性 Checklist](learnings/2026-06-03-ldpc-rtl-review-lessons.md) 的 14 条。
+每次写 RTL 前对照 [RTL 可靠性 Checklist](2026-06-03-ldpc-rtl-review-lessons.md) 的 14 条。
 
 ---
 
