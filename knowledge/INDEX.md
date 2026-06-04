@@ -1,7 +1,7 @@
 # AI 知识库索引
 
-> 最后更新: 2026-06-01
-> 版本: v1.2
+> 最后更新: 2026-06-04
+> 版本: v1.3
 
 ---
 
@@ -83,11 +83,15 @@ knowledge/
 | [lte/overview.md](primary/domains/comm/lte/overview.md) | 4G LTE 系统架构 | ⭐⭐ |
 | [lte/phy-downlink.md](primary/domains/comm/lte/phy-downlink.md) | LTE 下行物理层 | ⭐⭐⭐ |
 | [lte/phy-uplink.md](primary/domains/comm/lte/phy-uplink.md) | LTE 上行物理层 | ⭐⭐⭐ |
+| [5g-nr/overview.md](primary/domains/comm/5g-nr/overview.md) | 5G NR 系统架构总纲 | ⭐⭐ |
 | [5g-nr/oran-interface.md](primary/domains/comm/5g-nr/oran-interface.md) | ORAN 同步接口协议 | ⭐⭐⭐ |
 | [5g-nr/lowphy-architecture.md](primary/domains/comm/5g-nr/lowphy-architecture.md) | Lowphy 链路 (FFT/相位补偿) | ⭐⭐⭐ |
 | [5g-nr/dfe-architecture.md](primary/domains/comm/5g-nr/dfe-architecture.md) | DFE 处理模块 (CFR/DPD) | ⭐⭐⭐ |
 | [5g-nr/bfp-compression.md](primary/domains/comm/5g-nr/bfp-compression.md) | BFP 6bit 块浮点压缩 | ⭐⭐⭐ |
+| [5g-nr/oran-smo.md](primary/domains/comm/5g-nr/oran-smo.md) | O-RAN SMO — 服务管理与编排 / A1-O1 接口 | ⭐⭐⭐ |
 | [5g-nr/nr-test-mode.md](primary/domains/comm/5g-nr/nr-test-mode.md) | NR 测试模式与 EVM 测试 | ⭐⭐ |
+| [5g-nr/nr-ldpc.md](primary/domains/comm/5g-nr/nr-ldpc.md) | NR LDPC BG1/BG2 — 与 802.11n QC-LDPC 对比 | ⭐⭐⭐ |
+| [5g-nr/pdsch.md](primary/domains/comm/5g-nr/pdsch.md) | PDSCH 物理下行共享信道深度解析 | ⭐⭐⭐ |
 | [ofdm/algorithm_spec.md](primary/domains/comm/ofdm/algorithm_spec.md) | OFDM 算法规格书 | ⭐⭐⭐ |
 | [ofdm/rtl_architecture.md](primary/domains/comm/ofdm/rtl_architecture.md) | OFDM RTL 架构设计 | ⭐⭐⭐ |
 | [ofdm/resource_estimate.md](primary/domains/comm/ofdm/resource_estimate.md) | OFDM 资源评估 | ⭐⭐ |
@@ -157,7 +161,7 @@ fpga-team-collaboration.md → fpga-development-workflow.md → fpga-best-practi
 
 | 指标 | 值 |
 |------|-----|
-| **Markdown 文档** | 52 个（通信 33 + FPGA 16 + 跨域 3） |
+| **Markdown 文档** | 54 个（通信 35 + FPGA 16 + 跨域 3） |
 | **源文档提取** | 35 个 |
 | **原始 PDF** | 35+ 个（已分类） |
 | **领域数** | 3（通信/FPGA/Python/MATLAB） |
@@ -194,6 +198,7 @@ ls ~/.claude/knowledge/primary/domains/fpga/
 
 ## 更新日志
 
+- 2026-06-04: 新增 O-RAN SMO A1/O1 接口知识文档 (通信文档 35 篇)
 - 2026-06-03: v1.3 统计更新，通信文档 33+ FPGA 16 = 52 篇主文档
 - 2026-06-01: v1.2 完成知识库构建，创建 22 个知识文档
 - 2026-06-01: v1.1 调整为混合存储结构
