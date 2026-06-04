@@ -1,68 +1,14 @@
 {
   "env": {
-    "ANTHROPIC_AUTH_TOKEN": "REMOVED",
-    "ANTHROPIC_BASE_URL": "https://token-plan-cn.xiaomimimo.com/anthropic",
-    "ANTHROPIC_DEFAULT_HAIKU_MODEL": "mimo-v2.5-pro",
-    "ANTHROPIC_DEFAULT_OPUS_MODEL": "mimo-v2.5-pro[1M]",
-    "ANTHROPIC_DEFAULT_OPUS_MODEL_NAME": "mimo-v2.5-pro",
-    "ANTHROPIC_DEFAULT_SONNET_MODEL": "mimo-v2.5-pro",
-    "ANTHROPIC_MODEL": "mimo-v2.5",
+    "ANTHROPIC_AUTH_TOKEN": "TOKEN_REMOVED",
+    "ANTHROPIC_BASE_URL": "https://api.deepseek.com/anthropic",
+    "ANTHROPIC_DEFAULT_HAIKU_MODEL": "deepseek-v4-pro",
+    "ANTHROPIC_DEFAULT_OPUS_MODEL": "deepseek-v4-pro",
+    "ANTHROPIC_DEFAULT_SONNET_MODEL": "deepseek-v4-pro",
+    "ANTHROPIC_MODEL": "deepseek-v4-flash",
     "API_TIMEOUT_MS": "3000000",
     "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC": "1"
   },
-  "includeCoAuthoredBy": false,
-  "permissions": {
-    "deny": [
-      "Bash(git push origin main)",
-      "Bash(git push origin master)",
-      "Bash(git push --force:*)",
-      "Bash(git push -f:*)",
-      "Bash(git reset --hard:*)",
-      "Bash(git clean -f*:*)",
-      "Bash(git branch -D:*)",
-      "Bash(git checkout -- *:*)",
-      "Bash(rm -rf /:*)",
-      "Bash(rm -rf ~:*)"
-    ],
-    "ask": [
-      "Bash(git push:*)",
-      "Bash(gh pr merge:*)",
-      "Bash(git commit:*)"
-    ],
-    "defaultMode": "auto"
-  },
-  "enabledPlugins": {
-    "andrej-karpathy-skills@karpathy-skills": true,
-    "code-review@claude-plugins-official": true,
-    "everything-claude-code@everything-claude-code": true,
-    "github@claude-plugins-official": true,
-    "mgrep@Mixedbread-Grep": true,
-    "skill-creator@claude-plugins-official": true,
-    "superpowers@claude-plugins-official": true,
-    "coding-tutor@coding-tutor": true,
-    "compound-engineering@compound-engineering": true
-  },
-  "extraKnownMarketplaces": {
-    "Mixedbread-Grep": {
-      "source": {
-        "source": "git",
-        "url": "https://github.com/mixedbread-ai/mgrep.git"
-      }
-    },
-    "everything-claude-code": {
-      "source": {
-        "source": "git",
-        "url": "https://github.com/affaan-m/everything-claude-code.git"
-      }
-    },
-    "karpathy-skills": {
-      "source": {
-        "source": "git",
-        "url": "https://github.com/forrestchang/andrej-karpathy-skills.git"
-      }
-    }
-  },
   "effortLevel": "xhigh",
-  "theme": "light",
-  "model": "sonnet"
+  "model": "deepseek-v4-flash"
 }

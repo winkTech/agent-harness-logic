@@ -37,6 +37,7 @@
 - [Agent 自评报告 v2](learnings/2026-06-03-agent-evaluation.md) — Phase1 后全面盘点：52 文档/37 模型/19 RTL/7维度评分（6.6/10）
 - [LDPC RTL 审查经验](learnings/2026-06-03-ldpc-rtl-review-lessons.md) — 3 类 Bug + RTL 可靠性 Checklist
 - [今日复盘 0603](learnings/2026-06-03-daily-summary.md) — 成功决策/修正失误/告诫未来
+- [Agent 健康审查规范](learnings/2026-06-04-agent-health-audit.md) — 七维审查清单 + 脚本：断裂链接/孤立文件/记忆引用/配置一致性
 
 ### 工作记忆
 
@@ -64,7 +65,7 @@
 
 ---
 
-*上次更新: 2026-06-03*
+*上次更新: 2026-06-04*
 
 ### 项目规划
 
