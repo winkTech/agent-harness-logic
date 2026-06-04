@@ -1,0 +1,66 @@
+{
+  "env": {
+    "ECC_DISABLED_HOOKS": "pre:edit-write:gateguard-fact-force"
+  },
+  "hooks": {
+    "PostStop": [
+      {
+        "run": "node ~/.claude/plugins/cache/everything-claude-code/everything-claude-code/2.0.0-rc.1/scripts/hooks/session-end.js",
+        "async": true,
+        "timeout": 15000
+      }
+    ],
+    "SessionStart": [
+      {
+        "run": "node ~/.claude/plugins/cache/everything-claude-code/everything-claude-code/2.0.0-rc.1/scripts/hooks/session-start.js",
+        "timeout": 10000
+      }
+    ]
+  },
+  "extraKnownMarketplaces": {
+    "Mixedbread-Grep": {
+      "source": {
+        "source": "git",
+        "url": "https://github.com/mixedbread-ai/mgrep.git"
+      }
+    },
+    "karpathy-skills": {
+      "source": {
+        "source": "git",
+        "url": "https://github.com/forrestchang/andrej-karpathy-skills.git"
+      }
+    }
+  },
+  "enabledPlugins": {
+    "andrej-karpathy-skills@karpathy-skills": true,
+    "everything-claude-code@everything-claude-code": true,
+    "mgrep@Mixedbread-Grep": true,
+    "coding-tutor@coding-tutor": true,
+    "code-review@claude-plugins-official": true,
+    "compound-engineering@compound-engineering": true,
+    "github@claude-plugins-official": true,
+    "superpowers@claude-plugins-official": true,
+    "skill-creator@claude-plugins-official": true
+  },
+  "includeCoAuthoredBy": false,
+  "permissions": {
+    "ask": [
+      "Bash(git push:*)",
+      "Bash(gh pr merge:*)",
+      "Bash(git commit:*)"
+    ],
+    "defaultMode": "auto",
+    "deny": [
+      "Bash(git push origin main)",
+      "Bash(git push origin master)",
+      "Bash(git push --force:*)",
+      "Bash(git push -f:*)",
+      "Bash(git reset --hard:*)",
+      "Bash(git clean -f*:*)",
+      "Bash(git branch -D:*)",
+      "Bash(git checkout -- *:*)",
+      "Bash(rm -rf /:*)",
+      "Bash(rm -rf ~:*)"
+    ]
+  }
+}
