@@ -14,18 +14,14 @@ other popular search tools like The Silver Searcher, ack and grep.
 
 Dual-licensed under MIT or the [UNLICENSE](https://unlicense.org).
 
-### CHANGELOG
 
-Please see the [CHANGELOG](CHANGELOG.md) for a release history.
 
 ### Documentation quick links
 
 - [Installation](#installation)
 - [User Guide](GUIDE.md)
-- [Frequently Asked Questions](FAQ.md)
 - [Regex syntax](https://docs.rs/regex/1/regex/#syntax)
 - [Configuration files](GUIDE.md#configuration-file)
-- [Shell completions](FAQ.md#complete)
 - [Building](#building)
 - [Translations](#translations)
 
@@ -114,7 +110,6 @@ generally speaking):
 
 - It can replace many use cases served by other search tools
   because it contains most of their features and is generally faster. (See
-  [the FAQ](FAQ.md#posix4ever) for more details on whether ripgrep can truly
   replace grep.)
 - Like other tools specialized to code search, ripgrep defaults to
   [recursive search](GUIDE.md#recursive-search) and does [automatic

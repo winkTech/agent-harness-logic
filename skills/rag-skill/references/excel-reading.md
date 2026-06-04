@@ -4,8 +4,8 @@
 
 1. **首先：读取处理方法指南**
    - 在处理任何 Excel 之前，**必须先读取**：
-     - [references/excel_reading.md](references/excel_reading.md) - 学习如何读取工作表（注意这个目录位于 Skills 目录下，而不是 Knowledge 目录下）
-     - [references/excel_analysis.md](references/excel_analysis.md) - 学习如何分析数据（注意这个目录位于 Skills 目录下，而不是 Knowledge 目录下）
+     - [references/excel_reading.md](excel_reading.md) - 学习如何读取工作表
+     - [references/excel_analysis.md](excel_analysis.md) - 学习如何分析数据
    - 重点了解：pandas 读取方法、列筛选、数据过滤、聚合操作
    
 2. **选择候选 Excel**
@@ -27,14 +27,14 @@
 ## 与其他工具的协同
 
 ### PDF 处理
-- **在处理 PDF 前必须先读取** [references/pdf_reading.md](references/pdf_reading.md) 学习处理方法
+- **在处理 PDF 前必须先读取** [pdf_reading.md](pdf_reading.md) 学习处理方法
 - 使用 pdfplumber/pypdf 进行文本提取、表格提取、元数据读取
 - 优先使用 pdftotext 命令行工具进行快速文本提取
 
 ### Excel 处理
 - **在处理 Excel 前必须先读取**：
-  - [references/excel_reading.md](references/excel_reading.md) - 学习读取方法
-  - [references/excel_analysis.md](references/excel_analysis.md) - 学习分析方法
+  - [excel_reading.md](excel_reading.md) - 学习读取方法
+  - [excel_analysis.md](excel_analysis.md) - 学习分析方法
 - 使用 pandas 进行数据探索、预览、过滤和分析
 
 ### 工具使用原则

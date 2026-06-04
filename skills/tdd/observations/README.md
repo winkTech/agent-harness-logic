@@ -77,4 +77,4 @@ Observations are automatically analyzed quarterly to:
 
 - [TDD Skill Documentation](../SKILL.md)
 - [Testing Anti-Patterns](../testing-anti-patterns.md) - Common patterns to avoid
-- [Agent Studio TDD Rules](../../rules/tdd.md)
+- [Agent Studio TDD Rules](../rules/tdd.md)

@@ -99,4 +99,4 @@ Observations are automatically analyzed quarterly to:
 - [Root Cause Tracing Technique](../root-cause-tracing.md)
 - [Defense-in-Depth Validation](../defense-in-depth.md)
 - [Condition-Based Waiting Patterns](../condition-based-waiting.md)
-- [Agent Studio Debugging Rules](../../rules/debugging.md)
+- [Agent Studio Debugging Rules](../rules/debugging.md)

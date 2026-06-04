@@ -9,7 +9,7 @@ metadata:
 
 # Agent 长期优化路线图
 
-> 基于 [[agent-evaluation-v1]] 制定的 3 阶段优化计划
+> 基于 [[agent-evaluation-v2]] 制定的 3 阶段优化计划
 
 ---
 
@@ -147,6 +147,6 @@ Phase 3: [▱▱▱▱▱▱▱▱▱▱] 0%
 
 ## 相关记忆
 
-- [[agent-evaluation-v1]] — 评估结果明细
+- [[agent-evaluation-v2]] — 评估结果明细
 - 历史: `memory/work/2026-06-02-知识库构建.md` — 知识库构建方法
 - 历史: `memory/work/2026-06-02-Agent优化.md` — 配置优化方法
