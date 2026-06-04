@@ -58,6 +58,7 @@
 |:----|:-----|
 | [无线通信的 MATLAB 和 FPGA 实现](archive/sources/fpga/无线通信的MATLAB和FPGA实现-source.md) | 空占位 |
 | [基于 FPGA 与 RISC-V 的嵌入式系统设计](archive/sources/fpga/基于FPGA与RISC-V的嵌入式系统设计%20(顾长怡编著)-source.md) | 空占位 |
+| [避免全局复位](archive/sources/fpga/avoid-global-reset-source.md) | 170 | Xilinx 白皮书（原在 `pitfalls/` 目录） |
 
 ---
 

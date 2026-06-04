@@ -247,10 +247,10 @@ comm/ofdm/algorithm_spec.md → 模板框架 → 逐算法走完7阶段全链路
 
 | 模板 | 位置 | 用途 |
 |------|------|------|
-| [算法规格书模板](docs/templates/algorithm_spec_template.md) | 阶段1 |
-| [MATLAB 黄金模型](docs/templates/golden_model_template/) | 阶段2 |
-| [定点量化报告](docs/templates/fixed_point_report_template.md) | 阶段3 |
-| [资源评估报告](docs/templates/resource_estimate_template.md) | 阶段4 |
-| [RTL 模块模板](docs/templates/rtl_module_template.v) | 阶段5 |
-| [Testbench 模板](docs/templates/tb_template.sv) | 阶段6 |
-| [技术报告模板](docs/templates/report_template.md) | 阶段7 |
+| [算法规格书模板](../docs/templates/algorithm_spec_template.md) | 阶段1 |
+| [MATLAB 黄金模型](../docs/templates/golden_model_template/) | 阶段2 |
+| [定点量化报告](../docs/templates/fixed_point_report_template.md) | 阶段3 |
+| [资源评估报告](../docs/templates/resource_estimate_template.md) | 阶段4 |
+| [RTL 模块模板](../docs/templates/rtl_module_template.v) | 阶段5 |
+| [Testbench 模板](../docs/templates/tb_template.sv) | 阶段6 |
+| [技术报告模板](../docs/templates/report_template.md) | 阶段7 |
