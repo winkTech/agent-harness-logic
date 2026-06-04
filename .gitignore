@@ -36,3 +36,42 @@ settings.json
 .env
 .env.*
 *.env
+
+# ====================
+# 垃圾文件防护
+# ====================
+
+# Python 字节码
+__pycache__/
+*.pyc
+
+# 崩溃转储
+*.stackdump
+*.core
+*.dmp
+
+# 备份文件
+*.bak
+*.backup
+*.orig
+
+# 编译产物
+*.class
+*.jar
+*.war
+*.exe
+*.dll
+*.so
+*.dylib
+*.o
+*.obj
+
+# 插件缓存（运行时下载，不应入库）
+plugins/cache/
+
+# 运行时成本追踪
+metrics/
+
+# MCP 本地二进制
+mcp/*.exe
+mcp/*.dll
