@@ -41,6 +41,7 @@
 - [今日复盘 0603](learnings/2026-06-03-daily-summary.md)
 - [Agent 健康审查规范](learnings/2026-06-04-agent-health-audit.md)
 - [记忆积累计划](learnings/MEMORY_ACCUMULATION_PLAN.md)
+- [UVM 验证框架（OFDM TX 实战）](learnings/2026-06-04-UVM-验证流程与方法.md) — UVM 组件架构、四要素、FPGA 验证裁剪与 6 个踩坑记录
 
 ### 参考链接
 

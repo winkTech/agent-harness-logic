@@ -66,6 +66,53 @@ __pycache__/
 *.o
 *.obj
 
+# ====================
+# EDA 仿真产物
+# ====================
+
+# 通用波形
+*.vcd
+*.vcd.gz
+*.vpd
+*.fsdb
+
+# Vivado xsim
+*.wdb
+*.pb
+xsim.dir/
+xsim.jou
+xsim.log
+*.jou
+*.log
+xelab.pb
+xvlog.pb
+tr_db.log
+
+# ModelSim / Questa
+transcript
+work/
+*.wlf
+*.vstf
+*.mem
+*.mpf
+*.ucdb
+
+# 综合/实现产物
+*.bit
+*.bin
+*.mcs
+*.ltx
+*.dcp
+*.rpt
+*.ngc
+*.edf
+*.edif
+
+# 仿真缓存
+*.svf
+wev.log
+vlog.log
+
 # 插件缓存（运行时下载，不应入库）
 plugins/cache/
 

@@ -73,6 +73,13 @@ knowledge/
 | [vivado-guide.md](primary/domains/fpga/vivado-guide.md) | Vivado 使用指南 | ⭐⭐ |
 | [fpga-development-workflow.md](primary/domains/fpga/fpga-development-workflow.md) | FPGA 开发工作流 | ⭐⭐ |
 
+#### 验证方法学
+
+| 文档 | 内容 | 难度 |
+|------|------|------|
+| [uvm-verification-guide.md](primary/domains/fpga/uvm-verification-guide.md) | UVM 验证方法学 — 架构/组件/Phase/迁移指南 | ⭐⭐⭐ |
+| **模板位置** | `docs/templates/uvm/` — 完整 OFDM UVM 示例 (Vivado xsim 2023.1 验证通过) |
+
 #### 参考工程
 
 | 工程 | 内容 | 来源 |
@@ -203,7 +210,7 @@ fpga-team-collaboration.md → fpga-development-workflow.md → fpga-best-practi
 
 | 指标 | 值 |
 |------|-----|
-| **Markdown 文档** | **69 个**（通信 47 + FPGA 18 + 跨域 4） |
+| **Markdown 文档** | **70 个**（通信 47 + FPGA 19 + 跨域 4） |
 | **源文档提取** | **38 个**（已归档到 `archive/sources/fpga/`） |
 | **原始 PDF** | 35+ 个（已分类） |
 | **领域数** | 3（通信/FPGA/Python/MATLAB） |
@@ -243,7 +250,7 @@ ls ~/.claude/knowledge/primary/domains/fpga/
 
 ## 更新日志
 
-- 2026-06-04: FPGA 38 个源文档归档到 archive/（-199K 行）；sources-index.md 索引；INDEX.md 补齐孤岛文档（golden_model_lessons/data_structure/knowledge-graph/learning-path + 5 个算法子目录入口）
+- 2026-06-04: 新增 UVM 验证方法学指南 + 完整 OFDM UVM testbench（Vivado xsim 验证通过）；FPGA 文档 19 篇
 - 2026-06-04: 新增 O-RAN SMO A1/O1 接口知识文档 (通信文档 35 篇)
 - 2026-06-03: v1.3 统计更新，通信文档 33+ FPGA 16 = 52 篇主文档
 - 2026-06-01: v1.2 完成知识库构建，创建 22 个知识文档

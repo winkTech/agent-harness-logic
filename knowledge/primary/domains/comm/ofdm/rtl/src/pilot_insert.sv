@@ -180,7 +180,8 @@ module pilot_insert #(
         endcase
     end
 
-    assign s_axis_tready = (state == FILL_DATA) && m_axis_tready;
+    // ready 在 IDLE 和 FILL_DATA 都必须为高, 否则状态机无法跳出 IDLE
+    assign s_axis_tready = (state == IDLE || state == FILL_DATA) && m_axis_tready;
 
     // ========================================================================
     // Functions
