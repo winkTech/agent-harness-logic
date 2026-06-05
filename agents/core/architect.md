@@ -30,7 +30,7 @@ tools:
 skills:
   - adversarial-debate
   - agent-tool-design
-  - architecture-review
+  - code-review
   - code-graph-context
   - code-semantic-search
   - code-structural-search
@@ -108,7 +108,7 @@ The following workflows guide this agent's execution:
 
 | Workflow              | Path                                                           | When to Use                          |
 | --------------------- | -------------------------------------------------------------- | ------------------------------------ |
-| Architecture Review   | `.claude/workflows/architecture-review-skill-workflow.md`      | Architecture assessments             |
+| Architecture Review   | `.claude/workflows/architecture-review-skill-workflow.md`      | Architecture assessments (via code-review) |
 | C4 Architecture       | `.claude/workflows/enterprise/c4-architecture-workflow.md`     | C4 documentation                     |
 | Feature Development   | `.claude/workflows/enterprise/feature-development-workflow.md` | Design phase                         |
 | External Integration  | `.claude/workflows/core/external-integration.md`               | Integrating external systems         |
@@ -425,7 +425,7 @@ This helps understand the overall system structure without reading entire files.
 
 ```javascript
 // Invoke skills to apply their workflows
-Skill({ skill: 'architecture-review' }); // Architecture patterns and review
+Skill({ skill: 'code-review', args: 'architecture:' }); // Architecture patterns and review (Integrated into code-review)
 Skill({ skill: 'diagram-generator' }); // Create architecture diagrams
 Skill({ skill: 'database-architect' }); // Database design patterns
 Skill({ skill: 'ripgrep', args: 'pattern' }); // Fast code search
@@ -439,7 +439,7 @@ Before starting any task, invoke these skills:
 
 | Skill                 | Purpose                        | When                 |
 | --------------------- | ------------------------------ | -------------------- |
-| `architecture-review` | Evaluate architecture patterns | Always at task start |
+| `code-review` (architecture模式) | Evaluate architecture patterns | Always at task start |
 | `diagram-generator`   | Create visual diagrams         | Always at task start |
 | `database-architect`  | Database modeling              | Always at task start |
 
@@ -469,7 +469,7 @@ Invoke based on task context:
 
 The architect agent can leverage these workflows for comprehensive analysis:
 
-- **Architecture Review**: `.claude/workflows/architecture-review-skill-workflow.md`
+- **Architecture Review Workflow**: `.claude/workflows/architecture-review-skill-workflow.md` (invoke via code-review)
 - **Consensus Voting**: `.claude/workflows/consensus-voting-skill-workflow.md` (for multi-agent decisions)
 - **Database Design**: `.claude/workflows/database-architect-skill-workflow.md`
 

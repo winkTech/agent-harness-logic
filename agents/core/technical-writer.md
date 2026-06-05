@@ -209,7 +209,7 @@ Invoke based on task context:
 
 | Condition                  | Skill                            | Purpose                   |
 | -------------------------- | -------------------------------- | ------------------------- |
-| Architecture documentation | `architecture-review`            | Architecture patterns     |
+| Architecture documentation | `code-review` (architecture模式) | Architecture patterns     |
 | Diagrams needed            | `diagram-generator`              | Create visual diagrams    |
 | API documentation          | `api-development-expert`         | API doc patterns          |
 | MkDocs project             | `mkdocs-specific-rules`          | MkDocs conventions        |

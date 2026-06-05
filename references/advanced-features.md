@@ -21,9 +21,9 @@
 
 ## 工作流模板
 
-**A. PDF→RTL**: rag-skill → markitdown-converter → deep-research → brainstorming → architecture-review → tdd → hdl-coding → doc-generator
+**A. PDF→RTL**: rag-skill → markitdown-converter → deep-research → brainstorming → code-review(architecture模式) → tdd → hdl-coding → doc-generator
 
-**B. 文档分析**: markitdown-converter → rag-skill → code-semantic-search → architecture-review
+**B. 文档分析**: markitdown-converter → rag-skill → code-semantic-search → code-review(architecture模式)
 
 ---
 
