@@ -556,7 +556,7 @@ Escalate to architect agent for review if any of these apply:
 
 - **domain-development-workflow.md**: Development workflow that produces code for review
 - **feature-development-workflow.md**: Enterprise workflow (this is PHASE_3_REVIEW)
-- **architecture-review.md**: Escalation workflow for architectural concerns
+- **architecture-review-skill-workflow.md**: Escalation workflow for architectural concerns (via code-review)
 
 ## Related Skills
 

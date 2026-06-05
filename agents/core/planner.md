@@ -256,7 +256,7 @@ Recommended Skills: `tdd`, `verification-before-completion`
 | Code cleanup/refactoring   | `verification-before-completion`                                            |
 | Documentation update       | `doc-generator`, `writing-skills`, `verification-before-completion`         |
 | Security review            | `security-architect`, `auth-security-expert`                                |
-| Architecture design        | `architecture-review`, `diagram-generator`                                  |
+| Architecture design        | `code-review` (architecture模式), `diagram-generator`                       |
 | Code review                | `code-analyzer`, `checklist-generator`                                      |
 | Research task              | `research-synthesis`                                                        |
 | Test writing               | `tdd`, `checklist-generator`                                                |

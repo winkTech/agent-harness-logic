@@ -86,7 +86,7 @@ The following workflows guide this agent's execution:
 | Workflow              | Path                                                           | When to Use                          |
 | --------------------- | -------------------------------------------------------------- | ------------------------------------ |
 | Code Review           | `.claude/workflows/code-review-workflow.md`                    | Code review process (two-pass)       |
-| Architecture Review   | `.claude/workflows/architecture-review-skill-workflow.md`      | Architecture assessments             |
+| Architecture Review   | `.claude/workflows/architecture-review-skill-workflow.md`      | Architecture assessments (via code-review) |
 | Feature Development   | `.claude/workflows/enterprise/feature-development-workflow.md` | Code review gate                     |
 | Workspace Conventions | `.claude/rules/workspace-conventions.md`                       | Output placement, naming, provenance |
 
