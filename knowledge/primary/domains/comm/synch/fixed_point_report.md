@@ -1,3 +1,9 @@
+---
+title: "OFDM 同步 定点量化分析"
+tags: [comm, sync, fixed-point]
+description: "|:----:|:----:|:----:|:----:|------|"
+related: [synch/algorithm_spec.md, synch/report_sync_fpga_implementation.md, synch/resource_estimate.md]
+---
 # OFDM 同步 定点量化分析
 
 > 算法: 短前导码自相关 (包检测+粗CFO) + 长前导码互相关 (精定时) + T1/T2相位差 (精CFO)

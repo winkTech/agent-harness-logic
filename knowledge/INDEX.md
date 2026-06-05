@@ -1,7 +1,7 @@
-# AI 知识库索引
+# 知识库索引
 
-> 最后更新: 2026-06-04
-> 版本: v1.3
+> 导航: [场景入口卡](SCENE_CARDS.md) — [标签索引](TAG_INDEX.md)
+> 最后更新: 2026-06-05 | 文档: 76 篇 primary + 38 篇 source
 
 ---
 
@@ -9,283 +9,98 @@
 
 ```
 knowledge/
-├── INDEX.md                 # 本文件
-├── primary/                 # 主要知识（Markdown）
-│   ├── domains/            # 领域知识
-│   │   ├── fpga/           # FPGA 开发知识（17 篇精炼指南）
-│   │   └── comm/           # 通信算法知识（47 篇）
-│   ├── patterns/           # 设计模式
-│   ├── pitfalls/           # 常见陷阱
-│   ├── snippets/           # 代码片段
-│   └── references/         # 参考资料
-├── archive/                 # 归档文档（原始提取，搜索时默认排除）
-│   └── sources/fpga/       # FPGA 源文档 38 篇（199K 行）
-└── source/                 # 原始文档（PDF）
-    └── datasheets/         # 数据手册
-        ├── fpga-design/    # FPGA 设计
-        ├── verilog-sv/     # Verilog/SV
-        ├── vivado/         # Vivado
-        ├── communications/ # 通信
-        └── coding-standards/ # 代码规范
+├── INDEX.md              # 本文件（紧凑索引）
+├── SCENE_CARDS.md        # 场景入口卡 [NEW]
+├── TAG_INDEX.md          # 标签快速定位 [NEW]
+├── primary/              # 精炼知识文档（按域分类）
+│   ├── domains/comm/     # 通信算法 47 篇
+│   ├── domains/fpga/     # FPGA 设计 25 篇
+│   ├── domains/python/   # Python 工具
+│   ├── domains/matlab/   # MATLAB 模型
+│   └── cross-project-experience.md
+├── archive/sources/fpga/ # 38 本书籍全文提取（~200K 行，按需搜索）
+└── source/datasheets/    # 原始 PDF（35+ 个）
 ```
 
 ---
 
-## 快速导航
+## 通信算法 (47)
 
-### FPGA 知识文档（按类型）
+**OFDM** — `ofdm/algorithm_spec`, `rtl_architecture`, `fixed_point_report`, `resource_estimate`, `report_ofdm_fpga_implementation`, `testbench_plan`, `golden_model/`, `uvm_tb/`
 
-#### 基础入门
+**RRC** — `rrc/algorithm_spec`, `fixed_point_report`, `resource_estimate`, `report_rrc_fpga_implementation`, `uvm_tb/`
 
-| 文档 | 内容 | 难度 |
-|------|------|------|
-| [fpga-design-guide.md](primary/domains/fpga/fpga-design-guide.md) | FPGA 设计指南 | ⭐⭐ |
-| [learning-path.md](primary/domains/fpga/learning-path.md) | FPGA 学习路径 — 阶段划分/资源推荐/检查清单 | ⭐ |
-| [verilog-design-experience.md](primary/domains/fpga/verilog-design-experience.md) | Verilog 设计经验 | ⭐⭐ |
-| [fpga-best-practices.md](primary/domains/fpga/fpga-best-practices.md) | FPGA 设计最佳实践 | ⭐⭐ |
+**ChEst** — `channel_est/algorithm_spec`, `fixed_point_report`, `resource_estimate`, `report_channel_est_fpga_implementation`, `golden_model/`, `run_rtl_cosim.m`, `tb_chEst_cosim.sv`, `uvm_tb/`
 
-#### 源文档索引
+**Sync** — `synch/algorithm_spec`, `fixed_point_report`, `resource_estimate`, `report_sync_fpga_implementation`, `uvm_tb/`
 
-> **38 本书籍全文提取 → `archive/sources/fpga/`** —— 需要全文时通过此索引定位
->
-| 文档 | 内容 |
-|:-----|:-----|
-| [sources-index.md](primary/domains/fpga/sources-index.md) | 全部 38 个源文档的摘要、行数及归档路径 |
+**LDPC** — `ldpc/algorithm_spec`, `encoding_spec`, `stage3_fixed_point_report`, `stage4_resource_estimation`, `stage7_fpga_implementation_report`, `uvm_tb/`
 
-#### 编码规范
+**5G NR** — `5g-nr/overview.md`, `nr-frame-structure`, `nr-ldpc`, `polar-code`, `pdsch`, `pusch`, `pdcch`, `nr-prach`, `mimo-detection`, `fr2-beam-management`, `nru`, `ntn`, `nr-test-mode`
 
-| 文档 | 内容 | 难度 |
-|------|------|------|
-| [fpga-coding-standards.md](primary/domains/fpga/fpga-coding-standards.md) | FPGA 代码规范 | ⭐⭐ |
-| [verilog-coding-style.md](primary/domains/fpga/verilog-coding-style.md) | Verilog/SV 编码风格 | ⭐⭐ |
-| [ai-hardware-coding-spec.md](primary/domains/fpga/ai-hardware-coding-spec.md) | AI-Hardware 协同设计规范 | ⭐⭐⭐ |
+**ORAN** — `5g-nr/oran-interface`, `oran-ric`, `oran-smo`, `lowphy-architecture`, `dfe-architecture`, `bfp-compression`
 
-#### 时序约束
+**LTE** — `lte/overview`, `phy-downlink`, `phy-uplink`
 
-| 文档 | 内容 | 难度 |
-|------|------|------|
-| [timing-constraints-guide.md](primary/domains/fpga/timing-constraints-guide.md) | 时序约束基础与编写方法 | ⭐⭐⭐ |
-| [timing-convergence-cases.md](primary/domains/fpga/timing-convergence-cases.md) | 时序收敛实战案例 — 7 个真实问题修复全过程 | ⭐⭐⭐ |
-
-#### 工具使用
-
-| 文档 | 内容 | 难度 |
-|------|------|------|
-| [vivado-guide.md](primary/domains/fpga/vivado-guide.md) | Vivado 使用指南 | ⭐⭐ |
-| [vivado-automation-guide.md](primary/domains/fpga/vivado-automation-guide.md) | Tcl 自动化构建 — 脚本模板/策略对比/CI 集成 | ⭐⭐⭐ |
-| [selectmap-guide.md](primary/domains/fpga/selectmap-guide.md) | SelectMap 并行配置 — 时序/多 Boot/RFSoC 集成 | ⭐⭐⭐ |
-| [fpga-development-workflow.md](primary/domains/fpga/fpga-development-workflow.md) | FPGA 开发工作流 | ⭐⭐ |
-
-#### 高速接口
-
-| 文档 | 内容 | 难度 |
-|------|------|------|
-| [jesd204b-guide.md](primary/domains/fpga/jesd204b-guide.md) | JESD204B 串行接口 — 协议/参数计算/调试/PCB/RFSoC | ⭐⭐⭐ |
-| [pcie-guide.md](primary/domains/fpga/pcie-guide.md) | PCIe 高速接口 — TLP/DMA/AXI 桥接/verilog-pcie-master 参考工程 | ⭐⭐⭐ |
-| [aurora-guide.md](primary/domains/fpga/aurora-guide.md) | Aurora 高速接口 — 8B/10B 64B/66B/IP 核配置/RFSoC 集成 | ⭐⭐⭐ |
-
-#### 验证方法学
-
-| 文档 | 内容 | 难度 |
-|------|------|------|
-| [uvm-verification-guide.md](primary/domains/fpga/uvm-verification-guide.md) | UVM 验证方法学 — 架构/组件/Phase/迁移指南 | ⭐⭐⭐ |
-| **模板位置** | `docs/templates/uvm/` — 完整 OFDM UVM 示例 (Vivado xsim 2023.1 验证通过) |
-
-#### 参考工程
-
-| 工程 | 内容 | 来源 |
-|:----|:------|:-----|
-| [async_fifo-master](primary/domains/fpga/examples/async_fifo-master/) | 异步 FIFO 设计 | hdl-coding skill |
-| [axis_udp-main](primary/domains/fpga/examples/axis_udp-main/) | AXI-Stream UDP/IP 协议栈 | hdl-coding skill |
-| [basic_verilog-master](primary/domains/fpga/examples/basic_verilog-master/) | Verilog 基础语法范例合集 | hdl-coding skill |
-| [picorv32-main](primary/domains/fpga/examples/picorv32-main/) | PicoRV32 RISC-V CPU 核 | hdl-coding skill |
-| [r22sdf-master](primary/domains/fpga/examples/r22sdf-master/) | Radix-2² SDF FFT 处理器 (含 Quartus 工程) | hdl-coding skill |
-| [verilog-pcie-master](primary/domains/fpga/examples/verilog-pcie-master/) | Verilog PCIe 实现 (含 Quartus 工程) | hdl-coding skill |
-
-#### 算法实现
-
-### 通信算法知识文档
-
-| 文档 | 内容 | 难度 |
-|------|------|------|
-| [lte/overview.md](primary/domains/comm/lte/overview.md) | 4G LTE 系统架构 | ⭐⭐ |
-| [lte/phy-downlink.md](primary/domains/comm/lte/phy-downlink.md) | LTE 下行物理层 | ⭐⭐⭐ |
-| [lte/phy-uplink.md](primary/domains/comm/lte/phy-uplink.md) | LTE 上行物理层 | ⭐⭐⭐ |
-| [5g-nr/overview.md](primary/domains/comm/5g-nr/overview.md) | 5G NR 系统架构总纲 | ⭐⭐ |
-| [5g-nr/nr-frame-structure.md](primary/domains/comm/5g-nr/nr-frame-structure.md) | NR 帧结构与 Numerology（μ=0..4, SCS, 时隙格式） | ⭐⭐⭐ |
-| [5g-nr/fr2-beam-management.md](primary/domains/comm/5g-nr/fr2-beam-management.md) | FR2 波束管理（P1/P2/P3, TCI/QCL, BFR） | ⭐⭐⭐ |
-| [5g-nr/nr-prach.md](primary/domains/comm/5g-nr/nr-prach.md) | NR PRACH 前导格式与随机接入过程 | ⭐⭐⭐ |
-| [5g-nr/pdcch.md](primary/domains/comm/5g-nr/pdcch.md) | NR PDCCH（CORESET, CCE/REG, DCI 格式, 盲检） | ⭐⭐⭐ |
-| [5g-nr/nr-ldpc.md](primary/domains/comm/5g-nr/nr-ldpc.md) | NR LDPC BG1/BG2 — 与 802.11n QC-LDPC 对比 | ⭐⭐⭐ |
-| [5g-nr/pdsch.md](primary/domains/comm/5g-nr/pdsch.md) | PDSCH 物理下行共享信道（资源分配 Type 0/1, DMRS, HARQ） | ⭐⭐⭐ |
-| [5g-nr/pusch.md](primary/domains/comm/5g-nr/pusch.md) | PUSCH/PUCCH（DFT-s-OFDM, UCI 复用, SRS） | ⭐⭐⭐ |
-| [5g-nr/polar-code.md](primary/domains/comm/5g-nr/polar-code.md) | NR Polar 码（信道极化, SCL 译码, CA-Polar） | ⭐⭐⭐ |
-| [5g-nr/mimo-detection.md](primary/domains/comm/5g-nr/mimo-detection.md) | MIMO 检测与预编码（ZF/MMSE/LMMSE-IRC, SVD, 码本） | ⭐⭐⭐ |
-| [5g-nr/nru.md](primary/domains/comm/5g-nr/nru.md) | NR-U 非授权频谱（LBT Cat 1-4, COT, RB interlacing） | ⭐⭐⭐ |
-| [5g-nr/ntn.md](primary/domains/comm/5g-nr/ntn.md) | NTN 卫星 NR（LEO/GEO 多普勒, TA 预补偿） | ⭐⭐⭐ |
-| [5g-nr/oran-interface.md](primary/domains/comm/5g-nr/oran-interface.md) | ORAN C/U/S/M 四平面协议与 eCPRI | ⭐⭐⭐ |
-| [5g-nr/oran-ric.md](primary/domains/comm/5g-nr/oran-ric.md) | O-RAN RIC（Near-RT RIC, xApp, E2AP/E2SM） | ⭐⭐⭐ |
-| [5g-nr/oran-smo.md](primary/domains/comm/5g-nr/oran-smo.md) | O-RAN SMO — 服务管理与编排 / A1-O1 接口 | ⭐⭐⭐ |
-| [5g-nr/lowphy-architecture.md](primary/domains/comm/5g-nr/lowphy-architecture.md) | Lowphy 链路 (FFT/相位补偿) | ⭐⭐⭐ |
-| [5g-nr/dfe-architecture.md](primary/domains/comm/5g-nr/dfe-architecture.md) | DFE 处理模块 (CFR/DPD) | ⭐⭐⭐ |
-| [5g-nr/bfp-compression.md](primary/domains/comm/5g-nr/bfp-compression.md) | BFP 6bit 块浮点压缩 | ⭐⭐⭐ |
-| [5g-nr/nr-test-mode.md](primary/domains/comm/5g-nr/nr-test-mode.md) | NR 测试模式与 EVM 测试 | ⭐⭐ |
-| [ofdm/algorithm_spec.md](primary/domains/comm/ofdm/algorithm_spec.md) | OFDM 算法规格书 | ⭐⭐⭐ |
-| [ofdm/rtl_architecture.md](primary/domains/comm/ofdm/rtl_architecture.md) | OFDM RTL 架构设计 | ⭐⭐⭐ |
-| [ofdm/resource_estimate.md](primary/domains/comm/ofdm/resource_estimate.md) | OFDM 资源评估 | ⭐⭐ |
-| [ofdm/testbench_plan.md](primary/domains/comm/ofdm/testbench_plan.md) | OFDM 验证方案 | ⭐⭐ |
-| [ofdm/fixed_point_report.md](primary/domains/comm/ofdm/fixed_point_report.md) | OFDM 定点量化报告 | ⭐⭐⭐ |
-| [ofdm/report_ofdm_fpga_implementation.md](primary/domains/comm/ofdm/report_ofdm_fpga_implementation.md) | OFDM FPGA 实现报告 | ⭐⭐⭐ |
-| [golden_model_lessons.md](primary/domains/comm/golden_model_lessons.md) | Golden Model 开发经验总结 — 调试技巧/最佳实践 | ⭐⭐⭐ |
-| [data_structure.md](primary/domains/comm/data_structure.md) | 通信算法知识库目录结构 | ⭐ |
-
-#### 算法全链路文档（7阶段产物）
-
-每个算法目录含算法规格、定点报告、资源评估、实现报告等阶段文档：
-
-| 算法 | 包含文档 | 阶段覆盖 |
-|:----|:---------|:--------:|
-| [channel_est/](primary/domains/comm/channel_est/) | 规格/定点/资源/FPGA 实现报告 4 篇 | ①③④⑦ |
-| [ldpc/](primary/domains/comm/ldpc/) | 规格/编码规格/定点/资源/实现报告 6 篇 | ①③④⑦ |
-| [rrc/](primary/domains/comm/rrc/) | 规格/定点/资源/实现报告 4 篇 | ①③④⑦ |
-| [synch/](primary/domains/comm/synch/) | 规格/定点/资源/实现报告 4 篇 | ①③④⑦ |
-
-| 文档 | 内容 | 难度 |
-|------|------|------|
-| [algorithm-implementation.md](primary/domains/fpga/algorithm-implementation.md) | FPGA 算法实现 | ⭐⭐⭐ |
-| [communication-algorithms.md](primary/domains/fpga/communication-algorithms.md) | 通信算法 FPGA 实现 | ⭐⭐⭐ |
-| [rfsoc-guide.md](primary/domains/fpga/rfsoc-guide.md) | RFSoC 开发指南 | ⭐⭐⭐ |
-| [riscv-fpga-guide.md](primary/domains/fpga/riscv-fpga-guide.md) | RISC-V FPGA 嵌入式系统设计 | ⭐⭐⭐ |
-
-#### 跨域
-
-| 文档 | 内容 | 难度 |
-|------|------|------|
-| [cross-project-experience.md](primary/cross-project-experience.md) | 跨项目经验复用 — FPGA 项目模板/目录结构/代码规范 | ⭐⭐ |
-| [matlab-fpga-image-processing.md](primary/domains/fpga/matlab-fpga-image-processing.md) | MATLAB/FPGA 图像处理 | ⭐⭐⭐ |
-| [knowledge-graph.md](primary/knowledge-graph.md) | FPGA 知识图谱 — 概念关系与学习路线 | ⭐⭐ |
-
-#### 团队协作
-
-| 文档 | 内容 | 难度 |
-|------|------|------|
-| [fpga-team-collaboration.md](primary/domains/fpga/fpga-team-collaboration.md) | FPGA 团队协作指南 | ⭐⭐ |
-
-#### 常见陷阱
-
-| 文档 | 内容 | 难度 |
-|------|------|------|
-| [avoid-global-reset.md](primary/pitfalls/avoid-global-reset.md) | 避免全局复位 | ⭐⭐⭐ |
+**General** — `golden_model_lessons.md`, `data_structure.md`
 
 ---
 
-## 学习路径
+## FPGA 设计 (25)
 
-### 初学者路径
+**Guides** — `fpga-design-guide`, `fpga-best-practices`, `fpga-development-workflow`, `learning-path`, `fpga-team-collaboration`
+
+**Verilog/SV** — `verilog-design-experience`, `verilog-coding-style`, `fpga-coding-standards`, `ai-hardware-coding-spec`
+
+**Timing** — `timing-constraints-guide`, `timing-convergence-cases`
+
+**Tools** — `vivado-guide`, `vivado-automation-guide`
+
+**High-Speed IO** — `jesd204b-guide`, `pcie-guide`, `aurora-guide`, `selectmap-guide`
+
+**Platforms** — `rfsoc-guide`, `riscv-fpga-guide`
+
+**Special Topics** — `algorithm-implementation`, `communication-algorithms`, `matlab-fpga-image-processing`
+
+**UVM** — `uvm-verification-guide`
+
+**Reference Projects** — `examples/async_fifo-master`, `axis_udp-main`, `basic_verilog-master`, `picorv32-main`, `r22sdf-master`, `verilog-pcie-master`
+
+---
+
+## Cross-Domain (3)
+
+`cross-project-experience.md`, `knowledge-graph.md`, `pitfalls/avoid-global-reset.md`
+
+---
+
+## Source / PDF Archives
+
+| Path | Contents |
+|:-----|:---------|
+| `primary/domains/fpga/sources-index.md` | 38 source docs index (name, size, notes) |
+| `archive/sources/fpga/` | Full extracted text (~200K lines) |
+| `source/datasheets/` | Original PDFs (35+) |
+
+---
+
+## Usage
 
 ```
-fpga-design-guide.md → verilog-design-experience.md → fpga-coding-standards.md
-    ↓
-verilog-coding-style.md → timing-constraints-guide.md → vivado-guide.md
-```
-
-### 进阶路径
-
-```
-communication-algorithms.md → rfsoc-guide.md → riscv-fpga-guide.md
-    ↓
-algorithm-implementation.md → matlab-fpga-image-processing.md
-```
-
-### 团队协作路径
-
-```
-fpga-team-collaboration.md → fpga-development-workflow.md → fpga-best-practices.md
+1. 读 SCENE_CARDS.md → 匹配任务场景
+2. 用 TAG_INDEX.md → 按标签缩小范围
+3. 只加载目标文档（避免全文扫描）
+4. 回退: grep -r "keyword" primary/
 ```
 
 ---
 
-## 原始 PDF 分类
+## Stats (2026-06-05)
 
-| 目录 | 文件数 | 内容 |
-|------|--------|------|
-| [fpga-design/](source/datasheets/fpga-design/) | 8 个 | FPGA 设计方法 |
-| [verilog-sv/](source/datasheets/verilog-sv/) | 12 个 | Verilog/SV 语法 |
-| [communications/](source/datasheets/communications/) | 10 个 | 通信算法 |
-| [coding-standards/](source/datasheets/coding-standards/) | 3 个 | 代码规范 |
-| [vivado/](source/datasheets/vivado/) | 2 个 | Vivado 使用 |
-
----
-
-## 统计信息
-
-| 指标 | 值 |
-|------|-----|
-| **Markdown 文档** | **76 个**（通信 47 + FPGA 25 + 跨域 4） |
-| **源文档提取** | **38 个**（已归档到 `archive/sources/fpga/`） |
-| **原始 PDF** | 35+ 个（已分类） |
-| **领域数** | 3（通信/FPGA/Python/MATLAB） |
-| **MATLAB 黄金模型** | 37 个 `.m` 文件 |
-| **RTL 设计模块** | 19 个 `.sv` 文件 |
-| **FPGA 参考工程** | 7 个（自 hdl-coding skill 移入） |
-| **Skill 注册数** | 5 个 |
-| **最后更新** | 2026-06-05 |
-
----
-
-## 使用方式
-
-### 手动查询
-
-```bash
-# 搜索关键词（仅 primary/ 知识文档，排除 archive/ 源文档）
-grep -r "关键词" ~/.claude/knowledge/primary/
-
-# 如需搜索源文档归档
-grep -r "关键词" ~/.claude/knowledge/archive/
-
-# 按标签搜索
-grep -r "tags:.*标签" ~/.claude/knowledge/primary/
-
-# 按领域搜索
-ls ~/.claude/knowledge/primary/domains/fpga/
-```
-
-### AI 加载
-
-- 识别问题领域
-- 加载相关 Markdown 文档
-- 注入到上下文
-
----
-
-## 更新日志
-
-- 2026-06-04: 新增 UVM 验证方法学指南 + 完整 OFDM UVM testbench（Vivado xsim 验证通过）；FPGA 文档 19 篇
-- 2026-06-04: 新增 O-RAN SMO A1/O1 接口知识文档 (通信文档 35 篇)
-- 2026-06-03: v1.3 统计更新，通信文档 33+ FPGA 16 = 52 篇主文档
-- 2026-06-01: v1.2 完成知识库构建，创建 22 个知识文档
-- 2026-06-01: v1.1 调整为混合存储结构
-- 2026-06-01: v1.0 初始化知识库框架
-
-### 通信算法路径
-
-```
-comm/ofdm/algorithm_spec.md → 模板框架 → 逐算法走完7阶段全链路
-    ↓
-成形滤波 → 信道估计 → 同步 → LDPC
-```
-
----
-
-## 模板文档
-
-| 模板 | 位置 | 用途 |
-|------|------|------|
-| [算法规格书模板](../docs/templates/algorithm_spec_template.md) | 阶段1 |
-| [MATLAB 黄金模型](../docs/templates/golden_model_template/) | 阶段2 |
-| [定点量化报告](../docs/templates/fixed_point_report_template.md) | 阶段3 |
-| [资源评估报告](../docs/templates/resource_estimate_template.md) | 阶段4 |
-| [RTL 模块模板](../docs/templates/rtl_module_template.v) | 阶段5 |
-| [Testbench 模板](../docs/templates/tb_template.sv) | 阶段6 |
-| [技术报告模板](../docs/templates/report_template.md) | 阶段7 |
+| Metric | Value |
+|:-------|:-----:|
+| Primary docs | 76 (comm 47 + fpga 25 + cross 4) |
+| Source extracts | 38 (~200K lines) |
+| MATLAB models | 37 .m files |
+| RTL modules | 19 .sv files |
+| UVM testbenches | 5 algorithms |

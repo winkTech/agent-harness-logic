@@ -1,3 +1,9 @@
+---
+title: "ORAN 同步与接口协议"
+tags: [comm, 5g-nr, oran, ecpri, c-plane, u-plane]
+description: "│   DU     │  RLC/MAC/High-PHY (实时)"
+related: [5g-nr/bfp-compression.md, 5g-nr/dfe-architecture.md, 5g-nr/fr2-beam-management.md, 5g-nr/lowphy-architecture.md, 5g-nr/mimo-detection.md, 5g-nr/nr-frame-structure.md]
+---
 # ORAN 同步与接口协议
 
 > 最后更新: 2026-06-03

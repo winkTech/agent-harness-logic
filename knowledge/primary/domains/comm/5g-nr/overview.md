@@ -1,3 +1,9 @@
+---
+title: "5G NR 系统架构概述"
+tags: [comm, 5g-nr, overview]
+description: "┌────────────┴─┐      ┌─┴────────────┐"
+related: [5g-nr/bfp-compression.md, 5g-nr/dfe-architecture.md, 5g-nr/fr2-beam-management.md, 5g-nr/lowphy-architecture.md, 5g-nr/mimo-detection.md, 5g-nr/nr-frame-structure.md]
+---
 # 5G NR 系统架构概述
 
 > 最后更新: 2026-06-04

@@ -1,3 +1,9 @@
+---
+title: "OFDM 发射机 RTL 架构设计"
+tags: [comm, ofdm, rtl]
+description: "s_axis ──→ [输入FIFO] ──→ [Mod Mapper] ──→ [Pilot Insert]"
+related: [ofdm/algorithm_spec.md, ofdm/fixed_point_report.md, ofdm/report_ofdm_fpga_implementation.md, ofdm/resource_estimate.md, ofdm/testbench_plan.md]
+---
 # OFDM 发射机 RTL 架构设计
 
 ## 1. 整体架构

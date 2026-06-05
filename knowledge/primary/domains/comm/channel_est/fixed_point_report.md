@@ -1,3 +1,9 @@
+---
+title: "信道估计 (LS) 定点量化分析"
+tags: [comm, channel-est, fixed-point]
+description: "| Y(k) | Q2.14 | 16-bit | 接收频域信号 (FFT 输出) |"
+related: [channel_est/algorithm_spec.md, channel_est/report_channel_est_fpga_implementation.md, channel_est/resource_estimate.md]
+---
 # 信道估计 (LS) 定点量化分析
 
 > 算法: LS 估计 + 线性插值 | 平台: Xilinx Zynq / Kintex-7

@@ -1,3 +1,9 @@
+---
+title: "O-RAN RIC -- RAN Intelligent Controller & E2 接口"
+tags: [comm, 5g-nr, oran, ric, xapp, e2]
+description: "O-RAN 联盟在传统 3GPP NG-RAN 架构 (CU/DU/RU) 之上引入 RAN Intelligent Controller (RIC)，实现无线资源管理的智能化与开放化。RIC 分为两级：Non-RT RIC (非实时) 和 Near-RT RIC (近实时)。"
+related: [5g-nr/bfp-compression.md, 5g-nr/dfe-architecture.md, 5g-nr/fr2-beam-management.md, 5g-nr/lowphy-architecture.md, 5g-nr/mimo-detection.md, 5g-nr/nr-frame-structure.md]
+---
 # O-RAN RIC -- RAN Intelligent Controller & E2 接口
 
 > 最后更新: 2026-06-04

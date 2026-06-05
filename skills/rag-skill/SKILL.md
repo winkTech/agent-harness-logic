@@ -1,64 +1,176 @@
 ---
 name: rag-skill
-description: 本地知识库检索问答。分层索引导航 → 按文件类型检索(grep/PDF/Excel) → 避免整文件加载。
-version: 1.1.0
+description: 知识库检索问答。意图路由 → 标签优先 → 渐进加载。替代旧版 grep 轮询。
+version: 2.0.0
 ---
 
-# 本地知识库检索
+# 知识库检索 v2
 
 ## 核心流程
 
 ```
-1. 定位 knowledge/ 根目录
-2. 读 INDEX.md 了解文档结构
-3. 从 primary/ 优先检索（比 source/ 更结构化）
-4. 按关键词 grep → 逐步深入（最多 5 次迭代）
-5. 遇到 PDF/Excel → 先读 references/ 中的处理指南 → 再处理
+用户问题
+    │
+    ▼
+1. 意图识别 ─────────────────────────────┐
+    │  设计/调试/学习/集成/选型/其他      │
+    ▼                                     │
+2. 加载 SCENE_CARDS.md                    │
+    ↓ 匹配场景编号                         │
+    ▼                                     │
+3. 加载 TAG_INDEX.md                      │
+    ↓ 组合标签过滤                         │
+    ▼                                     │
+4. 加载目标文档前端摘要（frontmatter）     │
+    ↓ 确认相关度                           │
+    ▼                                     │
+5. 加载目标文档全文（按需分段）           │
+    │                                     │
+    ├─ 匹配成功 → 回答                    │
+    ├─ 不匹配 → 回退 grep primary/        │
+    └─ 仍不匹配 → 告知用户未找到          │
 ```
 
-## 公共检索原则
+---
 
-- **关键词选择**: 先宽后窄。第一轮用宽泛关键词，根据结果再精确化
-- **grep 优先**: 用 `grep -r "keyword" --include="*.md"` 定位相关文档
-- **多轮迭代**: 每轮基于上一轮结果调整方向，最多 5 轮
-- **禁止整文件加载**: 大文件必须用 `Read` 的 offset/limit 参数分段读取
-- **结果时先检查文件头部的 tags / metadata 确认相关度**
+## 1. 意图识别
 
-## 文件类型处理要点
+根据用户问题前几个词/语境，判断任务类型：
 
-### Markdown
-- 优先用 `INDEX.md` 目录导航
-- 用 `grep -r` 搜索关键词定位具体文档
-- 相关度高才完整读
+| 意图 | 触发词 | 目标场景 |
+|:----|:-------|:---------|
+| **设计** | 设计、实现、编解码器、OFDM、LDPC、滤波器、同步 | 场景 01 / 09 |
+| **调试** | 调试、不通过、错误、违例、仿真失败、ILA、EVM | 场景 02 / 07 |
+| **集成** | 集成、对接、PCIe、Aurora、JESD204B、RFSoC | 场景 03 |
+| **学习** | 学习、理解、概述、原理、NR、ORAN、通信系统 | 场景 04 |
+| **验证** | UVM、验证、testbench、覆盖率、仿真 | 场景 06 |
+| **贯通** | cosim、MATLAB→RTL、向量、对比、golden | 场景 05 |
+| **自动化** | Tcl、脚本、编译、构建、CI、vivado | 场景 08 |
+| **选型** | 选型、对比、区别、vs、vs、还是 | 场景 10 |
+| **其他** | 不匹配以上任何 → 走 TAG_INDEX 或回退 grep | 全部 |
+
+---
+
+## 2. 渐进式加载协议
+
+不再一次加载 INDEX.md。严格按层级加载，**禁止全量读取 SCENE_CARDS.md 或 TAG_INDEX.md**：
+
+```
+L0: SCENE_CARDS 总览行 (L1-L24, ~480 tok) → 用行号索引精确读
+    ↓ 选择场景
+L1: 匹配场景卡片 (L25-L291 中某段, ~900 tok)
+    ↓ 提取标签
+L2: TAG_INDEX 相关标签区 (~600 tok)
+    ↓ 定位文档
+L3: 目标文档 frontmatter (~100 tok/篇) → 确认相关度
+    ↓ 确认
+L4: 目标文档全文 (500-3k tok)
+    ↓ 不匹配
+L5: grep primary/ (全文扫描, 最后手段)
+```
+
+**行号精准加载**（SCENE_CARDS.md 含行号映射 YAML）:
+```
+SCENE_CARDS.md L1-L24   → 场景总览（选场景号）
+然后 Read file offset=N limit=M → 仅读匹配场景
+```
+
+**预算控制**：
+- 单次检索总消耗 ≤ 5,000 tok（含已读文档）
+- L0+L1+L2 三步必须 ≤ 2,000 tok（超出说明场景匹配错，回退重选）
+- 超过 5,000 tok 仍未找到 → 直接回退到 grep
+- grep 超过 3 次命中无结果 → 告知用户"未找到相关信息"
+
+---
+
+## 3. 标签优先检索
+
+替代旧版无差别 grep。步骤：
+
+### 3.1 定位场景
+
+从 SCENE_CARDS.md 找到匹配的任务场景，读取该场景的"核心标签"字段：
+
+```
+例：用户问"设计 LDPC 编解码器"
+→ 匹配场景 09
+→ 核心标签: ldpc + spec + rtl + 5g-nr
+```
+
+### 3.2 标签交叉过滤
+
+从 TAG_INDEX.md 按标签组合找出目标文档：
+
+```
+例：tag:ldpc + tag:spec
+→ ldpc/algorithm_spec, encoding_spec
+
+例：tag:fpga + tag:high-speed-io + tag:pcie
+→ fpga/pcie-guide
+```
+
+### 3.3 加载摘要确认
+
+读目标文档的 frontmatter（前三行）确认是否真正匹配。只暴露 `title:`, `description:`, `tags:` 三字段。
+
+---
+
+## 4. 回退流程
+
+当标签定位失败或文档内容不匹配时：
+
+```
+1. grep 场景内文档
+   grep -rl "keyword" knowledge/primary/domains/<scene-dir>/
+
+2. grep 全 primary
+   grep -rl "keyword" knowledge/primary/
+
+3. grep archive 源文档
+   grep -rl "keyword" knowledge/archive/sources/
+
+4. 告知用户未找到
+   → "知识库中未找到相关信息"
+   → 提示尝试其他关键词
+   → 或提供相关主题建议
+```
+
+---
+
+## 5. 文件类型处理
+
+### Markdown (primary/)
+- 先用 TAG_INDEX.md 定位 → 读 frontmatter → 读全文
+- 全文用 Read tool，大文件用 offset/limit 分段
 
 ### PDF
-→ 详细流程见 `references/pdf_reading.md`
-1. 先读取 `rag-skill/references/pdf_reading.md` 学习处理方法
-2. 使用 MCP pdf 工具打开和提取文本
-3. 大 PDF（>10 页）用 pages 参数分段提取
+→ 参见 `references/pdf_reading.md`
+- 使用 MCP pdf 工具
 
 ### Excel
-→ 详细流程见 `references/excel-reading.md`
-1. 使用 `python3 -c "import pandas; ..."` 读取
-2. 或 `markitdown-converter` 转换
-3. 只读取需要的列和行
+→ 参见 `references/excel-reading.md`
+- 使用 Python pandas 或 markitdown-converter
 
-## 注意事项
+---
 
-- 不要在单次操作中加载整个目录
-- 检索结果使用文件路径+关键词高亮的方式呈现
-- 如果某轮检索没有结果，回溯到更宽的搜索词
-- 不同文件格式使用对应的读取工具
-- uncertain → 直接告诉用户"未找到相关信息"，不要编造
+## 6. 注意事项
 
-## 关联Skill
+- **严禁一次加载完整 SCENE_CARDS.md 或 TAG_INDEX.md** — 仅加载匹配场景/标签的部分
+- **grep 是最后手段** — 先走场景→标签→摘要三级过滤
+- **每次检索最多 5 轮交互** — 超过即停止并告知用户
+- **不确定时直接说不知道** — 不编造
+- **大文件必须分段读取** — 禁止 Read 整个 archive 文件
+
+---
+
+## 关联 Skill
 
 - [code-search](../code-search/SKILL.md) — 代码库搜索
-- [markitdown-converter](../markitdown-converter/SKILL.md) — 文件转换
+- [hdl-coding](../../hdl-coding/SKILL.md) — HDL 编码
 
 ## 参考文档
 
 | 文档 | 内容 |
 |:----|:-----|
-| `references/pdf_reading.md` | PDF 读取完整流程与 MCP 工具使用 |
-| `references/excel-reading.md` | Excel 文件处理指南 |
+| `references/pdf_reading.md` | PDF 读取流程 |
+| `references/excel-reading.md` | Excel 处理指南 |

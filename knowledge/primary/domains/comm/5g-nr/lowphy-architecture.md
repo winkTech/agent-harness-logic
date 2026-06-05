@@ -1,3 +1,9 @@
+---
+title: "Lowphy 链路架构 (FFT/IFFT/CP/相位补偿/交换)"
+tags: [comm, 5g-nr, lowphy, fft, phase-comp]
+description: "┌────────────────────────────────┐"
+related: [5g-nr/bfp-compression.md, 5g-nr/dfe-architecture.md, 5g-nr/fr2-beam-management.md, 5g-nr/mimo-detection.md, 5g-nr/nr-frame-structure.md, 5g-nr/nr-ldpc.md]
+---
 # Lowphy 链路架构 (FFT/IFFT/CP/相位补偿/交换)
 
 > 最后更新: 2026-06-03

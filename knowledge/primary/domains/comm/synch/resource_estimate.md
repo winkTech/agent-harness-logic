@@ -1,3 +1,9 @@
+---
+title: "OFDM 同步 资源评估"
+tags: [comm, sync, resource]
+description: "│    ├─ 延迟线 (16 taps, 16-bit×2)"
+related: [synch/algorithm_spec.md, synch/fixed_point_report.md, synch/report_sync_fpga_implementation.md]
+---
 # OFDM 同步 资源评估
 
 > 目标芯片: XC7K325T (Kintex-7) | 速度: -2

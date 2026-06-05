@@ -1,3 +1,9 @@
+---
+title: "UVM 验证方法学指南"
+tags: [fpga, guide, uvm, verification]
+description: "UVM (Universal Verification Methodology) 是业界标准的 SystemVerilog 验证方法学，核心原则："
+related: [fpga/ai-hardware-coding-spec.md, fpga/algorithm-implementation.md, fpga/aurora-guide.md, fpga/communication-algorithms.md, fpga/fpga-best-practices.md, fpga/fpga-coding-standards.md]
+---
 # UVM 验证方法学指南
 
 > 适用: Vivado xsim 2023.1+ / ModelSim / Questa

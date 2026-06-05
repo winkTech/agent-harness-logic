@@ -1,3 +1,9 @@
+---
+title: "信道估计 (LS) FPGA 实现报告"
+tags: [comm, channel-est, impl]
+description: "1. **LS 估计**: $H_{pilot}(k) = Y_{pilot}(k) \cdot X^*_{pilot}(k)$"
+related: [channel_est/algorithm_spec.md, channel_est/fixed_point_report.md, channel_est/resource_estimate.md]
+---
 # 信道估计 (LS) FPGA 实现报告
 
 > 算法: LS 估计 + 线性插值 (DFT 插值备选)

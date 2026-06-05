@@ -3,6 +3,7 @@ algorithm: "OFDM"
 version: "1.0"
 status: "draft"
 created: "2026-06-02"
+tags: [comm, ofdm, fixed-point]
 ---
 
 # OFDM 发射机 定点量化报告

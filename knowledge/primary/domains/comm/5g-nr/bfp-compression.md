@@ -1,3 +1,9 @@
+---
+title: "BFP 6bit 块浮点压缩解压算法"
+tags: [comm, 5g-nr, bfp, compression]
+description: "ORAN 前传接口 (eCPRI) 传输 **频域 IQ 数据**:"
+related: [5g-nr/dfe-architecture.md, 5g-nr/fr2-beam-management.md, 5g-nr/lowphy-architecture.md, 5g-nr/mimo-detection.md, 5g-nr/nr-frame-structure.md, 5g-nr/nr-ldpc.md]
+---
 # BFP 6bit 块浮点压缩解压算法
 
 > 最后更新: 2026-06-03

@@ -1,3 +1,9 @@
+---
+title: "信道估计 (LS+插值) 资源评估"
+tags: [comm, channel-est, resource]
+description: "│   Pilot 提取 + LS 估计  │  ← 仅符号选择，零逻辑"
+related: [channel_est/algorithm_spec.md, channel_est/fixed_point_report.md, channel_est/report_channel_est_fpga_implementation.md]
+---
 # 信道估计 (LS+插值) 资源评估
 
 > 目标芯片: XC7K325T (Kintex-7) | 速度等级: -2

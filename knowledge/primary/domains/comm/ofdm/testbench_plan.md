@@ -1,3 +1,9 @@
+---
+title: "OFDM 发射机 验证方案"
+tags: [comm, ofdm, testbench]
+description: "MATLAB 测试向量 ──→ [txt/bin] ──→ [TB 读取] ──→ [DUT]"
+related: [ofdm/algorithm_spec.md, ofdm/fixed_point_report.md, ofdm/report_ofdm_fpga_implementation.md, ofdm/resource_estimate.md, ofdm/rtl_architecture.md]
+---
 # OFDM 发射机 验证方案
 
 ## 1. Testbench 架构

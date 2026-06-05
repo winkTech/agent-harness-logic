@@ -1,3 +1,9 @@
+---
+title: "LTE 下行物理层"
+tags: [comm, lte]
+description: "串行数据 → S/P ─→ IFFT ─→ P/S ─→ 加CP ─→ DAC ─→ RF"
+related: [lte/overview.md, lte/phy-uplink.md]
+---
 # LTE 下行物理层
 
 > 最后更新: 2026-06-03

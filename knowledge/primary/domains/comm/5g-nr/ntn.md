@@ -1,3 +1,9 @@
+---
+title: "5G NR NTN — 卫星通信与非地面网络"
+tags: [comm, 5g-nr, satellite, ntn, doppler]
+description: "NTN (Non-Terrestrial Networks) 是 3GPP 将 5G NR 扩展到卫星平台的标准框架, 旨在利用卫星、无人机等非地面平台实现全球覆盖。"
+related: [5g-nr/bfp-compression.md, 5g-nr/dfe-architecture.md, 5g-nr/fr2-beam-management.md, 5g-nr/lowphy-architecture.md, 5g-nr/mimo-detection.md, 5g-nr/nr-frame-structure.md]
+---
 # 5G NR NTN — 卫星通信与非地面网络
 
 > 最后更新: 2026-06-04

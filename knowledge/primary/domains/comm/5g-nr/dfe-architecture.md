@@ -1,3 +1,9 @@
+---
+title: "DFE 数字前端处理模块"
+tags: [comm, 5g-nr, dfe, cfr, dpd]
+description: "│ JESD204B (数字IQ, 通常为 16bit 定点)"
+related: [5g-nr/bfp-compression.md, 5g-nr/fr2-beam-management.md, 5g-nr/lowphy-architecture.md, 5g-nr/mimo-detection.md, 5g-nr/nr-frame-structure.md, 5g-nr/nr-ldpc.md]
+---
 # DFE 数字前端处理模块
 
 > 最后更新: 2026-06-03
