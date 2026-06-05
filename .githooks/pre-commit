@@ -171,7 +171,7 @@ if [ -n "$SV_FILES" ]; then
     echo "--- [vlog] 检查 Verilog/SV 语法 ---"
     for f in $SV_FILES; do
       if [ -f "$f" ]; then
-        OUTPUT=$(vlog -lint "$f" 2>&1)
+        OUTPUT=$(timeout 30 vlog -lint "$f" 2>&1)
         ERRORS=$(echo "$OUTPUT" | grep -cE "^(# )?\*\* Error")
         WARNINGS=$(echo "$OUTPUT" | grep -cE "^(# )?\*\* Warning")
         if [ "$ERRORS" -gt 0 ]; then
@@ -197,7 +197,7 @@ if [ -n "$VHD_FILES" ]; then
     echo "--- [vcom] 检查 VHDL 语法 ---"
     for f in $VHD_FILES; do
       if [ -f "$f" ]; then
-        OUTPUT=$(vcom -lint "$f" 2>&1)
+        OUTPUT=$(timeout 30 vcom -lint "$f" 2>&1)
         ERRORS=$(echo "$OUTPUT" | grep -cE "^(# )?\*\* Error")
         WARNINGS=$(echo "$OUTPUT" | grep -cE "^(# )?\*\* Warning")
         if [ "$ERRORS" -gt 0 ]; then
@@ -230,7 +230,7 @@ if [ -n "$PY_FILES" ]; then
     echo "--- [$PYTHON_CMD] 语法检查 ---"
     for f in $PY_FILES; do
       if [ -f "$f" ]; then
-        OUTPUT=$($PYTHON_CMD -m py_compile "$f" 2>&1)
+        OUTPUT=$(timeout 15 $PYTHON_CMD -m py_compile "$f" 2>&1)
         if [ -n "$OUTPUT" ]; then
           echo "❌ $f 语法错误"
           echo "$OUTPUT" | sed 's/^/  /'
@@ -246,7 +246,7 @@ if [ -n "$PY_FILES" ]; then
     echo "--- [flake8] 代码风格检查 ---"
     for f in $PY_FILES; do
       if [ -f "$f" ]; then
-        OUTPUT=$(flake8 --max-line-length=100 "$f" 2>&1)
+        OUTPUT=$(timeout 30 flake8 --max-line-length=100 "$f" 2>&1)
         if [ -n "$OUTPUT" ]; then
           echo "⚠️  $f"
           echo "$OUTPUT" | head -10 | sed 's/^/  /'
@@ -262,7 +262,7 @@ if [ -n "$PY_FILES" ]; then
     echo "--- [ruff] 代码检查 ---"
     for f in $PY_FILES; do
       if [ -f "$f" ]; then
-        OUTPUT=$(ruff check "$f" 2>&1)
+        OUTPUT=$(timeout 30 ruff check "$f" 2>&1)
         if [ -n "$OUTPUT" ]; then
           echo "⚠️  $f"
           echo "$OUTPUT" | head -10 | sed 's/^/  /'
@@ -300,6 +300,31 @@ if [ -n "$M_FILES" ]; then
     done
   else
     echo "⚠️  未找到 matlab 命令，跳过 .m 文件检查"
+  fi
+fi
+
+# ============================================================================
+# 10. Tcl / .do / .xdc / .sdc 语法检查
+# ============================================================================
+TCL_FILES=$(echo "$STAGED" | grep -E '\.(tcl|do|xdc|sdc)$' | grep -v '/examples/' | grep -v '/templates/')
+if [ -n "$TCL_FILES" ]; then
+  if check_cmd tclsh; then
+    echo "--- [tclsh] Tcl 语法检查 ---"
+    for f in $TCL_FILES; do
+      if [ -f "$f" ]; then
+        OUTPUT=$(timeout 15 tclsh -c "source \"$f\"" 2>&1)
+        ERRORS=$(echo "$OUTPUT" | grep -cE "error|Error|ERROR|unknown|invalid")
+        if [ "$ERRORS" -gt 0 ]; then
+          echo "❌ $f — Tcl 语法错误"
+          echo "$OUTPUT" | head -5 | sed 's/^/  /'
+          HAS_ERROR=1
+        else
+          echo "✅ $f 语法通过"
+        fi
+      fi
+    done
+  else
+    echo "⚠️  未找到 tclsh 命令，跳过 Tcl 检查"
   fi
 fi
 

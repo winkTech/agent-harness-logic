@@ -193,5 +193,5 @@ vvp sim.vvp
 
 ## 关联Skill
 
-- [code-inspect](../code-inspect/SKILL.md) — 代码审查门禁
+- [code-review](../code-review/SKILL.md) — 代码审查门禁
 - [debugging](../debugging/SKILL.md) — 仿真异常调试

@@ -38,11 +38,11 @@
 
 | Skill | 功能 | 场景 |
 |-------|------|------|
-| `code-inspect` | 统一审查 — 架构/复杂度/代码质量/框架审计 | 设计评审、规划评估、Clean Code、提交前检查 |
-| ~~architecture-review~~ | 🔀 已合并到 code-inspect | — |
-| ~~complexity-assessment~~ | 🔀 已合并到 code-inspect | — |
-| ~~code-quality-expert~~ | 🔀 已合并到 code-inspect | — |
-| ~~proactive-audit~~ | 🔀 已合并到 code-inspect | — |
+| `code-review` | 统一审查 — 架构/复杂度/代码质量/框架审计 | 设计评审、规划评估、Clean Code、提交前检查 |
+| ~~architecture-review~~ | 🔀 已合并到 code-review | — |
+| ~~complexity-assessment~~ | 🔀 已合并到 code-review | — |
+| ~~code-quality-expert~~ | 🔀 已合并到 code-review | — |
+| ~~proactive-audit~~ | 🔀 已合并到 code-review | — |
 | `security-review` | 安全审查 | 认证、API、敏感数据 |
 
 ## 研究分析

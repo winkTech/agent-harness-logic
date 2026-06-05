@@ -1,0 +1,30 @@
+#!/bin/bash
+# ============================================================================
+# Git commit-msg hook
+# 检查提交信息格式：非空 + 长度合理
+# ============================================================================
+COMMIT_MSG_FILE="$1"
+COMMIT_MSG=$(cat "$COMMIT_MSG_FILE")
+
+# 检查是否为空
+if [ -z "$(echo "$COMMIT_MSG" | tr -d '[:space:]' | head -1)" ]; then
+  echo "❌ 提交信息不能为空！"
+  echo "  格式: <类型>(<范围>): <简短描述>"
+  echo "  示例: feat(skill): 添加 Tcl lint 检查"
+  echo "        fix(hook): 修复路径解析 bug"
+  exit 1
+fi
+
+# 检查首行长度
+FIRST_LINE=$(echo "$COMMIT_MSG" | head -1)
+LINE_LEN=${#FIRST_LINE}
+if [ "$LINE_LEN" -gt 72 ]; then
+  echo "⚠️  提交信息首行超过 72 字符（当前 ${LINE_LEN} 字符），建议换行"
+fi
+
+# 检查是否包含 Co-Authored-By（自动标记）
+if echo "$COMMIT_MSG" | grep -q "Co-Authored-By"; then
+  exit 0
+fi
+
+exit 0
