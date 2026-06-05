@@ -10,6 +10,7 @@ todos/
 .ruff_cache/
 homunculus/
 plan/
+plans/
 
 # IDE 相关
 ide/
