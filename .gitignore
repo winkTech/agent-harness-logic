@@ -76,17 +76,10 @@ __pycache__/
 *.vpd
 *.fsdb
 
-# Vivado xsim
-*.wdb
-*.pb
+# Vivado xsim 特定产物
 xsim.dir/
 xsim.jou
-xsim.log
 *.jou
-*.log
-xelab.pb
-xvlog.pb
-tr_db.log
 
 # ModelSim / Questa
 transcript
@@ -110,8 +103,6 @@ work/
 
 # 仿真缓存
 *.svf
-wev.log
-vlog.log
 
 # 插件缓存（运行时下载，不应入库）
 plugins/cache/
