@@ -14,7 +14,7 @@
 - 所有输出使用中文（特殊字符/信号除外）
 
 ### Lint First（写完代码必须检查）
-所有代码提交前必须通过语法检查。Verilog/SV: `iverilog -g2012 -t null <file>`，Python: `ruff check`，MATLAB: 使用 MCP `check_matlab_code`。仅改 Markdown/注释/README 时免检。
+所有代码提交前必须通过语法检查。Verilog/SV: `vlog -lint <file>`，Python: `ruff check`，MATLAB: 使用 MCP `check_matlab_code`。仅改 Markdown/注释/README 时免检。
 
 ## 三、核心 Skill 与 MCP
 

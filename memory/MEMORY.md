@@ -49,6 +49,8 @@
 
 ### 工作记忆
 
+- [Agent 基座加固计划](work/2026-06-04-agent-base-reinforcement-plan.md) — 技能瘦身/配置修复/安全加固，明日执行
+- [Agent 基座健康评分](work/2026-06-04-agent-health-score.md) — 66→93/100 (C+→A)，6维度全面修复
 - [Phase 1 完成](work/2026-06-03-phase1-complete.md) — LTE/NR 知识库 8 篇 + Python 调试 Skill 6 模板 ✓
 
 ### 错误记录

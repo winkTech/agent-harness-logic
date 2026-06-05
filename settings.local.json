@@ -61,7 +61,11 @@
       "Bash(git branch -D:*)",
       "Bash(git checkout -- *:*)",
       "Bash(rm -rf /:*)",
-      "Bash(rm -rf ~:*)"
+      "Bash(rm -rf ~:*)",
+      "Bash(git push --delete:*)",
+      "Bash(git push origin :*)",
+      "Bash(git tag -d:*)",
+      "Bash(gh repo delete:*)"
     ]
   }
 }
