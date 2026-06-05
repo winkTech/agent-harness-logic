@@ -15,6 +15,17 @@
       {
         "run": "bash ~/.claude/scripts/hooks/resolve-plugin-path.sh session-start.js",
         "timeout": 10000
+      },
+      {
+        "run": "bash ~/.claude/scripts/hooks/memory-track.sh session-start",
+        "timeout": 15000
+      }
+    ],
+    "PostMessage": [
+      {
+        "run": "bash ~/.claude/scripts/hooks/memory-track.sh post-message",
+        "async": true,
+        "timeout": 5000
       }
     ]
   },
