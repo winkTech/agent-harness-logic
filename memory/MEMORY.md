@@ -48,3 +48,4 @@
 ## 归档
 
 `archive/` — 已完成任务记录（7 项）
+- [记忆系统自动化结构](memory/learnings/2026-06-05-memory-auto-trigger.md) — PostMessage/SessionStart/Cron 三层触发
