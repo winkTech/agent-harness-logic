@@ -74,7 +74,7 @@ fi
 # ============================================================================
 
 # 排除目录（这些路径下的 work/ 等是正常数据）
-EXCLUDE_DIRS="memory/work/|plugins/cache/|knowledge/source/|.git/"
+EXCLUDE_DIRS="memory/work/|plugins/cache/|knowledge/|.git/"
 
 # ---- 5a. 暂存区检查：禁止仿真文件被提交 ----
 FORBIDDEN_STAGED_PATTERNS="transcript|vsim\.wlf|\.vcd$|\.wlftmp|vsim\.dump|\.wdb$|xsim\.jou|xsim\.log|xsim\.tcl|xelab\.pb|xvlog\.pb|tr_db\.log|wev\.log|vlog\.log"
