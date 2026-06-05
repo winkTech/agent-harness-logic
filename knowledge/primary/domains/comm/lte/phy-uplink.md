@@ -1,3 +1,9 @@
+---
+title: "LTE 上行物理层"
+tags: [comm, lte]
+description: "LTE 上行采用 **SC-FDMA (单载波频分多址)**，核心优势是 **低 PAPR**:"
+related: [lte/overview.md, lte/phy-downlink.md]
+---
 # LTE 上行物理层
 
 > 最后更新: 2026-06-03

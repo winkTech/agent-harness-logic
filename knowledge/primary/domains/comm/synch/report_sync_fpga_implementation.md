@@ -1,3 +1,9 @@
+---
+title: "OFDM 同步 FPGA 实现报告"
+tags: [comm, sync, impl]
+description: "| 包检测 | 周期自相关 M[n] > η | 短 (16×10) | ±8 样点 |"
+related: [synch/algorithm_spec.md, synch/fixed_point_report.md, synch/resource_estimate.md]
+---
 # OFDM 同步 FPGA 实现报告
 
 > 算法: 短前导码自相关 (包检测) + 长前导码互相关 (精定时) + T1/T2 精 CFO

@@ -1,3 +1,9 @@
+---
+title: "通信算法知识库"
+tags: [comm]
+description: "├── data_structure.md                # 本文件"
+related: [5g-nr/bfp-compression.md, 5g-nr/dfe-architecture.md, 5g-nr/fr2-beam-management.md, 5g-nr/lowphy-architecture.md, 5g-nr/mimo-detection.md, 5g-nr/nr-frame-structure.md]
+---
 # 通信算法知识库
 
 > 最后更新: 2026-06-02

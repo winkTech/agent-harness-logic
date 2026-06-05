@@ -1,3 +1,9 @@
+---
+title: "JESD204B 高速串行接口指南"
+tags: [fpga, guide, jesd204b, high-speed-io, adc, dac]
+description: "|:----|:----|:------|:---------|"
+related: [fpga/ai-hardware-coding-spec.md, fpga/algorithm-implementation.md, fpga/aurora-guide.md, fpga/communication-algorithms.md, fpga/fpga-best-practices.md, fpga/fpga-coding-standards.md]
+---
 # JESD204B 高速串行接口指南
 
 > 最后更新: 2026-06-05

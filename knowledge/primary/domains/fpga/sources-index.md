@@ -1,3 +1,9 @@
+---
+title: "FPGA 源文档索引"
+tags: [fpga]
+description: "归档前 FPGA 目录包含 38 个源文档（201,163 行）—— 大量书籍的全文提取。已移出 `primary/` 域以保持索引与搜索效率，需要时可通过本索引定位。"
+related: [fpga/ai-hardware-coding-spec.md, fpga/algorithm-implementation.md, fpga/aurora-guide.md, fpga/communication-algorithms.md, fpga/fpga-best-practices.md, fpga/fpga-coding-standards.md]
+---
 # FPGA 源文档索引
 
 > 最后更新: 2026-06-04

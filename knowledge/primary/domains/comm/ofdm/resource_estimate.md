@@ -4,6 +4,7 @@ target_device: "XC7K325T"
 fixed_point: "16bit (Q2.14/Q3.13)"
 version: "2.0"  # 基于定点数据修正
 created: "2026-06-02"
+tags: [comm, ofdm, resource]
 ---
 
 # OFDM 发射机 资源评估报告

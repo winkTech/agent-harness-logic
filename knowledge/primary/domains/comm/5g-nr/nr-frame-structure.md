@@ -1,3 +1,9 @@
+---
+title: "5G NR 帧结构与 Numerology"
+tags: [comm, 5g-nr, frame-structure, numerology]
+description: "NR 以参数集 μ 定义子载波间隔 (SCS) Δf = 15 × 2^μ kHz，共支持 5 种子载波间隔。"
+related: [5g-nr/bfp-compression.md, 5g-nr/dfe-architecture.md, 5g-nr/fr2-beam-management.md, 5g-nr/lowphy-architecture.md, 5g-nr/mimo-detection.md, 5g-nr/nr-ldpc.md]
+---
 # 5G NR 帧结构与 Numerology
 
 > 最后更新: 2026-06-04
