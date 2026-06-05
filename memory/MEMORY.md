@@ -42,6 +42,16 @@
 - [Agent 健康审查规范](learnings/2026-06-04-agent-health-audit.md)
 - [记忆积累计划](learnings/MEMORY_ACCUMULATION_PLAN.md)
 - [UVM 验证框架（OFDM TX 实战）](learnings/2026-06-04-UVM-验证流程与方法.md) — UVM 组件架构、四要素、FPGA 验证裁剪与 6 个踩坑记录
+- [UVM 框架架构决策](learnings/2026-06-05-uvm-framework-architecture.md) — 通用模板 + factory override + 统一 32-bit 接口 (4 算法覆盖)
+- [JESD204B 高速接口指南](../knowledge/primary/domains/fpga/jesd204b-guide.md) — P1 交付物: 协议/参数计算/调试/PCB/RFSoC
+- [MATLAB↔Python 协同仿真](skills/python-hardware-debug/templates/matlab_cosim.py) — P1 交付物: 双引擎模式 + 4 算法支持 + 对比报告
+- [Tcl 自动构建指南](../knowledge/primary/domains/fpga/vivado-automation-guide.md) — P2 交付物: 脚本模板/策略对比/非工程模式/CI 集成
+- [时序收敛实战案例](../knowledge/primary/domains/fpga/timing-convergence-cases.md) — P2 交付物: 7 个真实收敛案例 (IFFT/复位扇出/CDC/GTY/BRAM)
+- [PCIe 高速接口指南](../knowledge/primary/domains/fpga/pcie-guide.md) — P3 交付物: TLP/DMA/AXI/参考工程
+- [Aurora 高速接口指南](../knowledge/primary/domains/fpga/aurora-guide.md) — P3 交付物: 8B/10B+64B/66B/天线阵列
+- [SelectMap 配置指南](../knowledge/primary/domains/fpga/selectmap-guide.md) — P3 交付物: 并行配置/多 Boot/RFSoC
+- [ORAN/eCPRI 分析工具](skills/python-hardware-debug/templates/oran_analysis.py) — P3 交付物: 前传接口分析 (8 模板)
+- [LDPC UVM 验证框架](knowledge/primary/domains/comm/ldpc/uvm_tb/) — P3 交付物: 6 文件 UVM (5 算法全覆盖)
 
 ### 参考链接
 
@@ -52,6 +62,7 @@
 - [Agent 基座加固计划](work/2026-06-04-agent-base-reinforcement-plan.md) — 技能瘦身/配置修复/安全加固，明日执行
 - [Agent 基座健康评分](work/2026-06-04-agent-health-score.md) — 66→93/100 (C+→A)，6维度全面修复
 - [Phase 1 完成](work/2026-06-03-phase1-complete.md) — LTE/NR 知识库 8 篇 + Python 调试 Skill 6 模板 ✓
+- [Phase 3 完成](work/2026-06-05-phase3-complete.md) — 6 项交付物，评分 8.5/10 (+0.5)
 
 ### 错误记录
 
@@ -78,4 +89,4 @@
 
 ---
 
-*上次更新: 2026-06-04*
+*上次更新: 2026-06-05*

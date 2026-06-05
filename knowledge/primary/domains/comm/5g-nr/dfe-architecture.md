@@ -276,7 +276,7 @@ DFE 与 DAC/ADC 之间通过 **JESD204B** 串行接口连接:
 | 分辨率 | 16 bit |
 | 采样率 | 245.76 / 491.52 MSps |
 
-详见 [[../fpga/high-speed-if/jesd204b-debug]] (Phase 2 文档)
+详见 [[../../fpga/jesd204b-guide]] — JESD204B 完整指南 (线速率/参数计算/调试/PCB)
 
 ---
 

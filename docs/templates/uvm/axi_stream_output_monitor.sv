@@ -1,7 +1,6 @@
 // ============================================================================
-// AXI4-Stream Output Monitor (32-bit)
+// AXI4-Stream Output Monitor (统一 32-bit)
 // 监测 DUT m_axis 输出 (32-bit packed I+Q)
-// 当 (tvalid && tready) 时捕获一笔交易 → analysis_port
 // ============================================================================
 
 class axi_stream_output_monitor extends uvm_monitor;
@@ -19,7 +18,7 @@ class axi_stream_output_monitor extends uvm_monitor;
     function void build_phase(uvm_phase phase);
         super.build_phase(phase);
         if (!uvm_config_db #(virtual axi_stream_if #(32))::get(this, "", "vif", vif))
-            `uvm_fatal("NOVIF", "axi_stream_output_monitor: virtual interface not set")
+            `uvm_fatal("NOVIF", "axi_stream_output_monitor: vif #32 not set")
     endfunction
 
     task run_phase(uvm_phase phase);
@@ -27,7 +26,7 @@ class axi_stream_output_monitor extends uvm_monitor;
             @(vif.mon_cb);
             if (vif.mon_cb.tvalid && vif.mon_cb.tready) begin
                 axi_stream_seq_item item = axi_stream_seq_item::type_id::create("item", this);
-                item.data = vif.mon_cb.tdata;   // 32-bit, I[15:0]+Q[15:0] packed
+                item.data = vif.mon_cb.tdata;
                 item.last = vif.mon_cb.tlast;
                 item_collected_port.write(item);
             end

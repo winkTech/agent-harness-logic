@@ -112,6 +112,7 @@ print(f"EVM: {evm:.2f}%")
 | `data_capture.py` | `CSVReader`, `BinaryReader` | 原始捕获文件 | 结构化 IQ 数据 |
 | `ber_test.py` | `ber_test()` | 发送 + 接收比特 | BER 曲线 |
 | `config_gen.py` | `gen_reg_config()` | 寄存器定义 JSON | 配置脚本 |
+| **`matlab_cosim.py`** 🆕 | `run_cosim()` | 算法名 + MATLAB 脚本 | 对比报告 (EVM/频谱/波形) |
 
 ---
 
