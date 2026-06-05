@@ -64,14 +64,25 @@ knowledge/
 
 | 文档 | 内容 | 难度 |
 |------|------|------|
-| [timing-constraints-guide.md](primary/domains/fpga/timing-constraints-guide.md) | 时序约束指南 | ⭐⭐⭐ |
+| [timing-constraints-guide.md](primary/domains/fpga/timing-constraints-guide.md) | 时序约束基础与编写方法 | ⭐⭐⭐ |
+| [timing-convergence-cases.md](primary/domains/fpga/timing-convergence-cases.md) | 时序收敛实战案例 — 7 个真实问题修复全过程 | ⭐⭐⭐ |
 
 #### 工具使用
 
 | 文档 | 内容 | 难度 |
 |------|------|------|
 | [vivado-guide.md](primary/domains/fpga/vivado-guide.md) | Vivado 使用指南 | ⭐⭐ |
+| [vivado-automation-guide.md](primary/domains/fpga/vivado-automation-guide.md) | Tcl 自动化构建 — 脚本模板/策略对比/CI 集成 | ⭐⭐⭐ |
+| [selectmap-guide.md](primary/domains/fpga/selectmap-guide.md) | SelectMap 并行配置 — 时序/多 Boot/RFSoC 集成 | ⭐⭐⭐ |
 | [fpga-development-workflow.md](primary/domains/fpga/fpga-development-workflow.md) | FPGA 开发工作流 | ⭐⭐ |
+
+#### 高速接口
+
+| 文档 | 内容 | 难度 |
+|------|------|------|
+| [jesd204b-guide.md](primary/domains/fpga/jesd204b-guide.md) | JESD204B 串行接口 — 协议/参数计算/调试/PCB/RFSoC | ⭐⭐⭐ |
+| [pcie-guide.md](primary/domains/fpga/pcie-guide.md) | PCIe 高速接口 — TLP/DMA/AXI 桥接/verilog-pcie-master 参考工程 | ⭐⭐⭐ |
+| [aurora-guide.md](primary/domains/fpga/aurora-guide.md) | Aurora 高速接口 — 8B/10B 64B/66B/IP 核配置/RFSoC 集成 | ⭐⭐⭐ |
 
 #### 验证方法学
 
@@ -210,7 +221,7 @@ fpga-team-collaboration.md → fpga-development-workflow.md → fpga-best-practi
 
 | 指标 | 值 |
 |------|-----|
-| **Markdown 文档** | **70 个**（通信 47 + FPGA 19 + 跨域 4） |
+| **Markdown 文档** | **76 个**（通信 47 + FPGA 25 + 跨域 4） |
 | **源文档提取** | **38 个**（已归档到 `archive/sources/fpga/`） |
 | **原始 PDF** | 35+ 个（已分类） |
 | **领域数** | 3（通信/FPGA/Python/MATLAB） |
@@ -218,7 +229,7 @@ fpga-team-collaboration.md → fpga-development-workflow.md → fpga-best-practi
 | **RTL 设计模块** | 19 个 `.sv` 文件 |
 | **FPGA 参考工程** | 7 个（自 hdl-coding skill 移入） |
 | **Skill 注册数** | 5 个 |
-| **最后更新** | 2026-06-04 |
+| **最后更新** | 2026-06-05 |
 
 ---
 
