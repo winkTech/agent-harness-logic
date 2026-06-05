@@ -80,6 +80,7 @@ __pycache__/
 xsim.dir/
 xsim.jou
 *.jou
+*.wdb
 
 # ModelSim / Questa
 transcript
