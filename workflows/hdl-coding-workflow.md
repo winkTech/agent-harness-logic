@@ -1,22 +1,25 @@
 ---
 name: hdl-coding-workflow
-description: RTL 开发全流程 — 参考模型→Testbench-First→增量仿真→透明调试
-version: 2.0.0
+description: RTL 开发全流程 — 算法分析→架构设计→定点量化→Testbench-First→增量仿真→透明调试
+version: 3.0.0
 agents: [developer, qa, code-reviewer]
-phases: 6
-complexity: medium-high
+phases: 8
+complexity: high
 triggers:
+  - new algorithm module
   - new RTL module
   - testbench creation
-  - lint cleanup
+  - resource evaluation
   - code review prep
 ---
 
-# HDL Coding Workflow (v2)
+# HDL Coding Workflow (v3)
 
-RTL 开发流程。核心原则：**验证左移，每层有检查点，仿真日志实时可读**。
+RTL 开发全流程。核心原则：
 
-把 "写完再看对不对" 改成 "写一点就验证一点，每一步都知道对错"。
+- **自顶向下**: 先架构框图，再模块方案，再代码
+- **验证左移**: 每层有检查点，仿真日志实时可读
+- **不可跳越**: 阶段 N 的产出是阶段 N+1 的输入
 
 ---
 
@@ -104,6 +107,7 @@ TEST_LIST      = $(wildcard tests/*.tcl)
 **增量编译原则**：仅修改过的文件及其下游依赖重编译。通过 Makefile 的自动依赖追踪生成 `.d` 文件实现。
 
 **检查点**: 选定工具链，Makefile + filelists 创建完成，`make lint` 和 `make compile` 通过。
+
 **可执行检查点**:
 ```bash
 source .claude/checkpoints/hdl-checkpoints.sh && check_phase_0
@@ -111,28 +115,56 @@ source .claude/checkpoints/hdl-checkpoints.sh && check_phase_0
 
 ---
 
-## Phase 1: 规格 + Golden Reference Model
+## Phase 1: 算法分析与架构设计
 
-**目标**: 在设计 RTL 之前，先用 MATLAB/Python 产生可验证的预期输出。
+**目标**: 在写任何代码之前，把算法文档化、设计架构框图、分析每模块难点与风险。
 
-1. **接口确定** — 模块端口列表（时钟/复位/数据/控制）
-2. **时序规划** — 流水线级数、时钟域、握手协议
-3. **状态机设计** — 状态转移图
-4. **量化分析** — 位宽、资源估算、时序余量
-5. **Reference Model** — MATLAB/Python 编写功能参考模型：
-   - 产生 `expected_output.hex` / `.bin`
-   - 包含多个测试用例（正常/边界/错误）
-   - 供后续 RTL 仿真自动比对
-6. **数据对齐策略** — 根据模块特性选择比对模式，解决 RTL 与参考模型之间的时序差异：
-   - **周期精确 (Cycle-Accurate)**：逐 cycle 比对 `dout === expected`。适用：组合逻辑、固定延迟流水线。参考模型需输出每 cycle 预期值。
-   - **事务级 (Transaction-Based)**：比对事务内容与顺序，忽略具体 timing。适用：有握手/反压的模块。参考模型输出事务序列，testbench 使用 `mailbox`/`queue` 缓存后比对。
-   - **Scoreboard 累计**：累积所有输出总量，结束时一次性比对。适用：无序输出、多通道聚合。参考模型计算预期总额，testbench 累计实际值后比较。
+### 1.1 算法文档化
+- 数学推导、关键公式、信号流图
+- 参数空间、数据率、时钟频率、延迟约束
+- 区分"必须满足"和"可以权衡"两类约束
+- 输出: `algorithm_spec.md`（`docs/templates/algorithm_spec_template.md` 参考）
 
-   选定策略后在 `compare_mode` 参数中记录。建议跨 cycle 关系用 SVA `##[min:max]` 约束，不要硬编码固定延迟。
+### 1.2 RTL 顶层架构框图
+- 绘制模块级框图：功能单元划分、数据流向、接口信号
+- 标注时钟域、位宽、流水线级数
+- **模块与 MATLAB 函数对标**：每个 RTL 模块对应哪个 MATLAB 函数，确保模型和硬件一一对应
+- 输出: 架构图（放入 `06_doc/`）
 
-**检查点**: 参考模型运行通过，预期数据已保存。
-**关联 Skill/MCP**: MATLAB MCP / Python — 运行 Golden Model 生成预期数据
-**数据输出**: `.claude/state/hdl-coding/project-spec.json`（符合 `schemas/hdl-project-spec.schema.json`）
+### 1.3 模块设计方案（每个模块逐一分析）
+
+| 项目 | 内容 |
+|:-----|:------|
+| 接口定义 | 端口列表、协议时序 |
+| 实现方案 | 算法→硬件映射（LUT/BRAM/DSP 选择及理由） |
+| 难点与风险 | 该模块实现中最难的部分、可能出什么问题 |
+| 解决方案 | 针对每个难点的具体对策 |
+| 监测机制 | 仿真中如何观测该模块是否正确（断言、计数值、状态监控） |
+| 鲁棒性 | 边界输入、反压、溢出、非法状态的处理策略 |
+
+### 1.4 资源约束识别
+- 目标器件资源上限（LUT/FF/BRAM/DSP）
+- 如有严格资源要求，明确每模块预算上限
+- 输出: 初步资源预算表（精确数字在 Phase 2 产出）
+
+### 1.5 浮点参考模型
+- MATLAB/Python golden model 构建
+- 函数划分对应 RTL 模块架构（与 1.2 框图一致）
+- 输出: `golden_model/` 脚本包（`golden_model/src/`, `golden_model/tests/`）
+
+### 1.6 测试向量生成
+- 常规数据 / 边界值 / 随机数据 / 特殊模式
+- 导出 `.bin` / `.hex` 供 testbench 加载
+- 输出: `vectors/*`
+
+### 1.7 性能基线
+- 浮点 BER/EVM/NMSE 曲线
+- 作为后续定点退化的比对基准
+
+**检查点**: algorithm_spec + 架构框图 + 所有模块方案完成 + golden_model 运行通过。
+**参考**: `skills/hdl-coding/references/alg-flow-verilog.md`（代码模板）, `docs/templates/algorithm_spec_template.md`
+**输出**: `.claude/state/hdl-coding/project-spec.json`
+
 **可执行检查点**:
 ```bash
 source .claude/checkpoints/hdl-checkpoints.sh && check_phase_1
@@ -140,11 +172,57 @@ source .claude/checkpoints/hdl-checkpoints.sh && check_phase_1
 
 ---
 
-## Phase 2: Testbench-First（自检框架 + SVA 断言）
+## Phase 2: 定点量化与资源评估
+
+**目标**: 用数据驱动的方式确定位宽、量化策略和资源预算，杜绝经验估算。
+
+### 2.1 资源目标确认
+- 基于 Phase 1.4 的初步预算，确认各模块资源上限
+- 如有严格资源要求，在量化阶段就纳入约束
+
+### 2.2 位宽扫描与量化分析
+- 各节点从高到低逐级缩减位宽，观察 BER/EVM 退化
+- 统计各节点动态范围，确定整数位宽
+- 量化策略选择比较：截断(truncation) / 四舍五入(rounding) / 饱和(saturation)
+- 量化误差报告：各节点 SNR 退化、最大误差、MSE 汇总
+
+### 2.3 Bit-true 定点模型
+- MATLAB `fi()` 重构定点模型
+- 与浮点基线逐比特对齐（bit-true）
+
+### 2.4 资源评估
+- DSP/LUT/BRAM 预算表（基于定点结果 + 架构框图，非经验估算）
+- 若超标 → 回退 2.2 调整位宽，或回退 Phase 1 调整架构
+- 输出架构缩放建议
+
+**检查点**: fixed_point_report + resource_estimate 完成，资源预算在约束内。
+**参考**: `skills/hdl-coding/references/alg-flow-verilog.md`（Python 定点函数）, `docs/templates/fixed_point_report_template.md`, `docs/templates/resource_estimate_template.md`
+**输出**: `fixed_point_report.md`, `resource_estimate.md`
+
+**可执行检查点**:
+```bash
+source .claude/checkpoints/hdl-checkpoints.sh && check_phase_2
+```
+
+---
+
+## Phase 3: Testbench-First（自检框架 + SVA + 数据对齐）
 
 **目标**: 先写能自动判断对错的 testbench，再写 RTL。
 
-### 2.1 自检 Testbench 模板
+### 3.1 比对策略选定（来自 Phase 1 的数据对齐规划）
+
+根据模块特性选择比对模式，解决 RTL 与参考模型之间的时序差异：
+
+| 模式 | 适用场景 | 说明 |
+|:-----|:---------|:------|
+| **周期精确** | 组合逻辑、固定延迟流水线 | 逐 cycle 比对 `dout === expected`。参考模型输出每 cycle 预期值 |
+| **事务级** | 有握手/反压的模块 | 比对事务内容与顺序，忽略具体 timing。用 `mailbox`/`queue` 缓存后比对 |
+| **Scoreboard 累计** | 无序输出、多通道聚合 | 累积所有输出总量，结束时一次性比对 |
+
+选定策略后在 `compare_mode` 参数中记录。建议跨 cycle 关系用 SVA `##[min:max]` 约束，不要硬编码固定延迟。
+
+### 3.2 自检 Testbench 模板
 
 ```systemverilog
 module tb_module;
@@ -152,12 +230,12 @@ module tb_module;
   // DUT 例化
   // 激励产生
   // 预期输出加载（来自 Phase 1 的 .hex）
-  
+
   integer cycle_count;
   always @(posedge clk) begin
     if (compare_enable) begin
       if (dout !== expected_dout) begin
-        $display("[FAIL] cycle=%0d dout=%h expected=%h", 
+        $display("[FAIL] cycle=%0d dout=%h expected=%h",
                  cycle_count, dout, expected_dout);
         error_count++;
       end else begin
@@ -166,7 +244,7 @@ module tb_module;
       cycle_count++;
     end
   end
-  
+
   initial begin
     $display("=== Test Start ===");
     // 运行测试
@@ -177,7 +255,7 @@ module tb_module;
 endmodule
 ```
 
-### 2.2 SVA 断言嵌入
+### 3.3 SVA 断言嵌入
 
 ```systemverilog
 // 每个关键属性都作为仿真时的实时检查点
@@ -185,7 +263,7 @@ assert property (@(posedge clk) valid |-> ##[1:3] ready);
 assert property (@(posedge clk) fifo_full |-> !fifo_wr);
 ```
 
-### 2.3 结构化日志宏
+### 3.4 结构化日志宏
 
 ```systemverilog
 `define LOG(lvl, msg) \
@@ -200,25 +278,18 @@ assert property (@(posedge clk) fifo_full |-> !fifo_wr);
 
 **检查点**: testbench 编译通过，自检逻辑完整，SVA 无编译错误。
 **关联 Skill**: `hdl-coding`（Testbench 结构模板、SVA 编写参考）
-**数据输入**: `.claude/state/hdl-coding/project-spec.json`（Phase 1 输出，定义端口列表和比对模式）
+**数据输入**: `.claude/state/hdl-coding/project-spec.json`（Phase 1 输出，含端口列表和比对策略）
+
 **可执行检查点**:
 ```bash
-source .claude/checkpoints/hdl-checkpoints.sh && check_phase_2
+source .claude/checkpoints/hdl-checkpoints.sh && check_phase_3
 ```
 
 ---
 
-## Phase 3: 增量式 RTL 编码（分层验证）
+## Phase 4: 增量式 RTL 编码（分层验证）
 
 **目标**: 从最小可验证单元开始，每层仿真绿灯后再推进。
-
-```
-Layer 0: 端口连通性         ← 每个 port 能正确读写
-Layer 1: 寄存器/配置通路     ← CSR 读写、配置生效
-Layer 2: 控制逻辑           ← 状态机跳转、握手协议
-Layer 3: 数据通路           ← 单笔数据 → 流水线满负荷
-Layer 4: 边界条件           ← 空/满/溢出/错误处理
-```
 
 ### 层间依赖与 Stub 机制
 
@@ -256,6 +327,8 @@ Layer 4: 边界条件           ← 空/满/溢出/错误处理
 说明：Layer 3 写完后，Layer 2 需要的 ready/valid 已可用；
       Layer 2 写完后，Layer 4 需要的 full/error 全部就绪。
 ```
+
+**重要**：Phase 1.3 的模块设计方案中的**难点与监测机制**在此阶段落地——每个模块实现时，其预定义的断言和监控点必须写入代码。
 
 ### 运行方式（实时输出到对话框）
 
@@ -351,15 +424,16 @@ done
 **检查点**: Layer 0-4 依次通过，日志中无 FAIL。
 **关联 Skill**: `hdl-coding`（FSM 模板、流水线模板、命名规范）、`debugging`（仿真异常调试）
 **数据输入**: `.claude/state/hdl-coding/project-spec.json`（比对模式和端口定义）
-**数据输出**: `.claude/state/hdl-coding/layer-status.json`（符合 `schemas/hdl-layer-status.schema.json`）
+**数据输出**: `.claude/state/hdl-coding/layer-status.json`
+
 **可执行检查点**:
 ```bash
-source .claude/checkpoints/hdl-checkpoints.sh && check_phase_3
+source .claude/checkpoints/hdl-checkpoints.sh && check_phase_4
 ```
 
 ---
 
-## Phase 4: 回归 + 覆盖率
+## Phase 5: 回归 + 覆盖率
 
 **目标**: 确保改动不破坏已有功能，覆盖关键功能场景。
 
@@ -381,15 +455,16 @@ source .claude/checkpoints/hdl-checkpoints.sh && check_phase_3
 
 **检查点**: 回归全绿 + mandatory covergroup 全部触发 + 覆盖率报告已审查。
 **关联 Skill/MCP**: `matlab` MCP（Golden Model 覆盖率映射验证）
-**数据输入**: `.claude/state/hdl-coding/layer-status.json`（Phase 3 输出，含回归历史）
+**数据输入**: `.claude/state/hdl-coding/layer-status.json`（Phase 4 输出，含回归历史）
+
 **可执行检查点**:
 ```bash
-source .claude/checkpoints/hdl-checkpoints.sh && check_phase_4
+source .claude/checkpoints/hdl-checkpoints.sh && check_phase_5
 ```
 
 ---
 
-## Phase 5: 代码审查
+## Phase 6: 代码审查
 
 **目标**: 确认代码质量、风格、以及流程合规性。
 
@@ -406,22 +481,59 @@ source .claude/checkpoints/hdl-checkpoints.sh && check_phase_4
    - [ ] 所有 SVA 断言已启用
    - [ ] 参考模型对比通过
    - [ ] Layer 间 Stub（如果有）已标注 TODO，后续替换为完整实现
+   - [ ] Phase 1 模块设计方案中预见的难点已解决
 2. **提交 code-review** — 用 `code-review` 的 quality 模式
 
-**输出**: 审查通过的 RTL + 完整仿真日志 + 覆盖率报告
+**输出**: 审查通过的 RTL + 完整仿真日志 + 覆盖率报告。
 **关联 Skill**: `code-review`（质量审查模式）、`hdl-coding`（时序安全/命名规范核查）
 **数据输入**: `.claude/state/hdl-coding/layer-status.json`
+
 **可执行检查点**:
 ```bash
-source .claude/checkpoints/hdl-checkpoints.sh && check_phase_5
+source .claude/checkpoints/hdl-checkpoints.sh && check_phase_6
+```
+
+---
+
+## Phase 7: 报告输出
+
+**目标**: 汇总各阶段文档，形成可交付的完整设计包，记录经验教训。
+
+1. **实现报告**: `report_*_fpga_implementation.md`
+   - 架构框图决策说明
+   - 定点量化结果汇总（位宽表、量化误差）
+   - 资源评估结果（DSP/LUT/BRAM 实际 vs 预算）
+   - 性能指标（BER/EVM 退化率）
+   - 难点解决方案回顾
+2. **文档归档**: 所有阶段文档整理链接
+   - `algorithm_spec.md` → Phase 1
+   - `golden_model/` → Phase 1
+   - `fixed_point_report.md` → Phase 2
+   - `resource_estimate.md` → Phase 2
+   - RTL 源码 → Phase 4
+   - 仿真日志 → Phase 3-5
+   - 覆盖率报告 → Phase 5
+3. **经验记录**: 关键决策、踩坑记录
+   - 记录到 `memory/learnings/` 或项目文档
+   - 供后续算法模块参考
+
+**检查点**: 报告完成，文档归档，经验已记录。
+**参考**: `docs/templates/` 各阶段模板
+
+**可执行检查点**:
+```bash
+source .claude/checkpoints/hdl-checkpoints.sh && check_phase_7
 ```
 
 ---
 
 ## 仿真调试透明化对照表
 
-| 传统方式 | v2 方式 | 区别 |
+| 传统方式 | v3 方式 | 区别 |
 |---------|--------|------|
+| 直接写 RTL | 先架构框图+模块方案+难点分析 | 代码前已有完整设计规划 |
+| 凭经验估算定点位宽 | Phase 2 定点扫描驱动位宽选择 | 量化决策有数据支撑 |
+| 资源靠猜 | Phase 2 基于定点+架构框图的资源评估 | 资源预算可追踪可验证 |
 | 写完再仿真 | 写一段仿一段 | 故障定位从小时级→分钟级 |
 | 人工看波形 | 自动比对 golden model | 发现错误从"感觉不对"→"第 N 个 cycle 数据不匹配" |
 | testbench 一次性写 | Testbench-First 分层写 | 每层是独立检查点，不互相阻塞 |
@@ -437,11 +549,12 @@ source .claude/checkpoints/hdl-checkpoints.sh && check_phase_5
 | 资源 | 路径 | 用途 |
 |------|------|------|
 | HDL 编码规范 | `skills/hdl-coding/SKILL.md` | 命名规则、时序安全、lint 门禁 |
+| 算法→Verilog 参考 | `skills/hdl-coding/references/alg-flow-verilog.md` | 代码模板、NMSE 判定、常见问题排查 |
 | TDD 工作流 | `skills/tdd/SKILL.md` | Testbench-First 方法论 |
-| Code Review 工作流 | `workflows/code-review-workflow.md` | Phase 5 审查环节 |
+| Code Review 工作流 | `workflows/code-review-workflow.md` | Phase 6 审查环节 |
 | MATLAB MCP | `CLAUDE.md` | Golden model 生成与验证 |
-| Project Spec Schema | `schemas/hdl-project-spec.schema.json` | Phase 1→2 数据契约（端口/时序/比对策略） |
-| Layer Status Schema | `schemas/hdl-layer-status.schema.json` | Phase 3→4 数据契约（层推进状态） |
+| Project Spec Schema | `schemas/hdl-project-spec.schema.json` | Phase 1→3 数据契约（端口/时序/比对策略） |
+| Layer Status Schema | `schemas/hdl-layer-status.schema.json` | Phase 4→5 数据契约（层推进状态） |
 | 检查点脚本 | `.claude/checkpoints/hdl-checkpoints.sh` | 各 Phase 可执行断言 |
 | Developer Agent | `agents/core/developer.md` | HDL 编码执行者（已绑定 hdl-coding skill） |
 | QA Agent | `agents/core/qa.md` | 回归/覆盖率验证（已绑定 hdl-coding skill） |
