@@ -6,29 +6,31 @@
 
 | 文件 | 内容 |
 |:-----|:-----|
-| LESSONS.md | 最佳实践汇总 |
-| 流水线框架必须严格执行 | 工作流纪律 |
-| 上下文压缩规则 | 压缩策略 |
-| 知识检索优先级规则 | 检索顺序 |
-| Agent 自评报告 v2→v7 | 评分 6.0→9.5 |
-| LDPC RTL 审查经验 | 编码审查 |
-| 今日复盘 0603 | 日总结 |
-| Agent 健康审查规范 | 定期审查 |
-| 记忆积累计划 | 积累策略 |
-| UVM 验证框架（OFDM 实战） | UVM 踩坑 |
-| UVM 框架架构决策 | 通用模板选择 |
-| 知识库地图合规规则 | 三同步原则（frontmatter/场景/标签） |
-| 软件安装路径规则 | 默认 D 盘，禁止 C 盘 |
-| 仓库脱敏规则 | [[desensitization-rule]] — 所有 git 追踪文件必须脱敏 |
+| [[lessons-summary]] | 最佳实践汇总 |
+| [[pipeline-framework-must-follow-order]] | 工作流纪律 |
+| [[context-compression-rule]] | 压缩策略 |
+| [[knowledge-retrieval-priority]] | 检索顺序 |
+| [[agent-evaluation-v7]] | 评分 6.0→9.5 |
+| [[ldpc-rtl-review-lessons]] | 编码审查 |
+| [[2026-06-03-daily-summary]] | 日总结 |
+| [[agent-health-audit]] | 定期审查 |
+| [[memory-accumulation-plan]] | 积累策略 |
+| [[uvm-verification-framework]] | UVM 踩坑 |
+| [[uvm-framework-architecture]] | 通用模板选择 |
+| [[knowledge-map-compliance]] | 三同步原则 |
+| [[software-install-rule]] | 默认 D 盘，禁止 C 盘 |
+| [[desensitization-rule]] | 所有 git 追踪文件必须脱敏 |
+| [[memory-auto-trigger]] | PostMessage/SessionStart/Cron 三层触发 |
 
 ## 工作 (work/)
 
 | 文件 | 内容 |
 |:-----|:-----|
-| Agent 基座加固计划 | 技能瘦身/配置修复 |
-| Agent 基座健康评分 | 66→93/100 |
-| Phase 1 完成 | LTE/NR 知识库 |
-| Phase 3 完成 | 6 交付物 8.5 |
+| [[agent-base-reinforcement-plan]] | 技能瘦身/配置修复 |
+| [[agent-health-score-20260604]] | 66→93/100 |
+| [[phase1-complete]] | Phase 1 — LTE/NR 知识库 |
+| [[p1-completion-20260605]] | Phase 2 完成 |
+| [[phase3-complete]] | 6 交付物 8.5 |
 | Phase 4 完成 | 22 文件 +3256/-82 行, 9.3 |
 | Phase 4.5 完成 | 5 任务, 9.5 🎯 |
 
@@ -36,19 +38,21 @@
 
 | 文件 | 内容 |
 |:-----|:-----|
-| GateGuard 触发问题 | 钩子拦截 |
-| PDF 提取限制 | 分段读取 |
-| 开源目录丢失 | 恢复操作 |
+| [[GateGuard 触发问题]] | 钩子拦截 |
+| [[pdf-extraction-limitation]] | 分段读取 |
+| [[open-source-dir-loss]] | 恢复操作 |
 
 ## 项目 (projects/)
 
-[Agent 长期优化路线图](projects/2026-06-03-agent-optimization-roadmap.md)
+[[agent-optimization-roadmap]] — Agent 长期优化路线图（3 阶段）
 
 ## 参考链接
 
-[跨项目经验复用](references/cross-project-experience-link.md) — 新 FPGA 项目启动模板
+[[cross-project-experience-ref]] — 新 FPGA 项目启动模板
 
-## 归档
+## 模板
 
-`archive/` — 已完成任务记录（7 项）
-- [记忆系统自动化结构](memory/learnings/2026-06-05-memory-auto-trigger.md) — PostMessage/SessionStart/Cron 三层触发
+| 文件 | 用途 |
+|:-----|:-----|
+| [TEMPLATE](work/TEMPLATE.md) | 工作记忆模板 |
+| [ERROR_TEMPLATE](errors/ERROR_TEMPLATE.md) | 错误记录模板 |
