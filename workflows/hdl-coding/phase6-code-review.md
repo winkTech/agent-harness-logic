@@ -25,12 +25,50 @@
 
 用 `code-review` 的 quality 模式执行审查，详见 `workflows/code-review-workflow.md`。
 
+## 升级决策
+
+审查完成后，评估是否需要升级到 architecture-review 或 security-review。
+**此决策必须写入数据契约**，供下游工具读取：
+
+```json
+{
+  "phase": "hdl-coding-phase-6",
+  "review_decision": {
+    "escalate_architecture": false,
+    "escalate_security": false,
+    "reason_arch": "",
+    "reason_security": ""
+  },
+  "codebase_metrics": {
+    "total_loc": 0,
+    "module_count": 0,
+    "security_sensitive_hits": 0
+  }
+}
+```
+
+**升级判定规则**：
+
+| 条件 | 触发 | 说明 |
+|:-----|:-----|:------|
+| 代码量 > 10K LOC | → architecture-review | 模块划分复杂，需要架构级审查 |
+| 模块数 > 5 | → architecture-review | 接口交互多，需检查架构一致性 |
+| 含 auth/token/secret 等关键词 | → security-review | 涉及敏感数据，需深度安全审查 |
+| 含 encrypt/decrypt/cipher | → security-review | 加密实现易出错，需专门审查 |
+| 含 payment/upload | → security-review | 金融/文件功能有合规要求 |
+
+**工具检查**：运行 `check_escalation` 自动判断上述条件：
+```bash
+source .claude/checkpoints/hdl-checkpoints.sh && check_escalation
+```
+
 ## 检查点
 
-审查通过的 RTL + 完整仿真日志 + 覆盖率报告。
+审查通过的 RTL + 完整仿真日志 + 覆盖率报告 + **升级决策记录**。
 
 **关联 Skill**: `code-review`（质量审查模式）、`hdl-coding`（时序安全/命名规范核查）
 **数据输入**: `.claude/state/hdl-coding/layer-status.json`
+**数据输出**（新增）: `.claude/state/hdl-coding/review-decision.json`
 
 **可执行检查点**:
 ```bash
