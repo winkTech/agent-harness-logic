@@ -9,7 +9,7 @@
 
 | Tag | 文档 | 计数 |
 |:----|:-----|:----:|
-| `comm` | [信道估计](primary/domains/comm/channel_est/), [LDPC](primary/domains/comm/ldpc/), [OFDM](primary/domains/comm/ofdm/), [RRC](primary/domains/comm/rrc/), [同步](primary/domains/comm/synch/), [5G NR](primary/domains/comm/5g-nr/), [LTE](primary/domains/comm/lte/) 全部 | ~47 |
+| `comm` | [WiFi](primary/domains/comm/wifi/), [信道估计](primary/domains/comm/channel_est/), [LDPC](primary/domains/comm/ldpc/), [OFDM](primary/domains/comm/ofdm/), [RRC](primary/domains/comm/rrc/), [同步](primary/domains/comm/synch/), [5G NR](primary/domains/comm/5g-nr/), [LTE](primary/domains/comm/lte/) 全部 | ~51 |
 | `fpga` | [指南](primary/domains/fpga/) 全部（不含 examples） | ~25 |
 | `python` | [硬件调试工具](primary/domains/python/README.md), skills/* | ~10 |
 | `matlab` | [模型](primary/domains/matlab/README.md), golden models, cosim | ~40+ |
@@ -32,6 +32,7 @@
 
 | Tag | 文档路径 | 说明 |
 |:----|:---------|:-----|
+| `wifi` | comm/wifi/overview, phy-layer, mac-layer, ldpc-bcc-encoding | 802.11 WiFi 知识集 (NEW ✦) |
 | `lte` | comm/lte/overview, phy-downlink, phy-uplink | 4G LTE |
 | `5g-nr` | comm/5g-nr/overview, nr-frame-structure, nr-ldpc, polar-code, pdsch, pusch, pdcch, nr-prach, nr-test-mode, fr2-beam-management, mimo-detection, nru, ntn | 5G NR |
 | `802.11n` | comm/ldpc/algorithm_spec | WiFi LDPC |

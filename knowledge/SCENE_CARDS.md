@@ -21,7 +21,8 @@
   场景 08:       L220-L242 (~900 tok)  Tcl 自动化构建
   场景 09:       L243-L268 (~900 tok)  设计 LDPC 编解码器
   场景 10:       L269-L291 (~900 tok)  技术选型对比
-  使用说明:      L292-L310 (~500 tok)
+  场景 11:       L292-L314 (~900 tok)  WiFi/802.11 系统设计
+  使用说明:      L315-L333 (~500 tok)
 ```
 
 | 编号 | 场景 | 核心标签 | 文档数 | Token 预估 |
@@ -36,6 +37,7 @@
 | 08 | Tcl 自动化构建 | `tcl` `vivado` | 2 | ~2,000 |
 | 09 | 设计 LDPC 编解码器 | `ldpc` `spec` `rtl` `5g-nr` | 6 | ~4,000 |
 | 10 | 技术选型对比 | `guide` `overview` | 多 | 按需 |
+| 11 | WiFi/802.11 系统设计 | `wifi` `phy` `mac` | 4 | ~2,500 |
 
 ---
 
@@ -306,9 +308,33 @@ UC 框架:
 
 ---
 
+## 11 🎯 WiFi/802.11 系统设计与分析
+
+**适用**: 理解 802.11a/b/g/n/ac/ax/be 标准、WiFi PHY/MAC 实现、编码方案选择
+
+```
+加载顺序:
+  1. wifi/overview                    ← 标准演进、频段、系统架构（必读）
+  2. wifi/phy-layer                   ← Preamble、编码、调制、OFDM 参数
+  3. wifi/mac-layer                   ← CSMA/CA、帧聚合、EDCA QoS
+  4. wifi/ldpc-bcc-encoding           ← 加扰、BCC/LDPC 编码链、编码选择
+
+跨链参考:
+  ├── comm/ofdm/algorithm_spec        ← OFDM 核心算法 (WiFi 各代参数对比)
+  ├── comm/ldpc/algorithm_spec        ← QC-LDPC 码设计 (802.11n 矩阵)
+  ├── comm/ldpc/encoding_spec         ← 双对角编码架构
+  └── comm/5g-nr/mimo-detection       ← MIMO 检测对比 (WiFi vs NR)
+```
+
+**标签**: `wifi` + `phy` + `mac`
+
+**跨链**: → 场景 01 (算法全链路), 场景 09 (LDPC 编解码)
+
+---
+
 ## 使用说明
 
-1. 识别用户任务 → 匹配上述 10 个场景之一
+1. 识别用户任务 → 匹配上述 11 个场景之一
 2. 仅加载该场景的**必要文档**（场景卡片中列出的核心文档）
 3. 用标签交叉细化:`tag:X + tag:Y`
 4. 仍不满足 → 回退到 TAG_INDEX.md 或 grep 全文

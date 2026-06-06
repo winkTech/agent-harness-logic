@@ -24,7 +24,9 @@ knowledge/
 
 ---
 
-## 通信算法 (47)
+## 通信算法 (51)
+
+**WiFi** — `wifi/overview`, `phy-layer`, `mac-layer`, `ldpc-bcc-encoding` (NEW ✦)
 
 **OFDM** — `ofdm/algorithm_spec`, `rtl_architecture`, `fixed_point_report`, `resource_estimate`, `report_ofdm_fpga_implementation`, `testbench_plan`, `golden_model/`, `uvm_tb/`
 
@@ -120,7 +122,7 @@ knowledge/
 
 | Metric | Value |
 |:-------|:-----:|
-| Primary docs | 76 (comm 47 + fpga 25 + cross 4) |
+| Primary docs | 80 (comm 51 + fpga 25 + cross 4) |
 | 鸢尾花书蒸馏 | 40 cards (~200KB) |
 | Source extracts | 38 (~200K lines) |
 | MATLAB models | 37 .m files |
