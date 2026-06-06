@@ -1,3 +1,10 @@
+---
+name: memory-rules
+description: 记忆触发规则 — 何时、如何记录记忆，自动触发条件和审核流程
+metadata:
+  type: reference
+---
+
 # 📋 记忆触发规则
 
 > 何时、如何记录记忆

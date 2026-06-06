@@ -1,3 +1,10 @@
+---
+name: memory-link-graph
+description: 记忆关联图 — 跨文件引用网络和主题聚类
+metadata:
+  type: reference
+---
+
 # 记忆关联图
 
 > 最后更新: 2026-06-02
