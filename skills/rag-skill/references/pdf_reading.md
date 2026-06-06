@@ -59,7 +59,7 @@ Agent解读PDF必须按顺序进行，中间遇到图表进行解读与理解后
 pip install 'markitdown[all]'
 
 # 转换PDF为Markdown（工具位于 rag-skill/tools/cli/）
-python C:/Users/Lihan/.claude/skills/rag-skill/tools/cli/markitdown-convert.py <input.pdf> [output.md]
+python [SKILL_DIR]/tools/cli/markitdown-convert.py <input.pdf> [output.md]
 ```
 
 **优点**：
@@ -137,7 +137,7 @@ def auto_convert_pdf(pdf_path, md_path):
     try:
         import subprocess
         result = subprocess.run(
-            ['python', 'C:/Users/Lihan/.claude/skills/rag-skill/tools/cli/markitdown-convert.py', pdf_path, md_path],
+            ['python', '[SKILL_DIR]/tools/cli/markitdown-convert.py', pdf_path, md_path],
             capture_output=True, text=True
         )
         if result.returncode == 0 and os.path.exists(md_path):

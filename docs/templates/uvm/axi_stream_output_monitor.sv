@@ -8,11 +8,17 @@ class axi_stream_output_monitor extends uvm_monitor;
     virtual axi_stream_if #(32) vif;
     uvm_analysis_port #(axi_stream_seq_item) item_collected_port;
 
+    // 交易计数 & 覆盖率统计
+    int tx_count;
+    int last_count;
+
     `uvm_component_utils(axi_stream_output_monitor)
 
     function new(string name, uvm_component parent);
         super.new(name, parent);
         item_collected_port = new("item_collected_port", this);
+        tx_count = 0;
+        last_count = 0;
     endfunction
 
     function void build_phase(uvm_phase phase);
@@ -29,8 +35,21 @@ class axi_stream_output_monitor extends uvm_monitor;
                 item.data = vif.mon_cb.tdata;
                 item.last = vif.mon_cb.tlast;
                 item_collected_port.write(item);
+
+                // 交易计数
+                tx_count++;
+                if (item.last) last_count++;
             end
         end
     endtask
+
+    function void report_phase(uvm_phase phase);
+        `uvm_info(get_type_name(),
+            $sformatf("  axi_stream_output_monitor Report:"), UVM_MEDIUM)
+        `uvm_info(get_type_name(),
+            $sformatf("    Total transactions: %0d", tx_count), UVM_MEDIUM)
+        `uvm_info(get_type_name(),
+            $sformatf("    Total packets:      %0d", last_count), UVM_MEDIUM)
+    endfunction : report_phase
 
 endclass
