@@ -41,9 +41,9 @@ set TOP     [lindex $argv 1]
 set PROJECT [lindex $argv 2]
 
 # 默认值
-if {$PART eq ""}    { set PART "xczu29dr-ffvf1760-2-e" }
-if {$TOP eq ""}     { set TOP "ofdm_tx_top" }
-if {$PROJECT eq ""} { set PROJECT "proj_ofdm" }
+if {$PART eq ""}    { set PART "[PART_NUM]" }
+if {$TOP eq ""}     { set TOP "[TOP_MODULE]" }
+if {$PROJECT eq ""} { set PROJECT "[PROJECT_NAME]" }
 
 set SRC_DIR  "../rtl"
 set TB_DIR   "../tb"
@@ -177,8 +177,8 @@ set strategies {
     {synth "Vivado Synthesis Defaults"            impl "Performance_Retiming"}
 }
 
-set top "ofdm_tx_top"
-set part "xczu29dr-ffvf1760-2-e"
+set top "[TOP_MODULE]"
+set part "[PART_NUM]"
 
 foreach {label syn_strat impl_strat} [join $strategies] {
     puts "\n--- Running: $label ---"
@@ -233,8 +233,8 @@ foreach {label syn_strat impl_strat} [join $strategies] {
 # 内存占用更低, 适合服务器批处理
 # ============================================================================
 
-set top "ofdm_tx_top"
-set part "xczu29dr-ffvf1760-2-e"
+set top "[TOP_MODULE]"
+set part "[PART_NUM]"
 
 # 1. 读入设计文件
 read_vhdl   [glob ./src/*.vhd]
@@ -397,9 +397,9 @@ jobs:
       - uses: actions/checkout@v4
       - name: Run Vivado Build
         run: |
-          source /tools/Xilinx/Vivado/2023.1/settings64.sh
+          source [VIVADO_INSTALL_PATH]/settings64.sh
           vivado -mode batch -source scripts/build_project.tcl \
-            -tclargs xczu29dr-ffvf1760-2-e ofdm_tx_top proj_cicd
+            -tclargs [PART_NUM] [TOP_MODULE] proj_cicd
       - name: Check Timing
         run: |
           if grep -q "WNS.*-" output/timing_summary.rpt; then
@@ -417,8 +417,8 @@ jobs:
 
 ```makefile
 # Makefile for Vivado build
-PART    ?= xczu29dr-ffvf1760-2-e
-TOP     ?= ofdm_tx_top
+PART    ?= [PART_NUM]
+TOP     ?= [TOP_MODULE]
 STRATEGY ?= default
 
 all: bitstream
@@ -451,7 +451,355 @@ clean:
 
 ---
 
-## 六、常见问题排查
+## 六、时序签收自动化 (Signoff Pipeline)
+
+### 6.1 自动时序签收脚本
+
+```tcl
+# ============================================================================
+# timing_signoff.tcl — 时序签收自动化
+# 功能:
+#   1. 检查 setup/hold 时序 (WNS ≥ 0)
+#   2. 若不满足 → 自动尝试多策略回退
+#   3. 生成签收报告 (JSON/HTML)
+# 用法: vivado -mode batch -source timing_signoff.tcl \
+#           -tclargs <dcp_path> <top_name> <freq_mhz>
+# ============================================================================
+
+# --- 配置 ---
+set DCP    [lindex $argv 0]
+set TOP    [lindex $argv 1]
+set FREQ   [lindex $argv 2]
+if {$FREQ eq ""} { set FREQ 100 }
+
+# 签收阈值 (可根据项目调整)
+set SETUP_MARGIN_NS   0.050  ;# setup 余量 ≥ 50 ps
+set HOLD_MARGIN_NS    0.020  ;# hold 余量 ≥ 20 ps
+set MAX_TNS          -0.500  ;# TNS 绝对值 ≤ 500 ps
+
+set result FAIL
+set strategy_used ""
+set all_results [list]
+
+# 策略列表 (按激进程度排序，优先用默认)
+set strategies {
+    {label "default"          impl "Vivado Implementation Defaults"}
+    {label "retiming"         impl "Performance_Retiming"}
+    {label "explore"          impl "Performance_Explore"}
+    {label "physopt"          impl "Flow_RunPhysOpt"}
+    {label "postroute_physopt" impl "Flow_RunPostRoutePhysOpt"}
+    {label "explore_aggr"     impl "Performance_ExploreAggressive"}
+    {label "areanetlist"      impl "Area_ExploreWithRemap"}
+}
+
+# --- 签收检查函数 ---
+proc check_timing_signoff {} {
+    set wns [get_property SLACK [get_timing_paths -max_paths 1 -nworst 1 -setup]]
+    set whs [get_property SLACK [get_timing_paths -max_paths 1 -nworst 1 -hold]]
+
+    set tns 0; set ths 0
+    foreach path [get_timing_paths -max_paths 10000 -setup] {
+        set slack [get_property SLACK $path]
+        if {$slack < 0} { set tns [expr {$tns + $slack}] }
+    }
+    foreach path [get_timing_paths -max_paths 10000 -hold] {
+        set slack [get_property SLACK $path]
+        if {$slack < 0} { set ths [expr {$ths + $slack}] }
+    }
+
+    set setup_pass [expr {$wns >= $::SETUP_MARGIN_NS}]
+    set hold_pass  [expr {$whs >= $::HOLD_MARGIN_NS}]
+    set tns_pass   [expr {$tns >= $::MAX_TNS}]
+
+    return [list $wns $whs $tns $ths $setup_pass $hold_pass $tns_pass]
+}
+
+# --- 签收主流程 ---
+puts "========================================="
+puts " Timing Signoff Pipeline"
+puts " Target: ${FREQ} MHz (period: [expr {1000.0/$FREQ}] ns)"
+puts "========================================="
+
+# 尝试每个策略
+foreach strat $::strategies {
+    set label   [dict get $strat label]
+    set impl_s  [dict get $strat impl]
+
+    puts "\n--- Trying: $label ($impl_s) ---"
+
+    # 非工程模式快速实现
+    if {$label eq "default"} {
+        open_checkpoint $::DCP
+    } else {
+        # 从综合 checkpoint 重新开始
+        open_checkpoint [file dirname $::DCP]/${TOP}_post_synth.dcp
+    }
+
+    set_property strategy $impl_s [get_runs impl_1]
+    launch_runs impl_1 -jobs 4
+    wait_on_run impl_1
+
+    if {[get_property PROGRESS [get_runs impl_1]] ne "100%"} {
+        puts "  ⚠ Implementation failed for $label, skipping"
+        continue
+    }
+
+    open_run impl_1
+    lassign [check_timing_signoff] wns whs tns ths setup_pass hold_pass tns_pass
+
+    puts "  WNS = [format %.3f $wns] ns, WHS = [format %.3f $whs] ns"
+    puts "  TNS = [format %.3f $tns] ns, THS = [format %.3f $ths] ns"
+
+    lappend all_results [list $label $wns $whs $tns $ths $setup_pass $hold_pass $tns_pass]
+
+    if {$setup_pass && $hold_pass && $tns_pass} {
+        set result PASS
+        set strategy_used $label
+        puts "  ✅ PASS with strategy: $label"
+        break
+    } else {
+        puts "  ❌ FAIL, trying next strategy..."
+    }
+}
+
+# --- 输出汇总 ---
+puts "\n========================================="
+puts " Signoff Summary"
+puts " Target: [format %.1f $FREQ] MHz"
+puts " Result: $result"
+puts " Strategy: $strategy_used"
+
+foreach r $all_results {
+    set l     [lindex $r 0]
+    set wns   [lindex $r 1]
+    set whs   [lindex $r 2]
+    set tns   [lindex $r 3]
+    set ths   [lindex $r 4]
+    set spass [lindex $r 5]
+    set hpass [lindex $r 6]
+    set tpass [lindex $r 7]
+    set mark  [expr {$spass && $hpass && $tpass ? "✅" : "❌"}]
+    puts "  $mark $l: WNS=${wns}ns WHS=${whs}ns TNS=${tns}ns"
+}
+
+puts "========================================="
+
+# JSON 输出 (供 CI 解析)
+set fd [open "signoff_result.json" w]
+puts $fd "\{"
+puts $fd "  \"top\": \"$TOP\","
+puts $fd "  \"freq_mhz\": $FREQ,"
+puts $fd "  \"result\": \"$result\","
+puts $fd "  \"strategy\": \"$strategy_used\""
+puts $fd "\}"
+close $fd
+
+if {$result eq "FAIL"} {
+    puts "  ❌ Timing signoff FAILED — check signoff_result.json for details"
+    exit 1
+} else {
+    puts "  ✅ Timing signoff PASSED"
+    exit 0
+}
+```
+
+### 6.2 增强 CI/CD — 多策略自动回退
+
+```yaml
+# .github/workflows/vivado-signoff.yml
+name: Vivado Timing Signoff
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    paths: ['rtl/**', 'xdc/**', 'ip/**']
+
+env:
+  VIVADO_PATH: [VIVADO_INSTALL_PATH]
+  FREQ_MHZ: 100
+
+jobs:
+  signoff:
+    runs-on: [self-hosted, xilinx]
+    strategy:
+      fail-fast: false
+      matrix:
+        freq: [100, 150, 200]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build
+        run: |
+          source $VIVADO_PATH/settings64.sh
+          vivado -mode batch -source scripts/build_project.tcl \
+            -tclargs [PART_NUM] [TOP_MODULE] proj_cicd
+
+      - name: Timing Signoff
+        run: |
+          source $VIVADO_PATH/settings64.sh
+          vivado -mode batch -source scripts/timing_signoff.tcl \
+            -tclargs output/[TOP_MODULE]_post_synth.dcp [TOP_MODULE] ${{ matrix.freq }}
+
+      - name: Parse Result
+        id: parse
+        run: |
+          result=$(python3 -c "import json; print(json.load(open('signoff_result.json'))['result'])")
+          strategy=$(python3 -c "import json; print(json.load(open('signoff_result.json'))['strategy'])")
+          echo "result=$result" >> $GITHUB_OUTPUT
+          echo "strategy=$strategy" >> $GITHUB_OUTPUT
+
+      - name: Archive Reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: signoff-report-${{ matrix.freq }}mhz
+          path: |
+            output/*.rpt
+            output/*.txt
+            signoff_result.json
+
+      - name: Notify on Failure
+        if: steps.parse.outputs.result == 'FAIL'
+        run: |
+          echo "::error::Timing signoff FAILED at ${FREQ_MHZ} MHz"
+          echo "Last strategy tried: ${{ steps.parse.outputs.strategy }}"
+```
+
+### 6.3 Makefile 增强 — 多频率签收
+
+```makefile
+# ============================================================================
+# Makefile — Vivado 增强版 (时序签收 + 多策略)
+# ============================================================================
+PART      ?= [PART_NUM]
+TOP       ?= [TOP_MODULE]
+FREQ      ?= 100
+FREQS     ?= 100 150 200
+
+.PHONY: all signoff signoff_all report clean
+
+all: build
+
+build:
+	vivado -mode batch -source scripts/build_project.tcl \
+		-tclargs $(PART) $(TOP) proj_$(TOP)
+
+signoff: build
+	vivado -mode batch -source scripts/timing_signoff.tcl \
+		-tclargs output/$(TOP)_post_synth.dcp $(TOP) $(FREQ)
+
+signoff_all:
+	@for freq in $(FREQS); do \
+		echo "=== Signoff @ $$freq MHz ==="; \
+		$(MAKE) signoff FREQ=$$freq; \
+	done
+
+auto_tune:
+	vivado -mode batch -source scripts/timing_signoff.tcl \
+		-tclargs output/$(TOP)_post_synth.dcp $(TOP) $(FREQ)
+
+report:
+	@echo "=== Build Report ==="
+	@echo "Top:     $(TOP)"
+	@echo "Part:    $(PART)"
+	@echo "Freq:    $(FREQ) MHz"
+	@echo "Period:  $$(echo "scale=3; 1000/$(FREQ)" | bc) ns"
+	@if [ -f output/$(TOP)_timing_summary.rpt ]; then \
+		wns=$$(grep "WNS" output/$(TOP)_timing_summary.rpt | awk '{print $$3}'); \
+		echo "WNS:     $$wns ns"; \
+	fi
+
+clean:
+	rm -rf proj_* output .Xil vivado*.jou vivado*.log
+```
+
+### 6.4 Tcl 函数库增强 — CI 诊断工具
+
+```tcl
+# ============================================================================
+# ci_diagnostics.tcl — CI 环境下的快速诊断函数
+# ============================================================================
+
+# 检查约束完整性 (check_timing 的 CI 封装)
+proc ci_check_constraints {{exit_on_error false}} {
+    set result [check_timing -return_string -verbose]
+    set unconstrained [regexp -all {unconstrained} $result]
+    set covered [regexp -all {covered} $result]
+
+    puts "Constraint Coverage:"
+    puts "  Covered paths:     $covered"
+    puts "  Unconstrained:     $unconstrained"
+
+    if {$unconstrained > 0} {
+        puts "  ⚠ 发现 $unconstrained 条未约束路径"
+        if {$exit_on_error} { exit 1 }
+    }
+    return [list $covered $unconstrained]
+}
+
+# 资源使用率告警
+proc ci_check_utilization {threshold_pct} {
+    set util [report_utilization -return_string]
+    set over_util [list]
+
+    foreach line [split $util "\n"] {
+        if {[regexp {(\w+)\s+(\d+)\s+(\d+)\s+([\d.]+)%} $line -> res used total pct]} {
+            if {$pct > $threshold_pct} {
+                lappend over_util "$res: ${pct}% (>${threshold_pct}%)"
+            }
+        }
+    }
+
+    if {[llength $over_util] > 0} {
+        puts "⚠ Resource over threshold ($threshold_pct%):"
+        foreach item $over_util { puts "  $item" }
+    } else {
+        puts "✅ All resources below ${threshold_pct}%"
+    }
+    return [llength $over_util]
+}
+
+# 时钟域交叉检查 (CI 模式)
+proc ci_check_clock_interaction {} {
+    set report [report_clock_interaction -return_string]
+    set cdc_issues 0
+
+    foreach line [split $report "\n"] {
+        if {[regexp {Clock\s+to\s+Clock} $line]} {
+            incr cdc_issues
+        }
+    }
+
+    if {$cdc_issues > 0} {
+        puts "⚠ Found $cdc_issues clock crossing domains (review recommended)"
+    }
+    return $cdc_issues
+}
+
+# 综合方法学检查 (CI 模式)
+proc ci_check_methodology {{severity "CRITICAL"}} {
+    set result [report_methodology -no_header -return_string]
+    set count 0
+
+    foreach line [split $result "\n"] {
+        if {[string match "*$severity*" $line]} {
+            incr count
+            puts "  $severity: $line"
+        }
+    }
+
+    if {$count > 0} {
+        puts "⚠ $count methodology $severity warnings"
+    } else {
+        puts "✅ No $severity methodology warnings"
+    }
+    return $count
+}
+```
+
+---
+
+## 七、常见问题排查 (增强)
 
 | 问题 | 原因 | 解决 |
 |:----|:-----|:-----|
@@ -461,6 +809,9 @@ clean:
 | Tcl 参数获取失败 | argv 为空 | 检查 `-tclargs` 传递 |
 | 策略枚举无效 | Vivado 版本不同 | `report_strategies` 查看可用策略 |
 | 并行构建冲突 | 多个 Vivado 写同一目录 | 每个构建独立项目目录 |
+| 签收 FAIL 但 WNS 接近 0 | 余量不足 | 尝试 `phys_opt_design -directive Explore` |
+| 多策略全 FAIL | 约束过于激进 | 降低频率目标或重写关键路径 RTL |
+| CI 中 Vivado 许可证不足 | 并发 job 过多 | 设置 `max-parallel: 1` 串行运行 |
 
 ---
 

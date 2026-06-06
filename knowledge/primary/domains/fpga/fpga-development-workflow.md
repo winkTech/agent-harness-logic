@@ -25,7 +25,7 @@ sources:
 
 ```tcl
 # 创建 Vivado 项目
-create_project my_fpga ./my_fpga -part xczu9eg-ffvb1156-2-e
+create_project my_fpga ./my_fpga -part [PART_NUM]
 
 # 设置项目属性
 set_property target_language Verilog [current_project]
@@ -55,7 +55,7 @@ set_property top top_module [current_fileset]
 
 ```tcl
 # 运行综合
-synth_design -top top_module -part xczu9eg-ffvb1156-2-e
+synth_design -top top_module -part [PART_NUM]
 
 # 查看综合报告
 report_timing_summary -file ./reports/synth_timing.rpt

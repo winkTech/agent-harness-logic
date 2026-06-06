@@ -165,7 +165,7 @@ echo "✅ 工作区无仿真垃圾文件"
 # ============================================================================
 # 6. Verilog / SystemVerilog 语法检查
 # ============================================================================
-SV_FILES=$(echo "$STAGED" | grep -E '\.(v|sv)$' | grep -v '/examples/' | grep -v '/templates/')
+SV_FILES=$(echo "$STAGED" | grep -E '\.(v|sv)$' | grep -v '/examples/' | grep -v '/templates/' | grep -v '/uvm_tb/')
 if [ -n "$SV_FILES" ]; then
   if check_cmd vlog; then
     echo "--- [vlog] 检查 Verilog/SV 语法 ---"

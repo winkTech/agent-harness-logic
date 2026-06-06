@@ -865,6 +865,162 @@ def _plot_constellation(iq: np.ndarray, title: str):
     plt.show()
 
 
+def compute_evm(iq: np.ndarray, constellation: np.ndarray) -> Tuple[float, float, float]:
+    """计算 EVM (Error Vector Magnitude)
+
+    Args:
+        iq: 实测 IQ 样本 (N,) complex64
+        constellation: 理想星座点 (M,) complex64
+
+    Returns:
+        (evm_rms, evm_peak, evm_percentile95)
+    """
+    # 对每个实测点找最近的理想星座点
+    evm_per_sample = np.zeros(len(iq))
+    for i, sample in enumerate(iq):
+        errors = np.abs(sample - constellation)
+        evm_per_sample[i] = errors.min()
+
+    # 归一化到星座图平均幅度
+    avg_amplitude = np.mean(np.abs(constellation))
+    evm_normalized = evm_per_sample / avg_amplitude
+
+    evm_rms = np.sqrt(np.mean(evm_normalized ** 2)) * 100
+    evm_peak = np.max(evm_normalized) * 100
+    evm_p95 = np.percentile(evm_normalized, 95) * 100
+
+    return evm_rms, evm_peak, evm_p95
+
+
+def generate_modulation_constellation(algo: str) -> np.ndarray:
+    """生成理想星座点"""
+    if algo == 'qpsk':
+        symbols = [1+1j, 1-1j, -1+1j, -1-1j]
+    elif algo == '16qam':
+        symbols = []
+        for i in [-3, -1, 1, 3]:
+            for q in [-3, -1, 1, 3]:
+                symbols.append(i + 1j*q)
+    elif algo == '64qam':
+        symbols = []
+        for i in [-7, -5, -3, -1, 1, 3, 5, 7]:
+            for q in [-7, -5, -3, -1, 1, 3, 5, 7]:
+                symbols.append(i + 1j*q)
+    else:
+        raise ValueError(f"Unknown modulation: {algo}")
+
+    # 归一化为单位平均功率
+    constellation = np.array(symbols, dtype=complex)
+    avg_power = np.mean(np.abs(constellation) ** 2)
+    constellation /= np.sqrt(avg_power)
+    return constellation
+
+
+def run_e2e_analysis(args: argparse.Namespace) -> int:
+    """端到端分析: PCAP → IQ 提取 → EVM → 星座图 → 报告"""
+    print("=" * 60)
+    print(" ORAN/eCPRI 端到端分析")
+    print("=" * 60)
+
+    # Step 1: 解析 PCAP
+    print("\n--- Step 1: PCAP Parsing ---")
+    frames = list(iter_pcap_packets(args.pcap))
+    print(f"  Total packets: {len(frames)}")
+
+    ecpri_frames = []
+    for frame in frames:
+        ecpri_packets = find_ecpri_in_packet(frame['packet_data'])
+        for pkt in ecpri_packets:
+            hdr = parse_ecpri_common_header(pkt)
+            payload = parse_ecpri_payload(hdr, pkt[8:])
+            ecpri_frames.append({'header': hdr, 'payload': payload})
+    print(f"  eCPRI frames: {len(ecpri_frames)}")
+
+    # Step 2: 分类 C-plane / U-plane
+    c_planes = [f for f in ecpri_frames if f['payload']['msg_type'] == 'C-plane']
+    u_planes = [f for f in ecpri_frames if f['payload']['msg_type'] == 'U-plane']
+    print(f"\n--- Step 2: Frame Classification ---")
+    print(f"  C-plane: {len(c_planes)} frames")
+    print(f"  U-plane: {len(u_planes)} frames")
+
+    if not u_planes:
+        print("  ⚠ No U-plane frames found — cannot extract IQ")
+        return 1
+
+    # Step 3: 提取 IQ
+    print(f"\n--- Step 3: IQ Extraction ---")
+
+    if args.c_plane:
+        print("  C-plane scheduling info:")
+        for i, cp in enumerate(c_planes[:5]):
+            frame = cp['payload']['parsed']
+            if 'sections' in frame:
+                for sec in frame['sections']:
+                    print(f"    [{i}] start_prb={sec.get('start_prb')} "
+                          f"nrb={sec.get('nrb')} start_sym={sec.get('start_sym')}")
+
+    # 提取 U-plane IQ
+    iq_list = []
+    for uf in u_planes:
+        parsed = uf['payload']['parsed']
+        if 'section' in parsed:
+            iq = extract_iq_from_u_plane(parsed, args.iq_width)
+            iq_list.append(iq)
+
+    if not iq_list or all(len(iq) == 0 for iq in iq_list):
+        print("  ⚠ No IQ data extracted")
+        return 1
+
+    all_iq = np.concatenate(iq_list)
+    print(f"  IQ samples: {len(all_iq)}")
+
+    # Step 4: EVM 计算
+    print(f"\n--- Step 4: EVM Calculation ---")
+    constellation = generate_modulation_constellation(args.algo)
+    evm_rms, evm_peak, evm_p95 = compute_evm(all_iq, constellation)
+
+    print(f"  Modulation: {args.algo.upper()}")
+    print(f"  EVM RMS:    {evm_rms:.2f}%")
+    print(f"  EVM Peak:   {evm_peak:.2f}%")
+    print(f"  EVM P95:    {evm_p95:.2f}%")
+
+    # 3GPP 规范检查
+    evm_limits = {'qpsk': 17.5, '16qam': 12.5, '64qam': 8.0, 'BFP': 8.0}
+    limit = evm_limits.get(args.algo, 12.5)
+    if evm_rms < limit:
+        print(f"  ✅ EVM within 3GPP spec ({args.algo.upper()} < {limit}%)")
+    else:
+        print(f"  ❌ EVM exceeds 3GPP spec ({args.algo.upper()} ≥ {limit}%)")
+
+    # Step 5: 星座图
+    if args.constellation:
+        print(f"\n--- Step 5: Constellation Plot ---")
+        _plot_constellation(all_iq, f"{args.algo.upper()} EVM={evm_rms:.2f}%")
+
+    # Step 6: 报告输出
+    if args.output:
+        print(f"\n--- Step 6: Report ---")
+        report = {
+            'pcap': args.pcap,
+            'packets': len(frames),
+            'ecpri_frames': len(ecpri_frames),
+            'c_plane_count': len(c_planes),
+            'u_plane_count': len(u_planes),
+            'iq_samples': len(all_iq),
+            'modulation': args.algo,
+            'evm_rms_pct': round(evm_rms, 2),
+            'evm_peak_pct': round(evm_peak, 2),
+            'evm_p95_pct': round(evm_p95, 2),
+            'within_spec': evm_rms < limit,
+        }
+        import json
+        with open(args.output, 'w') as f:
+            json.dump(report, f, indent=2)
+        print(f"  Report written to: {args.output}")
+
+    return 0 if evm_rms < limit else 1
+
+
 def main():
     parser = argparse.ArgumentParser(
         description='ORAN/eCPRI 前传接口分析工具',
@@ -895,6 +1051,8 @@ Examples:
                         help='BFP 压缩数据文件')
 
     # 分析选项
+    parser.add_argument('--e2e', action='store_true',
+                        help='端到端分析: PCAP → IQ → EVM → 报告')
     parser.add_argument('--extract-iq', action='store_true',
                         help='从 U-plane 提取 IQ 数据')
     parser.add_argument('--c-plane', action='store_true',
@@ -925,7 +1083,12 @@ Examples:
         print("\n[ERROR] Specify --pcap or --bfp-file")
         return 1
 
-    if args.pcap:
+    if args.e2e:
+        if not args.pcap:
+            print("[ERROR] --e2e requires --pcap")
+            return 1
+        return run_e2e_analysis(args)
+    elif args.pcap:
         return run_pcap_analysis(args)
     elif args.bfp_file:
         return run_bfp_analysis(args)
