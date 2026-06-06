@@ -45,7 +45,7 @@ Vivado 是 Xilinx FPGA 的集成开发环境，支持从设计输入到比特流
 
 ```tcl
 # 创建项目
-create_project my_project ./my_project -part xczu9eg-ffvb1156-2-e
+create_project my_project ./my_project -part [PART_NUM]
 
 # 添加源文件
 add_files -norecurse ./src/top.v
@@ -55,7 +55,7 @@ add_files -norecurset ./src/fifo.v
 set_property top top_module [current_fileset]
 
 # 综合
-synth_design -top top_module -part xczu9eg-ffvb1156-2-e
+synth_design -top top_module -part [PART_NUM]
 
 # 实现
 place_design

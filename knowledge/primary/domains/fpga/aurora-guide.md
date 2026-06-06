@@ -140,7 +140,212 @@ m_axi_rx_tlast                      // 帧结束
 
 ---
 
-## 四、链路层细节
+## 四、Aurora 配置用例
+
+### 4.1 用例: 多通道数据采集回传
+
+**场景**: RF 前端通过 4 片 ADC (JESD204B) → FPGA → Aurora → CPU
+
+```
+ADC0 ──▶ JESD204B RX ──┐
+ADC1 ──▶ JESD204B RX ──┤    ┌──────────┐    ┌──────────┐
+ADC2 ──▶ JESD204B RX ──┼───▶│ 数据聚合  │───▶│ Aurora   │───▶ CPU
+ADC3 ──▶ JESD204B RX ──┘    │  + 打包   │    │ 8B/10B   │    (PCIe)
+                             └──────────┘    └──────────┘
+```
+
+**配置步骤**:
+
+Step 1: Vivado IP 配置
+
+| 参数 | 本例设置 | 说明 |
+|:-----|:---------|:-----|
+| Line Rate | 10 Gbps | 8B/10B @ 10G, 实际数据 8Gbps |
+| GT Refclk | 250 MHz | 10G / 40 (8B/10B internal) |
+| Lane Width | 4 | 4 lane = 40 Gbps 链路 |
+| Dataflow Mode | Duplex | 双向 |
+| Interface | Framing | 加帧边界，便于接收端定界 |
+| Flow Control | UFIFO | 接收端反压保护 |
+| GT Drp Clk | 50 MHz | DRP 接口时钟 |
+
+Step 2: 时钟生成
+
+```tcl
+# 时钟结构
+# 外部 250 MHz → QPLL (10 Gbps)
+#            → BUFG → user_clk (125 MHz, 32-bit path)
+#            → GT RXOUTCLK → BUFG → rx_clk (125 MHz)
+
+create_clock -period 4.0 [get_ports refclk_250m_p]   # 250 MHz refclk
+
+# Aurora 用户时钟 (lane_width × line_rate / 40 = 125 MHz × 32-bit)
+create_generated_clock -name user_clk \
+    -source [get_pins aurora_inst/inst/gt_usrclk_src] \
+    -divide_by 2 \
+    [get_pins aurora_inst/user_clk]
+```
+
+Step 3: 数据打包格式
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│ Aurora Frame                                                 │
+│ ┌──────┬──────┬──────────┬──────────┬──────────┬──────────┐ │
+│ │ SOP  │ HDR  │ ADC0 数据│ ADC1 数据│ ADC2 数据│ ADC3 数据│ │
+│ │ (1B) │ (3B) │ (N bytes)│ (N bytes)│ (N bytes)│ (N bytes)│ │
+│ └──────┴──────┴──────────┴──────────┴──────────┴──────────┘ │
+│ ┌──────────┬──────┐                                          │
+│ │ ADC 数据 │ EOP  │                                          │
+│ │ (续)     │ (1B) │                                          │
+│ └──────────┴──────┘                                          │
+└─────────────────────────────────────────────────────────────┘
+
+Header 说明:
+  Byte 0: 帧序号 (递增, 用于丢帧检测)
+  Byte 1: 时间戳高 8-bit
+  Byte 2: 时间戳中 8-bit
+  (时间戳低 8-bit 使用后续帧)
+```
+
+Step 4: Aurora 发送逻辑
+
+```verilog
+// Aurora 数据定帧发送 (Framing 模式)
+module aurora_frame_tx #(
+    parameter ADC_SAMPLES_PER_FRAME = 1024
+) (
+    input  wire        user_clk,
+    input  wire        rst_n,
+    input  wire        channel_up,         // Aurora 通道建链
+    
+    // ADC 数据输入 (4 通道)
+    input  wire [63:0] adc_data [0:3],
+    input  wire        adc_valid,
+    
+    // Aurora TX 接口
+    output reg         s_axi_tx_tvalid,
+    input  wire        s_axi_tx_tready,
+    output reg [0:31]  s_axi_tx_tdata,
+    output reg         s_axi_tx_tlast      // 帧结束 (仅 Framing)
+);
+
+    typedef enum {IDLE, WAIT_CHANNEL, SEND_HDR, SEND_DATA, SEND_EOP} state_t;
+    state_t state;
+    reg [15:0] frame_count;
+    reg [15:0] sample_idx;
+    reg [2:0]  ch_idx;
+    
+    always_ff @(posedge user_clk) begin
+        if (!rst_n) begin
+            state <= IDLE;
+            frame_count <= 0;
+            s_axi_tx_tvalid <= 0;
+        end else begin
+            case (state)
+                IDLE: if (adc_valid) begin
+                    state <= WAIT_CHANNEL;
+                end
+                
+                WAIT_CHANNEL: if (channel_up) begin
+                    state <= SEND_HDR;
+                    frame_count <= frame_count + 1;
+                end
+                
+                SEND_HDR: begin
+                    // SOP byte + header
+                    s_axi_tx_tvalid <= 1;
+                    s_axi_tx_tdata <= {8'hFB, frame_count[15:8], frame_count[7:0], 8'h00};
+                    if (s_axi_tx_tready) begin
+                        state <= SEND_DATA;
+                        sample_idx <= 0;
+                        ch_idx <= 0;
+                    end
+                end
+                
+                SEND_DATA: begin
+                    s_axi_tx_tvalid <= 1;
+                    s_axi_tx_tdata <= {adc_data[ch_idx][31:0], adc_data[3-ch_idx][31:0]};
+                    if (s_axi_tx_tready) begin
+                        if (ch_idx < 3) begin
+                            ch_idx <= ch_idx + 1;
+                        end else begin
+                            ch_idx <= 0;
+                            if (sample_idx < ADC_SAMPLES_PER_FRAME - 1) begin
+                                sample_idx <= sample_idx + 1;
+                            end else begin
+                                state <= SEND_EOP;
+                            end
+                        end
+                    end
+                end
+                
+                SEND_EOP: begin
+                    s_axi_tx_tvalid <= 1;
+                    s_axi_tx_tdata <= {8'hFD, 24'h0};  // EOP
+                    s_axi_tx_tlast <= 1;
+                    if (s_axi_tx_tready) begin
+                        state <= IDLE;
+                        s_axi_tx_tlast <= 0;
+                    end
+                end
+            endcase
+        end
+    end
+endmodule
+```
+
+### 4.2 用例: Aurora 64B/66B 芯片间互联
+
+**场景**: 两片 FPGA 通过 Aurora 64B/66B 高速互联
+
+```
+FPGA A                         FPGA B
+┌──────────────┐   4× GTY    ┌──────────────┐
+│  User Logic  │────────────▶│  User Logic  │
+│  (25.8 Gbps) │◀────────────│              │
+│              │  100 Gbps   │              │
+└──────────────┘   链路       └──────────────┘
+```
+
+配置:
+
+| 参数 | 设置 |
+|:-----|:------|
+| IP | Aurora 64B/66B |
+| Line Rate | 25.78125 Gbps |
+| GT Refclk | 322.265625 MHz |
+| Lanes | 4 |
+| GT Type | GTY (UltraScale+) |
+| Flow Control | None |
+
+**关键**: 64B/66B 编码效率 64/66 = 97%，远高于 8B/10B 的 80%
+
+### 4.3 用例: 动态线速率切换
+
+支持在不重新配置 FPGA 的情况下改变 Aurora 线速率:
+
+```tcl
+# Tcl 控制 GT 速率
+# 前提: 使用 DRP 接口控制 GT
+
+# 1. 复位 Aurora
+reset_aurora aurora_inst
+
+# 2. 通过 DRP 更改 GT 设置
+set_property CONFIG.LINE_RATE 12.5 [get_ips aurora_8b10b]
+
+# 3. 重新初始化
+initialize_aurora aurora_inst
+wait_for_channel_up aurora_inst
+```
+
+**应用**: 
+- 低速模式 (6.25 Gbps) — 链路质量差时降速保连接
+- 高速模式 (12.5 Gbps) — 正常链路时全速
+
+---
+
+## 五、链路层细节
 
 ### 4.1 链路建立
 
@@ -181,7 +386,7 @@ RX: 初始 → 通道对齐 → 绑定 → 数据 → 监控错误
 
 ---
 
-## 五、RFSoC 集成场景
+## 六、RFSoC 集成场景
 
 ### 5.1 天线阵列数据传输
 
@@ -231,7 +436,7 @@ end
 
 ---
 
-## 六、调试指南
+## 七、调试指南
 
 ### 6.1 常见问题
 
@@ -290,7 +495,7 @@ prbs_check #(.POLY(31)) u_prbs_rx (
 
 ---
 
-## 七、PCB 设计建议
+## 八、PCB 设计建议
 
 | 项目 | 要求 |
 |:----|:-----|

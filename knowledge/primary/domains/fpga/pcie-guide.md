@@ -148,6 +148,202 @@ CPU 侧:                    FPGA 侧:
 
 [verilog-pcie-master](examples/verilog-pcie-master/) 提供了完整 DMA 子系统:
 
+### 3.5 DMA 引擎 RTL 核心
+
+```verilog
+// ============================================================================
+// dma_engine.v — PCIe DMA 引擎核心 (简化版)
+// 功能: 描述符环 → TLP 请求 → 数据搬运
+// 架构: 3 级流水线 (Fetch Desc → Xfer Data → Post Complete)
+// ============================================================================
+module dma_engine #(
+    parameter DESC_RING_ADDR = 32'h1000_0000,  // 描述符环基址
+    parameter MAX_DESC       = 64,              // 描述符数量
+    parameter TLP_MAX_PAYLOAD = 1024            // TLP 最大 payload (bytes)
+) (
+    input  wire       clk,
+    input  wire       rst_n,
+
+    // 控制寄存器接口
+    input  wire       doorbell_valid,
+    output reg        doorbell_ready,
+    input  wire [5:0] doorbell_desc_idx,    // 当前完成的 descriptor
+
+    // TLP Master 接口 (到 PCIe Hard IP)
+    output reg        m_tlp_valid,
+    input  wire       m_tlp_ready,
+    output reg [127:0] m_tlp_data,          // TLP header + payload
+    output reg [1:0]  m_tlp_type,           // 00=MWr, 01=MRd, 10=CplD
+    output reg [9:0]  m_tlp_length,         // DW 长度
+
+    // TLP Slave 接口 (PCIe Hard IP 返回)
+    input  wire       s_tlp_valid,
+    output reg        s_tlp_ready,
+    input  wire [127:0] s_tlp_data,
+
+    // 用户数据接口 (AXI-Stream)
+    input  wire       s_axis_valid,
+    output reg        s_axis_ready,
+    input  wire [63:0] s_axis_data,
+
+    output reg        m_axis_valid,
+    input  wire       m_axis_ready,
+    output reg [63:0] m_axis_data,
+
+    // 中断
+    output reg        irq_msi              // MSI 中断请求
+);
+
+    // --- 描述符格式 ---
+    // desc[0]: 控制字 {valid, dir, len, last}
+    // desc[1]: 源地址 (H2C: CPU 缓冲地址 / C2H: 忽略)
+    // desc[2]: 目标地址 (H2C: 忽略 / C2H: CPU 缓冲地址)
+    // desc[3]: 用户标记
+    // 描述符环: 位于 CPU 内存 (DESC_RING_ADDR)
+
+    typedef struct packed {
+        logic        valid;
+        logic        dir;       // 0=H2C (FPGA 读 CPU), 1=C2H (FPGA 写 CPU)
+        logic [21:0] length;    // 传输字节数
+        logic        last;      // 链尾
+        logic [7:0]  flags;     // 用户标记
+    } desc_ctrl_t;
+
+    // 状态机
+    typedef enum {IDLE, FETCH_DESC, WAIT_TLP_RD, XFER_H2C, XFER_C2H, POST_STATUS, SEND_MSI} state_t;
+    state_t state, next_state;
+
+    reg [5:0]   desc_idx;               // 当前处理描述符索引
+    reg [31:0]  desc_ring[0:3];         // 当前描述符缓存
+    desc_ctrl_t desc_ctrl;
+    reg [31:0]  xfer_count;             // 已传输字节数
+    reg [31:0]  tlp_seq_num;            // TLP 序号 (tag)
+
+    // --- 描述符解析 ---
+    assign desc_ctrl.valid  = desc_ring[0][31];
+    assign desc_ctrl.dir    = desc_ring[0][30];
+    assign desc_ctrl.length = desc_ring[0][29:8];
+    assign desc_ctrl.last   = desc_ring[0][7];
+    assign desc_ctrl.flags  = desc_ring[0][15:8];
+
+    // --- H2C 传输状态机 ---
+    always_ff @(posedge clk) begin
+        if (!rst_n) begin
+            state <= IDLE;
+            desc_idx <= 0;
+            xfer_count <= 0;
+            irq_msi <= 0;
+        end else begin
+            state <= next_state;
+
+            case (state)
+                IDLE: begin
+                    irq_msi <= 0;
+                    if (doorbell_valid) begin
+                        desc_idx <= doorbell_desc_idx;
+                    end
+                end
+
+                FETCH_DESC: begin
+                    // 发起 MRd 读取描述符环
+                    // TLP: MRd, addr = DESC_RING_ADDR + desc_idx * 16
+                    if (m_tlp_ready) begin
+                        tlp_seq_num <= tlp_seq_num + 1;
+                    end
+                end
+
+                WAIT_TLP_RD: begin
+                    // 等待 CplD 返回描述符数据
+                    if (s_tlp_valid) begin
+                        desc_ring[0] <= s_tlp_data[31:0];
+                        desc_ring[1] <= s_tlp_data[63:32];
+                        desc_ring[2] <= s_tlp_data[95:64];
+                        desc_ring[3] <= s_tlp_data[127:96];
+                    end
+                end
+
+                XFER_H2C: begin
+                    // H2C: 对 CPU 内存发起 MWr (FPGA 读 CPU 数据)
+                    if (xfer_count < desc_ctrl.length) begin
+                        if (m_tlp_ready) begin
+                            // 组装 TLP: MWr, addr = src + xfer_count
+                            // payload 来自 s_axis (用户逻辑数据)
+                            xfer_count <= xfer_count + TLP_MAX_PAYLOAD;
+                        end
+                    end
+                end
+
+                XFER_C2H: begin
+                    // C2H: 对 CPU 内存发起 MWr (FPGA 写数据到 CPU)
+                    // TLP: MWr, addr = dst + xfer_count
+                    // 数据来自 s_axis (用户逻辑)
+                    if (m_tlp_ready) begin
+                        xfer_count <= xfer_count + TLP_MAX_PAYLOAD;
+                    end
+                end
+
+                POST_STATUS: begin
+                    // 写 completion 状态回描述符
+                end
+
+                SEND_MSI: begin
+                    irq_msi <= 1;
+                end
+            endcase
+        end
+    end
+
+    // --- 下一状态逻辑 ---
+    always_comb begin
+        next_state = state;
+        case (state)
+            IDLE:           if (doorbell_valid && doorbell_ready) next_state = FETCH_DESC;
+            FETCH_DESC:     if (m_tlp_ready)                     next_state = WAIT_TLP_RD;
+            WAIT_TLP_RD:    if (s_tlp_valid) begin
+                                if (desc_ctrl.valid)
+                                    next_state = desc_ctrl.dir ? XFER_C2H : XFER_H2C;
+                                else
+                                    next_state = IDLE;
+                            end
+            XFER_H2C:       if (xfer_count >= desc_ctrl.length)  next_state = POST_STATUS;
+            XFER_C2H:       if (xfer_count >= desc_ctrl.length)  next_state = POST_STATUS;
+            POST_STATUS:    if (m_tlp_ready)                     next_state = SEND_MSI;
+            SEND_MSI:                                               next_state = IDLE;
+        endcase
+    end
+
+    // --- 输出 (简化) ---
+    // doorbell_ready: 只在 IDLE 接收 doorbell
+    // m_tlp/tlp_type/tlp_length: 根据状态组装 TLP 请求
+    // s_axis_ready/m_axis_valid: 数据通路控制
+
+endmodule
+```
+
+### 3.6 DMA 性能估算
+
+```
+PCIe Gen3 x8:
+  理论带宽: 8 Gbps × 8 lanes = 64 Gbps = 8 GB/s
+  开销:
+    - TLP 头: 12-20 bytes / 最大 payload 4096 bytes → ~0.5%
+    - 描述符读取: ~200 ns / 1MB 传输 → 可忽略
+    - MSI 中断: ~1 μs / 每次 DMA → 适合 ≥ 64KB 块
+  实际 DMA 带宽:
+    - 连续传输: ~6.5 GB/s (81% 利用率)
+    - 小包随机: ~800 MB/s (受中断 + 描述符开销)
+
+PCIe Gen4 x16:
+  理论: 32 GB/s
+  实际 DMA: ~26 GB/s (取决于描述符效率)
+```
+
+**注意**: 实际 DMA 性能取决于:
+- TLP Max Payload Size (MPS) — 越大效率越高
+- TLP 读取请求大小 (MRRS) — 匹配 MPS
+- 描述符环缓存 (Prefetch) — 提前读取下一个描述符
+- 中断合并 (Interrupt Coalescing) — 减少 MSI 数量
+
 | 模块 | 功能 |
 |:----|:-----|
 | `dma_if_pcie` | PCIe TLP ↔ Segmented Memory 桥接 |

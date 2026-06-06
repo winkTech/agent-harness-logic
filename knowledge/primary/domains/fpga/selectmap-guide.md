@@ -307,6 +307,246 @@ write_cfgmem -format MCS -size 128 -loadbit "up 0x00000000 ./output.bit" \
 
 ---
 
+## 八、Multi-Boot 方案深度对比
+
+### 8.1 三种 Multi-Boot 架构
+
+| 特性 | Golden + Update | Fallback (自动回退) | Multiboot (WBSTAR 切换) |
+|:----|:--------------:|:-------------------:|:----------------------:|
+| **Flash 空间** | 2× 位流大小 | 2× 位流大小 | N× 位流大小 |
+| **切换方式** | IPROG 命令 | CRC 失败自动回退 | IPROG + WBSTAR |
+| **失败恢复** | 手动 IPROG 到 Golden | **自动回退到 Golden** | 需外部 watchdog |
+| **版本数量** | 2 | 2 | N (无限制) |
+| **安全性** | 需防篡改保护 | 自带防变砖 | 需额外保护 |
+| **启动时间** | 取决于跳转逻辑 | 失败→回退需 2× 时间 | 取决于选择逻辑 |
+| **复杂度** | 低 | 低 | 中 |
+| **适用场景** | 生产烧录 + OTA 更新 | 远程更新 (变砖保护) | A/B 分区 + 多个功能位流 |
+
+### 8.2 推荐架构: Golden + Fallback (远程更新)
+
+```
+Flash 布局:
+┌───────────────────────────────────────┐
+│ 0x000000 ┌───────────────────────┐    │
+│          │ Golden Image (只读)   │    │  ← 出厂烧录，不可改写
+│          │ - 基本功能            │    │
+│          │ - 支持 OTA 下载       │    │
+│          └───────────────────────┘    │
+├───────────────────────────────────────┤
+│ 0x200000 ┌───────────────────────┐    │
+│          │ MultiBoot Image       │    │  ← OTA 更新目标
+│          │ (当前运行版本)        │    │
+│          └───────────────────────┘    │
+├───────────────────────────────────────┤
+│ 0x400000 ┌───────────────────────┐    │
+│          │ 用户数据 / 校准参数    │    │
+│          └───────────────────────┘    │
+└───────────────────────────────────────┘
+
+启动流程:
+  上电 → 加载 Golden (0x000000)
+       → DONE=1 → 运行 Golden
+       → IPROG → 加载 MultiBoot (0x200000)
+       → DONE=1 → 运行 MultiBoot
+       
+  若 MultiBoot CRC 失败:
+       → 自动回退 Golden (0x000000)
+       → 运行 Golden (降级模式)
+       → 等待 OTA 修复
+```
+
+**Golden Image 设计要求**:
+- 最小功能集：仅包含通信固件加载器和 OTA 更新逻辑
+- 位流大小 ≈ 完整功能位流的 1/5 ~ 1/3
+- 出厂后锁定 (写保护)，防止意外覆写
+
+### 8.3 Fallback 配置方法
+
+```tcl
+# Golden Image 配置 (Vivado)
+set_property BITSTREAM.CONFIG.CONFIGFALLBACK ENABLE [current_design]
+set_property BITSTREAM.CONFIG.NEXT_CONFIG_ADDR 0x00200000 [current_design]
+
+# 启用 CRC 检测
+set_property BITSTREAM.CONFIG.CRC ENABLE [current_design]
+
+# MultiBoot Image 配置
+# 无需特殊属性，但需通过 IPROG 跳转到此
+```
+
+```c
+// MCU 侧 IPROG 触发代码示例
+void switch_to_multiboot(uint32_t flash_addr) {
+    // 1. 通过 SelectMap 写 WBSTAR
+    selectmap_write(REG_WBSTAR, flash_addr);
+    
+    // 2. 发送 IPROG 命令
+    selectmap_write(REG_CMD, CMD_IPROG);
+    
+    // 3. 等待 FPGA 重配置
+    // FPGA 自动拉低 INIT_B → 重新加载
+    while (!gpio_get(PIN_DONE));
+    
+    printf("Switch to 0x%08X done\n", flash_addr);
+}
+```
+
+---
+
+## 九、启动时间优化
+
+### 9.1 配置时间模型
+
+配置总时间 = 初始化时间 + 数据加载时间 + 启动序列时间
+
+```
+T_total = T_init + (bitstream_size / bus_width / freq) + T_startup
+
+示例 (32-bit SelectMap @ 100 MHz):
+  T_init    ≈ 1~3 ms    (POR + INIT_B 拉高)
+  T_data    = 40 Mbit / (32 bit × 100 MHz) 
+            = 40 Mbit / 3200 Mbps 
+            ≈ 12.5 ms
+  T_startup ≈ 0.05~0.5 ms (时钟锁相 + IO 使能)
+  ─────────────────────────────────────
+  T_total   ≈ 14~16 ms
+```
+
+### 9.2 不同配置方式对比
+
+| 方式 | 位宽 | 频率 | T_data (40 Mbit) | 相对速度 |
+|:----|:---:|:----:|:---------------:|:--------:|
+| JTAG | 1-bit | 15 MHz | 2666 ms | 基准 |
+| SPI x1 | 1-bit | 50 MHz | 800 ms | 3.3× |
+| SPI x4 (QSPI) | 4-bit | 50 MHz | 200 ms | 13× |
+| **SelectMap x8** | **8-bit** | **100 MHz** | **50 ms** | **53×** |
+| **SelectMap x16** | **16-bit** | **100 MHz** | **25 ms** | **107×** |
+| **SelectMap x32** | **32-bit** | **100 MHz** | **12.5 ms** | **213×** |
+| BPI x16 | 16-bit | 50 MHz | 50 ms | 53× |
+| PCAP (RFSoC) | 32-bit | 200 MHz | **6.25 ms** | **426×** |
+
+### 9.3 优化策略
+
+**策略 1: 位流压缩**
+
+```tcl
+# Vivado 位流压缩 (可减少 20~60% 大小)
+set_property BITSTREAM.GENERAL.COMPRESS TRUE [current_design]
+
+# 压缩效果取决于设计: 填充多的设计压缩率更高
+# ┌──────────────┬──────────┬──────────┬─────────┐
+# │ 设计类型      │ 未压缩    │ 压缩后    │ 节省    │
+# ├──────────────┼──────────┼──────────┼─────────┤
+# │ 小型控制逻辑  │ 8 MB     │ 3 MB     │ 62%     │
+# │ 通信算法(DSP) │ 32 MB    │ 18 MB    │ 44%     │
+# │ 大型 SoC     │ 80 MB    │ 55 MB    │ 31%     │
+# └──────────────┴──────────┴──────────┴─────────┘
+```
+
+**策略 2: 提高配置时钟**
+
+```tcl
+# 7-series: CCLK max = 100 MHz (Slave SelectMap)
+# UltraScale+: CCLK max = 125 MHz (Slave SelectMap)
+# 检查器件数据手册确认上限
+
+# RFSoC PCAP 通过 PS 时钟可达 200 MHz
+# PS 配置 PL 时使用 PCAP 时钟 = PS_LPD_CLK / 分频系数
+```
+
+**策略 3: 部分重配置**
+
+不需要每次重配全部逻辑。只更新改变的模块:
+
+```tcl
+# 部分位流生成 (以 RF-DC tile 为例)
+# 仅生成特定 tile 的位流，大小 = 完整位流的 1/N
+write_bitstream -force -cell [get_cells rf_dc_tile_0] ./partial.bit
+```
+
+**策略 4: 多器件并行配置**
+
+```verilog
+// 多片 FPGA 菊花链 vs 并行配置
+//
+// 菊花链 (串联): T_total = T_init + N × T_data + T_startup
+//                = 1 + 4 × 12.5 + 0.5 = 51.5 ms (4片)
+//
+// 并行配置:     T_total = T_init + T_data + T_startup
+//                = 1 + 12.5 + 0.5 = 14 ms (同时完成)
+//
+// 并行要求: 每片 FPGA 独立的 CS_B + BUSY + DONE
+//          共享 D[31:0] + CCLK
+
+// SelectMap 并行配置控制器
+module parallel_selectmap_ctrl #(
+    parameter NUM_DEVICES = 4
+) (
+    input              clk,
+    input              start,
+    output reg [31:0]  data_out,
+    output reg         cs_b [NUM_DEVICES-1:0],
+    input  [NUM_DEVICES-1:0] busy,
+    input  [NUM_DEVICES-1:0] done
+);
+
+    // 状态机: 同步发送数据到所有 FPGA
+    // 独立等待 BUSY 和 DONE
+    always_ff @(posedge clk) begin
+        for (int i = 0; i < NUM_DEVICES; i++) begin
+            if (busy[i]) begin
+                cs_b[i] <= 1'b1;  // 暂停该器件
+            end else begin
+                cs_b[i] <= cs_b[i];  // 继续
+            end
+        end
+    end
+endmodule
+```
+
+**策略 5: 安全的 Golden Image 精简**
+
+Golden Image 通常 30%~50% 的资源即可运行核心功能:
+- 只保留: 时钟管理 (MMCM/PLL) + 通信接口 (SPI/UART) + OTA 逻辑
+- 可裁剪: 算法加速器、高速接口、调试逻辑
+- 优化后 Golden 可压缩至完整位流的 1/5，加载时间 < 3 ms (SelectMap32)
+
+---
+
+## 十、多器件配置拓扑决策
+
+```
+                    ┌───── 场景 ─────┐
+                    │                │
+              ┌─────┴─────┐   ┌─────┴─────┐
+              │  < 4 片    │   │  ≥ 4 片   │
+              └─────┬─────┘   └─────┬─────┘
+                    │                │
+              ┌─────┴─────┐   ┌─────┴─────┐
+              │ 启动时间   │   │ 启动时间   │
+              │ 敏感?      │   │ 敏感?      │
+              │ ┌─┴─┐     │   │ ┌─┴─┐     │
+              │ Y   N     │   │ Y   N     │
+              │ │   │     │   │ │   │     │
+              │ ▼   ▼     │   │ ▼   ▼     │
+              │并  菊     │   │混  菊     │
+              │联  花     │   │合  花     │
+              └───────────┘   └───────────┘
+
+  建议:
+  ┌──────────┬──────────┬──────────────────────┐
+  │ 片数     │ 启动要求 │ 推荐拓扑              │
+  ├──────────┼──────────┼──────────────────────┤
+  │ 1~2      │ 任意     │ 菊花链 (最简布线)    │
+  │ 2~4      │ < 50 ms  │ 并行 (独立 CS_B)     │
+  │ 4~8      │ < 100 ms │ 菊花链 (布线简单)    │
+  │ 4~8      │ < 30 ms  │ 混合 (2+2 分组并行)  │
+  │ > 8      │ 任意     │ 菊花链 (引脚限制)    │
+  └──────────┴──────────┴──────────────────────┘
+```
+
+---
+
 ## 参考
 
 | 资源 | 说明 |

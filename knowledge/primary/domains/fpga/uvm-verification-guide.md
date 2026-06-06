@@ -229,5 +229,5 @@ UVM:  继承 base_test → 改几行约束 → 新测试
 | UVM 模板 | `docs/templates/uvm/` |
 | OFDM UVM 示例 | `docs/templates/uvm/tb_ofdm_uvm_top.sv` |
 | Accellera UVM 官网 | https://www.accellera.org/downloads/standards/uvm |
-| Vivado xsim UVM | `C:/Xilinx/Vivado/2023.1/data/system_verilog/uvm_1.2/` |
-| Vivado xsim 预编译库 | `C:/Xilinx/Vivado/2023.1/data/xsim/system_verilog/uvm/` |
+| Vivado xsim UVM | `[VIVADO_PATH]/data/system_verilog/uvm_1.2/` |
+| Vivado xsim 预编译库 | `[VIVADO_PATH]/data/xsim/system_verilog/uvm/` |
