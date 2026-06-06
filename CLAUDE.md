@@ -16,7 +16,19 @@
 ### Lint First（写完代码必须检查）
 所有代码提交前必须通过语法检查。Verilog/SV: `vlog -lint <file>`，Python: `ruff check`，MATLAB: 使用 MCP `check_matlab_code`。仅改 Markdown/注释/README 时免检。
 
-## 三、核心 Skill 与 MCP
+## 三、核心规则
+
+### 新项目 / 新模块启动
+- 用户表示"新建项目/工程" → 自动调用 `scripts/init-project.sh <项目名>` 建目录结构
+- 用户表示"添加模块" → 自动调用 `scripts/init-module.sh <模块名>` 建 RTL+TB 脚手架
+- 详细规范见 `knowledge/primary/cross-project-experience.md`
+
+### 建项目后要点
+1. 先 git init + 首提交"init: 项目名"
+2. 新建模块立刻写 TB，遵循 Testbench-First
+3. 每加一个模块，同步更新仿真目录和文档
+
+## 四、核心 Skill 与 MCP
 
 | Skill | 位置 | 场景 |
 |-------|------|------|
@@ -30,12 +42,12 @@
 | matlab | stdio | .m 文件执行、golden model 验证、BER/SNR 仿真、定点化分析 |
 | mcp-pdf | stdio | PDF 文档操作 |
 
-## 四、参考资料
+## 五、参考资料
 
 `references/reference-index.md` — 完整索引（记忆系统/Agent 机制/错误恢复/插件管理/会话管理/高级功能/版本管理/工具脚本/性能基准）
 
 知识库：`knowledge/INDEX.md`，优先使用 rag-skill 检索。
 
-## 五、版本
+## 六、版本
 
-v3.1 (2026-06-03): 精简至 41 行 (~400 tokens)，去格式化开销和低价值文件指针
+v3.2 (2026-06-03): 精简至 41 行 (~400 tokens)，去格式化开销和低价值文件指针

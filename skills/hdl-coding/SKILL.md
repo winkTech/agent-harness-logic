@@ -82,7 +82,7 @@ version: 3.1.0
 - 每模块不超过 300 行
 - 每个 always 块不超过 50 行
 - 分离控制通路和数据通路
-- **新建项目结构参考**: [cross-project-experience.md](../../knowledge/primary/cross-project-experience.md) 的 FPGA 项目模板
+- **新建项目**: 执行 `scripts/init-project.sh <项目名>` (详见 [[cross-project-experience]])
 
 ---
 
