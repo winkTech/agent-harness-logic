@@ -1,7 +1,8 @@
-# 算法模型到 Verilog 实现验证流程
+# 算法模型 → Verilog 代码模板参考
 
-> 将 MATLAB/Python 浮点算法模型转化为可综合 Verilog RTL 的完整开发验证流程
-> 核心原则：**算法模型是黄金参考，RTL 必须逐 bit 对齐**
+> 流程执行见 `workflows/hdl-coding-workflow.md`（Phase 1-2: 算法分析/定点量化，Phase 3-4: TB/RTL）。
+> 本文件提供代码模板、NMSE 判定标准和常见问题排查，供各阶段参考。
+> 核心原则：**算法模型是黄金参考，RTL 必须逐 bit 对齐**。
 
 ---
 
@@ -16,25 +17,7 @@
 
 ---
 
-## 完整流程
-
-```
-Phase 1: 浮点算法模型开发 (Python/MATLAB)
-    ↓
-Phase 2: 量化分析与定点化
-    ↓
-Phase 3: 参考数据自动生成
-    ↓
-Phase 4: Verilog RTL 实现
-    ↓
-Phase 5: 仿真验证与比对
-    ↓
-Phase 6: 综合实现
-```
-
----
-
-## Phase 1: 浮点算法模型
+## 浮点算法模型
 
 ### Python 实现要点
 
@@ -67,7 +50,7 @@ y_ref = algorithm_model(x, params)
 
 ---
 
-## Phase 2: 量化分析与定点化
+## 量化分析与定点化
 
 ### 位宽确定流程
 
@@ -109,7 +92,7 @@ def fixed_mul(a, b, W, FB):
 
 ---
 
-## Phase 3: 参考数据生成
+## 参考数据生成
 
 ### 标准测试向量
 
@@ -155,7 +138,7 @@ def save_for_verilog(data, filename, fmt='dec'):
 
 ---
 
-## Phase 4: Verilog RTL 实现规范
+## Verilog RTL 实现
 
 ### 位宽匹配检查清单
 
@@ -201,7 +184,7 @@ endmodule
 
 ---
 
-## Phase 5: 仿真验证与比对
+## 仿真验证与比对
 
 ### Testbench 框架
 
