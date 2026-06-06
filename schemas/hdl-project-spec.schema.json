@@ -1,0 +1,113 @@
+{
+  "$schema": "https://json-schema.org/draft-07/schema#",
+  "$id": "https://claude-code.anthropic.com/schemas/hdl-project-spec",
+  "title": "HDL Project Specification",
+  "description": "Phase 1 → Phase 2/3 数据契约：定义模块接口、Golden Model 路径、比对策略。由 hdl-coding-workflow Phase 1 生成，Phase 2/3 消费。",
+  "type": "object",
+  "properties": {
+    "schema_version": {
+      "type": "string",
+      "enum": ["1.0"]
+    },
+    "module_name": {
+      "type": "string",
+      "description": "顶层模块名称"
+    },
+    "toolchain": {
+      "type": "string",
+      "enum": ["questa", "vcs", "xcelium", "verilator"],
+      "description": "Phase 0 选定的 EDA 工具链"
+    },
+    "ports": {
+      "type": "array",
+      "description": "模块端口列表",
+      "items": {
+        "type": "object",
+        "properties": {
+          "name": { "type": "string" },
+          "direction": { "type": "string", "enum": ["input", "output", "inout"] },
+          "width": { "type": "integer", "minimum": 1 },
+          "type": { "type": "string", "enum": ["wire", "reg", "logic"] }
+        },
+        "required": ["name", "direction", "width"]
+      }
+    },
+    "alignment": {
+      "type": "object",
+      "description": "Golden Model 与 RTL 的对齐策略",
+      "properties": {
+        "compare_mode": {
+          "type": "string",
+          "enum": ["cycle_accurate", "transaction_based", "scoreboard"],
+          "description": "比对模式（Phase 1 item 6 选定）"
+        },
+        "pipeline_delay_min": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "最小流水线延迟（cycle 数）"
+        },
+        "pipeline_delay_max": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "最大流水线延迟（cycle 数）"
+        }
+      },
+      "required": ["compare_mode"]
+    },
+    "golden_model": {
+      "type": "object",
+      "description": "Golden Model 输出文件路径",
+      "properties": {
+        "expected_output_path": { "type": "string" },
+        "test_vectors_path": { "type": "string" },
+        "format": { "type": "string", "enum": ["hex", "bin", "csv"] },
+        "test_cases": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "name": { "type": "string" },
+              "description": { "type": "string" },
+              "category": { "type": "string", "enum": ["normal", "boundary", "error"] }
+            },
+            "required": ["name", "category"]
+          }
+        }
+      },
+      "required": ["expected_output_path", "format"]
+    },
+    "clock": {
+      "type": "object",
+      "description": "时钟配置",
+      "properties": {
+        "name": { "type": "string" },
+        "period_ns": { "type": "number", "minimum": 0.1 }
+      },
+      "required": ["name"]
+    },
+    "reset": {
+      "type": "object",
+      "description": "复位配置",
+      "properties": {
+        "name": { "type": "string" },
+        "polarity": { "type": "string", "enum": ["active_high", "active_low"] },
+        "type": { "type": "string", "enum": ["sync", "async"] }
+      },
+      "required": ["name", "polarity"]
+    },
+    "sva_assertions": {
+      "type": "array",
+      "description": "需要嵌入的 SVA 断言（Phase 2 生成，Phase 3 验证）",
+      "items": {
+        "type": "object",
+        "properties": {
+          "name": { "type": "string" },
+          "expression": { "type": "string" },
+          "severity": { "type": "string", "enum": ["error", "warning", "info"] }
+        },
+        "required": ["name", "expression"]
+      }
+    }
+  },
+  "required": ["module_name", "toolchain", "ports", "alignment", "golden_model", "clock", "reset"]
+}

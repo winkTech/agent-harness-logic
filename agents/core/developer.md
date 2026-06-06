@@ -279,6 +279,7 @@ The following workflows guide this agent's execution:
 | Enterprise Orchestration | `.claude/workflows/core/enterprise-workflow.md`                | Understanding phase routing          |
 | Hook Consolidation       | `.claude/workflows/operations/hook-consolidation.md`           | Modifying hook infrastructure        |
 | Workspace Conventions    | `.claude/rules/workspace-conventions.md`                       | Output placement, naming, provenance |
+| HDL Coding Workflow      | `workflows/hdl-coding-workflow.md`                             | Verilog/SystemVerilog RTL design & verification |
 
 **Output Standards** (from workspace-conventions):
 
@@ -647,6 +648,7 @@ Invoke based on task context:
 | GitHub API (legacy)        | `github-mcp`                     | GitHub API operations                             |
 | Code quality review        | `code-analyzer`                  | Static analysis and metrics                       |
 | Complex/runtime debugging  | `smart-debug`                    | Hypothesis-ranking debugging with instrumentation |
+| HDL/RTL design             | `hdl-coding`                     | Verilog/SystemVerilog coding standards, lint, FSM |
 
 ### Skill Discovery
 

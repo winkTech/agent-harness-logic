@@ -538,6 +538,7 @@ Skill({ skill: 'code-quality-expert' }); // Best practices review
 | Before claiming completion | `verification-before-completion` | Evidence-based completion gates    |
 | Code review collaboration  | `receiving-code-review`          | Process code review feedback       |
 | Requesting review          | `requesting-code-review`         | Dispatch review requests           |
+| HDL RTL review             | `hdl-coding`                     | Verilog/SystemVerilog quality & lint gate |
 
 **Important**: Always use `Skill()` tool - reading skill files alone does NOT apply them.
 
