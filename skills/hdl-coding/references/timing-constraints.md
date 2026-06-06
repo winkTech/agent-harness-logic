@@ -169,7 +169,7 @@ set_input_delay -clock clk_50m -max 5.0 [get_ports {i_data[*]}]
 set_output_delay -clock clk_50m -max 3.0 [get_ports {o_data[*]}]
 
 # 5. 时序例外约束（最后）
-set_false_path -from [get_ports i_rst_n]
+set_false_path -from [get_ports i_rst]
 set_multicycle_path 2 -setup -from [get_pins u_slow_reg/C] -to [get_pins u_fast_reg/D]
 ```
 
