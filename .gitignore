@@ -109,6 +109,7 @@ work/
 
 # 插件缓存（运行时下载，不应入库）
 plugins/cache/
+plugins/.cache-archive/
 
 # 运行时成本追踪
 metrics/

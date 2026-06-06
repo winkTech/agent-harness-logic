@@ -136,6 +136,167 @@ class MatlabEngine:
             raise RuntimeError("Engine not started, use run_script() instead")
         return self._engine.feval(func_name, *args)
 
+    # ========================================================================
+    # 新增: Python ↔ MATLAB 实时数据交换
+    # ========================================================================
+
+    def send_array(self, name: str, array: np.ndarray) -> None:
+        """
+        将 numpy 数组发送到 MATLAB 工作区
+
+        Args:
+            name: MATLAB 变量名
+            array: numpy 数组 (自动转换为 matlab.double)
+        """
+        if not self.use_engine or not self._engine:
+            print(f"[MATLAB] Engine not available, cannot send '{name}'")
+            return
+        try:
+            import matlab
+            # 根据维度决定转换方式
+            if array.ndim == 1:
+                ml_array = matlab.double(array.tolist())
+            elif array.ndim == 2:
+                ml_array = matlab.double(array.tolist())
+            elif array.ndim == 0:
+                ml_array = matlab.double([array.item()])
+            else:
+                # 高维数组展平后发送
+                ml_array = matlab.double(array.flatten().tolist())
+            self._engine.workspace[name] = ml_array
+            print(f"[MATLAB] Sent '{name}' ({array.shape}, {array.dtype}) to workspace")
+        except Exception as e:
+            print(f"[MATLAB] send_array failed: {e}")
+
+    def get_array(self, name: str) -> Optional[np.ndarray]:
+        """
+        从 MATLAB 工作区获取变量到 numpy
+
+        Args:
+            name: MATLAB 变量名
+
+        Returns:
+            numpy 数组，或 None (失败时)
+        """
+        if not self.use_engine or not self._engine:
+            print(f"[MATLAB] Engine not available, cannot get '{name}'")
+            return None
+        try:
+            ml_val = self._engine.workspace[name]
+            return np.array(ml_val)
+        except Exception as e:
+            print(f"[MATLAB] get_array('{name}') failed: {e}")
+            return None
+
+    def eval(self, expr: str) -> Any:
+        """
+        在 MATLAB 中执行任意表达式并返回结果
+
+        Args:
+            expr: MATLAB 表达式字符串, e.g. "fft(x)"
+
+        Returns:
+            MATLAB 返回值 (转换为 Python 类型)
+        """
+        if not self.use_engine or not self._engine:
+            raise RuntimeError("Engine not started")
+        return self._engine.eval(expr)
+
+    def plot_via_matlab(self, x_data: np.ndarray, y_data: np.ndarray,
+                        plot_type: str = 'plot', title_str: str = '',
+                        xlabel_str: str = '', ylabel_str: str = '',
+                        fig_num: int = 1) -> None:
+        """
+        使用 MATLAB 引擎绘图 (比 matplotlib 更适合工程图)
+
+        Args:
+            x_data: X 轴数据
+            y_data: Y 轴数据 (复数时取实部)
+            plot_type: 'plot' | 'stem' | 'stairs' | 'scatter' | 'constellation'
+            title_str: 图标题
+            xlabel_str: X 轴标签
+            ylabel_str: Y 轴标签
+            fig_num: MATLAB figure 编号
+        """
+        if not self.use_engine or not self._engine:
+            print("[MATLAB] Engine not available, falling back to matplotlib")
+            self._fallback_plot(x_data, y_data, plot_type, title_str,
+                                xlabel_str, ylabel_str)
+            return
+        try:
+            # 发送数据到 MATLAB 工作区
+            self.send_array('ml_x', np.asarray(x_data).flatten())
+            if np.iscomplexobj(y_data):
+                self.send_array('ml_y_real', np.real(y_data))
+                self.send_array('ml_y_imag', np.imag(y_data))
+            else:
+                self.send_array('ml_y', np.asarray(y_data).flatten())
+
+            # 构造绘图命令
+            cmds = [f"figure({fig_num}); clf;"]
+            if plot_type == 'constellation':
+                cmds.append(
+                    "plot(ml_y_real, ml_y_imag, '.', 'MarkerSize', 3);"
+                )
+                cmds.append("axis equal; grid on;")
+            elif plot_type == 'stem':
+                cmds.append("stem(ml_x, ml_y, 'filled', 'MarkerSize', 3);")
+            elif plot_type == 'stairs':
+                cmds.append("stairs(ml_x, ml_y, 'LineWidth', 1.5);")
+            elif plot_type == 'scatter':
+                cmds.append(
+                    "scatter(ml_x, ml_y, 10, 'filled');"
+                )
+            else:  # 'plot' (default)
+                if np.iscomplexobj(y_data):
+                    cmds.append(
+                        "plot(ml_x, ml_y_real, 'b-', "
+                        "ml_x, ml_y_imag, 'r--', 'LineWidth', 1.5);"
+                    )
+                    cmds.append("legend('Real', 'Imag');")
+                else:
+                    cmds.append("plot(ml_x, ml_y, 'b-', 'LineWidth', 1.5);")
+
+            if title_str:
+                cmds.append(f"title('{title_str}');")
+            if xlabel_str:
+                cmds.append(f"xlabel('{xlabel_str}');")
+            if ylabel_str:
+                cmds.append(f"ylabel('{ylabel_str}');")
+
+            cmds.append("grid on;")
+            self._engine.eval(' '.join(cmd for cmd in cmds if cmd))
+            print(f"[MATLAB] Plot #{fig_num}: {title_str or plot_type}")
+        except Exception as e:
+            print(f"[MATLAB] plot_via_matlab failed: {e}, falling back")
+            self._fallback_plot(x_data, y_data, plot_type, title_str,
+                                xlabel_str, ylabel_str)
+
+    def _fallback_plot(self, x_data: np.ndarray, y_data: np.ndarray,
+                       plot_type: str, title_str: str,
+                       xlabel_str: str, ylabel_str: str) -> None:
+        """MATLAB 不可用时的 matplotlib 回退"""
+        import matplotlib.pyplot as plt
+        plt.figure()
+        if plot_type == 'constellation' and np.iscomplexobj(y_data):
+            plt.plot(y_data.real, y_data.imag, '.', markersize=3)
+            plt.axis('equal')
+        elif plot_type == 'stem':
+            plt.stem(x_data, y_data)
+        else:
+            if np.iscomplexobj(y_data):
+                plt.plot(x_data, y_data.real, 'b-', label='Real')
+                plt.plot(x_data, y_data.imag, 'r--', label='Imag')
+                plt.legend()
+            else:
+                plt.plot(x_data, y_data, 'b-')
+        plt.title(title_str or '')
+        plt.xlabel(xlabel_str or '')
+        plt.ylabel(ylabel_str or '')
+        plt.grid(True)
+        plt.show()
+        print(f"[matplotlib] Fallback plot: {title_str or plot_type}")
+
     @staticmethod
     def _run_matlab_subprocess(script_path: str, working_dir: Optional[str] = None) -> str:
         """通过 subprocess 调用 MATLAB (无 Engine)"""
@@ -399,6 +560,14 @@ ALGO_CONFIG = {
         'expected_bin': 'expected_sync_out.bin',
         'scale': 16384,  # Q2.14
     },
+    'ldpc': {
+        'name': 'LDPC Decoder',
+        'golden_dir': 'knowledge/primary/domains/comm/ldpc/golden_model',
+        'script': 'gen_rtl_test_vectors.m',
+        'expected_bin': 'expected_ldpc_out.bin',
+        'scale': 512,  # 10-bit LLR, Q1.9
+        'mod_types': ['bpsk'],
+    },
 }
 
 
@@ -565,8 +734,25 @@ Examples:
                         help='运行 RTL 仿真 (需要 Vivado xsim)')
     parser.add_argument('--compare', action='store_true',
                         help='执行 golden vs RTL 对比')
+    parser.add_argument('--matlab-plot', action='store_true',
+                        help='使用 MATLAB 引擎绘图 (需 Engine 模式)')
+    parser.add_argument('--live', action='store_true',
+                        help='实时数据交换模式: 将 Python 变量发送到 MATLAB 工作区 '
+                             '并通过 MATLAB 可视化')
 
     args = parser.parse_args()
+
+    # --matlab-plot: 如果指定则优先用 MATLAB 绘图
+    if args.matlab_plot and args.engine:
+        print("[INFO] MATLAB plot mode enabled — will use MATLAB for visualization")
+
+    # --live: 实时数据交换模式
+    if args.live:
+        if args.engine:
+            print("[INFO] Live mode enabled — MATLAB workspace ready for data exchange")
+            print("  Use send_array() / get_array() to exchange data in real-time")
+        else:
+            print("[WARN] --live requires --engine (MATLAB Engine API). Ignored.")
 
     # --sim 和 --compare 是占位提示, RTL 仿真需单独流程
     if args.sim:

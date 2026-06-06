@@ -9,8 +9,8 @@ sys.path.insert(0, os.path.abspath('../prj/08_py'))
 
 # -- 项目信息 ---------------------------------------------------------------
 project = 'FPGA Project'
-copyright = '2024, Lihan'
-author = 'Lihan'
+copyright = '2024, [AUTHOR]'
+author = '[AUTHOR]'
 release = '1.0'
 
 # -- 一般配置 ---------------------------------------------------------------

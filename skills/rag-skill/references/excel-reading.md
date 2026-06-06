@@ -61,20 +61,20 @@ rag-skill/
 
 ### 1. markitdown-convert.py — 多格式文档转Markdown
 
-**位置**：`C:/Users/Lihan/.claude/skills/rag-skill/tools/cli/markitdown-convert.py`
+**位置**：`[SKILL_DIR]/tools/cli/markitdown-convert.py`
 
 **功能**：将PDF、DOCX、XLSX、PPTX等格式文档转换为Markdown格式
 
 **调用方式**：
 ```bash
 # 基本用法
-python C:/Users/Lihan/.claude/skills/rag-skill/tools/cli/markitdown-convert.py <input_file> [output_file]
+python [SKILL_DIR]/tools/cli/markitdown-convert.py <input_file> [output_file]
 
 # 示例：转换PDF
-python C:/Users/Lihan/.claude/skills/rag-skill/tools/cli/markitdown-convert.py "D:/docs/document.pdf" "D:/docs/output.md"
+python [SKILL_DIR]/tools/cli/markitdown-convert.py "[DOCS_DIR]/document.pdf" "[DOCS_DIR]/output.md"
 
 # 示例：转换Excel
-python C:/Users/Lihan/.claude/skills/rag-skill/tools/cli/markitdown-convert.py "D:/data/report.xlsx" "D:/data/report.md"
+python [SKILL_DIR]/tools/cli/markitdown-convert.py "[DATA_DIR]/report.xlsx" "[DATA_DIR]/report.md"
 ```
 
 **支持格式**：
@@ -98,14 +98,14 @@ pip install 'markitdown[all]'
 
 ### 2. convert_pdf_to_images.py — PDF转图片
 
-**位置**：`C:/Users/Lihan/.claude/skills/rag-skill/scripts/convert_pdf_to_images.py`
+**位置**：`[SKILL_DIR]/scripts/convert_pdf_to_images.py`
 
 **功能**：将PDF页面转换为图片格式
 
 **调用方式**：
 ```bash
 # 查看脚本帮助
-python C:/Users/Lihan/.claude/skills/rag-skill/scripts/convert_pdf_to_images.py --help
+python [SKILL_DIR]/scripts/convert_pdf_to_images.py --help
 ```
 
 **使用时机**：
