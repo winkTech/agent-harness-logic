@@ -51,7 +51,6 @@
 |-------|------|------|
 | `deep-research` | 深度研究 | 技术调研、方案对比 |
 | `modern-python` | 现代 Python | Python 3.12+ 特性 |
-| `data-scientist` | 数据分析 | 仿真结果、性能对比 |
 | `brainstorming` | 头脑风暴 | 多方案对比 |
 
 ## Agent 管理
@@ -70,7 +69,6 @@
 |-------|------|------|
 | `browser` | 浏览器自动化 + 用户实时浏览器 | 网页交互/抓取/测试 & 登录态/DevTools 检查 |
 | ~~agent-browser~~ | 🔀 已合并到 browser | — |
-| ~~use-my-browser~~ | 🔀 已合并到 browser | — |
 
 ## 其他
 

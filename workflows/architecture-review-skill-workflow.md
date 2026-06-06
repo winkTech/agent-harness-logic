@@ -1,12 +1,12 @@
 ---
 name: architecture-review-workflow
-description: Multi-agent architecture review workflow with parallel security analysis
+description: Multi-agent architecture review workflow with parallel security analysis（通过 code-review 调用）
 version: 1.0.0
-agents: [architect, security-architect, code-reviewer, developer]
+agents: [architect, code-reviewer, developer, researcher]
 phases: 4
 complexity: medium-to-high
 triggers:
-  - architecture review
+  - architecture review (via code-review)
   - codebase assessment
   - technical debt analysis
   - system health check

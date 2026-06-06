@@ -34,7 +34,7 @@ Update the `tdd` skill to reflect current canonical TDD and AI-assisted TDD evid
 - `rules/tdd.md`: concise enforceable operating rules.
 - `templates/implementation-template.md`: scenario backlog + evidence-first template.
 - `references/tdd-memory-profile.md`: bounded runtime memory acceleration guidance.
-- `.claude/workflows/tdd-skill-workflow.md`: concise TDD execution sequence.
+- TDD 流程由 `skills/tdd/SKILL.md` 直接指引，无独立 workflow 文件。
 
 ## Non-Goals (Simplicity Guard)
 
