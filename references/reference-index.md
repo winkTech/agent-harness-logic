@@ -45,6 +45,18 @@
 | `hdl-coding/references/fpga-optimization.md` | FPGA 优化 |
 | `hdl-coding/references/alg-flow-verilog.md` | 算法→Verilog 代码模板（流程见 hdl-coding-workflow） |
 
+## 工作流
+
+> 渐进式披露结构：骨架文件是快速索引，子文件包含详细内容，按需加载。
+
+| 骨架 | 子文件 | 内容 |
+|:-----|:-------|:-----|
+| `workflows/hdl-coding-workflow.md` | `workflows/hdl-coding/` (8 个 Phase) | RTL 开发全流程 — 算法分析→架构→定点→TB→RTL→回归→审查→报告 |
+| `workflows/code-review-workflow.md` | `workflows/code-review/` (2 个 Pass) | 两轮代码审查：正确性→代码质量 |
+| `workflows/architecture-review-workflow.md` | `workflows/architecture-review/` (4 个 Phase) | 多 Agent 架构审查：上下文→分析→安全→建议 |
+| `workflows/rag-skill-workflow.md` | — | 知识库检索流程（66 行，无需拆分） |
+| `workflows/security-review-workflow.md` | — | 安全审查流程（97 行，无需拆分） |
+
 ## 工具链
 
 | 文档 | 内容 |
