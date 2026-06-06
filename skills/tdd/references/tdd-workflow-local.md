@@ -413,7 +413,7 @@ endmodule
 
 ### REFACTOR 阶段 - 优化代码
 
-遵循 RTL_DESIGN_RULE 进行重构：
+遵循 hdl-coding SKILL.md（§1 时序安全 + §2 命名规范）进行重构：
 - 输入信号寄存（ri_ 前缀）
 - 输出信号通过寄存器驱动（ro_ 前缀）
 - 使用同步复位、高电平有效
@@ -422,7 +422,7 @@ endmodule
 
 **验证标准:**
 - 仿真仍通过
-- 符合 RTL_DESIGN_RULE 命名规范
+- 符合 hdl-coding SKILL.md 命名规范
 - `vlog -lint` 零警告
 
 ### HDL 必测场景
