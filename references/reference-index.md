@@ -43,7 +43,7 @@
 | `hdl-coding/references/rtl-code-review.md` | RTL 代码审查规范 |
 | `hdl-coding/references/timing-constraints.md` | 时序约束 |
 | `hdl-coding/references/fpga-optimization.md` | FPGA 优化 |
-| `hdl-coding/references/alg-flow-verilog.md` | 算法→Verilog 流程 |
+| `hdl-coding/references/alg-flow-verilog.md` | 算法→Verilog 代码模板（流程见 hdl-coding-workflow） |
 
 ## 工具链
 

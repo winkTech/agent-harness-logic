@@ -57,4 +57,4 @@ comm/
 
 ## 框架文档
 
-`docs/plans/2026-06-02-comm-algorithm-full-link-design.md`
+已融入 `workflows/hdl-coding-workflow.md` v3（Phase 1: 算法分析/架构设计, Phase 2: 定点量化/资源评估）
