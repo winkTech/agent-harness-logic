@@ -1,7 +1,7 @@
 # 知识库索引
 
 > 导航: [场景入口卡](SCENE_CARDS.md) — [标签索引](TAG_INDEX.md)
-> 最后更新: 2026-06-05 | 文档: 76 篇 primary + 38 篇 source
+> 最后更新: 2026-06-06 | 文档: 76 篇 primary + 38 篇 source + 40 篇 鸢尾花书蒸馏
 
 ---
 
@@ -95,11 +95,33 @@ knowledge/
 
 ---
 
-## Stats (2026-06-05)
+## 鸢尾花书蒸馏 (40 卡片, ~200KB)
+
+来自 D:\Papers\book 下 6 本书的精华提取。详见 [书籍去重映射](DEDUP-MAP.md)。
+
+| 域 | 卡片数 | 原始大小 | 蒸馏后 | 压缩率 |
+|---|-------|---------|-------|-------|
+| [python-basics/](python-basics/) | 22 | 138M | 116K | 99.92% |
+| [math-foundation/](math-foundation/) | 9 | 64M | 40K | 99.94% |
+| [linear-algebra/](linear-algebra/) | 5 | 127M | 24K | 99.98% |
+| [probability-statistics/](probability-statistics/) | 3 | 11M | 20K | 99.82% |
+| [data-viz/](data-viz/) | 1 | 269M | 2.4K | 99.999% |
+| **合计** | **40** | **~609M** | **~200KB** | **99.97%** |
+
+### 快速跳转
+- **Python 编程**: 语法/数据类型/控制流 → [索引](python-basics/) 或直接查 ch04-syntax, ch08-functions, ch13-numpy-basics
+- **NumPy/Pandas**: 数值计算/数据处理 → ch13-numpy-basics, ch19-pandas-intro, ch21-22-pandas-indexing-reshape
+- **机器学习**: sklearn 全流程 → ch28-sklearn-intro, ch30-33-sklearn-models
+- **线性代数**: 向量/矩阵/EVD/SVD → [索引](linear-algebra/) 或查 04-evd-svd
+- **微积分/优化**: 导数/积分/梯度下降 → [索引](math-foundation/) 或查 06-calculus
+- **概率论**: 贝叶斯/分布/统计检验 → [索引](probability-statistics/)
+
+## Stats (2026-06-06)
 
 | Metric | Value |
 |:-------|:-----:|
 | Primary docs | 76 (comm 47 + fpga 25 + cross 4) |
+| 鸢尾花书蒸馏 | 40 cards (~200KB) |
 | Source extracts | 38 (~200K lines) |
 | MATLAB models | 37 .m files |
 | RTL modules | 19 .sv files |
