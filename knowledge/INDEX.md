@@ -26,7 +26,7 @@ knowledge/
 
 ## 通信算法 (51)
 
-**WiFi** — `wifi/overview`, `phy-layer`, `mac-layer`, `ldpc-bcc-encoding` (NEW ✦)
+**WiFi** — `wifi/overview`, `phy-layer`, `phy-implementation`, `mac-layer`, `ldpc-bcc-encoding` (NEW ✦)
 
 **OFDM** — `ofdm/algorithm_spec`, `rtl_architecture`, `fixed_point_report`, `resource_estimate`, `report_ofdm_fpga_implementation`, `testbench_plan`, `golden_model/`, `uvm_tb/`
 
