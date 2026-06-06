@@ -14,452 +14,91 @@ triggers:
 
 # Architecture Review Workflow
 
-**Extended Thinking**: Architecture reviews require multiple expert perspectives to identify structural issues, security vulnerabilities, and improvement opportunities. This workflow orchestrates specialized agents through four phases - from initial context gathering through analysis, security review, and actionable recommendations. By spawning agents in parallel where appropriate, the workflow maximizes efficiency while ensuring comprehensive coverage of architectural concerns.
+Multi-agent architecture review with parallel security analysis. Spawns specialized agents through four phases — from context gathering through analysis, security review, and actionable recommendations.
 
 ## Overview
 
-This workflow performs comprehensive architecture reviews by:
+| Phase | Agent | 目标 |
+|:------|:------|:------|
+| **Phase 1**: Context Gathering | Developer | 了解代码库结构 + 审计现有文档 |
+| **Phase 2**: Architecture Analysis | Architect | 架构模式分析 + 质量指标 + 技术债评估 |
+| **Phase 3**: Security Review | Security Architect | STRIDE 威胁建模 + OWASP + 依赖扫描 |
+| **Phase 4**: Recommendations | Code Reviewer | 汇总发现 → 优先级建议 + 路线图 |
 
-1. Gathering codebase context and existing documentation
-2. Analyzing architectural patterns, dependencies, and technical debt
-3. Reviewing security posture and identifying vulnerabilities
-4. Synthesizing findings into prioritized recommendations
+**执行顺序**: Phase 1 → (Phase 2 ‖ Phase 3) → Phase 4
 
 ## When to Use
 
-**Recommended triggers:**
+**推荐场景:**
+- 重大功能开发前（验证架构是否支持新功能）
+- 代码库重大变更后（确保架构完整性）
+- 技术债评估周期
+- 安全审计准备
+- 事故后分析
 
-- Before major feature development (validate existing architecture can support new features)
-- After significant codebase changes (ensure architectural integrity is maintained)
-- During technical debt assessment cycles (identify refactoring priorities)
-- Onboarding new team members (document current architecture state)
-- Pre-security audit preparation (identify issues before external review)
-- Post-incident analysis (determine if architecture contributed to issues)
+**复杂度指示:**
 
-**Complexity indicators:**
+| Indicator | Simple | Full |
+|-----------|--------|------|
+| Codebase | < 10k LOC | > 10k LOC |
+| Services | Monolith | Multi-service |
+| Team | 1-3 | 4+ |
+| Security | Low | Medium-High |
 
-| Indicator             | Simple Review | Full Review   |
-| --------------------- | ------------- | ------------- |
-| Codebase size         | < 10k LOC     | > 10k LOC     |
-| Service count         | Monolith      | Multi-service |
-| Team size             | 1-3           | 4+            |
-| External dependencies | < 5           | 5+            |
-| Security sensitivity  | Low           | Medium-High   |
+---
 
 ## Phase 1: Context Gathering
 
-**Purpose**: Build comprehensive understanding of the codebase before analysis.
-
+**目标**: 构建代码库的全面理解。
 **Agent**: Developer (exploration mode)
 
-**Parallel exploration**: If codebase has distinct domains, spawn multiple explorers.
+- 1.1 代码库结构探索 — 目录结构、组件、技术栈、依赖图
+- 1.2 文档审计 — README/ADR/API 文档覆盖度和时效性
 
-### Step 1.1: Codebase Structure Exploration
-
-```javascript
-Task({
-  task_id: 'task-1',
-  subagent_type: 'developer',
-  description: 'Exploring codebase structure for architecture review',
-  prompt: `You are the DEVELOPER agent in exploration mode.
-
-## PROJECT CONTEXT (CRITICAL)
-PROJECT_ROOT: $PROJECT_ROOT
-All file operations MUST be relative to PROJECT_ROOT.
-
-## Task
-Explore codebase structure to gather context for architecture review.
-
-## Instructions
-1. Read your agent definition: .claude/agents/core/developer.md
-2. **Invoke skills**:
-   - Skill({ skill: "code-analyzer" })
-   - Skill({ skill: "project-onboarding" })
-3. Map directory structure, identify major components and modules
-4. Catalog technologies, frameworks, and external dependencies
-5. Identify entry points, API boundaries, and data flow paths
-6. Document build system, configuration, and deployment artifacts
-7. Save findings to: .claude/context/exploration/architecture-review-structure.md
-
-## Output Format
-- Directory tree with component descriptions
-- Technology stack summary
-- Dependency graph (major components)
-- Entry point catalog
-
-## Memory Protocol
-1. Read .claude/context/memory/learnings.md first
-2. Record discoveries to .claude/context/memory/learnings.md
-`,
-});
-```
-
-**Expected Output**: Codebase map with technology stack, component boundaries, and dependency graph.
-
-### Step 1.2: Documentation Audit
-
-```javascript
-Task({
-  task_id: 'task-2',
-  subagent_type: 'developer',
-  description: 'Auditing existing architecture documentation',
-  prompt: `You are the DEVELOPER agent.
-
-## PROJECT CONTEXT
-PROJECT_ROOT: $PROJECT_ROOT
-
-## Task
-Audit existing architecture documentation.
-
-## Instructions
-1. Read your agent definition: .claude/agents/core/developer.md
-2. Search for existing documentation:
-   - README files, architecture decision records (ADRs)
-   - API documentation, design documents
-   - Diagrams (C4, sequence, ERD)
-3. Assess documentation completeness and currency
-4. Identify gaps between documented and actual architecture
-5. Save findings to: .claude/context/exploration/architecture-review-docs.md
-
-## Output Format
-- Documentation inventory
-- Coverage assessment (0-100%)
-- Currency assessment (stale/current)
-- Gap analysis
-
-## Memory Protocol
-1. Record documentation gaps to .claude/context/memory/issues.md
-`,
-});
-```
-
-**Expected Output**: Documentation inventory with gap analysis.
-
-**Phase 1 Deliverables**:
-
-- `architecture-review-structure.md` - Codebase structure analysis
-- `architecture-review-docs.md` - Documentation audit results
+→ 详见 [`architecture-review/phase1-context-gathering.md`](architecture-review/phase1-context-gathering.md)
 
 ---
 
 ## Phase 2: Architecture Analysis
 
-**Purpose**: Deep analysis of architectural patterns, quality metrics, and technical debt.
-
+**目标**: 深入分析架构模式、质量指标和技术债。
 **Agent**: Architect
+**前置**: Phase 1 完成
 
-**Prerequisite**: Phase 1 completed (structure exploration available).
+- 2.1 模式分析 — 分层/六边形/微服务，SOLID，耦合/内聚
+- 2.2 技术债评估 — 代码/设计/基础设施/文档债
 
-### Step 2.1: Pattern Analysis
-
-```javascript
-Task({
-  task_id: 'task-3',
-  subagent_type: 'developer',
-  model: 'opus', // Complex reasoning required
-  description: 'Analyzing architectural patterns and quality',
-  prompt: `You are the ARCHITECT agent.
-
-## PROJECT CONTEXT
-PROJECT_ROOT: $PROJECT_ROOT
-
-## Task
-Analyze architectural patterns and quality metrics.
-
-## Instructions
-1. Read your agent definition: .claude/agents/core/architect.md
-2. Read Phase 1 outputs:
-   - .claude/context/exploration/architecture-review-structure.md
-   - .claude/context/exploration/architecture-review-docs.md
-3. **Invoke skills**:
-   - Skill({ skill: "code-analyzer" })
-4. Analyze against established patterns:
-   - Layered architecture / Hexagonal / Microservices
-   - SOLID principles adherence
-   - DRY/KISS/YAGNI compliance
-5. Assess coupling, cohesion, and modularity
-6. Identify architectural anti-patterns and smell indicators
-7. Save analysis to: .claude/context/reports/architecture/architecture-review-patterns.md
-
-## Analysis Framework
-| Dimension | Indicators | Rating Scale |
-|-----------|-----------|--------------|
-| Modularity | Clear boundaries, single responsibility | 1-5 |
-| Coupling | Dependency direction, abstraction levels | 1-5 |
-| Cohesion | Related functionality grouping | 1-5 |
-| Extensibility | Plugin points, configuration | 1-5 |
-| Testability | Dependency injection, isolation | 1-5 |
-
-## Output Format
-- Pattern identification (what patterns are used)
-- Pattern adherence score (how well followed)
-- Anti-pattern catalog with locations
-- Complexity hotspots map
-
-## Memory Protocol
-1. Read .claude/context/memory/learnings.md first
-2. Record architectural decisions to .claude/context/memory/decisions.md
-`,
-});
-```
-
-**Expected Output**: Pattern analysis with quality metrics and anti-pattern catalog.
-
-### Step 2.2: Technical Debt Assessment
-
-```javascript
-Task({
-  task_id: 'task-4',
-  subagent_type: 'developer',
-  description: 'Assessing technical debt and maintenance burden',
-  prompt: `You are the ARCHITECT agent.
-
-## PROJECT CONTEXT
-PROJECT_ROOT: $PROJECT_ROOT
-
-## Task
-Assess technical debt and maintenance burden.
-
-## Instructions
-1. Read your agent definition: .claude/agents/core/architect.md
-2. Read pattern analysis: .claude/context/reports/architecture/architecture-review-patterns.md
-3. **Invoke skill**: Skill({ skill: "code-analyzer" })
-4. Identify and categorize technical debt:
-   - Code debt (duplication, complexity, outdated patterns)
-   - Design debt (poor abstractions, tight coupling)
-   - Infrastructure debt (outdated dependencies, missing automation)
-   - Documentation debt (stale docs, missing comments)
-5. Estimate remediation effort for each item
-6. Prioritize based on impact and effort
-7. Save assessment to: .claude/context/reports/architecture/architecture-review-techdebt.md
-
-## Debt Categorization Matrix
-| Category | Impact | Effort | Priority |
-|----------|--------|--------|----------|
-| Critical | Blocks development | Any | P0 |
-| High | Slows development | Low-Medium | P1 |
-| Medium | Causes bugs | Low | P2 |
-| Low | Aesthetic | Low | P3 |
-
-## Output Format
-- Technical debt inventory
-- Impact assessment per item
-- Remediation effort estimates
-- Prioritized backlog
-
-## Memory Protocol
-1. Record critical debt to .claude/context/memory/issues.md
-`,
-});
-```
-
-**Expected Output**: Technical debt inventory with prioritization.
-
-**Phase 2 Deliverables**:
-
-- `architecture-review-patterns.md` - Pattern analysis and quality metrics
-- `architecture-review-techdebt.md` - Technical debt assessment
+→ 详见 [`architecture-review/phase2-architecture-analysis.md`](architecture-review/phase2-architecture-analysis.md)
 
 ---
 
 ## Phase 3: Security Review
 
-**Purpose**: Identify security vulnerabilities and compliance gaps.
-
+**目标**: 识别安全漏洞和合规缺口。
 **Agent**: Security Architect
+**前置**: Phase 1 完成（可与 Phase 2 并行）
 
-**Prerequisite**: Phase 2 completed (architecture analysis available).
+- 3.1 安全态势评估 — STRIDE 威胁建模、OWASP Top 10
+- 3.2 依赖安全扫描 — CVE 数据库比对
 
-**Parallel execution**: This phase can run in parallel with Phase 2 if Phase 1 is complete.
-
-### Step 3.1: Security Posture Assessment
-
-```javascript
-Task({
-  task_id: 'task-5',
-  subagent_type: 'developer',
-  model: 'opus', // Security requires careful reasoning
-  description: 'Security architecture review',
-  prompt: `You are the SECURITY-ARCHITECT agent.
-
-## PROJECT CONTEXT
-PROJECT_ROOT: $PROJECT_ROOT
-
-## Task
-Perform comprehensive security architecture review.
-
-## Instructions
-1. Read your agent definition: .claude/agents/specialized/security-architect.md
-2. Read Phase 1 outputs:
-   - .claude/context/exploration/architecture-review-structure.md
-3. **Invoke skill**: Skill({ skill: "security-architect" })
-4. Apply STRIDE threat modeling:
-   - Spoofing, Tampering, Repudiation
-   - Information Disclosure, Denial of Service
-   - Elevation of Privilege
-5. Check OWASP Top 10 vulnerabilities
-6. Review authentication and authorization patterns
-7. Assess data protection (encryption, masking, retention)
-8. Identify attack surfaces and trust boundaries
-9. Save findings to: .claude/context/reports/architecture/architecture-review-security.md
-
-## Security Checklist
-- [ ] Authentication mechanisms reviewed
-- [ ] Authorization patterns validated
-- [ ] Input validation assessed
-- [ ] Cryptographic implementations checked
-- [ ] Secrets management evaluated
-- [ ] Logging and audit trails verified
-- [ ] Error handling reviewed (no info leakage)
-- [ ] Dependency vulnerabilities scanned
-
-## Output Format
-- Threat model (STRIDE analysis)
-- Vulnerability catalog with severity
-- Attack surface map
-- Trust boundary diagram
-- Remediation recommendations
-
-## Memory Protocol
-1. Read .claude/context/memory/learnings.md first
-2. Record security issues to .claude/context/memory/issues.md
-`,
-});
-```
-
-**Expected Output**: Security assessment with threat model and vulnerability catalog.
-
-### Step 3.2: Dependency Security Scan
-
-```javascript
-Task({
-  task_id: 'task-6',
-  subagent_type: 'developer',
-  description: 'Scanning dependencies for known vulnerabilities',
-  prompt: `You are the SECURITY-ARCHITECT agent.
-
-## PROJECT CONTEXT
-PROJECT_ROOT: $PROJECT_ROOT
-
-## Task
-Scan dependencies for security vulnerabilities.
-
-## Instructions
-1. Read your agent definition: .claude/agents/specialized/security-architect.md
-2. Identify all dependency manifests:
-   - package.json, requirements.txt, go.mod, Cargo.toml, etc.
-3. Check dependencies against CVE databases
-4. Identify outdated dependencies with known vulnerabilities
-5. Assess transitive dependency risks
-6. Create upgrade recommendations
-7. Save scan results to: .claude/context/reports/architecture/architecture-review-deps.md
-
-## Output Format
-- Dependency inventory with versions
-- Known vulnerabilities (CVE references)
-- Risk severity ratings
-- Upgrade recommendations
-
-## Memory Protocol
-1. Record critical vulnerabilities to .claude/context/memory/issues.md
-`,
-});
-```
-
-**Expected Output**: Dependency security scan with CVE findings.
-
-**Phase 3 Deliverables**:
-
-- `architecture-review-security.md` - Security posture assessment
-- `architecture-review-deps.md` - Dependency vulnerability scan
+→ 详见 [`architecture-review/phase3-security-review.md`](architecture-review/phase3-security-review.md)
 
 ---
 
 ## Phase 4: Recommendations
 
-**Purpose**: Synthesize all findings into actionable recommendations.
+**目标**: 汇总所有发现为可执行建议。
+**Agent**: Code Reviewer（合成模式）
+**前置**: Phase 2 和 Phase 3 完成
 
-**Agent**: Code Reviewer (synthesis mode)
+- 4.1 发现汇总 — 去重、按影响/安全/维护成本排序
+- 输出: 总览评分 + 分类发现 + 优先级路线图
 
-**Prerequisite**: Phases 2 and 3 completed.
-
-### Step 4.1: Findings Consolidation
-
-```javascript
-Task({
-  task_id: 'task-7',
-  subagent_type: 'developer',
-  description: 'Consolidating architecture review findings',
-  prompt: `You are the CODE-REVIEWER agent.
-
-## PROJECT CONTEXT
-PROJECT_ROOT: $PROJECT_ROOT
-
-## Task
-Consolidate all architecture review findings into actionable recommendations.
-
-## Instructions
-1. Read your agent definition: .claude/agents/specialized/code-reviewer.md
-2. Read all previous phase outputs:
-   - .claude/context/exploration/architecture-review-structure.md
-   - .claude/context/exploration/architecture-review-docs.md
-   - .claude/context/reports/architecture/architecture-review-patterns.md
-   - .claude/context/reports/architecture/architecture-review-techdebt.md
-   - .claude/context/reports/architecture/architecture-review-security.md
-   - .claude/context/reports/architecture/architecture-review-deps.md
-3. Synthesize findings across all dimensions
-4. Remove duplicates and consolidate related issues
-5. Create unified prioritization based on:
-   - Business impact (feature velocity, reliability)
-   - Security risk (vulnerability severity)
-   - Technical debt cost (maintenance burden)
-6. Generate executive summary for stakeholders
-7. Save consolidated report to: .claude/context/reports/architecture/architecture-review-final.md
-
-## Output Format (architecture-review-final.md)
-
-### Executive Summary
-- Overall health score (A-F rating)
-- Top 3 critical findings
-- Recommended immediate actions
-
-### Findings by Category
-| Category | Finding Count | Critical | High | Medium | Low |
-|----------|--------------|----------|------|--------|-----|
-| Architecture | N | X | Y | Z | W |
-| Security | N | X | Y | Z | W |
-| Technical Debt | N | X | Y | Z | W |
-
-### Prioritized Recommendations
-1. [P0] Critical - Immediate action required
-2. [P1] High - Address within 1 sprint
-3. [P2] Medium - Address within 1 quarter
-4. [P3] Low - Backlog for future consideration
-
-### Roadmap Suggestion
-- Week 1-2: Critical security fixes
-- Month 1: High-priority refactoring
-- Quarter 1: Technical debt reduction
-- Ongoing: Documentation improvements
-
-## Memory Protocol
-1. Record key decisions to .claude/context/memory/decisions.md
-2. Record learnings to .claude/context/memory/learnings.md
-`,
-});
-```
-
-**Expected Output**: Consolidated architecture review report with prioritized recommendations.
-
-**Phase 4 Deliverables**:
-
-- `architecture-review-final.md` - Complete review with recommendations
+→ 详见 [`architecture-review/phase4-recommendations.md`](architecture-review/phase4-recommendations.md)
 
 ---
 
 ## Success Criteria
-
-The architecture review is complete when:
 
 - [ ] Codebase structure fully documented
 - [ ] All major components and their interactions identified
@@ -473,128 +112,42 @@ The architecture review is complete when:
 
 ## Error Recovery
 
-### Phase 1 Failures
-
-**Codebase too large to explore**:
-
-1. Split exploration by domain/module
-2. Spawn parallel explorers for independent areas
-3. Set exploration depth limits for initial pass
-
-**Missing documentation**:
-
-1. Document gap in findings
-2. Proceed with code-based analysis
-3. Flag documentation as high-priority recommendation
-
-### Phase 2 Failures
-
-**Unable to identify patterns**:
-
-1. Check if codebase is too small/simple for formal patterns
-2. Look for emerging patterns vs. established patterns
-3. Document as "pattern-free" if truly ad-hoc
-
-**Complexity analysis timeout**:
-
-1. Focus on hotspot analysis rather than full coverage
-2. Use sampling for large codebases
-3. Prioritize recently-changed code
-
-### Phase 3 Failures
-
-**Security scan incomplete**:
-
-1. Document what was and wasn't scanned
-2. Flag gaps as recommendations for manual review
-3. Focus on highest-risk areas first
-
-**Dependency scan failures**:
-
-1. Check for unsupported package managers
-2. Fall back to manual dependency review
-3. Document unscannable dependencies
-
-### Phase 4 Failures
-
-**Conflicting recommendations**:
-
-1. Architect arbitrates conflicts
-2. Document trade-offs for stakeholder decision
-3. Provide multiple options with pros/cons
+| Phase | 故障 | 恢复策略 |
+|:------|:-----|:---------|
+| 1 | 代码库太大 | 按域拆分探索，并行 explorer，设深度上限 |
+| 1 | 文档缺失 | 记录缺口，基于代码分析，把文档列为高优建议 |
+| 2 | 无法识别模式 | 检查是否代码库太小，记录为 "pattern-free" |
+| 2 | 复杂度分析超时 | 聚焦 hotspot + 采样 + 优先最近变更 |
+| 3 | 安全扫描不完整 | 记录扫描范围，标记缺口为手动审查项 |
+| 3 | 依赖扫描失败 | 检查不支持的包管理器，回退手动审查 |
+| 4 | 冲突建议 | Architect 仲裁，记录 trade-off 供决策 |
 
 ## Execution Parameters
 
-### Required Parameters
+| 参数 | 描述 | 默认 |
+|:-----|:-----|:------|
+| `--project-root` | 项目根目录绝对路径 | 必填 |
+| `--scope` | 审查范围（full/focused） | full |
+| `--focus-areas` | 优先关注领域列表 | — |
+| `--exclude-paths` | 排除路径 | — |
+| `--security-level` | 安全审查深度（basic/standard/deep） | standard |
+| `--parallel-explorers` | 并行探索 agent 数量 | 1 |
+| `--output-format` | 报告格式（markdown/html/json） | markdown |
 
-- **--project-root**: Absolute path to project root
-- **--scope**: Review scope (full|focused) [default: full]
+## Agent-Skill Mapping
 
-### Optional Parameters
-
-- **--focus-areas**: Comma-separated list of areas to prioritize
-- **--exclude-paths**: Paths to exclude from analysis
-- **--security-level**: Security review depth (basic|standard|deep) [default: standard]
-- **--parallel-explorers**: Number of parallel exploration agents [default: 1]
-- **--output-format**: Report format (markdown|html|json) [default: markdown]
-
-## Usage Example
-
-```javascript
-// Router spawning architecture review workflow
-Task({
-  task_id: 'task-8',
-  subagent_type: 'developer',
-  description: 'Executing architecture review workflow',
-  prompt: `Execute architecture review workflow.
-
-## Parameters
-- Project Root: C:\\dev\\projects\\my-app
-- Scope: full
-- Security Level: deep
-- Focus Areas: backend-services, data-layer
-
-## Instructions
-Follow the phased workflow in: .claude/workflows/architecture-review-skill-workflow.md
-
-Execute each phase sequentially, spawning appropriate agents with correct skills.
-Wait for phase completion before proceeding to next phase.
-Phases 2 and 3 may run in parallel after Phase 1 completes.
-`,
-});
-```
-
-## Related Skill
-
-This workflow implements the structured process for the corresponding skill:
-
-- **Skill**: `.claude/skills/architecture-review/SKILL.md`
-- **Invoke skill**: `Skill({ skill: "architecture-review" })`
-- **Relationship**: Workflow provides multi-agent orchestration; skill provides core capabilities
-
-## Agent-Skill Mapping Reference
-
-| Phase | Agent              | Required Skills                   |
-| ----- | ------------------ | --------------------------------- |
-| 1.1   | developer          | code-analyzer, project-onboarding |
-| 1.2   | developer          | -                                 |
-| 2.1   | architect          | code-analyzer                     |
-| 2.2   | architect          | code-analyzer                     |
-| 3.1   | security-architect | security-architect                |
-| 3.2   | security-architect | -                                 |
-| 4.1   | code-reviewer      | -                                 |
+| Phase | Agent | Required Skills |
+|:------|:------|:----------------|
+| 1.1 | developer | code-analyzer, project-onboarding |
+| 1.2 | developer | — |
+| 2.1 | architect | code-analyzer |
+| 2.2 | architect | code-analyzer |
+| 3.1 | security-architect | security-architect |
+| 3.2 | security-architect | — |
+| 4.1 | code-reviewer | — |
 
 ## Related Workflows
 
-- **Feature Development Workflow**: `.claude/workflows/enterprise/feature-development-workflow.md`
-- **C4 Architecture Workflow**: `.claude/workflows/enterprise/c4-architecture-workflow.md`
-- **Incident Response Workflow**: `.claude/workflows/operations/incident-response.md`
-
-## Notes
-
-- This workflow integrates with the Task tracking system for multi-phase coordination
-- All agents follow Memory Protocol (read learnings.md, write to memory files)
-- Agents use Skill() tool to invoke specialized capabilities
-- Each phase builds on previous outputs via saved artifacts in .claude/context/
-- Phases 2 and 3 can execute in parallel after Phase 1 completes for efficiency
-- For large codebases (>100k LOC), consider spawning parallel explorers in Phase 1
+- **hdl-coding-workflow.md** — Phase 6 代码审查（可能升级为此工作流）
+- **code-review-workflow.md** — 常规代码审查（轻量级）
+- **security-review-workflow.md** — 独立安全审查（专注安全维度）
