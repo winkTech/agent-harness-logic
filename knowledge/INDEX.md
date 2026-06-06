@@ -72,7 +72,7 @@ knowledge/
 
 ## Cross-Domain (3)
 
-`cross-project-experience.md`, `knowledge-graph.md`, `pitfalls/avoid-global-reset.md`
+`cross-project-experience.md` (+ `scripts/init-project.sh`, `scripts/init-module.sh`), `knowledge-graph.md`, `pitfalls/avoid-global-reset.md`
 
 ---
 

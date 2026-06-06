@@ -61,7 +61,7 @@
       "Bash(gh pr merge:*)",
       "Bash(git commit:*)"
     ],
-    "defaultMode": "auto",
+    "defaultMode": "bypassPermissions",
     "deny": [
       "Bash(git push origin main)",
       "Bash(git push origin master)",
