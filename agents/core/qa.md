@@ -294,6 +294,7 @@ Invoke based on task context:
 | QA workflow needed         | `qa-workflow`                            | Systematic QA process             |
 | Security testing           | `security-architect`                     | Security testing patterns         |
 | Before claiming completion | `verification-before-completion`         | Evidence-based completion + gates |
+| HDL RTL verification       | `hdl-coding`                             | Verilog/SystemVerilog testbench structure, SVA |
 
 ### Skill Discovery
 

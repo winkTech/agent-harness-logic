@@ -127,11 +127,15 @@ version: 3.1.0
 ## §7 工具使用（必须执行）
 
 ### 7.1 语法检查
-写/改完 RTL 后，提交前必须运行 lint:
+写/改完 RTL 后，提交前必须运行 lint（通过项目构建系统，而非硬编码工具命令）:
 ```bash
-iverilog -g2012 -t null <file>
+# 优先使用项目 Makefile（由 hdl-coding-workflow Phase 0 定义）
+make lint
+
+# 降级：无构建系统时用 iverilog
+which make >/dev/null 2>&1 && make lint || iverilog -g2012 -t null -s <top_module> <file>
 ```
-**lint 未通过的代码不得提交。**
+**lint 未通过的代码不得提交。** 具体 lint 工具由项目 `Makefile` + `toolchains/` 决定（支持 Questa/VCS/Xcelium/Verilator）。详见 hdl-coding-workflow Phase 0。
 
 ### 7.2 仿真验证
 ```bash

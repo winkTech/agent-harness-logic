@@ -1,0 +1,132 @@
+{
+  "$schema": "https://json-schema.org/draft-07/schema#",
+  "$id": "https://claude-code.anthropic.com/schemas/hdl-layer-status",
+  "title": "HDL Layer Status",
+  "description": "Phase 3 → Phase 4 数据契约：记录增量层的推进状态、测试结果、失败的 case。由 hdl-coding-workflow Phase 3 持续更新，Phase 4 回归时读取。",
+  "type": "object",
+  "properties": {
+    "schema_version": {
+      "type": "string",
+      "enum": ["1.0"]
+    },
+    "module_name": {
+      "type": "string",
+      "description": "对应 hdl-project-spec 的模块名"
+    },
+    "project_spec_ref": {
+      "type": "string",
+      "description": "关联的 project spec 文件路径"
+    },
+    "layers": {
+      "type": "array",
+      "description": "所有 Layer 的状态",
+      "items": {
+        "type": "object",
+        "properties": {
+          "layer_id": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 4,
+            "description": "0=连通性, 1=CSR, 2=控制, 3=数据通路, 4=边界"
+          },
+          "name": {
+            "type": "string",
+            "enum": ["port_connectivity", "register_config", "control_logic", "datapath", "boundary"]
+          },
+          "status": {
+            "type": "string",
+            "enum": ["pending", "in_progress", "stubbed", "passed", "failed"]
+          },
+          "stub_note": {
+            "type": "string",
+            "description": "若 status=stubbed，说明被 Stub 替代的依赖层"
+          },
+          "tests_passed": { "type": "integer", "minimum": 0 },
+          "tests_failed": { "type": "integer", "minimum": 0 },
+          "fail_details": {
+            "type": "array",
+            "description": "失败的 case 详情",
+            "items": {
+              "type": "object",
+              "properties": {
+                "cycle": { "type": "integer" },
+                "signal": { "type": "string" },
+                "expected": { "type": "string" },
+                "actual": { "type": "string" },
+                "message": { "type": "string" }
+              },
+              "required": ["cycle", "signal", "message"]
+            }
+          },
+          "log_file": {
+            "type": "string",
+            "description": "该层的仿真日志文件路径"
+          },
+          "completed_at": {
+            "type": "string",
+            "format": "date-time",
+            "description": "通过时间"
+          }
+        },
+        "required": ["layer_id", "name", "status"]
+      },
+      "minItems": 5,
+      "maxItems": 5
+    },
+    "current_layer": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 4,
+      "description": "当前正在推进的 layer"
+    },
+    "coverage": {
+      "type": "object",
+      "description": "覆盖率汇总（Phase 4 读取）",
+      "properties": {
+        "mandatory_hit_rate": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 100,
+          "description": "Mandatory 覆盖点命中率百分比"
+        },
+        "informative_hit_rate": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 100
+        },
+        "coverage_report_path": {
+          "type": "string"
+        },
+        "golden_model_gaps": {
+          "type": "array",
+          "description": "Golden Model 覆盖了但 covergroup 未覆盖的路径",
+          "items": { "type": "string" }
+        }
+      }
+    },
+    "regression_history": {
+      "type": "array",
+      "description": "历次回归结果（每次 Phase 4 追加一条）",
+      "items": {
+        "type": "object",
+        "properties": {
+          "timestamp": { "type": "string", "format": "date-time" },
+          "all_pass": { "type": "boolean" },
+          "regression_failures": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "test_name": { "type": "string" },
+                "previous_status": { "type": "string" },
+                "current_status": { "type": "string" }
+              }
+            }
+          }
+        },
+        "required": ["timestamp", "all_pass"]
+      }
+    }
+  },
+  "required": ["module_name", "layers", "current_layer"]
+}
