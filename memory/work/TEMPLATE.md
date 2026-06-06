@@ -6,6 +6,12 @@ description: 工作记忆模板 — 记录任务目标、决策、进度和经�
 date: YYYY-MM-DD
 status: [进行中|完成|暂停]
 type: work
+metadata:
+  type: work
+  usage:
+    lastAccessed: YYYY-MM-DD
+    accessCount: 0
+    quality: medium
 ---
 
 ## 任务概述
