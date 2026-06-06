@@ -37,7 +37,7 @@
 | 08 | Tcl 自动化构建 | `tcl` `vivado` | 2 | ~2,000 |
 | 09 | 设计 LDPC 编解码器 | `ldpc` `spec` `rtl` `5g-nr` | 6 | ~4,000 |
 | 10 | 技术选型对比 | `guide` `overview` | 多 | 按需 |
-| 11 | WiFi/802.11 系统设计 | `wifi` `phy` `mac` | 4 | ~2,500 |
+| 11 | WiFi/802.11 系统设计 | `wifi` `phy` `mac` `impl` | 5 | ~3,000 |
 
 ---
 
@@ -316,8 +316,9 @@ UC 框架:
 加载顺序:
   1. wifi/overview                    ← 标准演进、频段、系统架构（必读）
   2. wifi/phy-layer                   ← Preamble、编码、调制、OFDM 参数
-  3. wifi/mac-layer                   ← CSMA/CA、帧聚合、EDCA QoS
-  4. wifi/ldpc-bcc-encoding           ← 加扰、BCC/LDPC 编码链、编码选择
+  3. wifi/phy-implementation          ← 包检测/CFO/FFT/均衡/LLR 硬件流水线 (NEW ✦)
+  4. wifi/mac-layer                   ← CSMA/CA、帧聚合、EDCA QoS
+  5. wifi/ldpc-bcc-encoding           ← 加扰、BCC/LDPC 编码链、编码选择
 
 跨链参考:
   ├── comm/ofdm/algorithm_spec        ← OFDM 核心算法 (WiFi 各代参数对比)

@@ -32,7 +32,7 @@
 
 | Tag | 文档路径 | 说明 |
 |:----|:---------|:-----|
-| `wifi` | comm/wifi/overview, phy-layer, mac-layer, ldpc-bcc-encoding | 802.11 WiFi 知识集 (NEW ✦) |
+| `wifi` | comm/wifi/overview, phy-layer, phy-implementation, mac-layer, ldpc-bcc-encoding | 802.11 WiFi 知识集 (NEW ✦) |
 | `lte` | comm/lte/overview, phy-downlink, phy-uplink | 4G LTE |
 | `5g-nr` | comm/5g-nr/overview, nr-frame-structure, nr-ldpc, polar-code, pdsch, pusch, pdcch, nr-prach, nr-test-mode, fr2-beam-management, mimo-detection, nru, ntn | 5G NR |
 | `802.11n` | comm/ldpc/algorithm_spec | WiFi LDPC |
@@ -73,7 +73,7 @@
 | `fixed-point` | comm/*/fixed_point_report | 定点量化报告 |
 | `resource` | comm/*/resource_estimate | 资源评估 |
 | `rtl` | comm/*/rtl_architecture, 各算法 rtl/ 目录 | RTL 架构 |
-| `impl` | comm/*/report_*_fpga_implementation | FPGA 实现报告 |
+| `impl` | comm/wifi/phy-implementation, comm/*/report_*_fpga_implementation | FPGA 实现报告 |
 | `guide` | fpga/*-guide.md, fpga/fpga-design-guide | 设计指南 |
 | `overview` | comm/5g-nr/overview, comm/lte/overview | 系统概述 |
 | `tutorial` | fpga/learning-path, fpga/fpga-best-practices | 学习教程 |
