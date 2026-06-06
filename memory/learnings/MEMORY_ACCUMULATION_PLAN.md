@@ -1,3 +1,10 @@
+---
+name: memory-accumulation-plan
+description: 记忆积累策略与目标 — 3 个月从 6 到 50+ 个记忆
+metadata:
+  type: learning
+---
+
 # 记忆积累计划
 
 > 最后更新: 2026-06-02

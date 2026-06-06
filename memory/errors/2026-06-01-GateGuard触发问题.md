@@ -2,6 +2,7 @@
 
 ---
 name: GateGuard 触发问题
+description: GateGuard 钩子误判正常操作为风险操作及排除规则
 date: 2026-06-01
 type: error
 severity: 低

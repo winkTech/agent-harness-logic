@@ -2,6 +2,7 @@
 
 ---
 name: [任务简述]
+description: 工作记忆模板 — 记录任务目标、决策、进度和经验
 date: YYYY-MM-DD
 status: [进行中|完成|暂停]
 type: work

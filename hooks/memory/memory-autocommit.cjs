@@ -3,12 +3,12 @@
 /**
  * Hook: memory-autocommit.cjs
  *
- * Stop-event hook. Auto-commits deltas to `.claude/context/memory/**\/*.{md,json}`
- * so session learnings are persisted without manual effort. Never blocks Stop:
+ * Stop-event hook. Auto-commits deltas to `memory/**\/*.md` so session learnings
+ * are persisted without manual effort. Never blocks Stop:
  * exits 0 on ALL failure paths.
  *
  * Design constraints (Phase 0.6 P03 / D2):
- * - Allowlist: ONLY `.claude/context/memory/**\/*.md` and `**\/*.json` are staged.
+ * - Allowlist: ONLY `memory/**\/*.md` are staged.
  * - Branch guard: refuses to commit on `main` or `master`.
  * - Idempotent: if nothing dirty in the allowlist, exit silently.
  * - Security: spawnSync with `shell:false` and array args per SE-01/SE-02.
@@ -21,7 +21,7 @@
 const path = require('node:path');
 const { spawnSync } = require('node:child_process');
 
-const MEMORY_DIR_REL = path.posix.join('.claude', 'context', 'memory');
+const MEMORY_DIR_REL = 'memory';
 const PROTECTED_BRANCHES = new Set(['main', 'master']);
 const COMMIT_MESSAGE =
   'chore(memory): auto-persist session learnings [skip ci]\n\n' +
@@ -73,14 +73,14 @@ function parseStatusPath(rawPath) {
 
 /**
  * Check whether a repo-relative path lies inside the memory allowlist.
- * Allowlist: starts with `.claude/context/memory/` AND ends with `.md` or `.json`.
+ * Allowlist: starts with `memory/` AND ends with `.md`.
  */
 function isAllowlistedPath(repoRelPath) {
   if (!repoRelPath) return false;
   const p = repoRelPath.replace(/\\/g, '/');
   if (!p.startsWith(`${MEMORY_DIR_REL}/`)) return false;
   const lower = p.toLowerCase();
-  return lower.endsWith('.md') || lower.endsWith('.json');
+  return lower.endsWith('.md');
 }
 
 /**

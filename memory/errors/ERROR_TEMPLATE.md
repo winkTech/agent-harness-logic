@@ -2,6 +2,7 @@
 
 ---
 name: [错误简述]
+description: 错误记录模板 — 记录错误描述、根本原因、解决方案和避免规则
 date: YYYY-MM-DD
 type: error
 severity: [低|中|高|严重]
