@@ -126,6 +126,23 @@
 
 ---
 
+## 升级触发条件
+
+Pass 1 审查过程中发现以下情况时，必须在审查报告中标记升级建议：
+
+| 发现类型 | 升级目标 | 判定条件 |
+|:---------|:---------|:---------|
+| 架构设计缺陷 | → architecture-review | 模块划分不合理、接口耦合过紧、无清晰分层 |
+| 设计模式引入 | → architecture-review | 新引入微服务/CQRS/事件驱动等架构模式 |
+| 数据库 schema 变更 | → architecture-review | 表创建/列变更/索引新增 |
+| CRITICAL 安全漏洞 | → security-review | OWASP A01-A03 等严重漏洞 |
+| 敏感数据处理 | → security-review | auth/token/password/加密实现 |
+| 第三方依赖漏洞 | → security-review | 已知 CVE 且无法简单升级 |
+
+> **规则**: 至少标记 1 个升级目标后，方可进入 Pass 2。
+
+---
+
 ## Pass 1 Summary Template
 
 ```markdown
@@ -139,6 +156,10 @@
 - Edge Case Handling: X issues
 - Security Review: X issues
 
+**Escalation:**
+- → architecture-review: [Yes/No — reason]
+- → security-review: [Yes/No — reason]
+
 **Total Blocking Issues:** X
 
 ### Blocking Issues (Must Fix Before Merge)
@@ -150,4 +171,5 @@
 ### Next Steps
 - [ ] Developer fixes blocking issues
 - [ ] Proceed to Pass 2 (Code Quality)
+- [ ] Escalate to [architecture-review / security-review] if flagged
 ```
