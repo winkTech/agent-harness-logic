@@ -36,7 +36,7 @@ metadata:
 | 2026-06-06 | 仓库脱敏 | [[desensitization-rule]] | 所有 git 追踪文件脱敏规则与占位符约定 |
 | 2026-06-06 | 记忆强化 | [[memory-auto-trigger]], [[memory-accumulation-plan]] | 三段式自动触发 + 积累策略 |
 | 2026-06-06 | 软件安装规范 | [[software-install-rule]] | D 盘安装，禁止 C 盘 |
-| 2026-06-06 | 知识合规 | [[knowledge-map-compliance]] | 三同步（frontmatter/场景/标签） |
+| 2026-06-06 | 知识文档臃肿 | [[doc-bloat-anti-pattern]] | 不要把完整代码/模板塞进文档 — 引用已有的 docs/templates/ |
 | 2026-06-06 | UVM 架构决策 | [[uvm-framework-architecture]] | 通用模板 vs OFDM 专用抉择 |
 
 ---
