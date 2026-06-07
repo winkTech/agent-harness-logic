@@ -22,6 +22,8 @@
 | [[desensitization-rule]] | 所有 git 追踪文件必须脱敏 |
 | [[memory-auto-trigger]] | PostMessage/SessionStart/Cron 三层触发 |
 | [[doc-bloat-anti-pattern]] | 知识文档不应包含完整代码/模板 — 引用 docs/templates/ 即可 |
+| [[hdl-golden-model-philosophy]] | Golden Model 绝对权威 + RTL↔MATLAB 严格对标原则 |
+| [[file-organization-discipline]] | 文件分类纪律 — 仿真/测试/文档必须归入对应目录 |
 
 ## 工作 (work/)
 

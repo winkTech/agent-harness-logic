@@ -5,7 +5,7 @@
       "repo": "anthropics/claude-plugins-official"
     },
     "installLocation": "[CLAUDE_HOME]/plugins/marketplaces/claude-plugins-official",
-    "lastUpdated": "2026-03-20T05:46:28.509Z"
+    "lastUpdated": "2026-06-07T01:22:28.795Z"
   },
   "Mixedbread-Grep": {
     "source": {
@@ -13,7 +13,7 @@
       "url": "https://github.com/mixedbread-ai/mgrep.git"
     },
     "installLocation": "[CLAUDE_HOME]/plugins/marketplaces/Mixedbread-Grep",
-    "lastUpdated": "2026-05-10T08:54:07.144Z"
+    "lastUpdated": "2026-06-07T11:47:32.355Z"
   },
   "karpathy-skills": {
     "source": {
@@ -21,7 +21,7 @@
       "url": "https://github.com/forrestchang/andrej-karpathy-skills.git"
     },
     "installLocation": "[CLAUDE_HOME]/plugins/marketplaces/karpathy-skills",
-    "lastUpdated": "2026-05-10T10:23:17.305Z"
+    "lastUpdated": "2026-06-07T11:47:34.457Z"
   },
   "everything-claude-code": {
     "source": {
@@ -29,6 +29,6 @@
       "url": "https://github.com/affaan-m/everything-claude-code.git"
     },
     "installLocation": "[CLAUDE_HOME]/plugins/marketplaces/everything-claude-code",
-    "lastUpdated": "2026-05-10T10:27:24.270Z"
+    "lastUpdated": "2026-06-07T01:22:41.027Z"
   }
 }
