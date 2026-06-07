@@ -6,7 +6,7 @@ Logic:
   2. Has frontmatter but no tags -> add tags
   3. No frontmatter -> add full frontmatter (tags + summary + related)
 
-Usage: /c/Python312/python.exe .scripts/normalize_frontmatter.py [--dry-run]
+Usage: /c/Python312/python.exe scripts/normalize_frontmatter.py [--dry-run]
 """
 
 import os, re, sys
