@@ -24,6 +24,12 @@ RTL 开发全流程。核心原则：
   不可缺斤少两。验证时相同输入必须输出与定点模型一致的结果
 - **验证左移**: 每层有检查点，仿真日志实时可读
 - **不可跳越**: 阶段 N 的产出是阶段 N+1 的输入
+- **LUT/映射模块额外门禁**: 涉及星座映射/查找表/比特-符号编码的模块，在 Phase 2
+  必须做逐点映射验证，Phase 4 必须做映射预验证三件套（固定序列→全星座点→背压），
+  不通过不得进入 Layer 3 数据通路仿真。详见各 Phase 文档。
+- **3-迭代复盘规则**: 同一问题的修复迭代 ≥ 3 次时，暂停调试，执行复盘（
+  `workflows/debug-retrospective.md`）。提取流程漏洞并更新工作流文件后再继续。
+  每次复盘都是在加固流程，不让同类问题再次浪费迭代。
 
 ---
 
@@ -154,6 +160,7 @@ RTL 开发全流程。核心原则：
 | 算法→Verilog 参考 | `skills/hdl-coding/references/alg-flow-verilog.md` | 代码模板、NMSE 判定、排查表 |
 | TDD 工作流 | `skills/tdd/SKILL.md` | Testbench-First 方法论 |
 | Code Review 工作流 | `workflows/code-review-workflow.md` | Phase 6 审查环节 |
+| Debug 复盘工作流 | `workflows/debug-retrospective.md` | Phase 4 迭代≥3次时触发 |
 | MATLAB MCP | `CLAUDE.md` | Golden model 生成与验证 |
 | Project Spec Schema | `schemas/hdl-project-spec.schema.json` | Phase 1→3 数据契约 |
 | Layer Status Schema | `schemas/hdl-layer-status.schema.json` | Phase 4→5 数据契约 |

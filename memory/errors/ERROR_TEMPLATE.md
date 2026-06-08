@@ -7,6 +7,8 @@ date: YYYY-MM-DD
 type: error
 severity: [低|中|高|严重]
 status: [已解决|待处理|部分解决]
+metadata:
+  type: error
 ---
 
 ## 错误描述
@@ -62,6 +64,13 @@ status: [已解决|待处理|部分解决]
 
 - 参考: [相关文档或代码]
 - 类似错误: [相关错误记录]
+
+## 关联记忆
+- [[open-source-dir-loss]] — 开源目录丢失错误记录
+- [[pdf-extraction-limitation]] — PDF 提取限制错误记录
+- [[GateGuard 触发问题]] — GateGuard 拦截错误记录
+- [[ERROR_TEMPLATE]] — 本模板
+- [[TEMPLATE]] — 工作记忆模板
 
 ---
 

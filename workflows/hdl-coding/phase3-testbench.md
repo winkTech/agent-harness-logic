@@ -56,7 +56,16 @@ assert property (@(posedge clk) valid |-> ##[1:3] ready);
 assert property (@(posedge clk) fifo_full |-> !fifo_wr);
 ```
 
-## 3.4 结构化日志宏
+## 3.4 TB/向量生成器耦合检查
+
+涉及帧结构（多子帧拼接、变调制格式、变位宽）的 testbench，必须增加检查：
+
+- **帧参数一致性**：TB 中的 `n_in_bytes` / `n_out_syms` 必须与向量生成脚本的计算值一致
+- **驱动偏移正确性**：多子帧场景的 `offset` 参数必须与向量生成器的数据排列顺序对应
+- **符号计数断言**：TB 应包含帧长断言，当实际输出符号数 != 预期符号数时及早报错而非静默超时
+- **自检过杀保护**：全星座点测试中，帧尾 tlast 检查需区分"子帧自然结束"和"帧尾漏报"
+
+## 3.5 结构化日志宏
 
 ```systemverilog
 `define LOG(lvl, msg) \

@@ -52,5 +52,11 @@ metadata:
 
 ---
 
+## 关联记忆
+- [[TEMPLATE]] — 本模板
+- [[ERROR_TEMPLATE]] — 错误记录模板
+- [[phase1-complete]] — 使用本模板的工作记录示例
+- [[p1-completion-20260605]] — P1 完成记录
+
 *开始: YYYY-MM-DD HH:MM*
 *最后更新: YYYY-MM-DD HH:MM*
