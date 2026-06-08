@@ -15,6 +15,14 @@
 - 绘制模块级框图：功能单元划分、数据流向、接口信号
 - 标注时钟域、位宽、流水线级数
 - **模块与 MATLAB 函数对标**：每个 RTL 模块对应哪个 MATLAB 函数，确保模型和硬件一一对应
+- **比特序文档化**：涉及比特流操作的模块（星座映射、交织、比特填充等），必须文档化完整的比特流追踪路径：
+  ```
+  输入字节 (hex LSB-first)
+    → word[7:0]=byte0, word[15:8]=byte1
+      → buf[0]=word[0] (first bit), buf[1]=word[1], ...
+        → w_sym_index/extracted_bits → LUT/index → I/Q
+  ```
+  标注每级位序约定（LSB-first / MSB-first / left-msb），确保从输入到输出的比特流无歧义。
 - 输出: 架构图（放入 `06_doc/`）
 
 ## 1.3 模块设计方案（每个模块逐一分析）

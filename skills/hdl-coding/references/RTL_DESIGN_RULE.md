@@ -29,6 +29,18 @@
 ### 例外规则
 - AXI等标准接口信号不受前缀规则约束，保持协议原生命名
 
+## LUT/映射模块编码规则
+涉及星座映射、查找表、比特-符号编码的模块必须：
+- **比特流追踪注释**：在映射代码附近写清完整的比特流追踪路径：
+  ```verilog
+  // w_sym_index[5:0] = {buf[0],buf[1],buf[2],buf[3],buf[4],buf[5]}
+  //                  = {b0,b1,b2,b3,b4,b5} (b0=first bit=MSB for bi2de)
+  // deSig = b0*32 + b1*16 + b2*8 + b3*4 + b4*2 + b5
+  // I = sign(b5) × mag({b3,b1}) → see phase-reflection.md §5.2
+  ```
+- **模型优先**：MATLAB 模型是映射的唯一参考，RTL 必须精确复现 `bi2de('left-msb') + cnstPattern`
+- **全索引覆盖**：使用 `unique case` 确保所有可能索引值均有显式映射，default 仅作防误保护
+
 ## 关键设计规范
 ### 输入输出处理
 - 输入寄存：所有输入信号必须打一拍寄存，降低关键路径延时
