@@ -7,7 +7,7 @@ set -euo pipefail
 
 MEMORY_DIR="$HOME/.claude/memory"
 TRACK_FILE="$MEMORY_DIR/.last-active"
-CLEANUP_SCRIPT="$HOME/.claude/scripts/memory-cleanup.sh"
+CLEANUP_SCRIPT="$HOME/.claude/engine/scripts/memory-cleanup.sh"
 
 case "${1:-}" in
     "post-message")

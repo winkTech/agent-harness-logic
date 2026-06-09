@@ -100,7 +100,7 @@ The following hooks govern this agent's behavior at runtime (same as developer):
 | `sync-memory-index.cjs`         | PostToolUse(Edit/Write) | Updates memory search index               | --              |
 | `code-index-updater.cjs`        | PostToolUse(Edit/Write) | Updates code search index                 | --              |
 
-See `.claude/docs/@HOOK_AGENT_MAP.md` for the complete hook-agent matrix.
+See `knowledge/docs/@HOOK_AGENT_MAP.md` for the complete hook-agent matrix.
 
 ## Related Workflows
 
@@ -108,18 +108,18 @@ The following workflows guide this agent's execution:
 
 | Workflow              | Path                                                           | When to Use                          |
 | --------------------- | -------------------------------------------------------------- | ------------------------------------ |
-| Architecture Review   | `.claude/workflows/architecture-review-skill-workflow.md`      | Architecture assessments (via code-review) |
-| C4 Architecture       | `.claude/workflows/enterprise/c4-architecture-workflow.md`     | C4 documentation                     |
-| Feature Development   | `.claude/workflows/enterprise/feature-development-workflow.md` | Design phase                         |
-| External Integration  | `.claude/workflows/core/external-integration.md`               | Integrating external systems         |
-| Consensus Voting      | `.claude/workflows/consensus-voting-skill-workflow.md`         | Multi-agent decisions                |
-| Workspace Conventions | `.claude/rules/workspace-conventions.md`                       | Output placement, naming, provenance |
+| Architecture Review   | `skills/workflows/architecture-review-skill-workflow.md`      | Architecture assessments (via code-review) |
+| C4 Architecture       | `skills/workflows/enterprise/c4-architecture-workflow.md`     | C4 documentation                     |
+| Feature Development   | `skills/workflows/enterprise/feature-development-workflow.md` | Design phase                         |
+| External Integration  | `skills/workflows/core/external-integration.md`               | Integrating external systems         |
+| Consensus Voting      | `skills/workflows/consensus-voting-skill-workflow.md`         | Multi-agent decisions                |
+| Workspace Conventions | `rules/workspace-conventions.md`                       | Output placement, naming, provenance |
 
 **Output Standards** (from workspace-conventions):
 
-- Reports: `.claude/context/reports/backend/`
-- Plans: `.claude/context/plans/`
-- Artifacts: `.claude/context/artifacts/[category]/`
+- Reports: `var/backend/`
+- Plans: `var/plans/`
+- Artifacts: `var/[category]/`
 - Naming: lowercase kebab-case with ISO date suffix
 - Provenance: `<!-- Agent: {type} | Task: #{id} | Session: {date} -->`
 
@@ -143,7 +143,7 @@ When reviewing or designing system architecture:
 
 1. **Check artifact graph**: Before proposing new components, verify existing artifacts via `artifact-graph.json`
    - Use `Skill({ skill: 'artifact-integrator', args: '<artifact-id>' })` to check integration status
-   - Read `.claude/context/runtime/artifact-graph.json` for relationship mapping
+   - Read `var/artifact-graph.json` for relationship mapping
    - Identify existing patterns before creating new ones
 
 2. **Impact analysis**: For proposed changes, consider integration impact on dependent artifacts
@@ -209,16 +209,16 @@ When architectural review reveals systemic patterns:
 
 When implementing architecture changes or prototypes, follow the Developer Workflow:
 
-- **Full Workflow**: `@.claude/docs/DEVELOPER_WORKFLOW.md`
-- **File Placement**: `@.claude/docs/FILE_PLACEMENT_RULES.md`
+- **Full Workflow**: `knowledge/docs/DEVELOPER_WORKFLOW.md`
+- **File Placement**: `knowledge/docs/FILE_PLACEMENT_RULES.md`
 - **TDD Required**: Red-Green-Refactor cycle when implementing code
 - **Skills**: Use `Skill({ skill: "tdd" })` to invoke skills, not just read them
 
 **Key Requirements for Architects**:
 
-1. **ADR Location**: Architecture Decision Records go to `@.claude/context/memory/decisions.md`
-2. **Diagrams Location**: Architecture diagrams go to `@.claude/context/artifacts/diagrams/`
-3. **Plans Location**: Design documents go to `@.claude/context/plans/`
+1. **ADR Location**: Architecture Decision Records go to `@memory/decisions.md`
+2. **Diagrams Location**: Architecture diagrams go to `@var/diagrams/`
+3. **Plans Location**: Design documents go to `@var/plans/`
 4. **Skill Usage**: Invoke `Skill({ skill: "diagram-generator" })` for creating diagrams
 
 ### Hybrid Validation for Architecture Reviews (NEW - Enhancement #10)
@@ -260,9 +260,9 @@ Skill({ skill: 'checklist-generator' });
 
 **Integration with Architecture Workflows**:
 
-- Reference `.claude/workflows/architecture-review-skill-workflow.md` for comprehensive architecture review process
+- Reference `skills/workflows/architecture-review-skill-workflow.md` for comprehensive architecture review process
 - Use `diagram-generator` skill to create Mermaid/ASCII diagrams for visual validation
-- Document decisions in ADRs (`.claude/context/memory/decisions.md`) with checklist validation results
+- Document decisions in ADRs (`memory/decisions.md`) with checklist validation results
 
 **Rationale**:
 
@@ -459,7 +459,7 @@ Invoke based on task context:
 
 ### Skill Discovery
 
-1. Consult skill catalog: `.claude/docs/skill-catalog.md`
+1. Consult skill catalog: `knowledge/references/skills-catalog.md`
 2. Search by category or keyword
 3. Invoke with: `Skill({ skill: "<skill-name>" })`
 
@@ -469,9 +469,9 @@ Invoke based on task context:
 
 The architect agent can leverage these workflows for comprehensive analysis:
 
-- **Architecture Review Workflow**: `.claude/workflows/architecture-review-skill-workflow.md` (invoke via code-review)
-- **Consensus Voting**: `.claude/workflows/consensus-voting-skill-workflow.md` (for multi-agent decisions)
-- **Database Design**: `.claude/workflows/database-architect-skill-workflow.md`
+- **Architecture Review Workflow**: `skills/workflows/architecture-review-skill-workflow.md` (invoke via code-review)
+- **Consensus Voting**: `skills/workflows/consensus-voting-skill-workflow.md` (for multi-agent decisions)
+- **Database Design**: `skills/workflows/database-architect-skill-workflow.md`
 
 ## Token Saver Invocation Rule
 
@@ -490,18 +490,18 @@ Do NOT invoke token-saver for normal small tasks (few files, short snippets); us
 **Before starting any task, you must query semantic memory and read recent static memory:**
 
 ```bash
-node .claude/lib/memory/memory-search.cjs "<your specific task domain/concept>"
-node .claude/lib/memory/memory-search.cjs "<task-domain-keywords>"
+node engine/scripts/memory-retrieve.sh "<your specific task domain/concept>"
+node engine/scripts/memory-retrieve.sh "<task-domain-keywords>"
 
 ```
 
 **After completing work, record findings:**
 
-- New pattern/solution -> Append to `.claude/context/memory/learnings.md`
-- Roadblock/issue -> Append to `.claude/context/memory/issues.md`
-- Architecture change -> Update `.claude/context/memory/decisions.md`
+- New pattern/solution -> Append to `memory/learnings.md`
+- Roadblock/issue -> Append to `memory/issues.md`
+- Architecture change -> Update `memory/decisions.md`
 
-**During long tasks:** Use `.claude/context/memory/active_context.md` as scratchpad.
+**During long tasks:** Use `memory/active_context.md` as scratchpad.
 
 > ASSUME INTERRUPTION: Your context may reset. If it's not in memory, it didn't happen.
 
@@ -551,7 +551,7 @@ TaskList();
 ## Memory
 
 - For structured memory (patterns, gotchas, discoveries), use MemoryRecord with ype, content, rea, source, and optional confidence.
-- Do not use Write/Edit directly on .claude/context/memory/patterns.json or .claude/context/memory/gotchas.json (guard-enforced).
+- Do not use Write/Edit directly on memory/patterns.json or memory/gotchas.json (guard-enforced).
 
 ### Code Search Protocol
 

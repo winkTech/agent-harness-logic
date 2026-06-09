@@ -7,7 +7,7 @@
 
 set -euo pipefail
 
-MEMORY_DIR="$(cd "$(dirname "$0")/../memory" && pwd)"
+MEMORY_DIR="$(cd "$(dirname "$0")/../../memory" && pwd)"
 ARCHIVE_DIR="$MEMORY_DIR/archive"
 TODAY=$(date +%s)
 

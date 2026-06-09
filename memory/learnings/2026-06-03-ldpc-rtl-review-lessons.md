@@ -136,4 +136,4 @@ end
 
 ## 相关记忆
 
-- [[agent-evaluation-v2]] — 评价报告中 LDPC 已标记为 7 阶段全链路完成
+- [[agent-evaluation-v7]] — 评价报告中 LDPC 已标记为 7 阶段全链路完成

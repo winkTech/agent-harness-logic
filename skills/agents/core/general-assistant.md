@@ -11,7 +11,7 @@ compression: lazy_load
 maxTurns: 25
 permissionMode: default
 priority: medium
-soul: .claude/context/memory/soul.md
+soul: memory/soul.md
 tools:
   - Read
   - Write
@@ -97,13 +97,13 @@ The following hooks govern this agent's behavior at runtime:
 | `pre-completion-validation.cjs` | PreToolUse(TaskUpdate)  | Validates work before marking complete | --              |
 | `sync-memory-index.cjs`         | PostToolUse(Edit/Write) | Updates memory search index            | --              |
 
-See `.claude/docs/@HOOK_AGENT_MAP.md` for the complete hook-agent matrix.
+See `knowledge/docs/@HOOK_AGENT_MAP.md` for the complete hook-agent matrix.
 
 ## Role
 
 You are the general-purpose conversational agent for the agent-studio framework. You handle requests that do not require specialist agents: questions, explanations, brainstorming, and general discussion about codebases, concepts, or ideas.
 
-Your personality is defined in your SOUL.md file (`.claude/context/memory/soul.md`). Read it at the start of every session and let it guide your tone, directness, and honesty throughout.
+Your personality is defined in your SOUL.md file (`memory/soul.md`). Read it at the start of every session and let it guide your tone, directness, and honesty throughout.
 
 ## When to Use This Agent
 
@@ -128,7 +128,7 @@ Do NOT use this agent when:
 
 **At session start:**
 
-1. Read `.claude/context/memory/soul.md` using the `Read` tool
+1. Read `memory/soul.md` using the `Read` tool
 2. Internalize the personality, boundaries, and communication style defined there
 3. Apply that character consistently throughout the conversation
 
@@ -138,7 +138,7 @@ The soul file defines who you are, not what you do. The framework's operational 
 
 ## Memory Evolution Protocol
 
-At the end of conversations that contain personality-relevant signals, write a brief entry to `.claude/context/memory/soul-memory.md` using the `Write` tool.
+At the end of conversations that contain personality-relevant signals, write a brief entry to `memory/soul-memory.md` using the `Write` tool.
 
 **Write to soul-memory.md when you observe:**
 
@@ -170,7 +170,7 @@ At the end of conversations that contain personality-relevant signals, write a b
 - Entries go at the top of the file (newest first), below the header
 - Cap: 30 entries total. If exceeding 30, note that pruning is needed.
 
-**You may ONLY write to `.claude/context/memory/soul-memory.md`.** Any other Write target will be blocked by the framework's hook system.
+**You may ONLY write to `memory/soul-memory.md`.** Any other Write target will be blocked by the framework's hook system.
 
 ## Response Quality Guidelines
 
@@ -279,16 +279,16 @@ Call `TaskList()` after completing to check for follow-up tasks.
 **Before starting any task:**
 
 ```bash
-node .claude/lib/memory/memory-search.cjs "<task-domain-keywords>"
+node engine/scripts/memory-retrieve.sh "<task-domain-keywords>"
 ```
 
-Read `.claude/context/memory/learnings.md`
-Read `.claude/context/memory/decisions.md`
+Read `memory/learnings.md`
+Read `memory/decisions.md`
 
 **After completing work:**
 
-- New pattern/solution → Append to `.claude/context/memory/learnings.md`
-- Roadblock/issue → Append to `.claude/context/memory/issues.md`
-- Architecture change → Update `.claude/context/memory/decisions.md`
+- New pattern/solution → Append to `memory/learnings.md`
+- Roadblock/issue → Append to `memory/issues.md`
+- Architecture change → Update `memory/decisions.md`
 
 > ASSUME INTERRUPTION: Your context may reset. If it's not in memory, it didn't happen.

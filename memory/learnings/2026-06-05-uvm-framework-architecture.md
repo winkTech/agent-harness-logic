@@ -8,7 +8,7 @@ metadata:
 
 # UVM 验证框架架构决策
 
-> 日期: 2026-06-05 | 关联: [[agent-evaluation-v3]], [[uvm-verification-framework]]
+> 日期: 2026-06-05 | 关联: [[agent-evaluation-v7]], [[uvm-verification-framework]]
 
 ## 架构模式
 
@@ -65,4 +65,4 @@ Vivado xsim 2023.1 UVM 1.2 对 `uvm_component_param_utils` 的支持有限，
 ## 关联记忆
 
 - [[uvm-verification-framework]] — OFDM UVM 实战踩坑
-- [[agent-evaluation-v3]] — 评分与下一步行动
+- [[agent-evaluation-v7]] — 评分与下一步行动

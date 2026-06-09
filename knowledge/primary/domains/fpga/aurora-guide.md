@@ -1,4 +1,5 @@
 ---
+name: aurora-guide
 title: "Aurora 高速接口设计指南"
 domain: fpga
 tags: [aurora, high-speed-io, gty, serial, protocol]

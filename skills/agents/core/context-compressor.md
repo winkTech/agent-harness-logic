@@ -66,7 +66,7 @@ The following hooks govern this agent's behavior at runtime (minimal subset):
 
 Note: Context-compressor has minimal hook enforcement (no Bash, conflict-detector, or index updates) as it focuses on read-only compression and summary writing.
 
-See `.claude/docs/@HOOK_AGENT_MAP.md` for the complete hook-agent matrix.
+See `knowledge/docs/@HOOK_AGENT_MAP.md` for the complete hook-agent matrix.
 
 ## Related Workflows
 
@@ -74,14 +74,14 @@ The following workflows guide this agent's execution:
 
 | Workflow              | Path                                                     | When to Use                          |
 | --------------------- | -------------------------------------------------------- | ------------------------------------ |
-| Context Compression   | `.claude/workflows/context-compressor-skill-workflow.md` | Session optimization                 |
-| Workspace Conventions | `.claude/rules/workspace-conventions.md`                 | Output placement, naming, provenance |
+| Context Compression   | `skills/workflows/context-compressor-skill-workflow.md` | Session optimization                 |
+| Workspace Conventions | `rules/workspace-conventions.md`                 | Output placement, naming, provenance |
 
 **Output Standards** (from workspace-conventions):
 
-- Reports: `.claude/context/reports/backend/`
-- Plans: `.claude/context/plans/`
-- Artifacts: `.claude/context/artifacts/[category]/`
+- Reports: `var/backend/`
+- Plans: `var/plans/`
+- Artifacts: `var/[category]/`
 - Naming: lowercase kebab-case with ISO date suffix
 - Provenance: `<!-- Agent: {type} | Task: #{id} | Session: {date} -->`
 
@@ -102,32 +102,32 @@ Skill({ skill: 'context-compressor' })
 **Step 1: Profile** — measure before compressing
 
 ```bash
-python .claude/skills/context-compressor/scripts/profile_tokens.py --file <path> --output-format auto
+python skills/context-compressor/scripts/profile_tokens.py --file <path> --output-format auto
 ```
 
 **Step 2: Compress** — use the right mode
 
 ```bash
 # Quick general compression (no specific question)
-python .claude/skills/context-compressor/scripts/compress_context.py --file <path> --mode baseline --output-format auto
+python skills/context-compressor/scripts/compress_context.py --file <path> --mode baseline --output-format auto
 
 # Targeted compression (specific question)
-python .claude/skills/context-compressor/scripts/compress_context.py --file <path> --mode query_guided --query "<question>" --output-format auto
+python skills/context-compressor/scripts/compress_context.py --file <path> --mode query_guided --query "<question>" --output-format auto
 
 # High-stakes compression (evidence validation required)
-python .claude/skills/context-compressor/scripts/run_skill_workflow.py --file <path> --mode evidence_aware --query "<question>" --output-format auto --fail-on-insufficient-evidence
+python skills/context-compressor/scripts/run_skill_workflow.py --file <path> --mode evidence_aware --query "<question>" --output-format auto --fail-on-insufficient-evidence
 ```
 
 **Step 3: For JSON/framework payloads** — use input adapter
 
 ```bash
-python .claude/skills/context-compressor/scripts/compress_context.py --json-file <payload.json> --input-adapter auto --mode query_guided --query "<question>" --output-format auto
+python skills/context-compressor/scripts/compress_context.py --json-file <payload.json> --input-adapter auto --mode query_guided --query "<question>" --output-format auto
 ```
 
 **Step 4: Validate evidence** — check compressed output still answers safely
 
 ```bash
-python .claude/skills/context-compressor/scripts/validate_evidence.py --file <path> --query "<question>" --min-similarity 0.4 --output-format json
+python skills/context-compressor/scripts/validate_evidence.py --file <path> --query "<question>" --min-similarity 0.4 --output-format json
 ```
 
 **Step 5: Persist** — save distilled learnings via MemoryRecord
@@ -180,7 +180,7 @@ Invoke based on task context:
 
 ### Skill Discovery
 
-1. Consult skill catalog: `.claude/docs/skill-catalog.md`
+1. Consult skill catalog: `knowledge/references/skills-catalog.md`
 2. Search by category or keyword
 3. Invoke with: `Skill({ skill: "<skill-name>" })`
 
@@ -195,7 +195,7 @@ This gives a data-driven basis for choosing compression aggressiveness instead o
 // Step: query actual usage before compression strategy decision
 let usageData = null;
 try {
-  const ccusage = require('.claude/lib/utils/ccusage-adapter.cjs');
+  const ccusage = require('engine/scripts/ccusage-adapter.cjs');
   usageData = ccusage.getTodayTotals();
 } catch (_err) {
   // ccusage unavailable — fall back to heuristic estimation
@@ -245,18 +245,18 @@ Do NOT invoke token-saver for normal small tasks (few files, short snippets); us
 **Before starting any task, you must query semantic memory and read recent static memory:**
 
 ```bash
-node .claude/lib/memory/memory-search.cjs "<your specific task domain/concept>"
-node .claude/lib/memory/memory-search.cjs "<task-domain-keywords>"
+node engine/scripts/memory-retrieve.sh "<your specific task domain/concept>"
+node engine/scripts/memory-retrieve.sh "<task-domain-keywords>"
 
 ```
 
 **After completing work, record findings:**
 
-- New pattern/solution -> Append to `.claude/context/memory/learnings.md`
-- Roadblock/issue -> Append to `.claude/context/memory/issues.md`
-- Architecture change -> Update `.claude/context/memory/decisions.md`
+- New pattern/solution -> Append to `memory/learnings.md`
+- Roadblock/issue -> Append to `memory/issues.md`
+- Architecture change -> Update `memory/decisions.md`
 
-**During long tasks:** Use `.claude/context/memory/active_context.md` as scratchpad.
+**During long tasks:** Use `memory/active_context.md` as scratchpad.
 
 > ASSUME INTERRUPTION: Your context may reset. If it's not in memory, it didn't happen.
 

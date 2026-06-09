@@ -128,7 +128,7 @@ Communicate findings clearly:
 - Support with statistical evidence and confidence levels
 - Distinguish correlation from causation explicitly
 - Provide actionable recommendations with caveats
-- Save notebooks and summary reports to `.claude/context/reports/`
+- Save notebooks and summary reports to `var/`
 
 ## Anti-Patterns
 
@@ -188,15 +188,15 @@ TaskList();
 **Before starting any task, query semantic memory:**
 
 ```bash
-node .claude/lib/memory/memory-search.cjs "data science statistical analysis"
-node .claude/lib/memory/memory-search.cjs "<task-domain-keywords>"
+node engine/scripts/memory-retrieve.sh "data science statistical analysis"
+node engine/scripts/memory-retrieve.sh "<task-domain-keywords>"
 ```
 
 **After completing work, record findings:**
 
-- New analytical pattern/technique → Append to `.claude/context/memory/learnings.md`
-- Dataset gotcha or data quality issue → Append to `.claude/context/memory/issues.md`
-- Modeling decision (e.g., chosen evaluation metric) → Append to `.claude/context/memory/decisions.md`
+- New analytical pattern/technique → Append to `memory/learnings.md`
+- Dataset gotcha or data quality issue → Append to `memory/issues.md`
+- Modeling decision (e.g., chosen evaluation metric) → Append to `memory/decisions.md`
 
 > ASSUME INTERRUPTION: Your context may reset. If it's not in memory, it didn't happen.
 

@@ -79,7 +79,7 @@ The following hooks govern this agent's behavior at runtime:
 | `sync-memory-index.cjs`         | PostToolUse(Edit/Write) | Updates memory search index            | --              |
 | `code-index-updater.cjs`        | PostToolUse(Edit/Write) | Updates code search index              | --              |
 
-See `.claude/docs/@HOOK_AGENT_MAP.md` for the complete hook-agent matrix.
+See `knowledge/docs/@HOOK_AGENT_MAP.md` for the complete hook-agent matrix.
 
 ## Related Workflows
 
@@ -87,14 +87,14 @@ The following workflows guide this agent's execution:
 
 | Workflow              | Path                                                | When to Use                          |
 | --------------------- | --------------------------------------------------- | ------------------------------------ |
-| Incident Response     | `.claude/workflows/operations/incident-response.md` | Production incident debugging        |
-| Workspace Conventions | `.claude/rules/workspace-conventions.md`            | Output placement, naming, provenance |
+| Incident Response     | `skills/workflows/operations/incident-response.md` | Production incident debugging        |
+| Workspace Conventions | `rules/workspace-conventions.md`            | Output placement, naming, provenance |
 
 **Output Standards** (from workspace-conventions):
 
-- Reports: `.claude/context/reports/backend/`
-- Plans: `.claude/context/plans/`
-- Artifacts: `.claude/context/artifacts/[category]/`
+- Reports: `var/backend/`
+- Plans: `var/plans/`
+- Artifacts: `var/[category]/`
 - Naming: lowercase kebab-case with ISO date suffix
 - Provenance: `<!-- Agent: {type} | Task: #{id} | Session: {date} -->`
 
@@ -329,18 +329,18 @@ Invoke token-saver when ANY of these hold:
 **Before starting any task, you must query semantic memory and read recent static memory:**
 
 ```bash
-node .claude/lib/memory/memory-search.cjs "<your specific task domain/concept>"
-node .claude/lib/memory/memory-search.cjs "<task-domain-keywords>"
+node engine/scripts/memory-retrieve.sh "<your specific task domain/concept>"
+node engine/scripts/memory-retrieve.sh "<task-domain-keywords>"
 
 ```
 
 **After completing work, record findings:**
 
-- New pattern/solution -> Append to `.claude/context/memory/learnings.md`
-- Roadblock/issue -> Append to `.claude/context/memory/issues.md`
-- Architecture change -> Update `.claude/context/memory/decisions.md`
+- New pattern/solution -> Append to `memory/learnings.md`
+- Roadblock/issue -> Append to `memory/issues.md`
+- Architecture change -> Update `memory/decisions.md`
 
-**During long tasks:** Use `.claude/context/memory/active_context.md` as scratchpad.
+**During long tasks:** Use `memory/active_context.md` as scratchpad.
 
 > ASSUME INTERRUPTION: Your context may reset. If it's not in memory, it didn't happen.
 

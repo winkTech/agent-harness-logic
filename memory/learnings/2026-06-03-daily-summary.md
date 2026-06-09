@@ -125,4 +125,4 @@ metadata:
 ## 关联记忆
 
 - [[ldpc-rtl-review-lessons]] — RTL 审查发现的 3 类 Bug 与 Checklist
-- [[agent-evaluation-v2]] — 今日总评 6.6/10
+- [[agent-evaluation-v7]] — 今日总评 6.6/10

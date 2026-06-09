@@ -45,8 +45,8 @@ skills:
   - token-saver-context-compression
   - verification-before-completion
 context_files:
-  - '@.claude/context/memory/patterns.json'
-  - '@.claude/context/memory/gotchas.json'
+  - '@memory/patterns.json'
+  - '@memory/gotchas.json'
 manifest:
   manifest_version: '1.0'
   agent_id: 'reflection-agent'
@@ -82,7 +82,7 @@ The following hooks govern this agent's behavior at runtime:
 
 Note: `unified-reflection-handler.cjs` monitors Bash errors for reflection triggers (error recovery reflection), but reflection-agent does NOT have Bash tool permission (observation only).
 
-See `.claude/docs/@HOOK_AGENT_MAP.md` for the complete hook-agent matrix.
+See `knowledge/docs/@HOOK_AGENT_MAP.md` for the complete hook-agent matrix.
 
 ## Related Workflows
 
@@ -90,14 +90,14 @@ The following workflows guide this agent's execution:
 
 | Workflow              | Path                                            | When to Use                          |
 | --------------------- | ----------------------------------------------- | ------------------------------------ |
-| Reflection            | `.claude/workflows/core/reflection-workflow.md` | Post-task quality assessment         |
-| Workspace Conventions | `.claude/rules/workspace-conventions.md`        | Output placement, naming, provenance |
+| Reflection            | `skills/workflows/core/reflection-workflow.md` | Post-task quality assessment         |
+| Workspace Conventions | `rules/workspace-conventions.md`        | Output placement, naming, provenance |
 
 **Output Standards** (from workspace-conventions):
 
-- Reports: `.claude/context/reports/backend/`
-- Plans: `.claude/context/plans/`
-- Artifacts: `.claude/context/artifacts/[category]/`
+- Reports: `var/backend/`
+- Plans: `var/plans/`
+- Artifacts: `var/[category]/`
 - Naming: lowercase kebab-case with ISO date suffix
 - Provenance: `<!-- Agent: {type} | Task: #{id} | Session: {date} -->`
 
@@ -168,7 +168,7 @@ When a task was spawned with a `planFile` reference:
 
 1. Check if the plan file exists and contains the task subject (or close match).
 2. If the task is completed but its marker is still `- [ ]` or `- [~]` in the plan file: **deduct 0.1 from the Completeness score**.
-3. If the pattern recurs across multiple tasks in the same session: append an entry to `.claude/context/memory/issues.md` noting the systemic failure.
+3. If the pattern recurs across multiple tasks in the same session: append an entry to `memory/issues.md` noting the systemic failure.
 4. Include a one-line note in the RBT "thorns" section: `"Plan file not updated: {planFile} still shows [ ] for completed task"`.
 
 **Total Score**: Weighted average (0.0-1.0 scale)
@@ -225,9 +225,9 @@ Based on MARS (Metacognitive Agent Reflective Self-improvement) framework:
 **PROHIBITED**:
 
 - **Bash** - Restricted to read-only operations only:
-  - Permitted: `node .claude/lib/memory/memory-search.cjs "query"` (memory-search skill)
+  - Permitted: `node engine/scripts/memory-retrieve.sh "query"` (memory-search skill)
   - Permitted: `node scripts/analyze-session-transcript.mjs` (transcript heuristics)
-  - Permitted: `cat .claude/context/memory/*.md` (reading memory files)
+  - Permitted: `cat memory/*.md` (reading memory files)
   - Prohibited: Any writes, installs, git operations, or code execution
   - Note: unified-reflection-handler.cjs monitors Bash errors for error recovery reflection
 - Direct code modification
@@ -331,13 +331,13 @@ Before evaluating task quality, scan key session logs for process adherence sign
 | Reflection trend | reflection-log.jsonl | PASS/FAIL | score trend |
 ```
 
-**Escalation**: Any FAIL in this table feeds directly into the **Process Adherence** rubric dimension (Step 2). If 2+ FAILs, append a structured entry to `.claude/context/memory/issues.md`.
+**Escalation**: Any FAIL in this table feeds directly into the **Process Adherence** rubric dimension (Step 2). If 2+ FAILs, append a structured entry to `memory/issues.md`.
 
 ### Step 1.6: Read Router Gap Observations
 
 Before evaluating task quality, check for router-observed pipeline gaps:
 
-1. Check if `.claude/context/runtime/session-gap-log.jsonl` exists and has content
+1. Check if `var/session-gap-log.jsonl` exists and has content
 2. If it contains entries — each represents a **cross-agent observation** the Router made during pipeline execution. These are INVISIBLE to individual task analysis because they span multiple agents:
    - `retry` — the Router had to re-spawn an agent
    - `placeholder_output` — an agent produced an empty or stub output
@@ -365,7 +365,7 @@ const outputType = detectOutputType(task);
 //          security_review_output, architecture_output
 ```
 
-**Scoring Process** (from `.claude/context/config/reflection-rubrics.json`):
+**Scoring Process** (from `engine/reflection-rubrics.json`):
 
 1. **Identify output type** based on agent and task
 2. **Evaluate each category** using checkpoints and scoring criteria
@@ -398,7 +398,7 @@ Memory write policy note: structured memory updates are enforced in **Step 5** (
 
 If score < 0.7 (pass threshold), generate specific improvements:
 
-1. **Classify failure**: Use the failure taxonomy schema (`.claude/schemas/failure-taxonomy.schema.json`) to categorize each failure into one of 10 categories: `tool-misuse`, `scope-drift`, `hallucination`, `incomplete-output`, `wrong-agent`, `timeout`, `context-overflow`, `dependency-failure`, `test-failure`, `other`. Include severity (low/medium/high/critical).
+1. **Classify failure**: Use the failure taxonomy schema (`engine/schemas/failure-taxonomy.schema.json`) to categorize each failure into one of 10 categories: `tool-misuse`, `scope-drift`, `hallucination`, `incomplete-output`, `wrong-agent`, `timeout`, `context-overflow`, `dependency-failure`, `test-failure`, `other`. Include severity (low/medium/high/critical).
 2. **Identify gaps**: Which rubric categories scored lowest?
 3. **Root cause**: Why did these categories fail?
 4. **Specific fixes**: Actionable steps to address each gap
@@ -426,8 +426,8 @@ If score < 0.7 (pass threshold), generate specific improvements:
 
 **When**: After evaluating task outputs, before updating memory
 
-1. **Read artifact graph**: `.claude/context/data/artifact-graph.json`
-2. **Check integration health**: Use `quickIntegrationCheck()` from `.claude/lib/workflow/artifact-graph.cjs`
+1. **Read artifact graph**: `var/artifact-graph.json`
+2. **Check integration health**: Use `quickIntegrationCheck()` from `skills/workflows/artifact-graph.cjs`
 3. **Assess integration score**:
    - Score ≥ 80%: Integration complete (no action)
    - Score 50-79%: Integration gaps (add to "buds" category)
@@ -478,17 +478,17 @@ If trigger condition is NOT met, log `"Step 4.7 skipped (non-creator task)"` and
 
 **Checks to perform** (when triggered) for each artifact created or updated in the task:
 
-1. **Catalog Presence** — Read `.claude/docs/skill-catalog.md`
+1. **Catalog Presence** — Read `knowledge/references/skills-catalog.md`
    - Search for `` `skill-name` `` pattern in table rows
    - If missing: flag as `CATALOG_MISSING`
 
-2. **Index Presence** — Read `.claude/config/skill-index.json`
+2. **Index Presence** — Read `engine/skill-index.json`
    - Check `skills[name]` exists
    - Check `agentPrimary` is non-empty
    - If entry missing: flag as `INDEX_MISSING`
    - If entry present but `agentPrimary` is empty: flag as `INDEX_NO_AGENTS`
 
-3. **Agent Assignment** — Use Glob to scan `.claude/agents/**/*.md`
+3. **Agent Assignment** — Use Glob to scan `skills/agents/**/*.md`
    - For each agent file found, check YAML frontmatter `skills:` array for the skill name
    - If at least one agent lists the skill: flag as `AGENT_ASSIGNED` (with agent name)
    - If no agent lists the skill: flag as `AGENT_MISSING`
@@ -501,7 +501,7 @@ If trigger condition is NOT met, log `"Step 4.7 skipped (non-creator task)"` and
 - Findings with `CATALOG_MISSING` or `INDEX_MISSING` → add to **Thorns** in RBT diagnosis
 - Findings with `AGENT_MISSING`, `INDEX_NO_AGENTS`, or `ORPHANED_SKILL` → add to **Buds** in RBT diagnosis
 - No findings → add to **Roses**: "All registration checks passed for newly-created artifact"
-- All findings (regardless of severity) → append to `.claude/context/memory/issues.md` using this format:
+- All findings (regardless of severity) → append to `memory/issues.md` using this format:
 
 ```
 ## Skill Registration Gap: {skill-name} ({date})
@@ -537,21 +537,21 @@ Consolidate learnings into persistent memory:
 
 **Memory Updates**:
 
-1. **Patterns** → `.claude/context/memory/patterns.json`
+1. **Patterns** → `memory/patterns.json`
    - Extract reusable solutions
    - Document effective approaches
    - Record anti-patterns to avoid
 
-2. **Gotchas** → `.claude/context/memory/gotchas.json`
+2. **Gotchas** → `memory/gotchas.json`
    - Capture pitfalls to avoid
    - Highlight failure modes and edge cases
 
-3. **Decisions** → `.claude/context/memory/decisions.md`
+3. **Decisions** → `memory/decisions.md`
    - Architectural insights
    - Tool selection rationale
    - Strategy adjustments
 
-4. **Issues** → `.claude/context/memory/issues.md`
+4. **Issues** → `memory/issues.md`
    - Recurring blockers
    - Workarounds discovered
    - Known limitations
@@ -576,7 +576,7 @@ Only `retain` items with strong evidence and expected reuse. Record rationale in
 
 **Note:** `post-completion-chain.cjs` validates that curation decisions are present on reflection-agent completion (advisory). Include `curationDecisions` in your `TaskUpdate(completed)` metadata to satisfy the contract.
 
-1. **Reflection Log** → `.claude/context/memory/reflection-log.jsonl`
+1. **Reflection Log** → `memory/reflection-log.jsonl`
    - Append structured reflection entry (JSON)
    - Maintain append-only log for audit trail
 
@@ -630,14 +630,14 @@ After completing RECE scoring and writing the reflection log entry, check whethe
 const {
   getAgentScoreSummary,
   isEvolutionEligible,
-} = require('.claude/lib/utils/reflection-score-tracker.cjs');
+} = require('engine/scripts/reflection-score-tracker.cjs');
 const summary = getAgentScoreSummary(agentId);
 ```
 
 If `summary.consecutiveLowCount >= 3`:
 
 1. Call `isEvolutionEligible(agentId)` — if `eligible: false`, log the reason to `issues.md` and skip
-2. If eligible, append to `.claude/context/runtime/reflection-spawn-request.json`:
+2. If eligible, append to `var/reflection-spawn-request.json`:
 
 ```json
 {
@@ -660,7 +660,7 @@ If `summary.consecutiveLowCount >= 3`:
 
 Check `summary.trend`:
 
-- `declining` → append to `.claude/context/memory/learnings.md`: `[TREND-ALERT] Agent <agentId> showing declining performance over last N reflections. Recommend review.`
+- `declining` → append to `memory/learnings.md`: `[TREND-ALERT] Agent <agentId> showing declining performance over last N reflections. Recommend review.`
 - `improving` → no action needed
 - `stable` → no action needed
 
@@ -757,7 +757,7 @@ Agent: developer
 | {name} | Orphan status    | OK / ORPHANED                            |
 
 {if issues found}
-Issues appended to `.claude/context/memory/issues.md`.
+Issues appended to `memory/issues.md`.
 Run `pnpm validate:skill-consistency --skill {skill-name}` for full diagnosis.
 
 {if no issues}
@@ -844,13 +844,13 @@ To prevent runaway self-healing loops:
 - **Cooldown period**: 30 minutes before retry allowed
 - **State machine**: CLOSED → OPEN → HALF-OPEN → (test) → CLOSED/OPEN
 
-**State File**: `.claude/context/runtime/self-healing-state.json`
+**State File**: `var/self-healing-state.json`
 
 ## Output Locations
 
-- **Reflection Reports**: `.claude/context/reports/reflections/` — **Do not pass this path to Read** (it is a directory; Read requires a file). Use Glob or ListDir to list files in this directory, then Read specific `.md` files.
-- **Reflection Log**: `.claude/context/memory/reflection-log.jsonl`
-- **Memory Updates**: `.claude/context/memory/` (patterns.json, gotchas.json, decisions.md, issues.md; learnings.md is legacy read-only)
+- **Reflection Reports**: `var/reflections/` — **Do not pass this path to Read** (it is a directory; Read requires a file). Use Glob or ListDir to list files in this directory, then Read specific `.md` files.
+- **Reflection Log**: `memory/reflection-log.jsonl`
+- **Memory Updates**: `memory/` (patterns.json, gotchas.json, decisions.md, issues.md; learnings.md is legacy read-only)
 
 ## Task Progress Protocol (MANDATORY)
 
@@ -894,9 +894,9 @@ TaskUpdate({
     overallScore: 0.84,
     summary: 'Reflected on task #X: score 0.85, 2 learnings extracted, memory updated',
     filesModified: [
-      '@.claude/context/memory/patterns.json',
-      '@.claude/context/memory/gotchas.json',
-      '@.claude/context/memory/reflection-log.jsonl',
+      '@memory/patterns.json',
+      '@memory/gotchas.json',
+      '@memory/reflection-log.jsonl',
     ],
   },
 });
@@ -935,18 +935,18 @@ Do NOT invoke token-saver for normal small tasks (few files, short snippets); us
 **Before starting any task, you must query semantic memory and read recent static memory:**
 
 ```bash
-node .claude/lib/memory/memory-search.cjs "<your specific task domain/concept>"
-node .claude/lib/memory/memory-search.cjs "<task-domain-keywords>"
+node engine/scripts/memory-retrieve.sh "<your specific task domain/concept>"
+node engine/scripts/memory-retrieve.sh "<task-domain-keywords>"
 
 ```
 
 **After completing work, record findings:**
 
-- New pattern/solution -> Append to `.claude/context/memory/learnings.md`
-- Roadblock/issue -> Append to `.claude/context/memory/issues.md`
-- Architecture change -> Update `.claude/context/memory/decisions.md`
+- New pattern/solution -> Append to `memory/learnings.md`
+- Roadblock/issue -> Append to `memory/issues.md`
+- Architecture change -> Update `memory/decisions.md`
 
-**During long tasks:** Use `.claude/context/memory/active_context.md` as scratchpad.
+**During long tasks:** Use `memory/active_context.md` as scratchpad.
 
 > ASSUME INTERRUPTION: Your context may reset. If it's not in memory, it didn't happen.
 
@@ -1016,7 +1016,7 @@ This agent design is based on:
 4. **LLM-Rubric** (arXiv:2501.00274v1): Multidimensional calibrated evaluation
 5. **ResearchRubrics** (arXiv:2511.07685v1): Fine-grained rubric benchmarks
 
-Full research report: `.claude/context/artifacts/research-reports/reflection-agent-research.md`
+Full research report: `var/research-reports/reflection-agent-research.md`
 
 ## Version History
 
