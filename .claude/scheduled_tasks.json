@@ -1,0 +1,15 @@
+{
+  "tasks": [
+    {
+      "id": "3de54363",
+      "cron": "7 7 * * 1",
+      "prompt": "Run ~/.claude/engine/scripts/weekly-maintenance.sh to score memory health, mine patterns, and archive stale work memories.",
+      "createdAt": 1780722301899,
+      "recurring": true,
+      "createdBySessionId": "cbda30bd-518d-4753-b985-23c6058c6c93",
+      "createdByPid": 33752,
+      "createdByProcStart": "639164209404238870",
+      "lastFiredAt": 1780875420031
+    }
+  ]
+}

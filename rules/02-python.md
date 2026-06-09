@@ -1,0 +1,13 @@
+---
+name: python-rules
+description: "Python 编码规则 — 工具链、调试"
+priority: L1
+---
+
+# Python 编码规则
+
+> L1 优先级：涉及 Python 开发时自动加载。
+
+- 使用 `ruff` 进行 lint（`ruff check`）
+- 调试硬件相关 Python（星座图/EVM/频偏）使用 `/python-hardware-debug` skill
+- 参见 `skills/python-hardware-debug/SKILL.md`

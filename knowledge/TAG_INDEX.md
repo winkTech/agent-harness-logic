@@ -100,7 +100,7 @@
 
 | Tag | 文档路径 | 说明 |
 |:----|:---------|:-----|
-| `work` | memory/work/* | 工作记忆（14天） |
+| `work` | var/work/* | 工作记忆（14天） |
 | `error` | memory/errors/* | 错误经验（90天） |
 | `learning` | memory/learnings/* | 学习总结（永久） |
 | `project` | memory/projects/* | 项目规划 |

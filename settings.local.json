@@ -7,18 +7,18 @@
   "hooks": {
     "PostStop": [
       {
-        "run": "bash ~/.claude/scripts/hooks/resolve-plugin-path.sh session-end.js",
+        "run": "bash ~/.claude/engine/scripts/hooks/resolve-plugin-path.sh session-end.js",
         "async": true,
         "timeout": 15000
       }
     ],
     "SessionStart": [
       {
-        "run": "bash ~/.claude/scripts/hooks/resolve-plugin-path.sh session-start.js",
+        "run": "bash ~/.claude/engine/scripts/hooks/resolve-plugin-path.sh session-start.js",
         "timeout": 10000
       },
       {
-        "run": "bash ~/.claude/scripts/hooks/memory-track.sh session-start",
+        "run": "bash ~/.claude/engine/scripts/hooks/memory-track.sh session-start",
         "timeout": 15000
       },
       {
@@ -35,7 +35,7 @@
     ],
     "PostMessage": [
       {
-        "run": "bash ~/.claude/scripts/hooks/memory-track.sh post-message",
+        "run": "bash ~/.claude/engine/scripts/hooks/memory-track.sh post-message",
         "async": true,
         "timeout": 5000
       }
@@ -46,13 +46,13 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node -e \"var p=require('path'),h=require('os').homedir();require('child_process').spawnSync('node',[p.join(h,'.claude/scripts/hooks/pre-commit-lint.js')],{stdio:'inherit',env:process.env,cwd:process.cwd()})\"",
+            "command": "node -e \"var p=require('path'),h=require('os').homedir();require('child_process').spawnSync('node',[p.join(h,'.claude/engine/scripts/hooks/pre-commit-lint.js')],{stdio:'inherit',env:process.env,cwd:process.cwd()})\"",
             "description": "Pre-commit lint check: run vlog/ruff on staged .v/.sv/.py before git commit",
             "id": "pre:bash:pre-commit-lint"
           },
           {
             "type": "command",
-            "command": "node -e \"var p=require('path'),h=require('os').homedir();require('child_process').spawnSync('node',[p.join(h,'.claude/scripts/hooks/diff-size-gate.js')],{stdio:'inherit',env:process.env,cwd:process.cwd()})\"",
+            "command": "node -e \"var p=require('path'),h=require('os').homedir();require('child_process').spawnSync('node',[p.join(h,'.claude/engine/scripts/hooks/diff-size-gate.js')],{stdio:'inherit',env:process.env,cwd:process.cwd()})\"",
             "description": "Diff-size gate: block git push if change set exceeds thresholds",
             "id": "pre:bash:diff-size-gate"
           }
@@ -158,7 +158,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node -e \"var p=require('path'),h=require('os').homedir();require('child_process').spawnSync('node',[p.join(h,'.claude/scripts/hooks/lint-auto-gate.js')],{stdio:'inherit',env:process.env,cwd:process.cwd()})\"",
+            "command": "node -e \"var p=require('path'),h=require('os').homedir();require('child_process').spawnSync('node',[p.join(h,'.claude/engine/scripts/hooks/lint-auto-gate.js')],{stdio:'inherit',env:process.env,cwd:process.cwd()})\"",
             "description": "Auto lint gate: run vlog/ruff on modified .v/.sv/.py files at end of response",
             "id": "stop:lint-auto-gate"
           }
