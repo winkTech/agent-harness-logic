@@ -1,0 +1,23 @@
+---
+name: hdl-rules
+description: "HDL 编码规则 — 新项目流程、模块规范"
+priority: L1
+---
+
+# HDL 编码规则
+
+> L1 优先级：涉及 RTL/TB 工作时自动加载。
+
+## 新项目 / 新模块启动
+
+- 用户表示"新建项目/工程" → 调用 `/project-init` 技能
+- 用户表示"添加模块" → 调用 `/project-init` 技能的 module 子流程
+
+### 建项目后要点
+1. 先 `git init` + 首提交 `"init: 项目名"`
+2. 新建模块立刻写 TB，遵循 Testbench-First
+3. 每加一个模块，同步更新仿真目录和文档
+
+## 详细规范
+- 见 `knowledge/primary/cross-project-experience.md`
+- HDL Skill: `skills/hdl-coding/SKILL.md`

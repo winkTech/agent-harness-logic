@@ -1,26 +1,17 @@
 # Claude Code 运行时文件
 .claude/
 history.jsonl
-backups/
-sessions/
-shell-snapshots/
 telemetry/
-file-history/
-projects/
 todos/
 .ruff_cache/
 homunculus/
 plan/
-plans/
-tasks/
-# IDE 相关
-ide/
-
-# 调试日志
 debug/
 
-# 会话数据
-session-data/
+# 统一运行时目录（原 backups/ sessions/ tasks/ plans/ 等）
+var/
+
+# 会话数据（旧路径兼容）
 session-aliases.json
 
 # 临时文件
@@ -117,3 +108,14 @@ metrics/
 # MCP 本地二进制
 mcp/*.exe
 mcp/*.dll
+
+# 旧路径兼容（已移入 var/，但确保不会重新跟踪）
+backups/
+sessions/
+shell-snapshots/
+file-history/
+projects/
+plans/
+tasks/
+ide/
+session-data/

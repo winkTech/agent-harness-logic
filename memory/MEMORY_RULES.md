@@ -142,8 +142,7 @@ learnings/YYYY-MM-DD-学习主题.md
 
 | 类型 | 目录 | 默认寿命 | 过期条件 | 归宿 |
 |:----|:----:|:--------:|----------|:----:|
-| **工作记忆** | `work/` | **14天** | status=完成 + 文件名日期 >14天 | → `archive/` |
-| **工作记忆** | `work/` | **14天** | status=in_progress + 文件名日期 >30天且无更新 | → 提示确认 |
+| **当前进度** | `var/work/` | **Session 级** | session 结束 → 摘要后归档 | 不进入长期记忆 |
 | **错误记录** | `errors/` | **90天** | 教训已提取到 LESSONS.md | 可保留 or → `archive/` |
 | **学习总结** | `learnings/` | **永久** | 不自动过期 | 原地更新/合并/标注 superseded-by |
 | **项目记忆** | `projects/` | **项目完成+30天** | 项目标记完成 | → `archive/` |
@@ -205,10 +204,10 @@ learnings/YYYY-MM-DD-学习主题.md
 
 ```bash
 # 快速统计各类型文件
-find memory/work memory/errors memory/learnings memory/projects -name "*.md" | wc -l
+find var/work memory/errors memory/learnings memory/projects -name "*.md" | wc -l
 
 # 列出可归档的 work 文件（完成状态 + 文件名日期 >14天）
-grep -l "status:.*完成\|status:.*completed" memory/work/*.md \
+grep -l "status:.*完成\|status:.*completed" var/work/*.md \
   | while IFS= read -r f; do
       d=$(basename "$f" | grep -oP '^\d{4}-\d{2}-\d{2}')
       [ -n "$d" ] && [ "$(date -d "$d" +%s 2>/dev/null)" -lt "$(date -d '14 days ago' +%s 2>/dev/null)" ] \
@@ -216,7 +215,7 @@ grep -l "status:.*完成\|status:.*completed" memory/work/*.md \
     done
 
 # 手动归档
-mv memory/work/过期文件.md memory/archive/
+mv var/work/过期文件.md memory/archive/
 ```
 
 ### 5.5 健康标准
