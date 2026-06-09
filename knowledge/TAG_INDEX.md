@@ -62,6 +62,7 @@
 | `matlab` | fpga/matlab-fpga-image-processing; 各算法 golden model; run_rtl_cosim.m | MATLAB 建模 |
 | `python` | skills/python-hardware-debug/templates/* | Python 硬件调试 |
 | `modelsim` | 各算法 sim/ 目录 | ModelSim 仿真 |
+| `ci` | docs/templates/ci/ | CI/CD 模板：Docker + TDD 脚本 + 质量门禁 |
 
 ---
 

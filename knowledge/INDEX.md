@@ -10,14 +10,18 @@
 ```
 knowledge/
 ├── INDEX.md              # 本文件（紧凑索引）
-├── SCENE_CARDS.md        # 场景入口卡 [NEW]
-├── TAG_INDEX.md          # 标签快速定位 [NEW]
+├── SCENE_CARDS.md        # 场景入口卡
+├── TAG_INDEX.md          # 标签快速定位
 ├── primary/              # 精炼知识文档（按域分类）
 │   ├── domains/comm/     # 通信算法 47 篇
 │   ├── domains/fpga/     # FPGA 设计 25 篇
 │   ├── domains/python/   # Python 工具
 │   ├── domains/matlab/   # MATLAB 模型
 │   └── cross-project-experience.md
+├── docs/                 # 文档模板
+│   ├── templates/uvm/    # UVM 验证框架模板
+│   ├── templates/ci/     # CI/CD 集成模板
+│   └── ...
 ├── archive/sources/fpga/ # 38 本书籍全文提取（~200K 行，按需搜索）
 └── source/datasheets/    # 原始 PDF（35+ 个）
 ```

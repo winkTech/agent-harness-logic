@@ -248,6 +248,13 @@ ORAN 学习路径:
   ├─ 仿真编译脚本 (xsim/vivado xsim Tcl)
   └─ CI 集成示例 (gitlab-ci.yml)
 
+	CI/CD 模板:
+	  docs/templates/ci/
+	  ├─ Docker 环境配置
+	  ├─ TDD 工作流脚本 (setup-env / run-tests / tdd-cycle)
+	  ├─ Python/Matlab 测试基础设施
+	  └─ 质量门禁 (pytest + quality-gate)
+
 UC 框架:
   各算法 uvm_tb/compile.tcl
   └─ 统一模式: xvlog UVM lib → interfaces → pkg → RTL → tb_top → xelab
