@@ -1,7 +1,7 @@
 # 错误经验模板
 
 ---
-name: [错误简述]
+name: error-template
 description: 错误记录模板 — 记录错误描述、根本原因、解决方案和避免规则
 date: YYYY-MM-DD
 type: error
@@ -69,8 +69,8 @@ metadata:
 - [[open-source-dir-loss]] — 开源目录丢失错误记录
 - [[pdf-extraction-limitation]] — PDF 提取限制错误记录
 - [[GateGuard 触发问题]] — GateGuard 拦截错误记录
-- [[ERROR_TEMPLATE]] — 本模板
-- [[TEMPLATE]] — 工作记忆模板
+- [[error-template]] — 本模板
+- [[work-template]] — 工作记忆模板
 
 ---
 

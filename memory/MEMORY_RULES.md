@@ -182,7 +182,7 @@ learnings/YYYY-MM-DD-学习主题.md
 适用范围: `learnings/` 中的内容需要更新时
 做法:
 ```markdown
-> 此文档已被 [[newer-document]] 部分或全部取代
+> 此文档已被更新文档部分或全部取代（参见 memory/learnings/ 或 knowledge/）
 > 保留以供历史参考，新项目请参阅新文档
 ```
 

@@ -21,7 +21,7 @@
       "trigger": "特殊场景"
     },
     "routing/code-index-updater.cjs": {
-      "enabled": false,
+      "enabled": true,
       "frequency": "low",
       "description": "代码索引更新",
       "trigger": "文件变更后"
@@ -33,7 +33,7 @@
       "trigger": "TaskUpdate(finished)"
     },
     "routing/handover-detector.cjs": {
-      "enabled": false,
+      "enabled": true,
       "frequency": "low",
       "description": "交接检测",
       "trigger": "会话切换"
@@ -99,7 +99,7 @@
       "trigger": "Grep"
     },
     "safety/validate-skill-invocation.cjs": {
-      "enabled": false,
+      "enabled": true,
       "frequency": "low",
       "description": "Skill 调用验证",
       "trigger": "Read"
@@ -111,13 +111,13 @@
       "trigger": "Worktree 操作"
     },
     "session/analysis-paralysis-guard.cjs": {
-      "enabled": false,
+      "enabled": true,
       "frequency": "low",
       "description": "分析瘫痪守卫",
       "trigger": "长时间任务"
     },
     "session/audit-skill-recency.cjs": {
-      "enabled": false,
+      "enabled": true,
       "frequency": "low",
       "description": "Skill 时效审计",
       "trigger": "Read"
@@ -135,7 +135,7 @@
       "trigger": "会话压缩前"
     },
     "reflection/reflection-data-aggregator.cjs": {
-      "enabled": false,
+      "enabled": true,
       "frequency": "low",
       "description": "反射数据聚合",
       "trigger": "定时"
@@ -201,7 +201,7 @@
       "trigger": "Task spawn"
     },
     "validation/subagent-citation-guard.cjs": {
-      "enabled": false,
+      "enabled": true,
       "frequency": "low",
       "description": "子 agent 引用守卫",
       "trigger": "子 agent 输出"

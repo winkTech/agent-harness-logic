@@ -73,7 +73,7 @@ The following hooks govern this agent's behavior at runtime:
 
 Note: `routing-guard.cjs` ensures this agent IS spawned for documentation tasks (prevents developer collapse).
 
-See `.claude/docs/@HOOK_AGENT_MAP.md` for the complete hook-agent matrix.
+See `knowledge/docs/@HOOK_AGENT_MAP.md` for the complete hook-agent matrix.
 
 ## Related Workflows
 
@@ -81,16 +81,16 @@ The following workflows guide this agent's execution:
 
 | Workflow                 | Path                                                           | When to Use                          |
 | ------------------------ | -------------------------------------------------------------- | ------------------------------------ |
-| Documentation            | `.claude/workflows/documentation-workflow.md`                  | Diataxis documentation creation      |
-| Feature Development      | `.claude/workflows/enterprise/feature-development-workflow.md` | Documentation phase                  |
-| Post-Creation Validation | `.claude/workflows/core/post-creation-validation.md`           | Ensuring doc integration             |
-| Workspace Conventions    | `.claude/rules/workspace-conventions.md`                       | Output placement, naming, provenance |
+| Documentation            | `skills/workflows/documentation-workflow.md`                  | Diataxis documentation creation      |
+| Feature Development      | `skills/workflows/enterprise/feature-development-workflow.md` | Documentation phase                  |
+| Post-Creation Validation | `skills/workflows/core/post-creation-validation.md`           | Ensuring doc integration             |
+| Workspace Conventions    | `rules/workspace-conventions.md`                       | Output placement, naming, provenance |
 
 **Output Standards** (from workspace-conventions):
 
-- Reports: `.claude/context/reports/backend/`
-- Plans: `.claude/context/plans/`
-- Artifacts: `.claude/context/artifacts/[category]/`
+- Reports: `var/backend/`
+- Plans: `var/plans/`
+- Artifacts: `var/[category]/`
 - Naming: lowercase kebab-case with ISO date suffix
 - Provenance: `<!-- Agent: {type} | Task: #{id} | Session: {date} -->`
 
@@ -123,8 +123,8 @@ The following workflows guide this agent's execution:
 
 Read your assigned skill files to understand specialized workflows:
 
-- `.claude/skills/writing-skills/SKILL.md` - TDD for documentation, voice, tone, banned words
-- `.claude/skills/doc-generator/SKILL.md` - Documentation generation patterns
+- `skills/writing-skills/SKILL.md` - TDD for documentation, voice, tone, banned words
+- `skills/doc-generator/SKILL.md` - Documentation generation patterns
 
 ### Step 1: Analyze Request
 
@@ -217,7 +217,7 @@ Invoke based on task context:
 
 ### Skill Discovery
 
-1. Consult skill catalog: `.claude/docs/skill-catalog.md`
+1. Consult skill catalog: `knowledge/references/skills-catalog.md`
 2. Search by category or keyword
 3. Invoke with: `Skill({ skill: "<skill-name>" })`
 
@@ -226,8 +226,8 @@ Invoke based on task context:
 ## Output Locations
 
 - Project docs: As specified in request
-- Generated docs: `.claude/context/artifacts/docs/`
-- Reports: `.claude/context/reports/backend/`
+- Generated docs: `var/docs/`
+- Reports: `var/backend/`
 
 ## Quality Checklist
 
@@ -258,18 +258,18 @@ Do NOT invoke token-saver for normal small tasks (few files, short snippets); us
 **Before starting any task, you must query semantic memory and read recent static memory:**
 
 ```bash
-node .claude/lib/memory/memory-search.cjs "<your specific task domain/concept>"
-node .claude/lib/memory/memory-search.cjs "<task-domain-keywords>"
+node engine/scripts/memory-retrieve.sh "<your specific task domain/concept>"
+node engine/scripts/memory-retrieve.sh "<task-domain-keywords>"
 
 ```
 
 **After completing work, record findings:**
 
-- New pattern/solution -> Append to `.claude/context/memory/learnings.md`
-- Roadblock/issue -> Append to `.claude/context/memory/issues.md`
-- Architecture change -> Update `.claude/context/memory/decisions.md`
+- New pattern/solution -> Append to `memory/learnings.md`
+- Roadblock/issue -> Append to `memory/issues.md`
+- Architecture change -> Update `memory/decisions.md`
 
-**During long tasks:** Use `.claude/context/memory/active_context.md` as scratchpad.
+**During long tasks:** Use `memory/active_context.md` as scratchpad.
 
 > ASSUME INTERRUPTION: Your context may reset. If it's not in memory, it didn't happen.
 
@@ -325,7 +325,7 @@ TaskList();
 ## Memory
 
 - For structured memory (patterns, gotchas, discoveries), use MemoryRecord with ype, content, rea, source, and optional confidence.
-- Do not use Write/Edit directly on .claude/context/memory/patterns.json or .claude/context/memory/gotchas.json (guard-enforced).
+- Do not use Write/Edit directly on memory/patterns.json or memory/gotchas.json (guard-enforced).
 
 ### Code Search Protocol
 

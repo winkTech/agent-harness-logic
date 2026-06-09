@@ -36,14 +36,14 @@
 
 ## 代码审查与审计
 
-| Skill | 功能 | 场景 |
+| Skill/Workflow | 功能 | 场景 |
 |-------|------|------|
 | `code-review` | 统一审查 — 架构/复杂度/代码质量/框架审计 | 设计评审、规划评估、Clean Code、提交前检查 |
 | ~~architecture-review~~ | 🔀 已合并到 code-review | — |
 | ~~complexity-assessment~~ | 🔀 已合并到 code-review | — |
 | ~~code-quality-expert~~ | 🔀 已合并到 code-review | — |
 | ~~proactive-audit~~ | 🔀 已合并到 code-review | — |
-| `security-review` | 安全审查 | 认证、API、敏感数据 |
+| `security-review-workflow` (工作流) | 安全审查 | 认证、API、敏感数据 |
 
 ## 研究分析
 
@@ -85,3 +85,21 @@
 | `rag-skill` | 知识库检索 | 本地知识库问答 |
 | `hdl-coding` | HDL 编码规范 | Verilog/SV FPGA 设计 |
 | `python-hardware-debug` | 硬件调试 | 星座图/EVM/频偏 |
+| `rtl-gen` | RTL 代码生成 | 快速 RTL 模板生成 |
+
+## 会话管理（自定义技能）
+
+| Skill | 功能 | 场景 |
+|-------|------|------|
+| `start` | Session 初始化仪式 | 新 session 开局：读任务协议 + git 状态 → 输出 Briefing |
+| `handoff` | Session 收尾仪式 | 保存进度、写日志、更新协议、flush 记忆 |
+
+## 工作流
+
+| Workflow | 功能 | 场景 |
+|----------|------|------|
+| `hdl-coding-workflow` | RTL 全流程 (8 Phase) | 算法 → 架构 → 定点 → TB → RTL → 回归 → 审查 → 报告 |
+| `code-review-workflow` | 两轮代码审查 | Pass 1 正确性 + Pass 2 代码质量 |
+| `architecture-review-workflow` | 多 Agent 架构审查 | 上下文 → 分析 → 安全 → 建议 |
+| `rag-skill-workflow` | 知识库检索 | 知识库问答（66 行） |
+| `security-review-workflow` | 安全审查 | 安全敏感关键词触发 |

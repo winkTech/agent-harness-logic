@@ -6,7 +6,7 @@ metadata:
   domain: meta
 ---
 
-关联知识文档: [[cross-project-experience.md]]
+关联知识文档: [[cross-project-experience-ref]]
 
 **入口**: `knowledge/primary/cross-project-experience.md`
 

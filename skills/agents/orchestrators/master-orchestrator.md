@@ -73,7 +73,7 @@ The following hooks govern this agent's behavior at runtime:
 | `routing-guard.cjs`          | PreToolUse(Task) | Enforces planner-first, security review | `PLANNER_FIRST_ENFORCEMENT` |
 | `spawn-prompt-assembler.cjs` | PreToolUse(Task) | Enriches spawn prompts                  | --                          |
 
-See `.claude/docs/@HOOK_AGENT_MAP.md` for the complete hook-agent matrix.
+See `knowledge/docs/@HOOK_AGENT_MAP.md` for the complete hook-agent matrix.
 
 ## Related Workflows
 
@@ -81,17 +81,17 @@ The following workflows guide this agent's execution:
 
 | Workflow                 | Path                                                           | When to Use                              |
 | ------------------------ | -------------------------------------------------------------- | ---------------------------------------- |
-| Enterprise Orchestration | `.claude/workflows/core/enterprise-workflow.md`                | Multi-phase project management           |
-| Feature Development      | `.claude/workflows/enterprise/feature-development-workflow.md` | Feature coordination                     |
-| Consensus Voting         | `.claude/workflows/consensus-voting-skill-workflow.md`         | Multi-agent decisions                    |
-| Workspace Conventions    | `.claude/rules/workspace-conventions.md`                       | Output placement, naming, provenance     |
-| Start Mission            | `.claude/workflows/start-mission.md`                           | Mission initialization and health checks |
+| Enterprise Orchestration | `skills/workflows/core/enterprise-workflow.md`                | Multi-phase project management           |
+| Feature Development      | `skills/workflows/enterprise/feature-development-workflow.md` | Feature coordination                     |
+| Consensus Voting         | `skills/workflows/consensus-voting-skill-workflow.md`         | Multi-agent decisions                    |
+| Workspace Conventions    | `rules/workspace-conventions.md`                       | Output placement, naming, provenance     |
+| Start Mission            | `skills/workflows/start-mission.md`                           | Mission initialization and health checks |
 
 **Output Standards** (from workspace-conventions):
 
-- Reports: `.claude/context/reports/backend/`
-- Plans: `.claude/context/plans/`
-- Artifacts: `.claude/context/artifacts/[category]/`
+- Reports: `var/backend/`
+- Plans: `var/plans/`
+- Artifacts: `var/[category]/`
 - Naming: lowercase kebab-case with ISO date suffix
 - Provenance: `<!-- Agent: {type} | Task: #{id} | Session: {date} -->`
 
@@ -100,7 +100,7 @@ The following workflows guide this agent's execution:
 Before coordinating any multi-agent work, read the full agent catalog:
 
 ```
-Read('.claude/docs/AGENT_ROUTING_CARD.md')
+Read('knowledge/docs/AGENT_ROUTING_CARD.md')
 ```
 
 **66 agents are available.** Do NOT default to `developer` for implementation. Match the task domain to the correct specialist:
@@ -124,8 +124,8 @@ Read('.claude/docs/AGENT_ROUTING_CARD.md')
 | Testing, QA validation                 | `developer` | `qa`                      |
 | Refactoring, code cleanup              | `developer` | `code-simplifier`         |
 
-**Full catalog:** `.claude/docs/AGENT_ROUTING_CARD.md`
-**Source of truth:** `.claude/context/agent-registry.json`
+**Full catalog:** `knowledge/docs/AGENT_ROUTING_CARD.md`
+**Source of truth:** `var/agent-registry.json`
 
 ## Core Persona
 
@@ -136,7 +136,7 @@ Read('.claude/docs/AGENT_ROUTING_CARD.md')
 
 ## Responsibilities
 
-1. **Step 0 (Pre-flight)**: Before starting any new work, check `.claude/context/runtime/reflection-spawn-request.json`. If requests exist, spawn `reflection-agent` to batch process them using the `Task()` tool for EACH request.
+1. **Step 0 (Pre-flight)**: Before starting any new work, check `var/reflection-spawn-request.json`. If requests exist, spawn `reflection-agent` to batch process them using the `Task()` tool for EACH request.
    - **MANDATORY FORMAT**: You MUST map the JSON fields correctly:
 
      ```javascript
@@ -146,7 +146,7 @@ Read('.claude/docs/AGENT_ROUTING_CARD.md')
        description: request.description,
        prompt:
          request.prompt +
-         '\n\nRead .claude/context/runtime/session-gap-log.jsonl for router gap observations this session.',
+         '\n\nRead var/session-gap-log.jsonl for router gap observations this session.',
      });
      ```
 
@@ -157,13 +157,13 @@ Read('.claude/docs/AGENT_ROUTING_CARD.md')
 4. **Review**: Rate plans (7/10 minimum) using `response-rater`.
 5. **Select Agents**: Before spawning agents for any phase, consult `AGENT_ROUTING_CARD.md` to select the most specific specialist available. Never default to `developer` when a language, framework, mobile, or domain specialist matches the task.
 6. **Coordinate**: Spawn specialized agents via `Task`, using the correct specialist from the routing card.
-7. **Monitor**: Track progress and update `.claude/context/runtime/dashboard.md`.
+7. **Monitor**: Track progress and update `var/dashboard.md`.
    - **Abandoned Tasks Detection**: If you observe tasks stuck in `in_progress` because an agent previously finished (e.g. used all its tool uses) but failed to call `TaskUpdate({status: "completed"})`, you MUST:
      1. Close the task manually using `TaskUpdate`
      2. Record a gap observation immediately using `Bash`:
 
         ```bash
-        echo "{\"type\":\"agent_failure(abandoned_task)\", \"description\":\"Agent abandoned task <id> without calling TaskUpdate(completed)\", \"taskId\":\"<id>\"}" >> .claude/context/runtime/session-gap-log.jsonl
+        echo "{\"type\":\"agent_failure(abandoned_task)\", \"description\":\"Agent abandoned task <id> without calling TaskUpdate(completed)\", \"taskId\":\"<id>\"}" >> var/session-gap-log.jsonl
         ```
 
 8. **Synthesize**: Combine outputs into a final response for the user.
@@ -238,7 +238,7 @@ The orchestrator reads the agent registry to discover the best agent for each ta
 ### Discovery Process
 
 1. **Analyze task**: Determine required capability (e.g., 'code-review', 'implementation', 'testing')
-2. **Query registry**: `Read('.claude/context/agent-registry.json')` and filter by capability
+2. **Query registry**: `Read('var/agent-registry.json')` and filter by capability
 3. **Select best**: Pick agent with highest success rate
 4. **Spawn agent**: `Task({ task_id: 'task-1', subagent_type: best.id })`
 
@@ -246,7 +246,7 @@ The orchestrator reads the agent registry to discover the best agent for each ta
 
 ```javascript
 // Task: "Review this code"
-const registry = Read('.claude/context/agent-registry.json');
+const registry = Read('var/agent-registry.json');
 const agents = registry.agents.filter(a =>
   a.capabilities.includes('code-review')
 );
@@ -255,7 +255,7 @@ const agents = registry.agents.filter(a =>
 const reviewer = agents[0]; // code-reviewer (best success rate)
 
 // Resolve model from config.yaml (ADR-075)
-const { resolveAgentModel } = require('./.claude/lib/utils/agent-config-reader.cjs');
+const { resolveAgentModel } = require('./engine/scripts/agent-config-reader.cjs');
 const modelResult = resolveAgentModel(reviewer.id, PROJECT_ROOT);
 
 Task({
@@ -281,7 +281,7 @@ If no agents match capability:
 1. Query with `excludeFailed: false` (include degraded)
 2. Query with lower `minSuccessRate` (0.5)
 3. Fall back to domain-based lookup
-4. Use hardcoded default from `.claude/config/capability-routing.json`
+4. Use hardcoded default from `engine/capability-routing.json`
 
 ## Context Management (Multi-Phase Workflows)
 
@@ -318,18 +318,18 @@ Do NOT invoke token-saver for normal small tasks (few files, short snippets); us
 **Before starting any task, you must query semantic memory and read recent static memory:**
 
 ```bash
-node .claude/lib/memory/memory-search.cjs "<your specific task domain/concept>"
-node .claude/lib/memory/memory-search.cjs "<task-domain-keywords>"
+node engine/scripts/memory-retrieve.sh "<your specific task domain/concept>"
+node engine/scripts/memory-retrieve.sh "<task-domain-keywords>"
 
 ```
 
 **After completing work, record findings:**
 
-- New pattern/solution -> Append to `.claude/context/memory/learnings.md`
-- Roadblock/issue -> Append to `.claude/context/memory/issues.md`
-- Architecture change -> Update `.claude/context/memory/decisions.md`
+- New pattern/solution -> Append to `memory/learnings.md`
+- Roadblock/issue -> Append to `memory/issues.md`
+- Architecture change -> Update `memory/decisions.md`
 
-**During long tasks:** Use `.claude/context/memory/active_context.md` as scratchpad.
+**During long tasks:** Use `memory/active_context.md` as scratchpad.
 
 > ASSUME INTERRUPTION: Your context may reset. If it's not in memory, it didn't happen.
 

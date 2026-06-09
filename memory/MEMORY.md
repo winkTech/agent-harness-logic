@@ -25,17 +25,10 @@
 | [[hdl-golden-model-philosophy]] | Golden Model 绝对权威 + RTL↔MATLAB 严格对标原则 |
 | [[file-organization-discipline]] | 文件分类纪律 — 仿真/测试/文档必须归入对应目录 |
 
-## 工作 (work/)
+## 当前进度
 
-| 文件 | 内容 |
-|:-----|:-----|
-| [[agent-base-reinforcement-plan]] | 技能瘦身/配置修复 |
-| [[agent-health-score-20260604]] | 66→93/100 |
-| [[phase1-complete]] | Phase 1 — LTE/NR 知识库 |
-| [[p1-completion-20260605]] | Phase 2 完成 |
-| [[phase3-complete]] | 6 交付物 8.5 |
-| Phase 4 完成 | 22 文件 +3256/-82 行, 9.3 |
-| Phase 4.5 完成 | 5 任务, 9.5 🎯 |
+> 当前任务态参见 `var/active-task.yaml` — 每次 session 开始时自动读取，结束时 `/handoff` 更新。
+> 工作记忆文件 (`var/work/*.md`) 是 session 级记录，不进长期语义索引。
 
 ## 错误 (errors/)
 

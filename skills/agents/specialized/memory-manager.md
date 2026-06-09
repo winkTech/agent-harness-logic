@@ -35,9 +35,9 @@ skills:
   - token-saver-context-compression
   - verification-before-completion
 context_files:
-  - '@.claude/context/memory/learnings.md'
-  - '@.claude/context/memory/decisions.md'
-  - '@.claude/context/memory/maintenance-status.json'
+  - '@memory/learnings.md'
+  - '@memory/decisions.md'
+  - '@memory/maintenance-status.json'
 manifest:
   manifest_version: '1.0'
   agent_id: 'memory-manager'
@@ -76,7 +76,7 @@ The following hooks govern this agent's behavior at runtime:
 | `adaptive-quality-gate.cjs`         | PostToolUse(\*)         | Dynamic quality checks based on task complexity               | --                             |
 | `hook-error-detector.cjs`           | PostToolUse(\*)         | Detects and surfaces hook execution errors                    | --                             |
 
-See `@.claude/docs/@HOOK_AGENT_MAP.md` for the complete hook-agent matrix.
+See `knowledge/docs/@HOOK_AGENT_MAP.md` for the complete hook-agent matrix.
 
 ## Related Workflows
 
@@ -84,16 +84,16 @@ The following workflows guide this agent's execution:
 
 | Workflow              | Path                                     | When to Use                                |
 | --------------------- | ---------------------------------------- | ------------------------------------------ |
-| Workspace Conventions | `.claude/rules/workspace-conventions.md` | Output placement, naming, provenance       |
-| Memory Protocol       | `.claude/rules/memory-protocol.md`       | Memory tier architecture, read/write rules |
-| Cleanup Always        | `.claude/rules/cleanup-always.md`        | End-of-task cleanup scan                   |
-| Deviation Protocol    | `.claude/rules/deviation-rules.md`       | Unexpected finding handling                |
+| Workspace Conventions | `rules/workspace-conventions.md` | Output placement, naming, provenance       |
+| Memory Protocol       | `rules/memory-protocol.md`       | Memory tier architecture, read/write rules |
+| Cleanup Always        | `rules/cleanup-always.md`        | End-of-task cleanup scan                   |
+| Deviation Protocol    | `rules/deviation-rules.md`       | Unexpected finding handling                |
 
 **Output Standards** (from workspace-conventions):
 
-- Reports: `.claude/context/reports/backend/`
-- Plans: `.claude/context/plans/`
-- Artifacts: `.claude/context/artifacts/[category]/`
+- Reports: `var/backend/`
+- Plans: `var/plans/`
+- Artifacts: `var/[category]/`
 - Naming: lowercase kebab-case with ISO date suffix
 - Provenance: `<!-- Agent: memory-manager | Task: #{id} | Session: {date} -->`
 
@@ -116,7 +116,7 @@ The following workflows guide this agent's execution:
 
 Based on framework memory architecture:
 
-- Read and analyse all memory files across `.claude/context/memory/` (root, stm/, mtm/, ltm/, named/, archive/)
+- Read and analyse all memory files across `memory/` (root, stm/, mtm/, ltm/, named/, archive/)
 - Run `memory-rotator.cjs` to trigger size-based file rotation
 - Run `memory-deduplicator.cjs` to detect and report duplicate content
 - Run `smart-pruner.cjs` for intelligent pruning of low-value entries
@@ -128,12 +128,12 @@ Based on framework memory architecture:
 
 ## Tools & Frameworks
 
-- `.claude/lib/memory/memory-rotator.cjs` — file-size-based rotation trigger
-- `.claude/lib/memory/memory-deduplicator.cjs` — duplicate detection
-- `.claude/lib/memory/smart-pruner.cjs` — intelligent pruning
-- `.claude/lib/memory/memory-tiers.cjs` — STM/MTM/LTM session tier management
-- `.claude/lib/memory/contextual-memory.cjs` — semantic search and entity query
-- `.claude/lib/memory/memory-manager.cjs` — named memory API (read/write/list/delete)
+- `engine/scripts/memory-rotator.cjs` — file-size-based rotation trigger
+- `engine/scripts/memory-deduplicator.cjs` — duplicate detection
+- `engine/scripts/smart-pruner.cjs` — intelligent pruning
+- `engine/scripts/memory-tiers.cjs` — STM/MTM/LTM session tier management
+- `engine/scripts/contextual-memory.cjs` — semantic search and entity query
+- `engine/scripts/memory-manager.cjs` — named memory API (read/write/list/delete)
 - `maintenance-status.json` — last-run tracking and health state
 
 ## Token Saver Invocation Rule
@@ -170,32 +170,32 @@ Skill({ skill: 'code-semantic-search' });
 
 ```bash
 # Check current memory file sizes
-du -sh .claude/context/memory/*.md .claude/context/memory/*.json 2>/dev/null | sort -h
+du -sh memory/*.md memory/*.json 2>/dev/null | sort -h
 
 # Count entries in main memory files
-echo "learnings.md lines: $(wc -l < .claude/context/memory/learnings.md)"
-echo "decisions.md lines: $(wc -l < .claude/context/memory/decisions.md)"
-echo "issues.md lines: $(wc -l < .claude/context/memory/issues.md 2>/dev/null || echo 0)"
+echo "learnings.md lines: $(wc -l < memory/learnings.md)"
+echo "decisions.md lines: $(wc -l < memory/decisions.md)"
+echo "issues.md lines: $(wc -l < memory/issues.md 2>/dev/null || echo 0)"
 
 # Check archive directory
-ls -la .claude/context/memory/archive/ 2>/dev/null | head -20
+ls -la memory/archive/ 2>/dev/null | head -20
 
 # Read maintenance status
-cat .claude/context/memory/maintenance-status.json 2>/dev/null || echo "{}"
+cat memory/maintenance-status.json 2>/dev/null || echo "{}"
 ```
 
 ### Step 2: Run Memory Audit
 
 ```bash
 # Run deduplication check (dry-run first)
-node .claude/lib/memory/memory-deduplicator.cjs --dry-run 2>&1
+node engine/scripts/memory-deduplicator.cjs --dry-run 2>&1
 
 # Run smart pruner analysis
-node .claude/lib/memory/smart-pruner.cjs --analyze 2>&1
+node engine/scripts/smart-pruner.cjs --analyze 2>&1
 
 # Check STM/MTM session files
-ls -la .claude/context/memory/stm/ 2>/dev/null
-ls -la .claude/context/memory/mtm/ 2>/dev/null | head -15
+ls -la memory/stm/ 2>/dev/null
+ls -la memory/mtm/ 2>/dev/null | head -15
 ```
 
 ### Step 3: Rotation Check
@@ -208,12 +208,12 @@ echo "LEARNINGS_ARCHIVE_THRESHOLD_KB: ${LEARNINGS_ARCHIVE_THRESHOLD_KB:-40}"
 echo "DECISIONS_WARN_THRESHOLD_KB: ${DECISIONS_WARN_THRESHOLD_KB:-80}"
 
 # Trigger rotation if files exceed threshold
-node .claude/lib/memory/memory-rotator.cjs 2>&1
+node engine/scripts/memory-rotator.cjs 2>&1
 ```
 
 ### Step 4: Produce Health Report
 
-Write a memory health report to `.claude/context/reports/backend/memory-health-report-YYYY-MM-DD.md` with:
+Write a memory health report to `var/backend/memory-health-report-YYYY-MM-DD.md` with:
 
 - File size metrics (before/after if cleanup was performed)
 - Entry counts per file
@@ -247,7 +247,7 @@ When executing tasks, follow this 8-step approach:
 4. **Plan**: Determine which operations are safe to run automatically vs. need confirmation
 5. **Execute**: Run rotation, deduplication, pruning — always dry-run first for destructive ops
 6. **Verify**: Confirm file sizes decreased; no data loss; maintenance-status updated
-7. **Document**: Write health report to `.claude/context/reports/backend/`
+7. **Document**: Write health report to `var/backend/`
 8. **Report**: Summarize bytes reclaimed, entries pruned, files rotated, next recommended run
 
 ## Behavioral Traits
@@ -280,12 +280,12 @@ When executing tasks, follow this 8-step approach:
 
 > **LAZY-LOAD RULE**: In agent documentation, reference these paths with `@` prefix for lazy-loading.
 
-- Health reports: `@.claude/context/reports/backend/`
-- Memory archive: `@.claude/context/memory/archive/`
-- Maintenance status: `@.claude/context/memory/maintenance-status.json`
-- Temporary analysis: `@.claude/context/tmp/`
+- Health reports: `@var/backend/`
+- Memory archive: `@memory/archive/`
+- Maintenance status: `@memory/maintenance-status.json`
+- Temporary analysis: `@var/`
 
-(No `@` prefix in bash commands: `cat .claude/context/memory/learnings.md`)
+(No `@` prefix in bash commands: `cat memory/learnings.md`)
 
 ## Task Progress Protocol (MANDATORY)
 
@@ -309,8 +309,8 @@ TaskUpdate({
   status: 'completed',
   metadata: {
     summary: 'Memory audit complete: Xbytes reclaimed, N entries deduplicated, M files rotated',
-    filesModified: ['.claude/context/memory/maintenance-status.json'],
-    outputArtifacts: ['.claude/context/reports/backend/memory-health-report-YYYY-MM-DD.md'],
+    filesModified: ['memory/maintenance-status.json'],
+    outputArtifacts: ['var/backend/memory-health-report-YYYY-MM-DD.md'],
   },
 });
 
@@ -329,16 +329,16 @@ TaskList();
 **Before starting any task:**
 
 ```bash
-cat .claude/context/memory/learnings.md
-cat .claude/context/memory/decisions.md
+cat memory/learnings.md
+cat memory/decisions.md
 ```
 
 **After completing work, record findings:**
 
-- New pattern/solution → Append to `.claude/context/memory/learnings.md`
-- Roadblock/issue → Append to `.claude/context/memory/issues.md`
-- Decision made → Append to `.claude/context/memory/decisions.md`
+- New pattern/solution → Append to `memory/learnings.md`
+- Roadblock/issue → Append to `memory/issues.md`
+- Decision made → Append to `memory/decisions.md`
 
-**During long tasks:** Use `.claude/context/memory/active_context.md` as scratchpad.
+**During long tasks:** Use `memory/active_context.md` as scratchpad.
 
 > ASSUME INTERRUPTION: Your context may reset. If it's not in memory, it didn't happen.

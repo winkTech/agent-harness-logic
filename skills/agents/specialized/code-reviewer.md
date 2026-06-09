@@ -77,7 +77,7 @@ The following hooks govern this agent's behavior at runtime:
 | `shell-injection-validator.cjs` | PreToolUse(Bash) | Blocks shell injection patterns | --       |
 | `validate-skill-invocation.cjs` | PreToolUse(Read) | Warns about Read vs Skill()     | --       |
 
-See `.claude/docs/@HOOK_AGENT_MAP.md` for the complete hook-agent matrix.
+See `knowledge/docs/@HOOK_AGENT_MAP.md` for the complete hook-agent matrix.
 
 ## Related Workflows
 
@@ -85,16 +85,16 @@ The following workflows guide this agent's execution:
 
 | Workflow              | Path                                                           | When to Use                          |
 | --------------------- | -------------------------------------------------------------- | ------------------------------------ |
-| Code Review           | `.claude/workflows/code-review-workflow.md`                    | Code review process (two-pass)       |
-| Architecture Review   | `.claude/workflows/architecture-review-skill-workflow.md`      | Architecture assessments (via code-review) |
-| Feature Development   | `.claude/workflows/enterprise/feature-development-workflow.md` | Code review gate                     |
-| Workspace Conventions | `.claude/rules/workspace-conventions.md`                       | Output placement, naming, provenance |
+| Code Review           | `skills/workflows/code-review-workflow.md`                    | Code review process (two-pass)       |
+| Architecture Review   | `skills/workflows/architecture-review-skill-workflow.md`      | Architecture assessments (via code-review) |
+| Feature Development   | `skills/workflows/enterprise/feature-development-workflow.md` | Code review gate                     |
+| Workspace Conventions | `rules/workspace-conventions.md`                       | Output placement, naming, provenance |
 
 **Output Standards** (from workspace-conventions):
 
-- Reports: `.claude/context/reports/backend/`
-- Plans: `.claude/context/plans/`
-- Artifacts: `.claude/context/artifacts/[category]/`
+- Reports: `var/backend/`
+- Plans: `var/plans/`
+- Artifacts: `var/[category]/`
 - Naming: lowercase kebab-case with ISO date suffix
 - Provenance: `<!-- Agent: {type} | Task: #{id} | Session: {date} -->`
 
@@ -311,7 +311,7 @@ Only after Stage 1 passes, review for quality:
 
 After completing spec compliance and code quality review, if changes involve artifact creation or modification:
 
-1. **Check artifact graph** — Read `.claude/context/runtime/artifact-graph.json`
+1. **Check artifact graph** — Read `var/artifact-graph.json`
 2. **Verify must-have integrations:**
    - [ ] Artifact appears in appropriate catalog/registry
    - [ ] At least one agent/workflow references the artifact
@@ -421,7 +421,7 @@ Skill({ skill: 'checklist-generator' });
 ## Issue Categorization
 
 Each finding MUST be tagged with a severity level from the taxonomy defined in
-`.claude/schemas/review-severity.schema.json` (four levels in descending urgency):
+`engine/schemas/review-severity.schema.json` (four levels in descending urgency):
 
 | Severity   | Enum value   | Meaning                                                           |
 | ---------- | ------------ | ----------------------------------------------------------------- |
@@ -570,18 +570,18 @@ Do NOT invoke token-saver for normal small tasks (few files, short snippets); us
 **Before starting any task, you must query semantic memory and read recent static memory:**
 
 ```bash
-node .claude/lib/memory/memory-search.cjs "<your specific task domain/concept>"
-node .claude/lib/memory/memory-search.cjs "<task-domain-keywords>"
+node engine/scripts/memory-retrieve.sh "<your specific task domain/concept>"
+node engine/scripts/memory-retrieve.sh "<task-domain-keywords>"
 
 ```
 
 **After completing work, record findings:**
 
-- New pattern/solution -> Append to `.claude/context/memory/learnings.md`
-- Roadblock/issue -> Append to `.claude/context/memory/issues.md`
-- Architecture change -> Update `.claude/context/memory/decisions.md`
+- New pattern/solution -> Append to `memory/learnings.md`
+- Roadblock/issue -> Append to `memory/issues.md`
+- Architecture change -> Update `memory/decisions.md`
 
-**During long tasks:** Use `.claude/context/memory/active_context.md` as scratchpad.
+**During long tasks:** Use `memory/active_context.md` as scratchpad.
 
 > ASSUME INTERRUPTION: Your context may reset. If it's not in memory, it didn't happen.
 
@@ -614,7 +614,7 @@ node .claude/lib/memory/memory-search.cjs "<task-domain-keywords>"
 ## Memory
 
 - For structured memory (patterns, gotchas, discoveries), use MemoryRecord with ype, content, rea, source, and optional confidence.
-- Do not use Write/Edit directly on .claude/context/memory/patterns.json or .claude/context/memory/gotchas.json (guard-enforced).
+- Do not use Write/Edit directly on memory/patterns.json or memory/gotchas.json (guard-enforced).
 
 ### Code Search Protocol
 

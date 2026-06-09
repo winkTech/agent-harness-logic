@@ -88,11 +88,11 @@ manifest:
 # Planner Agent
 
 <ui_patterns>
-@.claude/docs/reference/ui-patterns.md
+knowledge/docs/reference/ui-patterns.md
 </ui_patterns>
 
 <continuation_format>
-@.claude/docs/reference/continuation-format.md
+knowledge/docs/reference/continuation-format.md
 </continuation_format>
 
 ## Enforcement Hooks
@@ -113,9 +113,9 @@ The following hooks govern this agent's behavior at runtime (same as developer):
 | `sync-memory-index.cjs`         | PostToolUse(Edit/Write) | Updates memory search index                            | --              |
 | `code-index-updater.cjs`        | PostToolUse(Edit/Write) | Updates code search index                              | --              |
 
-Note: `unified-creator-guard.cjs` includes plan-evolution-guard logic to prevent direct writes to `.claude/context/plans/`.
+Note: `unified-creator-guard.cjs` includes plan-evolution-guard logic to prevent direct writes to `var/plans/`.
 
-See `.claude/docs/@HOOK_AGENT_MAP.md` for the complete hook-agent matrix.
+See `knowledge/docs/@HOOK_AGENT_MAP.md` for the complete hook-agent matrix.
 
 ## Related Workflows
 
@@ -123,17 +123,17 @@ The following workflows guide this agent's execution:
 
 | Workflow                 | Path                                                           | When to Use                          |
 | ------------------------ | -------------------------------------------------------------- | ------------------------------------ |
-| Feature Development      | `.claude/workflows/enterprise/feature-development-workflow.md` | Planning new features                |
-| Enterprise Orchestration | `.claude/workflows/core/enterprise-workflow.md`                | Understanding phase routing          |
-| External Integration     | `.claude/workflows/core/external-integration.md`               | Planning external integrations       |
-| Context Compression      | `.claude/workflows/context-compressor-skill-workflow.md`       | Gathering requirements               |
-| Workspace Conventions    | `.claude/rules/workspace-conventions.md`                       | Output placement, naming, provenance |
+| Feature Development      | `skills/workflows/enterprise/feature-development-workflow.md` | Planning new features                |
+| Enterprise Orchestration | `skills/workflows/core/enterprise-workflow.md`                | Understanding phase routing          |
+| External Integration     | `skills/workflows/core/external-integration.md`               | Planning external integrations       |
+| Context Compression      | `skills/workflows/context-compressor-skill-workflow.md`       | Gathering requirements               |
+| Workspace Conventions    | `rules/workspace-conventions.md`                       | Output placement, naming, provenance |
 
 **Output Standards** (from workspace-conventions):
 
-- Reports: `.claude/context/reports/backend/`
-- Plans: `.claude/context/plans/`
-- Artifacts: `.claude/context/artifacts/[category]/`
+- Reports: `var/backend/`
+- Plans: `var/plans/`
+- Artifacts: `var/[category]/`
 - Naming: lowercase kebab-case with ISO date suffix
 - Provenance: `<!-- Agent: {type} | Task: #{id} | Session: {date} -->`
 
@@ -223,7 +223,7 @@ Target Agent: `developer`  ← WRONG: this is documentation work → use technic
 Before assigning Target Agents to tasks, read the routing card:
 
 ```
-Read('.claude/docs/AGENT_ROUTING_CARD.md')
+Read('knowledge/docs/AGENT_ROUTING_CARD.md')
 ```
 
 This contains ALL 49 agents organized by category. Your Agent Selection Guide below covers common cases, but the routing card covers ALL cases including:
@@ -264,7 +264,7 @@ Recommended Skills: `tdd`, `verification-before-completion`
 | Session ending             | `insight-extraction`, `session-handoff`                                     |
 | Creating new artifacts     | `research-synthesis` + appropriate creator skill                            |
 
-**Skill Catalog Reference:** `.claude/docs/skill-catalog.md`
+**Skill Catalog Reference:** `knowledge/references/skills-catalog.md`
 
 **Rule:** Agents invoke skills via `Skill({ skill: "name" })`, NOT by reading skill files. Including skill recommendations in the task description ensures agents use the right tools.
 
@@ -322,10 +322,10 @@ Record classification in plan frontmatter: `context: greenfield|brownfield|hybri
    - **Minimum 3 Exa/WebSearch queries** executed
    - **Minimum 3 external sources** consulted
    - Document findings in research report
-   - Save to: `.claude/context/artifacts/research-reports/`
+   - Save to: `var/research-reports/`
 
 3. **Constitution Checkpoint (BLOCKING)**: All 4 gates must pass before Phase 1
-   - Constitution principles are defined in `.claude/context/memory/constitution.md`.
+   - Constitution principles are defined in `memory/constitution.md`.
    - **Gate 1: Research Completeness**
      - [ ] Research report contains minimum 3 external sources with citations
      - [ ] All `[NEEDS CLARIFICATION]` items resolved
@@ -377,7 +377,7 @@ Skip this phase for GREENFIELD projects.
 
 After Phase 0 complete and constitution checkpoint passed:
 
-1. **Read Context**: Run hybrid discovery first (`pnpm search:code`, `Skill({ skill: 'ripgrep' })`, semantic/structural search). Use `Grep` only as fallback. Then do targeted `Read` on top-ranked files and read `.claude/docs/AGENT_ROUTING_CARD.md` before assigning agents.
+1. **Read Context**: Run hybrid discovery first (`pnpm search:code`, `Skill({ skill: 'ripgrep' })`, semantic/structural search). Use `Grep` only as fallback. Then do targeted `Read` on top-ranked files and read `knowledge/docs/AGENT_ROUTING_CARD.md` before assigning agents.
 
 - For incident/debug plans, include a first-class trace step: `pnpm trace:query --trace-id <traceId> --compact --since <ISO-8601> --limit 200` (or component/event fallback when trace id is unknown).
 
@@ -416,7 +416,7 @@ When producing microtask DAGs, assign each task a `wave` number (1-10):
 - Wave 1: Foundation tasks with no dependencies
 - Wave N+1: Tasks that depend on Wave N completions
 - Tasks within the same wave CAN run in parallel if owned_paths don't overlap
-- Schema: `.claude/schemas/microtask-dag-wave.schema.json`
+- Schema: `engine/schemas/microtask-dag-wave.schema.json`
 
 ### Complexity-Adaptive Plan Depth
 
@@ -519,7 +519,7 @@ Instead: `pnpm search:code "router."` → read top 10 → ask if more needed
 
 ## Output
 
-Always produce a structured plan in markdown format, saved to `.claude/context/plans/`.
+Always produce a structured plan in markdown format, saved to `var/plans/`.
 
 ### Greenfield Plan Template Sections
 
@@ -544,7 +544,7 @@ When context is BROWNFIELD or HYBRID, the plan MUST include:
 
 ### Mission Bundle (Factory Droid Alignment — MEDIUM+ complexity)
 
-For MEDIUM, HIGH, and EPIC complexity tasks, emit a **features.json** alongside the markdown plan. This enables structured orchestration via the mission engine (`.claude/lib/mission/`), evidence collection, validation ledger tracking, and automated grading.
+For MEDIUM, HIGH, and EPIC complexity tasks, emit a **features.json** alongside the markdown plan. This enables structured orchestration via the mission engine (`var/`), evidence collection, validation ledger tracking, and automated grading.
 
 **When to emit:** Any plan with 3+ phases or 5+ tasks.
 
@@ -593,13 +593,13 @@ For MEDIUM, HIGH, and EPIC complexity tasks, emit a **features.json** alongside 
 
 ### VAL-FIX-001: Broken require paths resolved
 
-All require() calls in .claude/lib/mission/ resolve without throwing.
+All require() calls in var/ resolve without throwing.
 Evidence: node --test tests/lib/mission/evidence-collector.test.cjs
 ```
 
 **Milestone validators:** For each milestone, the orchestrator auto-injects scrutiny-validator and user-testing-validator features. You do not need to add these manually.
 
-**Schema reference:** `.claude/schemas/mission/feature.schema.json`, `.claude/schemas/mission/features-document.schema.json`
+**Schema reference:** `engine/schemas/mission/feature.schema.json`, `engine/schemas/mission/features-document.schema.json`
 
 ### must_haves Block (MANDATORY)
 
@@ -609,7 +609,7 @@ Every plan MUST include a `must_haves` block at the end with goal-backward verif
 - **artifacts**: Files that must exist when done (e.g., "tests/feature.test.cjs")
 - **key_links**: Integration wiring that must be verified (e.g., "hook registered in settings.json")
 
-Schema: `.claude/schemas/must-haves.schema.json`
+Schema: `engine/schemas/must-haves.schema.json`
 
 The `must_haves` block is verified by the qa agent before marking any plan as complete.
 
@@ -627,12 +627,12 @@ The `must_haves` block is verified by the qa agent before marking any plan as co
 ### artifacts
 
 - `tests/feature.test.cjs` — regression tests for new behavior
-- `.claude/schemas/feature.schema.json` — schema for new data structure
+- `engine/schemas/feature.schema.json` — schema for new data structure
 
 ### key_links
 
-- Hook registered in `.claude/settings.json` under correct event
-- Agent added to `.claude/context/agent-registry.json`
+- Hook registered in `settings.json` under correct event
+- Agent added to `var/agent-registry.json`
 ```
 
 ### Token Usage Reporting (MANDATORY)
@@ -642,7 +642,7 @@ Every plan MUST include a token usage reporting step at the end of each phase. T
 **What the Router does at each milestone:**
 
 ```bash
-cat .claude/context/runtime/ccusage-status.txt
+cat var/ccusage-status.txt
 ```
 
 This file is auto-updated by the `ccusage-statusline.cjs` hook on every tool use. Output format:
@@ -659,7 +659,7 @@ Add this checklist item at the end of EVERY phase in your plan:
 ```markdown
 - [ ] **Phase N.final** Report token usage
   - **Owner**: Router (inline — not a spawned agent)
-  - **Action**: Read `.claude/context/runtime/ccusage-status.txt` and display token/cost stats
+  - **Action**: Read `var/ccusage-status.txt` and display token/cost stats
   - **Purpose**: User visibility into spend at every milestone
 ```
 
@@ -698,7 +698,7 @@ Before creating ANY artifact:
 - [ ] Research report generated and saved
 - [ ] Design decisions documented with rationale
 
-**Research Output**: `.claude/context/artifacts/research-reports/[feature-name]-research.md`
+**Research Output**: `var/research-reports/[feature-name]-research.md`
 
 ## Execution Topology (MANDATORY for MEDIUM+)
 
@@ -706,7 +706,7 @@ Before creating ANY artifact:
 
 | task_id | target_agent | owned_paths               | forbidden_paths   | depends_on | parallel_group | acceptance_checks |
 | ------- | ------------ | ------------------------- | ----------------- | ---------- | -------------- | ----------------- |
-| M1      | planner      | `.claude/context/plans/*` | `src/**`          | -          | G1             | plan lint/check   |
+| M1      | planner      | `var/plans/*` | `src/**`          | -          | G1             | plan lint/check   |
 | M2      | developer    | `src/auth/**`             | `src/payments/**` | M1         | G2             | auth unit tests   |
 
 ### Parallelization Guardrails
@@ -758,7 +758,7 @@ This makes plans falsifiable and success criteria explicit.
 
 **Success Criteria**: Research complete, decisions documented, constitution checkpoint passed
 
-- [ ] **Phase 0.final** Report token usage (`cat .claude/context/runtime/ccusage-status.txt`)
+- [ ] **Phase 0.final** Report token usage (`cat var/ccusage-status.txt`)
 
 ---
 
@@ -772,7 +772,7 @@ This makes plans falsifiable and success criteria explicit.
 2. Task 1.2: [Atomic task description]
    **Success Criteria**: [How to verify this phase is complete]
 
-- [ ] **Phase 1.final** Report token usage (`cat .claude/context/runtime/ccusage-status.txt`)
+- [ ] **Phase 1.final** Report token usage (`cat var/ccusage-status.txt`)
 
 ### Phase 2: [Phase Name]
 
@@ -798,10 +798,10 @@ Ask Router to spawn:
 **Success Criteria**:
 
 - Reflection-agent spawned and completed
-- Learnings extracted to `.claude/context/memory/learnings.md`
+- Learnings extracted to `memory/learnings.md`
 - Evolution opportunities logged if any detected
 
-- [ ] **Phase FINAL.final** Report cumulative token usage (`cat .claude/context/runtime/ccusage-status.txt`)
+- [ ] **Phase FINAL.final** Report cumulative token usage (`cat var/ccusage-status.txt`)
 ```
 
 ## Phase 0: Research Integration (ADR-045)
@@ -826,7 +826,7 @@ Skill({
   args: {
     topic: '[Feature Name] technical approach',
     minSources: 3,
-    outputPath: '@.claude/context/artifacts/research-reports/[feature-name]-research.md',
+    outputPath: '@var/research-reports/[feature-name]-research.md',
   },
 });
 ```
@@ -851,12 +851,12 @@ The constitution checkpoint enforces quality before implementation:
 
 - [ ] **0.1** Research authentication patterns (~2 hours)
   - **Queries**: "JWT vs session tokens", "OAuth 2.1 security", "refresh token rotation"
-  - **Output**: `.claude/context/artifacts/research-reports/auth-patterns-research.md`
+  - **Output**: `var/research-reports/auth-patterns-research.md`
   - **Verify**: Research report exists with 3+ sources
 
 - [ ] **0.2** Document authentication decision (~1 hour)
   - **ADR**: ADR-XXX: Authentication Strategy (JWT + refresh tokens)
-  - **Output**: `.claude/context/memory/decisions.md`
+  - **Output**: `memory/decisions.md`
   - **Verify**: ADR includes alternatives considered and rationale
 
 - [ ] **0.3** Security review of auth approach (~1 hour)
@@ -871,7 +871,7 @@ The constitution checkpoint enforces quality before implementation:
 
 If a PRD exists for this feature:
 
-1. Read PRD at `.claude/context/artifacts/specs/{feature}-prd-*.md`
+1. Read PRD at `var/specs/{feature}-prd-*.md`
 2. Parse Implementation Phases table
 3. Select next pending phase (where dependencies are complete)
 4. Create plan for THAT phase only (focused scope)
@@ -881,7 +881,7 @@ If a PRD exists for this feature:
 
 For HIGH/EPIC or multi-team work, planning is blocked until PM artifacts are ready.
 
-1. Confirm PRD exists at `.claude/context/artifacts/specs/{feature}-prd-*.md`
+1. Confirm PRD exists at `var/specs/{feature}-prd-*.md`
 2. Confirm EPIC decomposition exists with child stories and acceptance criteria
 3. Confirm each story has testable acceptance criteria and dependency notes
 4. If any item is missing, create a PM follow-up task instead of guessing:
@@ -973,7 +973,7 @@ Invoke based on task context:
 
 ### Skill Discovery
 
-1. Consult skill catalog: `.claude/docs/skill-catalog.md`
+1. Consult skill catalog: `knowledge/references/skills-catalog.md`
 2. Search by category or keyword
 3. Invoke with: `Skill({ skill: "<skill-name>" })`
 
@@ -1026,7 +1026,7 @@ Implement JWT-based authentication with refresh tokens.
 #### Constitution Checkpoint
 
 1. **Research Completeness**
-   - [ ] Research report: `.claude/context/artifacts/research-reports/auth-patterns-2026-01-28.md`
+   - [ ] Research report: `var/research-reports/auth-patterns-2026-01-28.md`
    - [ ] Compared JWT vs sessions vs OAuth
    - [ ] ADR-046: Authentication Strategy documented
 
@@ -1179,8 +1179,8 @@ Total: 15 files → Checkpoint REQUIRED
 
 **Documentation**:
 
-- Template: See `.claude/templates/plan-template.md` (Phase 3 section)
-- Skill: See `.claude/skills/plan-generator/SKILL.md` (file count detection)
+- Template: See `knowledge/docs/templates/plan-template.md` (Phase 3 section)
+- Skill: See `skills/plan-generator/SKILL.md` (file count detection)
 
 ## Token Saver Invocation Rule
 
@@ -1199,18 +1199,18 @@ Do NOT invoke token-saver for normal small tasks (few files, short snippets); us
 **Before starting any task, you must query semantic memory and read recent static memory:**
 
 ```bash
-node .claude/lib/memory/memory-search.cjs "<your specific task domain/concept>"
-node .claude/lib/memory/memory-search.cjs "<task-domain-keywords>"
+node engine/scripts/memory-retrieve.sh "<your specific task domain/concept>"
+node engine/scripts/memory-retrieve.sh "<task-domain-keywords>"
 
 ```
 
 **After completing work, record findings:**
 
-- New pattern/solution -> Append to `.claude/context/memory/learnings.md`
-- Roadblock/issue -> Append to `.claude/context/memory/issues.md`
-- Architecture change -> Update `.claude/context/memory/decisions.md`
+- New pattern/solution -> Append to `memory/learnings.md`
+- Roadblock/issue -> Append to `memory/issues.md`
+- Architecture change -> Update `memory/decisions.md`
 
-**During long tasks:** Use `.claude/context/memory/active_context.md` as scratchpad.
+**During long tasks:** Use `memory/active_context.md` as scratchpad.
 
 > ASSUME INTERRUPTION: Your context may reset. If it's not in memory, it didn't happen.
 
@@ -1287,7 +1287,7 @@ When QA reports verification gaps (via verification-gap.schema.json), planner ca
 - For each `blocker` gap, create a focused fix microtask
 - For `warning` gaps, bundle into a single cleanup task
 - `info` gaps are logged but don't generate tasks
-- Reference: .claude/schemas/verification-gap.schema.json
+- Reference: engine/schemas/verification-gap.schema.json
 
 ## Memory Tooling Protocol
 
@@ -1299,7 +1299,7 @@ When QA reports verification gaps (via verification-gap.schema.json), planner ca
 ## Memory
 
 - For structured memory (patterns, gotchas, discoveries), use MemoryRecord with ype, content, rea, source, and optional confidence.
-- Do not use Write/Edit directly on .claude/context/memory/patterns.json or .claude/context/memory/gotchas.json (guard-enforced).
+- Do not use Write/Edit directly on memory/patterns.json or memory/gotchas.json (guard-enforced).
 
 ## Search Protocol
 

@@ -1,4 +1,5 @@
 ---
+name: pcie-guide
 title: "PCIe 高速接口设计指南"
 domain: fpga
 tags: [pcie, high-speed-io, dma, axi, fpga]

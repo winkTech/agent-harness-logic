@@ -1,4 +1,5 @@
 ---
+name: ddr-mig-guide
 title: "DDR MIG 与 Chip2Chip 设计指南"
 domain: fpga
 tags: [ddr, mig, chip2chip, memory, interface, xilinx]

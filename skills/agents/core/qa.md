@@ -103,7 +103,7 @@ The following hooks govern this agent's behavior at runtime (same as developer):
 | `sync-memory-index.cjs`         | PostToolUse(Edit/Write) | Updates memory search index               | --              |
 | `code-index-updater.cjs`        | PostToolUse(Edit/Write) | Updates code search index                 | --              |
 
-See `.claude/docs/@HOOK_AGENT_MAP.md` for the complete hook-agent matrix.
+See `knowledge/docs/@HOOK_AGENT_MAP.md` for the complete hook-agent matrix.
 
 ## Related Workflows
 
@@ -111,16 +111,16 @@ The following workflows guide this agent's execution:
 
 | Workflow                 | Path                                                           | When to Use                          |
 | ------------------------ | -------------------------------------------------------------- | ------------------------------------ |
-| Feature Development      | `.claude/workflows/enterprise/feature-development-workflow.md` | QA phase of feature work             |
-| QA Bounded Loop          | `.claude/workflows/operations/qa-bounded-loop.md`              | Bounded QA iteration cycles          |
-| Enterprise Orchestration | `.claude/workflows/core/enterprise-workflow.md`                | Understanding review phase           |
-| Workspace Conventions    | `.claude/rules/workspace-conventions.md`                       | Output placement, naming, provenance |
+| Feature Development      | `skills/workflows/enterprise/feature-development-workflow.md` | QA phase of feature work             |
+| QA Bounded Loop          | `skills/workflows/operations/qa-bounded-loop.md`              | Bounded QA iteration cycles          |
+| Enterprise Orchestration | `skills/workflows/core/enterprise-workflow.md`                | Understanding review phase           |
+| Workspace Conventions    | `rules/workspace-conventions.md`                       | Output placement, naming, provenance |
 
 **Output Standards** (from workspace-conventions):
 
-- Reports: `.claude/context/reports/backend/`
-- Plans: `.claude/context/plans/`
-- Artifacts: `.claude/context/artifacts/[category]/`
+- Reports: `var/backend/`
+- Plans: `var/plans/`
+- Artifacts: `var/[category]/`
 - Naming: lowercase kebab-case with ISO date suffix
 - Provenance: `<!-- Agent: {type} | Task: #{id} | Session: {date} -->`
 
@@ -248,8 +248,8 @@ Skill({ skill: 'code-structural-search', args: 'describe($NAME, () => { $$ }) --
 
 When implementing tests or making code changes, follow the Developer Workflow:
 
-- **Full Workflow**: `.claude/docs/DEVELOPER_WORKFLOW.md`
-- **File Placement**: `.claude/docs/FILE_PLACEMENT_RULES.md`
+- **Full Workflow**: `knowledge/docs/DEVELOPER_WORKFLOW.md`
+- **File Placement**: `knowledge/docs/FILE_PLACEMENT_RULES.md`
 - **TDD Required**: Red-Green-Refactor cycle for test and code changes
 - **Skills**: Use `Skill({ skill: "tdd" })` to invoke skills, not just read them
 
@@ -257,7 +257,7 @@ When implementing tests or making code changes, follow the Developer Workflow:
 
 1. **Pre-Implementation**: Read memory files for known patterns and past failures
 2. **Test Placement**: Co-locate tests with source files (`*.test.ts` next to `*.ts`)
-3. **Reports Location**: QA reports go to `.claude/context/reports/qa/`
+3. **Reports Location**: QA reports go to `var/qa/`
 4. **Post-Implementation**: Verify 0 test failures before claiming completion
 
 ## Skill Invocation Protocol (MANDATORY)
@@ -298,7 +298,7 @@ Invoke based on task context:
 
 ### Skill Discovery
 
-1. Consult skill catalog: `.claude/docs/skill-catalog.md`
+1. Consult skill catalog: `knowledge/references/skills-catalog.md`
 2. Search by category or keyword
 3. Invoke with: `Skill({ skill: "<skill-name>" })`
 
@@ -332,18 +332,18 @@ Do NOT invoke token-saver for normal small tasks (few files, short snippets); us
 **Before starting any task, you must query semantic memory and read recent static memory:**
 
 ```bash
-node .claude/lib/memory/memory-search.cjs "<your specific task domain/concept>"
-node .claude/lib/memory/memory-search.cjs "<task-domain-keywords>"
+node engine/scripts/memory-retrieve.sh "<your specific task domain/concept>"
+node engine/scripts/memory-retrieve.sh "<task-domain-keywords>"
 
 ```
 
 **After completing work, record findings:**
 
-- New pattern/solution -> Append to `.claude/context/memory/learnings.md`
-- Roadblock/issue -> Append to `.claude/context/memory/issues.md`
-- Architecture change -> Update `.claude/context/memory/decisions.md`
+- New pattern/solution -> Append to `memory/learnings.md`
+- Roadblock/issue -> Append to `memory/issues.md`
+- Architecture change -> Update `memory/decisions.md`
 
-**During long tasks:** Use `.claude/context/memory/active_context.md` as scratchpad.
+**During long tasks:** Use `memory/active_context.md` as scratchpad.
 
 > ASSUME INTERRUPTION: Your context may reset. If it's not in memory, it didn't happen.
 
@@ -412,7 +412,7 @@ Example gap output:
 }
 ```
 
-Schema: .claude/schemas/verification-gap.schema.json
+Schema: engine/schemas/verification-gap.schema.json
 
 ## Parallel QA Contract (Mandatory)
 
@@ -429,7 +429,7 @@ Schema: .claude/schemas/verification-gap.schema.json
 ## Memory
 
 - For structured memory (patterns, gotchas, discoveries), use MemoryRecord with ype, content, rea, source, and optional confidence.
-- Do not use Write/Edit directly on .claude/context/memory/patterns.json or .claude/context/memory/gotchas.json (guard-enforced).
+- Do not use Write/Edit directly on memory/patterns.json or memory/gotchas.json (guard-enforced).
 
 ### Code Search Protocol
 

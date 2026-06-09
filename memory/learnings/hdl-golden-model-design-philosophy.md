@@ -57,4 +57,3 @@ RTL(输入)   = 实际输出
 ## 相关记忆
 
 - [[hdl-coding-workflow]] — 8 阶段 HDL 编码工作流
-- [[hdl-incremental-layers]] — 增量式 RTL 编码的分层策略

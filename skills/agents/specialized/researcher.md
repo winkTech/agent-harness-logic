@@ -81,7 +81,7 @@ The following hooks govern this agent's behavior at runtime:
 | ------------------------------- | ---------------- | --------------------------- | -------- |
 | `validate-skill-invocation.cjs` | PreToolUse(Read) | Warns about Read vs Skill() | --       |
 
-See `.claude/docs/@HOOK_AGENT_MAP.md` for the complete hook-agent matrix.
+See `knowledge/docs/@HOOK_AGENT_MAP.md` for the complete hook-agent matrix.
 
 ## Related Workflows
 
@@ -89,15 +89,15 @@ The following workflows guide this agent's execution:
 
 | Workflow              | Path                                             | When to Use                          |
 | --------------------- | ------------------------------------------------ | ------------------------------------ |
-| Evolution             | `.claude/workflows/core/evolution-workflow.md`   | Pre-creation research (Phase O)      |
-| External Integration  | `.claude/workflows/core/external-integration.md` | External source evaluation           |
-| Workspace Conventions | `.claude/rules/workspace-conventions.md`         | Output placement, naming, provenance |
+| Evolution             | `skills/workflows/core/evolution-workflow.md`   | Pre-creation research (Phase O)      |
+| External Integration  | `skills/workflows/core/external-integration.md` | External source evaluation           |
+| Workspace Conventions | `rules/workspace-conventions.md`         | Output placement, naming, provenance |
 
 **Output Standards** (from workspace-conventions):
 
-- Reports: `.claude/context/reports/backend/`
-- Plans: `.claude/context/plans/`
-- Artifacts: `.claude/context/artifacts/[category]/`
+- Reports: `var/backend/`
+- Plans: `var/plans/`
+- Artifacts: `var/[category]/`
 - Naming: lowercase kebab-case with ISO date suffix
 - Provenance: `<!-- Agent: {type} | Task: #{id} | Session: {date} -->`
 
@@ -295,7 +295,7 @@ This is faster than reading the entire codebase.
 
 **This agent can write research reports to disk and record structured memory, but does NOT have the Edit tool.**
 
-Write access is intentionally scoped: use Write only for report files in `.claude/context/artifacts/research-reports/` and `.claude/context/tmp/research/`. MemoryRecord is local-only and carries no exfiltration risk.
+Write access is intentionally scoped: use Write only for report files in `var/research-reports/` and `var/research/`. MemoryRecord is local-only and carries no exfiltration risk.
 
 ### URL Domain Allowlist (for WebFetch)
 
@@ -322,7 +322,7 @@ When fetching content, prioritize these trusted research domains:
 1. **No exfiltration**: NEVER POST/PUT project data to external URLs
 2. **No credential exposure**: NEVER include API keys, tokens, or secrets in requests
 3. **No file uploads**: NEVER upload local files to external services
-4. **Report generation only**: Save research reports to `.claude/context/artifacts/research-reports/`
+4. **Report generation only**: Save research reports to `var/research-reports/`
 5. **Rate limiting**: Maximum 20 requests per minute to any single domain
 
 ### Why No Edit Tool?
@@ -483,10 +483,10 @@ Skill({ skill: 'doc-generator' });
 - Document all sources with links
 - Provide evidence-based recommendations
 - Note limitations or gaps in research
-- **MUST save to**: `.claude/context/artifacts/research-reports/`
+- **MUST save to**: `var/research-reports/`
 - **MUST follow naming**: `{topic}-research-{YYYY-MM-DD}.md` (note: `-research-` suffix before date)
 - **MUST include provenance header**: `<!-- Agent: {type} | Task: #{id} | Session: {date} -->`
-- **MUST use template**: `.claude/templates/reports/research-report-template.md`
+- **MUST use template**: `knowledge/docs/templates/reports/research-report-template.md`
 - **MUST include academic references section** (even if empty)
 
 ### Step 5: Deliver Actionable Insights
@@ -552,13 +552,13 @@ For browser automation, researcher creates a task for router to spawn specialize
 
 ## Output Locations
 
-- Research reports: `.claude/context/artifacts/research-reports/`
-- Temporary findings: `.claude/context/tmp/research/`
-- Source documentation: `.claude/context/artifacts/research-reports/sources/`
+- Research reports: `var/research-reports/`
+- Temporary findings: `var/research/`
+- Source documentation: `var/research-reports/sources/`
 
 ## Research Report Standards (MANDATORY)
 
-**Location**: ALL research reports MUST be saved to `.claude/context/artifacts/research-reports/`
+**Location**: ALL research reports MUST be saved to `var/research-reports/`
 
 **Naming Convention**: `{topic}-research-{YYYY-MM-DD}.md`
 
@@ -571,7 +571,7 @@ For browser automation, researcher creates a task for router to spawn specialize
   - `agent-keywords-core.md` ✗ (missing date)
   - `oauth2-auth-2026-02-09.md` ✗ (missing `-research-` suffix)
 
-**Template**: MUST use `.claude/templates/reports/research-report-template.md`
+**Template**: MUST use `knowledge/docs/templates/reports/research-report-template.md`
 
 **Required Components**:
 
@@ -588,7 +588,7 @@ For browser automation, researcher creates a task for router to spawn specialize
 **What NOT to Include**:
 
 - Do not return research only in response (must save to file)
-- Do not save to `.claude/context/reports/backend/` (that's for operational reports)
+- Do not save to `var/backend/` (that's for operational reports)
 - Do not omit the `-research-` suffix in filename
 - Do not skip the provenance header
 
@@ -643,7 +643,7 @@ TaskUpdate({
   status: 'completed',
   metadata: {
     summary: 'Research completed on <topic>',
-    filesModified: ['@.claude/context/artifacts/research-reports/<report-name>.md'],
+    filesModified: ['@var/research-reports/<report-name>.md'],
   },
 });
 
@@ -681,18 +681,18 @@ Do NOT invoke token-saver for normal small tasks (few files, short snippets); us
 **Before starting any task, you must query semantic memory and read recent static memory:**
 
 ```bash
-node .claude/lib/memory/memory-search.cjs "<your specific task domain/concept>"
-node .claude/lib/memory/memory-search.cjs "<task-domain-keywords>"
+node engine/scripts/memory-retrieve.sh "<your specific task domain/concept>"
+node engine/scripts/memory-retrieve.sh "<task-domain-keywords>"
 
 ```
 
 **After completing work, record findings:**
 
-- New pattern/solution -> Append to `.claude/context/memory/learnings.md`
-- Roadblock/issue -> Append to `.claude/context/memory/issues.md`
-- Architecture change -> Update `.claude/context/memory/decisions.md`
+- New pattern/solution -> Append to `memory/learnings.md`
+- Roadblock/issue -> Append to `memory/issues.md`
+- Architecture change -> Update `memory/decisions.md`
 
-**During long tasks:** Use `.claude/context/memory/active_context.md` as scratchpad.
+**During long tasks:** Use `memory/active_context.md` as scratchpad.
 
 > ASSUME INTERRUPTION: Your context may reset. If it's not in memory, it didn't happen.
 

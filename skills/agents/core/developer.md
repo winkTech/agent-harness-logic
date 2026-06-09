@@ -267,7 +267,7 @@ The following hooks govern this agent's behavior at runtime:
 | `sync-memory-index.cjs`         | PostToolUse(Edit/Write) | Updates memory search index               | --              |
 | `code-index-updater.cjs`        | PostToolUse(Edit/Write) | Updates code search index                 | --              |
 
-See `.claude/docs/@HOOK_AGENT_MAP.md` for the complete hook-agent matrix.
+See `knowledge/docs/@HOOK_AGENT_MAP.md` for the complete hook-agent matrix.
 
 ## Related Workflows
 
@@ -275,17 +275,17 @@ The following workflows guide this agent's execution:
 
 | Workflow                 | Path                                                           | When to Use                          |
 | ------------------------ | -------------------------------------------------------------- | ------------------------------------ |
-| Feature Development      | `.claude/workflows/enterprise/feature-development-workflow.md` | Implementing features (TDD)          |
-| Enterprise Orchestration | `.claude/workflows/core/enterprise-workflow.md`                | Understanding phase routing          |
-| Hook Consolidation       | `.claude/workflows/operations/hook-consolidation.md`           | Modifying hook infrastructure        |
-| Workspace Conventions    | `.claude/rules/workspace-conventions.md`                       | Output placement, naming, provenance |
+| Feature Development      | `skills/workflows/enterprise/feature-development-workflow.md` | Implementing features (TDD)          |
+| Enterprise Orchestration | `skills/workflows/core/enterprise-workflow.md`                | Understanding phase routing          |
+| Hook Consolidation       | `skills/workflows/operations/hook-consolidation.md`           | Modifying hook infrastructure        |
+| Workspace Conventions    | `rules/workspace-conventions.md`                       | Output placement, naming, provenance |
 | HDL Coding Workflow      | `workflows/hdl-coding-workflow.md`                             | Verilog/SystemVerilog RTL design & verification |
 
 **Output Standards** (from workspace-conventions):
 
-- Reports: `.claude/context/reports/backend/`
-- Plans: `.claude/context/plans/`
-- Artifacts: `.claude/context/artifacts/[category]/`
+- Reports: `var/backend/`
+- Plans: `var/plans/`
+- Artifacts: `var/[category]/`
 - Naming: lowercase kebab-case with ISO date suffix
 - Provenance: `<!-- Agent: {type} | Task: #{id} | Session: {date} -->`
 
@@ -322,10 +322,10 @@ This task is better suited for [AGENT_NAME]. Provide reroute guidance to Router:
 
 Read your assigned skill files to understand specialized workflows:
 
-- `.claude/skills/tdd/SKILL.md` - Test-Driven Development methodology
-- `.claude/skills/debugging/SKILL.md` - Systematic debugging process
-- `.claude/skills/git-expert/SKILL.md` - Git operations best practices
-- `.claude/skills/context-compressor/SKILL.md` - Search-aware compression for large evidence/context blocks
+- `skills/tdd/SKILL.md` - Test-Driven Development methodology
+- `skills/debugging/SKILL.md` - Systematic debugging process
+- `skills/git-expert/SKILL.md` - Git operations best practices
+- `skills/context-compressor/SKILL.md` - Search-aware compression for large evidence/context blocks
 
 ### Step 1-3: TDD Cycle (from tdd skill)
 
@@ -502,8 +502,8 @@ Each task gets exactly ONE commit upon completion:
 
 When implementing code, follow the Developer Workflow:
 
-- **Full Workflow**: `.claude/docs/DEVELOPER_WORKFLOW.md`
-- **File Placement**: `.claude/docs/FILE_PLACEMENT_RULES.md`
+- **Full Workflow**: `knowledge/docs/DEVELOPER_WORKFLOW.md`
+- **File Placement**: `knowledge/docs/FILE_PLACEMENT_RULES.md`
 - **TDD Required**: Red-Green-Refactor cycle for ALL code changes
 - **Skills**: Use `Skill({ skill: "tdd" })` to invoke skills, not just read them
 
@@ -538,8 +538,8 @@ TaskUpdate({
   metadata: {
     summary: 'Added shouldUseWorktree() guard with 5 hard-stop checks + TTL cleanup',
     filesModified: [
-      '.claude/lib/worktree/worktree-utils.cjs',
-      '.claude/hooks/cleanup/worktree-auto-cleanup.cjs',
+      'engine/scripts/worktree-utils.cjs',
+      'engine/hooks/cleanup/worktree-auto-cleanup.cjs',
     ],
     worktreePath: process.env.AGENT_WORKTREE_PATH || process.cwd(),
     completedAt: new Date().toISOString(),
@@ -607,7 +607,7 @@ When `shouldUseWorktree()` returns `{ ok: false, reason }` (e.g., disk full, nes
 1. Confirm with `process.env.AGENT_WORKTREE_PATH` — if empty, you are in fallback mode
 2. Proceed with extra care: avoid parallel file writes, stage changes frequently
 3. Include `worktreePath: 'main-worktree (fallback)'` in your `TaskUpdate` metadata
-4. The `shouldUseWorktree()` utility in `.claude/lib/worktree/worktree-utils.cjs` documents the exact checks
+4. The `shouldUseWorktree()` utility in `engine/scripts/worktree-utils.cjs` documents the exact checks
 
 ## Skill Invocation Protocol (MANDATORY)
 
@@ -652,7 +652,7 @@ Invoke based on task context:
 
 ### Skill Discovery
 
-1. Consult skill catalog: `.claude/docs/skill-catalog.md`
+1. Consult skill catalog: `knowledge/references/skills-catalog.md`
 2. Search by category or keyword
 3. Invoke with: `Skill({ skill: "<skill-name>" })`
 
@@ -700,18 +700,18 @@ Do NOT invoke token-saver for normal small tasks (few files, short snippets); us
 **Before starting any task, you must query semantic memory and read recent static memory:**
 
 ```bash
-node .claude/lib/memory/memory-search.cjs "<your specific task domain/concept>"
-node .claude/lib/memory/memory-search.cjs "<task-domain-keywords>"
+node engine/scripts/memory-retrieve.sh "<your specific task domain/concept>"
+node engine/scripts/memory-retrieve.sh "<task-domain-keywords>"
 
 ```
 
 **After completing work, record findings:**
 
-- New pattern/solution -> Append to `.claude/context/memory/learnings.md`
-- Roadblock/issue -> Append to `.claude/context/memory/issues.md`
-- Architecture change -> Update `.claude/context/memory/decisions.md`
+- New pattern/solution -> Append to `memory/learnings.md`
+- Roadblock/issue -> Append to `memory/issues.md`
+- Architecture change -> Update `memory/decisions.md`
 
-**During long tasks:** Use `.claude/context/memory/active_context.md` as scratchpad.
+**During long tasks:** Use `memory/active_context.md` as scratchpad.
 
 > ASSUME INTERRUPTION: Your context may reset. If it's not in memory, it didn't happen.
 
@@ -746,7 +746,7 @@ node .claude/lib/memory/memory-search.cjs "<task-domain-keywords>"
 ## Memory
 
 - For structured memory (patterns, gotchas, discoveries), use MemoryRecord with ype, content, rea, source, and optional confidence.
-- Do not use Write/Edit directly on .claude/context/memory/patterns.json or .claude/context/memory/gotchas.json (guard-enforced).
+- Do not use Write/Edit directly on memory/patterns.json or memory/gotchas.json (guard-enforced).
 
 ### Code Search Protocol
 
@@ -826,7 +826,7 @@ For complex algorithmic problems, architecture decisions, or debugging:
 
 For long-running tasks that may span multiple sessions:
 
-- Write state to `.claude/context/plans/{feature}-progress.json` before starting
+- Write state to `var/plans/{feature}-progress.json` before starting
 - Include: `{ feature, currentStep, completedSteps, pendingSteps, decisions, timestamp }`
 - Read this file at session start to resume from last known state
 - Update after each logical unit completes
