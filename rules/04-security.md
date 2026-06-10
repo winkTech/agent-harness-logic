@@ -2,6 +2,8 @@
 name: security-rules
 description: "安全准则 — 敏感操作审查"
 priority: L2
+trigger: "auth / token / password / secret / credential / payment / encrypt / SQL / XSS"
+skip: "纯 RTL 编写 / 无安全敏感关键词"
 ---
 
 # 安全准则

@@ -2,6 +2,8 @@
 name: workflow-trigger-rules
 description: "工作流调用规则 — 关键词触发 + 安全敏感绑定 + 不可跳越红线"
 priority: L3
+trigger: "用户表述含关键词时加载（见下方表格）"
+skip: "纯执行无需工作流"
 ---
 
 # 工作流调用规则
@@ -10,13 +12,44 @@ priority: L3
 
 ## 关键词 → 工作流映射
 
-| 用户表述 | 触发的工作流 | 说明 |
-|:---------|:------------|:------|
-| 新模块/写RTL/写TB/算法实现/定点 | `hdl-coding-workflow` | 必须从 Phase 0 或 1 开始，不可跳过架构设计 |
-| 审查代码/代码质量/PR审查 | `code-review-workflow` | 先 Pass 1 再 Pass 2 |
-| 架构审查/代码库评估/技术债 | `architecture-review-workflow` | 多 Agent 并行审查 |
-| 安全审查/认证/密钥/支付/文件上传 | `security-review-workflow` | 独立安全审查流程 |
-| HDL 编码时问知识/查参考 | rag-skill（自动 Hook） | 系统侧拦截，无感执行 |
+| 用户表述 | 触发的工作流 | 执行方式 | 说明 |
+|:---------|:------------|:---------|:------|
+| 新模块/写RTL/写TB/算法实现/定点 | `hdl-coding-workflow` | `Workflow({name: 'hdl-coding-workflow', args})` | 多 Agent 并行流水线，必须从 Phase 0 开始 |
+| 审查代码/代码质量/PR审查 | `code-review-workflow` | `Workflow({name: 'code-review-workflow', args})` | Adversarial 审查：Writer→Reviewer→Arbiter |
+| 架构审查/代码库评估/技术债 | `architecture-review-workflow` | `Workflow({name: 'architecture-review-workflow', args})` | 四维并行：性能/资源/时序/接口 |
+| 安全审查/认证/密钥/支付/文件上传 | `security-review-workflow` | 调用 `/security-review` skill | 独立安全审查流程 |
+| HDL 编码时问知识/查参考 | rag-skill（自动 Hook） | 系统侧拦截，无感执行 | — |
+
+## 已保存的工作流脚本
+
+项目级工作流位于 `.claude/workflows/`：
+
+| 文件名 | 入口 | args 格式 |
+|:-------|:-----|:----------|
+| `hdl-coding-workflow.js` | `Workflow({name: 'hdl-coding-workflow', args: {modules, projectRoot?}})` | `{modules: string[], projectRoot?: string}` |
+| `hdl-coding-dag-workflow.js` | `Workflow({scriptPath: 'skills/workflows/hdl-coding-dag-workflow.js', args: {modules}})` | `{modules: string[]}` ⚡ DAG 版: 定点+TB并行, 回归+审查并行, 含 Verifier |
+| `code-review-workflow.js` | `Workflow({name: 'code-review-workflow', args: {files, projectRoot?}})` | `{files: string[], projectRoot?: string}` |
+| `architecture-review-workflow.js` | `Workflow({name: 'architecture-review-workflow', args: {targets, projectRoot?}})` | `{targets: string[], projectRoot?: string}` |
+
+### 调用示例
+
+```
+// 并行实现 scrambler + descrambler
+Workflow({name: 'hdl-coding-workflow', args: {
+  modules: ['scrambler', 'descrambler'],
+  projectRoot: 'd:/Project_Files/ofdm/wifi_example/prj'
+}})
+
+// 审查最近修改的文件
+Workflow({name: 'code-review-workflow', args: {
+  files: ['01_src/tx/scrambler.sv', '01_src/rx/descrambler.sv']
+}})
+
+// 架构审查顶层模块
+Workflow({name: 'architecture-review-workflow', args: {
+  targets: ['01_src/tx/ofdm_tx.sv', '01_src/rx/ofdm_rx.sv']
+}})
+```
 
 ## Phase 完成自动触发
 

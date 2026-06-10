@@ -2,6 +2,8 @@
 name: python-rules
 description: "Python 编码规则 — 工具链、调试"
 priority: L1
+trigger: ".py 文件被打开或编辑时自动加载"
+skip: "不涉及 Python"
 ---
 
 # Python 编码规则

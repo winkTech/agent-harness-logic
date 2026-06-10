@@ -1,5 +1,8 @@
 # Claude Code 运行时文件
 .claude/
+
+# SQLite 运行时数据库（自动创建）
+.wright/
 history.jsonl
 telemetry/
 todos/

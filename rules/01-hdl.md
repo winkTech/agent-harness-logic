@@ -2,6 +2,8 @@
 name: hdl-rules
 description: "HDL 编码规则 — 新项目流程、模块规范"
 priority: L1
+trigger: ".sv / .v 文件被打开或编辑时自动加载"
+skip: "只改文档/配置/Python/MATLAB"
 ---
 
 # HDL 编码规则
