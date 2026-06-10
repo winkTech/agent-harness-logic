@@ -122,3 +122,6 @@ plans/
 tasks/
 ide/
 session-data/
+
+# PDF 参考文档（本地保存，不入 git）
+*.pdf
