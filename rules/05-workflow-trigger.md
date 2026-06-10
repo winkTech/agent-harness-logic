@@ -19,6 +19,7 @@ skip: "纯执行无需工作流"
 | 架构审查/代码库评估/技术债 | `architecture-review-workflow` | `Workflow({name: 'architecture-review-workflow', args})` | 四维并行：性能/资源/时序/接口 |
 | 安全审查/认证/密钥/支付/文件上传 | `security-review-workflow` | 调用 `/security-review` skill | 独立安全审查流程 |
 | HDL 编码时问知识/查参考 | rag-skill（自动 Hook） | 系统侧拦截，无感执行 | — |
+| 小改动/快速修复/改位宽/加pipeline/精简流程(小修改) | `hdl-coding-workflow (Lite)` | `Workflow({name: 'hdl-coding-dag-workflow', args: {modules, lite: true}})` | ⚡ Lite 模式: 跳过 P2+P6, 适用不影响算法/时序的小修改
 
 ## 已保存的工作流脚本
 
@@ -49,7 +50,23 @@ Workflow({name: 'code-review-workflow', args: {
 Workflow({name: 'architecture-review-workflow', args: {
   targets: ['01_src/tx/ofdm_tx.sv', '01_src/rx/ofdm_rx.sv']
 }})
+
+// Lite 模式 (小改动 — 跳过定点扫描和覆盖率回归)
+Workflow({name: 'hdl-coding-dag-workflow', args: {
+  modules: ['fir_filter'],
+  lite: true
+}})
 ```
+
+### Lite 模式适用条件
+
+| 允许 | 不允许 |
+|:-----|:--------|
+| 位宽调整 (不改算法逻辑) | 新功能/新算法模块 |
+| Pipeline 级数调整 | 影响时序路径 |
+| 接口信号重命名 | 新增接口/协议变更 |
+| 注释/文档更新 | 影响定点 bit-true 一致性 |
+| 已有模块的 bugfix | 顶层架构变更 |
 
 ## Phase 完成自动触发
 

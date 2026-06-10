@@ -16,24 +16,27 @@
 const { spawnSync } = require('node:child_process');
 const fs = require('node:fs');
 const path = require('node:path');
+const eda = require('./eda-detect.cjs');
 
-// ── 仿真器检测 ──────────────────────────────────────────────────────────────
+// ── 仿真器检测 (使用统一 eda-detect 结果) ──────────────────────────────────
+
+const SIMULATOR_MAP = {
+  xsim:       { label: 'Vivado Simulator',       dumpCmd: (dir) => `xsim --dump_all ${path.join(dir, 'dump.vcd')}` },
+  vsim:       { label: 'Questa/ModelSim',        dumpCmd: (dir) => `vsim -wlf ${path.join(dir, 'dump.wlf')}` },
+  iverilog:   { label: 'Icarus Verilog',         dumpCmd: (dir) => `vvp -n -l ${path.join(dir, 'dump.vcd')}` },
+  verilator:  { label: 'Verilator',              dumpCmd: (dir) => undefined },
+  xrun:       { label: 'Cadence Xcelium',        dumpCmd: (dir) => `xrun -input "${dir}/dump.tcl"` },
+  vcs:        { label: 'Synopsys VCS',           dumpCmd: (dir) => undefined },
+};
 
 function detectSimulator() {
-  const candidates = [
-    { cmd: 'xsim', label: 'Vivado Simulator', dumpCmd: (dir) => `xsim --dump_all ${path.join(dir, 'dump.vcd')}` },
-    { cmd: 'vsim', label: 'Questa/ModelSim', dumpCmd: (dir) => `vsim -wlf ${path.join(dir, 'dump.wlf')}` },
-    { cmd: 'iverilog', label: 'Icarus Verilog', dumpCmd: (dir) => `vvp -n -l ${path.join(dir, 'dump.vcd')}` },
-    { cmd: 'verilator', label: 'Verilator', dumpCmd: (dir) => undefined }, // Verilator 依赖 testbench
-  ];
-
-  for (const c of candidates) {
-    const r = spawnSync(c.cmd, ['--version'], { encoding: 'utf8', timeout: 5000, windowsHide: true });
-    if (r.status === 0 && !r.error) {
-      return { ...c, available: true };
+  const tools = eda.detect();
+  for (const name of Object.keys(SIMULATOR_MAP)) {
+    const tool = tools.find(t => t.name === name && t.available);
+    if (tool) {
+      return { cmd: name, label: SIMULATOR_MAP[name].label, dumpCmd: SIMULATOR_MAP[name].dumpCmd, available: true };
     }
   }
-
   return { cmd: null, label: '未检测到仿真器', available: false };
 }
 
