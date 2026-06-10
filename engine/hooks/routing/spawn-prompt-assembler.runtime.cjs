@@ -526,7 +526,36 @@ async function main() {
     assembled = ensureMandatorySpawnPreflight(assembled, explicitTaskId);
     checkDeveloperReadiness(agentType, assembled);
     assembled = resolveTaskOutputReferences(assembled);
-    assembled = enforcePromptBudget(assembled);
+
+    // Inject self-compact instruction BEFORE budget enforcement
+    // so the added text is accounted for in the budget
+    try {
+      const budgetPath = path.join(require('os').homedir(), '.claude', 'engine', 'scripts', 'agent-context-budget.cjs');
+      if (fs.existsSync(budgetPath)) {
+        const budgetMod = require(budgetPath);
+        assembled = budgetMod.injectSelfCompactInstruction(assembled, agentType);
+      }
+    } catch (_bgtErr) {
+      // fail-open
+    }
+
+    assembled = enforcePromptBudget(assembled, agentType);
+
+    // Track spawn with watchdog (non-blocking, fail-open)
+    try {
+      const wdPath = path.join(require('os').homedir(), '.claude', 'engine', 'scripts', 'agent-context-watchdog.cjs');
+      if (fs.existsSync(wdPath)) {
+        const watchdog = require(wdPath);
+        const tier = (() => { try { return require(path.join(require('os').homedir(), '.claude', 'engine', 'scripts', 'agent-context-budget.cjs')).getTier(agentType); } catch(_e){return 'unknown';} })();
+        watchdog.trackAgentSpawn(agentType, {
+          finalPromptChars: assembled.length,
+          taskId: explicitTaskId,
+          tier,
+        });
+      }
+    } catch (_wdErr) {
+      // fail-open
+    }
 
     // === NEW DYNAMIC METADATA BLOCK APPENDED END ===
     if (!hasRequiredWarningBox(assembled) || !hasTaskIdReference(assembled)) {

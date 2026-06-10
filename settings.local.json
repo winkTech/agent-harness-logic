@@ -1,8 +1,13 @@
 {
   "env": {
-    "ECC_DISABLED_HOOKS": "pre:edit-write:gateguard-fact-force",
     "CLAUDE_AUTOCOMPACT_PCT_OVERRIDE": "40",
-    "CLAUDE_MAX_CONTEXT_WINDOW": "200000"
+    "CLAUDE_MAX_CONTEXT_WINDOW": "200000",
+
+    "SPAWN_SKILL_SECTION_MODE": "names_only",
+    "SPAWN_PROMPT_BUDGET_LOG": "on",
+    "SPAWN_ASSEMBLY_CACHE": "on",
+    "SPAWN_ASSEMBLY_CACHE_TTL_MS": "300000",
+    "AGENT_TYPED_MEMORY_INJECTION": "on"
   },
   "hooks": {
     "PostStop": [
@@ -116,18 +121,6 @@
         "id": "pre:observe:continuous-learning"
       },
       {
-        "matcher": "Bash|Write|Edit|MultiEdit",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "node -e \"const p=require('path');const r=require(require('path').join(require('os').homedir(),'.claude','engine','scripts','ecc-root-resolver.cjs'))();const s=p.join(r,'scripts/hooks/plugin-hook-bootstrap.js');process.env.CLAUDE_PLUGIN_ROOT=r;process.argv.splice(1,0,s);require(s)\" node scripts/hooks/run-with-flags.js pre:governance-capture scripts/hooks/governance-capture.js standard,strict",
-            "timeout": 10
-          }
-        ],
-        "description": "Capture governance events (secrets, policy violations, approval requests). Enable with ECC_GOVERNANCE_CAPTURE=1",
-        "id": "pre:governance-capture"
-      },
-      {
         "matcher": "Write|Edit|MultiEdit",
         "hooks": [
           {
@@ -140,7 +133,7 @@
         "id": "pre:config-protection"
       },
       {
-        "matcher": "*",
+        "matcher": "mcp__*",
         "hooks": [
           {
             "type": "command",
@@ -149,18 +142,6 @@
         ],
         "description": "Check MCP server health before MCP tool execution and block unhealthy MCP calls",
         "id": "pre:mcp-health-check"
-      },
-      {
-        "matcher": "Edit|Write|MultiEdit",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "node -e \"const p=require('path');const r=require(require('path').join(require('os').homedir(),'.claude','engine','scripts','ecc-root-resolver.cjs'))();const s=p.join(r,'scripts/hooks/plugin-hook-bootstrap.js');process.env.CLAUDE_PLUGIN_ROOT=r;process.argv.splice(1,0,s);require(s)\" node scripts/hooks/run-with-flags.js pre:edit-write:gateguard-fact-force scripts/hooks/gateguard-fact-force.js standard,strict",
-            "timeout": 5
-          }
-        ],
-        "description": "Fact-forcing gate: block first Edit/Write/MultiEdit per file and demand investigation (importers, data schemas, user instruction) before allowing",
-        "id": "pre:edit-write:gateguard-fact-force"
       }
     ],
     "Stop": [
@@ -236,19 +217,6 @@
         ],
         "description": "Track token and cost metrics per session",
         "id": "stop:cost-tracker"
-      },
-      {
-        "matcher": "*",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "node -e \"const fs=require('fs');const path=require('path');const {spawnSync}=require('child_process');const raw=fs.readFileSync(0,'utf8');const rel=path.join('scripts','hooks','run-with-flags.js');const root=require(require('path').join(require('os').homedir(),'.claude','engine','scripts','ecc-root-resolver.cjs'))();const script=path.join(root,rel);if(fs.existsSync(script)){const result=spawnSync(process.execPath,[script,'stop:desktop-notify','scripts/hooks/desktop-notify.js','standard,strict'],{input:raw,encoding:'utf8',env:process.env,cwd:process.cwd(),timeout:30000});const stdout=typeof result.stdout==='string'?result.stdout:'';if(stdout)process.stdout.write(stdout);else process.stdout.write(raw);if(result.stderr)process.stderr.write(result.stderr);if(result.error||result.status===null||result.signal){const reason=result.error?result.error.message:(result.signal?'signal '+result.signal:'missing exit status');process.stderr.write('[Stop] ERROR: hook runner failed: '+reason+String.fromCharCode(10));process.exit(1);}process.exit(Number.isInteger(result.status)?result.status:0);}process.stderr.write('[Stop] WARNING: could not resolve ECC plugin root; skipping hook'+String.fromCharCode(10));process.stdout.write(raw);\"",
-            "async": true,
-            "timeout": 10
-          }
-        ],
-        "description": "Send desktop notification (macOS/WSL) with task summary when Claude responds",
-        "id": "stop:desktop-notify"
       }
     ],
     "PreCompact": [
@@ -315,7 +283,7 @@
         "id": "post:edit:accumulator"
       },
       {
-        "matcher": "Edit",
+        "matcher": "Edit|Write|MultiEdit",
         "hooks": [
           {
             "type": "command",
@@ -324,18 +292,6 @@
         ],
         "description": "Warn about console.log statements after edits",
         "id": "post:edit:console-warn"
-      },
-      {
-        "matcher": "Bash|Write|Edit|MultiEdit",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "node -e \"const p=require('path');const r=require(require('path').join(require('os').homedir(),'.claude','engine','scripts','ecc-root-resolver.cjs'))();const s=p.join(r,'scripts/hooks/plugin-hook-bootstrap.js');process.env.CLAUDE_PLUGIN_ROOT=r;process.argv.splice(1,0,s);require(s)\" node scripts/hooks/run-with-flags.js post:governance-capture scripts/hooks/governance-capture.js standard,strict",
-            "timeout": 10
-          }
-        ],
-        "description": "Capture governance events from tool outputs. Enable with ECC_GOVERNANCE_CAPTURE=1",
-        "id": "post:governance-capture"
       },
       {
         "matcher": "*",
