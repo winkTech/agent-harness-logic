@@ -29,41 +29,10 @@ export const meta = {
   ],
 };
 
-// ── 辅助: DAG 层化执行器 ─────────────────────────────────────────────────
-// (内联版本, 无需 require)
+// ── DAG 引擎（独立模块）────────────────────────────────────────────────────
+// 由 engine/dag-engine.cjs 提供拓扑排序/分层/重试/超时
 
-/** 拓扑排序 */
-function topoSort(nodes) {
-  const sorted = [], state = new Map();
-  function visit(name) {
-    const s = state.get(name) || 0;
-    if (s === 1) throw new Error(`循环依赖: ${name}`);
-    if (s === 2) return;
-    state.set(name, 1);
-    for (const dep of (nodes[name]?.deps || [])) visit(dep);
-    state.set(name, 2);
-    sorted.push(name);
-  }
-  for (const name of Object.keys(nodes)) if (!state.has(name)) visit(name);
-  return sorted;
-}
-
-/** 按依赖深度分层 */
-function layerize(nodes) {
-  const order = topoSort(nodes);
-  const depth = {};
-  for (const name of order) {
-    const deps = nodes[name]?.deps || [];
-    depth[name] = deps.length === 0 ? 0 : Math.max(...deps.map(d => (depth[d] ?? -1) + 1));
-  }
-  const layers = [];
-  for (const name of order) {
-    const d = depth[name];
-    if (!layers[d]) layers[d] = [];
-    layers[d].push(name);
-  }
-  return layers;
-}
+const dag = require('../../engine/dag-engine.cjs');
 
 // ── 主流程 ─────────────────────────────────────────────────────────────────
 
@@ -280,35 +249,13 @@ ${summary.slice(0, 3000)}
 
 // ── 执行 DAG ──────────────────────────────────────────────────────────────
 
-const layers = layerize(nodes);
-log(`DAG 共 ${Object.keys(nodes).length} 节点, ${layers.length} 层`);
-
-const results = {};
-
-for (let i = 0; i < layers.length; i++) {
-  const layer = layers[i];
-  const nodeNames = layer.join(', ');
-  log(`[层 ${i + 1}/${layers.length}] ${nodeNames}`);
-
-  // 同层并行执行
-  const layerResults = await Promise.all(
-    layer.map(async (name) => {
-      const node = nodes[name];
-      const res = await node.run(results);
-      results[name] = { status: 'ok', data: res };
-      return { name, status: 'ok' };
-    })
-  );
-
-  const failed = layerResults.filter(r => r.status !== 'ok');
-  if (failed.length > 0) {
-    const msgs = failed.map(f => f.name).join(', ');
-    throw new Error(`[DAG] 层 ${i + 1} 节点失败: ${msgs}`);
-  }
-}
+const dagResult = await dag.execute(nodes, {
+  onProgress: (layer, total, names) => log(`[层 ${layer}/${total}] ${names}`),
+  log,
+});
 
 // ── 输出摘要 ──────────────────────────────────────────────────────────────
-const verifierOutput = results.verifier?.data || '';
+const verifierOutput = dagResult.results.verifier?.data || '';
 log('=== DAG 工作流完成 ===');
 
 // 尝试解析 verifier JSON
@@ -325,10 +272,10 @@ try {
 }
 
 return {
-  nodeCount: Object.keys(results).length,
-  layerCount: layers.length,
+  nodeCount: dagResult.nodeCount,
+  layerCount: dagResult.layerCount,
   results: Object.fromEntries(
-    Object.entries(results).map(([k, v]) => [k, { status: v.status }])
+    Object.entries(dagResult.results).map(([k, v]) => [k, { status: v.status }])
   ),
   verifier: verifierOutput,
 };
