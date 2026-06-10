@@ -377,6 +377,19 @@
         ],
         "description": "Sync edited memory files to SQLite facts table (Phase 1 dual-write)",
         "id": "post:memory:sqlite-sync"
+      },
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node engine/hooks/learning/skill-tracker-hook.cjs",
+            "async": true,
+            "timeout": 3000
+          }
+        ],
+        "description": "Track skill invocations in SQLite skills registry + runtime_events",
+        "id": "post:skill-tracker"
       }
     ],
     "PostToolUseFailure": [
