@@ -1,12 +1,16 @@
-# Phase 6: 代码审查
+# Phase 7: 代码审查（原 Phase 6）
 
 > 所属工作流: `workflows/hdl-coding-workflow.md`
 > 目标: 确认代码质量、风格、以及流程合规性。
+> [增强] 增加模型一致性检查 + EDA 工具链约束注入。
+
+---
 
 ## 自审查清单
 
 请在提交审查前逐一确认：
 
+### 基本规范
 - [ ] 构建系统：Makefile + filelist 已创建，`make lint` / `make compile` 通过
 - [ ] 工具链：所有仿真/编译命令使用抽象接口（`make sim` 而非 vsim/vcs 硬编码）
 - [ ] 数据对齐：已选定比对模式（周期精确/事务级/Scoreboard），testbench 正确实现
@@ -18,17 +22,41 @@
 - [ ] 无 lint warning
 - [ ] 所有 SVA 断言已启用
 - [ ] 参考模型对比通过
-- [ ] 映射/查表类模块额外检查：
-  - [ ] MATLAB 模型优先原则：RTL 映射与模型不一致时是改 RTL 而非改模型
-  - [ ] 比特流全程追踪：代码注释中写清了 `bi2de` 位序到 RTL buffer 的对应关系
-  - [ ] 全星座点验证通过：所有可能的索引值全覆盖且与模型输出一致
-  - [ ] 映射预验证步骤已执行（非仅在 Layer 3 数据通路中验证）
+
+### 映射/查表类模块（额外检查）
+- [ ] MATLAB 模型优先原则：RTL 映射与模型不一致时是改 RTL 而非改模型
+- [ ] 比特流全程追踪：代码注释中写清了 `bi2de` 位序到 RTL buffer 的对应关系
+- [ ] 全星座点验证通过：所有可能的索引值全覆盖且与模型输出一致
+- [ ] 映射预验证步骤已执行（非仅在 Layer 3 数据通路中验证）
+
+### 模型一致性检查（新增 Phase 7）
+- [ ] 关键信号命名是否与 MATLAB golden model 对应变量一致？
+- [ ] 位宽/定点格式是否与 Phase 2 定点报告一致？
+- [ ] 模块命名是否与 architecture.yaml 一致？
+
+### EDA 工具链约束检查（新增 Phase 7）
+
+如当前项目锁定了特定 EDA 工具链（如 ModelSim 10.6c），需检查 RTL 是否违反工具链禁令：
+
+| 工具链 | 常见禁令 | 检查项 |
+|:-------|:---------|:-------|
+| ModelSim 10.6c | always_ff 内禁止 automatic logic | grep "automatic.*logic" |
+| ModelSim 10.6c | 初始化禁止 '0/'1 | grep 无宽度字面量 |
+| ModelSim 10.6c | generate assign 禁止调用函数 | grep 函数调用 |
+| ModelSim 10.6c | unpacked array 变量索引禁止 always_comb | grep 危险模式 |
+| Verilator | 禁止 `$display` 在 always 块内 | grep 语法警告 |
+
+### Layer/Stub 检查
 - [ ] Layer 间 Stub（如果有）已标注 TODO，后续替换为完整实现
 - [ ] Phase 1 模块设计方案中预见的难点已解决
+
+---
 
 ## 提交审查
 
 用 `code-review` 的 quality 模式执行审查，详见 `workflows/code-review-workflow.md`。
+
+---
 
 ## 升级决策
 
@@ -37,7 +65,7 @@
 
 ```json
 {
-  "phase": "hdl-coding-phase-6",
+  "phase": "hdl-coding-phase-7",
   "review_decision": {
     "escalate_architecture": false,
     "escalate_security": false,
@@ -67,15 +95,17 @@
 source .claude/checkpoints/hdl-checkpoints.sh && check_escalation
 ```
 
+---
+
 ## 检查点
 
 审查通过的 RTL + 完整仿真日志 + 覆盖率报告 + **升级决策记录**。
 
 **关联 Skill**: `code-review`（质量审查模式）、`hdl-coding`（时序安全/命名规范核查）
 **数据输入**: `.claude/state/hdl-coding/layer-status.json`
-**数据输出**（新增）: `.claude/state/hdl-coding/review-decision.json`
+**数据输出**: `.claude/state/hdl-coding/review-decision.json`
 
 **可执行检查点**:
 ```bash
-source .claude/checkpoints/hdl-checkpoints.sh && check_phase_6
+source .claude/checkpoints/hdl-checkpoints.sh && check_phase_7
 ```
