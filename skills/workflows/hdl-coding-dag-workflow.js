@@ -1,31 +1,42 @@
 /**
- * hdl-coding-dag-workflow — HDL RTL 开发 DAG 工作流。
+ * hdl-coding-dag-workflow — HDL RTL 开发 DAG 工作流 v3.3.0。
  *
- * 与 skills/workflows/hdl-coding-workflow.md 的 8 阶段对应,
- * 但用 DAG 结构表达依赖关系, 使独立阶段可并行执行。
+ * 与 skills/workflows/hdl-coding-workflow.md 的 9 阶段对应。
+ *
+ * [MUST 硬约束] RTL 验证流程:
+ *   Phase 4: 逐模块 RTL + MATLAB 验证 — 每模块写完后必须仿真对比 golden,
+ *            通过后才能继续下一模块
+ *   Phase 5: 顶层集成 + 全链仿真 — 所有子模块通过 Phase 4 后,
+ *            搭建顶层, 全链逐级与 golden model 对比
  *
  * 调用:
  *   Workflow({name: 'hdl-coding-dag-workflow', args: { modules: ['scrambler', 'descrambler'] }})
  *
  * DAG 结构:
  *   Layer 0: Phase 0  基础设施
- *   Layer 1: Phase 1  架构设计
- *   Layer 2: Phase 2  定点量化 + Phase 3 TB-First (并行)
- *   Layer 3: Phase 4  增量 RTL
- *   Layer 4: Phase 5  回归覆盖 + Phase 6 代码审查 (并行)
- *   Layer 5: Phase 7  报告输出 + Verifier
+ *   Layer 1: Phase 1  架构设计 (+ 产 architecture.yaml)
+ *   Layer 2: Phase 2  定点量化
+ *   Layer 3: Phase 3  TB + MATLAB 向量生成
+ *   Layer 4: Phase 4  逐模块 RTL + MATLAB 验证 [硬约束]
+ *   Layer 5: Phase 5  顶层集成 + 全链仿真 [硬约束]
+ *   Layer 6: Phase 6  回归覆盖率 (真跑 compile/sim)
+ *   Layer 7: Phase 7  代码审查 (含模型一致性检查)
+ *   Layer 8: Phase 8  报告输出 + Verifier (含验证矩阵检查)
  */
 
 export const meta = {
   name: 'hdl-coding-dag-workflow',
-  description: 'HDL RTL 开发 DAG 工作流 — 并行架构/定点/TB → 增量RTL → 回归+审查 (Verifier 终验)',
+  description: 'HDL RTL 开发 DAG 工作流 v3.3 — 逐模块RTL+MATLAB验证 → 顶层全链仿真 → 回归+审查 (Verifier终验)',
   phases: [
     { title: 'Phase 0 基础设施' },
     { title: 'Phase 1 架构设计' },
-    { title: 'Phase 2+3 定点+TB (并行)' },
-    { title: 'Phase 4 增量 RTL' },
-    { title: 'Phase 5+6 回归+审查 (并行)' },
-    { title: 'Phase 7 报告+Verifier' },
+    { title: 'Phase 2 定点量化' },
+    { title: 'Phase 3 TB+向量生成' },
+    { title: 'Phase 4 逐模块RTL+MATLAB验证' },
+    { title: 'Phase 5 顶层集成+全链仿真' },
+    { title: 'Phase 6 回归覆盖率' },
+    { title: 'Phase 7 代码审查' },
+    { title: 'Phase 8 报告+Verifier' },
   ],
 };
 
@@ -104,41 +115,91 @@ nodes.p2_fixedpt = {
   },
 };
 
-// Phase 3: TB-First (依赖 Phase 1, 与 Phase 2 并行)
+// Phase 3: TB + MATLAB 向量生成 (依赖 Phase 1)
 nodes.p3_tb = {
   deps: ['p1_arch'],
   run: async (ctx) => {
     const arch = ctx.p1_arch?.data || '';
-    const result = await agent(`执行 HDL 工作流 Phase 3: Testbench-First
+    const result = await agent(`执行 HDL 工作流 Phase 3: TB + MATLAB 向量生成
 
 架构设计: ${String(arch).slice(0, 300)}
 
 任务:
-1. 自检 Testbench
-2. SVA 断言
-3. 结构化日志 + 波形配置
+1. 自检 Testbench (模块级, 单模块验证)
+2. SVA 断言 (关键接口时序)
+3. 结构化日志 + 波形配置 ($dumpvars)
+4. MATLAB golden model 测试向量生成:
+   - 从每个子模块的 MATLAB 函数提取输入/输出对
+   - 存入 02_sim/tv/<module>_tv.txt
+   - 每条向量标注 golden 预期值
+
+[MUST] 标准算法模块 (LFSR/Viterbi/CRC/FIR):
+   - 必须用 MATLAB 生成黄金参考向量
+   - 禁止自闭环验证 (编码→译码对比)
+   - 参考向量存入 02_sim/tv/ 目录
 
 模块: ${modules.join(', ') || '项目默认'}
-输出: TB 编译通过, 自检逻辑完整`, { label: 'p3-testbench' });
+输出: TB 编译通过, 自检逻辑完整, 测试向量已生成`, { label: 'p3-testbench' });
     return result;
   },
 };
 
-// Phase 4: 增量 RTL (依赖 Phase 2 + Phase 3)
+// ═════════════════════════════════════════════════════════════════════════════
+// Phase 4: 逐模块 RTL + MATLAB 验证 [MUST 硬约束]
+//
+// [硬约束] 每次只处理一个模块。完成当前模块的 RTL 编码 + 仿真验证 +
+//          MATLAB golden 对比后，才能开始下一个模块。
+//          所有子模块通过后，输出验证矩阵供 Phase 5 消费。
+// ═════════════════════════════════════════════════════════════════════════════
 nodes.p4_rtl = {
   deps: ['p2_fixedpt', 'p3_tb'],
   run: async (ctx) => {
     const fixedpt = ctx.p2_fixedpt?.data || '';
     const tb = ctx.p3_tb?.data || '';
-    const result = await agent(`执行 HDL 工作流 Phase 4: 增量 RTL
+    const moduleList = modules.length > 0 ? modules : ['模块_1', '模块_2'];
 
-定点报告: ${String(fixedpt).slice(0, 300)}
-Testbench: ${String(tb).slice(0, 300)}
+    const result = await agent(`执行 HDL 工作流 Phase 4: 逐模块 RTL + MATLAB 验证
 
-任务:
-1. Layer 0-4 分层验证
-2. Stub 机制
-3. 双通道日志 + 仿真轮询
+定点报告: ${String(fixedpt).slice(0, 400)}
+Testbench: ${String(tb).slice(0, 400)}
+
+模块列表: ${moduleList.join(', ')}
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+[MUST 硬约束] 逐模块验证流程 — 不可跳过，不可批量执行
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+1. 按模块列表顺序，**一次只处理一个模块**。完成当前模块的全部
+   RTL 编码 + 仿真验证 + MATLAB 对比后，才能开始下一个模块。
+
+2. 每个模块的完成标准（缺一不可）:
+   a) RTL 编码完成 — 遵循编码规范 (ri_/ro_/i_rst 同步复位)
+   b) make compile 通过 (使用检测到的 EDA 工具链)
+   c) 仿真结果与 MATLAB golden model 逐周期比对:
+      - 关键中间信号逐一对比
+      - 输出数据逐周期匹配
+      - 误差 ≤ 1LSB (定点 golden 标准)
+   d) 如不一致 → 分析差异根因 → 修复 RTL → 重新仿真 → 再对比
+   e) 一致 → 记录到验证矩阵 → 开始下一模块
+
+3. 禁止跳过任何模块的 MATLAB 对比验证。如果 TB/测试向量未就绪，
+   必须先完成 TB/向量再继续。
+
+4. 每模块完成后输出一行到验证矩阵:
+   | 模块名 | 状态 | 对比结果 | 迭代次数 |
+   |--------|------|----------|----------|
+   | scrambler | ✅ | 与 scrambler.m 逐周期一致 | 2/2 |
+   | equalizer | ❌ | H_est 累加器差 1LSB | - |
+
+5. 如果某模块 FAIL 且修复超过 3 次迭代:
+   → 执行 Debug Retrospective (5 Whys 根因分析)
+   → 记录到 auto_lessons
+   → 确认根因解决后继续
+
+6. 必须记录 Bit-True 验证报告:
+   - 定点 vs MATLAB 浮点误差 (NMSE/EVM)
+   - 资源使用 (LUT/FF/DSP/BRAM)
+   - 时序收敛 (Fmax)
 
 📐 优先参考 skills/hdl-coding/templates/ 中的现成模板:
    comm/  : delay_sync.v, ram_2port.v
@@ -146,40 +207,114 @@ Testbench: ${String(tb).slice(0, 300)}
    internet/: crc.sv, crc32.v, hash_table.v, lru_counter.v, cam_cell.v,
              frame_sync.v, crossbar_cell.v, sm4_round.v
 
-模块: ${modules.join(', ') || '项目默认'}
-约束: [MUST] 输入寄存器 ri_ / 输出寄存器 ro_ / 同步复位
-输出: Layer 0-4 依次通过, 日志无 FAIL`, { label: 'p4-rtl' });
+模块: ${moduleList.join(', ')}
+
+输出格式:
+1. 验证矩阵 (Markdown 表格)
+2. 每模块 Bit-True 报告
+3. 未通过模块的差异分析`, { label: 'p4-rtl-sequential' });
     return result;
   },
 };
 
-// Phase 5: 回归覆盖率 (依赖 Phase 4)
-nodes.p5_regression = {
+// ═════════════════════════════════════════════════════════════════════════════
+// Phase 5: 顶层集成 + 全链仿真 [MUST 硬约束]
+//
+// [硬约束] Phase 4 验证矩阵必须全 ✅ 才能进入本阶段。
+//          全链逐级与 MATLAB golden model 对比，任何一级不匹配 = FAIL。
+// ═════════════════════════════════════════════════════════════════════════════
+nodes.p5_top_integration = {
   deps: ['p4_rtl'],
   run: async (ctx) => {
-    const rtl = ctx.p4_rtl?.data || '';
-    const result = await agent(`执行 HDL 工作流 Phase 5: 回归覆盖率
+    const rtlResult = ctx.p4_rtl?.data || '';
+    const result = await agent(`执行 HDL 工作流 Phase 5: 顶层集成 + 全链仿真
 
-RTL 实现: ${String(rtl).slice(0, 300)}
+Phase 4 输出: ${String(rtlResult).slice(0, 500)}
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+[MUST 硬约束] 顶层集成流程 — 不可跳过
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+1. 检查 Phase 4 产出的验证矩阵:
+   - 所有模块必须标记为 ✅ (通过)
+   - 有任何 ❌ → 返回 Phase 4 修复，不可继续顶层集成
+
+2. 搭建顶层:
+   a) 创建顶层模块，例化所有子模块
+   b) 按数据流方向连接: TX链 → RX链 (或指定方向)
+   c) 连接控制通路: 帧头/帧尾传递, 配置参数分发
+   d) 确认 AXI4-Stream 握手链完整 (tvalid/tready/tdata/tlast/tuser)
+   e) make compile 通过
+
+3. 全链仿真 — 从输入到输出逐级对比 MATLAB golden model:
+   a) 从 MATLAB 注入全帧测试向量
+   b) 逐级捕获中间结果并与 golden model 对比:
+      - 模块 A 输出 ↔ MATLAB 模块 A 输出
+      - 模块 B 输出 ↔ MATLAB 模块 B 输出
+      - ... (所有中间级)
+      - 最终输出 ↔ MATLAB 整体输出
+   c) 各级误差标准:
+      - 定点模块: 逐周期一致 (bit-true)
+      - 浮点近似模块: 误差 ≤ 1LSB
+   d) 如果有中间级不匹配:
+      → 隔离根因模块 (定位到具体子模块)
+      → 记录差异 (预期值 vs 实际值, 周期号)
+      → 返回 Phase 4 修复该模块
+
+4. 全链 PASS 标准:
+   - 所有中间级输出与 MATLAB golden model 一致
+   - 最终输出与 MATLAB golden model 一致
+   - 任何一级不一致 = FAIL，不可妥协
+
+模块: ${modules.join(', ') || '项目默认'}
+输出:
+1. top.sv 顶层模块
+2. 全链仿真日志 (含所有中间级对比)
+3. 全链 PASS/FAIL 报告
+4. 如有 FAIL → 隔离到具体模块的差异报告`, { label: 'p5-top-integration' });
+    return result;
+  },
+};
+
+// ═════════════════════════════════════════════════════════════════════════════
+// Phase 6: 回归覆盖率 (依赖 Phase 5)
+// [增强] 必须真跑 compile/sim，不能写文字描述替代
+// ═════════════════════════════════════════════════════════════════════════════
+nodes.p6_regression = {
+  deps: ['p5_top_integration'],
+  run: async (ctx) => {
+    const top = ctx.p5_top_integration?.data || '';
+    const result = await agent(`执行 HDL 工作流 Phase 6: 回归覆盖率
+
+顶层集成: ${String(top).slice(0, 400)}
 
 任务:
-1. make regress 全量回归
-2. covergroup 全部触发
-3. mandatory 覆盖点 100%
+1. 检查 Makefile 是否有 compile/sim/regress 目标
+2. 如无 → 自动扫描 01_src/ 下 .sv/.v 文件，生成临时 compile 脚本并运行
+3. 如有 → make regress 全量回归
+4. covergroup 全部触发
+5. mandatory 覆盖点 100%
 
-输出: make regress 全绿`, { label: 'p5-regression' });
+[MUST] 必须真跑编译/仿真。如果 EDA 工具链不可用，
+       至少完成 lint + 语法检查。禁止仅文字描述。
+       使用 eda-detect 检测可用工具链。
+
+输出: regress 全绿 (或真实编译/仿真日志)`, { label: 'p6-regression' });
     return result;
   },
 };
 
-// Phase 6: 代码审查 (依赖 Phase 4, 与 Phase 5 并行)
-nodes.p6_review = {
-  deps: ['p4_rtl'],
+// ═════════════════════════════════════════════════════════════════════════════
+// Phase 7: 代码审查 (依赖 Phase 5, 与 Phase 6 并行)
+// [增强] 增加模型一致性检查 + 工具链约束注入
+// ═════════════════════════════════════════════════════════════════════════════
+nodes.p7_review = {
+  deps: ['p5_top_integration'],
   run: async (ctx) => {
-    const rtl = ctx.p4_rtl?.data || '';
-    const result = await agent(`执行 HDL 工作流 Phase 6: 代码审查
+    const top = ctx.p5_top_integration?.data || '';
+    const result = await agent(`执行 HDL 工作流 Phase 7: 代码审查
 
-RTL 实现: ${String(rtl).slice(0, 300)}
+顶层集成: ${String(top).slice(0, 400)}
 
 审查维度:
 1. 时序安全 (输入寄存/输出寄存/CDC)
@@ -187,56 +322,66 @@ RTL 实现: ${String(rtl).slice(0, 300)}
 3. 状态机 (三段式 + default)
 4. Lint 门禁 (make lint pass)
 5. 位宽匹配
+6. 模型一致性检查:
+   - 关键信号命名是否与 MATLAB golden model 对应变量一致?
+   - 位宽/定点格式是否与 Phase 2 报告一致?
+   - 模块命名是否与 architecture.yaml 一致?
+7. [工具链] 如有 EDA 工具链约束 (如 ModelSim 10.6c 禁令),
+   检查 RTL 是否违规
 
-输出: 审查报告 PASS/FAIL + 修改建议`, { label: 'p6-code-review' });
+输出: 审查报告 PASS/FAIL + 修改建议`, { label: 'p7-code-review' });
     return result;
   },
 };
 
-// Phase 7: 报告 + Verifier (依赖 Phase 5 + Phase 6)
-nodes.p7_report = {
-  deps: ['p5_regression', 'p6_review'],
+// ═════════════════════════════════════════════════════════════════════════════
+// Phase 8: 报告输出 (依赖 Phase 6 + Phase 7)
+// ═════════════════════════════════════════════════════════════════════════════
+nodes.p8_report = {
+  deps: ['p6_regression', 'p7_review'],
   run: async (ctx) => {
-    const regression = ctx.p5_regression?.data || '';
-    const review = ctx.p6_review?.data || '';
-    const result = await agent(`生成 HDL 工作流 Phase 7: 总结报告
+    const regression = ctx.p6_regression?.data || '';
+    const review = ctx.p7_review?.data || '';
+    const result = await agent(`生成 HDL 工作流 Phase 8: 总结报告
 
 回归结果: ${String(regression).slice(0, 300)}
 审查结果: ${String(review).slice(0, 300)}
 
 输出:
-1. 汇总实现报告
+1. 汇总实现报告 (含全链验证矩阵)
 2. 文档归档
-3. 经验记录`, { label: 'p7-report' });
+3. 经验记录`, { label: 'p8-report' });
     return result;
   },
 };
 
 // Verifier (终验节点)
 nodes.verifier = {
-  deps: ['p7_report'],
+  deps: ['p8_report'],
   run: async (ctx) => {
-    const report = ctx.p7_report?.data || '';
+    const report = ctx.p8_report?.data || '';
     // 汇总所有下游结果供 Verifier 审阅
     const summary = [
       '## Phase 0 基础设施', ctx.p0_infra?.data || 'N/A',
       '## Phase 1 架构设计', ctx.p1_arch?.data || 'N/A',
       '## Phase 2 定点量化', ctx.p2_fixedpt?.data || 'N/A',
-      '## Phase 3 Testbench', ctx.p3_tb?.data || 'N/A',
-      '## Phase 4 增量 RTL', ctx.p4_rtl?.data || 'N/A',
-      '## Phase 5 回归', ctx.p5_regression?.data || 'N/A',
-      '## Phase 6 审查', ctx.p6_review?.data || 'N/A',
-      '## Phase 7 报告', report,
+      '## Phase 3 TB+向量生成', ctx.p3_tb?.data || 'N/A',
+      '## Phase 4 逐模块RTL+MATLAB验证', ctx.p4_rtl?.data || 'N/A',
+      '## Phase 5 顶层集成+全链仿真', ctx.p5_top_integration?.data || 'N/A',
+      '## Phase 6 回归', ctx.p6_regression?.data || 'N/A',
+      '## Phase 7 审查', ctx.p7_review?.data || 'N/A',
+      '## Phase 8 报告', report,
     ].join('\n\n');
 
     const result = await agent(`你是一个**跨阶段校验者**。审以下 HDL 开发工作流的全链路结果是否完整满足要求。
 
 逐条检查:
-1. 所有 8 个 Phase 是否都有输出
-2. Phase 4 (RTL) 是否满足 [MUST] 约束: 输入寄存/输出寄存/同步复位
-3. Phase 5 (回归) 是否通过
-4. Phase 6 (审查) 是否通过
-5. 是否适用于模块: ${modules.join(', ') || '项目默认'}
+1. 所有 9 个 Phase 是否都有输出
+2. Phase 4 (逐模块RTL) 验证矩阵: 所有模块是否都标记 ✅?
+3. Phase 5 (顶层集成) 全链仿真各中间级与 MATLAB golden model 一致?
+4. Phase 6 (回归) 是否通过 (要求真实编译/仿真, 非文字)
+5. Phase 7 (审查) 是否通过
+6. 是否适用于模块: ${modules.join(', ') || '项目默认'}
 
 结果摘要:
 ${summary.slice(0, 3000)}

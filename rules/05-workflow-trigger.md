@@ -27,7 +27,7 @@ skip: "纯执行无需工作流"
 | 文件名 | 入口 | args 格式 |
 |:-------|:-----|:----------|
 | `hdl-coding-workflow.js` | `Workflow({name: 'hdl-coding-workflow', args: {modules, projectRoot?}})` | `{modules: string[], projectRoot?: string}` |
-| `hdl-coding-dag-workflow.js` | `Workflow({scriptPath: 'skills/workflows/hdl-coding-dag-workflow.js', args: {modules}})` | `{modules: string[]}` ⚡ DAG 版: 定点+TB并行, 回归+审查并行, 含 Verifier |
+| `hdl-coding-dag-workflow.js` | `Workflow({scriptPath: 'skills/workflows/hdl-coding-dag-workflow.js', args: {modules}})` | `{modules: string[]}` ⚡ DAG 版: 逐模块RTL+MATLAB验证 → 顶层全链仿真, 含 Verifier |
 | `code-review-workflow.js` | `Workflow({name: 'code-review-workflow', args: {files, projectRoot?}})` | `{files: string[], projectRoot?: string}` |
 | `architecture-review-workflow.js` | `Workflow({name: 'architecture-review-workflow', args: {targets, projectRoot?}})` | `{targets: string[], projectRoot?: string}` |
 
@@ -54,7 +54,7 @@ Workflow({name: 'architecture-review-workflow', args: {
 ## Phase 完成自动触发
 
 ```
-hdl-coding Phase 6（代码审查）完成
+hdl-coding Phase 7（代码审查）完成
     → 自动加载 code-review-workflow 执行审查
     → code-review Pass 1 中发现架构问题
         → 自动升级到 architecture-review-workflow
@@ -74,6 +74,6 @@ hdl-coding Phase 6（代码审查）完成
 ## 不可跳越红线
 
 - 写 RTL 前必须先过 Phase 1（架构框图）和 Phase 2（定点量化）——不允许直接写代码
-- Phase 6 未完成（code-review 未通过）不允许提交
+- Phase 7 未完成（code-review 未通过）不允许提交
 - code-review Pass 1 有阻塞项不允许进入 Pass 2
 - 代码库 > 10K LOC 但未做架构审查 → 标记为流程违规
