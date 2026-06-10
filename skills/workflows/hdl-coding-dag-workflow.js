@@ -88,9 +88,26 @@ ${String(infra).slice(0, 300)}
 1. 算法文档化 + 顶层框图
 2. 模块↔MATLAB Golden Model 对标
 3. 每模块方案规格 (端口/时序/接口)
+4. 输出 architecture.yaml (结构化模块清单), 包含:
+   - 模块名 / 类型 / MATLAB 参考函数
+   - 模块间数据流关系
+5. 模块对称对分析:
+   - 扫描模块列表, 识别所有可能成对的模块
+   - 识别规则 (通用, 不限项目领域):
+     a) 前缀对: <前缀1>_<名称> / <前缀2>_<名称>
+        → 如 tx_scrambler / rx_scrambler, enc_data / dec_data
+     b) 后缀对: <名称>_<后缀1> / <名称>_<后缀2>
+        → 如 scrambler_tx / scrambler_rx
+     c) de- 前缀: <名称> / de<名称>
+        → 如 scrambler / descrambler, interleaver / deinterleaver
+     d) 互逆词: encoder/decoder, modulator/demodulator, mapper/demapper, fft/ifft
+     e) 用户可自定义规则添加到 architecture.yaml
+   - 输出到 architecture.yaml:
+     - pair_conventions 字段 (描述当前项目的命名模式)
+     - 每模块 symmetric_with 和 symmetry_type (dataflow_inverse / identical / structural_inverse)
 
 模块: ${modules.join(', ') || '项目默认'}
-输出: algorithm_spec + 顶层框图文档`, { label: 'p1-architecture' });
+输出: algorithm_spec + architecture.yaml + 顶层框图文档`, { label: 'p1-architecture' });
     return result;
   },
 };
@@ -200,6 +217,15 @@ Testbench: ${String(tb).slice(0, 400)}
    - 定点 vs MATLAB 浮点误差 (NMSE/EVM)
    - 资源使用 (LUT/FF/DSP/BRAM)
    - 时序收敛 (Fmax)
+
+7. 对称对复用 [效率提升]:
+   - 在处理每个模块前, 检查 architecture.yaml 中的 symmetric_with 配对信息
+   - 如果当前模块的配对模块**已完成**:
+     → 分析对称类型 (dataflow_inverse / identical / structural_inverse)
+     → 基于已完成模块的端口列表、参数、数据通路反向推导当前模块框架
+     → 例: "descrambler 是 scrambler 的逆向——LFSR 相同, 数据流相反"
+     → 复用框架减少重复手写, 且保持结构一致性
+   - 如果配对模块**尚未完成**: 正常独立编写
 
 📐 优先参考 skills/hdl-coding/templates/ 中的现成模板:
    comm/  : delay_sync.v, ram_2port.v

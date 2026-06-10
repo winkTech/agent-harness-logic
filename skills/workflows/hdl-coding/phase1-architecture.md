@@ -70,3 +70,28 @@ algorithm_spec + 架构框图 + 所有模块方案完成 + golden_model 运行�
 ```bash
 source .claude/checkpoints/hdl-checkpoints.sh && check_phase_1
 ```
+
+---
+
+## 1.8 模块对称对分析
+
+扫描模块列表，识别对称对并输出到 `architecture.yaml`。这使 Phase 4 写配对模块
+时能复用已完成的框架，减少重复手写。
+
+### 通用命名模式
+
+| 模式 | 检测方式 | 示例 |
+|:-----|:---------|:------|
+| 前缀对 | 提取公共 `<name>` 部分 | `tx_*` / `rx_*`, `enc_*` / `dec_*` |
+| 后缀对 | 提取公共 `<name>` 部分 | `*_tx` / `*_rx`, `*_fwd` / `*_rev` |
+| de- 逆前缀 | 匹配 `^(de)` 前缀 | scrambler/descrambler |
+| 互逆词表 | 已知对查表 | encoder/decoder, fft/ifft |
+| 自定义 | architecture.yaml 手工指定 | — |
+
+### 产出
+
+- `architecture.yaml` 的 `pair_conventions` 字段（描述项目的命名模式）
+- 每模块的 `symmetric_with` 和 `symmetry_type` 字段
+  - `dataflow_inverse`: 数据流反向，算法不变
+  - `identical`: 完全相同（如 rrc_tx/rrc_rx）
+  - `structural_inverse`: 结构反向（如 fft/ifft）
