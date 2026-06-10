@@ -6,6 +6,7 @@
 - 系统：安装/下载默认 D 盘，不进 C 盘 → `rules/07-system.md`
 - 硬约束：Golden Model 保护 + 系统文件保护 → `rules/08-constraints.md`
 - 按上下文自动加载：HDL(`01-hdl.md`)、Python(`02-python.md`)、调试(`03-debugging.md`)
+- **新用户首次 session**: 提示阅读 `快速入门.md` — 5 分钟上手
 
 ## 认知层（L4）
 卡住时自动切换 7 种推理模式 → `rules/06-cognition.md`
