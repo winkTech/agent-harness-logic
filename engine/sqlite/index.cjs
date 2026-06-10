@@ -180,11 +180,27 @@ function isAvailable() {
   return true;
 }
 
+/**
+ * 规范化 opts.db 参数: 接受 DatabaseSync 实例或 WrightDb 包装。
+ * 所有 store 统一使用此函数，避免重复。
+ *
+ * @param {object} [opts] - 选项
+ * @param {import('node:sqlite').DatabaseSync|WrightDb} [opts.db] - 数据库连接
+ * @returns {import('node:sqlite').DatabaseSync} DatabaseSync 实例
+ */
+function resolveDb(opts = {}) {
+  if (!opts.db) return openDb().db;
+  // 如果 db 有 .db 属性 (WrightDb), 解包
+  if (opts.db.db && typeof opts.db.prepare === 'undefined') return opts.db.db;
+  return opts.db;
+}
+
 module.exports = {
   openDb,
   defaultDb,
   closeAll,
   backupDb,
   isAvailable,
+  resolveDb,
   DEFAULT_DB_PATH,
 };

@@ -15,7 +15,7 @@
  *   - fact_links: 事实间关系 (取代 [[links]])
  */
 
-const { openDb } = require('./index.cjs');
+const { openDb, resolveDb } = require('./index.cjs');
 const crypto = require('node:crypto');
 
 // ── 常量 ──────────────────────────────────────────────────────────────────
@@ -24,19 +24,6 @@ const VALID_NAMESPACES = new Set([
   'user', 'feedback', 'project', 'projects', 'reference',
   'learnings', 'errors', 'archive',
 ]);
-
-// ── 内部 helpers ───────────────────────────────────────────────────────────
-
-/**
- * 规范化 opts.db 参数: 接受 DatabaseSync 实例或 WrightDb 包装。
- * 返回值是 DatabaseSync 实例。
- */
-function resolveDb(opts = {}) {
-  if (!opts.db) return openDb().db;
-  // 如果 db 有 .db 属性 (WrightDb), 解包
-  if (opts.db.db && typeof opts.db.prepare === 'undefined') return opts.db.db;
-  return opts.db;
-}
 
 // ── ID 生成 ───────────────────────────────────────────────────────────────
 
@@ -322,19 +309,6 @@ function purgeExpired(opts = {}) {
 
   const result = db.prepare('DELETE FROM facts WHERE ttl_until IS NOT NULL AND ttl_until < ?').run(now);
   return result.changes;
-}
-
-// ── 统计 ───────────────────────────────────────────────────────────────────
-
-/**
- * 记忆系统统计。
- */
-function resolveDb(opts = {}) {
-  // opts.db 可能是 DatabaseSync 实例或 WrightDb 包装
-  if (!opts.db) return openDb().db;
-  // 如果 db 有 .db 属性且是 DatabaseSync, 解包
-  if (opts.db.db && typeof opts.db.prepare === 'undefined') return opts.db.db;
-  return opts.db;
 }
 
 // ── 上下文注入版检索 ──────────────────────────────────────────────────────

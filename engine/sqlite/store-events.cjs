@@ -10,14 +10,7 @@
  *   events.setWatermark(42);
  */
 
-const { openDb } = require('./index.cjs');
-
-/** 规范化 opts.db 为 DatabaseSync 实例 */
-function resolveDb(opts = {}) {
-  if (!opts.db) return openDb().db;
-  if (opts.db.db && typeof opts.db.prepare === 'undefined') return opts.db.db;
-  return opts.db;
-}
+const { openDb, resolveDb } = require('./index.cjs');
 
 /**
  * 记录一条运行时事件。
