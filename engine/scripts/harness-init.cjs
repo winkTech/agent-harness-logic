@@ -45,60 +45,51 @@ function section(title) { console.log(`\n━━━ ${title} ━━━`); }
 
 // ── Makefile 生成 ───────────────────────────────────────────────────────────
 
-function generateMakefile(projectName, lintTool, simulator) {
-  const lintTarget = lintTool
-    ? `LINT_TOOL ?= ${lintTool.name}\nLINT_FLAGS ?= ${lintTool.lintCmd('$(FILE)').join(' ')}`
-    : '# 未检测到 lint 工具';
+function generateMakefile(projectName, lintTool, simulator, edaTools) {
+  // 检测最佳匹配的工具链 .mk 文件
+  const HOME_DIR = path.join(os.homedir(), '.claude');
+  let toolchainMk = '';
 
-  const fList = `FILES := \\
-\t${path.join('01_src', 'tx', `${projectName}_tx.sv`)} \\
-\t${path.join('01_src', 'rx', `${projectName}_rx.sv`)} \\
-\t${path.join('01_src', 'top', `${projectName}.sv`)} \\
-\t${path.join('02_tb', `tb_${projectName}.sv`)}
+  if (edaTools.find(t => t.name === 'xvlog' && t.available)) {
+    toolchainMk = 'vivado.mk';
+  } else if (edaTools.find(t => t.name === 'vlog' && t.available)) {
+    // 区分 ModelSim 与 Questa (vlog -version 输出含不同标识)
+    const vlogTool = edaTools.find(t => t.name === 'vlog');
+    const isModelSim = /modelsim/i.test(vlogTool?.versionRaw || '');
+    toolchainMk = isModelSim ? 'modelsim.mk' : 'questa.mk';
+  } else if (edaTools.find(t => t.name === 'iverilog' && t.available)) {
+    toolchainMk = 'iverilog.mk';
+  }
 
-# 自动发现源文件
-SRC_DIR ?= 01_src
-AUTO_FILES := $(shell find $(SRC_DIR) -name '*.sv' -o -name '*.v' 2>/dev/null)`;
+  const includeLine = toolchainMk
+    ? `HARNESS_DIR ?= ${HOME_DIR.replace(/\\/g, '/')}\ninclude $(HARNESS_DIR)/engine/toolchains/${toolchainMk}`
+    : '# 未检测到支持的工具链，请手动配置';
 
   return `# ${projectName} — 由 harness-init 自动生成
+# 工具链: ${lintTool?.label || '未检测到'}, 仿真器: ${simulator || 'vsim'}
 
-.PHONY: all lint compile sim regress clean help
+.PHONY: all clean help
 
 all: lint compile
 
-# ── 工具链配置 ─────────────────────────────────────────────────────────────
-${lintTarget}
-SIMULATOR ?= ${simulator || 'vsim'}
+# ── 工具链 (引用 .claude/toolchains/*.mk) ─────────────────────────────────
+${includeLine}
 
-# ── 源文件 ─────────────────────────────────────────────────────────────────
-${fList}
-
-# ── 目标 ───────────────────────────────────────────────────────────────────
-
-lint:
-\t@echo "=== Lint ==="
-\t@for f in $(AUTO_FILES); do \\
-\t\techo "检查 $$$$f"; \\
-\t\t$(LINT_TOOL) $(LINT_FLAGS) $$$$f; \\
-\tdone
-
-compile: lint
-\t@echo "=== Compile ==="
-\t$(SIMULATOR) -work work $(AUTO_FILES) -c -do "quit"
-
-sim: compile
-\t@echo "=== Simulate ==="
-\t$(SIMULATOR) -work work -c -do "run -all; quit" $(TOP_MODULE)
-
-regress:
-\t@echo "=== Regression ==="
-\t@echo "make lint + make compile + make sim"
+# ── 项目配置 ───────────────────────────────────────────────────────────────
+TOP_MODULE ?= ${projectName}_top
+SRC_DIR    ?= 01_src
 
 clean:
-\trm -rf work *.log *.vcd *.wlf
+\trm -rf work *.log *.vcd *.wlf *.vvp xsim.dir .Xil
 
 help:
-\t@echo "Targets: lint compile sim regress clean"
+\t@echo "Targets: lint compile sim wave clean"
+\t@echo "工具链: ${lintTool?.label || '未检测到'}"
+\t@echo "Sim:    ${simulator || 'vsim'}"
+
+# ── 回归 (多目标串联) ──────────────────────────────────────────────────────
+regress: lint compile sim
+\t@echo "=== Regression PASS ==="
 `;
 }
 
@@ -221,6 +212,20 @@ endmodule
 
 // ── 目录结构生成 ────────────────────────────────────────────────────────────
 
+function toolchainLabel(tools) {
+  if (tools.find(t => t.name === 'xvlog' && t.available)) return 'Vivado';
+  if (tools.find(t => t.name === 'vlog' && t.available)) {
+    const vlogTool = tools.find(t => t.name === 'vlog');
+    return /modelsim/i.test(vlogTool?.versionRaw || '') ? 'ModelSim' : 'Questa';
+  }
+  if (tools.find(t => t.name === 'quartus_map' && t.available)) return 'Quartus';
+  if (tools.find(t => t.name === 'vcs' && t.available)) return 'VCS';
+  if (tools.find(t => t.name === 'xrun' && t.available)) return 'Xcelium';
+  if (tools.find(t => t.name === 'iverilog' && t.available)) return 'Icarus';
+  if (tools.find(t => t.name === 'verilator' && t.available)) return 'Verilator';
+  return '未检测到';
+}
+
 function createProjectStructure(rootDir, projectName) {
   const dirs = [
     rootDir,
@@ -303,10 +308,22 @@ async function main() {
   // ── 4. 生成文件 ─────────────────────────────────────────────────────
   section('生成文件');
 
-  // Makefile
-  const makefile = generateMakefile(projectName, lintTool, defaultSim);
+  // Makefile (引用 toolchains/*.mk)
+  const makefile = generateMakefile(projectName, lintTool, defaultSim, edaTools);
   fs.writeFileSync(path.join(projectDir, 'Makefile'), makefile);
-  ok(`Makefile (lint=${lintTool?.label || '未检测到'}, sim=${defaultSim})`);
+  ok(`Makefile (toolchain=${toolchainLabel(edaTools)}, sim=${defaultSim})`);
+
+  // .gitignore
+  const gitignore = `*.log
+*.vcd
+*.wlf
+*.vvp
+work/
+xsim.dir/
+.Xil/
+`;
+  fs.writeFileSync(path.join(projectDir, '.gitignore'), gitignore);
+  ok(`.gitignore (仿真临时文件/波形)`);
 
   // fpga_constraints.yaml
   const constraints = generateConstraints(fmax + 'MHz', device);
