@@ -2,6 +2,8 @@
 name: debugging-rules
 description: "调试方法论 — 系统化排错流程"
 priority: L2
+trigger: "仿真报错 / 波形不对 / 信号异常 / 不匹配 / 挂掉 / 跑不通"
+skip: "正常编码 / 新增功能 / 文档编写"
 ---
 
 # 调试规则

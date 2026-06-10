@@ -1,8 +1,7 @@
 {
   "env": {
-    "CLAUDE_AUTOCOMPACT_PCT_OVERRIDE": "40",
+    "CLAUDE_AUTOCOMPACT_PCT_OVERRIDE": "20",
     "CLAUDE_MAX_CONTEXT_WINDOW": "200000",
-
     "SPAWN_SKILL_SECTION_MODE": "names_only",
     "SPAWN_PROMPT_BUDGET_LOG": "on",
     "SPAWN_ASSEMBLY_CACHE": "on",
@@ -43,6 +42,11 @@
         "run": "bash ~/.claude/engine/scripts/hooks/memory-track.sh post-message",
         "async": true,
         "timeout": 5000
+      },
+      {
+        "run": "node engine/hooks/learning/signal-collector.cjs drift_stuck",
+        "async": true,
+        "timeout": 3000
       }
     ],
     "PreToolUse": [
@@ -102,6 +106,12 @@
           {
             "type": "command",
             "command": "node -e \"const p=require('path');const r=require(require('path').join(require('os').homedir(),'.claude','engine','scripts','ecc-root-resolver.cjs'))();const s=p.join(r,'scripts/hooks/plugin-hook-bootstrap.js');process.env.CLAUDE_PLUGIN_ROOT=r;process.argv.splice(1,0,s);require(s)\" node scripts/hooks/run-with-flags.js pre:edit-write:suggest-compact scripts/hooks/suggest-compact.js standard,strict"
+          },
+          {
+            "type": "command",
+            "command": "node -e \"var p=require('path'),h=require('os').homedir();require('child_process').spawnSync('node',[p.join(h,'.claude/engine/scripts/hooks/file-protection-guard.cjs')],{stdio:'inherit',env:process.env,cwd:process.cwd()})\"",
+            "description": "File protection guard: block writes to files matching protected patterns",
+            "id": "pre:edit-write:file-protection-guard"
           }
         ],
         "description": "Suggest manual compaction at logical intervals",
@@ -217,6 +227,19 @@
         ],
         "description": "Track token and cost metrics per session",
         "id": "stop:cost-tracker"
+      },
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node engine/hooks/learning/cost-tracker-hook.cjs",
+            "async": true,
+            "timeout": 5000
+          }
+        ],
+        "description": "Per-response cost estimate → cost_ledger (Phase 4)",
+        "id": "stop:cost-estimate"
       }
     ],
     "PreCompact": [
@@ -341,6 +364,19 @@
         ],
         "description": "Inject agent warnings on context exhaustion, high cost, scope creep, or tool loops",
         "id": "post:ecc-context-monitor"
+      },
+      {
+        "matcher": "Edit|Write|MultiEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node engine/hooks/memory/memory-sqlite-sync.cjs",
+            "async": true,
+            "timeout": 5000
+          }
+        ],
+        "description": "Sync edited memory files to SQLite facts table (Phase 1 dual-write)",
+        "id": "post:memory:sqlite-sync"
       }
     ],
     "PostToolUseFailure": [
@@ -354,6 +390,19 @@
         ],
         "description": "Track failed MCP tool calls, mark unhealthy servers, and attempt reconnect",
         "id": "post:mcp-health-check"
+      },
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node engine/hooks/learning/signal-collector.cjs tool_fail",
+            "async": true,
+            "timeout": 3000
+          }
+        ],
+        "description": "Record tool failure events for self-learning flywheel (Phase 3)",
+        "id": "post:learning:tool-fail"
       }
     ],
     "SessionEnd": [

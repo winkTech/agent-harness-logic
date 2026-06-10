@@ -2,6 +2,8 @@
 name: core-rules
 description: "四条铁律 + 通用编码准则 — 所有 session 必须遵守，不可跳过"
 priority: L0
+trigger: "始终加载"
+skip: "永不跳过"
 ---
 
 # 核心规则
