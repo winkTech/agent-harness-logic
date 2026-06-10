@@ -104,6 +104,20 @@ function main() {
   // Normalize: use forward slashes for cross-platform matching
   const normalizedPath = call.filePath.replace(/\\/g, '/');
 
+  // ── Auto-backup settings.local.json ──────────────────────────────────────
+  // 在修改 settings.local.json 前自动备份
+  if (normalizedPath.endsWith('settings.local.json') || normalizedPath.endsWith('settings.json')) {
+    try {
+      const bakPath = call.filePath + '.bak';
+      if (fs.existsSync(call.filePath)) {
+        fs.copyFileSync(call.filePath, bakPath);
+        console.error(`[FileProtection] 已自动备份 ${call.filePath} → ${bakPath}`);
+      }
+    } catch (_e) {
+      // 备份失败不阻断操作
+    }
+  }
+
   for (const pattern of PROTECTED_PATTERNS) {
     if (matchesPattern(normalizedPath, pattern)) {
       console.error('');

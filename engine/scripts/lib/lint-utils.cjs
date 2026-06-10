@@ -1,21 +1,55 @@
 'use strict';
 
 /**
- * engine/scripts/lib/lint-utils.cjs — Lint 工具共享库。
+ * engine/scripts/lib/lint-utils.cjs — Lint 工具共享库 (v2)。
  *
  * 被 pre-commit-lint.js 和 lint-auto-gate.js 共用。
- * 职责: 文件过滤 + vlog/ruff 调用 + 格式化输出。
+ * 职责: 文件过滤 + EDA 工具链自适应 + 格式化输出。
+ *
+ * 增强 v2:
+ *   - 自动检测系统中可用的 EDA 工具链
+ *   - 如果 vlog 不可用，自动降级到 xvlog/verilator/iverilog
+ *   - 每次 lint 操作有超时保护
  */
 
 const { spawnSync } = require('child_process');
 const path = require('path');
+const { detect, pickLintTool } = require('../eda-detect.cjs');
 
 // ── 常量 ──────────────────────────────────────────────────────────────────
 
 const LINTABLE_EXTS = new Set(['.v', '.sv', '.py']);
 const TIMEOUT_MS = 30000;
 
-// ── 工具函数 ───────────────────────────────────────────────────────────────
+// ── 缓存检测结果（进程级，避免每次 lint 都重测） ──────────────────────────
+
+let _cachedLintTool = null;
+
+function getLintTool() {
+  if (_cachedLintTool) return _cachedLintTool;
+
+  const tools = detect({ quick: true });
+  const tool = pickLintTool(tools);
+
+  if (tool) {
+    _cachedLintTool = tool;
+    process.stderr.write(`[LintUtils] 检测到 lint 工具: ${tool.lintLabel}\n`);
+  } else {
+    _cachedLintTool = { name: 'vlog', lintCmd: (f) => ['-lint', f], lintLabel: 'vlog -lint' };
+    process.stderr.write(`[LintUtils] 未检测到 EDA 工具，默认 vlog\n`);
+  }
+
+  return _cachedLintTool;
+}
+
+/**
+ * 清除工具链缓存（用于测试）。
+ */
+function clearCache() {
+  _cachedLintTool = null;
+}
+
+// ── 工具函数 ──────────────────────────────────────────────────────────────
 
 /** 带统一前缀的日志输出 */
 function log(msg) {
@@ -49,6 +83,8 @@ function isLintable(filePath) {
 
 /**
  * 对单个文件运行 linter，输出结果到 stderr。
+ * 自动选择系统中可用的 EDA 工具链。
+ *
  * @param {string} filePath       — 相对路径（用于显示）
  * @param {string} [prefix]       — 日志前缀，默认 'LintGate'
  * @returns {boolean} true=有错误
@@ -61,8 +97,9 @@ function lintFile(filePath, prefix) {
   const writeLog = (msg) => process.stderr.write(`[${tag}] ${msg}\n`);
 
   if (ext === '.v' || ext === '.sv') {
-    writeLog(`🔍 vlog -lint ${filePath}`);
-    const r = exec('vlog', ['-lint', filePath]);
+    const tool = getLintTool();
+    writeLog(`🔍 ${tool.lintLabel} ${filePath}`);
+    const r = exec(tool.name, [...tool.lintCmd(filePath)]);
     if (r.status !== 0) {
       const out = (r.stderr || r.stdout || '').split('\n').filter(Boolean).slice(0, 8);
       out.forEach(l => writeLog(`      ${l}`));
@@ -92,4 +129,6 @@ module.exports = {
   exec,
   isLintable,
   lintFile,
+  clearCache,
+  getLintTool,
 };

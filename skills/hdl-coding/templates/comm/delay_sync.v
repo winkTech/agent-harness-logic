@@ -1,19 +1,9 @@
 `timescale 1ns / 1ps
-//---------------------------------------------------------------------------------------
-//	Project Name	:
-//	Module	Name	:delay_sync
-//	Build	Date	:
-//	Author	Name	:
-//	Device	Num		:
-//	Project	Intro	:
-//
-//	Tool	Versions:
-//	Add		Comments:
-//	
-//---------------------------------------------------------------------------------------
-//	Revision		By				Time				Updata	Discription
-//	
-//	Initial			[AUTHOR]		2023-07-19			
+// template: delay_sync
+// version: 1.0.0
+// domain: comm
+// description: 可配置延迟同步器，支持任意位宽和延迟周期数
+// requires: 无
 //---------------------------------------------------------------------------------------
 
 

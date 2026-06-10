@@ -1,0 +1,47 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "FPGA Constraints Schema",
+  "description": "项目级 FPGA 资源/时序约束定义。用于 resource-budget-gate 和 diagnostics。",
+  "type": "object",
+  "properties": {
+    "target": {
+      "type": "object",
+      "description": "设计目标约束",
+      "properties": {
+        "fmax": { "type": "string", "description": "目标时钟频率，如 200MHz", "pattern": "^\\d+(\\.\\d+)?\\s*(MHz|kHz|Hz)$" },
+        "lut": { "type": "integer", "description": "LUT 预算上限", "minimum": 0 },
+        "ff": { "type": "integer", "description": "FF/寄存器预算上限", "minimum": 0 },
+        "bram": { "type": "integer", "description": "BRAM 预算上限（36K 块）", "minimum": 0 },
+        "dsp": { "type": "integer", "description": "DSP slice 预算上限", "minimum": 0 },
+        "latency": { "type": "integer", "description": "最大延迟（时钟周期数）", "minimum": 1 }
+      },
+      "required": ["fmax"],
+      "additionalProperties": true
+    },
+    "clocks": {
+      "type": "array",
+      "description": "时钟定义列表",
+      "items": {
+        "type": "object",
+        "properties": {
+          "name": { "type": "string", "description": "时钟名称" },
+          "period": { "type": "number", "description": "时钟周期（ns）" },
+          "ports": { "type": "array", "items": { "type": "string" }, "description": "时钟输入端口" }
+        },
+        "required": ["name", "period"]
+      }
+    },
+    "iodelay": {
+      "type": "object",
+      "description": "IO 延迟约束",
+      "properties": {
+        "input_max": { "type": "number", "description": "输入最大延迟（ns）" },
+        "input_min": { "type": "number", "description": "输入最小延迟（ns）" },
+        "output_max": { "type": "number", "description": "输出最大延迟（ns）" },
+        "output_min": { "type": "number", "description": "输出最小延迟（ns）" }
+      }
+    }
+  },
+  "required": ["target"],
+  "additionalProperties": true
+}

@@ -53,6 +53,26 @@ engine/sqlite/
 用户关键词 → 对应工作流。详见 `rules/05-workflow-trigger.md`。
 新增 DAG 版 HDL 工作流: `hdl-coding-dag-workflow` (定点+TB并行, 含 Verifier)
 
+## FPGA 工具链（新增 v5.1）
+```
+engine/scripts/
+├── eda-detect.cjs          # EDA 工具自动检测 (vlog/xvlog/verilator/iverilog)
+├── fpga-xdc-parser.cjs     # Vivado .xdc 约束文件解析
+├── fpga-timing-parser.cjs  # Timing Report 解析 (WNS/TNS/Fmax)
+├── fpga-util-parser.cjs    # Utilization Report 解析 (LUT/BRAM/DSP)
+├── fpga-wave-helper.cjs    # 波形辅助 (VCD/WLF dump)
+└── harness-init.cjs        # FPGA 项目脚手架 (生成 Makefile/约束/模块模板)
+```
+lint 自动降级: `lint-utils.cjs` 优先使用检测到的工具链，无 `vlog` 则降级 `xvlog/verilator/iverilog`。
+
+## 诊断
+```bash
+node engine/diagnostics.cjs            # 全量（含 FPGA 环境）
+node engine/diagnostics.cjs --bench    # Hook 延迟基准 P50/P95
+node engine/diagnostics.cjs --hooks    # 37 条 hook 集成测试
+node engine/diagnostics.cjs --templates # 模板元数据检查
+```
+
 ## 预检 (run-on-start)
 - `memory-health-check.cjs` 记忆系统健康评分
 - `dream-consolidate.cjs --dry-run` 检查待提炼事件 (新 session 首次提示)
@@ -64,6 +84,6 @@ engine/sqlite/
 - `engine/sqlite/README.md` — SQLite 持久层文档
 
 ## 版本
-v5.0 (2026-06-10): 架构升级完成 — SQLite 持久层 + DAG 编排 + Verifier + Dream 自学习 + 成本追踪
+v5.1 (2026-06-10): 10/10 全面升级 — EDA 工具链 + FPGA 解析器 + harness-init + 资源门禁 + 37 条 hook 洁净化
 v4.1 (2026-06-10): 按需加载 — CLAUDE.md 减载为纯 catalog + rules/ 全量 trigger/skip 条件
 v4.0 (2026-06-09): 目录重构 + 五层架构（边界/记忆/交接/认知/技能）

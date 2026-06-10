@@ -90,7 +90,7 @@
 | 事件 | 时机 | 本地钩子 | ECC 插件钩子 |
 |:-----|:-----|:---------|:-------------|
 | `SessionStart` | 新 session 开局 | memory-track, resolve-plugin-path | session-start-bootstrap |
-| `PreToolUse` | 工具调用前 | 挫败检测, pre-commit-lint, diff-size-gate, file-protection-guard | run-with-flags(6 个场景) |
+| `PreToolUse` | 工具调用前 | 挫败检测, pre-commit-lint, diff-size-gate, file-protection-guard, **resource-budget-gate** | run-with-flags(6 个场景) |
 | `PostToolUse` | 工具调用后 | memory-sqlite-sync, skill-tracker | 观测/指标/监控/质量门 |
 | `PostToolUseFailure` | 工具失败 | signal-collector(tool_fail) | MCP 健康检查 |
 | `Stop` | 响应结束 | lint-auto-gate, cost-tracker | 格式化/检查/Session 持久化 |
@@ -181,14 +181,39 @@ SQLite FTS5 (BM25 排序) → Grep/Glob → git log → rag-skill/code-search �
 ## 📊 系统诊断
 
 ```bash
-# 全量健康检查
+# 全量健康检查（含 FPGA 环境）
 node engine/diagnostics.cjs
+
+# Hook 延迟基准 + SLA 检查
+node engine/diagnostics.cjs --bench
+
+# 快速检查（仅 PreToolUse 延迟）
+node engine/diagnostics.cjs --quick
+
+# Hook 集成测试（37 条 hook dry-run）
+node engine/diagnostics.cjs --hooks
 
 # 记忆系统专项
 node engine/scripts/memory-health-check.cjs
 
 # Dream 试运行
 node engine/scripts/dream-consolidate.cjs --dry-run
+
+# 模板元数据检查
+node engine/diagnostics.cjs --templates
+
+# EDA 工具链检测
+node engine/scripts/eda-detect.cjs
+node engine/scripts/eda-detect.cjs --json
+
+# FPGA 约束/时序/资源/波形工具
+node engine/scripts/fpga-xdc-parser.cjs <file.xdc>
+node engine/scripts/fpga-timing-parser.cjs <timing.rpt>
+node engine/scripts/fpga-util-parser.cjs <util.rpt>
+node engine/scripts/fpga-wave-helper.cjs detect
+
+# 新项目脚手架
+node engine/scripts/harness-init.cjs
 ```
 
 ---

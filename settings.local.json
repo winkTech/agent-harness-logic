@@ -55,7 +55,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node -e \"var p=require('path'),h=require('os').homedir();require('child_process').spawnSync('node',[p.join(h,'.claude/engine/scripts/hooks/frustration-detector.cjs'),(process.env.CLAUDE_USER_MESSAGE||'')],{stdio:'inherit',env:process.env,cwd:process.cwd()})\"",
+            "command": "node engine/scripts/hooks/local-runner.cjs frustration-detector.cjs",
             "description": "Frustration detection hook: detect frustration keywords → trigger mode switch (L4 认知层)",
             "id": "pre:cognition:frustration-detector"
           }
@@ -66,15 +66,21 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node -e \"var p=require('path'),h=require('os').homedir();require('child_process').spawnSync('node',[p.join(h,'.claude/engine/scripts/hooks/pre-commit-lint.js')],{stdio:'inherit',env:process.env,cwd:process.cwd()})\"",
+            "command": "node engine/scripts/hooks/local-runner.cjs pre-commit-lint.js",
             "description": "Pre-commit lint check: run vlog/ruff on staged .v/.sv/.py before git commit",
             "id": "pre:bash:pre-commit-lint"
           },
           {
             "type": "command",
-            "command": "node -e \"var p=require('path'),h=require('os').homedir();require('child_process').spawnSync('node',[p.join(h,'.claude/engine/scripts/hooks/diff-size-gate.js')],{stdio:'inherit',env:process.env,cwd:process.cwd()})\"",
+            "command": "node engine/scripts/hooks/local-runner.cjs diff-size-gate.js",
             "description": "Diff-size gate: block git push if change set exceeds thresholds",
             "id": "pre:bash:diff-size-gate"
+          },
+          {
+            "type": "command",
+            "command": "node engine/scripts/hooks/local-runner.cjs resource-budget-gate.js",
+            "description": "Resource budget gate: check FPGA LUT/BRAM/DSP/Fmax against fpga_constraints.yaml",
+            "id": "pre:bash:resource-budget-gate"
           }
         ]
       },
@@ -109,7 +115,7 @@
           },
           {
             "type": "command",
-            "command": "node -e \"var p=require('path'),h=require('os').homedir();require('child_process').spawnSync('node',[p.join(h,'.claude/engine/scripts/hooks/file-protection-guard.cjs')],{stdio:'inherit',env:process.env,cwd:process.cwd()})\"",
+            "command": "node engine/scripts/hooks/local-runner.cjs file-protection-guard.cjs",
             "description": "File protection guard: block writes to files matching protected patterns",
             "id": "pre:edit-write:file-protection-guard"
           }
@@ -160,7 +166,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node -e \"var p=require('path'),h=require('os').homedir();require('child_process').spawnSync('node',[p.join(h,'.claude/engine/scripts/hooks/lint-auto-gate.js')],{stdio:'inherit',env:process.env,cwd:process.cwd()})\"",
+            "command": "node engine/scripts/hooks/local-runner.cjs lint-auto-gate.js",
             "description": "Auto lint gate: run vlog/ruff on modified .v/.sv/.py files at end of response",
             "id": "stop:lint-auto-gate"
           }
@@ -171,7 +177,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node -e \"const fs=require('fs');const path=require('path');const {spawnSync}=require('child_process');const raw=fs.readFileSync(0,'utf8');const rel=path.join('scripts','hooks','run-with-flags.js');const root=require(require('path').join(require('os').homedir(),'.claude','engine','scripts','ecc-root-resolver.cjs'))();const script=path.join(root,rel);if(fs.existsSync(script)){const result=spawnSync(process.execPath,[script,'stop:format-typecheck','scripts/hooks/stop-format-typecheck.js','standard,strict'],{input:raw,encoding:'utf8',env:process.env,cwd:process.cwd(),timeout:300000});const stdout=typeof result.stdout==='string'?result.stdout:'';if(stdout)process.stdout.write(stdout);else process.stdout.write(raw);if(result.stderr)process.stderr.write(result.stderr);if(result.error||result.status===null||result.signal){const reason=result.error?result.error.message:(result.signal?'signal '+result.signal:'missing exit status');process.stderr.write('[Stop] ERROR: hook runner failed: '+reason+String.fromCharCode(10));process.exit(1);}process.exit(Number.isInteger(result.status)?result.status:0);}process.stderr.write('[Stop] WARNING: could not resolve ECC plugin root; skipping hook'+String.fromCharCode(10));process.stdout.write(raw);\"",
+            "command": "node engine/scripts/hooks/stop-runner.cjs stop:format-typecheck scripts/hooks/stop-format-typecheck.js standard,strict 300000",
             "timeout": 300
           }
         ],
@@ -183,7 +189,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node -e \"const fs=require('fs');const path=require('path');const {spawnSync}=require('child_process');const raw=fs.readFileSync(0,'utf8');const rel=path.join('scripts','hooks','run-with-flags.js');const root=require(require('path').join(require('os').homedir(),'.claude','engine','scripts','ecc-root-resolver.cjs'))();const script=path.join(root,rel);if(fs.existsSync(script)){const result=spawnSync(process.execPath,[script,'stop:check-console-log','scripts/hooks/check-console-log.js','standard,strict'],{input:raw,encoding:'utf8',env:process.env,cwd:process.cwd(),timeout:30000});const stdout=typeof result.stdout==='string'?result.stdout:'';if(stdout)process.stdout.write(stdout);else process.stdout.write(raw);if(result.stderr)process.stderr.write(result.stderr);if(result.error||result.status===null||result.signal){const reason=result.error?result.error.message:(result.signal?'signal '+result.signal:'missing exit status');process.stderr.write('[Stop] ERROR: hook runner failed: '+reason+String.fromCharCode(10));process.exit(1);}process.exit(Number.isInteger(result.status)?result.status:0);}process.stderr.write('[Stop] WARNING: could not resolve ECC plugin root; skipping hook'+String.fromCharCode(10));process.stdout.write(raw);\""
+            "command": "node engine/scripts/hooks/stop-runner.cjs stop:check-console-log scripts/hooks/check-console-log.js standard,strict 30000"
           }
         ],
         "description": "Check for console.log in modified files after each response",
@@ -194,7 +200,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node -e \"const fs=require('fs');const path=require('path');const {spawnSync}=require('child_process');const raw=fs.readFileSync(0,'utf8');const rel=path.join('scripts','hooks','run-with-flags.js');const root=require(require('path').join(require('os').homedir(),'.claude','engine','scripts','ecc-root-resolver.cjs'))();const script=path.join(root,rel);if(fs.existsSync(script)){const result=spawnSync(process.execPath,[script,'stop:session-end','scripts/hooks/session-end.js','minimal,standard,strict'],{input:raw,encoding:'utf8',env:process.env,cwd:process.cwd(),timeout:30000});const stdout=typeof result.stdout==='string'?result.stdout:'';if(stdout)process.stdout.write(stdout);else process.stdout.write(raw);if(result.stderr)process.stderr.write(result.stderr);if(result.error||result.status===null||result.signal){const reason=result.error?result.error.message:(result.signal?'signal '+result.signal:'missing exit status');process.stderr.write('[Stop] ERROR: hook runner failed: '+reason+String.fromCharCode(10));process.exit(1);}process.exit(Number.isInteger(result.status)?result.status:0);}process.stderr.write('[Stop] WARNING: could not resolve ECC plugin root; skipping hook'+String.fromCharCode(10));process.stdout.write(raw);\"",
+            "command": "node engine/scripts/hooks/stop-runner.cjs stop:session-end scripts/hooks/session-end.js minimal,standard,strict 30000",
             "async": true,
             "timeout": 10
           }
@@ -207,7 +213,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node -e \"const fs=require('fs');const path=require('path');const {spawnSync}=require('child_process');const raw=fs.readFileSync(0,'utf8');const rel=path.join('scripts','hooks','run-with-flags.js');const root=require(require('path').join(require('os').homedir(),'.claude','engine','scripts','ecc-root-resolver.cjs'))();const script=path.join(root,rel);if(fs.existsSync(script)){const result=spawnSync(process.execPath,[script,'stop:evaluate-session','scripts/hooks/evaluate-session.js','minimal,standard,strict'],{input:raw,encoding:'utf8',env:process.env,cwd:process.cwd(),timeout:30000});const stdout=typeof result.stdout==='string'?result.stdout:'';if(stdout)process.stdout.write(stdout);else process.stdout.write(raw);if(result.stderr)process.stderr.write(result.stderr);if(result.error||result.status===null||result.signal){const reason=result.error?result.error.message:(result.signal?'signal '+result.signal:'missing exit status');process.stderr.write('[Stop] ERROR: hook runner failed: '+reason+String.fromCharCode(10));process.exit(1);}process.exit(Number.isInteger(result.status)?result.status:0);}process.stderr.write('[Stop] WARNING: could not resolve ECC plugin root; skipping hook'+String.fromCharCode(10));process.stdout.write(raw);\"",
+            "command": "node engine/scripts/hooks/stop-runner.cjs stop:evaluate-session scripts/hooks/evaluate-session.js minimal,standard,strict 30000",
             "async": true,
             "timeout": 10
           }
@@ -220,26 +226,13 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node -e \"const fs=require('fs');const path=require('path');const {spawnSync}=require('child_process');const raw=fs.readFileSync(0,'utf8');const rel=path.join('scripts','hooks','run-with-flags.js');const root=require(require('path').join(require('os').homedir(),'.claude','engine','scripts','ecc-root-resolver.cjs'))();const script=path.join(root,rel);if(fs.existsSync(script)){const result=spawnSync(process.execPath,[script,'stop:cost-tracker','scripts/hooks/cost-tracker.js','minimal,standard,strict'],{input:raw,encoding:'utf8',env:process.env,cwd:process.cwd(),timeout:30000});const stdout=typeof result.stdout==='string'?result.stdout:'';if(stdout)process.stdout.write(stdout);else process.stdout.write(raw);if(result.stderr)process.stderr.write(result.stderr);if(result.error||result.status===null||result.signal){const reason=result.error?result.error.message:(result.signal?'signal '+result.signal:'missing exit status');process.stderr.write('[Stop] ERROR: hook runner failed: '+reason+String.fromCharCode(10));process.exit(1);}process.exit(Number.isInteger(result.status)?result.status:0);}process.stderr.write('[Stop] WARNING: could not resolve ECC plugin root; skipping hook'+String.fromCharCode(10));process.stdout.write(raw);\"",
+            "command": "node engine/scripts/hooks/stop-runner.cjs stop:cost-tracker scripts/hooks/cost-tracker.js minimal,standard,strict 30000",
             "async": true,
             "timeout": 10
           }
         ],
         "description": "Track token and cost metrics per session",
         "id": "stop:cost-tracker"
-      },
-      {
-        "matcher": "*",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "node engine/hooks/learning/cost-tracker-hook.cjs",
-            "async": true,
-            "timeout": 5000
-          }
-        ],
-        "description": "Per-response cost estimate → cost_ledger (Phase 4)",
-        "id": "stop:cost-estimate"
       }
     ],
     "PreCompact": [
@@ -261,7 +254,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node -e \"const p=require('path');const r=require(require('path').join(require('os').homedir(),'.claude','engine','scripts','ecc-root-resolver.cjs'))();const s=p.join(r,'scripts/hooks/plugin-hook-bootstrap.js');process.env.CLAUDE_PLUGIN_ROOT=r;process.argv.splice(1,0,s);require(s)\" node scripts/hooks/post-bash-dispatcher.js",
+            "command": "node engine/scripts/hooks/ecc-runner.cjs scripts/hooks/post-bash-dispatcher.js",
             "async": true,
             "timeout": 30
           }
@@ -424,7 +417,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node -e \"const fs=require('fs');const path=require('path');const {spawnSync}=require('child_process');const raw=fs.readFileSync(0,'utf8');const rel=path.join('scripts','hooks','run-with-flags.js');const root=require(require('path').join(require('os').homedir(),'.claude','engine','scripts','ecc-root-resolver.cjs'))();const script=path.join(root,rel);if(fs.existsSync(script)){const result=spawnSync(process.execPath,[script,'session:end:marker','scripts/hooks/session-end-marker.js','minimal,standard,strict'],{input:raw,encoding:'utf8',env:process.env,cwd:process.cwd(),timeout:30000});const stdout=typeof result.stdout==='string'?result.stdout:'';if(stdout)process.stdout.write(stdout);else process.stdout.write(raw);if(result.stderr)process.stderr.write(result.stderr);if(result.error||result.status===null||result.signal){const reason=result.error?result.error.message:(result.signal?'signal '+result.signal:'missing exit status');process.stderr.write('[SessionEnd] ERROR: hook runner failed: '+reason+String.fromCharCode(10));process.exit(1);}process.exit(Number.isInteger(result.status)?result.status:0);}process.stderr.write('[SessionEnd] WARNING: could not resolve ECC plugin root; skipping hook'+String.fromCharCode(10));process.stdout.write(raw);\"",
+            "command": "node engine/scripts/hooks/stop-runner.cjs session:end:marker scripts/hooks/session-end-marker.js minimal,standard,strict 30000",
             "async": true,
             "timeout": 10
           }

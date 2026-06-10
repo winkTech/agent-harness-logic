@@ -1,10 +1,14 @@
 #!/usr/bin/env node
 /**
- * Stop Hook: Lint Auto Gate
+ * Stop Hook: Lint Auto Gate — 增强版
  *
  * 响应结束时自动对修改过的 .v/.sv/.py 文件运行 linter。
  * 非阻断（Stop hook）——仅报告警告。
- * 跨平台，依赖 git diff --name-only。
+ *
+ * 增强:
+ *   - 超时保护（30s，超时出 warning 不阻断）
+ *   - 规模保护（最多 lint 20 个文件，超出报 "还有 N 个未检查"）
+ *   - 跨平台，依赖 git diff --name-only
  */
 
 'use strict';
@@ -14,6 +18,11 @@ const path = require('path');
 const { LINTABLE_EXTS, TIMEOUT_MS, isLintable, lintFile } = require('../lib/lint-utils.cjs');
 
 const PREFIX = 'LintGate';
+
+// 规模保护阈值
+const MAX_LINT_FILES = 20;
+// 超时保护（lint-utils.cjs 的 TIMEOUT_MS 已经是 30000）
+const GLOBAL_TIMEOUT_MS = 35000;
 
 function log(msg) {
   process.stderr.write(`[${PREFIX}] ${msg}\n`);
@@ -43,7 +52,34 @@ function main() {
     if (toLint.length === 0) return;
 
     log(`本轮修改涉及 ${toLint.length} 个可检查文件`);
-    toLint.forEach(f => lintFile(f, PREFIX));
+
+    // 规模保护：最多检查 MAX_LINT_FILES 个
+    const toCheck = toLint.slice(0, MAX_LINT_FILES);
+    const remaining = toLint.length - toCheck.length;
+
+    if (remaining > 0) {
+      log(`⚠ 可检查文件过多，只 lint 前 ${MAX_LINT_FILES} 个（还有 ${remaining} 个未检查）`);
+    }
+
+    // 超时保护：用整体超时兜底
+    const startTime = Date.now();
+    let checkedCount = 0;
+
+    for (const file of toCheck) {
+      if (Date.now() - startTime > GLOBAL_TIMEOUT_MS) {
+        log(`⚠ lint 超时（${GLOBAL_TIMEOUT_MS / 1000}s），已检查 ${checkedCount}/${toCheck.length} 个文件`);
+        break;
+      }
+      lintFile(file, PREFIX);
+      checkedCount++;
+    }
+
+    log(`✅ lint 完成: ${checkedCount}/${toCheck.length} 个文件`);
+
+    // 为 remaining 生成一个 warning 但不清零
+    if (remaining > 0) {
+      log(`⚠ 本次跳过 ${remaining} 个文件。用 "make lint" 全量检查。`);
+    }
   } catch (e) {
     log(`跳过（${e.message}）`);
   }
