@@ -9,6 +9,14 @@ const PROJECT_ROOT = path.resolve(__dirname, '..', '..', '..');
 const LIB_DIR = path.join(PROJECT_ROOT, '.claude', 'lib');
 const HOOKS_DIR = path.join(PROJECT_ROOT, '.claude', 'hooks');
 
+const BUDGET = (() => {
+  try {
+    return require(path.join(require('os').homedir(), '.claude', 'engine', 'scripts', 'agent-context-budget.cjs'));
+  } catch (_e) {
+    return null;
+  }
+})();
+
 function libRequire(modulePath) {
   return require(path.join(LIB_DIR, modulePath));
 }
@@ -449,27 +457,51 @@ function resolveTaskOutputReferences(prompt) {
   }
 }
 
-function enforcePromptBudget(prompt) {
+function enforcePromptBudget(prompt, agentType) {
   if (!prompt || typeof prompt !== 'string') return prompt;
-  if (!Number.isFinite(MAX_SPAWN_PROMPT_CHARS) || MAX_SPAWN_PROMPT_CHARS <= 0) {
-    return prompt;
+
+  // Resolve max chars: budget system > env var > default 40k
+  const agentTypeStr = (agentType || 'developer').toLowerCase().trim();
+  let maxChars = MAX_SPAWN_PROMPT_CHARS; // 40000 fallback if env unset
+
+  if (BUDGET) {
+    const tierMax = BUDGET.getMaxChars(agentTypeStr);
+    // Use tier budget unless env var explicitly set lower
+    const envOverride = Number(process.env.SPAWN_PROMPT_MAX_CHARS);
+    if (Number.isFinite(envOverride) && envOverride > 0 && envOverride < tierMax) {
+      maxChars = envOverride;
+    } else {
+      maxChars = tierMax;
+    }
   }
-  if (prompt.length <= MAX_SPAWN_PROMPT_CHARS) return prompt;
+
+  if (!Number.isFinite(maxChars) || maxChars <= 0) return prompt;
+  if (prompt.length <= maxChars) return prompt;
 
   const beforeChars = prompt.length;
   let reduced = prompt;
   const removedHeaders = [];
+
+  // Priority order: LEAST important removed FIRST
+  // Constitution/rules are NEVER auto-removed — they are mission-critical
   const removalOrder = [
-    { type: 'top', header: '## Memory Context (Auto-Loaded)' },
+    // 1. Entity graph (bulky, low value for most tasks)
     { type: 'sub', header: '### Entity Graph (SQLite)' },
-    { type: 'sub', header: '### Relevant Memories (Query)' },
+    { type: 'sub', header: '### Entity Graph' },
+    // 2. Detailed semantic matches (reference only, already in memory)
     { type: 'sub', header: '### Semantic Matches (ContextualMemory)' },
-    { type: 'top', header: '## Agent Constitution' },
-    { type: 'top', header: '## Dynamic behaviour rules' },
+    { type: 'sub', header: '### Relevant Memories (Query)' },
+    // 3. Memory context (helpful but not essential for rules compliance)
+    { type: 'top', header: '## Memory Context (Auto-Loaded)' },
+    // 4. Soul/personality (nice-to-have for general assistants)
+    { type: 'top', header: '## Agent Personality' },
+    { type: 'top', header: '## Soul' },
+    // Constitution / Dynamic behaviour rules — NOT in removalOrder.
+    // They are mission-critical and must be preserved at all costs.
   ];
 
   for (const item of removalOrder) {
-    if (reduced.length <= MAX_SPAWN_PROMPT_CHARS) break;
+    if (reduced.length <= maxChars) break;
     const prev = reduced;
     reduced =
       item.type === 'top'
@@ -480,21 +512,49 @@ function enforcePromptBudget(prompt) {
     }
   }
 
+  // Hard truncation — protect constitution section even when cutting
   let hardTruncated = false;
-  if (reduced.length > MAX_SPAWN_PROMPT_CHARS) {
+  if (reduced.length > maxChars) {
     hardTruncated = true;
-    const keep = Math.max(0, MAX_SPAWN_PROMPT_CHARS - TRUNCATION_NOTICE.length);
-    reduced = reduced.slice(0, keep) + TRUNCATION_NOTICE;
+
+    // Find constitution/dynamic-rules section boundaries
+    const constitutionStart = reduced.indexOf('\n## Agent Constitution');
+    const dynamicRulesStart = reduced.indexOf('\n## Dynamic behaviour rules');
+    const protectStart = Math.min(
+      constitutionStart >= 0 ? constitutionStart : Infinity,
+      dynamicRulesStart >= 0 ? dynamicRulesStart : Infinity
+    );
+
+    if (protectStart < Infinity) {
+      // Save protected sections, truncate everything before them
+      const protectedSections = reduced.slice(protectStart);
+      const preSections = reduced.slice(0, protectStart);
+      const keep = Math.max(0, maxChars - protectedSections.length - TRUNCATION_NOTICE.length);
+      if (keep > 0) {
+        // Keep as much of the pre-section content as fits, then append protected sections
+        reduced = preSections.slice(0, keep) + '\n' + protectedSections;
+      } else {
+        // Extremely tight budget: only keep protected sections
+        reduced = protectedSections.slice(0, Math.max(0, maxChars - TRUNCATION_NOTICE.length)) + TRUNCATION_NOTICE;
+      }
+    } else {
+      // No constitution found, normal hard truncation
+      const keep = Math.max(0, maxChars - TRUNCATION_NOTICE.length);
+      reduced = reduced.slice(0, keep) + TRUNCATION_NOTICE;
+    }
   }
 
   if (isSpawnPromptBudgetLogEnabled()) {
     stderrLog('spawn_prompt_budget', {
       event: 'spawn_prompt_budget',
+      agentType: agentTypeStr,
       beforeChars,
       afterChars: reduced.length,
-      maxChars: MAX_SPAWN_PROMPT_CHARS,
+      maxChars,
       removedHeaders,
       hardTruncated,
+      tier: BUDGET ? BUDGET.getTier(agentTypeStr) : 'unknown',
+      constitutionProtected: reduced.includes('## Agent Constitution'),
     });
   }
 

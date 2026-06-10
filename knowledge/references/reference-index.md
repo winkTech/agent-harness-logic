@@ -64,3 +64,30 @@
 | `knowledge/references/mcp-matlab-usage.md` | MATLAB MCP 使用指南 |
 | `skills/tdd/references/tdd-workflow-local.md` | TDD 工作流 |
 | `skills/rag-skill/references/pdf_reading.md` | PDF 文档读取 |
+
+## Agent 上下文管理
+
+| 脚本 | 用途 |
+|:----|:-----|
+| `engine/scripts/agent-context-budget.cjs` | 逐 Agent 类型上下文预算（tight/normal/relaxed/full 四档）+ 智能压缩 |
+| `engine/scripts/agent-context-watchdog.cjs` | Agent spawn 追踪 + 自压缩指令注入 + context 统计报表 |
+| `engine/scripts/ctx-checkpoint.sh` | PreCompact hook 调用的压缩前 checkpoint |
+| `engine/scripts/runtime-state.cjs` | 运行时状态管理器（含 spawnedAgents 列表） |
+
+使用方式：
+```bash
+# 查 developer agent 的预算
+node engine/scripts/agent-context-budget.cjs tier developer
+
+# 从 stdin 压缩 prompt
+cat prompt.txt | node engine/scripts/agent-context-budget.cjs compress developer
+
+# 查 agent 上下文健康摘要
+node engine/scripts/agent-context-watchdog.cjs health
+
+# 记录 agent spawn
+node engine/scripts/agent-context-watchdog.cjs track planner
+
+# 查看所有已 spawn agent
+node engine/scripts/agent-context-watchdog.cjs status
+```

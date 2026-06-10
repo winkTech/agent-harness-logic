@@ -3,6 +3,7 @@
 ## 约束（L0，必须读）
 - 通用：四条铁律 + Lint First + 验证闭环 → `rules/00-core.md`
 - 安全：禁止操作 + 需确认项 → `rules/04-security.md`
+- 系统：安装/下载默认 D 盘，不进 C 盘 → `rules/07-system.md`
 - 按上下文自动加载：HDL(`01-hdl.md`)、Python(`02-python.md`)、调试(`03-debugging.md`)
 
 ## 认知层（L4）

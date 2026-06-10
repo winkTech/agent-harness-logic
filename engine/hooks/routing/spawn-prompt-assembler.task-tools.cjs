@@ -631,10 +631,26 @@ function appendConstitutionSection(assembled, context) {
   }
 
   const section = lines.join('\n') + '\n';
-  const marker = '## Memory Context (Auto-Loaded)';
-  if (assembled.includes(marker)) {
-    const markerIdx = assembled.indexOf(marker);
-    return assembled.slice(0, markerIdx) + `${section}\n` + assembled.slice(markerIdx);
+
+  // Insert constitution near the TOP of the prompt — the most visible position.
+  // Constitution is mission-critical and should be the LAST content compressed.
+  // Priority:
+  //   1. Before the first ## heading (right after system intro — top area)
+  //   2. Before ## Memory Context (fallback)
+  //   3. Append at end (last resort)
+  const firstHeading = assembled.indexOf('\n## ');
+  const memMarker = '## Memory Context (Auto-Loaded)';
+  const memIdx = assembled.indexOf(memMarker);
+
+  if (firstHeading >= 0 && (memIdx < 0 || firstHeading < memIdx)) {
+    // Insert before the first ## heading: constitution goes right
+    // after the system header, before tools/skills/reference sections.
+    return assembled.slice(0, firstHeading) + '\n' + section + assembled.slice(firstHeading + 1);
+  }
+
+  if (memIdx >= 0) {
+    // Fallback: insert before memory section
+    return assembled.slice(0, memIdx) + `${section}\n` + assembled.slice(memIdx);
   }
 
   return assembled + `\n${section}`;

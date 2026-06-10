@@ -45,3 +45,4 @@ metadata:
 ## 相关记忆
 
 - [[knowledge-map-compliance]] — 新增知识必须三同步
+- `rules/07-system.md` — 系统操作规则（L1 边界层，每 session 自动加载）
