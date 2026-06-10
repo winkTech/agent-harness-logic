@@ -48,9 +48,15 @@ const dag = require('../../engine/dag-engine.cjs');
 // ── 主流程 ─────────────────────────────────────────────────────────────────
 
 const modules = args?.modules || [];
+const liteMode = args?.lite === true;
 
 phase('Phase 0 基础设施');
 log(`模块: ${modules.length > 0 ? modules.join(', ') : '未指定 (使用项目默认)'}`);
+
+if (liteMode) {
+  log('⚡ EXPRESS LANE (Lite 模式) — Phase 2 (定点扫描) + Phase 6 (覆盖率回归) 已跳过');
+  log('   适用: 小改动/位宽调整/pipeline 级添加。不影响算法行为/时序路径');
+}
 
 // 定义 DAG 节点
 // 每个节点: { deps: string[], run: (上游结果) => Promise<输出> }
@@ -227,8 +233,20 @@ Testbench: ${String(tb).slice(0, 400)}
      → 复用框架减少重复手写, 且保持结构一致性
    - 如果配对模块**尚未完成**: 正常独立编写
 
+8. 波形审查 [新增 — Waveform-First 门禁]:
+   a) 仿真后使用 fpga-wave-helper 检查波形:
+      node engine/scripts/fpga-wave-helper.cjs check 05_result/sim/dump.vcd
+   b) 验证 VCD 波形文件存在且非零大小
+   c) 观察关键信号: tvalid/tready 握手、输出数据 vs golden 期望
+   d) 确认无 X/Z 状态漂移 — 使用日志搜索 "x" "z" (不区分大小写)
+   e) 确认复位行为正确 — 复位释放后所有状态机进入 IDLE
+   f) 如波形文件不存在或为 0 字节 → 自动触发:
+      node engine/scripts/fpga-wave-helper.cjs dump 05_result/sim/
+
 📐 优先参考 skills/hdl-coding/templates/ 中的现成模板:
-   comm/  : delay_sync.v, ram_2port.v
+   comm/  : delay_sync.v, ram_2port.v, axis_master.sv, axis_slave.sv,
+            axis_pipeline_reg.sv, pipe_delay.sv, lfsr_gen.sv,
+            cmult.sv, cdc_sync.sv
    alu/   : carry_lookahead_4bit.v, alu_16bit_7func.v, alu_4bit_16func.v
    internet/: crc.sv, crc32.v, hash_table.v, lru_counter.v, cam_cell.v,
              frame_sync.v, crossbar_cell.v, sm4_round.v
@@ -423,6 +441,15 @@ ${summary.slice(0, 3000)}
     return result;
   },
 };
+
+// ── Lite 模式：重写依赖链 ────────────────────────────────────────────────
+if (liteMode) {
+  nodes.p4_rtl.deps = ['p3_tb'];          // 跳过 Phase 2 (定点扫描)
+  nodes.p8_report.deps = ['p7_review'];    // 跳过 Phase 6 (覆盖率回归)
+  // 保留 p2_fixedpt 和 p6_regression 节点但无上游依赖 → 不执行
+  // Verifier 仍依赖 p8_report，不受影响
+  log('   依赖链: P0→P1→P3→P4→P5→P7→P8→Verifier');
+}
 
 // ── 执行 DAG ──────────────────────────────────────────────────────────────
 

@@ -8,13 +8,16 @@
  * 检测的工具:
  *   - vlog         → Questa/ModelSim
  *   - vsim         → Questa/ModelSim 仿真器
- *   - xvlog        → Vivado
+ *   - xvlog        → Vivado xvlog
  *   - xelab        → Vivado 仿真器
- *   - xsim         → Vivado 仿真器
+ *   - xsim         → Vivado 仿真器 (独立条)
  *   - verilator    → Verilator
  *   - iverilog     → Icarus Verilog
  *   - vivado       → Vivado 综合/实现
  *   - yosys        → Yosys 综合
+ *   - quartus_map  → Intel Quartus
+ *   - vcs          → Synopsys VCS
+ *   - xrun         → Cadence Xcelium
  *
  * 用法:
  *   const eda = require('./eda-detect.cjs');
@@ -107,6 +110,40 @@ const TOOLS = [
     args: ['-version'],
     versionRegex: /Vivado\s+v?([\d.]+)/i,
   },
+  {
+    name: 'xsim',
+    label: 'Vivado Simulator (xsim)',
+    cmd: 'xsim',
+    args: ['--version'],
+    versionRegex: /xsim\s+([\d.]+)/i,
+  },
+  {
+    name: 'quartus_map',
+    label: 'Intel Quartus',
+    cmd: 'quartus_map',
+    args: ['--version'],
+    versionRegex: /Quartus\s+(?:Prime\s+)?Version\s+([\d.]+)/i,
+    lintCmd: (file) => ['--lint', '-source', file],
+    lintLabel: 'quartus_map --lint',
+  },
+  {
+    name: 'vcs',
+    label: 'Synopsys VCS',
+    cmd: 'vcs',
+    args: ['-ID'],
+    versionRegex: /VCS\s+([\d.]+)/i,
+    lintCmd: (file) => ['-full64', '-lint', '-sverilog', file],
+    lintLabel: 'vcs -lint -sverilog',
+  },
+  {
+    name: 'xrun',
+    label: 'Cadence Xcelium',
+    cmd: 'xrun',
+    args: ['-version'],
+    versionRegex: /xrun.*\(v?([\d.]+)\)/i,
+    lintCmd: (file) => ['-lmt', '-sv', file],
+    lintLabel: 'xrun -lmt -sv',
+  },
 ];
 
 // ── 检测 ────────────────────────────────────────────────────────────────────
@@ -133,12 +170,15 @@ function detect(opts = {}) {
       });
 
       let version = null;
+      let versionRaw = '';
       if (r.status === 0 && r.stdout) {
+        versionRaw = r.stdout.slice(0, 200);
         const m = r.stdout.match(tool.versionRegex);
         if (m) version = m[1];
       }
       // 尝试 stderr
       if (!version && r.status === 0 && r.stderr) {
+        versionRaw = r.stderr.slice(0, 200);
         const m = r.stderr.match(tool.versionRegex);
         if (m) version = m[1];
       }
@@ -156,6 +196,7 @@ function detect(opts = {}) {
         label: tool.label,
         available,
         version,
+        versionRaw,
         lintCmd: tool.lintCmd || null,
         lintLabel: tool.lintLabel || null,
         companion,
@@ -166,6 +207,7 @@ function detect(opts = {}) {
         label: tool.label,
         available: false,
         version: null,
+        versionRaw: '',
         lintCmd: tool.lintCmd || null,
         lintLabel: tool.lintLabel || null,
         companion: null,
@@ -180,13 +222,13 @@ function detect(opts = {}) {
 
 /**
  * 从已检测的工具中选择最佳 lint 工具链。
- * 优先级: xvlog (Vivado) > vlog (Questa) > verilator > iverilog
+ * 优先级: xvlog (Vivado) > vlog (Questa) > quartus_map (Quartus) > vcs (VCS) > xrun (Xcelium) > verilator > iverilog
  *
  * @param {Array} tools — detect() 的返回值
  * @returns {{ name: string, lintCmd: Function, lintLabel: string } | null}
  */
 function pickLintTool(tools) {
-  const priority = ['xvlog', 'vlog', 'verilator', 'iverilog'];
+  const priority = ['xvlog', 'vlog', 'quartus_map', 'vcs', 'xrun', 'verilator', 'iverilog'];
   for (const name of priority) {
     const tool = tools.find(t => t.name === name && t.available && t.lintCmd);
     if (tool) {
