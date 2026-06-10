@@ -3,7 +3,7 @@
  * PreToolUse Hook: Pre-Commit Lint Check
  *
  * 在 git commit 前对暂存区中的 .v/.sv/.py 文件运行 linter。
- * 检查失败则阻断绝 commit（exit 1），防止不合格代码入库。
+ * 检查失败则阻断 commit（exit 1），防止不合格代码入库。
  *
  * 格式（原生 Claude Code PreToolUse hook）：
  *   从 stdin 接收 JSON，包含 { tool, input: { command } }
@@ -16,13 +16,13 @@
 
 const { spawnSync } = require('child_process');
 const path = require('path');
+const { LINTABLE_EXTS, TIMEOUT_MS, isLintable, lintFile } = require('../lib/lint-utils.cjs');
 
 const MAX_STDIN = 1024 * 1024;
-const LINTABLE_EXTS = new Set(['.v', '.sv', '.py']);
-const TIMEOUT_MS = 30000;
+const PREFIX = 'PreCommit';
 
 function log(msg) {
-  process.stderr.write(`[PreCommit] ${msg}\n`);
+  process.stderr.write(`[${PREFIX}] ${msg}\n`);
 }
 
 /** 从 stdin 读取完整内容 */
@@ -37,21 +37,14 @@ function readStdin() {
   });
 }
 
-function exec(cmd, args, opts = {}) {
-  return spawnSync(cmd, args, {
-    encoding: 'utf8',
-    timeout: TIMEOUT_MS,
-    windowsHide: true,
-    ...opts,
-  });
-}
-
 /**
  * 获取暂存区中待提交的文件列表。
  * @returns {string[]}
  */
 function getStagedFiles() {
-  const r = exec('git', ['diff', '--cached', '--name-only', '--diff-filter=ACMR']);
+  const r = spawnSync('git', ['diff', '--cached', '--name-only', '--diff-filter=ACMR'], {
+    encoding: 'utf8', timeout: TIMEOUT_MS, windowsHide: true,
+  });
   if (r.status !== 0) return [];
   return r.stdout.trim().split('\n').filter(Boolean);
 }
@@ -63,38 +56,14 @@ function getStagedFiles() {
  */
 function runCheck(files) {
   let hasError = false;
-
   files.forEach(file => {
-    const ext = path.extname(file).toLowerCase();
-    if (!LINTABLE_EXTS.has(ext)) return;
-
-    const absPath = path.resolve(file);
-
-    if (ext === '.v' || ext === '.sv') {
-      log(`🔍 vlog -lint ${file}`);
-      const r = exec('vlog', ['-lint', absPath]);
-      if (r.status !== 0) {
-        const out = (r.stderr || r.stdout || '').split('\n').filter(Boolean).slice(0, 8);
-        out.forEach(l => log(`      ${l}`));
-        log(`╚════ ✖ 失败 — 请修复后重试，或用 git commit --no-verify 跳过`);
-        hasError = true;
-      } else {
-        log(`╚════ ✓ 通过`);
-      }
-    } else if (ext === '.py') {
-      log(`🔍 ruff check ${file}`);
-      const r = exec('ruff', ['check', '--quiet', absPath]);
-      if (r.status !== 0) {
-        const out = (r.stderr || r.stdout || '').split('\n').filter(Boolean).slice(0, 8);
-        out.forEach(l => log(`      ${l}`));
-        log(`╚════ ✖ 失败 — 请修复后重试，或用 git commit --no-verify 跳过`);
-        hasError = true;
-      } else {
-        log(`╚════ ✓ 通过`);
-      }
+    if (!isLintable(file)) return;
+    const failed = lintFile(path.resolve(file), PREFIX);
+    if (failed) {
+      log(`╚════ ✖ 失败 — 请修复后重试，或用 git commit --no-verify 跳过`);
+      hasError = true;
     }
   });
-
   return hasError;
 }
 
@@ -104,17 +73,15 @@ async function main() {
     if (!raw) process.exit(0);
 
     const payload = JSON.parse(raw);
-
-    // PreToolUse stdin 结构: { tool: "Bash", input: { command: "..." }, ... }
     const command = (payload?.input?.command || payload?.command || '').trim();
 
-    // 只关心 git commit（排除 git commit --amend 中 amend 不加 --no-verify 的场景）
+    // 只关心 git commit
     if (!/^git\s+commit(\s|$)/.test(command)) process.exit(0);
 
     log('检测到 git commit，启动预提交 lint 检查...');
 
     const files = getStagedFiles();
-    const toCheck = files.filter(f => LINTABLE_EXTS.has(path.extname(f).toLowerCase()));
+    const toCheck = files.filter(isLintable);
 
     if (toCheck.length === 0) {
       log('✓ 暂存区无可检查的 .v/.sv/.py 文件');
@@ -126,7 +93,7 @@ async function main() {
 
     if (failed) {
       log('✖ 预提交 lint 检查未通过，已阻断 commit');
-      process.exit(1); // 阻断
+      process.exit(1);
     }
 
     log('✓ 预提交检查全部通过');
