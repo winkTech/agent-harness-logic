@@ -140,6 +140,12 @@ Testbench: ${String(tb).slice(0, 300)}
 2. Stub 机制
 3. 双通道日志 + 仿真轮询
 
+📐 优先参考 skills/hdl-coding/templates/ 中的现成模板:
+   comm/  : delay_sync.v, ram_2port.v
+   alu/   : carry_lookahead_4bit.v, alu_16bit_7func.v, alu_4bit_16func.v
+   internet/: crc.sv, crc32.v, hash_table.v, lru_counter.v, cam_cell.v,
+             frame_sync.v, crossbar_cell.v, sm4_round.v
+
 模块: ${modules.join(', ') || '项目默认'}
 约束: [MUST] 输入寄存器 ri_ / 输出寄存器 ro_ / 同步复位
 输出: Layer 0-4 依次通过, 日志无 FAIL`, { label: 'p4-rtl' });

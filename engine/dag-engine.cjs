@@ -149,7 +149,7 @@ async function runNode(name, run, ctx, opts = {}) {
  * }>}
  */
 async function execute(nodes, opts = {}) {
-  const { failFast = true, retryCount = 0, timeoutMs = 0 } = opts;
+  const { failFast = true, retryCount = 0, timeoutMs = 300000 } = opts;
   const log = opts.log || (() => {});
   const onProgress = opts.onProgress || (() => {});
 
@@ -159,6 +159,7 @@ async function execute(nodes, opts = {}) {
   const failedNodes = [];
   const nodeCount = Object.keys(nodes).length;
   const layerCount = layers.length;
+  const depMatrix = validateLayerDeps(nodes);
 
   log(`[DAG] ${nodeCount} 节点, ${layerCount} 层`);
 
@@ -195,7 +196,36 @@ async function execute(nodes, opts = {}) {
     layerCount,
     nodeCount,
     failedNodes,
+    dependencyMatrix: depMatrix,
   };
 }
 
-module.exports = { topoSort, layerize, runNode, execute };
+// ── 依赖矩阵验证 ─────────────────────────────────────────────────────────
+
+/**
+ * 验证同层节点间是否存在依赖关系。
+ * 如果存在，说明分层有误（同一层应该无相互依赖）。
+ *
+ * @param {Object<string, { deps?: string[] }>} nodes
+ * @returns {{ valid: boolean, violations: Array<{ layer: number, from: string, to: string }> }}
+ */
+function validateLayerDeps(nodes) {
+  const layers = layerize(nodes);
+  const violations = [];
+
+  for (let i = 0; i < layers.length; i++) {
+    const layerSet = new Set(layers[i]);
+    for (const name of layers[i]) {
+      const deps = nodes[name]?.deps || [];
+      for (const dep of deps) {
+        if (layerSet.has(dep)) {
+          violations.push({ layer: i, from: name, to: dep });
+        }
+      }
+    }
+  }
+
+  return { valid: violations.length === 0, violations };
+}
+
+module.exports = { topoSort, layerize, runNode, execute, validateLayerDeps };

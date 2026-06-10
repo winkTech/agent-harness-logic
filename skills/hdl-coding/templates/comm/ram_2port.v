@@ -1,19 +1,9 @@
 `timescale 1ns / 1ps
-//---------------------------------------------------------------------------------------
-//	Project Name	:
-//	Module	Name	:ram_2port
-//	Build	Date	:
-//	Author	Name	:
-//	Device	Num		:
-//	Project	Intro	:
-//
-//	Tool	Versions:
-//	Add		Comments:
-//	
-//---------------------------------------------------------------------------------------
-//	Revision		By				Time				Updata	Discription
-//	
-//	Initial			[AUTHOR]		2023-07-19			
+// template: ram_2port
+// version: 1.0.0
+// domain: comm
+// description: 双端口 RAM，支持独立读写端口和可配置位宽/深度
+// requires: 无
 //---------------------------------------------------------------------------------------
 
 

@@ -187,9 +187,61 @@ function checkFilesystem() {
   }
 }
 
-// ── 4. 评分 ─────────────────────────────────────────────────────────────────
+// ── 4. FPGA 环境 ────────────────────────────────────────────────────────────
 
-function score(sqlite, hooks, fs_) {
+function checkFPGA() {
+  section('FPGA 环境');
+  try {
+    const eda = require('./scripts/eda-detect.cjs');
+    const tools = eda.detect({ quick: true });
+    const template = require('./scripts/lib/check-templates.cjs');
+
+    const lintTool = eda.pickLintTool(tools);
+    const available = tools.filter(t => t.available);
+    const total = tools.length;
+
+    info(`EDA 工具: ${available.length}/${total} 可用`);
+
+    if (lintTool) info(`首选 lint: ${lintTool.lintLabel}`);
+    else warn('未检测到 lint 工具');
+
+    for (const t of available.slice(0, 5)) {
+      info(`  ${t.label} ${t.version ? `v${t.version}` : ''}`);
+    }
+
+    // 检查项目中是否有关注文件
+    let xdcCount = 0;
+    let constraintCount = 0;
+    try {
+      const cwd = process.cwd();
+      if (fs.existsSync(cwd)) {
+        // 向上找 .git
+        let gitDir = cwd;
+        while (gitDir && !fs.existsSync(path.join(gitDir, '.git'))) {
+          const p = path.dirname(gitDir);
+          if (p === gitDir) { gitDir = null; break; }
+          gitDir = p;
+        }
+        if (gitDir) {
+          xdcCount = (spawnSync('git', ['ls-files', '*.xdc'], { cwd: gitDir, encoding: 'utf8', timeout: 5000, windowsHide: true }).stdout || '').split('\n').filter(Boolean).length;
+          constraintCount = (spawnSync('git', ['ls-files', 'fpga_constraints.*'], { cwd: gitDir, encoding: 'utf8', timeout: 5000, windowsHide: true }).stdout || '').split('\n').filter(Boolean).length;
+        }
+      }
+    } catch { /* 非 git 仓库 */ }
+
+    if (xdcCount > 0) info(`.xdc 约束文件: ${xdcCount} 个`);
+    if (constraintCount > 0) info(`fpga_constraints.yaml: ${constraintCount} 个`);
+
+    return { toolCount: available.length, lintTool: !!lintTool };
+  } catch (e) {
+    fail(`FPGA 环境检查失败: ${e.message}`);
+    return { toolCount: 0, lintTool: false };
+  }
+}
+
+// ── 5. 评分 ─────────────────────────────────────────────────────────────────
+
+function score(sqlite, hooks, fs_, fpga) {
   section('健康评分');
   let score = 100;
 
@@ -206,6 +258,10 @@ function score(sqlite, hooks, fs_) {
   if (fs_.dirty > 10) score -= 5;
   if (fs_.packSize > 100 * 1024 * 1024) score -= 5; // >100MB
 
+  // FPGA
+  if (!fpga.lintTool) score -= 10;
+  if (fpga.toolCount === 0) score -= 5;
+
   score = Math.max(0, Math.min(100, score));
 
   const grade = score >= 90 ? '🟢 优秀' : score >= 75 ? '🟡 良好' : score >= 60 ? '🟠 一般' : '🔴 需维护';
@@ -216,15 +272,73 @@ function score(sqlite, hooks, fs_) {
 // ── Main ───────────────────────────────────────────────────────────────────
 
 async function main() {
+  const args = process.argv.slice(2);
+  const isBench = args.includes('--bench');
+  const isQuick = args.includes('--quick');
+  const isTemplates = args.includes('--templates');
+  const isHooks = args.includes('--hooks');
+
   console.log(`\n╔════════════════════════════════════╗`);
   console.log(`║   🤖 Claude Code Harness 诊断     ║`);
   console.log(`║   ${new Date().toISOString().slice(0, 19).replace('T', ' ')}           ║`);
   console.log(`╚════════════════════════════════════╝`);
 
+  // ── 模式派发 ──────────────────────────────────────────────────────────
+
+  if (isBench) {
+    console.log(`\n📊 模式: 全量基准 (--bench)`);
+    try {
+      const bench = require('./scripts/lib/bench-hooks.cjs');
+      await bench.main();
+    } catch (e) {
+      fail(`基准失败: ${e.message}`);
+    }
+    console.log(`\n━━━ 诊断完成 ━━━\n`);
+    return;
+  }
+
+  if (isQuick) {
+    console.log(`\n⚡ 模式: 快速检查 (--quick)`);
+    try {
+      const bench = require('./scripts/lib/bench-hooks.cjs');
+      await bench.main();
+    } catch (e) {
+      fail(`快速检查失败: ${e.message}`);
+    }
+    console.log(`\n━━━ 诊断完成 ━━━\n`);
+    return;
+  }
+
+  if (isTemplates) {
+    section('模板检查');
+    try {
+      const { checkTemplates } = require('./scripts/lib/check-templates.cjs');
+      await checkTemplates();
+    } catch (e) {
+      fail(`模板检查失败: ${e.message}`);
+    }
+    console.log(`\n━━━ 诊断完成 ━━━\n`);
+    return;
+  }
+
+  if (isHooks) {
+    section('Hook 集成测试');
+    try {
+      require('./scripts/hooks/test-hooks.cjs');
+    } catch (e) {
+      fail(`Hook 测试失败: ${e.message}`);
+    }
+    console.log(`\n━━━ 诊断完成 ━━━\n`);
+    return;
+  }
+
+  // ── 全量诊断 ──────────────────────────────────────────────────────────
+
   const sqlite = checkSQLite();
   const hooks = checkHooks();
   const fs_ = checkFilesystem();
-  score(sqlite, hooks, fs_);
+  const fpga = checkFPGA();
+  score(sqlite, hooks, fs_, fpga);
 
   console.log(`\n━━━ 诊断完成 ━━━\n`);
 }
