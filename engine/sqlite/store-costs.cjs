@@ -12,14 +12,7 @@
  * 依赖: cost_ledger 表 (001-init 已创建)
  */
 
-const { openDb } = require('./index.cjs');
-
-/** 规范化 opts.db */
-function resolveDb(opts = {}) {
-  if (!opts.db) return openDb().db;
-  if (opts.db.db && typeof opts.db.prepare === 'undefined') return opts.db.db;
-  return opts.db;
-}
+const { openDb, resolveDb } = require('./index.cjs');
 
 /**
  * 记录一条成本条目。
