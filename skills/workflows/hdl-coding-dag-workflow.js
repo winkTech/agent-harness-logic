@@ -615,8 +615,46 @@ if (liteMode) {
   log('   (跳过节点: P2 定点量化, P6 覆盖率回归)');
 }
 
+// ═══════════════════════════════════════════════════════════════════════════════
+// Pre-flight 检查: 在 DAG 执行前验证任务理解
+// ═══════════════════════════════════════════════════════════════════════════════
+
+phase('Pre-flight 检查');
+
+// 输出任务理解摘要，供 agent 在开始 DAG 前验证
+const preflightSummary = [
+  '━━━ Pre-flight 任务理解检查 ━━━',
+  `模块列表: ${modules.join(', ') || '(空 — 将使用项目默认模块)'}`,
+  `模式: ${liteMode ? 'Lite (跳过定点+覆盖率回归)' : '完整'}`,
+  `项目根目录: ${projectRoot}`,
+  `高安全模块: ${highSecModules.length > 0 ? highSecModules.join(', ') : '(无)'}`,
+  `标准模块: ${stdModules.length > 0 ? stdModules.join(', ') : '(无)'}`,
+  '',
+  '请在开始前确认:',
+  '  1. 以上模块列表是否完整且正确?',
+  '  2. 模块间数据流关系是否清楚?',
+  '  3. MATLAB Golden Model 是否就位?',
+  '  4. 项目目录结构是否符合预期 (01_src/02_sim/...)?',
+  '  5. 如果任一答案是否 → 请先澄清，不要直接开始。',
+  '',
+  'DAG 依赖链:',
+  liteMode
+    ? '  P0→P1→P3→P4→P45→P5→P7→P8→Verifier (跳过 P2,P6)'
+    : '  P0→P1→P2/P3并行→P4→P45→P5→P6/P7并行→P8→Verifier',
+  '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━',
+].join('\n');
+
+log(preflightSummary);
+
+// 如果模块列表为空且不是项目初始化的场景，发出警告
+if (modules.length === 0) {
+  log('⚠️ 警告: 模块列表为空。如果是有意初始化新项目请忽略此警告。');
+  log('   如果是执行已有模块的开发流程，请传入 modules 参数。');
+}
+
 // ── 执行 DAG ──────────────────────────────────────────────────────────────
 
+phase('DAG 执行');
 const dagResult = await dag.execute(nodes, {
   onProgress: (layer, total, names) => log(`[层 ${layer}/${total}] ${names}`),
   log,

@@ -35,6 +35,17 @@
         ],
         "description": "Load previous context and detect package manager on new session",
         "id": "session:start"
+      },
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node engine/scripts/state-resume.cjs",
+            "description": "Read runtime-state.json and inject previous session summary into new session context (L3 交接层)",
+            "id": "session:state-resume"
+          }
+        ]
       }
     ],
     "PostMessage": [
@@ -47,6 +58,28 @@
         "run": "node engine/hooks/learning/signal-collector.cjs drift_stuck",
         "async": true,
         "timeout": 3000
+      },
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node engine/scripts/context-monitor-gate.cjs",
+            "description": "Context monitor gate: estimate context usage, warn at >50%, red X at >60% (P2)",
+            "id": "post:context-monitor-gate"
+          }
+        ]
+      },
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node engine/scripts/cross-link-memory.cjs",
+            "description": "Cross-link memory: retrieve error/learning memories when frustration is detected (L2↔L4)",
+            "id": "post:cross-link-memory"
+          }
+        ]
       }
     ],
     "PreToolUse": [
@@ -58,6 +91,12 @@
             "command": "node engine/scripts/hooks/local-runner.cjs frustration-detector.cjs",
             "description": "Frustration detection hook: detect frustration keywords → trigger mode switch (L4 认知层)",
             "id": "pre:cognition:frustration-detector"
+          },
+          {
+            "type": "command",
+            "command": "node engine/scripts/rule-loader.cjs",
+            "description": "Rule loader hook: parse rules/ trigger/skip frontmatter, inject matching rules into context (L1 边界层)",
+            "id": "pre:cognition:rule-loader"
           }
         ]
       },

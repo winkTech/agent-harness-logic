@@ -4,7 +4,11 @@
  * engine/dag-engine.cjs — DAG 调度引擎。
  *
  * 从 hdl-coding-dag-workflow.js 提取，独立可复用。
- * 支持：拓扑排序 / 分层并行 / 重试 / 超时 / 进度回调。
+ * 支持：拓扑排序 / 分层并行 / 重试 / 超时 / 进度回调 / 循环检测。
+ *
+ * v3.5 新增：
+ *   - loopDetection: 检测节点在相同错误模式上反复重试，超过阈值后跳过/建议切换策略
+ *   - maxRetriesAcrossLayers: 跨层全局最大重试计数门禁
  *
  * 用法:
  *   const dag = require('./engine/dag-engine.cjs');
@@ -82,26 +86,81 @@ function layerize(nodes) {
   return layers;
 }
 
-// ── 带重试的执行器 ─────────────────────────────────────────────────────────
+// ── 全局循环检测状态 ────────────────────────────────────────────────────────
+// 追踪跨节点的重试模式，用于检测"反复死磕同一问题"的 loop
+const _loopTracker = new Map(); // nodeName → { attempts: number, errorPatterns: string[], lastError: string }
+
+function resetLoopTracker() { _loopTracker.clear(); }
 
 /**
- * 执行单个 DAG 节点，支持重试和超时。
+ * 检查指定节点是否存在循环重试问题。
+ * 检测规则: 同一节点连续重试 >maxLoopRetries 次且错误消息相似。
+ * @param {string} nodeName
+ * @param {string} errorMsg
+ * @param {number} maxLoopRetries
+ * @returns {{ loopDetected: boolean, attempts: number, suggestion: string }}
+ */
+function checkLoop(nodeName, errorMsg, maxLoopRetries) {
+  const entry = _loopTracker.get(nodeName) || { attempts: 0, errorPatterns: [], lastError: '' };
+  entry.attempts++;
+
+  // 提取错误模式（取前 40 字符作为指纹）
+  const errorFingerprint = (errorMsg || '').slice(0, 40);
+  if (errorFingerprint && errorFingerprint !== entry.lastError) {
+    entry.errorPatterns.push(errorFingerprint);
+    if (entry.errorPatterns.length > 5) entry.errorPatterns.shift();
+  }
+  entry.lastError = errorFingerprint;
+  _loopTracker.set(nodeName, entry);
+
+  if (entry.attempts >= maxLoopRetries) {
+    return {
+      loopDetected: true,
+      attempts: entry.attempts,
+      suggestion: entry.errorPatterns.length <= 2
+        ? `节点 "${nodeName}" 已重试 ${entry.attempts} 次且错误模式相似，建议切换策略或检查前置依赖`
+        : `节点 "${nodeName}" 已重试 ${entry.attempts} 次且出现 ${entry.errorPatterns.length} 种不同错误，建议前置条件验证`,
+    };
+  }
+  return { loopDetected: false, attempts: entry.attempts };
+}
+
+// ── 带重试与循环检测的执行器 ────────────────────────────────────────────
+
+/**
+ * 执行单个 DAG 节点，支持重试、超时和循环检测。
  * @param {string} name - 节点名
  * @param {Function} run - 节点执行函数: (ctx) => Promise<any>
  * @param {object} ctx - 当前上下文（所有已完成节点的结果）
  * @param {object} [opts]
  * @param {number} [opts.retryCount=0] - 失败重试次数（默认 0 = 不重试）
  * @param {number} [opts.timeoutMs=0] - 超时毫秒（默认 0 = 无超时）
+ * @param {number} [opts.maxLoopRetries=3] - 最大循环重试门禁（默认 3）
  * @param {(msg: string) => void} [opts.log] - 日志回调
- * @returns {Promise<{ status: string, data?: any, error?: string, attempts: number }>}
+ * @returns {Promise<{ status: string, data?: any, error?: string, attempts: number, loop?: object }>}
  */
 async function runNode(name, run, ctx, opts = {}) {
-  const { retryCount = 0, timeoutMs = 0 } = opts;
+  const { retryCount = 0, timeoutMs = 0, maxLoopRetries = 3 } = opts;
   const log = opts.log || (() => {});
   const maxAttempts = retryCount + 1;
   let lastError;
 
   for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    // ── 循环检测: 重试前检查是否陷入死循环 ──────────────
+    if (attempt > 1) {
+      const loopCheck = checkLoop(name, lastError?.message || '', maxLoopRetries);
+      if (loopCheck.loopDetected) {
+        log(`  🔄 [循环检测] ${loopCheck.suggestion}`);
+        return {
+          status: 'loop_skip',
+          error: `循环重试门禁: 节点 "${name}" 重试 ${loopCheck.attempts} 次后跳过`,
+          attempts: attempt - 1,
+          loop: loopCheck,
+        };
+      }
+    }
+
+    // ── 实际执行 ─────────────────────────────────────
     try {
       let timeoutHandle;
       const runPromise = run(ctx);
@@ -149,7 +208,7 @@ async function runNode(name, run, ctx, opts = {}) {
  * }>}
  */
 async function execute(nodes, opts = {}) {
-  const { failFast = true, retryCount = 0, timeoutMs = 300000 } = opts;
+  const { failFast = true, retryCount = 0, timeoutMs = 300000, maxLoopRetries = 3 } = opts;
   const log = opts.log || (() => {});
   const onProgress = opts.onProgress || (() => {});
 
@@ -157,11 +216,15 @@ async function execute(nodes, opts = {}) {
   const ctx = {};
   const results = {};
   const failedNodes = [];
+  const loopSkippedNodes = [];
   const nodeCount = Object.keys(nodes).length;
   const layerCount = layers.length;
   const depMatrix = validateLayerDeps(nodes);
 
-  log(`[DAG] ${nodeCount} 节点, ${layerCount} 层`);
+  // 重置循环检测追踪器
+  resetLoopTracker();
+
+  log(`[DAG] ${nodeCount} 节点, ${layerCount} 层, 循环门禁=${maxLoopRetries}次/节点`);
 
   for (let i = 0; i < layers.length; i++) {
     const layer = layers[i];
@@ -172,17 +235,23 @@ async function execute(nodes, opts = {}) {
     const layerResults = await Promise.all(
       layer.map(async (name) => {
         const node = nodes[name];
-        const result = await runNode(name, node.run, ctx, { retryCount, timeoutMs, log });
+        const result = await runNode(name, node.run, ctx, { retryCount, timeoutMs, maxLoopRetries, log });
         results[name] = result;
         ctx[name] = result.status === 'ok' ? result.data : null;
         return { name, result };
       })
     );
 
-    const failures = layerResults.filter(r => r.result.status !== 'ok');
+    // 处理失败和循环跳过的节点
+    const failures = layerResults.filter(r => r.result.status !== 'ok' && r.result.status !== 'loop_skip');
+    const loopSkips = layerResults.filter(r => r.result.status === 'loop_skip');
     for (const f of failures) {
       failedNodes.push(f.name);
       log(`  ❌ ${f.name}: ${f.result.error}`);
+    }
+    for (const s of loopSkips) {
+      loopSkippedNodes.push(s.name);
+      log(`  🔄 ${s.name}: 循环跳过 — ${s.result.error}`);
     }
 
     if (failFast && failedNodes.length > 0) {
