@@ -1,13 +1,13 @@
-# 错误经验: GateGuard 触发问题
-
 ---
 name: GateGuard 触发问题
 description: GateGuard 钩子误判正常操作为风险操作及排除规则
-date: 2026-06-01
-type: error
-severity: 低
-status: 已解决
+metadata:
+  type: error
+  severity: 低
+  status: 已解决
 ---
+
+# 错误经验: GateGuard 触发问题
 
 ## 错误描述
 

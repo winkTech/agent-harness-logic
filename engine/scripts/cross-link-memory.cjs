@@ -27,11 +27,6 @@ const os = require('os');
 const HOMEDIR = os.homedir();
 const HARNESS = path.join(HOMEDIR, '.claude');
 const STATE_FILE = path.join(HARNESS, 'var', 'index', 'runtime-state.json');
-const ERRORS_DIR = path.join(HARNESS, 'memory', 'errors');
-const LEARNINGS_DIR = path.join(HARNESS, 'memory', 'learnings');
-const PROJECTS_DIR = path.join(HARNESS, 'memory', 'projects');
-
-// ── 辅助函数 ────────────────────────────────────────────────────────────────
 
 function readJSON(fp) {
   try {
@@ -40,78 +35,115 @@ function readJSON(fp) {
   return null;
 }
 
-/**
- * 解析 memory 文件 frontmatter 获取名称和描述。
- */
-function parseMemoryFile(filePath) {
-  try {
-    const content = fs.readFileSync(filePath, 'utf8');
-    const match = content.match(/^---\r?\n([\s\S]*?)\r?\n---/);
-    if (!match) return null;
-    const fm = {};
-    for (const line of match[1].split('\n')) {
-      const idx = line.indexOf(':');
-      if (idx === -1) continue;
-      fm[line.slice(0, idx).trim()] = line.slice(idx + 1).trim().replace(/^["']|["']$/g, '');
-    }
-    return {
-      name: fm.name || path.basename(filePath, '.md'),
-      description: (fm.description || '').replace(/^["']|["']$/g, ''),
-      type: fm['metadata.type'] || '',
-    };
-  } catch { return null; }
-}
+// ── 构建 FTS5 检索查询 ──────────────────────────────────────────────────────
 
 /**
- * 列出自指定目录中的最近文件（按 mtime 降序）。
+ * 从挫败上下文构建检索查询词。
+ * 优先级: 当前模式 > 失败次数 > 通用查询
  */
-function getRecentFiles(dir, maxCount, excludePatterns = []) {
-  if (!fs.existsSync(dir)) return [];
-  try {
-    const files = fs.readdirSync(dir)
-      .filter(f => f.endsWith('.md'))
-      .filter(f => !excludePatterns.some(p => f.includes(p)))
-      .map(f => ({
-        name: f,
-        path: path.join(dir, f),
-        mtime: fs.statSync(path.join(dir, f)).mtimeMs,
-      }))
-      .sort((a, b) => b.mtime - a.mtime)
-      .slice(0, maxCount);
-    return files;
-  } catch { return []; }
+function buildQuery(state) {
+  if (!state) return '挫败 错误 失败';
+  const parts = [];
+  if (state.currentMode) parts.push(state.currentMode);
+  if (state.failureCount >= 5) parts.push('循环 绕圈 卡住');
+  if (state.failureCount >= 3) parts.push('失败 挫败');
+  if (state.lastTool) parts.push(state.lastTool);
+  parts.push('错误 教训 经验');
+  return parts.join(' ');
+}
+
+// ── 触发条件判断 ──────────────────────────────────────────────────────────────
+
+/**
+ * 判断是否应该触发记忆交叉检索。
+ * 主要条件: failureCount >= 2
+ * 次要条件: 最近 15 分钟内有 failureHistory 记录（即使 de-escalation 已复位计数）
+ */
+function shouldTrigger(state) {
+  if (!state) return false;
+
+  // 主要: failureCount 直接 >= 2
+  if ((state.failureCount || 0) >= 2) return true;
+
+  // 次要: 最近 15 分钟内有挫败历史（补偿 frustration-detector 的 de-escalation 复位）
+  if (state.failureHistory && Array.isArray(state.failureHistory)) {
+    const recentWindow = Date.now() - 15 * 60 * 1000; // 15 分钟前
+    const recentFailures = state.failureHistory.filter(f => {
+      const at = new Date(f.at).getTime();
+      return at >= recentWindow;
+    });
+    if (recentFailures.length >= 2) return true;
+
+    // 特殊情况: 最近 30 分钟内有 >=3 次挫败但计数被复位
+    const thirtyMinWindow = Date.now() - 30 * 60 * 1000;
+    const totalRecent = state.failureHistory.filter(f =>
+      new Date(f.at).getTime() >= thirtyMinWindow
+    );
+    if (totalRecent.length >= 3) return true;
+  }
+
+  return false;
 }
 
 // ── 主入口 ───────────────────────────────────────────────────────────────────
 
 function evaluate() {
   const state = readJSON(STATE_FILE);
-  // 仅当挫败计数 ≥ 2 时触发
-  if (!state || (state.failureCount || 0) < 2) return null;
+  if (!shouldTrigger(state)) return null;
 
-  // 收集最近的错误记录
-  const errors = getRecentFiles(ERRORS_DIR, 3).map(f => {
-    const meta = parseMemoryFile(f.path);
-    return { file: f.name, ...meta };
-  }).filter(Boolean);
+  const query = buildQuery(state);
 
-  // 收集最近的学习记录
-  const learnings = getRecentFiles(LEARNINGS_DIR, 2,
-    ['MEMORY_RULES', 'MEMORY.md', 'memory-auto-trigger']
-  ).map(f => {
-    const meta = parseMemoryFile(f.path);
-    return { file: f.name, ...meta };
-  }).filter(Boolean);
+  // 改用 SQLite FTS5 BM25 检索（替代原文件系统按 mtime 排序）
+  try {
+    const { openDb } = require('../sqlite/index.cjs');
+    const { retrieveMemory } = require('../sqlite/store-memory.cjs');
 
-  if (errors.length === 0 && learnings.length === 0) return null;
+    const wDb = openDb();
 
-  return {
-    source: 'cross-link-memory',
-    type: 'memory-cross-ref',
-    trigger: `failureCount=${state.failureCount}`,
-    errors: errors.map(e => ({ name: e.name, desc: e.description })),
-    learnings: learnings.map(l => ({ name: l.name, desc: l.description })),
-  };
+    // 从 errors 命名空间检索（挫败上下文查询）
+    const errorResults = retrieveMemory(query, {
+      db: wDb.db,
+      namespaces: ['errors'],
+      limit: 3,
+      minConfidence: 0.3,
+    });
+
+    // 从 learnings 命名空间检索
+    const learningsResults = retrieveMemory(query, {
+      db: wDb.db,
+      namespaces: ['learnings'],
+      limit: 2,
+      minConfidence: 0.4,
+    });
+
+    wDb.close();
+
+    const errors = errorResults.map(r => ({
+      name: r.name || '(unnamed)',
+      desc: (r.description || r.content.slice(0, 120)).replace(/\n/g, ' '),
+      score: Math.round(r.score * 100) / 100,
+    }));
+
+    const learnings = learningsResults.map(r => ({
+      name: r.name || '(unnamed)',
+      desc: (r.description || r.content.slice(0, 120)).replace(/\n/g, ' '),
+      score: Math.round(r.score * 100) / 100,
+    }));
+
+    if (errors.length === 0 && learnings.length === 0) return null;
+
+    return {
+      source: 'cross-link-memory',
+      type: 'memory-cross-ref',
+      trigger: `failureCount=${state.failureCount}${state.failureHistory?.length > state.failureCount ? '+history' : ''}`,
+      query,
+      errors,
+      learnings,
+    };
+  } catch {
+    // SQLite 不可用时静默降级
+    return null;
+  }
 }
 
 function main() {

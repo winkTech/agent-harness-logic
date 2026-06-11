@@ -57,6 +57,17 @@
             "id": "session:dream-inject"
           }
         ]
+      },
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node engine/scripts/memory-health-check.cjs --quick",
+            "description": "Memory health quick-check: run at session start, output only if score < 70 (P2-m3)",
+            "id": "session:memory-health-check"
+          }
+        ]
       }
     ],
     "PostMessage": [
@@ -108,6 +119,12 @@
             "command": "node engine/scripts/rule-loader.cjs",
             "description": "Rule loader hook: parse rules/ trigger/skip frontmatter, inject matching rules into context (L1 边界层)",
             "id": "pre:cognition:rule-loader"
+          },
+          {
+            "type": "command",
+            "command": "node engine/scripts/memory-retrieve-hook.cjs",
+            "description": "Memory retrieve hook: query FTS5 BM25 on user message keywords, inject relevant memory summaries into context (P0-B1)",
+            "id": "pre:cognition:memory-retrieve"
           }
         ]
       },
