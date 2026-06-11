@@ -172,13 +172,20 @@ SQLite FTS5 (BM25 排序) → Grep/Glob → git log → rag-skill/code-search �
 
 ---
 
-## 🔄 自学习飞轮（Dream）
+## 🔄 自学习飞轮（Dream v2.0）
 
 ```
-运行时事件 → dream-consolidate.cjs → 模式检测 → learnings 事实写入 → 置信度升级 → 技能退役
+信号采集(6+类型) → SQLite events → dream-consolidate v2 → 
+  跨类型模式检测 → learnings 事实写入 → 置信度升级(时间衰减) → 技能退役
+  ↓
+SessionStart: dream-startup-inject → 自动检索 + 上下文注入
 ```
 
-每日 4:23 自动运行。详见 `engine/scripts/dream-consolidate.cjs`。
+**采集升级 v2.0**: 6 种新信号类型 — `rule_load`, `context_pressure`, `mode_switch`, `memory_cross_ref`, `session_handoff`, `loop_skip`
+**检测升级 v2.0**: 跨类型事件序列、代码错误聚类、时间序列模式
+**调度升级**: 每次 SessionStart 自动检查未处理事件数 ≥10 → 运行 `dream-consolidate --dry-run` → 注入近期 Learnings 到上下文
+
+详见 `engine/scripts/dream-consolidate.cjs`（检测引擎）和 `engine/scripts/dream-startup-inject.cjs`（调度注入）。
 
 ---
 
@@ -205,6 +212,12 @@ node engine/scripts/dream-consolidate.cjs --dry-run
 
 # 模板元数据检查
 node engine/diagnostics.cjs --templates
+
+# Dream 自学习飞轮
+## 采集 → 检测 → 注入 全链路
+node engine/scripts/dream-consolidate.cjs                 # 全量运行
+node engine/scripts/dream-consolidate.cjs --dry-run        # 试运行(不写文件)
+node engine/scripts/dream-startup-inject.cjs               # 模拟 SessionStart 注入
 
 # EDA 工具链检测
 ## 自动检测 vlog / xvlog / verilator / iverilog / Vivado

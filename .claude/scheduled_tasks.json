@@ -10,17 +10,6 @@
       "createdByPid": 33752,
       "createdByProcStart": "639164209404238870",
       "lastFiredAt": 1780875420031
-    },
-    {
-      "id": "dream-consolidate-daily",
-      "cron": "23 4 * * *",
-      "prompt": "Run node ~/.claude/engine/scripts/dream-consolidate.cjs to analyze runtime events, detect patterns, write learnings, and upgrade memory confidence.",
-      "createdAt": 1781140000000,
-      "recurring": true,
-      "createdBySessionId": "harness-optimization",
-      "createdByPid": 0,
-      "createdByProcStart": "0",
-      "lastFiredAt": null
     }
   ]
 }

@@ -331,6 +331,16 @@ function evaluate(userMessage, opts = {}) {
     }
   }
 
+  // Emit signal: 规则加载事件
+  try {
+    const { emitSync } = require('../hooks/learning/signal-collector.cjs');
+    emitSync('rule_load', {
+      files: toLoad.map(r => r.file),
+      priorities: toLoad.map(r => r.priority),
+      matchCount: matches.length,
+    });
+  } catch { /* 静默 */ }
+
   return {
     source: 'rule-loader',
     type: 'rule-inject-suggest',

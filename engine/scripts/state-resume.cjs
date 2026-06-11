@@ -84,6 +84,17 @@ function main() {
     } catch { /* ignore */ }
   }
 
+  // Emit signal: session交接事件
+  try {
+    const { emitSync } = require('../hooks/learning/signal-collector.cjs');
+    emitSync('session_handoff', {
+      hoursSinceLast: summary.hoursSinceLastActivity,
+      prevFailureCount: summary.previousFailureCount,
+      prevMode: summary.previousMode,
+      taskStale,
+    });
+  } catch { /* 静默 */ }
+
   console.log(JSON.stringify({
     ...summary,
     taskSummary,

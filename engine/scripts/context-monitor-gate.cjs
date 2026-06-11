@@ -201,6 +201,17 @@ function evaluate() {
     suggestion = '建议在下次阶段切换时执行 /compact。当前上下文仍有空间，但建议控制 prompt 长度。';
   }
 
+  // Emit signal: 上下文压力事件
+  try {
+    const { emitSync } = require('../hooks/learning/signal-collector.cjs');
+    emitSync('context_pressure', {
+      level,
+      estimatedRatio: Math.round(ratio * 100),
+      toolCalls: details.toolCalls,
+      transcriptKB: details.transcriptKB,
+    });
+  } catch { /* 静默 */ }
+
   return {
     source: 'context-monitor-gate',
     type: 'context-pressure',

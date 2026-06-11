@@ -45,7 +45,7 @@ engine/sqlite/
 ├── index.cjs          # 统一入口: openDb/closeDb/backupDb
 ├── schema.cjs         # 迁移管理 (幂等)
 ├── store-memory.cjs   # 记忆仓库 (FTS5全文检索)
-├── store-events.cjs   # 运行事件 (Dream自学习)
+├── store-events.cjs   # 运行事件 (Dream自学习 v2.0 — 11种信号类型)
 ├── store-skills.cjs   # 技能注册表 (统计/退役)
 └── store-costs.cjs    # 成本记账
 ```
@@ -76,9 +76,13 @@ node engine/diagnostics.cjs --hooks    # 37 条 hook 集成测试
 node engine/diagnostics.cjs --templates # 模板元数据检查
 ```
 
-## 预检 (run-on-start)
+## 预检 (run-on-start + SessionStart hooks)
 - `memory-health-check.cjs` 记忆系统健康评分
-- `dream-consolidate.cjs --dry-run` 检查待提炼事件 (新 session 首次提示)
+- `dream-startup-inject.cjs` 自动检查未处理事件 + 注入近期 Learnings (SessionStart hook)
+- `state-resume.cjs` 读取前 session runtime-state (SessionStart hook)
+- `rule-loader.cjs` 按场景条件注入匹配规则 (PreToolUse hook)
+- `context-monitor-gate.cjs` 上下文三色阈值监控 (PostMessage hook)
+- `cross-link-memory.cjs` 挫败→记忆联动 (PostMessage hook)
 
 ## 参考
 - `knowledge/references/reference-index.md` — 完整索引
