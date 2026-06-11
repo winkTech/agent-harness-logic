@@ -229,16 +229,21 @@ function toolchainLabel(tools) {
 function createProjectStructure(rootDir, projectName) {
   const dirs = [
     rootDir,
-    path.join(rootDir, '01_src', 'tx'),
-    path.join(rootDir, '01_src', 'rx'),
-    path.join(rootDir, '01_src', 'top'),
-    path.join(rootDir, '02_tb'),
-    path.join(rootDir, '03_doc'),
-    path.join(rootDir, '04_script'),
-    path.join(rootDir, '05_result', 'synth'),
-    path.join(rootDir, '05_result', 'sim'),
-    path.join(rootDir, '05_result', 'rpt'),
-    path.join(rootDir, '06_ref'),
+    path.join(rootDir, '00_comm'),
+    path.join(rootDir, '01_src', '00_hdl'),
+    path.join(rootDir, '01_src', '01_ip', '00_clk'),
+    path.join(rootDir, '01_src', '01_ip', '01_mem'),
+    path.join(rootDir, '01_src', '01_ip', '02_dsp'),
+    path.join(rootDir, '01_src', '01_ip', '03_comm'),
+    path.join(rootDir, '02_sim'),
+    path.join(rootDir, '03_xdc'),
+    path.join(rootDir, '04_prj'),
+    path.join(rootDir, '05_bin'),
+    path.join(rootDir, '06_doc'),
+    path.join(rootDir, '07_mat', '00_fx'),
+    path.join(rootDir, '07_mat', '01_conf'),
+    path.join(rootDir, '07_mat', '02_script'),
+    path.join(rootDir, '08_py'),
   ];
 
   for (const d of dirs) {
@@ -300,9 +305,9 @@ async function main() {
   section('创建项目结构');
   const dirs = createProjectStructure(projectDir, projectName);
   ok(`项目目录: ${projectDir}`);
-  for (const d of dirs.slice(0, 6)) {
+  for (const d of dirs) {
     const short = path.relative(projectDir, d) || '.';
-    ok(`创建 ${short}/`);
+    if (short) ok(`创建 ${short}/`);
   }
 
   // ── 4. 生成文件 ─────────────────────────────────────────────────────
@@ -335,15 +340,17 @@ xsim.dir/
   fs.writeFileSync(path.join(projectDir, `${projectName}.f`), fContent);
   ok(`${projectName}.f (源文件列表，请手动编辑)`);
 
-  // 首模块
+  // 首模块 (放 01_src/00_hdl/<module>/)
+  const moduleSubdir = path.join('01_src', '00_hdl', `${projectName}_top`);
+  fs.mkdirSync(path.join(projectDir, moduleSubdir), { recursive: true });
   const moduleContent = generateModule(`${projectName}_top`, 16);
-  fs.writeFileSync(path.join(projectDir, '01_src', 'top', `${projectName}_top.sv`), moduleContent);
-  ok(`01_src/top/${projectName}_top.sv (模块模板)`);
+  fs.writeFileSync(path.join(projectDir, moduleSubdir, `${projectName}_top.sv`), moduleContent);
+  ok(`${moduleSubdir}/${projectName}_top.sv (模块模板)`);
 
   // TB
   const tbContent = generateTb(`${projectName}_top`);
-  fs.writeFileSync(path.join(projectDir, '02_tb', `tb_${projectName}_top.sv`), tbContent);
-  ok(`02_tb/tb_${projectName}_top.sv (TB 模板)`);
+  fs.writeFileSync(path.join(projectDir, '02_sim', `tb_${projectName}_top.sv`), tbContent);
+  ok(`02_sim/tb_${projectName}_top.sv (TB 模板)`);
 
   // ── 5. 模板引用 ─────────────────────────────────────────────────────
   section('可用模板');
@@ -366,20 +373,21 @@ xsim.dir/
   ├── Makefile               — lint / compile / sim / regress
   ├── fpga_constraints.yaml  — 资源/时序预算
   ├── ${projectName}.f          — 源文件列表
+  ├── 00_comm/               — 脚本/配置文件
   ├── 01_src/
-  │   ├── tx/                — 发送模块
-  │   ├── rx/                — 接收模块
-  │   └── top/               — 顶层模块
-  ├── 02_tb/                 — Testbench
-  ├── 03_doc/                — 文档
-  ├── 04_script/             — 脚本
-  ├── 05_result/             — 综合/仿真结果
-  └── 06_ref/                — 参考
+  │   ├── 00_hdl/            — HDL 代码 (按模块分目录)
+  │   └── 01_ip/             — IP 核 (clk/mem/dsp/comm)
+  ├── 02_sim/                — 仿真 (与模块同名)
+  ├── 03_xdc/                — 约束文件
+  ├── 04_prj/                — Vivado 工程
+  ├── 05_bin/                — 比特流
+  ├── 06_doc/                — 文档
+  ├── 07_mat/                — MATLAB golden model
+  └── 08_py/                 — Python
 
   下一步:
     cd ${projectName}
-    make lint                 # 检查语法
-    make sim                  # 运行仿真
+    vlog -lint 01_src/00_hdl/  # 语法检查 (或用检测到的 EDA 工具)
     code fpga_constraints.yaml # 调整资源预算
 `);
 }
