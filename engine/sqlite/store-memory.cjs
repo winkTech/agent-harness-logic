@@ -211,7 +211,12 @@ function retrieveMemory(query, opts = {}) {
     const stmt = db.prepare(sql);
     results = stmt.all(...params);
   } catch (err) {
-    // FTS5 查询失败 (空结果或语法错误) → 降级到 LIKE 搜索
+    // FTS5 查询失败 (语法错误等) → 降级到 LIKE 搜索
+    return fallbackSearch(db, query, opts);
+  }
+
+  // FTS5 返回 0 结果 + 查询包含中文 → 尝试 LIKE 回退（解决 CJK 长句 tokenization 问题）
+  if (results.length === 0 && /[一-鿿]{2,}/.test(query)) {
     return fallbackSearch(db, query, opts);
   }
 

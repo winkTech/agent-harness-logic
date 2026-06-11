@@ -21,8 +21,10 @@
 const fs = require('fs');
 const path = require('path');
 
-const STATE_FILE = path.join(require('os').homedir(), '.claude', 'var', 'index', 'runtime-state.json');
-const TASK_FILE = path.join(require('os').homedir(), '.claude', 'var', 'active-task.yaml');
+const HOMEDIR = require('os').homedir();
+const STATE_FILE = path.join(HOMEDIR, '.claude', 'var', 'index', 'runtime-state.json');
+const TASK_FILE = path.join(HOMEDIR, '.claude', 'var', 'active-task.yaml');
+const WORK_DIR = path.join(HOMEDIR, '.claude', 'memory', 'work');
 
 function readJSON(filePath) {
   try {
@@ -95,10 +97,34 @@ function main() {
     });
   } catch { /* 静默 */ }
 
+  // ── P2-m2: 工作记忆初始化 ─────────────────────────────────────────────
+  let workMemory = null;
+  try {
+    const today = new Date().toISOString().slice(0, 10); // YYYY-MM-DD
+    const workFiles = fs.existsSync(WORK_DIR)
+      ? fs.readdirSync(WORK_DIR).filter(f => f.startsWith(today) && f.endsWith('.md'))
+      : [];
+
+    if (workFiles.length === 0) {
+      // 今日尚无工作记忆文件 → 从模板创建
+      const templatePath = path.join(WORK_DIR, 'TEMPLATE.md');
+      if (fs.existsSync(templatePath)) {
+        let template = fs.readFileSync(templatePath, 'utf8');
+        template = template.replace(/\{\{date\}\}/g, today);
+        const newFile = path.join(WORK_DIR, `${today}-session.md`);
+        fs.writeFileSync(newFile, template);
+        workMemory = { file: `${today}-session.md`, created: true };
+      }
+    } else {
+      workMemory = { file: workFiles[0], created: false };
+    }
+  } catch { /* 工作记忆初始化失败不阻塞 */ }
+
   console.log(JSON.stringify({
     ...summary,
     taskSummary,
     taskStale,
+    ...(workMemory ? { workMemory } : {}),
     handoffBrief: hoursSinceLast > 24
       ? `上次活动在 ${hoursSinceLast} 小时前。前 session 失败 ${state.failureCount || 0} 次，最后模式为 ${state.currentMode || '闭环'}。${taskStale ? 'active-task.yaml 可能已过期。' : ''}`
       : `前 session 失败 ${state.failureCount || 0} 次，最后模式为 ${state.currentMode || '闭环'}。`,

@@ -59,15 +59,13 @@ function getRecentDreamLearnings(daysBack = 90) {
     const { retrieveMemory } = require(HARNESS + '/engine/sqlite/store-memory.cjs');
     const wDb = openDb();
 
-    // 从 facts 表中检索 source='script:dream' 且 confidence >= 0.4 且未过期的记录
-    const cutoff = new Date(Date.now() - daysBack * 86400000).toISOString();
+    // 从 facts 表中检索高置信度记忆（Dream + 用户写入 + 手动记录），不限 source
     const rows = wDb.db.prepare(`
-      SELECT id, name, description, confidence, created_at
+      SELECT id, name, description, confidence, created_at, source
       FROM facts
-      WHERE source = 'script:dream'
-        AND confidence >= 0.4
+      WHERE confidence >= 0.4
         AND (ttl_until IS NULL OR ttl_until > datetime('now'))
-      ORDER BY created_at DESC
+      ORDER BY confidence DESC, created_at DESC
       LIMIT 5
     `).all();
 
@@ -77,6 +75,7 @@ function getRecentDreamLearnings(daysBack = 90) {
       name: r.name,
       description: r.description,
       confidence: r.confidence,
+      source: r.source,
       createdAt: r.created_at,
     }));
   } catch {
