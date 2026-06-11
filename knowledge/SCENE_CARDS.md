@@ -1,3 +1,12 @@
+---
+name: scene-cards
+description: 场景入口卡 — 11 个常见任务场景的文档加载路径，支持增量读取
+metadata:
+  type: reference
+  domain: meta
+tags: [index, navigation, scene]
+---
+
 # 场景入口卡
 
 > 按设计意图导航知识库。每张卡片对应一个常见任务场景，列出该场景下需要加载的核心文档及阅读顺序。

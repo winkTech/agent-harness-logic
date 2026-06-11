@@ -1,3 +1,10 @@
+---
+name: advanced-features
+description: 高级功能参考
+metadata:
+  type: reference
+---
+
 # 高级功能参考
 
 > Skill 调用优先级、工作流模板、Agent/Hook 边界

@@ -1,3 +1,10 @@
+---
+name: agent-harness
+description: Agent Harness 核心机制
+metadata:
+  type: reference
+---
+
 # Agent Harness 核心机制
 
 > 来源: fpga-agent-harness + learn-claude-code

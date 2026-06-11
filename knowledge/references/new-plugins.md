@@ -1,3 +1,10 @@
+---
+name: new-plugins
+description: 新插件详细说明
+metadata:
+  type: reference
+---
+
 # 新插件详细说明
 
 > coding-tutor、compound-engineering 详细配置

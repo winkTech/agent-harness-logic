@@ -1,3 +1,10 @@
+---
+name: skills-catalog
+description: 辅助 Skill 目录
+metadata:
+  type: reference
+---
+
 # 辅助 Skill 目录
 
 > 详细功能列表，按需加载。标注 🔀 的为重定向桩（原 skill 已合并）。

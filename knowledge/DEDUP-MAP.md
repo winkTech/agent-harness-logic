@@ -1,3 +1,12 @@
+---
+name: dedup-map
+description: 鸢尾花书系列跨书去重映射 — 14 个主题的压缩/合并决策表
+metadata:
+  type: reference
+  domain: meta
+tags: [index, dedup, iris-books]
+---
+
 # 鸢尾花书系列 — 跨书去重映射表
 
 > 策略：重复主题保留**最详细/最系统**的版本，其他书引用指向主来源。

@@ -1,3 +1,10 @@
+---
+name: plugin-management
+description: 插件管理参考
+metadata:
+  type: reference
+---
+
 # 插件管理参考
 
 > 详细插件配置和使用说明

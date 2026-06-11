@@ -1,3 +1,10 @@
+---
+name: mcp-matlab-usage
+description: MATLAB MCP Server 使用规范
+metadata:
+  type: reference
+---
+
 # MATLAB MCP Server 使用规范
 
 > 版本: v1.0 | 更新: 2026-06-03

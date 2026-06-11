@@ -1,3 +1,12 @@
+---
+name: tag-index
+description: 标签索引 — 按 domain/algo/standard/interface/tool/type/skill 七维分类查找文档
+metadata:
+  type: reference
+  domain: meta
+tags: [index, navigation, tags]
+---
+
 # 标签索引
 
 > 快速按标签定位文档。每行格式：`doc-path | 场景标签` 或压缩行。

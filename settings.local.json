@@ -68,6 +68,17 @@
             "id": "session:memory-health-check"
           }
         ]
+      },
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node engine/scripts/kb-stats.cjs --check",
+            "description": "Knowledge base index check: verify INDEX.md counts are up to date at session start",
+            "id": "session:kb-stats-check"
+          }
+        ]
       }
     ],
     "PostMessage": [

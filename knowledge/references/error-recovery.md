@@ -1,3 +1,10 @@
+---
+name: error-recovery
+description: 错误恢复指南
+metadata:
+  type: reference
+---
+
 # 错误恢复指南
 
 > 常见错误及恢复策略
