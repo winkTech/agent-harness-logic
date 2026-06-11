@@ -207,6 +207,8 @@ node engine/scripts/dream-consolidate.cjs --dry-run
 node engine/diagnostics.cjs --templates
 
 # EDA 工具链检测
+## 自动检测 vlog / xvlog / verilator / iverilog / Vivado
+## Windows 上自动解析 .bat 包装器，Vivado 通过目录扫描回退
 node engine/scripts/eda-detect.cjs
 node engine/scripts/eda-detect.cjs --json
 

@@ -57,7 +57,7 @@ engine/sqlite/
 ## FPGA 工具链（新增 v5.1）
 ```
 engine/scripts/
-├── eda-detect.cjs          # EDA 工具自动检测 (vlog/xvlog/verilator/iverilog)
+├── eda-detect.cjs          # EDA 工具自动检测（跨平台，含 Vivado 目录扫描回退）
 ├── fpga-xdc-parser.cjs     # Vivado .xdc 约束文件解析
 ├── fpga-timing-parser.cjs  # Timing Report 解析 (WNS/TNS/Fmax)
 ├── fpga-util-parser.cjs    # Utilization Report 解析 (LUT/BRAM/DSP)
@@ -65,6 +65,7 @@ engine/scripts/
 └── harness-init.cjs        # FPGA 项目脚手架 (生成 Makefile/约束/模块模板)
 ```
 lint 自动降级: `lint-utils.cjs` 优先使用检测到的工具链，无 `vlog` 则降级 `xvlog/verilator/iverilog`。
+Windows 上自动解析 `.bat` 包装器，Vivado 工具链支持目录级回退检测。
 
 ## 诊断
 ```bash
@@ -86,5 +87,4 @@ node engine/diagnostics.cjs --templates # 模板元数据检查
 
 ## 版本
 v5.1 (2026-06-10): 10/10 全面升级 — EDA 工具链 + FPGA 解析器 + harness-init + 资源门禁 + 37 条 hook 洁净化
-v4.1 (2026-06-10): 按需加载 — CLAUDE.md 减载为纯 catalog + rules/ 全量 trigger/skip 条件
-v4.0 (2026-06-09): 目录重构 + 五层架构（边界/记忆/交接/认知/技能）
+v5.2 (2026-06-11): EDA 检测增强 — 跨平台 .bat 解析 + Vivado 目录扫描回退（支持 shebang/Java loader 不可用场景）
