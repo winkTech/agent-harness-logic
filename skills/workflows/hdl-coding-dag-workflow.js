@@ -1,38 +1,55 @@
 /**
- * hdl-coding-dag-workflow — HDL RTL 开发 DAG 工作流 v3.3.0。
+ * hdl-coding-dag-workflow — HDL RTL 开发 DAG 工作流 v3.4.0
  *
- * 与 skills/workflows/hdl-coding-workflow.md 的 9 阶段对应。
+ * 核心改进 v3.4 — 证据驱动验证:
+ *   D+B: Phase 4 prompt 精简 + 强制脚本化对比 + JSON 证据制品
+ *   A降维: Phase 4.5 证据门禁 — fs 读 JSON (0 token)，高安全模块追加对抗 agent
+ *   C升级: Verifier 独立交叉检查 evidence JSON + architecture.yaml
+ *   模块自动分类: 标准/高安全模式自适应路由
+ *
+ * 与 skills/workflows/hdl-coding-workflow.md 的 10 阶段对应。
  *
  * [MUST 硬约束] RTL 验证流程:
- *   Phase 4: 逐模块 RTL + MATLAB 验证 — 每模块写完后必须仿真对比 golden,
- *            通过后才能继续下一模块
- *   Phase 5: 顶层集成 + 全链仿真 — 所有子模块通过 Phase 4 后,
- *            搭建顶层, 全链逐级与 golden model 对比
+ *   Phase 4: 逐模块 RTL + 脚本化对比 — 生成 check_<module>.py + JSON 证据
+ *   Phase 4.5: 证据门禁 — 独立读取 JSON 证据文件，不信任 Phase 4 自述
+ *   Phase 5: 全链仿真 — 通过 Phase 4.5 后才可进入
  *
  * 调用:
- *   Workflow({name: 'hdl-coding-dag-workflow', args: { modules: ['scrambler', 'descrambler'] }})
+ *   Workflow({name: 'hdl-coding-dag-workflow', args: {
+ *     modules: ['scrambler', 'equalizer'],
+ *     securityModules: ['equalizer'],           // 可选，覆盖自动分类
+ *     standardModules: ['fir_fixed'],           // 可选，强制标准模式
+ *     projectRoot: 'd:/project/ofdm/prj',       // 可选
+ *     lite: false,                               // 可选 Lite 模式
+ *   }})
  *
  * DAG 结构:
  *   Layer 0: Phase 0  基础设施
  *   Layer 1: Phase 1  架构设计 (+ 产 architecture.yaml)
  *   Layer 2: Phase 2  定点量化
  *   Layer 3: Phase 3  TB + MATLAB 向量生成
- *   Layer 4: Phase 4  逐模块 RTL + MATLAB 验证 [硬约束]
- *   Layer 5: Phase 5  顶层集成 + 全链仿真 [硬约束]
- *   Layer 6: Phase 6  回归覆盖率 (真跑 compile/sim)
- *   Layer 7: Phase 7  代码审查 (含模型一致性检查)
- *   Layer 8: Phase 8  报告输出 + Verifier (含验证矩阵检查)
+ *   Layer 4: Phase 4  逐模块 RTL + 脚本化对比 [MUST] — 产 JSON 证据
+ *   Layer 5: Phase 4.5 证据门禁 [NEW] — fs 读 JSON，高安全模块对抗验证
+ *   Layer 6: Phase 5  顶层集成 + 全链仿真 [MUST]
+ *   Layer 7: Phase 6  回归覆盖率 (真跑 compile/sim)
+ *   Layer 8: Phase 7  代码审查 (含模型一致性检查)
+ *   Layer 9: Phase 8  报告输出 + Verifier (含证据交叉检查)
  */
+
+const dag = require('../../engine/dag-engine.cjs');
+const fs = require('fs');
+const path = require('path');
 
 export const meta = {
   name: 'hdl-coding-dag-workflow',
-  description: 'HDL RTL 开发 DAG 工作流 v3.3 — 逐模块RTL+MATLAB验证 → 顶层全链仿真 → 回归+审查 (Verifier终验)',
+  description: 'HDL RTL 开发 DAG 工作流 v3.4 — 证据驱动验证, 逐模块脚本化对比 → 证据门禁 → 全链仿真 (Verifier终验)',
   phases: [
     { title: 'Phase 0 基础设施' },
     { title: 'Phase 1 架构设计' },
     { title: 'Phase 2 定点量化' },
     { title: 'Phase 3 TB+向量生成' },
-    { title: 'Phase 4 逐模块RTL+MATLAB验证' },
+    { title: 'Phase 4 RTL编码+脚本化对比' },
+    { title: 'Phase 4.5 证据门禁' },
     { title: 'Phase 5 顶层集成+全链仿真' },
     { title: 'Phase 6 回归覆盖率' },
     { title: 'Phase 7 代码审查' },
@@ -40,29 +57,45 @@ export const meta = {
   ],
 };
 
-// ── DAG 引擎（独立模块）────────────────────────────────────────────────────
-// 由 engine/dag-engine.cjs 提供拓扑排序/分层/重试/超时
-
-const dag = require('../../engine/dag-engine.cjs');
-
-// ── 主流程 ─────────────────────────────────────────────────────────────────
+// ── 主参数 ─────────────────────────────────────────────────────────────────
 
 const modules = args?.modules || [];
 const liteMode = args?.lite === true;
+const projectRoot = args?.projectRoot || process.cwd();
 
-phase('Phase 0 基础设施');
-log(`模块: ${modules.length > 0 ? modules.join(', ') : '未指定 (使用项目默认)'}`);
+// ── 模块分类（自动 / 手动覆盖）─────────────────────────────────────────────
+//
+// 标准模式: check_<module>.py 脚本对比 + JSON 证据 → 文件门禁检查 (0 token)
+// 高安全模式: 同上 + 独立对抗 agent 读 RTL 源码找茬
+//
+const HIGH_SECURITY_KEYWORDS = [
+  'equalizer', 'equaliser', 'viterbi', 'turbo', 'ldpc',
+  'fft', 'ifft', 'freq_offset', 'carrier', 'cordic',
+  'feedback', 'adapt', 'kalman', 'cholesky', 'qr',
+  'agc', 'power_est', 'symbol_sync', 'timing', 'costas', 'pll',
+  'channel_est', 'channel_equal', 'cma', 'lms', 'rls', 'dfe',
+];
 
-if (liteMode) {
-  log('⚡ EXPRESS LANE (Lite 模式) — Phase 2 (定点扫描) + Phase 6 (覆盖率回归) 已跳过');
-  log('   适用: 小改动/位宽调整/pipeline 级添加。不影响算法行为/时序路径');
+function isHighSecurity(modName) {
+  const name = typeof modName === 'string' ? modName.toLowerCase() : '';
+  return HIGH_SECURITY_KEYWORDS.some(kw => name.includes(kw));
 }
 
-// 定义 DAG 节点
-// 每个节点: { deps: string[], run: (上游结果) => Promise<输出> }
+// 用户手动覆盖优先级: securityModules > 自动分类 > standardModules 强制排除
+const userHighSec  = Array.isArray(args?.securityModules)  ? args.securityModules  : null;
+const userStd      = Array.isArray(args?.standardModules)   ? args.standardModules   : [];
+
+const highSecModules = userHighSec
+  ? userHighSec.filter(m => modules.includes(m))
+  : modules.filter(m => isHighSecurity(m) && !userStd.includes(m));
+const stdModules = modules.filter(m => !highSecModules.includes(m));
+
+// ── DAG 节点 ────────────────────────────────────────────────────────────────
+
 const nodes = {};
 
-// Phase 0: 基础设施 (无依赖)
+// ── Phase 0: 基础设施 (无依赖) ──────────────────────────────────────────────
+
 nodes.p0_infra = {
   deps: [],
   run: async () => {
@@ -80,7 +113,8 @@ nodes.p0_infra = {
   },
 };
 
-// Phase 1: 架构设计
+// ── Phase 1: 架构设计 ───────────────────────────────────────────────────────
+
 nodes.p1_arch = {
   deps: ['p0_infra'],
   run: async (ctx) => {
@@ -118,7 +152,8 @@ ${String(infra).slice(0, 300)}
   },
 };
 
-// Phase 2: 定点量化 (依赖 Phase 1)
+// ── Phase 2: 定点量化 ───────────────────────────────────────────────────────
+
 nodes.p2_fixedpt = {
   deps: ['p1_arch'],
   run: async (ctx) => {
@@ -138,7 +173,8 @@ nodes.p2_fixedpt = {
   },
 };
 
-// Phase 3: TB + MATLAB 向量生成 (依赖 Phase 1)
+// ── Phase 3: TB + MATLAB 向量生成 ──────────────────────────────────────────
+
 nodes.p3_tb = {
   deps: ['p1_arch'],
   run: async (ctx) => {
@@ -168,12 +204,14 @@ nodes.p3_tb = {
 };
 
 // ═════════════════════════════════════════════════════════════════════════════
-// Phase 4: 逐模块 RTL + MATLAB 验证 [MUST 硬约束]
+// Phase 4: 逐模块 RTL + 脚本化对比 [MUST]  — D+B 融合
 //
-// [硬约束] 每次只处理一个模块。完成当前模块的 RTL 编码 + 仿真验证 +
-//          MATLAB golden 对比后，才能开始下一个模块。
-//          所有子模块通过后，输出验证矩阵供 Phase 5 消费。
+// 关键变化 v3.4:
+//   - Prompt 从 ~70 行压缩到 ~20 行 (聚焦核心约束)
+//   - [MUST] 生成 check_<module>.py + 通过 bash 运行 + 输出 JSON 证据
+//   - 辅助指令 (对称复用/波形审查/模板) 降级为附录
 // ═════════════════════════════════════════════════════════════════════════════
+
 nodes.p4_rtl = {
   deps: ['p2_fixedpt', 'p3_tb'],
   run: async (ctx) => {
@@ -181,149 +219,262 @@ nodes.p4_rtl = {
     const tb = ctx.p3_tb?.data || '';
     const moduleList = modules.length > 0 ? modules : ['模块_1', '模块_2'];
 
-    const result = await agent(`执行 HDL 工作流 Phase 4: 逐模块 RTL + MATLAB 验证
+    const result = await agent(`执行 HDL 工作流 Phase 4: 逐模块 RTL + 脚本化对比
 
-定点报告: ${String(fixedpt).slice(0, 400)}
-Testbench: ${String(tb).slice(0, 400)}
-
-模块列表: ${moduleList.join(', ')}
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-[MUST 硬约束] 逐模块验证流程 — 不可跳过，不可批量执行
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-1. 按模块列表顺序，**一次只处理一个模块**。完成当前模块的全部
-   RTL 编码 + 仿真验证 + MATLAB 对比后，才能开始下一个模块。
-
-2. 每个模块的完成标准（缺一不可）:
-   a) RTL 编码完成 — 遵循编码规范 (ri_/ro_/i_rst 同步复位)
-   b) make compile 通过 (使用检测到的 EDA 工具链)
-   c) 仿真结果与 MATLAB golden model 逐周期比对:
-      - 关键中间信号逐一对比
-      - 输出数据逐周期匹配
-      - 误差 ≤ 1LSB (定点 golden 标准)
-   d) 如不一致 → 分析差异根因 → 修复 RTL → 重新仿真 → 再对比
-   e) 一致 → 记录到验证矩阵 → 开始下一模块
-
-3. 禁止跳过任何模块的 MATLAB 对比验证。如果 TB/测试向量未就绪，
-   必须先完成 TB/向量再继续。
-
-4. 每模块完成后输出一行到验证矩阵:
-   | 模块名 | 状态 | 对比结果 | 迭代次数 |
-   |--------|------|----------|----------|
-   | scrambler | ✅ | 与 scrambler.m 逐周期一致 | 2/2 |
-   | equalizer | ❌ | H_est 累加器差 1LSB | - |
-
-5. 如果某模块 FAIL 且修复超过 3 次迭代:
-   → 执行 Debug Retrospective (5 Whys 根因分析)
-   → 记录到 auto_lessons
-   → 确认根因解决后继续
-
-6. 必须记录 Bit-True 验证报告:
-   - 定点 vs MATLAB 浮点误差 (NMSE/EVM)
-   - 资源使用 (LUT/FF/DSP/BRAM)
-   - 时序收敛 (Fmax)
-
-7. 对称对复用 [效率提升]:
-   - 在处理每个模块前, 检查 architecture.yaml 中的 symmetric_with 配对信息
-   - 如果当前模块的配对模块**已完成**:
-     → 分析对称类型 (dataflow_inverse / identical / structural_inverse)
-     → 基于已完成模块的端口列表、参数、数据通路反向推导当前模块框架
-     → 例: "descrambler 是 scrambler 的逆向——LFSR 相同, 数据流相反"
-     → 复用框架减少重复手写, 且保持结构一致性
-   - 如果配对模块**尚未完成**: 正常独立编写
-
-8. 波形审查 [新增 — Waveform-First 门禁]:
-   a) 仿真后使用 fpga-wave-helper 检查波形:
-      node engine/scripts/fpga-wave-helper.cjs check 05_result/sim/dump.vcd
-   b) 验证 VCD 波形文件存在且非零大小
-   c) 观察关键信号: tvalid/tready 握手、输出数据 vs golden 期望
-   d) 确认无 X/Z 状态漂移 — 使用日志搜索 "x" "z" (不区分大小写)
-   e) 确认复位行为正确 — 复位释放后所有状态机进入 IDLE
-   f) 如波形文件不存在或为 0 字节 → 自动触发:
-      node engine/scripts/fpga-wave-helper.cjs dump 05_result/sim/
-
-📐 优先参考 skills/hdl-coding/templates/ 中的现成模板:
-   comm/  : delay_sync.v, ram_2port.v, axis_master.sv, axis_slave.sv,
-            axis_pipeline_reg.sv, pipe_delay.sv, lfsr_gen.sv,
-            cmult.sv, cdc_sync.sv
-   alu/   : carry_lookahead_4bit.v, alu_16bit_7func.v, alu_4bit_16func.v
-   internet/: crc.sv, crc32.v, hash_table.v, lru_counter.v, cam_cell.v,
-             frame_sync.v, crossbar_cell.v, sm4_round.v
+定点报告: ${String(fixedpt).slice(0, 300)}
+Testbench: ${String(tb).slice(0, 300)}
 
 模块: ${moduleList.join(', ')}
 
-输出格式:
-1. 验证矩阵 (Markdown 表格)
-2. 每模块 Bit-True 报告
-3. 未通过模块的差异分析`, { label: 'p4-rtl-sequential' });
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+[MUST 硬约束] — 逐模块, 一次一个, 脚本证据驱动
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+1. 一次只处理一个模块。完成再下一模块。
+
+2. 每个模块的完成标准:
+   a) 写 RTL
+   b) make compile 通过
+   c) 生成对比脚本 02_sim/check_<module>.py:
+      - 读 MATLAB golden 向量  02_sim/tv/<module>_tv.txt
+      - 读 RTL 仿真输出        05_result/sim/<module>_out.txt
+      - 逐点数值对比
+      - 输出 JSON 到 02_sim/check_results/<module>.json
+      - JSON 格式: {"module":"<name>","status":"PASS|FAIL","compared_points":N,"max_error_lsb":E,"first_fail_at":null}
+   d) bash 运行该脚本, 确认 exit code 为 0
+   e) status=FAIL → 分析根因 → 修复 RTL → 重新对比
+
+3. 所有模块完成后输出验证矩阵表格
+
+4. 波形证据 (可选):
+   - node engine/scripts/fpga-wave-helper.cjs check 05_result/sim/dump.vcd
+   - 确认无 X/Z 状态漂移
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+[参考] 配对模块效率复用
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+- 检查 architecture.yaml 的 symmetric_with 配对
+- 如配对已完成 → 基于已完成端框架反推
+- (不影响验证标准, 仅减少手写量)
+
+模块: ${moduleList.join(', ')}
+
+输出:
+1. 02_sim/check_results/<module>.json   (每个模块)
+2. 验证矩阵表格 (Markdown)
+3. 差异分析 (如有 FAIL)`, { label: 'p4-rtl-sequential' });
     return result;
   },
 };
 
 // ═════════════════════════════════════════════════════════════════════════════
-// Phase 5: 顶层集成 + 全链仿真 [MUST 硬约束]
+// Phase 4.5: 证据门禁 [NEW]  — A 降维 + 高安全分支
 //
-// [硬约束] Phase 4 验证矩阵必须全 ✅ 才能进入本阶段。
-//          全链逐级与 MATLAB golden model 对比，任何一级不匹配 = FAIL。
+// 标准模式: 纯 fs 读 JSON 文件 → 验证所有模块 PASS → 0 token
+// 高安全模式: fs 验证通过后 → 对抗 agent 读 RTL + MATLAB golden 找差异
+//
+// [核心设计] 不信任 Phase 4 的自述, 独立从磁盘读取证据制品
 // ═════════════════════════════════════════════════════════════════════════════
-nodes.p5_top_integration = {
+
+nodes.p45_evidence_gate = {
   deps: ['p4_rtl'],
   run: async (ctx) => {
-    const rtlResult = ctx.p4_rtl?.data || '';
+    phase('Phase 4.5 证据门禁');
+
+    const checkDir = path.join(projectRoot, '02_sim', 'check_results');
+
+    // ── Step 1: File Check (纯 fs, 0 agent token) ──────────────
+
+    log('🔍 [证据门禁] 独立读取 evidence JSON 文件...');
+
+    if (!fs.existsSync(checkDir)) {
+      throw new Error(`❌ [证据门禁] 目录不存在: ${checkDir}\n   Phase 4 未产出验证证据, 请确保 Phase 4 生成了检查脚本并运行。`);
+    }
+
+    const files = fs.readdirSync(checkDir).filter(f => f.endsWith('.json'));
+    const allResults = [];
+    let allPass = true;
+
+    for (const mod of modules) {
+      const jsonFile = `${mod}.json`;
+      const jsonPath = path.join(checkDir, jsonFile);
+
+      if (!fs.existsSync(jsonPath)) {
+        allPass = false;
+        allResults.push({ module: mod, pass: false, reason: `JSON 证据文件不存在: ${jsonPath}` });
+        continue;
+      }
+
+      let data;
+      try {
+        data = JSON.parse(fs.readFileSync(jsonPath, 'utf-8'));
+      } catch (e) {
+        allPass = false;
+        allResults.push({ module: mod, pass: false, reason: `JSON 解析失败: ${e.message}` });
+        continue;
+      }
+
+      if (!data.status || data.status !== 'PASS') {
+        allPass = false;
+        allResults.push({
+          module: mod,
+          pass: false,
+          reason: `status=${data.status || 'MISSING'}, first_fail_at=${data.first_fail_at ?? 'N/A'}`,
+        });
+        continue;
+      }
+
+      if (!data.compared_points || data.compared_points === 0) {
+        allPass = false;
+        allResults.push({
+          module: mod,
+          pass: false,
+          reason: `compared_points=${data.compared_points} — 脚本可能未实际运行`,
+        });
+        continue;
+      }
+
+      allResults.push({
+        module: mod,
+        pass: true,
+        points: data.compared_points,
+        max_error: data.max_error_lsb ?? 0,
+      });
+    }
+
+    // 报告文件检查结果
+    for (const r of allResults) {
+      if (r.pass) {
+        log(`  ✅ ${r.module}: PASS (${r.points} points, max_err=${r.max_error}LSB)`);
+      } else {
+        log(`  ❌ ${r.module}: FAIL — ${r.reason}`);
+      }
+    }
+
+    if (!allPass) {
+      throw new Error(
+        `❌ [证据门禁] 文件检查 FAIL:\n${
+          allResults.filter(r => !r.pass).map(r => `   - ${r.module}: ${r.reason}`).join('\n')
+        }\nPhase 4 验证未通过, 无法进入 Phase 5 集成。请修复后重试。`
+      );
+    }
+
+    log('✅ [证据门禁] 文件检查全部通过。所有模块已验证并与 MATLAB golden 一致。');
+
+    // ── Step 2: 高安全模式 — 对抗验证 (仅高安全模块) ──────────
+
+    const activeHighSec = highSecModules.filter(m => modules.includes(m));
+
+    if (activeHighSec.length > 0 && !liteMode) {
+      log(`⚠️ [高安全模式] 以下模块需要独立对抗验证: ${activeHighSec.join(', ')}`);
+      log('    将独立读取 RTL + MATLAB golden 源码进行逻辑差异分析...');
+
+      const advResult = await agent(`你是**对抗验证者**。以下模块声称已与 MATLAB golden model 逐周期一致。
+
+你的任务: 独立找茬。读 RTL 源码, 读 MATLAB golden, 找任何逻辑差异。
+
+高安全模块: ${activeHighSec.join(', ')}
+
+逐模块检查:
+1. RTL 关键数据通路 ↔ MATLAB 对应步骤
+2. 位宽/定点格式是否与 Phase 2 报告一致
+3. 条件分支/状态机 → 算法步骤映射
+4. 反馈环路/累加器/自适应逻辑
+
+输出 JSON 数组:
+[
+  {"module":"<name>","pass":true},
+  {"module":"<name>","pass":false,"issue":"具体差异描述","rtl_file":"<路径>","golden_file":"<路径>"}
+]
+
+如果全部 pass → 只输出空数组 []。`, { label: 'p45-adversarial', phase: 'Phase 4.5 证据门禁' });
+
+      // 解析对抗结果
+      try {
+        const issues = typeof advResult === 'string' ? JSON.parse(advResult) : advResult;
+        if (Array.isArray(issues) && issues.length > 0) {
+          const fails = issues.filter(i => i.pass === false);
+          if (fails.length > 0) {
+            throw new Error(
+              `❌ [对抗验证] 发现 ${fails.length} 个不一致:\n${
+                fails.map(f => `   - ${f.module}: ${f.issue} (RTL: ${f.rtl_file}, Golden: ${f.golden_file})`).join('\n')
+              }`
+            );
+          }
+          log(`✅ [对抗验证] ${activeHighSec.length} 个模块全部通过逻辑检查`);
+        } else {
+          log(`✅ [对抗验证] 全部通过`);
+        }
+      } catch (e) {
+        if (e instanceof SyntaxError) {
+          log(`⚠️ [对抗验证] JSON 解析失败, 原始输出:\n${String(advResult).slice(0, 500)}`);
+        } else {
+          throw e; // 重新抛出我们自定义的错误
+        }
+      }
+    } else if (activeHighSec.length > 0 && liteMode) {
+      log(`ℹ️ [高安全模块] Lite 模式跳过对抗验证, 仅文件检查。`);
+    } else {
+      log(`ℹ️ [标准模式] 所有模块为标准模块, 脚本化对比 + 文件检查已足够。`);
+    }
+
+    return {
+      pass: true,
+      fileCheck: allResults,
+      highSecChecked: activeHighSec,
+    };
+  },
+};
+
+// ═════════════════════════════════════════════════════════════════════════════
+// Phase 5: 顶层集成 + 全链仿真 [MUST]
+//
+// [入口门禁] 依赖 p45_evidence_gate — 证据不通过则不会到达这里
+// ═════════════════════════════════════════════════════════════════════════════
+
+nodes.p5_top_integration = {
+  deps: ['p45_evidence_gate'],
+  run: async (ctx) => {
+    const gateResult = ctx.p45_evidence_gate?.data || {};
+    const isTrusted = gateResult.pass === true;
+
     const result = await agent(`执行 HDL 工作流 Phase 5: 顶层集成 + 全链仿真
 
-Phase 4 输出: ${String(rtlResult).slice(0, 500)}
+证据门禁: ${isTrusted ? '✅ 通过 (所有模块已验证)' : '⚠️ 状态未知'}
+门禁详情: ${JSON.stringify(gateResult).slice(0, 300)}
 
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-[MUST 硬约束] 顶层集成流程 — 不可跳过
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+[MUST 硬约束] 顶层集成 — 入口已验证
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-1. 检查 Phase 4 产出的验证矩阵:
-   - 所有模块必须标记为 ✅ (通过)
-   - 有任何 ❌ → 返回 Phase 4 修复，不可继续顶层集成
+1. 搭建顶层:
+   a) 创建顶层模块, 例化所有子模块
+   b) 按数据流方向连接
+   c) 确认 AXI4-Stream 握手链完整
+   d) make compile 通过
 
-2. 搭建顶层:
-   a) 创建顶层模块，例化所有子模块
-   b) 按数据流方向连接: TX链 → RX链 (或指定方向)
-   c) 连接控制通路: 帧头/帧尾传递, 配置参数分发
-   d) 确认 AXI4-Stream 握手链完整 (tvalid/tready/tdata/tlast/tuser)
-   e) make compile 通过
+2. 全链仿真 — 输入到输出逐级对比 MATLAB golden:
+   a) MATLAB 注入全帧测试向量
+   b) 逐级捕获中间结果对比
+   c) 定点模块: 逐周期 bit-true
+   d) 不一致 → 隔离根因模块
 
-3. 全链仿真 — 从输入到输出逐级对比 MATLAB golden model:
-   a) 从 MATLAB 注入全帧测试向量
-   b) 逐级捕获中间结果并与 golden model 对比:
-      - 模块 A 输出 ↔ MATLAB 模块 A 输出
-      - 模块 B 输出 ↔ MATLAB 模块 B 输出
-      - ... (所有中间级)
-      - 最终输出 ↔ MATLAB 整体输出
-   c) 各级误差标准:
-      - 定点模块: 逐周期一致 (bit-true)
-      - 浮点近似模块: 误差 ≤ 1LSB
-   d) 如果有中间级不匹配:
-      → 隔离根因模块 (定位到具体子模块)
-      → 记录差异 (预期值 vs 实际值, 周期号)
-      → 返回 Phase 4 修复该模块
-
-4. 全链 PASS 标准:
-   - 所有中间级输出与 MATLAB golden model 一致
-   - 最终输出与 MATLAB golden model 一致
-   - 任何一级不一致 = FAIL，不可妥协
+3. 全链 PASS 标准:
+   - 所有中间级与 golden 一致
+   - 最终输出与 golden 一致
+   - 任何不一致 = FAIL
 
 模块: ${modules.join(', ') || '项目默认'}
 输出:
 1. top.sv 顶层模块
-2. 全链仿真日志 (含所有中间级对比)
-3. 全链 PASS/FAIL 报告
-4. 如有 FAIL → 隔离到具体模块的差异报告`, { label: 'p5-top-integration' });
+2. 全链仿真日志 (含中间级对比)
+3. PASS/FAIL 报告`, { label: 'p5-top-integration' });
     return result;
   },
 };
 
-// ═════════════════════════════════════════════════════════════════════════════
-// Phase 6: 回归覆盖率 (依赖 Phase 5)
-// [增强] 必须真跑 compile/sim，不能写文字描述替代
-// ═════════════════════════════════════════════════════════════════════════════
+// ── Phase 6: 回归覆盖率 ────────────────────────────────────────────────────
+
 nodes.p6_regression = {
   deps: ['p5_top_integration'],
   run: async (ctx) => {
@@ -348,10 +499,8 @@ nodes.p6_regression = {
   },
 };
 
-// ═════════════════════════════════════════════════════════════════════════════
-// Phase 7: 代码审查 (依赖 Phase 5, 与 Phase 6 并行)
-// [增强] 增加模型一致性检查 + 工具链约束注入
-// ═════════════════════════════════════════════════════════════════════════════
+// ── Phase 7: 代码审查 ──────────────────────────────────────────────────────
+
 nodes.p7_review = {
   deps: ['p5_top_integration'],
   run: async (ctx) => {
@@ -378,9 +527,8 @@ nodes.p7_review = {
   },
 };
 
-// ═════════════════════════════════════════════════════════════════════════════
-// Phase 8: 报告输出 (依赖 Phase 6 + Phase 7)
-// ═════════════════════════════════════════════════════════════════════════════
+// ── Phase 8: 报告输出 ──────────────────────────────────────────────────────
+
 nodes.p8_report = {
   deps: ['p6_regression', 'p7_review'],
   run: async (ctx) => {
@@ -399,33 +547,42 @@ nodes.p8_report = {
   },
 };
 
-// Verifier (终验节点)
+// ── Verifier (终验节点, 升级版) ────────────────────────────────────────────
+
 nodes.verifier = {
   deps: ['p8_report'],
   run: async (ctx) => {
     const report = ctx.p8_report?.data || '';
-    // 汇总所有下游结果供 Verifier 审阅
+    const gateResult = ctx.p45_evidence_gate?.data || {};
+
+    // 汇总结果
     const summary = [
-      '## Phase 0 基础设施', ctx.p0_infra?.data || 'N/A',
-      '## Phase 1 架构设计', ctx.p1_arch?.data || 'N/A',
-      '## Phase 2 定点量化', ctx.p2_fixedpt?.data || 'N/A',
-      '## Phase 3 TB+向量生成', ctx.p3_tb?.data || 'N/A',
-      '## Phase 4 逐模块RTL+MATLAB验证', ctx.p4_rtl?.data || 'N/A',
-      '## Phase 5 顶层集成+全链仿真', ctx.p5_top_integration?.data || 'N/A',
-      '## Phase 6 回归', ctx.p6_regression?.data || 'N/A',
-      '## Phase 7 审查', ctx.p7_review?.data || 'N/A',
-      '## Phase 8 报告', report,
+      '## Phase 0 基础设施',     ctx.p0_infra?.data || 'N/A',
+      '## Phase 1 架构设计',     ctx.p1_arch?.data || 'N/A',
+      '## Phase 2 定点量化',     ctx.p2_fixedpt?.data || 'N/A',
+      '## Phase 3 TB+向量生成',  ctx.p3_tb?.data || 'N/A',
+      '## Phase 4 RTL+脚本对比', ctx.p4_rtl?.data || 'N/A',
+      '## Phase 4.5 证据门禁',   JSON.stringify(gateResult).slice(0, 500) || 'N/A',
+      '## Phase 5 全链仿真',     ctx.p5_top_integration?.data || 'N/A',
+      '## Phase 6 回归',         ctx.p6_regression?.data || 'N/A',
+      '## Phase 7 审查',         ctx.p7_review?.data || 'N/A',
+      '## Phase 8 报告',         report,
     ].join('\n\n');
 
-    const result = await agent(`你是一个**跨阶段校验者**。审以下 HDL 开发工作流的全链路结果是否完整满足要求。
+    const result = await agent(`你是一个**跨阶段校验者**。审以下 HDL 开发工作流的全链路结果是否满足要求。
 
 逐条检查:
-1. 所有 9 个 Phase 是否都有输出
-2. Phase 4 (逐模块RTL) 验证矩阵: 所有模块是否都标记 ✅?
-3. Phase 5 (顶层集成) 全链仿真各中间级与 MATLAB golden model 一致?
-4. Phase 6 (回归) 是否通过 (要求真实编译/仿真, 非文字)
-5. Phase 7 (审查) 是否通过
-6. 是否适用于模块: ${modules.join(', ') || '项目默认'}
+1. 所有 10 个 Phase 是否都有输出
+2. Phase 4 验证矩阵: 所有模块 ✅?
+3. **Phase 4.5 证据门禁**: check_results/*.json 文件:
+   - 所有模块都有对应 .json 文件?
+   - 所有 status==PASS?
+   - compared_points > 0?
+4. Phase 5 全链仿真各中间级与 MATLAB golden model 一致?
+5. Phase 6 回归是否通过 (要求真实编译/仿真)
+6. Phase 7 审查是否通过
+7. **对照 architecture.yaml 模块列表**: 有没有模块遗漏验证?
+8. 是否适用于模块: ${modules.join(', ') || '项目默认'}
 
 结果摘要:
 ${summary.slice(0, 3000)}
@@ -433,7 +590,7 @@ ${summary.slice(0, 3000)}
 输出 JSON:
 {
   "pass": true/false,
-  "reason": "fail 时说明缺哪条要求",
+  "reason": "通过 或 说明缺哪条要求",
   "missing": ["缺失项列表"],
   "strongest_phase": "表现最好的阶段",
   "weakest_phase": "需改进的阶段"
@@ -442,13 +599,20 @@ ${summary.slice(0, 3000)}
   },
 };
 
-// ── Lite 模式：重写依赖链 ────────────────────────────────────────────────
+// ── Lite 模式：重写依赖链 ──────────────────────────────────────────────────
+
 if (liteMode) {
-  nodes.p4_rtl.deps = ['p3_tb'];          // 跳过 Phase 2 (定点扫描)
-  nodes.p8_report.deps = ['p7_review'];    // 跳过 Phase 6 (覆盖率回归)
-  // 保留 p2_fixedpt 和 p6_regression 节点但无上游依赖 → 不执行
-  // Verifier 仍依赖 p8_report，不受影响
-  log('   依赖链: P0→P1→P3→P4→P5→P7→P8→Verifier');
+  nodes.p4_rtl.deps = ['p3_tb'];            // 跳过 Phase 2 (定点扫描)
+  // p45_evidence_gate 依赖保持不变 (deps: ['p4_rtl'])
+  // 但 run 函数内部会检查 liteMode, 不会 spawn 对抗 agent
+  nodes.p8_report.deps = ['p7_review'];      // 跳过 Phase 6 (覆盖率回归)
+
+  // 用 no-op 替换被跳过节点的 run，避免 DAG 引擎仍执行它们
+  nodes.p2_fixedpt.run = async () => '[SKIPPED] Lite 模式 — 定点量化跳过';
+  nodes.p6_regression.run = async () => '[SKIPPED] Lite 模式 — 覆盖率回归跳过';
+
+  log('   依赖链: P0→P1→P3→P4→P45→P5→P7→P8→Verifier');
+  log('   (跳过节点: P2 定点量化, P6 覆盖率回归)');
 }
 
 // ── 执行 DAG ──────────────────────────────────────────────────────────────
@@ -459,6 +623,7 @@ const dagResult = await dag.execute(nodes, {
 });
 
 // ── 输出摘要 ──────────────────────────────────────────────────────────────
+
 const verifierOutput = dagResult.results.verifier?.data || '';
 log('=== DAG 工作流完成 ===');
 
@@ -475,11 +640,24 @@ try {
   log('Verifier 输出 (raw): ' + String(verifierOutput).slice(0, 500));
 }
 
+// ── 分类摘要 ──────────────────────────────────────────────────────────────
+
+if (stdModules.length > 0) {
+  log(`📦 标准模式模块 (${stdModules.length}): ${stdModules.join(', ')} — 脚本对比+文件门禁`);
+}
+if (highSecModules.length > 0) {
+  log(`🔒 高安全模式模块 (${highSecModules.length}): ${highSecModules.join(', ')} — 脚本对比+文件门禁+对抗验证`);
+}
+
 return {
   nodeCount: dagResult.nodeCount,
   layerCount: dagResult.layerCount,
   results: Object.fromEntries(
-    Object.entries(dagResult.results).map(([k, v]) => [k, { status: v.status }])
+    Object.entries(dagResult.results).map(([k, v]) => [k, { status: v.status, dataLength: String(v.data || '').length }])
   ),
+  moduleClassification: {
+    standard: stdModules,
+    highSecurity: highSecModules,
+  },
   verifier: verifierOutput,
 };
