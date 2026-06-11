@@ -36,6 +36,95 @@ const { spawnSync } = require('node:child_process');
 
 // ── 工具检测定义 ────────────────────────────────────────────────────────────
 
+// ── 跨平台命令解析 ───────────────────────────────────────────────────────────
+
+/**
+ * 在 win32 上，EDA 工具通常是 .bat 包装器而非原生可执行文件（如 Vivado 的 shebang 脚本）。
+ * 这里检测命令是否存在，如果原始命令不在 PATH 中则尝试 .bat/.cmd 后缀。
+ * @param {string} cmd
+ * @returns {string} 可执行的命令名
+ */
+function resolveWin32Cmd(cmd) {
+  if (process.platform !== 'win32') return cmd;
+  if (/\.(bat|cmd|exe|com)$/i.test(cmd)) return cmd;
+
+  // 用 where 定位真实路径，检查扩展名
+  try {
+    const r = spawnSync('where', [cmd], { encoding: 'utf8', timeout: 3000, windowsHide: true });
+    if (r.status === 0 && r.stdout) {
+      const found = r.stdout.trim().split(/\r?\n/)[0];
+      // 已有 Windows 可执行扩展名 → 直接用
+      if (/\.(exe|com|bat|cmd)$/i.test(found)) return cmd;
+    }
+  } catch { /* fall through */ }
+
+  // 原始命令无可执行扩展名（如 bash shebang 脚本）→ 尝试 .bat
+  try {
+    const r2 = spawnSync('where', [cmd + '.bat'], { encoding: 'utf8', timeout: 3000, windowsHide: true });
+    if (r2.status === 0 && r2.stdout && r2.stdout.trim()) return cmd + '.bat';
+  } catch { /* try .cmd */ }
+
+  try {
+    const r3 = spawnSync('where', [cmd + '.cmd'], { encoding: 'utf8', timeout: 3000, windowsHide: true });
+    if (r3.status === 0 && r3.stdout && r3.stdout.trim()) return cmd + '.cmd';
+  } catch { /* give up */ }
+
+  return cmd;
+}
+
+/**
+ * 在标准路径中搜索 Xilinx Vivado 安装目录，返回可用版本列表。
+ * 基于环境变量 SystemDrive（通常 C:），不硬编码盘符。
+ * 也检查 D:（常见安装盘）。
+ * @returns {Array<{ dir: string, version: string }>}
+ */
+function findVivadoInstallDirs() {
+  if (process.platform !== 'win32') return [];
+
+  const drives = new Set();
+  // SystemDrive → C: 或 D:
+  const sysDrive = (process.env.SystemDrive || 'C:').replace(/\\$/, '');
+  drives.add(sysDrive);
+  // 也检查 D:（安装软件默认走 D 盘规则）
+  drives.add('D:');
+
+  const results = [];
+
+  for (const drive of drives) {
+    // shell:true 模式下 cmd.exe 需要反斜杠
+    const searchPath = `${drive}\\Xilinx\\Vivado`;
+    try {
+      const ls = spawnSync(`dir /b "${searchPath}" 2>nul`, [], {
+        encoding: 'utf8', timeout: 5000, shell: true, windowsHide: true,
+      });
+      if (!ls.stdout) {
+        // 也试小写
+        const ls2 = spawnSync(`dir /b "${drive}\\Xilinx\\vivado" 2>nul`, [], {
+          encoding: 'utf8', timeout: 5000, shell: true, windowsHide: true,
+        });
+        if (ls2.stdout) ls.stdout = ls2.stdout;
+      }
+      if (!ls.stdout) continue;
+      for (const line of ls.stdout.trim().split(/\r?\n/)) {
+        const v = line.trim();
+        if (/^\d{4}\.\d+$/.test(v)) {
+          const absDir = `${drive}\\Xilinx\\Vivado\\${v}`;
+          // 确认 bin/vivado.bat 存在
+          const check = spawnSync(`if exist "${absDir}\\bin\\vivado.bat" (echo 1) else (echo 0)`, [], {
+            encoding: 'utf8', timeout: 3000, shell: true, windowsHide: true,
+          });
+          if (check.stdout && check.stdout.trim() === '1') {
+            results.push({ dir: absDir, version: v });
+          }
+        }
+      }
+    } catch { /* next drive */ }
+  }
+  return results;
+}
+
+// ── 工具检测定义 ────────────────────────────────────────────────────────────
+
 const TOOLS = [
   {
     name: 'vlog',
@@ -61,13 +150,9 @@ const TOOLS = [
     versionRegex: /xvlog\s+v([\d.]+)/i,
     lintCmd: (file) => ['-sv', '-lint', file],
     lintLabel: 'xvlog -sv -lint',
-    // 同时检测 vivado
-    companionCheck: () => {
-      const r = spawnSync('vivado', ['-version'], { encoding: 'utf8', timeout: 10000, windowsHide: true });
-      if (r.status === 0) {
-        const m = r.stdout.match(/Vivado\s+v?([\d.]+)/i);
-        return { version: m ? m[1] : 'unknown' };
-      }
+    detectFallback: () => {
+      const dirs = findVivadoInstallDirs();
+      if (dirs.length > 0) return { version: dirs[0].version, source: 'dir' };
       return null;
     },
   },
@@ -77,6 +162,11 @@ const TOOLS = [
     cmd: 'xelab',
     args: ['-version'],
     versionRegex: /xelab\s+([\d.]+)/i,
+    detectFallback: () => {
+      const dirs = findVivadoInstallDirs();
+      if (dirs.length > 0) return { version: dirs[0].version, source: 'dir' };
+      return null;
+    },
   },
   {
     name: 'verilator',
@@ -109,6 +199,21 @@ const TOOLS = [
     cmd: 'vivado',
     args: ['-version'],
     versionRegex: /Vivado\s+v?([\d.]+)/i,
+    // CLI 检测失败时从安装目录提取版本（通用方案，不限平台）
+    detectFallback: () => {
+      // 1. 优先走环境变量 XILINX_VIVADO
+      const envPath = process.env.XILINX_VIVADO;
+      if (envPath) {
+        const m = envPath.match(/(\d{4}\.\d+)/);
+        if (m) return { version: m[1], source: 'env' };
+      }
+      // 2. Windows 上扫描标准安装目录
+      const dirs = findVivadoInstallDirs();
+      if (dirs.length > 0) {
+        return { version: dirs.map(d => d.version).join(', '), source: 'dir' };
+      }
+      return null;
+    },
   },
   {
     name: 'xsim',
@@ -116,6 +221,11 @@ const TOOLS = [
     cmd: 'xsim',
     args: ['--version'],
     versionRegex: /xsim\s+([\d.]+)/i,
+    detectFallback: () => {
+      const dirs = findVivadoInstallDirs();
+      if (dirs.length > 0) return { version: dirs[0].version, source: 'dir' };
+      return null;
+    },
   },
   {
     name: 'quartus_map',
@@ -162,8 +272,11 @@ function detect(opts = {}) {
     // 快速模式：只检测 lint 工具
     if (opts.quick && !tool.lintCmd) continue;
 
+    // 跨平台命令解析（win32 → .bat 回退）
+    const effectiveCmd = resolveWin32Cmd(tool.cmd);
+
     try {
-      const r = spawnSync(tool.cmd, tool.args, {
+      const r = spawnSync(effectiveCmd, tool.args, {
         encoding: 'utf8',
         timeout: 10000,
         windowsHide: true,
@@ -183,9 +296,20 @@ function detect(opts = {}) {
         if (m) version = m[1];
       }
 
-      const available = r.status === 0 && !r.error && !r.signal;
+      let available = r.status === 0 && !r.error && !r.signal;
 
-      // 伴生检测（如 xvlog → vivado）
+      // CLI 检测失败 → 走 fallback（如 Vivado 目录扫描）
+      let fallbackResult = null;
+      if (!available && tool.detectFallback) {
+        fallbackResult = tool.detectFallback();
+        if (fallbackResult) {
+          available = true;
+          version = fallbackResult.version;
+          versionRaw = `[${fallbackResult.source || 'fallback'}] ${fallbackResult.version}`;
+        }
+      }
+
+      // 伴生检测
       let companion = null;
       if (tool.companionCheck && available) {
         companion = tool.companionCheck();
@@ -202,12 +326,18 @@ function detect(opts = {}) {
         companion,
       });
     } catch {
+      // catch 中也尝试 fallback
+      let fallbackResult = null;
+      if (tool.detectFallback) {
+        fallbackResult = tool.detectFallback();
+      }
+
       results.push({
         name: tool.name,
         label: tool.label,
-        available: false,
-        version: null,
-        versionRaw: '',
+        available: !!fallbackResult,
+        version: fallbackResult ? fallbackResult.version : null,
+        versionRaw: fallbackResult ? `[${fallbackResult.source || 'fallback'}] ${fallbackResult.version}` : '',
         lintCmd: tool.lintCmd || null,
         lintLabel: tool.lintLabel || null,
         companion: null,
@@ -253,7 +383,10 @@ function report(tools) {
 
   lines.push(`  可用: ${available.length} | 不可用: ${unavailable.length}`);
   for (const t of available) {
-    const ver = t.version ? ` v${t.version}` : '';
+    let ver = t.version ? ` v${t.version}` : '';
+    if (t.versionRaw && t.versionRaw.startsWith('[')) {
+      ver += ' (' + t.versionRaw.replace(/\[.*?\]\s*/, '').trim() + ')';
+    }
     const companion = t.companion ? ` (+${t.companion.version || 'unknown'})` : '';
     lines.push(`  ✅ ${t.label}${ver}${companion}`);
   }

@@ -485,5 +485,11 @@
       "Bash(gh repo delete:*)",
       "Bash(git commit --amend:*)"
     ]
+  },
+  "mcpServers": {
+    "matlab": {
+      "command": "matlab-mcp",
+      "args": []
+    }
   }
 }
