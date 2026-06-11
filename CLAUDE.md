@@ -8,8 +8,9 @@
 - 按上下文自动加载：HDL(`01-hdl.md`)、Python(`02-python.md`)、调试(`03-debugging.md`)
 - **新用户首次 session**: 提示阅读 `快速入门.md` — 5 分钟上手
 
-## 认知层（L4）
-卡住时自动切换 7 种推理模式 → `rules/06-cognition.md`
+## 认知层
+模式切换条件已内嵌到 `rules/00-core.md`（L0，始终加载）。
+详细模式说明见 `rules/06-cognition.md`。
 
 ## 检索（L2）
 五检索工具的使用场景和优先级 (含 SQLite FTS5) → `rules/09-search-tools.md`
