@@ -1,3 +1,10 @@
+---
+name: reference-index
+description: 参考资料索引
+metadata:
+  type: reference
+---
+
 # 参考资料索引
 
 > CLAUDE.md 中提到的所有 reference 文档路径。按需加载，不占用启动 token。

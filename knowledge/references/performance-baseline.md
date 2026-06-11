@@ -1,3 +1,10 @@
+---
+name: performance-baseline
+description: 性能基准
+metadata:
+  type: reference
+---
+
 # 性能基准
 
 > Agent 配置性能指标基准

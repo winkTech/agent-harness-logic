@@ -1,3 +1,10 @@
+---
+name: session-management
+description: 会话管理指南
+metadata:
+  type: reference
+---
+
 # 会话管理指南
 
 > 上下文膨胀监控与应对策略

@@ -1,3 +1,10 @@
+---
+name: memory-system
+description: 记忆系统参考
+metadata:
+  type: reference
+---
+
 # 记忆系统参考
 
 > 跨项目共享的工作记忆、错误经验、学习教训

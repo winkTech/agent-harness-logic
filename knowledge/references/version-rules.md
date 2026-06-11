@@ -1,3 +1,10 @@
+---
+name: version-rules
+description: 版本管理规则
+metadata:
+  type: reference
+---
+
 # 版本管理规则
 
 > 详细版本管理规范

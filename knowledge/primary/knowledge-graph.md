@@ -1,17 +1,23 @@
 ---
-title: "FPGA 知识图谱"
-domain: fpga
-tags: [knowledge-graph, relationships, concepts]
-created: 2026-06-01
-updated: 2026-06-01
-difficulty: advanced
+name: knowledge-graph
+description: 全知识库知识图谱 — FPGA/通信算法/工具链的概念关联网络
+metadata:
+  type: reference
+  domain: meta
+tags: [knowledge-graph, relationships, concepts, navigation]
+related: [INDEX, scene-cards, tag-index]
+reviewed_at: 2026-06-11
 ---
 
-# FPGA 知识图谱
+# 知识图谱
+
+> 全知识库关联网络。新文档入库时同步更新此图。
+> 维护规则见 [KNOWLEDGE_RULES.md](../KNOWLEDGE_RULES.md) 第五节。
 
 ## 概述
 
-本文档建立 FPGA 领域的知识图谱，展示各概念之间的关系，帮助理解和记忆。
+本文档建立知识库的概念关联图谱，按领域组织。
+当前涵盖 FPGA 领域（详细关系图如下），通信算法知识图谱建设中。
 
 ---
 

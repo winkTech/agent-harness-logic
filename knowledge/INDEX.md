@@ -1,7 +1,16 @@
+---
+name: knowledge-index
+description: 知识库主索引 — 导航到所有 primary 文档、鸢尾花书蒸馏、引用文档和模板
+metadata:
+  type: reference
+  domain: meta
+tags: [index, navigation, knowledge-base]
+---
+
 # 知识库索引
 
-> 导航: [场景入口卡](SCENE_CARDS.md) — [标签索引](TAG_INDEX.md)
-> 最后更新: 2026-06-06 | 文档: 76 篇 primary + 38 篇 source + 40 篇 鸢尾花书蒸馏
+> 导航: [场景入口卡](SCENE_CARDS.md) — [标签索引](TAG_INDEX.md) — [知识库规则](KNOWLEDGE_RULES.md)
+> 最后更新: 2026-06-11 | 文档: 85 篇 primary + 39 篇 source + 40 篇 鸢尾花书蒸馏
 
 ---
 
@@ -12,18 +21,24 @@ knowledge/
 ├── INDEX.md              # 本文件（紧凑索引）
 ├── SCENE_CARDS.md        # 场景入口卡
 ├── TAG_INDEX.md          # 标签快速定位
+├── KNOWLEDGE_RULES.md    # 知识库管理规则 ★
 ├── primary/              # 精炼知识文档（按域分类）
-│   ├── domains/comm/     # 通信算法 47 篇
+│   ├── domains/comm/     # 通信算法 51 篇
 │   ├── domains/fpga/     # FPGA 设计 25 篇
 │   ├── domains/python/   # Python 工具
 │   ├── domains/matlab/   # MATLAB 模型
-│   └── cross-project-experience.md
+│   ├── cross-project-experience.md
+│   └── knowledge-graph.md
+├── references/           # 引用文档（13 篇）
 ├── docs/                 # 文档模板
-│   ├── templates/uvm/    # UVM 验证框架模板
-│   ├── templates/ci/     # CI/CD 集成模板
-│   └── ...
-├── archive/sources/fpga/ # 38 本书籍全文提取（~200K 行，按需搜索）
-└── source/datasheets/    # 原始 PDF（35+ 个）
+│   └── templates/        # UVM/CI/PRD 等模板
+├── archive/sources/fpga/ # 39 本书籍全文提取（~200K 行，按需搜索）
+├── source/datasheets/    # 原始 PDF（35 个）
+├── python-basics/        # 鸢尾花书蒸馏: Python 编程
+├── math-foundation/      # 鸢尾花书蒸馏: 微积分/优化
+├── linear-algebra/       # 鸢尾花书蒸馏: 线性代数
+├── probability-statistics/ # 鸢尾花书蒸馏: 概率论
+└── data-viz/             # 鸢尾花书蒸馏: 可视化
 ```
 
 ---
@@ -74,9 +89,11 @@ knowledge/
 
 ---
 
-## Cross-Domain (3)
+## Cross-Domain (4)
 
-`cross-project-experience.md` (+ `scripts/init-project.sh`, `scripts/init-module.sh`), `knowledge-graph.md`, `pitfalls/avoid-global-reset.md`
+`cross-project-experience.md`, `knowledge-graph.md`, `pitfalls/avoid-global-reset.md`, `data_structure.md`
+
+> 工程脚本见 `engine/scripts/init-project.sh`, `engine/scripts/init-module.sh` (不在 knowledge/ 内)
 
 ---
 
@@ -122,13 +139,19 @@ knowledge/
 - **微积分/优化**: 导数/积分/梯度下降 → [索引](math-foundation/) 或查 06-calculus
 - **概率论**: 贝叶斯/分布/统计检验 → [索引](probability-statistics/)
 
-## Stats (2026-06-06)
+## Stats (2026-06-11)
 
 | Metric | Value |
 |:-------|:-----:|
-| Primary docs | 80 (comm 51 + fpga 25 + cross 4) |
+| Primary docs (不含 examples) | 85 (comm 51 + fpga 27 + cross 4 + 其他 3) |
+| Primary docs (含 examples) | 116 |
 | 鸢尾花书蒸馏 | 40 cards (~200KB) |
-| Source extracts | 38 (~200K lines) |
+| Source extracts | 39 (~200K lines) |
+| 引用文档 (references/) | 13 |
+| 文档模板 (docs/templates/) | 19 |
+| PDF 原始文件 | 35 |
 | MATLAB models | 37 .m files |
 | RTL modules | 19 .sv files |
 | UVM testbenches | 5 algorithms |
+
+> 计数自动更新: `node engine/scripts/kb-stats.cjs`

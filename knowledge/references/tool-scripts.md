@@ -1,3 +1,10 @@
+---
+name: tool-scripts
+description: 工具脚本参考
+metadata:
+  type: reference
+---
+
 # 工具脚本参考
 
 > Agent 配置和管理工具脚本

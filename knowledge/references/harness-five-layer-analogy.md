@@ -1,3 +1,14 @@
+---
+name: harness-five-layer-analogy
+description: Harness 五层全景类比 — 边界层/记忆层/交接层/认知层/技能层
+metadata:
+  type: reference
+  domain: meta
+tags: [harness, architecture, overview]
+---
+
+# Harness 五层全景
+
 一、harness 的五层全景打个类比：Claude 像一个能力超强、学得飞快、但不守规矩的新同事。单靠口头说规矩他做小任务完全没问题，但做严肃项目就必须有门禁、团队百科、任务管理、同事反馈、SOP 手册围着他。我搭的 harness 就是这五件事的自动化版本：层类比角色解决什么问题核心机制
 1. 边界层门禁 + 审计硬拦截危险动作、验证证据hooks（工具调用前后自动跑的脚本）
 2. 记忆层团队百科几个月前的决策怎么找到语义记忆 + 代码图谱 + 字面量搜索 + 时间轴查询
