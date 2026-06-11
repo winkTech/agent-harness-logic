@@ -83,13 +83,47 @@ function detect(text) {
 }
 
 function checkToolFailure(state) {
-  // Check if failureCount > 2 with no mode switch
   if (!state) return null;
+
+  // ── 降级检测: 如果最近 5 次工具调用全部成功 → 复位 failureCount ────
+  const recentCalls = (state.toolCalls || []).slice(-5);
+  if (recentCalls.length >= 3 && recentCalls.every(c => c.result === 'ok' || c.result === 'success')) {
+    // 连续成功 → 降级: 清除 failureCount 和 currentMode（切回闭环）
+    if (state.failureCount > 0) {
+      state.failureCount = 0;
+      const oldMode = state.currentMode;
+      state.currentMode = '';
+      writeState(state);
+      return { mode: '闭环', reason: `${recentCalls.length} 次连续成功，从 ${oldMode || '高失败'} 模式降级回闭环`, deEscalate: true };
+    }
+  }
+
+  // ── 升级检测: 根据失败次数升级模式 ────────────────────────────────
+  // 已有模式 + 仍失败 → 建议更强模式
+  if (state.failureCount >= 5 && state.currentMode) {
+    // 已在某种模式但还在失败 → 升到第一性原理
+    if (state.currentMode !== '第一性原理') {
+      return {
+        mode: '第一性原理',
+        reason: `已在 ${state.currentMode} 模式但累计失败 ${state.failureCount} 次，当前范式已证明不可行，强制切换到第一性原理`,
+        forceModeSwitch: true,
+      };
+    }
+    // 已到第一性原理还失败 → 建议 session 重置
+    return {
+      mode: '第一性原理',
+      reason: `累计失败 ${state.failureCount} 次，即便第一性原理也无法突破。建议: 执行 /handoff 保存进度后 /compact 重置会话`,
+      forceModeSwitch: true,
+      suggestReset: true,
+    };
+  }
+
+  // 连续失败 ≥3 次且无模式 → 切入根因分析
   if (state.failureCount >= 3 && !state.currentMode) {
-    return { mode: '根因分析', reason: `已连续失败 ${state.failureCount} 次，需要切换到根因分析模式` };
+    return { mode: '根因分析', reason: `已连续失败 ${state.failureCount} 次，需要切换到根因分析模式`, forceModeSwitch: true };
   }
   if (state.failureCount >= 5) {
-    return { mode: '第一性原理', reason: `累计失败 ${state.failureCount} 次，当前范式已证明不可行，需要回归第一性原理` };
+    return { mode: '第一性原理', reason: `累计失败 ${state.failureCount} 次，当前范式已证明不可行，需要回归第一性原理`, forceModeSwitch: true };
   }
   return null;
 }
@@ -113,13 +147,23 @@ const state = readState();
 // 1. Check tool failure count
 const failureSignal = checkToolFailure(state);
 if (failureSignal) {
+  const isForce = failureSignal.forceModeSwitch === true;
   console.log(JSON.stringify({
     source: 'frustration-detector',
-    type: 'mode-switch-suggest',
+    type: isForce ? 'mode-switch-force' : 'mode-switch-suggest',
     mode: failureSignal.mode,
     reason: failureSignal.reason,
     trigger: 'failure-count',
     count: state?.failureCount || 0,
+    deEscalate: failureSignal.deEscalate || false,
+    forceModeSwitch: isForce,
+    suggestReset: failureSignal.suggestReset || false,
+    // 注入强制指令（Claude 必须执行的切换命令）
+    instruction: isForce
+      ? `【强制模式切换】failureCount=${state?.failureCount || 0}。立即切换到 ${failureSignal.mode} 模式。${failureSignal.suggestReset ? '当前 session 上下文可能已污染，建议保存进度后 /compact。' : ''}`
+      : failureSignal.deEscalate
+        ? `【自动降级】检测到连续成功，复位 failureCount 并切回闭环模式。`
+        : `【模式切换建议】考虑切换到 ${failureSignal.mode} 模式以适应当前进展。`,
   }));
   process.exit(0);
 }
@@ -142,12 +186,14 @@ if (result.frustrated) {
 
   console.log(JSON.stringify({
     source: 'frustration-detector',
-    type: 'mode-switch-suggest',
+    type: 'mode-switch-force',
     mode: result.suggestion.mode,
     reason: result.suggestion.reason,
     trigger: 'keyword',
     keyword: result.matches[0],
     failureCount: state?.failureCount || 0,
+    forceModeSwitch: true,
+    instruction: `【强制模式切换】检测到挫败关键词"${result.matches[0]}"。切换到 ${result.suggestion.mode} 模式。`,
   }));
   process.exit(0);
 }
