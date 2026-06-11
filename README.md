@@ -168,7 +168,7 @@ SQLite FTS5 (BM25 排序) → Grep/Glob → git log → rag-skill/code-search �
 
 13 核心技能（slash 命令）+ 17 Agent 角色 + 6 工作流。完整列表见 `knowledge/references/skills-catalog.md`。
 
-**DAG 工作流**（`hdl-coding-dag-workflow.js`）：8 阶段 HDL 开发流程，Phase 2(定点)+Phase 3(TB) 并行、Phase 5(回归)+Phase 6(审查) 并行，含 Verifier 终验节点。
+**DAG 工作流**（`hdl-coding-dag-workflow.js`）：10 阶段 HDL 开发流程 v3.4，Phase 2(定点)+Phase 3(TB) 并行、Phase 6(回归)+Phase 7(审查) 并行，含证据门禁 + Verifier 终验节点。
 
 ---
 

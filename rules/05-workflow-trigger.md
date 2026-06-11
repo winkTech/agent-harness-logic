@@ -28,7 +28,7 @@ skip: "纯执行无需工作流"
 | 文件名 | 入口 | args 格式 |
 |:-------|:-----|:----------|
 | `hdl-coding-workflow.js` | `Workflow({name: 'hdl-coding-workflow', args: {modules, projectRoot?}})` | `{modules: string[], projectRoot?: string}` |
-| `hdl-coding-dag-workflow.js` | `Workflow({scriptPath: 'skills/workflows/hdl-coding-dag-workflow.js', args: {modules}})` | `{modules: string[]}` ⚡ DAG 版: 逐模块RTL+MATLAB验证 → 顶层全链仿真, 含 Verifier |
+| `hdl-coding-dag-workflow.js` | `Workflow({scriptPath: 'skills/workflows/hdl-coding-dag-workflow.js', args: {modules}})` | `{modules: string[], securityModules?: string[], standardModules?: string[], projectRoot?: string, lite?: boolean}` ⚡ DAG v3.4 证据驱动: 逐模块脚本化对比 → 证据门禁 → 全链仿真, 含 Verifier + 对抗验证 |
 | `code-review-workflow.js` | `Workflow({name: 'code-review-workflow', args: {files, projectRoot?}})` | `{files: string[], projectRoot?: string}` |
 | `architecture-review-workflow.js` | `Workflow({name: 'architecture-review-workflow', args: {targets, projectRoot?}})` | `{targets: string[], projectRoot?: string}` |
 
@@ -41,6 +41,13 @@ Workflow({name: 'hdl-coding-workflow', args: {
   projectRoot: 'd:/Project_Files/ofdm/wifi_example/prj'
 }})
 
+// 混合模式: 均衡器高安全, 其他标准 (自动分类 + 手动覆盖)
+Workflow({name: 'hdl-coding-dag-workflow', args: {
+  modules: ['scrambler', 'viterbi', 'descrambler'],
+  securityModules: ['viterbi'],            // viterbi → 高安全模式
+  standardModules: ['scrambler'],          // 强制标准 (即使含匹配关键词)
+}})
+
 // 审查最近修改的文件
 Workflow({name: 'code-review-workflow', args: {
   files: ['01_src/tx/scrambler.sv', '01_src/rx/descrambler.sv']
@@ -51,10 +58,17 @@ Workflow({name: 'architecture-review-workflow', args: {
   targets: ['01_src/tx/ofdm_tx.sv', '01_src/rx/ofdm_rx.sv']
 }})
 
-// Lite 模式 (小改动 — 跳过定点扫描和覆盖率回归)
+// Lite 模式 (小改动 — 跳过定点扫描和覆盖率回归, Phase 4.5 文件门禁保留)
 Workflow({name: 'hdl-coding-dag-workflow', args: {
   modules: ['fir_filter'],
   lite: true
+}})
+
+// Lite + 手动指定高安全模块 (对抗验证对修改也执行)
+Workflow({name: 'hdl-coding-dag-workflow', args: {
+  modules: ['equalizer'],
+  lite: true,
+  securityModules: ['equalizer'],          // Lite 下对抗 agent 仍运行
 }})
 ```
 
@@ -91,6 +105,7 @@ hdl-coding Phase 7（代码审查）完成
 ## 不可跳越红线
 
 - 写 RTL 前必须先过 Phase 1（架构框图）和 Phase 2（定点量化）——不允许直接写代码
+- **Phase 4.5 (证据门禁) 未通过不允许进入 Phase 5 (顶层集成)** — 机制上已强制（DAG 依赖链锁定）
 - Phase 7 未完成（code-review 未通过）不允许提交
 - code-review Pass 1 有阻塞项不允许进入 Pass 2
 - 代码库 > 10K LOC 但未做架构审查 → 标记为流程违规

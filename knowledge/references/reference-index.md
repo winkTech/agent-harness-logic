@@ -51,7 +51,7 @@
 
 | 骨架 | 子文件 | 内容 |
 |:-----|:-------|:-----|
-| `skills/workflows/hdl-coding-workflow.md` | `skills/workflows/hdl-coding/` (9 个 Phase) | RTL 开发全流程 — 架构→定点→TB+向量生成→逐模块RTL+MATLAB验证→顶层全链仿真→回归→审查→报告 |
+| `skills/workflows/hdl-coding-workflow.md` | `skills/workflows/hdl-coding/` (10 个 Phase) | RTL 开发全流程 v3.4 — 架构→定点→TB+向量生成→逐模块RTL+脚本化对比→证据门禁→顶层全链仿真→回归→审查→报告 |
 | `skills/workflows/code-review-workflow.md` | `skills/workflows/code-review/` (2 个 Pass) | 两轮代码审查：正确性→代码质量 |
 | `skills/workflows/architecture-review-skill-workflow.md` | `skills/workflows/architecture-review/` (4 个 Phase) | 多 Agent 架构审查：上下文→分析→安全→建议 |
 | `skills/workflows/rag-skill-workflow.md` | — | 知识库检索流程（66 行，无需拆分） |
