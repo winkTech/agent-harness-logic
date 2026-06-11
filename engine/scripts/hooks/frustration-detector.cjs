@@ -148,6 +148,17 @@ const state = readState();
 const failureSignal = checkToolFailure(state);
 if (failureSignal) {
   const isForce = failureSignal.forceModeSwitch === true;
+  // Emit signal: 模式切换事件
+  try {
+    const { emitSync } = require('../../hooks/learning/signal-collector.cjs');
+    emitSync('mode_switch', {
+      mode: failureSignal.mode,
+      trigger: 'failure-count',
+      forceModeSwitch: isForce,
+      deEscalate: failureSignal.deEscalate || false,
+      failureCount: state?.failureCount || 0,
+    });
+  } catch { /* 静默 */ }
   console.log(JSON.stringify({
     source: 'frustration-detector',
     type: isForce ? 'mode-switch-force' : 'mode-switch-suggest',
@@ -183,6 +194,17 @@ if (result.frustrated) {
     });
     writeState(state);
   }
+
+  // Emit signal: 关键词触发的模式切换
+  try {
+    const { emitSync } = require('../../hooks/learning/signal-collector.cjs');
+    emitSync('mode_switch', {
+      mode: result.suggestion.mode,
+      trigger: 'keyword',
+      keyword: result.matches[0],
+      failureCount: state?.failureCount || 0,
+    });
+  } catch { /* 静默 */ }
 
   console.log(JSON.stringify({
     source: 'frustration-detector',

@@ -46,6 +46,17 @@
             "id": "session:state-resume"
           }
         ]
+      },
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node engine/scripts/dream-startup-inject.cjs",
+            "description": "Dream startup inject: check pending events, detect patterns, inject recent learnings into context (P3+P4)",
+            "id": "session:dream-inject"
+          }
+        ]
       }
     ],
     "PostMessage": [

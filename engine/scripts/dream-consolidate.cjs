@@ -28,21 +28,30 @@ const LEARNINGS_DIR = path.join(HOME_DIR, 'memory', 'learnings');
 // ── 模式检测 ──────────────────────────────────────────────────────────────
 
 /**
- * 检测事件中的重复模式。
+ * 检测事件中的模式。v2.0 升级:
+ *   - 跨类型关联（tool_fail → drift_stuck 转移概率）
+ *   - 时间序列模式（事件链重复）
+ *   - 代码错误聚类（相同错误消息跨 session 出现）
+ *   - 6 种新事件类型支持
+ *
  * @param {Array} events - RuntimeEventRow[]
- * @returns {Array<{ signal: string, count: number, examples: string[], suggestion: string }>}
+ * @param {number} sessionCount - 涉及的 session 数
+ * @returns {Array<{ signal: string, count: number, examples: string[], suggestion: string, severity: string }>}
  */
-function detectPatterns(events) {
+function detectPatterns(events, sessionCount) {
   const patterns = [];
 
   // 按类型聚合
   const byType = {};
+  const bySession = {};
   for (const ev of events) {
     if (!byType[ev.type]) byType[ev.type] = [];
     byType[ev.type].push(ev);
+    if (!bySession[ev.sessionId]) bySession[ev.sessionId] = [];
+    bySession[ev.sessionId].push(ev);
   }
 
-  // 工具失败模式: 同一工具多次失败
+  // ── 1. 工具失败模式 (原有的，增强版) ──────────────────────
   const toolFailures = byType['tool_fail'] || [];
   const byTool = {};
   for (const f of toolFailures) {
@@ -62,19 +71,112 @@ function detectPatterns(events) {
     }
   }
 
-  // 卡住模式: 多次 drift_stuck
+  // ── 2. 代码错误聚类 v2 ──────────────────────────────────
+  // 将 tool_fail 中的错误消息按相似度聚类
+  if (toolFailures.length >= 3) {
+    const errorClusters = {};
+    for (const f of toolFailures) {
+      const errMsg = (f.payload?.error || f.payload?.stdinPreview || '').slice(0, 60);
+      if (!errMsg) continue;
+      // 取前 40 字符作为指纹（去除行号等易变信息）
+      const fingerprint = errMsg.replace(/\d+/g, 'N').replace(/line \d+/gi, '').slice(0, 40);
+      if (!errorClusters[fingerprint]) errorClusters[fingerprint] = { errors: [], sessions: new Set() };
+      errorClusters[fingerprint].errors.push(errMsg);
+      errorClusters[fingerprint].sessions.add(f.sessionId);
+    }
+    for (const [fingerprint, cluster] of Object.entries(errorClusters)) {
+      if (cluster.errors.length >= 3 && cluster.sessions.size >= 2) {
+        patterns.push({
+          signal: `code_error×${cluster.errors.length} (${cluster.sessions.size} sessions)`,
+          count: cluster.errors.length,
+          examples: [...cluster.errors].slice(0, 3),
+          suggestion: `相同错误 "` + cluster.errors[0].slice(0, 50) + `" 在 ${cluster.sessions.size} 个 session 中出现 ${cluster.errors.length} 次。建议: 创建 permanent learning 记录此错误模式及修复。`,
+          severity: 'medium',
+        });
+      }
+    }
+  }
+
+  // ── 3. 跨类型序列模式 v2 ──────────────────────────────────
+  // 检测一个 session 中事件类型的转移序列
+  if (sessionCount >= 2) {
+    const transitions = {}; // "A→B" → count
+    for (const [sid, sEvents] of Object.entries(bySession)) {
+      const types = sEvents.sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt)).map(e => e.type);
+      for (let i = 1; i < types.length; i++) {
+        const key = `${types[i-1]}→${types[i]}`;
+        transitions[key] = (transitions[key] || 0) + 1;
+      }
+    }
+    // 找高频跨类型转移: 不同类型的转移且出现 ≥2 次
+    for (const [trans, count] of Object.entries(transitions)) {
+      const [from, to] = trans.split('→');
+      if (from !== to && count >= 2) {
+        patterns.push({
+          signal: `transition:${trans}×${count}`,
+          count,
+          examples: [`${from} 后常跟随 ${to}`],
+          suggestion: `事件序列 "${from} → ${to}" 出现 ${count} 次。${from === 'tool_fail' ? '工具失败后切换模式可能减少后续挫败。' : '建议关注此事件链对应的工作流环节。'}`,
+          severity: count >= 3 ? 'medium' : 'low',
+        });
+      }
+    }
+  }
+
+  // ── 4. 上下文压力模式 v2 (新增) ──────────────────────────
+  const pressure = byType['context_pressure'] || [];
+  const redPressure = pressure.filter(p => p.payload?.level === 'RED');
+  if (redPressure.length >= 2) {
+    patterns.push({
+      signal: `context_pressure(RED)×${redPressure.length}`,
+      count: redPressure.length,
+      examples: redPressure.slice(0, 3).map(p => `${p.payload?.estimatedRatio || '?'}%`),
+      suggestion: `上下文达到 RED 红线 ${redPressure.length} 次。建议: 在 workflow 关键阶段后自动 /compact。`,
+      severity: 'high',
+    });
+  }
+
+  // ── 5. 模式切换模式 (新增) ──────────────────────────────
+  const modeSwitches = byType['mode_switch'] || [];
+  const forcedSwitches = modeSwitches.filter(m => m.payload?.forceModeSwitch);
+  if (forcedSwitches.length >= 3) {
+    const switchModes = forcedSwitches.map(m => m.payload?.mode).filter(Boolean);
+    const uniqueModes = [...new Set(switchModes)];
+    patterns.push({
+      signal: `mode_switch×${forcedSwitches.length}`,
+      count: forcedSwitches.length,
+      examples: uniqueModes.slice(0, 3),
+      suggestion: `强制模式切换 ${forcedSwitches.length} 次 (${uniqueModes.join(', ')})。建议: 审查工作流是否在让 AI 反复碰壁后才切换方向。`,
+      severity: forcedSwitches.length >= 5 ? 'high' : 'medium',
+    });
+  }
+
+  // ── 6. 循环跳过模式 (新增) ──────────────────────────────
+  const loopSkips = byType['loop_skip'] || [];
+  if (loopSkips.length >= 2) {
+    const loopNodes = [...new Set(loopSkips.map(l => l.payload?.nodeName).filter(Boolean))];
+    patterns.push({
+      signal: `loop_skip×${loopSkips.length}`,
+      count: loopSkips.length,
+      examples: loopNodes.slice(0, 5),
+      suggestion: `DAG 循环跳过 ${loopSkips.length} 次${loopNodes.length > 0 ? ` (节点: ${loopNodes.join(', ')})` : ''}。建议: 检查这些节点的前置依赖和输入条件。`,
+      severity: loopSkips.length >= 3 ? 'high' : 'medium',
+    });
+  }
+
+  // ── 7. 已有类型: 卡住/挫败 ──────────────────────────────
   const stuck = byType['drift_stuck'] || [];
   if (stuck.length >= 2) {
     patterns.push({
       signal: `drift_stuck×${stuck.length}`,
       count: stuck.length,
       examples: stuck.slice(0, 3).map(f => f.payload?.extra || f.payload?.matchedPattern || '').filter(Boolean),
-      suggestion: '检测到多次挫败信号。建议: 考虑切换到根因分析模式, 或查阅类似问题的记忆。',
+      suggestion: `检测到多次挫败信号 (${stuck.length}次)。${modeSwitches.length > 0 ? '部分触发了模式切换。' : '建议考虑切换到根因分析模式。'}`,
       severity: stuck.length >= 4 ? 'high' : 'medium',
     });
   }
 
-  // 用户纠正模式
+  // ── 8. 已有类型: 用户纠正 ──────────────────────────────
   const corrections = byType['user_correct'] || [];
   if (corrections.length >= 2) {
     patterns.push({
@@ -86,7 +188,7 @@ function detectPatterns(events) {
     });
   }
 
-  // 记忆未命中
+  // ── 9. 已有类型: 记忆未命中 ──────────────────────────────
   const memMiss = byType['memory_miss'] || [];
   if (memMiss.length >= 2) {
     patterns.push({
@@ -104,21 +206,57 @@ function detectPatterns(events) {
 // ── 置信度升级 ────────────────────────────────────────────────────────────
 
 /**
- * 将跨 session 复现的 tentative 事实升级为 confirmed。
+ * 置信度升级模型 v2.0:
+ *
+ *    confidence = base + 0.15 × hit_count - 0.05 × days_since_last_hit + 0.2 × cross_session_confirmed
+ *
+ *   - hit_count 奖励: 每命中一次 +0.15 (比原来 +0.1 更有区分度)
+ *   - 时间衰减: 每天 -0.05 (长期不命中的事实自动降级)
+ *   - 跨 session 确认: 在 ≥2 个不同 session 中命中的事实 +0.2
+ *
+ *  最终值 clamped 到 [0, 1]。
  */
 function upgradeConfidence(db) {
-  // 找到被多次命中的 tentative 事实
+  // 找到可升级的事实 (tentative 区间 0.3~0.8，且命中 ≥2)
   const candidates = db.prepare(`
-    SELECT id, name, hit_count, confidence FROM facts
-    WHERE confidence >= 0.3 AND confidence < 0.8 AND hit_count >= 3
-    ORDER BY hit_count DESC
+    SELECT id, name, hit_count, confidence, last_hit_at FROM facts
+    WHERE confidence >= 0.3 AND confidence < 0.8 AND hit_count >= 2
+    ORDER BY hit_count DESC, last_hit_at DESC
   `).all();
 
+  let upgraded = 0;
+  const now = Date.now();
+
   for (const c of candidates) {
-    db.prepare('UPDATE facts SET confidence = MIN(1.0, confidence + 0.1) WHERE id = ?').run(c.id);
+    let newConf = c.confidence;
+
+    // hit_count 奖励
+    newConf += 0.15 * c.hit_count;
+
+    // 时间衰减 (每 24 小时 -0.05)
+    if (c.last_hit_at) {
+      const daysSince = (now - new Date(c.last_hit_at).getTime()) / 86400000;
+      newConf -= 0.05 * Math.max(0, daysSince - 7); // 前 7 天免衰减
+    }
+
+    // 跨 session 确认: 在 ≥2 session 中出现过
+    const sessionCount = db.prepare(`
+      SELECT COUNT(DISTINCT session_id) as cnt FROM runtime_events
+      WHERE payload LIKE ?
+    `).get(`%${c.name}%`);
+    if (sessionCount && sessionCount.cnt >= 2) {
+      newConf += 0.2;
+    }
+
+    newConf = Math.max(0, Math.min(1.0, newConf));
+
+    if (Math.abs(newConf - c.confidence) > 0.01) {
+      db.prepare('UPDATE facts SET confidence = ? WHERE id = ?').run(newConf, c.id);
+      upgraded++;
+    }
   }
 
-  return candidates.length;
+  return upgraded;
 }
 
 // ── 技能退役 ──────────────────────────────────────────────────────────────
@@ -151,7 +289,7 @@ function writeLearnings(patterns, db, isDryRun) {
       const content = [
         `# Dream 提炼: ${p.signal}`,
         '',
-        `> 自动检测于 ${dateStr}`,
+        `> 自动检测于 ${dateStr}。来源: dream-consolidate v2.0`,
         '',
         '## 模式',
         `- 信号: ${p.signal}`,
@@ -161,18 +299,23 @@ function writeLearnings(patterns, db, isDryRun) {
         '## 建议',
         p.suggestion,
         '',
-        '## 相关事件',
-        p.severity === 'high' ? `- 严重度: **高** — 建议审视工作流` : `- 严重度: ${p.severity}`,
+        '## 严重度',
+        p.severity === 'high' ? '**高** — 建议审视工作流' : p.severity,
+        '',
+        '## 自动提炼',
+        '此条由 Dream v2.0 从运行时事件中自动检测并写入。',
+        '如果此模式不再出现，将在 180 天后过期。',
       ].filter(Boolean).join('\n');
 
       if (!isDryRun) {
+        const baseConfidence = p.severity === 'high' ? 0.6 : 0.4;
         writeMemory({
           namespace: 'learnings',
           name: `dream-${dateStr}-${p.signal.replace(/[^a-zA-Z0-9]/g, '-').slice(0, 40)}`,
           content,
           description: `Dream 自动: ${p.signal}`,
           source: 'script:dream',
-          confidence: 0.5, // Dream 产出默认 tentative
+          confidence: baseConfidence,
           ttlDays: 180,
         }, { db });
         written++;
@@ -217,12 +360,26 @@ async function main() {
   }
   console.log(`涉及 ${Object.keys(bySession).length} 个 session`);
 
-  // 3. 模式检测
-  const patterns = detectPatterns(events);
-  console.log(`检测到 ${patterns.length} 个模式`);
-  for (const p of patterns) {
-    const icon = p.severity === 'high' ? '🔴' : p.severity === 'medium' ? '🟡' : '🟢';
-    console.log(`  ${icon} ${p.signal}: ${p.suggestion.slice(0, 80)}`);
+  // 3. 模式检测 (v2: 传入 sessionCount)
+  const sessionCount = Object.keys(bySession).length;
+  const patterns = detectPatterns(events, sessionCount);
+  console.log(`检测到 ${patterns.length} 个模式 (${sessionCount} sessions)`);
+
+  // 按严重度分组输出
+  const highPatterns = patterns.filter(p => p.severity === 'high');
+  const medPatterns = patterns.filter(p => p.severity === 'medium');
+  const lowPatterns = patterns.filter(p => p.severity === 'low');
+  if (highPatterns.length > 0) {
+    console.log('  🔴 高严重度:');
+    for (const p of highPatterns) console.log(`    ${p.signal} — ${p.suggestion.slice(0, 80)}`);
+  }
+  if (medPatterns.length > 0) {
+    console.log('  🟡 中严重度:');
+    for (const p of medPatterns) console.log(`    ${p.signal} — ${p.suggestion.slice(0, 80)}`);
+  }
+  if (lowPatterns.length > 0) {
+    console.log('  🟢 低严重度:');
+    for (const p of lowPatterns) console.log(`    ${p.signal} — ${p.suggestion.slice(0, 80)}`);
   }
 
   // 4. 写入 Learnings

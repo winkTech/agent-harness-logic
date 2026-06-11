@@ -117,6 +117,16 @@ function evaluate() {
 function main() {
   const result = evaluate();
   if (result) {
+    // Emit signal: 记忆交叉检索事件
+    try {
+      const { emitSync } = require('../hooks/learning/signal-collector.cjs');
+      emitSync('memory_cross_ref', {
+        failureCount: result.errors?.length || 0,
+        errorsFound: result.errors?.map(e => e.name) || [],
+        learningsFound: result.learnings?.map(l => l.name) || [],
+      });
+    } catch { /* 静默 */ }
+
     console.log(JSON.stringify(result));
   }
   // 无匹配 → 无输出 (0 token 开销)

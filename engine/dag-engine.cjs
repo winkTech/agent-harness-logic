@@ -151,6 +151,11 @@ async function runNode(name, run, ctx, opts = {}) {
       const loopCheck = checkLoop(name, lastError?.message || '', maxLoopRetries);
       if (loopCheck.loopDetected) {
         log(`  🔄 [循环检测] ${loopCheck.suggestion}`);
+        // Emit signal: 循环跳过事件
+        try {
+          const { emitSync } = require('./hooks/learning/signal-collector.cjs');
+          emitSync('loop_skip', { nodeName: name, attempts: loopCheck.attempts });
+        } catch { /* 静默 */ }
         return {
           status: 'loop_skip',
           error: `循环重试门禁: 节点 "${name}" 重试 ${loopCheck.attempts} 次后跳过`,
