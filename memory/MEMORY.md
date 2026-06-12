@@ -24,6 +24,7 @@
 | [[doc-bloat-anti-pattern]] | 知识文档不应包含完整代码/模板 — 引用 docs/templates/ 即可 |
 | [[hdl-golden-model-philosophy]] | Golden Model 绝对权威 + RTL↔MATLAB 严格对标原则 |
 | [[file-organization-discipline]] | 文件分类纪律 — 仿真/测试/文档必须归入对应目录 |
+| [[agent-context-budget-integration]] | Agent 上下文预算系统集成 — 宪法段保护 |
 
 ## 当前进度
 

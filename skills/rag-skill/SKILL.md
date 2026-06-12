@@ -166,7 +166,7 @@ SCENE_CARDS.md L1-L24   → 场景总览（选场景号）
 ## 关联 Skill
 
 - [code-search](../code-search/SKILL.md) — 代码库搜索
-- [hdl-coding](../../hdl-coding/SKILL.md) — HDL 编码
+- [hdl-coding](../hdl-coding/SKILL.md) — HDL 编码
 
 ## 参考文档
 
