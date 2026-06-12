@@ -8,7 +8,6 @@
 | 文件名 (skills/workflows/) | 用途 | 调用方式 |
 |:--------------------------|:-----|:---------|
 | `hdl-coding-dag-workflow.js` | HDL RTL 开发 DAG 工作流 v3.4 | `Workflow({name: 'hdl-coding-dag-workflow', args})` |
-| `dag-executor.js` | 独立 DAG 执行器 | `const dag = require('./dag-executor.js')` |
 | `hdl-coding-workflow.md` | HDL 开发工作流定义（8 阶段） | 参考文档 |
 | `code-review-workflow.md` | 代码审查工作流（2 轮） | `Workflow({name: 'code-review-workflow', args})` |
 | `architecture-review-skill-workflow.md` | 架构审查 | `Workflow({name: 'architecture-review-workflow', args})` |

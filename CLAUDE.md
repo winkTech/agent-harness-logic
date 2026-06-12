@@ -65,7 +65,7 @@ engine/scripts/
 ├── fpga-wave-helper.cjs    # 波形辅助 (VCD/WLF dump)
 └── harness-init.cjs        # FPGA 项目脚手架 (生成 Makefile/约束/模块模板)
 ```
-lint 自动降级: `lint-utils.cjs` 优先使用检测到的工具链，无 `vlog` 则降级 `xvlog/verilator/iverilog`。
+lint 自动降级: `lib/lint-utils.cjs` 优先使用检测到的工具链，无 `vlog` 则降级 `xvlog/verilator/iverilog`。
 Windows 上自动解析 `.bat` 包装器，Vivado 工具链支持目录级回退检测。
 
 ## 诊断
@@ -77,12 +77,12 @@ node engine/diagnostics.cjs --templates # 模板元数据检查
 ```
 
 ## 预检 (run-on-start + SessionStart hooks)
-- `memory-health-check.cjs` 记忆系统健康评分
-- `dream-startup-inject.cjs` 自动检查未处理事件 + 注入近期 Learnings (SessionStart hook)
-- `state-resume.cjs` 读取前 session runtime-state (SessionStart hook)
-- `rule-loader.cjs` 按场景条件注入匹配规则 (PreToolUse hook)
-- `context-monitor-gate.cjs` 上下文三色阈值监控 (PostMessage hook)
-- `cross-link-memory.cjs` 挫败→记忆联动 (PostMessage hook)
+- `engine/scripts/memory-health-check.cjs` 记忆系统健康评分
+- `engine/scripts/dream-startup-inject.cjs` 自动检查未处理事件 + 注入近期 Learnings (SessionStart hook)
+- `engine/scripts/state-resume.cjs` 读取前 session runtime-state (SessionStart hook)
+- `engine/scripts/rule-loader.cjs` 按场景条件注入匹配规则 (PreToolUse hook)
+- `engine/scripts/context-monitor-gate.cjs` 上下文三色阈值监控 (PostMessage hook)
+- `engine/scripts/cross-link-memory.cjs` 挫败→记忆联动 (PostMessage hook)
 
 ## 参考
 - `knowledge/references/reference-index.md` — 完整索引
@@ -92,4 +92,4 @@ node engine/diagnostics.cjs --templates # 模板元数据检查
 
 ## 版本
 v5.1 (2026-06-10): 10/10 全面升级 — EDA 工具链 + FPGA 解析器 + harness-init + 资源门禁 + 37 条 hook 洁净化
-v5.2 (2026-06-11): EDA 检测增强 — 跨平台 .bat 解析 + Vivado 目录扫描回退（支持 shebang/Java loader 不可用场景）
+v5.3 (2026-06-12): 仓库全面优化审计 — 修复 13 处问题（路径/重复/孤儿文件/断链）+ 规则洁净化
