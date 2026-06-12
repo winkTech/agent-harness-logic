@@ -154,11 +154,12 @@ function matchRules(input, opts = {}) {
 
   for (const rule of rules) {
     // 1. 检查 skip 条件 — 如果匹配 skip 则跳过
-    const skipMatch = matchTriggerPatterns(normalizedInput, rule.skips, openFiles, toolNames);
+    //    skip 使用严格模式（无 char-seed 模糊匹配），防止过度排除
+    const skipMatch = matchTriggerPatterns(normalizedInput, rule.skips, openFiles, toolNames, true);
     if (skipMatch) continue;
 
     // 2. 检查 trigger 条件
-    const triggerMatch = matchTriggerPatterns(normalizedInput, rule.triggers, openFiles, toolNames);
+    const triggerMatch = matchTriggerPatterns(normalizedInput, rule.triggers, openFiles, toolNames, false);
     if (triggerMatch) {
       matches.push({
         file: rule.file,
@@ -191,7 +192,7 @@ function matchRules(input, opts = {}) {
  * @param {string[]} toolNames
  * @returns {{ type: string, term: string } | null}
  */
-function matchTriggerPatterns(input, patterns, openFiles, toolNames) {
+function matchTriggerPatterns(input, patterns, openFiles, toolNames, strict) {
   if (!patterns || patterns.length === 0) return null;
 
   for (const pattern of patterns) {
@@ -214,8 +215,12 @@ function matchTriggerPatterns(input, patterns, openFiles, toolNames) {
       return { type: 'keyword', term: pattern };
     }
 
+    // 严格模式（skip 使用）— 只用关键词精确匹配，不进入模糊匹配
+    if (strict) continue;
+
     // 中文单字种子匹配：对于多字中文触发词（如"搜索"→匹配"搜一下"、"仿真报错"→匹配"仿真跑不通"）
     // 如果触发词中有≥2个中文字且输入中至少包含其中1个 → 匹配
+    // 注意：skip 规则走严格模式（strict=true），不进入此分支
     if (input && /[一-鿿]/.test(lowPattern)) {
       const chineseChars = lowPattern.split('').filter(c => /[一-鿿]/.test(c));
       // 常见虚词/介词/方位词/数量词不参与单字匹配（避免误触）
