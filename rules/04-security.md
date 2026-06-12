@@ -21,4 +21,4 @@ skip: "纯 RTL 编写 / 无安全敏感关键词"
 - `git commit` — 需用户确认
 
 ## 安全敏感关键词
-遇到 `auth/token/password/secret/credential` 等关键词时，加载 `security-review` 工作流。
+遇到安全敏感关键词时（详见 `rules/05-workflow-trigger.md` 的安全敏感关键词自动绑定），加载 `security-review` 工作流。

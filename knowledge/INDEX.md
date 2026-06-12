@@ -91,7 +91,7 @@ knowledge/
 
 ## Cross-Domain (4)
 
-`cross-project-experience.md`, `knowledge-graph.md`, `pitfalls/avoid-global-reset.md`, `data_structure.md`
+`cross-project-experience.md`, `knowledge-graph.md`, `pitfalls/avoid-global-reset.md`, `data_structure.md` (根目录)
 
 > 工程脚本见 `engine/scripts/init-project.sh`, `engine/scripts/init-module.sh` (不在 knowledge/ 内)
 

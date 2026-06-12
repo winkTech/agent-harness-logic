@@ -23,7 +23,7 @@ skip: "纯执行无需工作流"
 
 ## 已保存的工作流脚本
 
-项目级工作流位于 `.claude/workflows/`：
+工作流脚本位于 `skills/workflows/`（JS DAG 流）或 `skills/workflows/<名称>/`（MD 阶段流）：
 
 | 文件名 | 入口 | args 格式 |
 |:-------|:-----|:----------|

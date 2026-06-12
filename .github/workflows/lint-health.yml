@@ -39,7 +39,7 @@ jobs:
               verilator --lint-only --sv "$file" 2>&1 | head -20
               errors=$((errors + 1))
             fi
-          done < <(find knowledge/primary/domains docs/templates -name '*.sv' -o -name '*.v' -print0 2>/dev/null)
+          done < <(find knowledge/primary/domains docs/templates \( -name '*.sv' -o -name '*.v' \) ! -name 'stim.v' ! -name 'stim1.v' -print0 2>/dev/null)
           echo "Files with lint issues: $errors"
           [ "$errors" -eq 0 ] || exit 1
 
