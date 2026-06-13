@@ -10,7 +10,7 @@ tags: [index, navigation, knowledge-base]
 # 知识库索引
 
 > 导航: [场景入口卡](SCENE_CARDS.md) — [标签索引](TAG_INDEX.md) — [知识库规则](KNOWLEDGE_RULES.md)
-> 最后更新: 2026-06-11 | 文档: 85 篇 primary + 39 篇 source + 40 篇 鸢尾花书蒸馏
+> 最后更新: 2026-06-14 | 文档: 85 篇 primary + 39 篇 source + 40 篇 鸢尾花书蒸馏 + 5 篇 methodology + 2 篇 references
 
 ---
 
@@ -29,9 +29,16 @@ knowledge/
 │   ├── domains/matlab/   # MATLAB 模型
 │   ├── cross-project-experience.md
 │   └── knowledge-graph.md
-├── references/           # 引用文档（13 篇）
+├── references/           # 引用文档 + SVA/EDA 调试参考（15 篇）
+│   ├── sva-patterns.md
+│   └── eda-debug-checklist.md
 ├── docs/                 # 文档模板
-│   └── templates/        # UVM/CI/PRD 等模板
+│   └── templates/        # UVM/CI/PRD 等模板 + makefile-templates/
+├── methodology/          # 算法方法论（NEW 2026-06-14）
+│   ├── fixed-point-methodology.md
+│   ├── test-vector-generation.md
+│   ├── golden-model-standards.md
+│   └── matlab-mcp-guide.md
 ├── archive/sources/fpga/ # 39 本书籍全文提取（~200K 行，按需搜索）
 ├── source/datasheets/    # 原始 PDF（35 个）
 ├── python-basics/        # 鸢尾花书蒸馏: Python 编程

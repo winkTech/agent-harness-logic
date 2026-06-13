@@ -1,0 +1,130 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://claude-code/schemas/check-result",
+  "title": "HDL Module Verification Evidence Schema",
+  "description": "JSON 证据文件格式 — Phase 4 逐模块验证输出的标准格式，供 Phase 4.5 证据门禁读取验证。",
+  "type": "object",
+  "required": [
+    "module",
+    "status",
+    "compared_points",
+    "max_error",
+    "timestamp",
+    "check_type",
+    "files"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "module": {
+      "type": "string",
+      "pattern": "^[a-zA-Z0-9_]+$",
+      "description": "模块名称，与 architecture.yaml 中的模块名一致"
+    },
+    "status": {
+      "type": "string",
+      "enum": ["PASS", "FAIL", "SKIP", "ERROR"],
+      "description": "验证结论"
+    },
+    "check_type": {
+      "type": "string",
+      "enum": ["module", "integration", "regression", "gate_level"],
+      "description": "验证类型"
+    },
+    "compared_points": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "对比点数（RTL 输出 vs Golden Model 参考值），必须 > 0 才有效"
+    },
+    "max_error": {
+      "type": "number",
+      "minimum": 0,
+      "description": "最大绝对误差（定点量化单位）。PASS 条件：max_error ≤ tolerance"
+    },
+    "tolerance": {
+      "type": "number",
+      "minimum": 0,
+      "default": 0,
+      "description": "容差门限。默认 0 表示必须完全 bit-true"
+    },
+    "nmse_db": {
+      "type": "number",
+      "description": "归一化均方误差 (dB)。PASS 条件：nmse_db ≤ -40dB（高安全模块）或 -30dB（标准模块）"
+    },
+    "failed_points": {
+      "type": "array",
+      "maxItems": 100,
+      "items": {
+        "type": "object",
+        "required": ["index", "expected", "actual", "error"],
+        "properties": {
+          "index": { "type": "integer", "description": "失败点索引" },
+          "expected": { "description": "Golden Model 期望值" },
+          "actual": { "description": "RTL 实际值" },
+          "error": { "type": "number", "description": "绝对误差" }
+        }
+      },
+      "description": "失败点详情（仅 status=FAIL 时存在）"
+    },
+    "files": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "required": ["role", "path"],
+        "properties": {
+          "role": {
+            "type": "string",
+            "enum": ["rtl", "tb", "golden", "script", "log", "wave"],
+            "description": "文件角色"
+          },
+          "path": {
+            "type": "string",
+            "description": "相对项目根目录的路径"
+          }
+        }
+      },
+      "description": "涉及的文件列表"
+    },
+    "duration_us": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "仿真运行时间（微秒）"
+    },
+    "timestamp": {
+      "type": "string",
+      "format": "date-time",
+      "description": "验证完成时间戳"
+    },
+    "toolchain": {
+      "type": "object",
+      "properties": {
+        "simulator": { "type": "string", "description": "仿真器版本" },
+        "python_version": { "type": "string", "description": "Python 版本" }
+      }
+    }
+  },
+  "examples": [
+    {
+      "module": "scrambler",
+      "status": "PASS",
+      "check_type": "module",
+      "compared_points": 1024,
+      "max_error": 0,
+      "tolerance": 0,
+      "nmse_db": -300,
+      "files": [
+        { "role": "rtl", "path": "01_src/tx/scrambler.sv" },
+        { "role": "tb", "path": "02_sim/tb/tb_scrambler.sv" },
+        { "role": "golden", "path": "03_golden/scrambler_golden.m" },
+        { "role": "script", "path": "02_sim/check_scrambler.py" },
+        { "role": "log", "path": "02_sim/logs/scrambler_sim.log" }
+      ],
+      "duration_us": 1520,
+      "timestamp": "2026-06-14T10:30:00.000Z",
+      "toolchain": {
+        "simulator": "Questa 2023.3",
+        "python_version": "3.11.4"
+      }
+    }
+  ]
+}
