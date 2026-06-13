@@ -10,7 +10,7 @@ tags: [index, navigation, knowledge-base]
 # 知识库索引
 
 > 导航: [场景入口卡](SCENE_CARDS.md) — [标签索引](TAG_INDEX.md) — [知识库规则](KNOWLEDGE_RULES.md)
-> 最后更新: 2026-06-14 | 文档: 85 篇 primary + 39 篇 source + 40 篇 鸢尾花书蒸馏 + 5 篇 methodology + 2 篇 references
+> 最后更新: 2026-06-14 | 文档: 86 篇 primary + 39 篇 source + 40 篇 鸢尾花书蒸馏 + 5 篇 methodology + 2 篇 references
 
 ---
 
@@ -69,6 +69,8 @@ knowledge/
 **ORAN** — `5g-nr/oran-interface`, `oran-ric`, `oran-smo`, `lowphy-architecture`, `dfe-architecture`, `bfp-compression`
 
 **LTE** — `lte/overview`, `phy-downlink`, `phy-uplink`
+
+**卷积码** — `convolutional-coding/algorithm_spec` (NEW ✦ 全文覆盖 编码+译码+定点+向量)
 
 **General** — `golden_model_lessons.md`, `data_structure.md`
 

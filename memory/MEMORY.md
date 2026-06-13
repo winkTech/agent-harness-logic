@@ -67,6 +67,7 @@
 | [[test-vector-generation]] | 算法+逻辑工程师 | 测试向量格式、corner case、自检脚本模板 |
 | [[golden-model-standards]] | 算法工程师 | Golden Model 编码规范、分段对标、版本管理 |
 | [[matlab-mcp-guide]] | 算法工程师 | MATLAB MCP 高效使用技巧 |
+| [[conv-coding-algorithm-spec]] | 算法工程师 | 卷积编码+Viterbi译码 算法全规范 (K=7/速率1-2/软硬判决/定点/向量) |
 
 ## 知识库参考 (knowledge/references/)
 

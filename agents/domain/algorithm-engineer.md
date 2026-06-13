@@ -23,6 +23,7 @@ skills:
   - modern-python
 context_files:
   - knowledge/primary/cross-project-experience.md
+  - knowledge/primary/domains/comm/convolutional-coding/algorithm_spec.md
 context_strategy: full
 fork_eligible: false
 verified: true
