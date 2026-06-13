@@ -25,6 +25,7 @@
 | [[hdl-golden-model-philosophy]] | Golden Model 绝对权威 + RTL↔MATLAB 严格对标原则 |
 | [[file-organization-discipline]] | 文件分类纪律 — 仿真/测试/文档必须归入对应目录 |
 | [[agent-context-budget-integration]] | Agent 上下文预算系统集成 — 宪法段保护 |
+| [[instruction-compliance]] | ⛔ 指令绝对优先 — 已多次违反，零容忍，行动前强制匹配检查 |
 
 ## 当前进度
 
@@ -42,10 +43,37 @@
 ## 项目 (projects/)
 
 [[agent-optimization-roadmap]] — Agent 长期优化路线图（3 阶段）
+[[fullframe-tb-frame-boundary-bug]] — 全帧TB: rx_fifo反压修复完成, viterbi双traceback已修复, 帧边界2562正确
+[[viterbi-double-traceback-fix]] — viterbi DONE→IDLE跨block NBA竞态, r_tb_pending_clear门控修复
 
 ## 参考链接
 
 [[cross-project-experience-ref]] — 新 FPGA 项目启动模板
+
+## Agent 定义 (agents/)
+
+| 文件 | 角色 |
+|:-----|:------|
+| [[algorithm-engineer]] | agents/domain/ — 算法建模/定点/向量生成/Golden Model |
+| [[logic-engineer]] | agents/domain/ — RTL 编码/TB/仿真/顶层集成/综合 |
+| [[algorithm-engineer-agent]] | memory/agents/ — 算法工程师 Agent 创建记录 |
+| [[logic-engineer-agent]] | memory/agents/ — 逻辑工程师 Agent 创建记录 |
+
+## 知识库方法论 (knowledge/methodology/)
+
+| 文件 | 适用 | 内容 |
+|:-----|:-----|:------|
+| [[fixed-point-methodology]] | 算法工程师 | 定点量化全流程、位宽确定、截断策略 |
+| [[test-vector-generation]] | 算法+逻辑工程师 | 测试向量格式、corner case、自检脚本模板 |
+| [[golden-model-standards]] | 算法工程师 | Golden Model 编码规范、分段对标、版本管理 |
+| [[matlab-mcp-guide]] | 算法工程师 | MATLAB MCP 高效使用技巧 |
+
+## 知识库参考 (knowledge/references/)
+
+| 文件 | 适用 | 内容 |
+|:-----|:-----|:------|
+| [[sva-patterns]] | 逻辑工程师 | SVA 断言模板（握手/FIFO/FSM/流水线） |
+| [[eda-debug-checklist]] | 逻辑工程师 | EDA 调试决策树（lint/仿真/Vivado/Questa） |
 
 ## 模板
 
@@ -53,3 +81,5 @@
 |:-----|:-----|
 | [TEMPLATE](work/TEMPLATE.md) | 工作记忆模板 |
 | [ERROR_TEMPLATE](errors/ERROR_TEMPLATE.md) | 错误记录模板 |
+| [Makefile.sim](knowledge/docs/templates/makefile-templates/Makefile.sim) | 仿真自动化模板 |
+| [Makefile.vivado](knowledge/docs/templates/makefile-templates/Makefile.vivado) | Vivado 综合模板 |

@@ -15,15 +15,58 @@
 
 const fs = require('node:fs');
 
-/** 从 stdin 解析工具调用信息 */
+/**
+ * 从 stdin 解析工具调用信息。
+ *
+ * Claude Code PostToolUse stdin 格式:
+ *   Line 1: 工具名 (如 "Skill")
+ *   Line 2+: JSON 工具输入
+ * 部分 hook runner 也可能直接传纯 JSON。
+ */
 function parseToolCall(input) {
   try {
-    const data = JSON.parse(input);
+    const trimmed = input.trim();
+    // 尝试整段解析（纯 JSON 格式）
+    let data;
+    try {
+      data = JSON.parse(trimmed);
+    } catch {
+      // 多行格式: 第一行是工具名，剩余行是 JSON
+      const lines = trimmed.split('\n');
+      const toolName = lines[0].trim();
+      const rest = lines.slice(1).join('\n').trim();
+      if (rest) {
+        data = JSON.parse(rest);
+        data.tool = data.tool || toolName;
+      } else {
+        return null;
+      }
+    }
+
     const name = data?.tool || data?.toolName || '';
+    // 多行格式: skill 在顶层; 纯 JSON 格式: 嵌套在 input/arguments 下
     const skillInput = data?.input || data?.arguments || {};
-    const skillName = skillInput?.skill || '';
-    const skillArgs = skillInput?.args || '';
+    const skillName = skillInput?.skill || data?.skill || '';
+    const skillArgs = skillInput?.args || data?.args || '';
     return { toolName: name, skillName, skillArgs };
+  } catch {
+    return null;
+  }
+}
+
+/** 从环境变量获取工具调用信息（备选路径） */
+function parseToolCallFromEnv() {
+  const toolName = process.env.CLAUDE_TOOL_NAME || '';
+  const toolInput = process.env.CLAUDE_TOOL_INPUT || '';
+  if (!toolName) return null;
+  try {
+    const data = JSON.parse(toolInput);
+    const skillInput = data?.arguments || data?.input || {};
+    return {
+      toolName,
+      skillName: skillInput?.skill || data?.skill || '',
+      skillArgs: skillInput?.args || data?.args || '',
+    };
   } catch {
     return null;
   }
@@ -38,7 +81,7 @@ async function main() {
     } catch { return; }
     if (!input) return;
 
-    const call = parseToolCall(input);
+    const call = parseToolCall(input) || parseToolCallFromEnv();
     if (!call || call.toolName !== 'Skill') return; // 只关心 Skill 工具
 
     const sessionId = process.env.CLAUDE_SESSION_ID || `s-${Date.now()}`;

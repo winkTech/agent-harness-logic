@@ -1,0 +1,55 @@
+# ── Vivado 综合/实现 Makefile 模板 ──────────────────────────────────
+# 适用: logic-engineer
+# 用法:
+#   make synth          — 综合
+#   make impl           — 实现
+#   make bitstream      — 生成比特流
+#   make all            — 全流程
+#   make report         — 生成报告
+#   make clean          — 清理
+# ────────────────────────────────────────────────────────────────────
+
+# ── 配置 ────────────────────────────────────────────────────────────
+PRJ      ?= project
+PART     ?= xczu67dr-ffve1517-2-e
+TOP      ?= top
+
+VIVADO   ?= vivado
+TCL_DIR  ?= scripts
+RPT_DIR  ?= reports
+OUT_DIR  ?= output
+
+SRC_DIR  := 01_src
+XDC_DIR  := 04_constraints
+
+# ── 目标 ────────────────────────────────────────────────────────────
+
+.PHONY: synth impl bitstream all report clean
+
+synth:
+	@mkdir -p $(RPT_DIR) $(OUT_DIR)
+	$(VIVADO) -mode batch -source $(TCL_DIR)/synth.tcl \
+		-tclargs $(PRJ) $(PART) $(TOP) $(SRC_DIR)
+	@echo "✅ synth 完成"
+
+impl: synth
+	$(VIVADO) -mode batch -source $(TCL_DIR)/impl.tcl \
+		-tclargs $(PRJ) $(TOP)
+	@echo "✅ impl 完成"
+
+bitstream: impl
+	$(VIVADO) -mode batch -source $(TCL_DIR)/bitstream.tcl \
+		-tclargs $(PRJ) $(TOP)
+	@echo "✅ bitstream 生成完成: $(OUT_DIR)/$(TOP).bit"
+
+all: bitstream report
+
+report:
+	$(VIVADO) -mode batch -source $(TCL_DIR)/report.tcl \
+		-tclargs $(PRJ) $(RPT_DIR)
+	@echo "✅ 报告生成: $(RPT_DIR)/"
+
+clean:
+	rm -rf $(PRJ).cache $(PRJ).runs $(PRJ).srcs $(PRJ).xpr
+	rm -rf $(RPT_DIR) $(OUT_DIR)
+	@echo "✅ 清理完成"
