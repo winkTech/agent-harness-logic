@@ -26,6 +26,8 @@
 | [[file-organization-discipline]] | 文件分类纪律 — 仿真/测试/文档必须归入对应目录 |
 | [[agent-context-budget-integration]] | Agent 上下文预算系统集成 — 宪法段保护 |
 | [[instruction-compliance]] | ⛔ 指令绝对优先 — 已多次违反，零容忍，行动前强制匹配检查 |
+| [[agent-workflow-refinement]] | Agent+Workflow 优化 — 架构拆解缺失/验证归属/不透明 三项修复 |
+| [[project-directory-cleanup-discipline]] | 项目目录标准化 + 仿真 transient 清理纪律 |
 
 ## 当前进度
 
