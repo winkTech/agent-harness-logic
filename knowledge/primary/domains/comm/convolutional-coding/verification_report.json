@@ -1,0 +1,468 @@
+{
+  "summary": "PASS",
+  "checks": [
+    {
+      "module": "conv_encoder",
+      "status": "PASS",
+      "check_type": "module",
+      "compared_points": 24528,
+      "max_error": 0,
+      "tolerance": 0,
+      "timestamp": "2026-06-14T03:26:49.000Z",
+      "files": [
+        {
+          "role": "script",
+          "path": "C:\\Users\\Lihan\\.claude\\knowledge\\primary\\domains\\comm\\convolutional-coding\\golden_model\\check_conv_decoder.py"
+        },
+        {
+          "role": "golden",
+          "path": "D:/Project_Files/works/conv_viterbi_golden/tv\\*_data_in.hex"
+        },
+        {
+          "role": "golden",
+          "path": "D:/Project_Files/works/conv_viterbi_golden/tv\\*_coded_out.hex"
+        }
+      ],
+      "duration_us": 15997,
+      "toolchain": {
+        "python_version": "3.12.3"
+      }
+    },
+    {
+      "module": "viterbi_decoder",
+      "status": "PASS",
+      "check_type": "module",
+      "compared_points": 12210,
+      "max_error": 0,
+      "tolerance": 0,
+      "timestamp": "2026-06-14T03:26:49.000Z",
+      "files": [
+        {
+          "role": "script",
+          "path": "C:\\Users\\Lihan\\.claude\\knowledge\\primary\\domains\\comm\\convolutional-coding\\golden_model\\check_conv_decoder.py"
+        },
+        {
+          "role": "golden",
+          "path": "D:/Project_Files/works/conv_viterbi_golden/tv\\*_coded_out.hex"
+        },
+        {
+          "role": "golden",
+          "path": "D:/Project_Files/works/conv_viterbi_golden/tv\\*_data_in.hex"
+        }
+      ],
+      "duration_us": 273506,
+      "toolchain": {
+        "python_version": "3.12.3"
+      }
+    },
+    {
+      "module": "viterbi_decoder_noise",
+      "status": "PASS",
+      "check_type": "module",
+      "compared_points": 12210,
+      "max_error": 1,
+      "tolerance": 2442,
+      "timestamp": "2026-06-14T03:26:49.000Z",
+      "files": [
+        {
+          "role": "script",
+          "path": "C:\\Users\\Lihan\\.claude\\knowledge\\primary\\domains\\comm\\convolutional-coding\\golden_model\\check_conv_decoder.py"
+        }
+      ],
+      "duration_us": 279774,
+      "toolchain": {
+        "python_version": "3.12.3"
+      },
+      "failed_points": [
+        {
+          "index": 821,
+          "expected": 0,
+          "actual": 1,
+          "error": 1
+        },
+        {
+          "index": 822,
+          "expected": 0,
+          "actual": 1,
+          "error": 1
+        },
+        {
+          "index": 825,
+          "expected": 1,
+          "actual": 0,
+          "error": 1
+        },
+        {
+          "index": 826,
+          "expected": 0,
+          "actual": 1,
+          "error": 1
+        },
+        {
+          "index": 827,
+          "expected": 1,
+          "actual": 0,
+          "error": 1
+        },
+        {
+          "index": 4333,
+          "expected": 1,
+          "actual": 0,
+          "error": 1
+        },
+        {
+          "index": 4334,
+          "expected": 0,
+          "actual": 1,
+          "error": 1
+        },
+        {
+          "index": 4337,
+          "expected": 1,
+          "actual": 0,
+          "error": 1
+        },
+        {
+          "index": 4338,
+          "expected": 1,
+          "actual": 0,
+          "error": 1
+        },
+        {
+          "index": 4339,
+          "expected": 1,
+          "actual": 0,
+          "error": 1
+        },
+        {
+          "index": 4342,
+          "expected": 0,
+          "actual": 1,
+          "error": 1
+        },
+        {
+          "index": 4344,
+          "expected": 1,
+          "actual": 0,
+          "error": 1
+        },
+        {
+          "index": 4346,
+          "expected": 1,
+          "actual": 0,
+          "error": 1
+        },
+        {
+          "index": 4371,
+          "expected": 1,
+          "actual": 0,
+          "error": 1
+        },
+        {
+          "index": 4373,
+          "expected": 1,
+          "actual": 0,
+          "error": 1
+        },
+        {
+          "index": 4374,
+          "expected": 1,
+          "actual": 0,
+          "error": 1
+        },
+        {
+          "index": 4375,
+          "expected": 0,
+          "actual": 1,
+          "error": 1
+        },
+        {
+          "index": 4376,
+          "expected": 1,
+          "actual": 0,
+          "error": 1
+        },
+        {
+          "index": 4377,
+          "expected": 0,
+          "actual": 1,
+          "error": 1
+        },
+        {
+          "index": 4378,
+          "expected": 1,
+          "actual": 0,
+          "error": 1
+        },
+        {
+          "index": 4381,
+          "expected": 1,
+          "actual": 0,
+          "error": 1
+        },
+        {
+          "index": 4552,
+          "expected": 0,
+          "actual": 1,
+          "error": 1
+        },
+        {
+          "index": 4553,
+          "expected": 0,
+          "actual": 1,
+          "error": 1
+        },
+        {
+          "index": 4556,
+          "expected": 1,
+          "actual": 0,
+          "error": 1
+        },
+        {
+          "index": 4562,
+          "expected": 1,
+          "actual": 0,
+          "error": 1
+        },
+        {
+          "index": 4563,
+          "expected": 1,
+          "actual": 0,
+          "error": 1
+        },
+        {
+          "index": 4566,
+          "expected": 0,
+          "actual": 1,
+          "error": 1
+        },
+        {
+          "index": 4567,
+          "expected": 0,
+          "actual": 1,
+          "error": 1
+        },
+        {
+          "index": 4568,
+          "expected": 1,
+          "actual": 0,
+          "error": 1
+        },
+        {
+          "index": 8817,
+          "expected": 0,
+          "actual": 1,
+          "error": 1
+        },
+        {
+          "index": 8819,
+          "expected": 1,
+          "actual": 0,
+          "error": 1
+        },
+        {
+          "index": 8820,
+          "expected": 1,
+          "actual": 0,
+          "error": 1
+        },
+        {
+          "index": 8824,
+          "expected": 0,
+          "actual": 1,
+          "error": 1
+        },
+        {
+          "index": 8827,
+          "expected": 0,
+          "actual": 1,
+          "error": 1
+        },
+        {
+          "index": 8828,
+          "expected": 1,
+          "actual": 0,
+          "error": 1
+        },
+        {
+          "index": 8830,
+          "expected": 1,
+          "actual": 0,
+          "error": 1
+        },
+        {
+          "index": 8831,
+          "expected": 1,
+          "actual": 0,
+          "error": 1
+        },
+        {
+          "index": 302,
+          "expected": 0,
+          "actual": 1,
+          "error": 1
+        },
+        {
+          "index": 303,
+          "expected": 1,
+          "actual": 0,
+          "error": 1
+        }
+      ]
+    },
+    {
+      "module": "puncture_rate_1_2",
+      "status": "PASS",
+      "check_type": "module",
+      "compared_points": 0,
+      "max_error": 0,
+      "tolerance": 0,
+      "timestamp": "2026-06-14T03:26:49.000Z",
+      "files": [
+        {
+          "role": "script",
+          "path": "C:\\Users\\Lihan\\.claude\\knowledge\\primary\\domains\\comm\\convolutional-coding\\golden_model\\check_conv_decoder.py"
+        },
+        {
+          "role": "golden",
+          "path": "D:/Project_Files/works/conv_viterbi_golden/tv\\*_coded_mother.hex"
+        },
+        {
+          "role": "golden",
+          "path": "D:/Project_Files/works/conv_viterbi_golden/tv\\*_coded_punc_1_2.hex"
+        }
+      ],
+      "duration_us": 0,
+      "toolchain": {
+        "python_version": "3.12.3"
+      }
+    },
+    {
+      "module": "puncture_rate_2_3",
+      "status": "PASS",
+      "check_type": "module",
+      "compared_points": 759,
+      "max_error": 0,
+      "tolerance": 0,
+      "timestamp": "2026-06-14T03:26:49.000Z",
+      "files": [
+        {
+          "role": "script",
+          "path": "C:\\Users\\Lihan\\.claude\\knowledge\\primary\\domains\\comm\\convolutional-coding\\golden_model\\check_conv_decoder.py"
+        },
+        {
+          "role": "golden",
+          "path": "D:/Project_Files/works/conv_viterbi_golden/tv\\*_coded_mother.hex"
+        },
+        {
+          "role": "golden",
+          "path": "D:/Project_Files/works/conv_viterbi_golden/tv\\*_coded_punc_2_3.hex"
+        }
+      ],
+      "duration_us": 0,
+      "toolchain": {
+        "python_version": "3.12.3"
+      }
+    },
+    {
+      "module": "puncture_rate_3_4",
+      "status": "PASS",
+      "check_type": "module",
+      "compared_points": 950,
+      "max_error": 0,
+      "tolerance": 0,
+      "timestamp": "2026-06-14T03:26:49.000Z",
+      "files": [
+        {
+          "role": "script",
+          "path": "C:\\Users\\Lihan\\.claude\\knowledge\\primary\\domains\\comm\\convolutional-coding\\golden_model\\check_conv_decoder.py"
+        },
+        {
+          "role": "golden",
+          "path": "D:/Project_Files/works/conv_viterbi_golden/tv\\*_coded_mother.hex"
+        },
+        {
+          "role": "golden",
+          "path": "D:/Project_Files/works/conv_viterbi_golden/tv\\*_coded_punc_3_4.hex"
+        }
+      ],
+      "duration_us": 0,
+      "toolchain": {
+        "python_version": "3.12.3"
+      }
+    },
+    {
+      "module": "puncture_rate_5_6",
+      "status": "PASS",
+      "check_type": "module",
+      "compared_points": 608,
+      "max_error": 0,
+      "tolerance": 0,
+      "timestamp": "2026-06-14T03:26:49.000Z",
+      "files": [
+        {
+          "role": "script",
+          "path": "C:\\Users\\Lihan\\.claude\\knowledge\\primary\\domains\\comm\\convolutional-coding\\golden_model\\check_conv_decoder.py"
+        },
+        {
+          "role": "golden",
+          "path": "D:/Project_Files/works/conv_viterbi_golden/tv\\*_coded_mother.hex"
+        },
+        {
+          "role": "golden",
+          "path": "D:/Project_Files/works/conv_viterbi_golden/tv\\*_coded_punc_5_6.hex"
+        }
+      ],
+      "duration_us": 0,
+      "toolchain": {
+        "python_version": "3.12.3"
+      }
+    },
+    {
+      "module": "puncture_rate_7_8",
+      "status": "PASS",
+      "check_type": "module",
+      "compared_points": 579,
+      "max_error": 0,
+      "tolerance": 0,
+      "timestamp": "2026-06-14T03:26:49.000Z",
+      "files": [
+        {
+          "role": "script",
+          "path": "C:\\Users\\Lihan\\.claude\\knowledge\\primary\\domains\\comm\\convolutional-coding\\golden_model\\check_conv_decoder.py"
+        },
+        {
+          "role": "golden",
+          "path": "D:/Project_Files/works/conv_viterbi_golden/tv\\*_coded_mother.hex"
+        },
+        {
+          "role": "golden",
+          "path": "D:/Project_Files/works/conv_viterbi_golden/tv\\*_coded_punc_7_8.hex"
+        }
+      ],
+      "duration_us": 0,
+      "toolchain": {
+        "python_version": "3.12.3"
+      }
+    },
+    {
+      "module": "conv_viterbi_check",
+      "status": "PASS",
+      "check_type": "regression",
+      "compared_points": 51844,
+      "max_error": 1,
+      "tolerance": 0,
+      "timestamp": "2026-06-14T03:26:49.000Z",
+      "files": [
+        {
+          "role": "script",
+          "path": "C:\\Users\\Lihan\\.claude\\knowledge\\primary\\domains\\comm\\convolutional-coding\\golden_model\\check_conv_decoder.py"
+        }
+      ],
+      "duration_us": 572209,
+      "toolchain": {
+        "python_version": "3.12.3"
+      }
+    }
+  ]
+}

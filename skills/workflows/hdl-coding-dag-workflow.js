@@ -99,16 +99,41 @@ const nodes = {};
 nodes.p0_infra = {
   deps: [],
   run: async () => {
-    const result = await agent(`执行 HDL 工作流 Phase 0:
-1. 检查/创建 Makefile, .f 文件列表
-2. 验证 make lint / make compile 可用
-3. 确认 EDA 工具链就绪
+    const result = await agent(`执行 HDL 工作流 Phase 0: 基础设施 + 建目录
+
+[MUST] 按跨项目标准建目录 (knowledge/primary/cross-project-experience.md):
+<project_root>/
+├── 01_src/00_hdl/      # RTL 源码 (每个模块独立子目录)
+├── 01_src/01_ip/        # IP 核
+├── 02_sim/              # 仿真 (含 tv/ 和 check_results/)
+│   ├── tv/              # 测试向量
+│   └── check_results/   # JSON 证据文件
+├── 03_xdc/              # 约束 (可空)
+├── 04_prj/              # 工程文件 (可空)
+├── 05_bin/              # 比特流 (可空)
+├── 06_doc/              # 设计文档
+├── 07_mat/              # MATLAB golden model
+├── 08_py/               # Python 脚本
+└── README.md
+
+2. Makefile: 必须包含 lint / compile / sim / clean 目标
+   [MUST] make clean 删除: work/ transcript *.wlf vsim.wlf __pycache__/ *.vcd
+
+3. .gitignore: 必须排除所有 transient 文件
+   work/ transcript *.wlf vsim.wlf __pycache__/ *.pyc *.vcd *.vcd.lxt *.ini
+
+4. 验证 make lint / make compile 可用
 
 模块: ${modules.join(', ') || '项目默认'}
 输出检查清单:
-- Makefile 存在且 lint/compile/sim 目标完整
-- .f 文件列出所有源文件
-- make lint 通过`, { label: 'p0-infra' });
+- 目录结构符合跨项目标准
+- Makefile 存在且 lint/compile/sim/clean 目标完整
+- .gitignore 排除 transient
+- make lint 通过
+
+━━━ 检查点 ━━━
+产出以上目录结构后暂停，用户审查确认目录合规后再进入 Phase 1。
+━━━━━━━━━━━`, { label: 'p0-infra' });
     return result;
   },
 };
@@ -119,7 +144,7 @@ nodes.p1_arch = {
   deps: ['p0_infra'],
   run: async (ctx) => {
     const infra = ctx.p0_infra?.data || '';
-    const result = await agent(`执行 HDL 工作流 Phase 1: 架构设计
+    const result = await agent(`执行 HDL 工作流 Phase 1: 架构设计 (算法工程师负责)
 
 前提: 基础设施已就绪
 ${String(infra).slice(0, 300)}
@@ -127,27 +152,50 @@ ${String(infra).slice(0, 300)}
 任务:
 1. 算法文档化 + 顶层框图
 2. 模块↔MATLAB Golden Model 对标
-3. 每模块方案规格 (端口/时序/接口)
-4. 输出 architecture.yaml (结构化模块清单), 包含:
-   - 模块名 / 类型 / MATLAB 参考函数
-   - 模块间数据流关系
+3. **微架构拆解 [MUST]**:
+   a) **流水线结构**: 每级功能、延迟周期、握手方式
+   b) **FSM 状态图**: 状态定义、转移条件、输出信号
+   c) **数据通路**: 每级输入/输出位宽、定点 Q 格式
+   d) **模块接口时序图**
+4. **写入文件 [MUST]**: 以下文件必须写入磁盘:
+   - 06_doc/architecture.yaml — 包含必填字段:
+     modules: [{name, type, matlab_ref, symmetric_with, pipeline_stages: [{name, function, latency, bit_width, q_format}], fsm_states: [{name, description, transitions}]}]
+   - 06_doc/pipeline_diagram.md — 流水线图 + 数据流描述
+   - 06_doc/algorithm_spec.md — 算法规范
 5. 模块对称对分析:
    - 扫描模块列表, 识别所有可能成对的模块
    - 识别规则 (通用, 不限项目领域):
      a) 前缀对: <前缀1>_<名称> / <前缀2>_<名称>
-        → 如 tx_scrambler / rx_scrambler, enc_data / dec_data
      b) 后缀对: <名称>_<后缀1> / <名称>_<后缀2>
-        → 如 scrambler_tx / scrambler_rx
      c) de- 前缀: <名称> / de<名称>
-        → 如 scrambler / descrambler, interleaver / deinterleaver
      d) 互逆词: encoder/decoder, modulator/demodulator, mapper/demapper, fft/ifft
-     e) 用户可自定义规则添加到 architecture.yaml
    - 输出到 architecture.yaml:
-     - pair_conventions 字段 (描述当前项目的命名模式)
-     - 每模块 symmetric_with 和 symmetry_type (dataflow_inverse / identical / structural_inverse)
+     - pair_conventions 字段
+     - 每模块 symmetric_with 和 symmetry_type
 
 模块: ${modules.join(', ') || '项目默认'}
-输出: algorithm_spec + architecture.yaml + 顶层框图文档`, { label: 'p1-architecture' });
+
+━━━ 检查点 ━━━
+产出以上 artifact 后暂停，等待用户审查方案后再进入 Phase 2。
+━━━━━━━━━━━`, { label: 'p1-architecture' });
+
+    // ── 校验 architecture.yaml 完整性 ─────────────────────────
+    const archPath = path.join(projectRoot, '06_doc', 'architecture.yaml');
+    log(`🔍 校验 architecture.yaml: ${archPath}`);
+    if (!fs.existsSync(archPath)) {
+      throw new Error(`❌ architecture.yaml 不存在于 ${archPath}\n   Phase 1 未产出架构文件, 请确保写入 06_doc/architecture.yaml`);
+    }
+    const archContent = fs.readFileSync(archPath, 'utf-8');
+    const requiredFields = ['modules', 'pipeline_stages', 'fsm_states', 'bit_width', 'latency'];
+    const missing = requiredFields.filter(f => !archContent.includes(f));
+    if (missing.length > 0) {
+      log(`⚠️ architecture.yaml 缺少以下字段: ${missing.join(', ')}`);
+      log('  继续执行但建议审查后补充完整。');
+    } else {
+      log('✅ architecture.yaml 包含所有必填字段');
+    }
+
+    return result;
     return result;
   },
 };
@@ -179,26 +227,56 @@ nodes.p3_tb = {
   deps: ['p1_arch'],
   run: async (ctx) => {
     const arch = ctx.p1_arch?.data || '';
-    const result = await agent(`执行 HDL 工作流 Phase 3: TB + MATLAB 向量生成
+    // 并行执行: 逻辑工程师写 TB, 算法工程师生成向量 (含 GM 预检)
+    const [tbResult, vecResult] = await parallel([
+      // ── 子任务 1: 逻辑工程师 — Testbench ─────────────────────────
+      () => agent(`执行 HDL 工作流 Phase 3 (TB): 编写 Testbench (逻辑工程师)
 
 架构设计: ${String(arch).slice(0, 300)}
+模块: ${modules.join(', ') || '项目默认'}
 
 任务:
 1. 自检 Testbench (模块级, 单模块验证)
 2. SVA 断言 (关键接口时序)
 3. 结构化日志 + 波形配置 ($dumpvars)
-4. MATLAB golden model 测试向量生成:
+4. 对比脚本骨架: 02_sim/check_<module>.py
+   - 读 02_sim/tv/<module>_tv.txt (MATLAB golden 向量)
+   - 读 RTL 仿真输出 02_sim/<module>_out.txt
+   - 逐点数值对比 → 输出 JSON 到 02_sim/check_results/<module>.json
+
+输出: TB 编译通过, 自检逻辑完整, 对比脚本骨架就绪`, { label: 'p3-tb', phase: 'Phase 3 TB+向量生成' }),
+
+      // ── 子任务 2: 算法工程师 — 向量生成 ──────────────────────────
+      () => agent(`执行 HDL 工作流 Phase 3 (向量): 生成测试向量 (算法工程师)
+
+架构设计: ${String(arch).slice(0, 300)}
+模块: ${modules.join(', ') || '项目默认'}
+
+━━━ [MUST] 第 0 步: Golden Model 自检 ━━━
+先生成并运行 Golden Model 自检脚本:
+   - 检查 check_<module>.py 是否存在
+   - 运行 python3 check_<module>.py
+   - 确认所有 check status=PASS, compared_points>0
+   - 如果任何 check FAIL → 立即停止, 修复 GM 后再继续
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+任务 (GM 自检通过后):
+1. MATLAB golden model 测试向量生成:
    - 从每个子模块的 MATLAB 函数提取输入/输出对
    - 存入 02_sim/tv/<module>_tv.txt
    - 每条向量标注 golden 预期值
+2. 覆盖 corner case: 全零、全一、脉冲、随机、边界值、溢出
+3. 向量格式: 每行 1 bit (ASCII '0'/'1'), .hex 后缀
 
-[MUST] 标准算法模块 (LFSR/Viterbi/CRC/FIR):
-   - 必须用 MATLAB 生成黄金参考向量
+[MUST]:
+   - 必须用 MATLAB/Python golden 生成黄金参考向量
    - 禁止自闭环验证 (编码→译码对比)
-   - 参考向量存入 02_sim/tv/ 目录
+   - 向量存入 02_sim/tv/ 目录
 
-模块: ${modules.join(', ') || '项目默认'}
-输出: TB 编译通过, 自检逻辑完整, 测试向量已生成`, { label: 'p3-testbench' });
+输出: 02_sim/tv/<module>_tv.txt, 覆盖所有 corner case`, { label: 'p3-vectors', phase: 'Phase 3 TB+向量生成' }),
+    ]);
+
+    return `[TB]\n${tbResult}\n\n[VECTORS]\n${vecResult}`;
     return result;
   },
 };
@@ -219,50 +297,57 @@ nodes.p4_rtl = {
     const tb = ctx.p3_tb?.data || '';
     const moduleList = modules.length > 0 ? modules : ['模块_1', '模块_2'];
 
-    const result = await agent(`执行 HDL 工作流 Phase 4: 逐模块 RTL + 脚本化对比
+    // Lite 模式兼容: 定点报告可能为空
+    const fixedptHint = fixedpt ? String(fixedpt).slice(0, 300) : '[Lite 模式] 无定点报告 — 使用架构方案默认位宽';
 
-定点报告: ${String(fixedpt).slice(0, 300)}
+    const result = await agent(`执行 HDL 工作流 Phase 4: 逐模块 RTL + 脚本化对比 (逻辑工程师负责)
+
+定点报告: ${fixedptHint}
 Testbench: ${String(tb).slice(0, 300)}
 
 模块: ${moduleList.join(', ')}
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-[MUST 硬约束] — 逐模块, 一次一个, 脚本证据驱动
+[MUST 硬约束] — 逐模块, 逻辑工程师独立完成
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 1. 一次只处理一个模块。完成再下一模块。
 
 2. 每个模块的完成标准:
-   a) 写 RTL
-   b) make compile 通过
-   c) 生成对比脚本 02_sim/check_<module>.py:
+   a) 按 architecture.yaml 微架构方案编码 (流水线/FSM/位宽必须一致)
+   b) make lint 通过 [MUST] — 不通过不进下一步
+   c) make compile 通过
+   d) 确保 02_sim/check_results/ 目录存在 (不存在则创建)
+   e) 生成对比脚本 02_sim/check_<module>.py:
       - 读 MATLAB golden 向量  02_sim/tv/<module>_tv.txt
-      - 读 RTL 仿真输出        05_result/sim/<module>_out.txt
+      - 读 RTL 仿真输出        02_sim/<module>_out.txt (仿真在 02_sim/ 下运行)
       - 逐点数值对比
       - 输出 JSON 到 02_sim/check_results/<module>.json
       - JSON 格式: {"module":"<name>","status":"PASS|FAIL","compared_points":N,"max_error_lsb":E,"first_fail_at":null}
-   d) bash 运行该脚本, 确认 exit code 为 0
-   e) status=FAIL → 分析根因 → 修复 RTL → 重新对比
+   f) bash 运行该脚本, 确认 exit code 为 0
+   g) status=FAIL → 分析根因 → 修复 RTL → 重新对比
 
-3. 所有模块完成后输出验证矩阵表格
+3. [NEW] 每模块完成后运行 make clean, 清理 work/ transcript 避免干扰下一模块
 
-4. 波形证据 (可选):
-   - node engine/scripts/fpga-wave-helper.cjs check 05_result/sim/dump.vcd
-   - 确认无 X/Z 状态漂移
+4. RTL ↔ Golden Model 对标标准:
+   - RTL 每模块输出必须与定点 Golden Model 逐周期逐比特对齐
+   - 允许差异: 定点精度损失（截位/饱和，须在 fixed_point_report 中标注）
+   - 不允许差异: 算法方向偏离、流水线级数与架构方案不一致
 
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-[参考] 配对模块效率复用
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-- 检查 architecture.yaml 的 symmetric_with 配对
-- 如配对已完成 → 基于已完成端框架反推
-- (不影响验证标准, 仅减少手写量)
+5. 所有模块完成后输出验证矩阵表格
 
 模块: ${moduleList.join(', ')}
 
 输出:
 1. 02_sim/check_results/<module>.json   (每个模块)
 2. 验证矩阵表格 (Markdown)
-3. 差异分析 (如有 FAIL)`, { label: 'p4-rtl-sequential' });
+3. 差异分析 (如有 FAIL)
+4. RTL vs GM 对标报告
+
+	━━━ 检查点 ━━━
+	产出验证矩阵 + 每模块 JSON 证据文件后暂停。
+	由调度层呈报用户审查后进入 Phase 4.5 证据门禁。
+	━━━━━━━━━━━`, { label: 'p4-rtl-sequential' });
     return result;
   },
 };
@@ -438,7 +523,7 @@ nodes.p5_top_integration = {
     const gateResult = ctx.p45_evidence_gate?.data || {};
     const isTrusted = gateResult.pass === true;
 
-    const result = await agent(`执行 HDL 工作流 Phase 5: 顶层集成 + 全链仿真
+    const result = await agent(`执行 HDL 工作流 Phase 5: 顶层集成 + 全链仿真 (逻辑工程师负责)
 
 证据门禁: ${isTrusted ? '✅ 通过 (所有模块已验证)' : '⚠️ 状态未知'}
 门禁详情: ${JSON.stringify(gateResult).slice(0, 300)}
@@ -459,16 +544,21 @@ nodes.p5_top_integration = {
    c) 定点模块: 逐周期 bit-true
    d) 不一致 → 隔离根因模块
 
-3. 全链 PASS 标准:
-   - 所有中间级与 golden 一致
-   - 最终输出与 golden 一致
-   - 任何不一致 = FAIL
+3. [NEW] RTL ↔ Golden Model 最终对齐标准:
+   - 最终输出必须与定点 Golden Model 逐比特对齐
+   - 允许: 定点精度损失 (截位/饱和，须在报告中注明)
+   - 不允许: 算法方向偏离、使用容差掩盖逻辑差异
+   - 验证报告必须包含: compared_points, max_error_lsb, 算法方向一致性结论
 
 模块: ${modules.join(', ') || '项目默认'}
 输出:
 1. top.sv 顶层模块
-2. 全链仿真日志 (含中间级对比)
-3. PASS/FAIL 报告`, { label: 'p5-top-integration' });
+2. 全链仿真日志 (含逐级对比表)
+3. RTL vs GM 对比报告 (compared_points + max_error_lsb + 算法方向一致性)
+
+━━━ 检查点 ━━━
+产出全链仿真日志 + 对比报告后暂停，由调度层呈报用户审查。
+━━━━━━━━━━━`, { label: 'p5-top-integration' });
     return result;
   },
 };
@@ -534,7 +624,7 @@ nodes.p8_report = {
   run: async (ctx) => {
     const regression = ctx.p6_regression?.data || '';
     const review = ctx.p7_review?.data || '';
-    const result = await agent(`生成 HDL 工作流 Phase 8: 总结报告
+    const result = await agent(`生成 HDL 工作流 Phase 8: 总结报告 + 清理
 
 回归结果: ${String(regression).slice(0, 300)}
 审查结果: ${String(review).slice(0, 300)}
@@ -542,7 +632,17 @@ nodes.p8_report = {
 输出:
 1. 汇总实现报告 (含全链验证矩阵)
 2. 文档归档
-3. 经验记录`, { label: 'p8-report' });
+3. 经验记录
+
+━━━ 清理 [MUST] ━━━
+4. 运行 make clean 删除以下 transient 文件:
+   - work/           (ModelSim 编译库)
+   - transcript      (ModelSim 日志)
+   - *.wlf vsim.wlf  (波形文件)
+   - *.vcd *.vcd.lxt (VCD dump)
+   - __pycache__/ *.pyc (Python 缓存)
+5. 确认仅保留: 01_src/ 02_sim/tv/ 02_sim/check_results/ 06_doc/ 07_mat/ 08_py/ 下的必要文件
+━━━━━━━━━━━━`, { label: 'p8-report' });
     return result;
   },
 };
@@ -636,6 +736,11 @@ const preflightSummary = [
   '  3. MATLAB Golden Model 是否就位?',
   '  4. 项目目录结构是否符合预期 (01_src/02_sim/...)?',
   '  5. 如果任一答案是否 → 请先澄清，不要直接开始。',
+  '',
+  '📋 检查点流程 (NEW):',
+  '  此工作流在 Phase 1/2/3/4.5/5/7 完成后产出 artifact',
+  '  调度层将暂停并呈报审查 → 用户确认后继续',
+  '  未确认不跨 Phase',
   '',
   'DAG 依赖链:',
   liteMode

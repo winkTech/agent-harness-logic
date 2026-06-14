@@ -32,8 +32,8 @@ const DREAM_SCRIPT = path.join(HARNESS, 'engine', 'scripts', 'dream-consolidate.
 const EVENTS_STORE = path.join(HARNESS, 'engine', 'sqlite', 'store-events.cjs');
 const DB_INDEX = path.join(HARNESS, 'engine', 'sqlite', 'index.cjs');
 
-// 最少事件数才触发 Dream 运行
-const MIN_EVENTS_THRESHOLD = 10;
+// 最少事件数才触发 Dream 运行 (v2: 10→5, 日均 ~5 条事件的节奏下每 session 都有机会触发)
+const MIN_EVENTS_THRESHOLD = 5;
 
 // ── 检查未处理事件数 ─────────────────────────────────────────────────────────
 

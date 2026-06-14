@@ -80,8 +80,10 @@ const AGENT_BUDGETS = {
   'code-reviewer':   'relaxed',
 
   // Domain/specialist agents — medium context
-  'python-pro':      'normal',
-  'data-scientist':  'normal',
+  'algorithm-engineer': 'normal',
+  'logic-engineer':     'normal',
+  'python-pro':         'normal',
+  'data-scientist':     'normal',
   'performance-engineer': 'normal',
   'technical-writer': 'normal',
   'general-assistant': 'normal',
