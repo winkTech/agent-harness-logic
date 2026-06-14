@@ -48,6 +48,14 @@ Workflow({name: 'architecture-review-workflow', args: {targets: ['01_src/tx/ofdm
 ## 不可跳越红线
 
 - 写 RTL 前必须先过 Phase 1（架构）和 Phase 2（定点）——不允许直接写代码
+- **Phase 1 必须包含微架构拆解**（流水线/FSM/位宽映射）— 无架构方案不写 RTL
 - Phase 4.5 (证据门禁) 未通过不允许进入 Phase 5 (顶层集成)
+- **Phase 5 最终输出必须与定点 Golden Model bit-true 对齐**（不允许用容差掩盖算法偏离）
 - Phase 7 未完成（code-review 未通过）不允许提交
 - 用户指定了实现方向 → 必须实施，不得继续分析
+
+## 验证归属
+
+- **所有的 RTL 验证/TB/调试/对比脚本**归逻辑工程师，调度层不做
+- 调度层负责：组织流程、呈报 artifact、协调算法↔逻辑工程师争议
+- 检查点 Phase 1/2/3/4.5/5/7 产出 artifact 后暂停，用户审查确认后再继续

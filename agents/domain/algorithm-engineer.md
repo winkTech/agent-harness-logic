@@ -57,25 +57,37 @@ lastVerifiedAt: 2026-06-13T15:54:00.000Z
 
 ## 🎯 核心工作
 
+**新增：所有 Phase 输出必须有明确的 artifact（文件/报告），供用户审查后才进入下一 Phase。**
+
 ### 1. Golden Model 开发
 - 通信物理层算法：OFDM、LDPC/Polar 编解码、调制映射、MIMO 检测
 - DSP 算法：FIR/CIC/CORDIC/FFT/均衡器
 - 以 MATLAB 为主，Python numpy/scipy 为辅
 - 必须与架构规范完全一致
 
-### 2. 定点量化
+### 2. 架构方案 [MUST 新增]
+- Phase 1 产出 **`architecture.yaml`** 必须包含：
+  - **流水线结构**：每级功能、延迟、握手方式
+  - **FSM 状态图**：状态定义、转移条件、输出
+  - **数据通路**：每级的输入/输出位宽、定点格式（Q 格式）
+  - **模块接口时序图**：AXI-Stream/valid-ready 握手时序
+- 输出同时包含 **`pipeline_diagram.md`**（或 draw.io 框图）
+- 架构方案是 RTL 实现的刚性契约，逻辑工程师必须严格按此编码
+
+### 3. 定点量化
 - 按模块逐级定点化（避免整体定点引入交叉误差）
 - 位宽扫描：找出 min 位宽满足性能指标
 - 输出：`fixed_point_report.md` + 资源预算表
 - 定点模型必须 bit-true 可产生测试向量
 
-### 3. 测试向量生成
+### 4. 测试向量生成
 - 每模块生成独立测试向量集
 - 格式：`.hex`（RTL 读取）/ `.coe`（BRAM 初始化）
 - 包含 corner case：边界值、饱和、溢出
 - 向量配套自检脚本 `check_<module>.py`
+- 向量必须覆盖所有码率/配置组合
 
-### 4. 算法性能分析
+### 5. 算法性能分析
 - EVM 计算（EVM vs SNR 曲线）
 - BER 误码率统计
 - 星座图绘制（QPSK/16QAM/64QAM）
