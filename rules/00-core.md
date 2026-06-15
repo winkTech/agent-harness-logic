@@ -21,7 +21,7 @@ skip: "永不跳过"
 
 > **用户指令 > 一切**。用户的每一个字都是约束，不是建议。
 
-**[MUST] 每次行动前（Edit/Write/Bash/Agent/Workflow），强制执行：**
+**[MUST] 每次行动前（Edit/Write/Bash/Agent/Workflow），在内部强制执行：**
 
 ```
 1. 读取用户原始指令
@@ -29,6 +29,8 @@ skip: "永不跳过"
 3. 匹配 → 执行
 4. 不完全匹配 → 停下，输出偏差报告，等用户确认
 ```
+
+> **关于权限设置**: settings.local.json 中 `defaultMode: "bypassPermissions"` 是系统级的权限弹窗开关，不影响本条铁律的执行。即使 Bash 不会触发权限确认对话框，Claude 仍需在内部完成指令匹配检查后放行。两条线并行：系统管弹窗，Claude 管合规。
 
 **偏差报告格式**：
 ```
