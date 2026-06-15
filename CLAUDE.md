@@ -51,14 +51,40 @@
 | `/rag-skill` | 知识库检索 | 查知识 / 参考文档 |
 | `/code-search` | 代码搜索 | 搜代码 / 找文件 |
 | `/git-expert` | Git 操作 | git / 提交 |
-| 完整列表 | `knowledge/references/skills-catalog.md` | — |
+| `/deep-research` | 深度研究 | 技术调研 / 方案对比 |
+| `/brainstorming` | 头脑风暴 | 多方案 / 想点子 |
+| `/presentation` | 图表/PPT | 架构图 / 汇报 |
+| `/doc-gen` | 文档生成 | 生成文档 / README |
+| `/tdd` | 测试驱动开发 | TDD / 测试优先 |
+| `/test-generator` | 测试生成 | 生成 testbench |
+| `/security-review` | 安全审查 | 安全 / 认证 / 密钥 |
+| `/rtl-gen` | RTL 代码生成 | 生成RTL模板 |
+| `/modern-python` | Python 开发 | Python 3.12+ |
+| `/python-hardware-debug` | 硬件调试Python | 星座图 / EVM / 频偏 |
+| `/verify` | 验证改动 | 验证 / 确认效果 |
+| `/simplify` | 代码简化 | 简化 / 重构 |
+| `/browser` | 浏览器自动化 | 网页交互 / 抓取 |
+| `/agent-management` | Agent 管理 | 管理技能 / 编排 |
+| `/markitdown-converter` | 格式转换 | 转Markdown |
+| `/project-init` | 项目脚手架 | 新建工程 / 加模块 |
+| `/update-config` | 配置管理 | 改设置 / 加hook |
+| `/keybindings-help` | 快捷键 | 改快捷键 |
+| `/loop` | 定时循环 | 定期检查 / 轮询 |
+| `/claude-api` | Claude API 参考 | 模型 / API / 价格 |
+| `/fewer-permission-prompts` | 权限优化 | 减少确认 |
+| `/run` | 运行应用 | 启动 / 运行 |
+| `/init` | 项目初始化 | 初始化 |
+| 完整详情 | `knowledge/references/skills-catalog.md` | — |
 
 ## 工作流
 
 ```js
-Workflow({name: 'hdl-coding-workflow', args: {modules: ['模块名']}})
-Workflow({name: 'code-review-workflow', args: {files: ['文件路径']}})
-Workflow({name: 'architecture-review-workflow', args: {targets: ['目标文件']}})
+Workflow({name: 'hdl-coding-dag-workflow', args: {modules: ['模块名']}})     // HDL 全流程 (推荐)
+Workflow({name: 'hdl-coding-workflow', args: {modules: ['模块名']}})          // 别名，同上
+Workflow({name: 'hdl-coding-dag-workflow', args: {modules: ['viterbi'], lite: true}})  // Lite 模式
+Workflow({name: 'code-review-workflow', args: {files: ['文件路径']}})          // 代码审查
+Workflow({name: 'architecture-review-workflow', args: {targets: ['目标路径']}}) // 架构审查
+Workflow({name: 'security-review-workflow', args: {targets: ['src/']}})        // 安全审查
 ```
 
 详见 `rules/05-workflow-trigger.md`。
