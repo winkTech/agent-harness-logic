@@ -182,6 +182,17 @@ ${String(infra).slice(0, 300)}
       log('✅ architecture.yaml 包含所有必填字段');
     }
 
+    // ── 压缩保留块: Phase 1 架构 ──────────────────────────
+    log('');
+    log('📌 === 压缩保留块: Phase 1 架构 ===');
+    log('保留原因: 架构方案是后续所有 RTL 的契约，压缩时丢失 = 全部重来');
+    log(`模块列表: ${modules.join(', ') || '项目默认'}`);
+    log(`文件产出: 06_doc/architecture.yaml, 06_doc/pipeline_diagram.md, 06_doc/algorithm_spec.md`);
+    log(`流水线级数: ${(() => { try { return JSON.parse(fs.readFileSync(archPath,'utf8'))?.pipeline_stages?.length || '未知'; } catch { return '未知'; } })()}`);
+    log(`关键决策: FSM 状态图、模块接口定义、定点 Q 格式`);
+    log('=== 保留块结束 ===');
+    log('');
+
     return result;
   },
 };
@@ -326,12 +337,20 @@ Testbench: ${String(tb).slice(0, 300)}
 	产出验证矩阵 + 每模块 JSON 证据文件后暂停。
 	由调度层呈报用户审查后进入 Phase 4.5 证据门禁。
 	━━━━━━━━━━━`, { label: 'p4-rtl-sequential' });
+    // ── 压缩保留块: Phase 4 RTL ─────────────────────────────
+    log('');
+    log('📌 === 压缩保留块: Phase 4 RTL ===');
+    log('保留原因: 每模块 JSON 证据是门禁依据，验证矩阵是准入 Phase 5 的凭证');
+    log(`已验证模块: ${modules.join(', ') || '项目默认'}`);
+    log(`证据文件: 02_sim/check_results/*.json (每个模块)`);
+    log(`产出文件: 01_src/00_hdl/*.sv (RTL 源码), 02_sim/check_*.py (对比脚本)`);
+    log(`验证标准: RTL vs Golden Model 逐周期逐比特对齐`);
+    log('=== 保留块结束 ===');
+    log('');
+
     return result;
   },
 };
-
-// ═════════════════════════════════════════════════════════════════════════════
-// Phase 4.5: 证据门禁 [NEW]  — A 降维 + 高安全分支
 // ═════════════════════════════════════════════════════════════════════════════
 
 nodes.p45_evidence_gate = {
@@ -526,11 +545,21 @@ nodes.p5_top_integration = {
 ━━━ 检查点 ━━━
 产出全链仿真日志 + 对比报告后暂停，由调度层呈报用户审查。
 ━━━━━━━━━━━`, { label: 'p5-top-integration' });
+
+    // ── 压缩保留块: Phase 5 顶层集成 ───────────────────────
+    log('');
+    log('📌 === 压缩保留块: Phase 5 顶层集成 ===');
+    log('保留原因: 全链仿真结果是 RTL 与 Golden Model bit-true 对齐的最终证据');
+    log('产出文件: top.sv (顶层), 全链仿真日志, RTL vs GM 对比报告');
+    log(`模块: ${modules.join(', ') || '项目默认'}`);
+    log('验证标准: 最终输出与定点 Golden Model 逐比特对齐');
+    log('允许误差: 定点精度损失（截位/饱和），已在报告中注明');
+    log('=== 保留块结束 ===');
+    log('');
+
     return result;
   },
 };
-
-// ── Phase 6: 回归覆盖率 ────────────────────────────────────────────────────
 
 nodes.p6_regression = {
   deps: ['p5_top_integration'],

@@ -21,8 +21,17 @@ skills:
   - code-review
   - rag-skill
   - debugging
+  - presentation                                   # 画 RTL 架构图/时序图
 context_files:
   - skills/hdl-coding/references/alg-flow-verilog.md
+  - knowledge/primary/domains/comm/ofdm/algorithm_spec.md      # OFDM 算法参考
+  - knowledge/primary/domains/comm/ofdm/rtl_architecture.md     # OFDM RTL 架构
+  - knowledge/primary/domains/comm/ldpc/algorithm_spec.md       # LDPC 算法参考
+  - knowledge/primary/domains/comm/channel_est/algorithm_spec.md # 信道估计算法参考
+  - knowledge/primary/domains/comm/synch/algorithm_spec.md      # 同步算法参考
+  - knowledge/primary/cross-project-experience.md               # 跨项目经验
+  - rules/01-hdl.md                                              # HDL 编码规则
+  - knowledge/references/compact-preservation-guide.md           # 上下文压缩保留指引
 context_strategy: full
 fork_eligible: false
 verified: true
@@ -116,6 +125,25 @@ lastVerifiedAt: 2026-06-13T15:55:00.000Z
 | `rag-skill` | 查知识库（协议/接口/调试经验） |
 | `debugging` skill | 仿真调试方法论 |
 | Makefile | lint/compile/sim/regress 自动化 |
+
+## 🧠 模型策略
+
+- **默认模型**: `sonnet` — RTL 编码、仿真调试需要快速迭代，sonnet 的编码效率最优
+- **升级条件**: 复杂时序分析、CDC 方案设计、FSM 状态爆炸排查时可请求 opus
+- **不允许降级**: lint/sim/regress 等质量门禁步骤必须保持 sonnet，确保结果一致性
+
+## ⚖️ 争议升级路径
+
+当逻辑工程师与算法工程师对实现方案或验证结果有分歧时：
+
+```
+1. 数据对齐: 逻辑工程师提供 RTL 仿真波形/日志，算法工程师提供 Golden Model 输出
+2. 逐级对比: 按模块分级定位差异源（端口 → 位宽 → 时序 → 逻辑）
+3. 调度层裁决: 如果差异在算法方向（非精度损失），调度层介入判定
+4. 外部仲裁: 记录为 architecture decision，提交项目架构师
+```
+
+**原则**：Golden Model 是权威，但 RTL 发现 Golden Model 不一致时必须反馈，不能静默适配。
 
 ## 📐 与算法工程师的协作
 
