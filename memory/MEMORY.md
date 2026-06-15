@@ -47,6 +47,7 @@
 [[agent-optimization-roadmap]] — Agent 长期优化路线图（3 阶段）
 [[fullframe-tb-frame-boundary-bug]] — 全帧TB: rx_fifo反压修复完成, viterbi双traceback已修复, 帧边界2562正确
 [[viterbi-double-traceback-fix]] — viterbi DONE→IDLE跨block NBA竞态, r_tb_pending_clear门控修复
+[[skill-evolve-harness]] — SkillOpt 蒸馏到本地 harness: session模式挖掘+held-out门禁+PostStop自动stage
 
 ## 参考链接
 

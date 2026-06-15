@@ -105,8 +105,9 @@ metadata:
 
 | Workflow | 功能 | 场景 |
 |----------|------|------|
-| `hdl-coding-workflow` | RTL 全流程 (8 Phase) | 算法 → 架构 → 定点 → TB → RTL → 回归 → 审查 → 报告 |
+| `hdl-coding-dag-workflow` | RTL 全流程 (10 Phase) | 算法 → 架构 → 定点 → TB → RTL → 门禁 → 集成 → 回归 → 审查 → 报告 |
+| `hdl-coding-workflow` | 别名，同上 | 向后兼容 |
 | `code-review-workflow` | 两轮代码审查 | Pass 1 正确性 + Pass 2 代码质量 |
 | `architecture-review-workflow` | 多 Agent 架构审查 | 上下文 → 分析 → 安全 → 建议 |
-| `rag-skill-workflow` | 知识库检索 | 知识库问答（66 行） |
+| `rag-skill-workflow` | 知识库检索 | 知识库问答 |
 | `security-review-workflow` | 安全审查 | 安全敏感关键词触发 |
