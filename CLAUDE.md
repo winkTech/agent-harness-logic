@@ -40,6 +40,7 @@
 | `rules/11-git.md` | Git 操作 | commit/push |
 | `rules/12-tdd.md` | 测试驱动 | TDD/写测试 |
 | `rules/13-context-management.md` | 上下文管理 | 始终加载 |
+| `rules/14-fix-in-place.md` | Fix-in-Place 文件修改规范 | 涉及 .sv/.v 修改 |
 
 ## 技能
 

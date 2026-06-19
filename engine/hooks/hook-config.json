@@ -55,6 +55,18 @@
       "frequency": "medium",
       "description": "管道后自审 — 检测语法错误和残留调试输出",
       "trigger": "Write/Edit 后"
+    },
+    "safety/fix-in-place-guard.cjs": {
+      "enabled": true,
+      "frequency": "high",
+      "description": "Fix-in-Place 守卫 — 阻断文件变体创建 (_v2, _new, tb_basic 等), 强制原地修改",
+      "trigger": "每次 PreToolUse (Write/Bash)"
+    },
+    "safety/sim-governance.cjs": {
+      "enabled": true,
+      "frequency": "medium",
+      "description": "仿真治理 — 清理 wlft*/transcript, 自动生成 JSON 证据文件",
+      "trigger": "PostToolUse (Bash vsim 后)"
     }
   }
 }
