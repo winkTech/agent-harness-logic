@@ -39,6 +39,7 @@
 | `rules/10-drawing.md` | 绘图 | 画图/架构图 |
 | `rules/11-git.md` | Git 操作 | commit/push |
 | `rules/12-tdd.md` | 测试驱动 | TDD/写测试 |
+| `rules/13-context-management.md` | 上下文管理 | 始终加载 |
 
 ## 技能
 
@@ -93,3 +94,15 @@ Workflow({name: 'rag-skill-workflow', args: {query: ['关键词']}})  // 知识�
 ```
 
 详见 `rules/05-workflow-trigger.md`。
+
+---
+
+## 上下文管理
+
+**红线**: ≥40% ⚠ 预警 / ≥60% ❌ 强制压缩 / ≥80% 🚨 立即保存+压缩
+
+**/compact 前**: 更新 scratchpad 顶部"已完成"日志 + `pre-compact.cjs save`  
+**/compact 后**: `context-resume.cjs` — 自动恢复关键状态  
+**自检**: 每 ~20 次工具调用更新"已完成"日志
+
+详见 `rules/13-context-management.md`。
