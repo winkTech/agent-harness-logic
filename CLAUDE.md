@@ -20,6 +20,18 @@
 
 **核心：效率不优先于合规。宁可慢一步，不可错一步。**
 
+### 上下文自动管理
+
+当 `context-monitor-gate` 输出以下信号时，必须自动响应：
+
+| 信号 | 自动动作 |
+|:-----|:---------|
+| `level: "AUTO_COMPACT"` + `autoAction: "subagent"` | → 立即 spawn 子 agent 承载当前任务继续，主 session 执行 `/compact`。**不等待用户确认，用户已授权** |
+| `level: "AUTO_COMPACT"`（无 subagent 信号） | → 在下次回复尾部追加 `/compact` focus 建议 |
+| `level: "RED"` | → 优先执行 `/compact`，压缩完成前不开始新任务 |
+
+> 子 agent 创建时传入 `continuationPrompt` 作为任务描述，确保进度不丢失。子 agent 完成后，只取结论摘要合并回主 session。
+
 ---
 
 ## 规则索引（按需加载，不主动读）

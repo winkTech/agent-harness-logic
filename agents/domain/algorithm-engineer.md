@@ -24,6 +24,8 @@ skills:
 context_files:
   - knowledge/primary/cross-project-experience.md
   - knowledge/primary/domains/comm/convolutional-coding/algorithm_spec.md
+  - rules/08-constraints.md                                 # Golden Model 文件保护规则
+  - knowledge/references/compact-preservation-guide.md       # 上下文压缩保留指引
 context_strategy: full
 fork_eligible: false
 verified: true
@@ -104,6 +106,25 @@ lastVerifiedAt: 2026-06-13T15:54:00.000Z
 | `rag-skill` | 查知识库（5G NR/LTE/DSP 参考） |
 | `modern-python` skill | Python 编码规范 |
 | `debugging` skill | 算法调试方法论 |
+
+## 🧠 模型策略
+
+- **默认模型**: `opus` — 算法推演、定点扫描、Golden Model 开发需要高精度推理
+- **降级条件**: 简单算法验证（如 FIR 系数计算、CRC 查表）可切换 `sonnet` 以节省 token
+- **不允许降级**: 涉及位宽决策、EVM/BER 分析、协议合规检查时必须用 opus
+- Agent 实例可通过 `fork_eligible: false` 防止并行污染 Golden Model 状态
+
+## ⚖️ 争议升级路径
+
+当算法工程师与逻辑工程师对方案或结果有分歧时，按以下顺序升级：
+
+```
+1. 内部协商: 双方各出证据（算法实测数据 vs RTL 仿真结果）
+2. 调度层裁决: 调度层对比 Golden Model 与 RTL 输出的差异，定位问题方
+3. 外部仲裁: 以上无法解决 → 记录为 issue，提交给项目架构师或领域专家
+```
+
+**原则**：数据驱动，不靠权威。谁的输出跟实测对不上，谁改。
 
 ## 📐 与逻辑工程师的协作
 

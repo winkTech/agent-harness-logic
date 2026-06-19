@@ -163,6 +163,7 @@ function estimateContextRatio() {
 function getHealthLevel(ratio) {
   if (ratio >= THRESHOLDS.CRITICAL) return 'CRITICAL';
   if (ratio >= THRESHOLDS.RED) return 'RED';
+  if (ratio >= THRESHOLDS.AUTO_COMPACT) return 'AUTO_COMPACT';
   if (ratio >= THRESHOLDS.YELLOW) return 'YELLOW';
   return 'GREEN';
 }
@@ -224,7 +225,7 @@ function evaluate() {
     });
   } catch (e) { console.error('[context-monitor-gate] 错误:', e.message); }
 
-  return {
+  var result = {
     source: 'context-monitor-gate',
     type: 'context-pressure',
     level,
@@ -234,11 +235,17 @@ function evaluate() {
     flag,
     message,
     suggestion,
-    // 注入到 Claude 上下文的指令
-    instruction: level === 'RED'
-      ? '【强制指令】上下文已超过 60% 红线。立即执行 /compact 压缩上下文。在压缩完成前不要开始新任务。'
-      : '【上下文提醒】当前上下文使用率超过 50%。请注意控制后续 prompt 长度，在阶段切换时执行 /compact。',
+    compactHint,
+    instruction,
   };
+
+  // Subagent 溢出: AUTO_COMPACT 且有足够工作量时，派子 agent 继续
+  if (level === 'AUTO_COMPACT' && autoSpawnSubagent) {
+    result.autoAction = 'subagent';
+    result.continuationPrompt = '上下文超过 55%，主 session 即将压缩。请接收当前上下文中的进度摘要、文件列表和待办事项，在全新的上下文中继续当前任务。完成后返回结果摘要。';
+  }
+
+  return result;
 }
 
 // ── CLI ──────────────────────────────────────────────────────────────────────
