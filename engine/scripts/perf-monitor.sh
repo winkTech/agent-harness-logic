@@ -1,4 +1,5 @@
 #!/bin/bash
+set -euo pipefail
 # 性能监控脚本
 # 用途：检查 Agent 配置性能指标
 

@@ -20,8 +20,8 @@
 
 'use strict';
 
-const fs = require('fs');
-const path = require('path');
+const fs = require('node:fs');
+const path = require('node:path');
 const os = require('os');
 
 const HOMEDIR = os.homedir();
@@ -31,7 +31,7 @@ const STATE_FILE = path.join(HARNESS, 'var', 'index', 'runtime-state.json');
 function readJSON(fp) {
   try {
     if (fs.existsSync(fp)) return JSON.parse(fs.readFileSync(fp, 'utf8'));
-  } catch { /* ignore */ }
+  } catch (e) { console.error('[cross-link-memory] 错误:', e.message); }
   return null;
 }
 
@@ -140,8 +140,8 @@ function evaluate() {
       errors,
       learnings,
     };
-  } catch {
-    // SQLite 不可用时静默降级
+  } catch (e) {
+    console.error('[cross-link-memory] 错误:', e.message);
     return null;
   }
 }
@@ -157,7 +157,7 @@ function main() {
         errorsFound: result.errors?.map(e => e.name) || [],
         learningsFound: result.learnings?.map(l => l.name) || [],
       });
-    } catch { /* 静默 */ }
+    } catch (e) { console.error('[cross-link-memory] 错误:', e.message); }
 
     console.log(JSON.stringify(result));
   }

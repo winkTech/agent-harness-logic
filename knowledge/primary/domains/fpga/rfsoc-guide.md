@@ -1,4 +1,5 @@
 ---
+name: rfsoc-guide
 title: "RFSoC 开发指南"
 domain: fpga
 tags: [rfsoc, sdr, radio, analog]

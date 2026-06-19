@@ -1,4 +1,5 @@
 ---
+name: vivado-guide
 title: "Vivado 使用指南"
 domain: fpga
 tags: [vivado, tools, tcl, automation]

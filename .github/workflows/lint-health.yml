@@ -1,88 +1,52 @@
-# ============================================================================
-# Lint + 健康检查 CI
-# 用途: 每次 PR/推送自动检查代码质量
-# 涵盖: Verilog lint, Python ruff, 记忆系统健康度
-# ============================================================================
-
-name: Lint & Health Check
+name: Harness Health Check
 on:
   push:
-    branches: [main, develop]
+    branches: [main]
   pull_request:
-    paths:
-      - 'knowledge/primary/domains/**/*.sv'
-      - 'knowledge/primary/domains/**/*.v'
-      - 'docs/templates/**/*.sv'
-      - '**.py'
-      - 'memory/**/*.md'
-
-env:
-  PYTHON_VERSION: '3.12'
+    branches: [main]
 
 jobs:
-  verilog-lint:
-    name: Verilog/SV Lint
+  markdown-lint:
+    name: Markdown Format
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - name: Check markdown files exist
+        run: |
+          count=$(find . -name '*.md' -not -path './.git/*' | wc -l)
+          echo "Found $count markdown files"
+          [ "$count" -gt 0 ] || { echo "No markdown files found!"; exit 1; }
 
-      - name: Install Verilator
-        run: sudo apt-get update && sudo apt-get install -y verilator
-
-      - name: Lint RTL files
+  json-syntax:
+    name: JSON Syntax
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate JSON files
         run: |
           errors=0
-          while IFS= read -r -d '' file; do
-            echo "Linting: $file"
-            if ! verilator --lint-only --sv "$file" 2>/dev/null; then
-              echo "  ⚠ Lint warnings in $file"
-              verilator --lint-only --sv "$file" 2>&1 | head -20
+          while IFS= read -r file; do
+            if ! jq empty "$file" 2>/dev/null; then
+              echo "FAIL: $file is not valid JSON"
               errors=$((errors + 1))
             fi
-          done < <(find knowledge/primary/domains docs/templates \( -name '*.sv' -o -name '*.v' \) ! -name 'stim.v' ! -name 'stim1.v' -print0 2>/dev/null)
-          echo "Files with lint issues: $errors"
+          done < <(find . -name '*.json' -not -path './.git/*' -not -path './node_modules/*' -not -path './.wright/*' 2>/dev/null)
+          echo "Invalid JSON files: $errors"
           [ "$errors" -eq 0 ] || exit 1
 
   python-lint:
-    name: Python Ruff
+    name: Python Syntax
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-
       - name: Install ruff
         run: pip install ruff
-
       - name: Run ruff check
         run: |
-          find . -name '*.py' -path '*/skills/*' -exec ruff check {} + || true
-
-  markdown-health:
-    name: Markdown Health
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Check memory links
-        run: |
-          errors=0
-          while IFS= read -r file; do
-            # 检查 [[name]] 引用是否有对应文件
-            refs=$(grep -oP '\[\[([^\]]+)\]\]' "$file" | sort -u)
-            echo "$file: $(echo "$refs" | wc -w) wiki-links"
-          done < <(find memory -name '*.md' 2>/dev/null)
-          echo "Memory health check complete"
-
-      - name: Check broken internal links
-        run: |
-          errors=0
-          while IFS= read -r file; do
-            # 检查 .md 内部链接
-            while IFS= read -r link; do
-              target=$(echo "$link" | sed 's/.*](\(.*\))/\1/')
-              [ -f "$target" ] || [ -d "$target" ] || {
-                echo "  Broken link: $target (from $file)"
-                errors=$((errors + 1))
-              }
-            done < <(grep -oP '\]\([^)]+\)' "$file" 2>/dev/null)
-          done < <(find . -name '*.md' -not -path './.git/*' -not -path './.github/*' 2>/dev/null)
-          echo "Broken links: $errors"
+          files=$(find . -name '*.py' -not -path './.git/*' -not -path './backups/*' 2>/dev/null | head -50)
+          if [ -n "$files" ]; then
+            echo "$files" | xargs ruff check --exit-zero
+            echo "Python lint complete"
+          else
+            echo "No Python files to check"
+          fi

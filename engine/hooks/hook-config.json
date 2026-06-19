@@ -211,6 +211,12 @@
       "frequency": "medium",
       "description": "TaskUpdate 契约验证",
       "trigger": "TaskUpdate"
+    },
+    "cognition/cognition-mode-enforcer.cjs": {
+      "enabled": true,
+      "frequency": "high",
+      "description": "认知模式强制执行 — 根据当前推理模式注入行为约束",
+      "trigger": "每次工具调用"
     }
   }
 }

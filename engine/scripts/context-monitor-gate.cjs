@@ -28,8 +28,8 @@
 
 'use strict';
 
-const fs = require('fs');
-const path = require('path');
+const fs = require('node:fs');
+const path = require('node:path');
 const os = require('os');
 
 // ── 配置 ────────────────────────────────────────────────────────────────────
@@ -53,7 +53,7 @@ function readJSON(filePath) {
     if (fs.existsSync(filePath)) {
       return JSON.parse(fs.readFileSync(filePath, 'utf8'));
     }
-  } catch { /* ignore */ }
+  } catch (e) { console.error('[context-monitor-gate] 错误:', e.message); }
   return null;
 }
 
@@ -135,7 +135,7 @@ function estimateContextRatio() {
         compactAgo = Math.max(0, toolCalls - lines.length * 20);
       }
     }
-  } catch { /* ignore */ }
+  } catch (e) { console.error('[context-monitor-gate] 错误:', e.message); }
   const compactRatio = Math.min(compactAgo / 100, 1.0);
 
   // 综合: 取最大值（最悲观的估计）
@@ -234,7 +234,7 @@ function evaluate() {
       toolCalls: details.toolCalls,
       transcriptKB: details.transcriptKB,
     });
-  } catch { /* 静默 */ }
+  } catch (e) { console.error('[context-monitor-gate] 错误:', e.message); }
 
   var result = {
     source: 'context-monitor-gate',

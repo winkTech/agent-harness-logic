@@ -1,7 +1,7 @@
 ---
 name: cognition-modes
 description: "7 种推理模式详细说明 — 触发条件已在 00-core.md 定义"
-priority: L4
+priority: L2
 trigger: "卡住 / 不对 / 又错了 / 再试试 / 换一种 / 太复杂 / 从用户角度 / 测一下 / 数据呢 / 卡住了"
 skip: "正常编码 / 例行任务 / 文档编写 / Git 操作"
 ---

@@ -1,10 +1,10 @@
 // Shared ECC plugin root resolver
 // 检查新旧两种路径以兼容目录重构前后
 // 替换 settings.local.json 中 21 处重复的 ~30 行 IIFE
-const p = require('path');
-const f = require('fs');
-const h = require('os').homedir();
-const HOME = p.join(h, '.claude');
+const p = require('node:path');
+const f = require('node:fs');
+const HOMEDIR = require('os').homedir();
+const HOME = p.join(HOMEDIR, '.claude');
 const UTILS_REL = p.join('scripts', 'lib', 'utils.js');
 
 function check(dir) {

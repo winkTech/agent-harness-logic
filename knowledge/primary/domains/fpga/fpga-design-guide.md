@@ -1,4 +1,5 @@
 ---
+name: fpga-design-guide
 title: "FPGA 设计指南"
 domain: fpga
 tags: [design, guide, best-practices, vivado]

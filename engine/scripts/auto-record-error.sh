@@ -1,4 +1,5 @@
 #!/bin/bash
+set -euo pipefail
 # 自动记录错误脚本
 # 用途：自动创建错误记录，提取教训
 

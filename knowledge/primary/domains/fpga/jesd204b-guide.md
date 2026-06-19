@@ -1,4 +1,5 @@
 ---
+name: jesd204b-guide
 title: "JESD204B 高速串行接口指南"
 tags: [fpga, guide, jesd204b, high-speed-io, adc, dac]
 description: "|:----|:----|:------|:---------|"

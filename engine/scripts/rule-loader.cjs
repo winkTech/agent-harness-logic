@@ -26,13 +26,14 @@
 
 'use strict';
 
-const fs = require('fs');
-const path = require('path');
+const fs = require('node:fs');
+const path = require('node:path');
+const HOMEDIR = require('os').homedir();
 
 // ── 配置 ────────────────────────────────────────────────────────────────────
 
-const RULES_DIR = path.join(require('os').homedir(), '.claude', 'rules');
-const STATE_FILE = path.join(require('os').homedir(), '.claude', 'var', 'index', 'runtime-state.json');
+const RULES_DIR = path.join(HOMEDIR, '.claude', 'rules');
+const STATE_FILE = path.join(HOMEDIR, '.claude', 'var', 'index', 'runtime-state.json');
 
 // ── Frontmatter 解析 ─────────────────────────────────────────────────────────
 
@@ -118,7 +119,7 @@ function buildRuleIndex() {
         description: frontmatter.description || '',
       });
     } catch (e) {
-      // 单个文件解析失败不影响其他
+      console.error('[rule-loader] 错误:', e.message);
     }
   }
 
@@ -271,7 +272,8 @@ function loadRuleContent(fileName) {
   if (!fs.existsSync(filePath)) return null;
   try {
     return fs.readFileSync(filePath, 'utf8');
-  } catch {
+  } catch (e) {
+    console.error('[rule-loader] 错误:', e.message);
     return null;
   }
 }
@@ -344,7 +346,7 @@ function evaluate(userMessage, opts = {}) {
       priorities: toLoad.map(r => r.priority),
       matchCount: matches.length,
     });
-  } catch { /* 静默 */ }
+  } catch (e) { console.error('[rule-loader] 错误:', e.message); }
 
   return {
     source: 'rule-loader',
