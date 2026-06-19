@@ -149,6 +149,12 @@ ${String(infra).slice(0, 300)}
      modules: [{name, type, matlab_ref, symmetric_with, pipeline_stages: [{name, function, latency, bit_width, q_format}], fsm_states: [{name, description, transitions}]}]
    - 06_doc/pipeline_diagram.md — 流水线图 + 数据流描述
    - 06_doc/algorithm_spec.md — 算法规范
+6. **[NEW] 自动发现 Golden Model**
+   - 扫描 07_mat/04_platform/dsp/ 目录下的 .m 文件
+   - 匹配与模块名对应的 Golden Model
+   - 将找到的 GM 路径记录到 architecture.yaml 的 matlab_ref 字段
+   - 如果没有找到 GM → 标记 matlab_ref: "无 (需人工确认)"
+
 5. 模块对称对分析:
    - 扫描模块列表, 识别所有可能成对的模块
    - 识别规则 (通用, 不限项目领域):
@@ -232,6 +238,12 @@ nodes.p3_tb = {
 模块: ${modules.join(', ') || '项目默认'}
 
 任务:
+[NEW TB 收敛规则 — 违反即阻断]
+a) [MUST] 仅允许一个 tb_<module>.sv 文件。如果已有 → 读取后覆盖, 不创建新文件
+b) [MUST] Testbench 必须使用 AXI-Stream VIP
+c) [MUST] TB 必须有自动对比逻辑 (读 golden 向量 + scoreboard 比对 + JSON 输出)
+d) [SHOULD] TB 自检通过: compile + 自动 PASS/FAIL 结论
+
 1. 自检 Testbench (模块级, 单模块验证)
 2. SVA 断言 (关键接口时序)
 3. 结构化日志 + 波形配置 ($dumpvars)
@@ -285,70 +297,38 @@ nodes.p4_rtl = {
   run: async (ctx) => {
     const fixedpt = ctx.p2_fixedpt?.data || '';
     const tb = ctx.p3_tb?.data || '';
-    const moduleList = modules.length > 0 ? modules : ['模块_1', '模块_2'];
+    const moduleList = modules.length > 0 ? modules : ['模块_1'];
+    const fixedptHint = fixedpt ? String(fixedpt).slice(0, 200) : '[Lite] 无定点报告';
 
-    const fixedptHint = fixedpt ? String(fixedpt).slice(0, 300) : '[Lite 模式] 无定点报告 — 使用架构方案默认位宽';
+    log(`[Phase 4] 分拆为 ${moduleList.length} 个独立 agent, 每模块独立上下文`);
 
-    const result = await agent(`执行 HDL 工作流 Phase 4: 逐模块 RTL + 脚本化对比 (逻辑工程师负责)
+    // 逐模块编码: 每个模块独立 agent, 互不干扰
+    const results = await pipeline(
+      moduleList,
+      (mod) => agent(
+        '执行 RTL 编码: ' + mod + '\n\n'
+        + '目标文件: 01_src/00_hdl/' + mod + '/' + mod + '.sv\n'
+        + '如果文件已存在 → 读取后原地覆盖。禁止创建 ' + mod + '_v2.sv 等变体。\n'
+        + '参考: architecture.yaml 中 ' + mod + ' 的微架构方案\n\n'
+        + '定点参考: ' + fixedptHint + '\n'
+        + 'TB: 02_sim/tb_' + mod + '.sv (唯一 TB, 直接覆盖)\n\n'
+        + '[MUST 完成标准]\n'
+        + '1. 按 architecture.yaml 微架构编码 (流水线/FSM/位宽一致)\n'
+        + '2. make lint 通过 — 不通过不进下一步\n'
+        + '3. make compile 通过\n'
+        + '4. 运行仿真, 自动对比 golden 向量\n'
+        + '5. 输出 JSON 证据到 02_sim/check_results/' + mod + '.json\n'
+        + '   {"module":"' + mod + '","status":"PASS|FAIL","compared_points":N}\n'
+        + '6. FAIL → 分析根因 → 修复 RTL → 重对比, 直到 PASS\n'
+        + '7. 清理: 删除 wlft* transcript *.wlf vsim.wlf\n'
+        + '8. RTL 输出必须与定点 Golden Model 逐周期逐比特对齐',
+        { label: 'rtl-' + mod, phase: 'Phase 4 RTL编码' }
+      ),
+    );
 
-定点报告: ${fixedptHint}
-Testbench: ${String(tb).slice(0, 300)}
-
-模块: ${moduleList.join(', ')}
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-[MUST 硬约束] — 逐模块, 逻辑工程师独立完成
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-1. 一次只处理一个模块。完成再下一模块。
-
-2. 每个模块的完成标准:
-   a) 按 architecture.yaml 微架构方案编码 (流水线/FSM/位宽必须一致)
-   b) make lint 通过 [MUST] — 不通过不进下一步
-   c) make compile 通过
-   d) 确保 02_sim/check_results/ 目录存在 (不存在则创建)
-   e) 生成对比脚本 02_sim/check_<module>.py:
-      - 读 MATLAB golden 向量  02_sim/tv/<module>_tv.txt
-      - 读 RTL 仿真输出        02_sim/<module>_out.txt (仿真在 02_sim/ 下运行)
-      - 逐点数值对比
-      - 输出 JSON 到 02_sim/check_results/<module>.json
-      - JSON 格式: {"module":"<name>","status":"PASS|FAIL","compared_points":N,"max_error_lsb":E,"first_fail_at":null}
-   f) bash 运行该脚本, 确认 exit code 为 0
-   g) status=FAIL → 分析根因 → 修复 RTL → 重新对比
-
-3. [NEW] 每模块完成后运行 make clean, 清理 work/ transcript 避免干扰下一模块
-
-4. RTL ↔ Golden Model 对标标准:
-   - RTL 每模块输出必须与定点 Golden Model 逐周期逐比特对齐
-   - 允许差异: 定点精度损失（截位/饱和，须在 fixed_point_report 中标注）
-   - 不允许差异: 算法方向偏离、流水线级数与架构方案不一致
-
-5. 所有模块完成后输出验证矩阵表格
-
-模块: ${moduleList.join(', ')}
-
-输出:
-1. 02_sim/check_results/<module>.json   (每个模块)
-2. 验证矩阵表格 (Markdown)
-3. 差异分析 (如有 FAIL)
-4. RTL vs GM 对标报告
-
-	━━━ 检查点 ━━━
-	产出验证矩阵 + 每模块 JSON 证据文件后暂停。
-	由调度层呈报用户审查后进入 Phase 4.5 证据门禁。
-	━━━━━━━━━━━`, { label: 'p4-rtl-sequential' });
-    // ── 压缩保留块: Phase 4 RTL ─────────────────────────────
-    log('');
-    log('📌 === 压缩保留块: Phase 4 RTL ===');
-    log('保留原因: 每模块 JSON 证据是门禁依据，验证矩阵是准入 Phase 5 的凭证');
-    log(`已验证模块: ${modules.join(', ') || '项目默认'}`);
-    log(`证据文件: 02_sim/check_results/*.json (每个模块)`);
-    log(`产出文件: 01_src/00_hdl/*.sv (RTL 源码), 02_sim/check_*.py (对比脚本)`);
-    log(`验证标准: RTL vs Golden Model 逐周期逐比特对齐`);
-    log('=== 保留块结束 ===');
-    log('');
-
-    return result;
+    const passCount = results.filter(function(r) { return r && String(r).indexOf('PASS') >= 0; }).length;
+    log('[Phase 4] ' + passCount + '/' + moduleList.length + ' 模块通过');
+    return 'Phase 4 完成: ' + passCount + '/' + moduleList.length + ' 模块通过';
   },
 };
 // ═════════════════════════════════════════════════════════════════════════════
@@ -632,6 +612,11 @@ nodes.p8_report = {
 
 ━━━ 清理 [MUST] ━━━
 4. 运行 make clean 删除以下 transient 文件:
+   - wlft*           (ModelSim 随机名波形文件)
+   - transcript      (ModelSim 日志)
+   - *.wlf vsim.wlf  (波形文件)
+   - vish_stacktrace.vstf vsim_stacktrace.vstf
+   - 02_sim/work*/   (Vivado 仿真缓存)
    - work/           (ModelSim 编译库)
    - transcript      (ModelSim 日志)
    - *.wlf vsim.wlf  (波形文件)

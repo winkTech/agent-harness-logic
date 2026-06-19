@@ -28,6 +28,9 @@
 | [[instruction-compliance]] | ⛔ 指令绝对优先 — 已多次违反，零容忍，行动前强制匹配检查 |
 | [[agent-workflow-refinement]] | Agent+Workflow 优化 — 架构拆解缺失/验证归属/不透明 三项修复 |
 | [[project-directory-cleanup-discipline]] | 项目目录标准化 + 仿真 transient 清理纪律 |
+| [[fix-in-place-discipline]] | Fix-in-Place 纪律 — 禁止文件变体，agent 必须原地修改 |
+| [[sim-governance]] | 仿真治理 — 自动清理 wlft*/transcript, 生成 JSON 证据 |
+| [[per-module-pipeline]] | Phase 4 分拆 — 每模块独立 agent, 35 模块不溢出 |
 
 ## 当前进度
 
@@ -41,6 +44,7 @@
 | [[GateGuard 触发问题]] | 钩子拦截 |
 | [[pdf-extraction-limitation]] | 分段读取 |
 | [[open-source-dir-loss]] | 恢复操作 |
+| [[file-variant-explosion]] | Agent 文件变体爆炸 — 21 版本/8 TB/61 wlft — WiFi PHY 项目 |
 
 ## 项目 (projects/)
 

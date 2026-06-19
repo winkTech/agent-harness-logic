@@ -40,10 +40,12 @@ const STATE_FILE = path.join(HARNESS, 'var', 'index', 'runtime-state.json');
 const COMPACT_LOG = path.join(HARNESS, 'var', 'sessions', 'compaction-log.txt');
 
 // 阈值配置（上下文占比估算）
+// 与 engine/hooks/safety/context-monitor.cjs 统一
+// 更新说明: 2026-06-19, 与 hook 对齐为 40%/60%/80%
 const THRESHOLDS = {
-  YELLOW: 0.50,       // ≥50% → 建议压缩
-  AUTO_COMPACT: 0.55, // ≥55% → 输出可执行的 /compact 命令
-  RED: 0.60,          // ≥60% → 红 X + 强制压缩信号
+  YELLOW: 0.40,  // ≥40% → 黄色预警，注意安排关键操作
+  RED: 0.60,     // ≥60% → 红 X + 强制压缩信号
+  CRITICAL: 0.80, // ≥80% → 紧急，立即收尾并压缩
 };
 
 // ── 辅助函数 ────────────────────────────────────────────────────────────────
@@ -156,9 +158,10 @@ function estimateContextRatio() {
 
 /**
  * 获取上下文健康级别。
- * @returns { 'GREEN' | 'YELLOW' | 'RED' }
+ * @returns { 'GREEN' | 'YELLOW' | 'RED' | 'CRITICAL' }
  */
 function getHealthLevel(ratio) {
+  if (ratio >= THRESHOLDS.CRITICAL) return 'CRITICAL';
   if (ratio >= THRESHOLDS.RED) return 'RED';
   if (ratio >= THRESHOLDS.AUTO_COMPACT) return 'AUTO_COMPACT';
   if (ratio >= THRESHOLDS.YELLOW) return 'YELLOW';
@@ -192,37 +195,23 @@ function evaluate() {
   const bar = statusBar(ratio);
   const toolCalls = details.toolCalls;
 
-  let flag, message, suggestion, instruction, compactHint;
-
-  if (level === 'RED') {
+  let flag, message, suggestion, instruction;
+  if (ratio >= THRESHOLDS.CRITICAL) {
+    level = 'CRITICAL';
+    flag = '🚨';
+    message = `上下文使用率 ${Math.round(ratio * 100)}%，超过 80% 紧急红线！`;
+    suggestion = '立即执行 /compact。当前会话已接近极限，继续操作将导致严重的质量下降。先保存状态，然后压缩。';
+    instruction = '【紧急指令】上下文超过 80%。立即执行 node engine/hooks/session/pre-compact.cjs save 保存状态，然后 /compact。压缩后执行 node engine/hooks/session/pre-compact.cjs read 恢复上下文。';
+  } else if (level === 'RED') {
     flag = '❌';
     message = `上下文使用率 ${Math.round(ratio * 100)}%，超过 60% 红线！`;
     suggestion = '建议立即执行 /compact 或启动新的 session。当前会话上下文已接近满载，继续执行可能导致质量下降或幻觉。';
-    compactHint = '执行 /compact 压缩上下文';
-    instruction = '【强制指令】上下文已超过 60% 红线。立即执行 /compact 压缩上下文。在压缩完成前不要开始新任务。';
-
-  } else if (level === 'AUTO_COMPACT') {
-    flag = '🔴';
-    message = `上下文使用率 ${Math.round(ratio * 100)}%，建议立即压缩。`;
-    suggestion = '建议立即执行 /compact，指定保留当前阶段的关键信息。上下文超过 55% 后模型质量开始下降。';
-    compactHint = '执行 /compact "保留：当前 Phase 进展、已修改文件列表、待办事项、关键决策。丢弃：已完成任务的中间讨论、已修正的错误尝试。"';
-    instruction = `【压缩建议】上下文使用率 ${Math.round(ratio * 100)}%。请在方便时执行 /compact，并在提示中指明保留以下内容：
-- 当前 Phase 进展
-- 已修改文件列表
-- 待办事项
-- 关键架构/算法决策`;
-
-    // ── Subagent 溢出信号 ───────────────────────────────
-    // 当上下文 >55% 且在工作流中间（非起点），自动派子 agent 承载后续任务
-    // 主 session 压缩，子 agent 继续工作 → 用户无感知
-    var autoSpawnSubagent = toolCalls > 40; // 只有在有一定工作量的 session 中才触发
-
+    instruction = '【强制指令】上下文超过 60% 红线。保存状态后立即 /compact。压缩前禁止开始新任务。';
   } else {
     flag = '⚠️';
-    message = `上下文使用率 ${Math.round(ratio * 100)}%，超过 50% 警戒线。`;
-    suggestion = '建议在下次阶段切换时执行 /compact。当前上下文仍有空间，但请注意控制 prompt 长度。';
-    compactHint = '在阶段切换时执行 /compact';
-    instruction = '【上下文提醒】当前上下文使用率超过 50%。请注意控制后续 prompt 长度，在阶段切换时执行 /compact。';
+    message = `上下文使用率 ${Math.round(ratio * 100)}%，超过 40% 警戒线。`;
+    suggestion = '建议在下次阶段切换时执行 /compact。当前上下文仍有空间，但建议控制 prompt 长度，优先完成当前阶段。';
+    instruction = '【上下文提醒】使用率超过 40%。注意控制后续操作，在阶段切换时执行 /compact。';
   }
 
   // Emit signal: 上下文压力事件
