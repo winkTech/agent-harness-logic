@@ -19,8 +19,8 @@
 
 'use strict';
 
-const fs = require('fs');
-const path = require('path');
+const fs = require('node:fs');
+const path = require('node:path');
 
 // ── Budget Tiers (char limits for the assembled prompt) ──────────────────
 const TIERS = {
@@ -113,8 +113,8 @@ function resolveAgentCompress() {
 
   // Search paths for agent-compress.js
   const searchPaths = [
-    path.join(require('os').homedir(), '.claude', 'var', 'plugins', 'marketplaces', 'ecc', 'scripts', 'lib', 'agent-compress.js'),
-    path.join(require('os').homedir(), '.claude', 'var', 'plugins', 'marketplaces', 'everything-claude-code', 'scripts', 'lib', 'agent-compress.js'),
+    path.join(require('node:os').homedir(), '.claude', 'var', 'plugins', 'marketplaces', 'ecc', 'scripts', 'lib', 'agent-compress.js'),
+    path.join(require('node:os').homedir(), '.claude', 'var', 'plugins', 'marketplaces', 'everything-claude-code', 'scripts', 'lib', 'agent-compress.js'),
   ];
 
   for (const p of searchPaths) {
@@ -300,7 +300,7 @@ function buildCompressedAgentCatalog(agentType) {
   const tier = getTier(agentType);
   const config = TIERS[tier];
 
-  const agentsRoot = path.join(require('os').homedir(), '.claude', 'skills', 'agents');
+  const agentsRoot = path.join(require('node:os').homedir(), '.claude', 'skills', 'agents');
   if (!fs.existsSync(agentsRoot)) return '';
 
   try {

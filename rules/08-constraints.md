@@ -8,7 +8,7 @@ skip: "永不跳过"
 
 # 硬约束规则
 
-> L0 优先级：违反任何一条 [MUST NOT] = **FAIL**。
+> **约束力最高**：违反任何一条 [MUST NOT] = **FAIL**。
 > 文件保护模式在 `engine/scripts/hooks/file-protection-guard.cjs` 的 `PROTECTED_PATTERNS` 中定义。
 
 ## §1 浮点 Golden Model 保护

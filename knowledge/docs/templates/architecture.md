@@ -1,3 +1,9 @@
+---
+name: architecture
+title: "System Architecture Document Template"
+description: "System architecture document template covering system overview, component architecture, data architecture, security, deployment, and performance"
+---
+
 # System Architecture Document
 
 ## Document Information

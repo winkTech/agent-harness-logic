@@ -1,4 +1,5 @@
 ---
+name: nr-test-mode
 title: "5G NR 下行测试模式与 EVM 测试"
 tags: [comm, 5g-nr, test-mode, evm]
 description: "| EVM 测量 | 验证调制质量 (256QAM <3.5%) | 原型 → 量产 |"

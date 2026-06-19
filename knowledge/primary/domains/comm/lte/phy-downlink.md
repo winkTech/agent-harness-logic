@@ -1,4 +1,5 @@
 ---
+name: phy-downlink
 title: "LTE 下行物理层"
 tags: [comm, lte]
 description: "串行数据 → S/P ─→ IFFT ─→ P/S ─→ 加CP ─→ DAC ─→ RF"

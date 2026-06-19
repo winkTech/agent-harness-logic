@@ -24,9 +24,9 @@
 
 const fs = require('node:fs');
 const path = require('node:path');
-const { spawnSync } = require('child_process');
+const { spawnSync } = require('node:child_process');
 
-const HOMEDIR = require('os').homedir();
+const HOMEDIR = require('node:os').homedir();
 const HARNESS = path.join(HOMEDIR, '.claude');
 const DREAM_SCRIPT = path.join(HARNESS, 'engine', 'scripts', 'dream-consolidate.cjs');
 const EVENTS_STORE = path.join(HARNESS, 'engine', 'sqlite', 'store-events.cjs');

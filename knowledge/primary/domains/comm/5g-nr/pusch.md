@@ -1,4 +1,5 @@
 ---
+name: pusch
 title: "5G NR PUSCH & PUCCH -- 物理上行信道深度解析"
 tags: [comm, 5g-nr, data-channel, dft-s-ofdm, uci]
 description: "PUSCH (Physical Uplink Shared Channel) 是 NR 上行物理层核心数据信道。其主要承载："

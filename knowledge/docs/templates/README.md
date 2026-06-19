@@ -1,3 +1,9 @@
+---
+name: templates
+title: "Templates Directory"
+description: "Central catalog of standardized templates for creating agents, skills, workflows, and other artifacts in the multi-agent orchestration framework"
+---
+
 # Templates Directory
 
 Standardized templates for creating new agents, skills, and workflows in the multi-agent orchestration framework.

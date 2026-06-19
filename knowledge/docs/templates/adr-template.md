@@ -1,4 +1,6 @@
 ---
+name: adr-template
+description: "Architecture Decision Record (ADR) template for documenting architectural decisions with metadata, context, consequences, and alternatives"
 # [REQUIRED] ADR identifier in format ADR-XXX where XXX is a number
 # Example: "ADR-042"
 adr_number: '{{ADR_NUMBER}}'

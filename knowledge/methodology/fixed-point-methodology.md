@@ -1,4 +1,5 @@
 ---
+name: fixed-point-methodology
 title: "定点量化方法论"
 domain: algorithm
 tags: [fixed-point, quantization, methodology]

@@ -1,4 +1,7 @@
 ---
+name: fixed-point-report-template
+title: "Fixed-Point Report Template"
+description: "Fixed-point quantization report template for bit-width scanning, overflow analysis, truncation strategies, and final quantization scheme"
 algorithm: "<算法名称>"
 version: "1.0"
 status: "draft"

@@ -28,7 +28,7 @@
 
 const fs = require('node:fs');
 const path = require('node:path');
-const HOMEDIR = require('os').homedir();
+const HOMEDIR = require('node:os').homedir();
 
 // ── 配置 ────────────────────────────────────────────────────────────────────
 

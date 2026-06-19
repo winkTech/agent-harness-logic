@@ -1,4 +1,5 @@
 ---
+name: selectmap-guide
 title: "SelectMap 配置指南"
 domain: fpga
 tags: [selectmap, configuration, bitstream, boot, xilinx]

@@ -1,4 +1,5 @@
 ---
+name: eda-debug-checklist
 title: "EDA 调试 Checklist"
 domain: verification
 tags: [vivado, questa, debugging, eda]

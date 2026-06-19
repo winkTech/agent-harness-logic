@@ -1,4 +1,5 @@
 ---
+name: golden-model-lessons
 title: "通信算法 Golden Model 开发经验总结"
 version: "1.0"
 date: "2026-06-03"

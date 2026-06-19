@@ -1,4 +1,5 @@
 ---
+name: resource-estimate
 algorithm: "OFDM"
 target_device: "XC7K325T"
 fixed_point: "16bit (Q2.14/Q3.13)"

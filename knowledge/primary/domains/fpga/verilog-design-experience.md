@@ -1,4 +1,5 @@
 ---
+name: verilog-design-experience
 title: "Verilog 设计经验总结"
 domain: fpga
 tags: [verilog, design, experience, best-practices]

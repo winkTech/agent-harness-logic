@@ -1,4 +1,5 @@
 ---
+name: fpga-coding-standards
 title: "FPGA 代码规范"
 domain: fpga
 tags: [coding-standards, verilog, style, review]

@@ -1,4 +1,5 @@
 ---
+name: matlab-mcp-guide
 title: "MATLAB MCP 高效使用指南"
 domain: algorithm
 tags: [matlab, mcp, golden-model]

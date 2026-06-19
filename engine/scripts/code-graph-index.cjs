@@ -14,9 +14,9 @@
  * 索引位置: var/index/code-graph.json
  */
 
-const p = require('path');
-const f = require('fs');
-const os = require('os');
+const p = require('node:path');
+const f = require('node:fs');
+const os = require('node:os');
 
 const HOME = p.join(os.homedir(), '.claude');
 const INDEX_DIR = p.join(HOME, 'var', 'index');

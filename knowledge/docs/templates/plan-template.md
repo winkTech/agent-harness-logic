@@ -1,3 +1,9 @@
+---
+name: plan-template
+title: "Plan Template"
+description: "Implementation plan template with phased task breakdown, dependency graphs, verification gates, risk assessment, and agent assignments"
+---
+
 # {{PLAN_TITLE}}
 
 **Date**: {{DATE}}

@@ -1,4 +1,5 @@
 ---
+name: oran-interface
 title: "ORAN 同步与接口协议"
 tags: [comm, 5g-nr, oran, ecpri, c-plane, u-plane]
 description: "│   DU     │  RLC/MAC/High-PHY (实时)"

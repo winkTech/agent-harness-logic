@@ -1,4 +1,5 @@
 ---
+name: oran-smo
 title: "O-RAN SMO — 服务管理与编排 / A1-O1 接口"
 tags: [comm, 5g-nr, oran, smo, o1, a1]
 description: "SMO (Service Management and Orchestration) 是 O-RAN 架构中所有管理和编排功能的集合体。它负责管理 Non-RT RIC (非实时 RAN 智能控制器) 以及所有的 O-RAN 网元 (O-CU、O-DU、O-RU)。"

@@ -1,4 +1,5 @@
 ---
+name: learning-path
 title: "FPGA 学习路径"
 domain: fpga
 tags: [learning, path, roadmap, beginner]

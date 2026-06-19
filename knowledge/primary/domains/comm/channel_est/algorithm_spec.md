@@ -1,4 +1,5 @@
 ---
+name: algorithm-spec
 algorithm: "OFDM信道估计 (LS/MMSE)"
 version: "1.0"
 status: "draft"

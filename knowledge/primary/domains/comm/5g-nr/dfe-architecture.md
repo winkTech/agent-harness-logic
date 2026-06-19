@@ -1,4 +1,5 @@
 ---
+name: dfe-architecture
 title: "DFE 数字前端处理模块"
 tags: [comm, 5g-nr, dfe, cfr, dpd]
 description: "│ JESD204B (数字IQ, 通常为 16bit 定点)"

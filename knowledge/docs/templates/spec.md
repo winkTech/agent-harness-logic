@@ -1,4 +1,5 @@
 ---
+name: spec
 # [REQUIRED] Clear, concise specification title (10-200 chars)
 # Example: "User Authentication System Specification"
 title: '{{FEATURE_NAME}} Specification'
@@ -45,7 +46,7 @@ acceptance_criteria:
 
 # [OPTIONAL] Brief overview of what this specification covers (20-1000 chars)
 # Detailed content goes in the Markdown body below
-description: ''
+description: 'IEEE 830-compliant specification template with YAML frontmatter for feature requirements, acceptance criteria, and interface documentation'
 
 # [OPTIONAL] List of stakeholders involved in or affected by this specification
 # Example: ["Product Manager", "Engineering Team", "Security Team", "End Users"]

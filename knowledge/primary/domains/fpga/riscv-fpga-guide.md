@@ -1,4 +1,5 @@
 ---
+name: riscv-fpga-guide
 title: "RISC-V FPGA 嵌入式系统设计"
 domain: fpga
 tags: [riscv, embedded, soc, processor]

@@ -15,7 +15,7 @@
 
 'use strict';
 
-const fs = require('fs');
+const fs = require('node:fs');
 
 // ── Protected File Patterns ────────────────────────────────────────────────
 // Edit this array to add/remove patterns. Glob-like syntax:

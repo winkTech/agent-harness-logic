@@ -1,4 +1,5 @@
 ---
+name: pdsch
 title: "5G NR PDSCH -- 物理下行共享信道深度解析"
 tags: [comm, 5g-nr, data-channel, dmrs, harq]
 description: "PDSCH (Physical Downlink Shared Channel) 是 NR 下行物理层承载用户数据和控制信息的核心信道。它承载来自 DL-SCH (Downlink Shared Channel) 传输信道的数据。"

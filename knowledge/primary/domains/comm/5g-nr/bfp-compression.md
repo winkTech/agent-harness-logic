@@ -1,4 +1,5 @@
 ---
+name: bfp-compression
 title: "BFP 6bit 块浮点压缩解压算法"
 tags: [comm, 5g-nr, bfp, compression]
 description: "ORAN 前传接口 (eCPRI) 传输 **频域 IQ 数据**:"

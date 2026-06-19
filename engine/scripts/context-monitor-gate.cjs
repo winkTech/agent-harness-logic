@@ -30,7 +30,7 @@
 
 const fs = require('node:fs');
 const path = require('node:path');
-const os = require('os');
+const os = require('node:os');
 
 // ── 配置 ────────────────────────────────────────────────────────────────────
 

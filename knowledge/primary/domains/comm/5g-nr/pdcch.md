@@ -1,4 +1,5 @@
 ---
+name: pdcch
 title: "5G NR PDCCH — CORESET / 搜索空间 / DCI"
 tags: [comm, 5g-nr, control-channel, coreset, dci]
 description: "PDCCH (Physical Downlink Control Channel) 是 NR 下行物理层控制信令的核心信道，承载 DCI (Downlink Control Information)。其主要功能："

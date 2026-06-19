@@ -1,4 +1,5 @@
 ---
+name: algorithm-implementation
 title: "FPGA 算法实现"
 domain: fpga
 tags: [algorithm, implementation, digital-signal-processing]

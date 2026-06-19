@@ -1,4 +1,5 @@
 ---
+name: report-channel-est-fpga-implementation
 title: "信道估计 (LS) FPGA 实现报告"
 tags: [comm, channel-est, impl]
 description: "1. **LS 估计**: $H_{pilot}(k) = Y_{pilot}(k) \cdot X^*_{pilot}(k)$"

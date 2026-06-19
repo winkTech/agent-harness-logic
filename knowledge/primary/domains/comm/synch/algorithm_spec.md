@@ -1,4 +1,5 @@
 ---
+name: algorithm-spec
 algorithm: "OFDM Synchronization"
 version: "1.0"
 status: "draft"

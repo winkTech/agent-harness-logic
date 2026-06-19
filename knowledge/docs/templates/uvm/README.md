@@ -1,3 +1,9 @@
+---
+name: uvm
+title: "UVM Verification Template"
+description: "UVM verification template for AXI4-Stream based DUTs with agent, scoreboard, environment, testbench, and compilation scripts"
+---
+
 # UVM 验证模板
 
 ## 文件清单

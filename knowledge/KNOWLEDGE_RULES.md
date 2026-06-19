@@ -249,7 +249,7 @@ compression_ratio: <压缩率>
 前置知识: [[fpga-design-guide]]
 ```
 
-所有 `[[wiki-link]]` 会被 `engine/scripts/resolve-wiki-links.cjs` 自动解析。
+所有 wiki-link（`[[...]]` 语法）会被 `engine/scripts/resolve-wiki-links.cjs` 自动解析。
 
 ---
 

@@ -1,3 +1,7 @@
+---
+name: systemverilog-用好packed-array-source
+---
+
 <!-- Page 1 -->
 SystemVerilog:用好packed array 已付费
 原创喜欢FPGA的高老师FPGA技术驿站2026年4月16日08:02河南

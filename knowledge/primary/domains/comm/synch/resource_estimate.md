@@ -1,4 +1,5 @@
 ---
+name: resource-estimate
 title: "OFDM 同步 资源评估"
 tags: [comm, sync, resource]
 description: "│    ├─ 延迟线 (16 taps, 16-bit×2)"

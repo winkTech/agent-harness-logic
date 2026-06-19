@@ -1,4 +1,5 @@
 ---
+name: avoid-global-reset
 title: "避免全局复位的使用"
 domain: fpga
 tags: [reset, pitfall, timing, optimization]

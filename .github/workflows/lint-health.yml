@@ -45,8 +45,33 @@ jobs:
         run: |
           files=$(find . -name '*.py' -not -path './.git/*' -not -path './backups/*' 2>/dev/null | head -50)
           if [ -n "$files" ]; then
-            echo "$files" | xargs ruff check --exit-zero
+            echo "$files" | xargs ruff check --exit-non-zero-on-fix
             echo "Python lint complete"
           else
             echo "No Python files to check"
           fi
+      - name: Check workflow references
+        run: |
+          errors=0
+          for ref in $(grep -oP 'Workflow\(\{name: \"\K[^\"]+' CLAUDE.md 2>/dev/null); do
+            [ -f "workflows/${ref}.js" ] && echo "OK: $ref" || { echo "MISSING: $ref"; errors=$((errors+1)); }
+          done
+          [ "$errors" -eq 0 ] || exit 1
+      - name: Check hook file integrity
+        run: |
+          errors=0
+          config="engine/hooks/hook-config.json"
+          if [ -f "$config" ]; then
+            while IFS= read -r hook_path; do
+              full_path="engine/hooks/${hook_path}"
+              if [ -f "$full_path" ]; then
+                echo "OK: $hook_path"
+              else
+                echo "MISSING: $hook_path"
+                errors=$((errors+1))
+              fi
+            done < <(jq -r '.hooks | to_entries[] | select(.value.enabled == true) | .key' "$config")
+          else
+            echo "WARNING: $config not found, skipping hook check"
+          fi
+          [ "$errors" -eq 0 ] || exit 1

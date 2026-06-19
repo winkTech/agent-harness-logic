@@ -1,4 +1,5 @@
 ---
+name: stage7-fpga-implementation-report
 algorithm: "LDPC FPGA Implementation"
 version: "2.0"
 status: "complete"

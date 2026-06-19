@@ -1,4 +1,5 @@
 ---
+name: stage3-fixed-point-report
 algorithm: "LDPC Fixed-Point Design"
 version: "1.0"
 status: "draft"

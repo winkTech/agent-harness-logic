@@ -1,4 +1,5 @@
 ---
+name: phy-implementation
 title: "WiFi PHY 实现架构 — 接收机/发射机 FPGA 实现"
 tags: [comm, wifi, phy, fpga, implementation]
 description: "包检测 → CFO校正 → FFT → 信道估计 → LLR解调 → 解码 全硬件流水线"

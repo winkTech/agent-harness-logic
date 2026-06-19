@@ -16,9 +16,9 @@
 
 'use strict';
 
-const path = require('path');
-const fs = require('fs');
-const os = require('os');
+const path = require('node:path');
+const fs = require('node:fs');
+const os = require('node:os');
 
 // ── ECC 根目录解析（与 ecc-root-resolver.cjs 同步） ─────────────────────────
 

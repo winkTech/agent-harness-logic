@@ -1,3 +1,7 @@
+---
+name: fpga-coding-standards-source
+---
+
 硬件协同设计规范
 Verilog-AI
 Verilog/SystemVerilog代码规范/指导AI生成代码

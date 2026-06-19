@@ -1,4 +1,5 @@
 ---
+name: polar-code
 algorithm: "5G NR Polar — 控制信道编码"
 version: "1.0"
 status: "draft"

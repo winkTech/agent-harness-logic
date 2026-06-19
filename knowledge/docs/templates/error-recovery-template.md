@@ -1,3 +1,9 @@
+---
+name: error-recovery-template
+title: "Error Recovery Template"
+description: "Standardized template for implementing error recovery patterns in hooks, tools, and agents with retry logic and fail-closed/open modes"
+---
+
 # Error Recovery Template
 
 Standardized template for implementing error recovery patterns in hooks, tools, and agents.

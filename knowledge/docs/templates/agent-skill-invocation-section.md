@@ -1,3 +1,9 @@
+---
+name: agent-skill-invocation-section
+title: "Agent Skill Invocation Section Template"
+description: "Standardized skill invocation guidance template for agent definitions, covering primary skills, contextual skills, and discovery protocol"
+---
+
 # Agent Skill Invocation Section Template
 
 > **Purpose**: Standardized skill invocation guidance for agent definitions.

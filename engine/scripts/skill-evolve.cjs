@@ -172,7 +172,9 @@ function setMyWatermark(eventId) {
   try {
     const { setWatermark } = require('../sqlite/store-events.cjs');
     setWatermark(eventId);
-  } catch (e) {}
+  } catch (e) {
+    // 非关键操作：设置水印失败不影响后续处理，下次启动会重新尝试
+  }
 }
 
 // ── Mine: 从纠正信号中提取可操作的改进 ────────────────────────────────
@@ -656,7 +658,10 @@ function minePatternsFromSessions(allSessions, force) {
           }
         }
       }
-    } catch (e) {}
+    } catch (e) {
+      // 单个 session 文件读取失败，跳过不影响整体统计
+      console.warn('[skill-evolve] skip unreadable session:', s.name);
+    }
   }
 
   // 频率 > 20% → 生成规则建议
@@ -724,7 +729,10 @@ function collectAllSessions() {
         }
       }
     }
-  } catch (e) {}
+  } catch (e) {
+    // 项目目录不可访问时返回空列表，后续降级为无 session 可用
+    console.warn('[skill-evolve] cannot list project sessions:', e.message);
+  }
   sessions.sort((a, b) => a.mtime - b.mtime);
   const valCount = Math.max(1, Math.floor(sessions.length * 0.3));
   return sessions.map((s, i) => ({ ...s, isVal: i >= sessions.length - valCount }));

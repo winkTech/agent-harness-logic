@@ -1,4 +1,5 @@
 ---
+name: stage4-resource-estimation
 algorithm: "LDPC Resource Estimation"
 version: "1.0"
 status: "draft"

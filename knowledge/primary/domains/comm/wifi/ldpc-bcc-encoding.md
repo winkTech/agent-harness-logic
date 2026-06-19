@@ -1,4 +1,5 @@
 ---
+name: ldpc-bcc-encoding
 title: "WiFi 编码 — BCC 与 LDPC"
 tags: [comm, wifi, ldpc, encoding]
 description: "802.11a/g BCC → 802.11n LDPC — 编码选择、加扰、编码链差异"

@@ -1,4 +1,5 @@
 ---
+name: ofdm-algorithm-spec
 algorithm: "OFDM"
 version: "1.0"
 status: "draft"
