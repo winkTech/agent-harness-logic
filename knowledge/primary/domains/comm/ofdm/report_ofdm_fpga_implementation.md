@@ -1,4 +1,5 @@
 ---
+name: report-ofdm-fpga-implementation
 title: "OFDM 发射机 FPGA 实现技术报告"
 tags: [comm, ofdm, impl]
 description: "本报告记录 OFDM 发射机从算法分析到 FPGA 实现的全链路过程。OFDM (Orthogonal Frequency Division Multiplexing) 是 4G/5G/WiFi 的核心物理层技术，通过将高速数据流分解为多个并行低速子载波实现高效传输。"

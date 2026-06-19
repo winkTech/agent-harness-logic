@@ -17,8 +17,8 @@ skip: "纯 RTL 编写 / 无安全敏感关键词"
 ## 需要确认的操作
 - `git push` — 需用户确认
 - `git commit` — 需用户确认
-- `git push --force` — 需用户确认
-- `git reset --hard` — 需用户确认
+- `git push --force` — 需用户明确确认
+- `git reset --hard` — 需用户明确确认
 
 ## 安全敏感关键词
 遇到安全敏感关键词时（详见 `rules/05-workflow-trigger.md` 的安全敏感关键词自动绑定），加载 `security-review` 工作流。

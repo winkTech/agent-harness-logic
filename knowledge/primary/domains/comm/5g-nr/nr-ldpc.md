@@ -1,4 +1,5 @@
 ---
+name: nr-ldpc
 algorithm: "5G NR LDPC — BG1/BG2"
 version: "1.0"
 status: "draft"

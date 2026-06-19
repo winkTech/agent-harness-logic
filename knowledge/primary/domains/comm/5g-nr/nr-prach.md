@@ -1,4 +1,5 @@
 ---
+name: nr-prach
 title: "5G NR PRACH 深度分析"
 tags: [comm, 5g-nr, prach, random-access]
 description: "PRACH (Physical Random Access Channel) 是 UE 发起网络接入的唯一上行信道。UE 通过 PRACH 发送前导码 (preamble) 向 gNB 表明自己的存在, gNB 检测到前导后回复 RAR (Random Access Response), 完成初始同步。"

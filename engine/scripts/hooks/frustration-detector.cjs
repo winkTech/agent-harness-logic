@@ -13,9 +13,9 @@
  * 输出：命中时打印 JSON 行，hook 框架将其注入到 Claude 的上下文中。
  */
 
-const p = require('path');
-const f = require('fs');
-const os = require('os');
+const p = require('node:path');
+const f = require('node:fs');
+const os = require('node:os');
 
 const HOME = p.join(os.homedir(), '.claude');
 const STATE_FILE = p.join(HOME, 'var', 'index', 'runtime-state.json');
@@ -138,7 +138,7 @@ if (!input) {
 // If still empty, try reading from stdin (non-blocking)
 if (!input && !process.stdin.isTTY) {
   try {
-    const fd = require('fs').readFileSync(0, 'utf8').slice(0, 2000);
+    const fd = require('node:fs').readFileSync(0, 'utf8').slice(0, 2000);
     if (fd) input = fd;
   } catch { /* stdin not available */ }
 }

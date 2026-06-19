@@ -1,3 +1,7 @@
+---
+name: matlab
+---
+
 # MATLAB 使用知识
 
 > 语法, Simulink, 代码生成

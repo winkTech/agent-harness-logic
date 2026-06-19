@@ -1,4 +1,5 @@
 ---
+name: ldpc-encoding-spec
 algorithm: "LDPC Codec"
 version: "1.0"
 status: "draft"

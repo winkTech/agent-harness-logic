@@ -1,4 +1,5 @@
 ---
+name: mimo-detection
 algorithm: "5G NR MIMO检测与预编码"
 version: "1.0"
 status: "draft"

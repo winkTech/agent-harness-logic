@@ -1,4 +1,5 @@
 ---
+name: testbench-plan
 title: "OFDM 发射机 验证方案"
 tags: [comm, ofdm, testbench]
 description: "MATLAB 测试向量 ──→ [txt/bin] ──→ [TB 读取] ──→ [DUT]"

@@ -1,4 +1,7 @@
 ---
+name: tasks-template
+title: "Task Breakdown Template"
+description: "Task breakdown template with Epic-to-Story-to-Task hierarchy, priority levels, dependency tracking, and verification gates"
 # [REQUIRED] Feature or Epic name - high-level feature description
 feature: '{{FEATURE_NAME}}'
 

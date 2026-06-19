@@ -1,4 +1,5 @@
 ---
+name: fixed-point-report
 title: "信道估计 (LS) 定点量化分析"
 tags: [comm, channel-est, fixed-point]
 description: "| Y(k) | Q2.14 | 16-bit | 接收频域信号 (FFT 输出) |"

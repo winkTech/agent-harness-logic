@@ -1,3 +1,9 @@
+---
+name: state-digest
+title: "Session State Digest Template"
+description: "Session continuity digest template for maintaining project state context across sessions with current position, blockers, and recent decisions"
+---
+
 # SESSION STATE
 
 <!-- How to use: This template defines the STATE.md session continuity digest.

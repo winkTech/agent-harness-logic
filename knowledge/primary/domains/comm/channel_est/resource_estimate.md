@@ -1,4 +1,5 @@
 ---
+name: resource-estimate
 title: "信道估计 (LS+插值) 资源评估"
 tags: [comm, channel-est, resource]
 description: "│   Pilot 提取 + LS 估计  │  ← 仅符号选择，零逻辑"

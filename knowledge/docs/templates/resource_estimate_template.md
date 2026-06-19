@@ -1,4 +1,7 @@
 ---
+name: resource-estimate-template
+title: "Resource Estimate Template"
+description: "Resource estimation template for FPGA design covering DSP48 mapping, architecture scaling, resource budgeting, and alternative mapping strategies"
 algorithm: "<算法名称>"
 target_device: "<器件型号>"
 version: "1.0"

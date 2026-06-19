@@ -1,4 +1,5 @@
 ---
+name: timing-constraints-guide
 title: "FPGA 时序约束指南"
 domain: fpga
 tags: [timing, constraints, vivado, analysis]

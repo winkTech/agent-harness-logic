@@ -1,4 +1,5 @@
 ---
+name: report-sync-fpga-implementation
 title: "OFDM 同步 FPGA 实现报告"
 tags: [comm, sync, impl]
 description: "| 包检测 | 周期自相关 M[n] > η | 短 (16×10) | ±8 样点 |"

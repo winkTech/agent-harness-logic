@@ -1,4 +1,5 @@
 ---
+name: vivado-automation-guide
 title: "Vivado Tcl 自动化构建指南"
 domain: fpga
 tags: [vivado, tcl, automation, build, synthesis, implementation]

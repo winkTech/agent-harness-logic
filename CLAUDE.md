@@ -61,6 +61,7 @@
 | `/hdl-coding` | RTL 编写 | 写RTL / 写TB | 本地 |
 | `/debugging` | 系统化调试 | 调查 / debug | 本地 |
 | `/code-review` | 代码审查 | 审查 / review | 本地 |
+| `/review` | 审查代码 | 审查 / review | 内置 |
 | `/rag-skill` | 知识库检索 | 查知识 / 参考文档 | 本地 |
 | `/code-search` | 代码搜索 | 搜代码 / 找文件 | 本地 |
 | `/git-expert` | Git 操作 | git / 提交 | 本地 |
@@ -79,6 +80,7 @@
 | `/simplify` | 代码简化 | 简化 / 重构 | 内置 |
 | `/browser` | 浏览器自动化 | 网页交互 / 抓取 | 本地 |
 | `/agent-management` | Agent 管理 | 管理技能 / 编排 | 本地 |
+| `/skill-creator` | 技能创建 | 创建新 skill | 本地 |
 | `/markitdown-converter` | 格式转换 | 转Markdown | 本地 |
 | `/project-init` | 项目脚手架 | 新建工程 / 加模块 | 本地 |
 | `/update-config` | 配置管理 | 改设置 / 加hook | 内置 |

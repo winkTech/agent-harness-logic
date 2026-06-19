@@ -1,4 +1,5 @@
 ---
+name: test-vector-generation
 title: "测试向量生成规范"
 domain: algorithm
 tags: [test-vector, verification, co-simulation]

@@ -1,3 +1,7 @@
+---
+name: rfsoc-sdr-book-software-defined-radio-with-zynq-ultrascale+-rfsoc-source
+---
+
 This book introduces Zynq UltraScale+ RFSoC, a technology that brings real, single-chip, software
 Software Defined Radio
 defi ned radio (SDR) to the marketplace. RFSoC devices are the fi rst adaptive SoCs (Systems-on-Chip) to

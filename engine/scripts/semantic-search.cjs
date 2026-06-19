@@ -17,7 +17,7 @@
 
 const p = require('node:path');
 const f = require('node:fs');
-const os = require('os');
+const os = require('node:os');
 
 const HOME = p.join(os.homedir(), '.claude');
 const INDEX_DIR = p.join(HOME, 'var', 'index');

@@ -1,3 +1,10 @@
+---
+name: error-template
+description: "错误记录模板"
+metadata:
+  type: reference
+---
+
 # 错误经验模板
 
 ---

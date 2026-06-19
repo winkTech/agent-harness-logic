@@ -1,3 +1,7 @@
+---
+name: amd-fpga设计优化宝典：面向vivado-system-verilog-2023-source
+---
+
 AMD FPGA…Ë°Δ”≈aØ±¶μ‰-‘¥Œƒ°˛.pdf 1 2023/6/13 16：38
 C
 M

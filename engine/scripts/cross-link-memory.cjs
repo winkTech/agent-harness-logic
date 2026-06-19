@@ -22,7 +22,7 @@
 
 const fs = require('node:fs');
 const path = require('node:path');
-const os = require('os');
+const os = require('node:os');
 
 const HOMEDIR = os.homedir();
 const HARNESS = path.join(HOMEDIR, '.claude');

@@ -12,8 +12,8 @@
  *   - 每次 lint 操作有超时保护
  */
 
-const { spawnSync } = require('child_process');
-const path = require('path');
+const { spawnSync } = require('node:child_process');
+const path = require('node:path');
 const { detect, pickLintTool } = require('../eda-detect.cjs');
 
 // ── 常量 ──────────────────────────────────────────────────────────────────

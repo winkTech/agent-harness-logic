@@ -33,6 +33,8 @@ const DIR_NS_MAP = {
   archive: 'archive',
   projects: 'project',
   references: 'reference',
+  agents: 'learnings',   // agent 定义归入 learnings
+  work: 'reference',      // 工作模板归入 reference
 };
 
 /** 不迁移的系统文件 */

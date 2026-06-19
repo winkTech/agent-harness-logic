@@ -1,4 +1,5 @@
 ---
+name: ipi-automation-guide
 title: "Vivado IP Integrator Tcl 自动化指南"
 domain: fpga
 tags: [vivado, ipi, tcl, automation, block-design]

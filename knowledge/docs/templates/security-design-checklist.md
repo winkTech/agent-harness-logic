@@ -1,3 +1,9 @@
+---
+name: security-design-checklist
+title: "Security-First Design Checklist"
+description: "Security-first design checklist using STRIDE threat modeling, DREAD risk scoring, and OWASP ASVS references for preventing security antipatterns"
+---
+
 # Security-First Design Checklist
 
 **Purpose**: Prevent "security as afterthought" antipattern by asking "What could go wrong?" during Phase E (Evaluate) of the EVOLVE workflow.

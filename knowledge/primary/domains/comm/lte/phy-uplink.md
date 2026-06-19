@@ -1,4 +1,5 @@
 ---
+name: phy-uplink
 title: "LTE 上行物理层"
 tags: [comm, lte]
 description: "LTE 上行采用 **SC-FDMA (单载波频分多址)**，核心优势是 **低 PAPR**:"

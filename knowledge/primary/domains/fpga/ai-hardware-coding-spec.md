@@ -1,4 +1,5 @@
 ---
+name: ai-hardware-coding-spec
 title: "AI-Hardware 协同设计规范"
 domain: fpga
 tags: [ai, hardware, coding-spec, verilog, systemverilog]

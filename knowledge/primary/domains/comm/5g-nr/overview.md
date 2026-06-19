@@ -1,4 +1,5 @@
 ---
+name: overview
 title: "5G NR 系统架构概述"
 tags: [comm, 5g-nr, overview]
 description: "┌────────────┴─┐      ┌─┴────────────┐"

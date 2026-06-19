@@ -1,4 +1,5 @@
 ---
+name: fpga-best-practices
 title: "FPGA 设计最佳实践"
 domain: fpga
 tags: [best-practices, checklist, optimization]

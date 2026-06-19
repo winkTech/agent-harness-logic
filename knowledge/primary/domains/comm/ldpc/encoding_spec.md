@@ -1,4 +1,5 @@
 ---
+name: encoding-spec
 algorithm: "LDPC Encoding — 802.11n QC-LDPC"
 version: "1.0"
 status: "draft"

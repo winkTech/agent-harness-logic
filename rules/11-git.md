@@ -35,10 +35,17 @@ skip: "纯代码编写 / 仿真调试 / 文档阅读 / 架构设计 / 绘图"
 - **Python**: `__pycache__/`, `*.pyc`, `.venv/`, `*.egg-info/`
 - **系统**: `.DS_Store`, `Thumbs.db`, `*.swp`
 
-## 禁止操作
+## 需要确认的操作
 
+- `git push` — 需用户确认
+- `git commit` — 需用户确认
 - `git push --force` — 需用户明确确认
 - `git reset --hard` — 需用户明确确认
+
+> 同步自 rules/04-security.md 的安全策略
+
+## 禁止操作
+
 - 不要在 main 分支上直接开发
 
 ## 参考

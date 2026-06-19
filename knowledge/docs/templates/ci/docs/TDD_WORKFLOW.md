@@ -1,3 +1,9 @@
+---
+name: tdd-workflow
+title: "TDD Workflow Specification"
+description: "Test-Driven Development workflow specification with Red-Green-Refactor cycle, testing standards, coverage requirements, and quality gates"
+---
+
 # TDD 工作流规范
 
 > 严谨 · 敏捷 · 可持续

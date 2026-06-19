@@ -3,7 +3,7 @@
 // 替换 settings.local.json 中 21 处重复的 ~30 行 IIFE
 const p = require('node:path');
 const f = require('node:fs');
-const HOMEDIR = require('os').homedir();
+const HOMEDIR = require('node:os').homedir();
 const HOME = p.join(HOMEDIR, '.claude');
 const UTILS_REL = p.join('scripts', 'lib', 'utils.js');
 

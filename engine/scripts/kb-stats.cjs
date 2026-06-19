@@ -13,10 +13,10 @@
 
 'use strict';
 
-const fs = require('fs');
-const path = require('path');
+const fs = require('node:fs');
+const path = require('node:path');
 
-const KB_DIR = path.join(require('os').homedir(), '.claude', 'knowledge');
+const KB_DIR = path.join(require('node:os').homedir(), '.claude', 'knowledge');
 
 function count(dir, filter = f => f.endsWith('.md'), excludeDirs = []) {
   if (!fs.existsSync(dir)) return { files: 0, dirs: 0 };

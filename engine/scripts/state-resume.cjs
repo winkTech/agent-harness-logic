@@ -18,10 +18,10 @@
 
 'use strict';
 
-const fs = require('fs');
-const path = require('path');
+const fs = require('node:fs');
+const path = require('node:path');
 
-const HOMEDIR = require('os').homedir();
+const HOMEDIR = require('node:os').homedir();
 const STATE_FILE = path.join(HOMEDIR, '.claude', 'var', 'index', 'runtime-state.json');
 const TASK_FILE = path.join(HOMEDIR, '.claude', 'var', 'active-task.yaml');
 const WORK_DIR = path.join(HOMEDIR, '.claude', 'memory', 'work');

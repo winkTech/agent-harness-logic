@@ -1,4 +1,5 @@
 ---
+name: fpga-development-workflow
 title: "FPGA 开发工作流"
 domain: fpga
 tags: [workflow, development, tools, automation]

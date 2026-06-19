@@ -1,3 +1,9 @@
+---
+name: report-template
+title: "FPGA Implementation Report Template"
+description: "Technical report template for FPGA implementation covering algorithm principles, fixed-point quantization, resource estimation, and RTL verification"
+---
+
 # <算法名称> FPGA 实现技术报告
 
 **日期:** <日期>

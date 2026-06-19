@@ -1,4 +1,5 @@
 ---
+name: rtl-architecture
 title: "OFDM 发射机 RTL 架构设计"
 tags: [comm, ofdm, rtl]
 description: "s_axis ──→ [输入FIFO] ──→ [Mod Mapper] ──→ [Pilot Insert]"

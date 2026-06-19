@@ -1,4 +1,5 @@
 ---
+name: matlab-fpga-image-processing
 title: "MATLAB/FPGA 图像处理"
 domain: fpga
 tags: [matlab, image-processing, video, computer-vision]

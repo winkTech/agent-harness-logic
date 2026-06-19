@@ -1,4 +1,5 @@
 ---
+name: fr2-beam-management
 title: "5G NR FR2 波束管理（上） -- 基础与 SSB"
 tags: [comm, 5g-nr, beam-management, fr2, tci, bfr]
 description: "NR 将频率范围分为 FR1 (sub-7 GHz) 和 FR2 (mmWave)。FR2 各频段定义如下："

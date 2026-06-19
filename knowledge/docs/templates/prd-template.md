@@ -1,3 +1,9 @@
+---
+name: prd-template
+title: "Product Requirements Document Template"
+description: "Product Requirements Document (PRD) template for defining feature scope, success metrics, MoSCoW capabilities, and implementation phases"
+---
+
 # PRD: {{FEATURE_NAME}}
 
 **Version**: {{VERSION}}

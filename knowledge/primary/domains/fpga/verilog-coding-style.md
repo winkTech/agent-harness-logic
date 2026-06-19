@@ -1,4 +1,5 @@
 ---
+name: verilog-coding-style
 title: "Verilog/SystemVerilog 编码风格"
 domain: fpga
 tags: [verilog, systemverilog, coding-style, best-practices]

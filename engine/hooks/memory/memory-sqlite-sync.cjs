@@ -60,7 +60,7 @@ function parseFrontmatter(content) {
 function inferNamespace(filePath) {
   const rel = path.relative(MEMORY_DIR, filePath);
   const parts = rel.split(path.sep);
-  const dirMap = { learnings: 'learnings', errors: 'errors', archive: 'archive', projects: 'project', references: 'reference' };
+  const dirMap = { learnings: 'learnings', errors: 'errors', archive: 'archive', projects: 'project', references: 'reference', agents: 'learnings', work: 'reference' };
   return (parts.length >= 2 && dirMap[parts[0]]) || 'learnings';
 }
 

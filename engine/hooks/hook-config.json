@@ -2,221 +2,59 @@
   "_comment": "Hook 启用/禁用配置 - 设置 enabled: false 可禁用对应 hook",
   "_doc": "低频 hook 可按需启用，减少每次工具调用的开销",
   "hooks": {
-    "routing/agent-registry-auto-refresh.cjs": {
-      "enabled": true,
-      "frequency": "low",
-      "description": "Agent 注册表刷新",
-      "trigger": "定时/会话开始"
-    },
-    "routing/aip-token-injector.cjs": {
-      "enabled": false,
-      "frequency": "low",
-      "description": "AIP token 注入",
-      "trigger": "特殊场景"
-    },
-    "routing/aip-token-validator.cjs": {
-      "enabled": false,
-      "frequency": "low",
-      "description": "AIP token 验证",
-      "trigger": "特殊场景"
-    },
-    "routing/code-index-updater.cjs": {
-      "enabled": true,
-      "frequency": "low",
-      "description": "代码索引更新",
-      "trigger": "文件变更后"
-    },
-    "routing/finish-only-guard.cjs": {
-      "enabled": true,
-      "frequency": "low",
-      "description": "排空模式守卫",
-      "trigger": "TaskUpdate(finished)"
-    },
-    "routing/handover-detector.cjs": {
-      "enabled": true,
-      "frequency": "low",
-      "description": "交接检测",
-      "trigger": "会话切换"
-    },
-    "routing/heartbeat-step05-check.cjs": {
-      "enabled": false,
-      "frequency": "low",
-      "description": "心跳检查",
-      "trigger": "定时"
-    },
-    "routing/mcp-agent-allowlist-guard.cjs": {
-      "enabled": true,
-      "frequency": "low",
-      "description": "MCP agent 白名单",
-      "trigger": "MCP 调用"
-    },
-    "routing/router-tool-lockdown.cjs": {
-      "enabled": true,
-      "frequency": "high",
-      "description": "路由工具锁定",
-      "trigger": "每次工具调用"
-    },
-    "routing/spawn-token-guard.cjs": {
-      "enabled": true,
-      "frequency": "medium",
-      "description": "Spawn token 守卫",
-      "trigger": "Task spawn"
-    },
-    "routing/task-pretool-orchestrator.cjs": {
-      "enabled": false,
-      "frequency": "low",
-      "description": "任务预工具编排",
-      "trigger": "Task 工具调用"
-    },
-    "routing/unified-creator-guard.cjs": {
-      "enabled": true,
-      "frequency": "medium",
-      "description": "Creator 工作流守卫",
-      "trigger": "Write/Edit"
-    },
-    "safety/context-monitor.cjs": {
-      "enabled": true,
-      "frequency": "medium",
-      "description": "上下文监控（>40% 告警）",
-      "trigger": "每次工具调用"
-    },
-    "safety/dlp-pretool.cjs": {
-      "enabled": true,
-      "frequency": "high",
-      "description": "DLP 检查",
-      "trigger": "Bash/Write/Edit"
-    },
-    "safety/external-content-guard.cjs": {
-      "enabled": true,
-      "frequency": "high",
-      "description": "外部内容守卫",
-      "trigger": "WebFetch/Bash"
-    },
-    "safety/hybrid-search-enforcer.cjs": {
-      "enabled": false,
-      "frequency": "low",
-      "description": "混合搜索强制",
-      "trigger": "Grep"
-    },
-    "safety/validate-skill-invocation.cjs": {
-      "enabled": true,
-      "frequency": "low",
-      "description": "Skill 调用验证",
-      "trigger": "Read"
-    },
-    "safety/worktree-preflight-check.cjs": {
-      "enabled": true,
-      "frequency": "low",
-      "description": "工作树预检",
-      "trigger": "Worktree 操作"
-    },
-    "session/analysis-paralysis-guard.cjs": {
-      "enabled": true,
-      "frequency": "low",
-      "description": "分析瘫痪守卫",
-      "trigger": "长时间任务"
-    },
-    "session/audit-skill-recency.cjs": {
-      "enabled": true,
-      "frequency": "low",
-      "description": "Skill 时效审计",
-      "trigger": "Read"
-    },
-    "session/post-edit-scanner.cjs": {
-      "enabled": false,
-      "frequency": "low",
-      "description": "编辑后扫描",
-      "trigger": "Edit/Write"
-    },
-    "session/pre-compact.cjs": {
-      "enabled": true,
-      "frequency": "low",
-      "description": "压缩前处理",
-      "trigger": "会话压缩前"
-    },
-    "reflection/reflection-data-aggregator.cjs": {
-      "enabled": true,
-      "frequency": "low",
-      "description": "反射数据聚合",
-      "trigger": "定时"
-    },
-    "reflection/reflection-cleanup.cjs": {
-      "enabled": false,
-      "frequency": "low",
-      "description": "反射清理",
-      "trigger": "定时"
-    },
-    "memory/memory-autocommit.cjs": {
-      "enabled": true,
-      "frequency": "low",
-      "description": "记忆自动提交",
-      "trigger": "会话结束"
-    },
-    "memory/sync-memory-index.cjs": {
-      "enabled": true,
-      "frequency": "low",
-      "description": "记忆索引同步",
-      "trigger": "记忆变更"
-    },
-    "quality/artifact-scoring-ledger-hook.cjs": {
-      "enabled": false,
-      "frequency": "low",
-      "description": "产物评分",
-      "trigger": "任务完成"
-    },
-    "validation/check-console-log.cjs": {
-      "enabled": false,
-      "frequency": "low",
-      "description": "console.log 检查",
-      "trigger": "代码审查"
-    },
-    "validation/creator-compliance-validator.cjs": {
-      "enabled": true,
-      "frequency": "medium",
-      "description": "Creator 合规验证",
-      "trigger": "Creator 工作流"
-    },
-    "validation/flight-recorder-schema-gate.cjs": {
-      "enabled": false,
-      "frequency": "low",
-      "description": "飞行记录器 schema",
-      "trigger": "特殊场景"
-    },
-    "validation/post-pipeline-self-review.cjs": {
-      "enabled": true,
-      "frequency": "medium",
-      "description": "管道后自审",
-      "trigger": "任务完成"
-    },
-    "validation/post-pipeline-token-report.cjs": {
-      "enabled": false,
-      "frequency": "low",
-      "description": "管道后 token 报告",
-      "trigger": "任务完成"
-    },
-    "validation/pre-spawn-hook-check.cjs": {
-      "enabled": true,
-      "frequency": "medium",
-      "description": "Spawn 前检查",
-      "trigger": "Task spawn"
-    },
-    "validation/subagent-citation-guard.cjs": {
-      "enabled": true,
-      "frequency": "low",
-      "description": "子 agent 引用守卫",
-      "trigger": "子 agent 输出"
-    },
-    "validation/taskupdate-contract-validator.cjs": {
-      "enabled": true,
-      "frequency": "medium",
-      "description": "TaskUpdate 契约验证",
-      "trigger": "TaskUpdate"
-    },
     "cognition/cognition-mode-enforcer.cjs": {
       "enabled": true,
       "frequency": "high",
       "description": "认知模式强制执行 — 根据当前推理模式注入行为约束",
       "trigger": "每次工具调用"
+    },
+    "learning/cost-tracker-hook.cjs": {
+      "enabled": true,
+      "frequency": "low",
+      "description": "从 Stop 事件估算 token 消耗，写入 cost_ledger 表",
+      "trigger": "会话结束"
+    },
+    "learning/signal-collector.cjs": {
+      "enabled": true,
+      "frequency": "medium",
+      "description": "统一信号采集，从多个 hook 时机采集运行时信号写入 SQLite",
+      "trigger": "工具调用/会话事件"
+    },
+    "learning/skill-tracker-hook.cjs": {
+      "enabled": true,
+      "frequency": "low",
+      "description": "Skill 工具调用后追踪触发次数到 SQLite",
+      "trigger": "Skill 调用"
+    },
+    "memory/memory-sqlite-sync.cjs": {
+      "enabled": true,
+      "frequency": "low",
+      "description": "memory/*.md 文件编辑时同步内容到 SQLite fact 表",
+      "trigger": "Write/Edit"
+    },
+    "session/analysis-paralysis-guard.cjs": {
+      "enabled": true,
+      "frequency": "high",
+      "description": "分析瘫痪守卫 — 检测连续只读操作(≥3轮)，触发收敛检查",
+      "trigger": "每次工具调用"
+    },
+    "session/pre-compact.cjs": {
+      "enabled": true,
+      "frequency": "low",
+      "description": "压缩前保存关键上下文状态，确保压缩后不丢上下文",
+      "trigger": "会话压缩前"
+    },
+    "safety/context-monitor.cjs": {
+      "enabled": true,
+      "frequency": "high",
+      "description": "上下文监控 — 估算 context 使用率，40%/60%/80% 三级预警",
+      "trigger": "每次工具调用"
+    },
+    "validation/post-pipeline-self-review.cjs": {
+      "enabled": true,
+      "frequency": "medium",
+      "description": "管道后自审 — 检测语法错误和残留调试输出",
+      "trigger": "Write/Edit 后"
     }
   }
 }

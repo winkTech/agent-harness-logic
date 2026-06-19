@@ -1,4 +1,5 @@
 ---
+name: fixed-point-report
 title: "OFDM 同步 定点量化分析"
 tags: [comm, sync, fixed-point]
 description: "|:----:|:----:|:----:|:----:|------|"

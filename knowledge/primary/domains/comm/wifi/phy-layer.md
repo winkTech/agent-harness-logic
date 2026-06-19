@@ -1,4 +1,5 @@
 ---
+name: phy-layer
 title: "WiFi PHY 层 — Preamble、编码与调制"
 tags: [comm, wifi, phy]
 description: "L-STF/L-LTF → L-SIG → SIG-A/B/C → Data — OFDM 编码调制链"

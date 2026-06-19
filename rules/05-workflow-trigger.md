@@ -15,6 +15,8 @@ skip: "纯执行无需工作流"
 | 用户表述 | 触发的工作流 | 说明 |
 |:---------|:------------|:------|
 | 新模块/写RTL/写TB/算法实现/定点 | `hdl-coding-dag-workflow` | 多 Agent 并行流水线，必须从 Phase 0 开始 |
+| hdl编码/写RTL(别名) | `hdl-coding-workflow` | 与 `hdl-coding-dag-workflow` 等价 |
+| hdl编码/快速修复(别名) | `hdl-coding-workflow` | 与 `hdl-coding-dag-workflow` 等价，Lite模式兼容 |
 | 审查代码/代码质量/PR审查 | `code-review-workflow` | Adversarial 审查：Writer→Reviewer→Arbiter |
 | 架构审查/代码库评估/技术债 | `architecture-review-workflow` | 四维并行：性能/资源/时序/接口 |
 | 安全审查/认证/密钥/支付 | `security-review-workflow` | 调用 `/security-review` skill |

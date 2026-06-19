@@ -1,3 +1,7 @@
+---
+name: avoid-global-reset-source
+---
+
 在 FPGA 开发中尽量避免全局复位的使用
 最近几天读了 Xilinx 网站上一个很有意思的白皮书（ white paper，
 wp272.pdf），名字叫《Get Smart About Reset:Think Local, Not Global》，在

@@ -1,4 +1,5 @@
 ---
+name: lowphy-architecture
 title: "Lowphy 链路架构 (FFT/IFFT/CP/相位补偿/交换)"
 tags: [comm, 5g-nr, lowphy, fft, phase-comp]
 description: "┌────────────────────────────────┐"

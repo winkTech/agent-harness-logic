@@ -1,4 +1,5 @@
 ---
+name: fpga-team-collaboration
 title: "FPGA 团队协作指南"
 domain: fpga
 tags: [team, collaboration, version-control, code-review]

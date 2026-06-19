@@ -1,4 +1,5 @@
 ---
+name: communication-algorithms
 title: "通信算法 FPGA 实现"
 domain: fpga
 tags: [communication, algorithm, dsp, signal-processing]

@@ -1,3 +1,9 @@
+---
+name: continuation
+title: "Continuation Template"
+description: "Standardized template for presenting next steps and continuation blocks after completing tasks, plans, or workflows"
+---
+
 # Continuation Template
 
 This template provides a standardized format for presenting next steps after completing work.

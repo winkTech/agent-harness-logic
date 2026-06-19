@@ -1,4 +1,5 @@
 ---
+name: nru
 title: "5G NR-U — 非授权频谱接入"
 tags: [comm, 5g-nr, unlicensed, lbt]
 description: "NR-U (NR in Unlicensed Spectrum) 是 3GPP 将 5G NR 扩展到非授权频谱的标准化方案。核心动机："

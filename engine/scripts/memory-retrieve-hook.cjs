@@ -37,7 +37,7 @@
 'use strict';
 
 const path = require('node:path');
-const HARNESS = path.join(require('os').homedir(), '.claude');
+const HARNESS = path.join(require('node:os').homedir(), '.claude');
 
 // ── 触发模式 ────────────────────────────────────────────────────────────────
 // 当用户消息匹配这些模式时触发 FTS5 检索
@@ -85,7 +85,7 @@ function main() {
         confidence: Math.round(r.confidence * 100) / 100,
       }));
 
-      // P1-M2: 解析结果摘要中的 [[wiki-link]] → 注入关联记忆上下文
+      // P1-M2: 解析结果摘要中的 wiki-link → 注入关联记忆上下文
       let wikiLinks = null;
       try {
         const { resolveWikiLinks, extractReferences } = require('./resolve-wiki-links.cjs');

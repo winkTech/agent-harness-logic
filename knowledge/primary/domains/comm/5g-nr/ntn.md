@@ -1,4 +1,5 @@
 ---
+name: ntn
 title: "5G NR NTN — 卫星通信与非地面网络"
 tags: [comm, 5g-nr, satellite, ntn, doppler]
 description: "NTN (Non-Terrestrial Networks) 是 3GPP 将 5G NR 扩展到卫星平台的标准框架, 旨在利用卫星、无人机等非地面平台实现全球覆盖。"

@@ -18,10 +18,10 @@
 
 'use strict';
 
-const fs = require('fs');
-const path = require('path');
+const fs = require('node:fs');
+const path = require('node:path');
 
-const HOMEDIR = require('os').homedir();
+const HOMEDIR = require('node:os').homedir();
 const HARNESS_DIR = path.join(HOMEDIR, '.claude');
 const STATE_FILE = path.join(HARNESS_DIR, 'var', 'index', 'runtime-state.json');
 const AGENTS_DIR = path.join(HARNESS_DIR, 'skills', 'agents');

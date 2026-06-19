@@ -1,4 +1,5 @@
 ---
+name: uvm-verification-guide
 title: "UVM 验证方法学指南"
 tags: [fpga, guide, uvm, verification]
 description: "UVM (Universal Verification Methodology) 是业界标准的 SystemVerilog 验证方法学，核心原则："

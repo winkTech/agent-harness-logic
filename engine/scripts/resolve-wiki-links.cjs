@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * engine/scripts/resolve-wiki-links.cjs — P1-M2: [[wiki-link]] 解析器
+ * engine/scripts/resolve-wiki-links.cjs — P1-M2: wiki-link 解析器
  *
  * 将 memory/ MEMORY.md 中的 [[name]] 引用解析为实际文件路径和摘要。
  *
@@ -24,10 +24,10 @@
 
 'use strict';
 
-const fs = require('fs');
-const path = require('path');
+const fs = require('node:fs');
+const path = require('node:path');
 
-const HOMEDIR = require('os').homedir();
+const HOMEDIR = require('node:os').homedir();
 const MEMORY_DIR = path.join(HOMEDIR, '.claude', 'memory');
 const LEARNINGS_DIR = path.join(MEMORY_DIR, 'learnings');
 const ERRORS_DIR = path.join(MEMORY_DIR, 'errors');
@@ -158,7 +158,7 @@ function resolveWikiLinks(names) {
 }
 
 /**
- * 从 MEMORY.md 提取所有 [[wiki-link]] 引用。
+ * 从 MEMORY.md 提取所有 wiki-link 引用。
  * @returns {string[]} 引用名称列表
  */
 function extractReferences() {

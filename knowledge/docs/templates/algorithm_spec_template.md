@@ -1,4 +1,7 @@
 ---
+name: algorithm-spec-template
+title: "Algorithm Specification Template"
+description: "Algorithm specification template for documenting mathematical principles, parameters, design constraints, and verification criteria"
 algorithm: "<算法名称>"
 version: "1.0"
 status: "draft"

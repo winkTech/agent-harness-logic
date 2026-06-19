@@ -26,7 +26,10 @@
 │   ├── 06-cognition.md    ← L4: 7 种推理模式定义
 │   ├── 07-system.md       ←     系统操作约束（D 盘安装等）
 │   ├── 08-constraints.md  ←     硬约束（保护 golden model 等）
-│   └── 09-search-tools.md ← L2: 检索工具选择矩阵
+│   ├── 09-search-tools.md ← L2: 检索工具选择矩阵
+│   ├── 10-drawing.md      ←     绘图规则
+│   ├── 11-git.md          ←     Git 操作规则
+│   └── 12-tdd.md          ←     TDD 测试驱动开发规则
 │
 ├── engine/                ← 核心引擎
 │   ├── sqlite/            ←     持久层（FTS5 全文检索 + 记忆/事件/技能/成本）
@@ -273,6 +276,9 @@ node engine/scripts/harness-init.cjs
 | 安全规则 | `rules/04-security.md` |
 | 认知层 | `rules/06-cognition.md` |
 | 检索工具选择 | `rules/09-search-tools.md` |
+| 绘图规则 | `rules/10-drawing.md` |
+| Git 操作规则 | `rules/11-git.md` |
+| TDD 测试驱动 | `rules/12-tdd.md` |
 | 查技能列表 | `knowledge/references/skills-catalog.md` |
 | 查完整索引 | `knowledge/references/reference-index.md` |
 | SQLite 文档 | `engine/sqlite/README.md` |

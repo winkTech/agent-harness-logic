@@ -16,8 +16,8 @@
 
 'use strict';
 
-const { spawnSync } = require('child_process');
-const path = require('path');
+const { spawnSync } = require('node:child_process');
+const path = require('node:path');
 
 const MAX_STDIN = 1024 * 1024;
 

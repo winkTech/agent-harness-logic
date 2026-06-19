@@ -1,4 +1,5 @@
 ---
+name: mac-layer
 title: "WiFi MAC 层 — CSMA/CA、帧聚合与 QoS"
 tags: [comm, wifi, mac]
 description: "DCF/EDCA → 退避 → RTS/CTS → 帧聚合 → Block Ack — CSMA/CA 全流程"

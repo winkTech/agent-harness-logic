@@ -1,4 +1,5 @@
 ---
+name: golden-model-standards
 title: "Golden Model 编码规范"
 domain: algorithm
 tags: [golden-model, matlab, python, standards]
