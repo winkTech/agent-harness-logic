@@ -94,6 +94,7 @@ function buildNameIndex() {
   scanDir(LEARNINGS_DIR);
   scanDir(ERRORS_DIR);
   scanDir(PROJECTS_DIR);
+  scanDir(MEMORY_DIR);
   scanDir(path.join(MEMORY_DIR, 'references'));
   scanDir(path.join(MEMORY_DIR, 'agents'));
   scanDir(path.join(HOMEDIR, '.claude', 'knowledge', 'methodology'));

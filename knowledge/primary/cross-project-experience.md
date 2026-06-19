@@ -1,4 +1,5 @@
 ---
+name: cross-project-experience
 title: "跨项目经验复用"
 domain: fpga
 tags: [cross-project, experience, reuse, templates]

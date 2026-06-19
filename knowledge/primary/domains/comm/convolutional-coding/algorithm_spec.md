@@ -1,4 +1,5 @@
 ---
+name: conv-coding-algorithm-spec
 title: "卷积编码与 Viterbi 译码 — 算法规范"
 domain: comm
 tags: [convolutional-code, viterbi, fec, channel-coding, algorithm]

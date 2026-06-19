@@ -52,6 +52,7 @@
 ## 参考链接
 
 [[cross-project-experience-ref]] — 新 FPGA 项目启动模板
+[[memory-link-graph]] — 记忆关联图
 
 ## Agent 定义 (agents/)
 
