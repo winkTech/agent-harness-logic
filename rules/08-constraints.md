@@ -1,8 +1,8 @@
 ---
 name: hard-constraints
 description: "硬约束规则 — 违反 [MUST NOT] = FAIL，全局强制执行"
-priority: L0
-trigger: "任何 session 启动时自动加载"
+priority: L2
+trigger: "修改 matlab/python/golden 文件时"
 skip: "永不跳过"
 ---
 

@@ -13,3 +13,6 @@ skip: "不涉及 Python"
 - 使用 `ruff` 进行 lint（`ruff check`）
 - 调试硬件相关 Python（星座图/EVM/频偏）使用 `/python-hardware-debug` skill
 - 参见 `skills/python-hardware-debug/SKILL.md`
+
+### 违反后果
+未运行 ruff check 提交 Python 代码 → CI 会拦截，增加修复成本。

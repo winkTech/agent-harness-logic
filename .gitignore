@@ -10,6 +10,7 @@ todos/
 homunculus/
 plan/
 debug/
+session-env/
 
 # 统一运行时目录（原 backups/ sessions/ tasks/ plans/ 等）
 var/
@@ -127,3 +128,12 @@ session-data/
 
 # PDF 参考文档（本地保存，不入 git）
 *.pdf
+
+node_modules/
+.venv/
+venv/
+*.egg-info/
+*.pyc
+__pycache__/
+*.swp
+*.swo

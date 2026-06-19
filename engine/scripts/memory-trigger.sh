@@ -1,4 +1,5 @@
 #!/bin/bash
+set -euo pipefail
 # 记忆积累触发器
 # 用途：根据工作状态自动触发记忆记录
 

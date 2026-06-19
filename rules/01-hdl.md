@@ -23,3 +23,6 @@ skip: "只改文档/配置/Python/MATLAB"
 ## 详细规范
 - 见 `knowledge/primary/cross-project-experience.md`
 - HDL Skill: `skills/hdl-coding/SKILL.md`
+
+### 违反后果
+未调用 /project-init 直接写代码 → 项目结构可能不符合规范，需在 review 中修复。

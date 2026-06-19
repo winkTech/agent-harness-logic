@@ -32,6 +32,7 @@
 | `rules/03-debugging.md` | 调试排错 | 仿真报错/波形不对 |
 | `rules/04-security.md` | 安全敏感操作 | auth/token/encrypt 等 |
 | `rules/05-workflow-trigger.md` | 工作流触发 | 关键词命中 |
+| `rules/06-cognition.md` | 7种推理模式 | 卡住/不对/再试试/换一种 |
 | `rules/07-system.md` | 安装/下载 | 涉及安装 |
 | `rules/08-constraints.md` | Golden Model 保护 | 修改 matlab/python |
 | `rules/09-search-tools.md` | 代码搜索 | 搜索/查找 |
@@ -41,40 +42,41 @@
 
 ## 技能
 
-| Skill | 场景 | 触发词 |
-|:------|:-----|:-------|
-| `/start` | 新 session 开局 | 开始 / 继续 |
-| `/handoff` | session 收尾 | 结束 / 收工 |
-| `/hdl-coding` | RTL 编写 | 写RTL / 写TB |
-| `/debugging` | 系统化调试 | 调查 / debug |
-| `/code-review` | 代码审查 | 审查 / review |
-| `/rag-skill` | 知识库检索 | 查知识 / 参考文档 |
-| `/code-search` | 代码搜索 | 搜代码 / 找文件 |
-| `/git-expert` | Git 操作 | git / 提交 |
-| `/deep-research` | 深度研究 | 技术调研 / 方案对比 |
-| `/brainstorming` | 头脑风暴 | 多方案 / 想点子 |
-| `/presentation` | 图表/PPT | 架构图 / 汇报 |
-| `/doc-gen` | 文档生成 | 生成文档 / README |
-| `/tdd` | 测试驱动开发 | TDD / 测试优先 |
-| `/test-generator` | 测试生成 | 生成 testbench |
-| `/security-review` | 安全审查 | 安全 / 认证 / 密钥 |
-| `/rtl-gen` | RTL 代码生成 | 生成RTL模板 |
-| `/modern-python` | Python 开发 | Python 3.12+ |
-| `/python-hardware-debug` | 硬件调试Python | 星座图 / EVM / 频偏 |
-| `/verify` | 验证改动 | 验证 / 确认效果 |
-| `/simplify` | 代码简化 | 简化 / 重构 |
-| `/browser` | 浏览器自动化 | 网页交互 / 抓取 |
-| `/agent-management` | Agent 管理 | 管理技能 / 编排 |
-| `/markitdown-converter` | 格式转换 | 转Markdown |
-| `/project-init` | 项目脚手架 | 新建工程 / 加模块 |
-| `/update-config` | 配置管理 | 改设置 / 加hook |
-| `/keybindings-help` | 快捷键 | 改快捷键 |
-| `/loop` | 定时循环 | 定期检查 / 轮询 |
-| `/claude-api` | Claude API 参考 | 模型 / API / 价格 |
-| `/fewer-permission-prompts` | 权限优化 | 减少确认 |
-| `/run` | 运行应用 | 启动 / 运行 |
-| `/init` | 项目初始化 | 初始化 |
-| 完整详情 | `knowledge/references/skills-catalog.md` | — |
+| Skill | 场景 | 触发词 | 来源 |
+|:------|:-----|:---------|:-----|
+| `/start` | 新 session 开局 | 开始 / 继续 | 本地 |
+| `/handoff` | session 收尾 | 结束 / 收工 | 本地 |
+| `/hdl-coding` | RTL 编写 | 写RTL / 写TB | 本地 |
+| `/debugging` | 系统化调试 | 调查 / debug | 本地 |
+| `/code-review` | 代码审查 | 审查 / review | 本地 |
+| `/rag-skill` | 知识库检索 | 查知识 / 参考文档 | 本地 |
+| `/code-search` | 代码搜索 | 搜代码 / 找文件 | 本地 |
+| `/git-expert` | Git 操作 | git / 提交 | 本地 |
+| `/deep-research` | 深度研究 | 技术调研 / 方案对比 | 本地 |
+| `/brainstorming` | 头脑风暴 | 多方案 / 想点子 | 本地 |
+| `/presentation` | 图表/PPT | 架构图 / 汇报 | 本地 |
+| `/pdf` | PDF编辑/填表/签名 | 编辑PDF/填表/加签名/合并/水印 | 本地 |
+| `/doc-gen` | 文档生成 | 生成文档 / README | 本地 |
+| `/tdd` | 测试驱动开发 | TDD / 测试优先 | 本地 |
+| `/test-generator` | 测试生成 | 生成 testbench | 本地 |
+| `/security-review` | 安全审查 | 安全 / 认证 / 密钥 | 本地 |
+| `/rtl-gen` | RTL 代码生成 | 生成RTL模板 | 本地 |
+| `/modern-python` | Python 开发 | Python 3.12+ | 本地 |
+| `/python-hardware-debug` | 硬件调试Python | 星座图 / EVM / 频偏 | 本地 |
+| `/verify` | 验证改动 | 验证 / 确认效果 | 内置 |
+| `/simplify` | 代码简化 | 简化 / 重构 | 内置 |
+| `/browser` | 浏览器自动化 | 网页交互 / 抓取 | 本地 |
+| `/agent-management` | Agent 管理 | 管理技能 / 编排 | 本地 |
+| `/markitdown-converter` | 格式转换 | 转Markdown | 本地 |
+| `/project-init` | 项目脚手架 | 新建工程 / 加模块 | 本地 |
+| `/update-config` | 配置管理 | 改设置 / 加hook | 内置 |
+| `/keybindings-help` | 快捷键 | 改快捷键 | 内置 |
+| `/loop` | 定时循环 | 定期检查 / 轮询 | 内置 |
+| `/claude-api` | Claude API 参考 | 模型 / API / 价格 | 内置 |
+| `/fewer-permission-prompts` | 权限优化 | 减少确认 | 内置 |
+| `/run` | 运行应用 | 启动 / 运行 | 内置 |
+| `/init` | 项目初始化 | 初始化 | 内置 |
+| 完整详情 | `knowledge/references/skills-catalog.md` | — | 本地 |
 
 ## 工作流
 
@@ -85,6 +87,7 @@ Workflow({name: 'hdl-coding-dag-workflow', args: {modules: ['viterbi'], lite: tr
 Workflow({name: 'code-review-workflow', args: {files: ['文件路径']}})          // 代码审查
 Workflow({name: 'architecture-review-workflow', args: {targets: ['目标路径']}}) // 架构审查
 Workflow({name: 'security-review-workflow', args: {targets: ['src/']}})        // 安全审查
+Workflow({name: 'rag-skill-workflow', args: {query: ['关键词']}})  // 知识库深度检索
 ```
 
 详见 `rules/05-workflow-trigger.md`。

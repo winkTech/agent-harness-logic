@@ -1,4 +1,5 @@
 #!/bin/bash
+set -euo pipefail
 # 自动记录成功经验脚本
 # 用途：自动创建成功记录，提取模式
 

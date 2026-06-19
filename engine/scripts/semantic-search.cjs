@@ -15,8 +15,8 @@
  * 索引位置: var/index/semantic-index.json
  */
 
-const p = require('path');
-const f = require('fs');
+const p = require('node:path');
+const f = require('node:fs');
 const os = require('os');
 
 const HOME = p.join(os.homedir(), '.claude');

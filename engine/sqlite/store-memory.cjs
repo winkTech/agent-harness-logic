@@ -169,7 +169,23 @@ function retrieveMemory(query, opts = {}) {
   if (!cleanQuery) return [];
 
   const terms = cleanQuery.split(/\s+/).filter(Boolean);
-  const ftsQuery = terms.map(t => `"${t}"`).join(' OR ');
+
+  // 构建 FTS5 查询: 纯中文词使用字符级 bigram 前缀匹配
+  // unicode61 将连续中文字符合并为一个 token, 导致子串查询失败。
+  // 解法: 将中文词拆为所有相邻字符对 (bigram), 每对做前缀匹配。
+  // 例如 "编码" → "编码" * ;  "卷积编码" → "卷积" * OR "积编" * OR "编码" *
+  // 这要求 FTS5 表有 prefix='2 3 4' (002 迁移已加)。
+  const CJK_PURE = /^[一-鿿㐀-䶿豈-﫿]+$/;
+  const ftsQuery = terms.map(t => {
+    if (!CJK_PURE.test(t)) return `"${t}"`;  // 非中文: 精确匹配
+    // 中文: 生成所有相邻字符对作为前缀查询
+    const bigrams = new Set();
+    for (let i = 0; i < t.length - 1; i++) bigrams.add(t.slice(i, i + 2));
+    // 至少有一个 bigram 才走前缀匹配, 否则退化为精确匹配 (单字符中文)
+    return bigrams.size > 0
+      ? [...bigrams].map(b => `"${b}" *`).join(' OR ')
+      : `"${t}"`;
+  }).join(' OR ');
 
   let sql;
   let params;

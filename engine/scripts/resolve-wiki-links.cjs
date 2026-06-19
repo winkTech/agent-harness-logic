@@ -95,6 +95,9 @@ function buildNameIndex() {
   scanDir(ERRORS_DIR);
   scanDir(PROJECTS_DIR);
   scanDir(path.join(MEMORY_DIR, 'references'));
+  scanDir(path.join(MEMORY_DIR, 'agents'));
+  scanDir(path.join(HOMEDIR, '.claude', 'knowledge', 'methodology'));
+  scanDir(path.join(HOMEDIR, '.claude', 'knowledge', 'references'));
 
   // 从 MEMORY.md 补充索引（仅取名称，路径从索引行推断）
   if (fs.existsSync(MEMORY_INDEX)) {
