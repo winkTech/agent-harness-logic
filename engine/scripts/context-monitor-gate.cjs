@@ -46,6 +46,7 @@ const COMPACT_LOG = path.join(HARNESS, 'var', 'sessions', 'compaction-log.txt');
 const THRESHOLDS = {
   YELLOW: 0.40,   // ≥40% → 黄色预警，注意安排关键操作
   ORANGE: 0.50,   // ≥50% → 🟠 红线，必须 /compact（对应 H1）
+  AUTO_COMPACT: 0.55, // ≥55% → 自动派生子 agent 继续，主 session 执行 /compact
   RED: 0.60,      // ≥60% → 红 X + 强制压缩信号
   CRITICAL: 0.80, // ≥80% → 紧急，立即收尾并压缩
 };
@@ -169,9 +170,6 @@ function getHealthLevel(ratio) {
   if (ratio >= THRESHOLDS.ORANGE) return 'ORANGE';
   if (ratio >= THRESHOLDS.YELLOW) return 'YELLOW';
   return 'GREEN';
-} (feat(architecture): 补齐三大缺口 — 架构模式库+资源估算工具+门禁检查+复位红线)
-  if (ratio >= THRESHOLDS.YELLOW) return 'YELLOW';
-  return 'GREEN';
 }
 
 /**
@@ -235,7 +233,11 @@ function evaluate() {
     });
   } catch (e) { console.error('[context-monitor-gate] 错误:', e.message); }
 
-  var result = {
+    // 是否建议自动子 agent 溢出
+  const autoSpawnSubagent = level === 'AUTO_COMPACT' && details.toolCalls > 30;
+  const compactHint = level === 'AUTO_COMPACT' ? '即将自动执行 /compact' : undefined;
+
+var result = {
     source: 'context-monitor-gate',
     type: 'context-pressure',
     level,
@@ -247,7 +249,6 @@ function evaluate() {
     suggestion,
     compactHint,
     instruction,
-  };
   };
 
   // Subagent 溢出: AUTO_COMPACT 且有足够工作量时，派子 agent 继续

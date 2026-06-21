@@ -270,8 +270,6 @@ ${sysHint}
 
     // ── 校验 architecture.yaml 完整性 ─────────────────────────
     const archPath = path.join(projectRoot, '06_doc', 'architecture.yaml');
-        // ── 校验 architecture.yaml 完整性 ─────────────────────────
-    const archPath = path.join(projectRoot, '06_doc', 'architecture.yaml');
     log(`🔍 校验 architecture.yaml: ${archPath}`);
     if (!fs.existsSync(archPath)) {
       throw new Error(`❌ architecture.yaml 不存在于 ${archPath}\n   P1b 未产出微架构文件, 请确保写入 06_doc/architecture.yaml`);

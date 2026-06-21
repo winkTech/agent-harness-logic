@@ -1,16 +1,6 @@
 {
   "version": 2,
   "plugins": {
-    "mgrep@Mixedbread-Grep": [
-      {
-        "scope": "user",
-        "installPath": "[PLUGINS_CACHE]/Mixedbread-Grep/mgrep/0.0.0",
-        "version": "0.0.0",
-        "installedAt": "2026-05-10T10:23:15.061Z",
-        "lastUpdated": "2026-06-01T03:58:33.483Z",
-        "gitCommitSha": "5c1ba628c62d9f3cf96cb98b3616f2ac23698aad"
-      }
-    ],
     "code-review@claude-plugins-official": [
       {
         "scope": "user",
@@ -39,16 +29,6 @@
         "installedAt": "2026-05-10T10:26:45.103Z",
         "lastUpdated": "2026-06-01T03:58:33.483Z",
         "gitCommitSha": "b664e152af5742dd11b6a6e5d7a65848a8c5a261"
-      }
-    ],
-    "everything-claude-code@everything-claude-code": [
-      {
-        "scope": "user",
-        "installPath": "[PLUGINS_CACHE]/everything-claude-code/everything-claude-code/2.0.0-rc.1",
-        "version": "2.0.0-rc.1",
-        "installedAt": "2026-05-10T10:27:24.995Z",
-        "lastUpdated": "2026-06-01T03:58:33.483Z",
-        "gitCommitSha": "841beea45cb25ba51f29fa45b7e272938d19b80a"
       }
     ],
     "andrej-karpathy-skills@karpathy-skills": [
@@ -99,15 +79,6 @@
         "installedAt": "2026-05-10T10:31:21.680Z",
         "lastUpdated": "2026-05-10T10:31:21.680Z",
         "gitCommitSha": "b664e152af5742dd11b6a6e5d7a65848a8c5a261"
-      }
-    ],
-    "coding-tutor@coding-tutor": [
-      {
-        "scope": "user",
-        "installPath": "[PLUGINS_CACHE]/coding-tutor/coding-tutor/1.3.0",
-        "version": "1.3.0",
-        "installedAt": "2026-06-01T12:18:00.000Z",
-        "lastUpdated": "2026-06-01T12:18:00.000Z"
       }
     ],
     "compound-engineering@compound-engineering": [
