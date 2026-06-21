@@ -80,26 +80,23 @@ if command -v node &>/dev/null && [ -f "$ENGINE_SCRIPTS/semantic-search.cjs" ]; 
     fi
 fi
 
-# ── 3. Code graph query ────────────────────────────────────────────────
-if command -v node &>/dev/null && [ -f "$ENGINE_SCRIPTS/code-graph-index.cjs" ]; then
-    if [ ! -f "$INDEX_DIR/code-graph.json" ]; then
-        node "$ENGINE_SCRIPTS/code-graph-index.cjs" index 2>/dev/null || true
-    fi
+# ── 3. Code graph query (SQLite 代码图后端) ────────────────────────────
+if command -v node &>/dev/null && [ -f "$ENGINE_SCRIPTS/cg-queries.cjs" ]; then
+    code_out=$(node -e "
+        try {
+            const {searchNodes,resolveProject} = require('$ENGINE_SCRIPTS/cg-queries.cjs');
+            let pid;
+            try { pid = resolveProject(process.cwd()).projectId; } catch(e) { pid = null; }
+            if (pid) {
+                const r = searchNodes(process.argv[1], {projectId:pid, limit:5, maxChars:150});
+                for (const n of r) {
+                    console.log(JSON.stringify({tool:'code-graph',kind:n.kind,name:n.name,file:n.file,line:n.line,sig:(n.signature||'').slice(0,80)}));
+                }
+            }
+        } catch(e) { console.error('cg error:', e.message); }
+    " "$QUERY" 2>/dev/null || true)
 
-    if [ -f "$INDEX_DIR/code-graph.json" ]; then
-        code_out=$(node "$ENGINE_SCRIPTS/code-graph-index.cjs" query "$QUERY" 2>/dev/null || true)
-        if [ -n "$code_out" ]; then
-            echo "$code_out" | node -e "
-                const d=require('fs').readFileSync(0,'utf8');
-                try {
-                    const r=JSON.parse(d);
-                    if (r.found && r.matches) {
-                        for (const m of r.matches) {
-                            console.log(JSON.stringify({tool:'code-graph',type:m.type,name:m.name,file:m.file,line:m.line}));
-                        }
-                    }
-                } catch(e) {}
-            " 2>/dev/null || true
-        fi
+    if [ -n "$code_out" ]; then
+        echo "$code_out"
     fi
 fi
