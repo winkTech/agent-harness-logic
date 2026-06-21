@@ -1,26 +1,17 @@
-/**
- * code-review-workflow — 两轮代码审查工作流
- *
- * Pass 1: 正确性审查（阻塞性）— 规格合规 + 逻辑正确 + 边界处理 + 安全审查
- * Pass 2: 代码质量审查（建议性）— 代码结构 + 风格 + DRY + 命名 + 文档
- *
- * 调用:
- *   Workflow({name: 'code-review-workflow', args: {files: ['01_src/tx/scrambler.sv']}})
- *   Workflow({name: 'code-review-workflow', args: {files: ['src/*.py'], lang: 'python'}})
- */
-
-const path = require('path');
-const fs = require('fs');
-
 export const meta = {
   name: 'code-review-workflow',
   description: '两轮代码审查 — Pass 1 正确性(阻塞) → Pass 2 代码质量(建议)',
   phases: [
     { title: 'Pass 1 正确性审查' },
     { title: 'Pass 2 代码质量审查' },
+    { title: 'Pass 3 HDL 专项审查' },
     { title: '报告合成' },
   ],
 };
+
+// ── 两轮 + HDL 专项审查工作流 ────────────────────────────────────────────
+// Pass 1: 正确性审查 (阻塞)  Pass 2: 代码质量审查 (建议)  Pass 3: HDL 专项 (4 维并行)
+//   Workflow({name: 'code-review-workflow', args: {files: ['path/to/file.sv']}})
 
 const fileList = args?.files || [];
 const language = args?.lang || 'auto';
@@ -37,6 +28,17 @@ if (fileList.length === 0) {
 
 log(`📋 审查文件 (${fileList.length} 个):`);
 fileList.forEach(f => log(`   - ${f}`));
+
+// ── 检测是否为 HDL 文件 ────────────────────────────────────────────────────
+
+const hdlFiles = fileList.filter(f => /\.(sv|v|vhdl?)$/i.test(f));
+const isHDL = hdlFiles.length > 0;
+
+log(`📂 检测到 HDL 文件: ${isHDL ? hdlFiles.length + ' 个' : '无'}`);
+if (isHDL) {
+  log(`   HDL 文件: ${hdlFiles.join(', ')}`);
+  log(`   → 将启用 4 维 HDL 专项审查 (架构/正确性/性能/接口)`);
+}
 
 // ── Pass 1: 正确性审查 ───────────────────────────────────────────────────
 
@@ -130,22 +132,18 @@ blockingIssues.forEach(f => {
 const pass1Passed = blockingIssues.length === 0;
 
 if (!pass1Passed) {
-  log('\n❌ Pass 1 未通过 — 存在阻塞性问题，不进入 Pass 2');
-  log('   请修复以上问题后重试。');
-
-  return {
-    pass: false,
-    pass1: { passed: false, findings: p1Findings, blockingIssues },
-    pass2: null,
-    summary: `Pass 1 未通过: ${blockingIssues.length} 个阻塞问题`,
-  };
+  log('\n❌ Pass 1 未通过 — ' + blockingIssues.length + ' 个阻塞问题 (跳过 Pass 2 代码质量审查)');
+  log('   Pass 3 HDL 专项审查和报告合成将继续执行。');
+} else {
+  log('✅ Pass 1 通过 — 零阻塞问题，进入 Pass 2');
 }
 
-log('✅ Pass 1 通过 — 零阻塞问题，进入 Pass 2');
+// ── Pass 2: 代码质量审查 (仅在 Pass 1 通过时执行) ─────────────────────────
 
-// ── Pass 2: 代码质量审查 ─────────────────────────────────────────────────
+let p2Findings = [];
 
-phase('Pass 2 代码质量审查');
+if (pass1Passed) {
+  phase('Pass 2 代码质量审查');
 
 const pass2Result = await agent(`你是一名**代码审查员**，执行 Pass 2 代码质量审查（建议性，非阻塞）。
 
@@ -216,7 +214,7 @@ ${fileList.map(f => `- ${f}`).join('\n')}
     required: ['findings'],
   }});
 
-const p2Findings = pass2Result?.findings || [];
+p2Findings = pass2Result?.findings || [];
 
 log(`\n📊 Pass 2 结果:`);
 log(`   共 ${p2Findings.length} 条建议`);
@@ -225,16 +223,195 @@ p2Findings.forEach(f => {
   log(`   💡 [${f.severity}] ${f.file}: ${f.title}`);
 });
 
+} // end if(pass1Passed) — Pass 2
+
+// ── Pass 3: HDL 多维专项审查 (仅在检测到 .sv/.v 时激活) ────────────────────
+
+const p3Findings = [];
+
+if (isHDL) {
+  phase('Pass 3 HDL 专项审查');
+
+  log('\n🔬 HDL 多维专项审查启动 (4 维度并行):');
+  log('   1. 架构审查 — 流水线/FSM/CDC/复位合规');
+  log('   2. 正确性审查 — 逻辑错误/位宽/时序/latch');
+  log('   3. 性能审查 — Fmax/资源/吞吐/关键路径');
+  log('   4. 接口审查 — valid-ready/位宽/AXI-Stream 合规');
+
+  const hdlReviews = await Promise.all([
+    agent(`你是一个 FPGA 架构审查专家 (ce-architecture-strategist)。
+
+审查以下 HDL 文件：
+${hdlFiles.map(f => '- ' + f).join('\n')}
+
+执行架构审查，聚焦:
+1. **流水线架构**: 级数匹配、背压传播、吞吐一致性
+2. **状态机**: 编码方式、死锁风险、输出寄存
+3. **数据通路**: 位宽与 Q 格式一致、截位策略
+4. **🔴 复位红线**: 全部使用 i_rst 同步高有效
+5. **时钟域**: CDC 信号清单完整、异步 FIFO 深度计算
+6. **模块划分**: 边界合理、无跨层次组合逻辑
+
+注意: 这是 FPGA/HDL 专用审查，不是软件审查。
+
+输出格式同 code-review-workflow Pass 1 格式。`,
+    { label: 'p3-architecture', phase: 'Pass 3 HDL 专项审查', schema: {
+      type: 'object',
+      properties: {
+        findings: {
+          type: 'array',
+          items: {
+            type: 'object',
+            properties: {
+              severity: { type: 'string', enum: ['CRITICAL', 'HIGH', 'MEDIUM', 'LOW'] },
+              category: { type: 'string', enum: ['架构-流水线', '架构-FSM', '架构-数据通路', '架构-复位红线', '架构-CDC', '架构-模块划分'] },
+              file: { type: 'string' },
+              title: { type: 'string' },
+              description: { type: 'string' },
+              suggestion: { type: 'string' },
+            },
+            required: ['severity', 'category', 'file', 'title', 'description'],
+          },
+        },
+      },
+      required: ['findings'],
+    }}),
+
+    agent(`你是一个 HDL 逻辑正确性审查专家 (ce-correctness-reviewer)。
+
+审查以下 HDL 文件：
+${hdlFiles.map(f => '- ' + f).join('\n')}
+
+执行正确性审查，聚焦:
+1. **位宽匹配**: 赋值两侧位宽一致，signed/unsigned 正确
+2. **FSM 安全**: 无不可达状态、default 完备、无 latch 推断
+3. **时序**: 组合环路检查、阻塞/非阻塞赋值混用、异步输入未同步
+4. **🔴 复位**: always_ff 块第一行 if(i_rst) 检查
+5. **边界条件**: FIFO 空满标志正确性、计数器溢出、背压保持
+
+输出格式同 code-review-workflow Pass 1 格式。`,
+    { label: 'p3-correctness', phase: 'Pass 3 HDL 专项审查', schema: {
+      type: 'object',
+      properties: {
+        findings: {
+          type: 'array',
+          items: {
+            type: 'object',
+            properties: {
+              severity: { type: 'string', enum: ['CRITICAL', 'HIGH', 'MEDIUM', 'LOW'] },
+              category: { type: 'string', enum: ['正确性-位宽', '正确性-FSM', '正确性-时序', '正确性-复位', '正确性-边界条件'] },
+              file: { type: 'string' },
+              title: { type: 'string' },
+              description: { type: 'string' },
+              suggestion: { type: 'string' },
+            },
+            required: ['severity', 'category', 'file', 'title', 'description'],
+          },
+        },
+      },
+      required: ['findings'],
+    }}),
+
+    agent(`你是一个 FPGA 性能/资源审查专家 (ce-performance-oracle)。
+
+审查以下 HDL 文件：
+${hdlFiles.map(f => '- ' + f).join('\n')}
+
+执行性能审查，聚焦:
+1. **关键路径**: 最长组合逻辑级数，标注路径
+2. **资源**: DSP48/LUT/BRAM 使用是否合理
+3. **吞吐**: 启动间隔 II=1? 背压下的有效吞吐?
+4. **Pipeline 平衡**: 各级延迟是否匹配，有无瓶颈
+5. **CDC 时序**: 异步 FIFO 接口的时序约束
+
+注意: 这是 FPGA 时序/资源审查，不是软件性能审查。
+
+输出格式同 code-review-workflow Pass 1 格式。`,
+    { label: 'p3-performance', phase: 'Pass 3 HDL 专项审查', schema: {
+      type: 'object',
+      properties: {
+        findings: {
+          type: 'array',
+          items: {
+            type: 'object',
+            properties: {
+              severity: { type: 'string', enum: ['CRITICAL', 'HIGH', 'MEDIUM', 'LOW'] },
+              category: { type: 'string', enum: ['性能-时序', '性能-资源', '性能-吞吐', '性能-Pipeline', '性能-CDC'] },
+              file: { type: 'string' },
+              title: { type: 'string' },
+              description: { type: 'string' },
+              suggestion: { type: 'string' },
+            },
+            required: ['severity', 'category', 'file', 'title', 'description'],
+          },
+        },
+      },
+      required: ['findings'],
+    }}),
+
+    agent(`你是一个 HDL 接口契约审查专家 (ce-api-contract-reviewer)。
+
+审查以下 HDL 文件：
+${hdlFiles.map(f => '- ' + f).join('\n')}
+
+执行接口审查，聚焦:
+1. **握手协议**: valid-ready 时序正确 (valid 不依赖 ready)
+2. **位宽匹配**: 端口位宽与 architecture.yaml 一致
+3. **AXI-Stream**: tvalid/tready/tlast/tkeep 合规
+4. **CDC 接口**: 跨时钟信号清单完整，同步方案合理
+5. **悬空端口**: 例化时未连接的输入/输出
+
+注意: 这是 FPGA 模块接口审查，不是软件 API 审查。
+
+输出格式同 code-review-workflow Pass 1 格式。`,
+    { label: 'p3-interface', phase: 'Pass 3 HDL 专项审查', schema: {
+      type: 'object',
+      properties: {
+        findings: {
+          type: 'array',
+          items: {
+            type: 'object',
+            properties: {
+              severity: { type: 'string', enum: ['CRITICAL', 'HIGH', 'MEDIUM', 'LOW'] },
+              category: { type: 'string', enum: ['接口-握手', '接口-位宽', '接口-AXI-Stream', '接口-CDC', '接口-悬空'] },
+              file: { type: 'string' },
+              title: { type: 'string' },
+              description: { type: 'string' },
+              suggestion: { type: 'string' },
+            },
+            required: ['severity', 'category', 'file', 'title', 'description'],
+          },
+        },
+      },
+      required: ['findings'],
+    }}),
+  ]);
+
+  hdlReviews.forEach((review, i) => {
+    const labels = ['架构', '正确性', '性能', '接口'];
+    const findings = review?.findings || [];
+    log('  📊 HDL ' + labels[i] + '审查: ' + findings.length + ' 条发现');
+    findings.forEach(f => {
+      const icon = f.severity === 'CRITICAL' ? '❌' : f.severity === 'HIGH' ? '⚠️' : '💡';
+      log('     ' + icon + ' [' + f.severity + '] ' + f.category + ': ' + f.file + ' — ' + f.title);
+    });
+    p3Findings.push(...findings.map(f => ({ ...f, pass: 'P3' })));
+  });
+
+  log('\n📊 Pass 3 汇总: ' + p3Findings.length + ' 条 HDL 专项审查发现');
+}
+
 // ── 报告合成 ──────────────────────────────────────────────────────────────
 
 phase('报告合成');
 
-const allFindings = [...p1Findings, ...p2Findings];
+const allFindings = [...p1Findings, ...p2Findings, ...p3Findings];
 
 log('\n📋 ===== 审查总结 =====');
 log(`   审查文件: ${fileList.length} 个`);
 log(`   Pass 1 (正确性): ✅ 通过 — ${p1Findings.length} 条发现, 0 阻塞`);
 log(`   Pass 2 (代码质量): ${p2Findings.length} 条建议`);
+if (isHDL) log(`   Pass 3 (HDL 专项): ${p3Findings.length} 条发现 (架构/正确性/性能/接口)`);
 
 // 按 severity 统计
 const bySeverity = {};
@@ -257,6 +434,10 @@ return {
     total: p2Findings.length,
     findings: p2Findings,
   },
+  pass3: isHDL ? {
+    total: p3Findings.length,
+    findings: p3Findings,
+  } : null,
   summary: {
     files: fileList,
     totalFindings: allFindings.length,

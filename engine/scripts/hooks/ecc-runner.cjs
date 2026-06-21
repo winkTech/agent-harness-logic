@@ -63,8 +63,8 @@ function eccRoot() {
 
 const root = eccRoot();
 if (!root) {
-  console.error('[ecc-runner] 无法解析 ECC 插件根目录', file.stderr);
-  process.exit(1);
+  // ECC 未安装 — 安静退出，不产生错误
+  process.exit(0);
 }
 
 const bootstrap = path.join(root, 'scripts', 'hooks', 'plugin-hook-bootstrap.js');
