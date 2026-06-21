@@ -33,10 +33,11 @@ const path = require('path');
 
 export const meta = {
   name: 'hdl-coding-dag-workflow',
-  description: 'HDL RTL 开发 DAG 工作流 v3.4 — 证据驱动验证, 逐模块脚本化对比 → 证据门禁 → 全链仿真 (Verifier终验)',
+  description: 'HDL RTL 开发 DAG 工作流 v3.5 — P1a(系统方案)+P1b(微架构)双阶段设计, 证据驱动验证, 逐模块脚本化对比 → 证据门禁 → 全链仿真 (Verifier终验)',
   phases: [
     { title: 'Phase 0 基础设施' },
-    { title: 'Phase 1 架构设计' },
+    { title: 'Phase 1a 系统方案设计' },
+    { title: 'Phase 1b 微架构设计' },
     { title: 'Phase 2 定点量化' },
     { title: 'Phase 3 TB+向量生成' },
     { title: 'Phase 4 RTL编码+脚本化对比' },
@@ -119,64 +120,161 @@ nodes.p0_infra = {
 - make lint 通过
 
 ━━━ 检查点 ━━━
-产出以上目录结构后暂停，用户审查确认目录合规后再进入 Phase 1。
+产出以上目录结构后暂停，用户审查确认目录合规后再进入 Phase 1a。
 ━━━━━━━━━━━`, { label: 'p0-infra' });
     return result;
   },
 };
 
-// ── Phase 1: 架构设计 ───────────────────────────────────────────────────────
+// ── Phase 1a: 系统级方案设计 (算法工程师) ──────────────────────────────────
 
-nodes.p1_arch = {
+nodes.p1a_sys_design = {
   deps: ['p0_infra'],
-  run: async (ctx) => {
-    const infra = ctx.p0_infra?.data || '';
-    const result = await agent(`执行 HDL 工作流 Phase 1: 架构设计 (算法工程师负责)
+  run: async () => {
+    const result = await agent(`执行 HDL 工作流 Phase 1a: 系统级方案设计
 
-前提: 基础设施已就绪
-${String(infra).slice(0, 300)}
+前提: 基础设施已就绪, 项目目录已建。
 
-任务:
-1. 算法文档化 + 顶层框图
-2. 模块↔MATLAB Golden Model 对标
-3. **微架构拆解 [MUST]**:
-   a) **流水线结构**: 每级功能、延迟周期、握手方式
-   b) **FSM 状态图**: 状态定义、转移条件、输出信号
-   c) **数据通路**: 每级输入/输出位宽、定点 Q 格式
-   d) **模块接口时序图**
-4. **写入文件 [MUST]**: 以下文件必须写入磁盘:
-   - 06_doc/architecture.yaml — 包含必填字段:
-     modules: [{name, type, matlab_ref, symmetric_with, pipeline_stages: [{name, function, latency, bit_width, q_format}], fsm_states: [{name, description, transitions}]}]
-   - 06_doc/pipeline_diagram.md — 流水线图 + 数据流描述
-   - 06_doc/algorithm_spec.md — 算法规范
-6. **[NEW] 自动发现 Golden Model**
-   - 扫描 07_mat/04_platform/dsp/ 目录下的 .m 文件
-   - 匹配与模块名对应的 Golden Model
-   - 将找到的 GM 路径记录到 architecture.yaml 的 matlab_ref 字段
-   - 如果没有找到 GM → 标记 matlab_ref: "无 (需人工确认)"
+【核心方法论 — 系统级思维】
+不要在写代码前就直接拆模块。先理解系统, 再推导算法, 再对比选型, 最后才拆模块。
+每一步的产出都写入 06_doct/ 目录。
 
-5. 模块对称对分析:
-   - 扫描模块列表, 识别所有可能成对的模块
-   - 识别规则 (通用, 不限项目领域):
-     a) 前缀对: <前缀1>_<名称> / <前缀2>_<名称>
-     b) 后缀对: <名称>_<后缀1> / <名称>_<后缀2>
-     c) de- 前缀: <名称> / de<名称>
-     d) 互逆词: encoder/decoder, modulator/demodulator, mapper/demapper, fft/ifft
-   - 输出到 architecture.yaml:
-     - pair_conventions 字段
-     - 每模块 symmetric_with 和 symmetry_type
+=== A1 — 系统上下文分析 ===
+回答并写入 06_doct/system_context.md:
+- 这个算法在全局链路中的位置？前级是什么？输出给谁？
+- 输入信号特性: 信噪比范围、带宽、符号率、最大/最小幅度
+- 系统约束: Fclk、最大延迟(cycles)、最低吞吐(samples/s)、面积预算
+- 输出要求: EVM(dB)、BER、锁定时间
+
+=== A2 — 数学原理推导 ===
+写入 06_doct/algorithm_derivation.md:
+从第一性原理导出算法，不靠记忆。完整推导链。
+关键的近似/简化及其误差分析。
+
+=== A3 — 多方案对比选型 ===
+写入 06_doct/tradeoff_analysis.md:
+至少 2-3 候选，从性能/复杂度/存储/收敛速度/数值稳定性五维对比，表格呈现。
+
+=== A4 — 信号链分析 ===
+写入 06_doct/signal_chain_analysis.md:
+每级处理后的信号形态、幅度范围、SNR变化、需要的动态余量。标注瓶颈级。
+
+=== A5 — 定界分析 ===
+写入 06_doct/performance_bounds.md:
+理论性能界(CRLB/Shannon限等) vs 预期性能的差距。
+
+=== A6 — 定点策略 ===
+写入 06_doct/fixed_point_strategy.md:
+每级的预期位宽范围、溢出/截断策略、Q格式草案。
+
+=== 🔴 复位约定 (红线 — 全项目统一) ===
+[MUST] 所有模块的复位信号必须为: 同步高有效, 信号名 i_rst
+[MUST] 禁止使用异步复位或低有效复位 (rst_n / reset_n)
+[MUST] 所有时序逻辑必须用 always_ff @(posedge clk) 触发, 在块内用 if(i_rst) 做复位
+
+每级的预期位宽范围、溢出/截断策略、Q格式草案。
 
 模块: ${modules.join(', ') || '项目默认'}
 
-━━━ 检查点 ━━━
-产出以上 artifact 后暂停，等待用户审查方案后再进入 Phase 2。
-━━━━━━━━━━━`, { label: 'p1-architecture' });
+━━━ 检查点 (P1a 门禁) ━━━
+产出 06_doct/ 下 6 份文档后暂停。
+
+调度层将使用 knowledge/primary/architecture-patterns/gate-checklist-p1a.md 检查:
+  [MUST] A1 系统上下文: 链路位置+信号特性+系统约束+性能指标
+  [MUST] A2 数学推导: 完整链+每步公式+近似误差
+  [MUST] A3 多方案对比: ≥2 候选+4 维对比表+否选理由
+  [MUST] A4 信号链: 每级形态+幅度范围+位宽+瓶颈标注
+  [MUST] A5 定界: 理论界+差值 dB+瓶颈识别
+  [MUST] A6 定点策略: 每级位宽+Q 格式+溢出/截断策略
+  [🔴 红线] 复位约定: 全部模块必须使用同步高有效 i_rst (禁止 rst_n/reset_n)
+
+用户审查系统方案 + 门禁通过后再进 P1b。
+━━━━━━━━━━━`, { agentType: 'algorithm-engineer', label: 'p1a-system-design', phase: 'Phase 1a 系统方案设计' });
+    return result;
+  },
+};
+
+// ── Phase 1b: 微架构设计 (算法工程师 + 逻辑工程师) ─────────────────────────
+
+nodes.p1b_micro_arch = {
+  deps: ['p1a_sys_design'],
+  run: async (ctx) => {
+    const sysDesign = ctx.p1a_sys_design?.data || '';
+    const sysHint = String(sysDesign).slice(0, 500);
+
+    const [algoArch, logicArch] = await parallel([
+      // ── 算法工程师: 模块分解 + 接口定义 ──────────────────────
+      () => agent(`执行 HDL 工作流 Phase 1b: 微架构 (算法工程师 — 模块分解/接口)
+
+系统方案参考:
+${sysHint}
+
+任务:
+1. 划分模块: 根据信号链分析, 将系统拆为 RTL 模块
+2. 模块接口定义: 每个模块的端口信号、位宽、握手协议
+3. **写入 06_doct/architecture.yaml [MUST]**:
+   modules:
+     - name: <模块名>
+       type: <datapath/control/memory>
+       matlab_ref: <Golden Model 路径>
+       symmetric_with: <对称模块>
+       pipeline_stages:
+         - {name, function, latency, bit_width, q_format}
+       fsm_states:
+         - {name, description, transitions}
+   pair_conventions:
+     - <对称对分析>
+4. **写入 06_doct/interface_contract.md**: 每个端口握手协议、时序波形
+5. **写入 06_doct/algorithm_spec.md**: 细化到每模块的算法步骤
+6. **写入 06_doct/pipeline_diagram.md**: 流水线图 + 数据流
+
+7. **[MUST — 红线]** 所有模块复位信号必须为 i_rst (同步高有效)，禁止 rst_n/reset_n/arst_n。所有时序 always_ff @(posedge clk) + if(i_rst)
+模块: ${modules.join(', ') || '项目默认'}
+微架构是 RTL 实现的刚性契约，逻辑工程师将严格按此编码。`, { agentType: 'algorithm-engineer', label: 'p1b-algo-arch', phase: 'Phase 1b 微架构设计' }),
+
+      // ── 逻辑工程师: 架构评估 + 资源/时序预估 ────────────────
+      () => agent(`执行 HDL 工作流 Phase 1b: 微架构 (逻辑工程师 — 资源/时序/CDC)
+
+系统方案参考:
+${sysHint}
+
+任务 — 在写任何 RTL 之前完成以下分析:
+
+=== B1 — 架构空间探索 ===
+写入 06_doct/architecture_tradeoff.md:
+至少 2 种微架构对比（全并行/半折叠/全串行），从面积/延迟/吞吐/预估 Fmax 四维比较。
+
+=== B2 — 资源预算跟踪 ===
+写入 06_doct/resource_budget_tracking.md:
+根据算法工程师的预算(DSP48×N/LUT×M/BRAM×K)出发，预估每个数据通路的资源消耗。
+
+=== B3 — 时序预估 ===
+写入 06_doct/timing_estimate.md:
+每级组合逻辑级数估算、关键路径标注、pipeline 插入策略。
+
+=== B4 — 接口契约审查 ===
+审查 06_doc/interface_contract.md（算法工程师产出），确认:
+     - 握手协议可综合、背压传播可行、反压链长度可控
+     - [MUST - 红线] 所有复位信号必须为 i_rst (同步高有效)，禁止异步/低有效复位。
+
+=== B5 — 验证策略 ===
+写入 06_doct/verification_strategy.md:
+每模块的自检方法、关键信号可观察性、调试 hook、覆盖率收集策略。
+
+=== B6 — 时钟域分析 ===
+写入 06_doct/clock_domain.md:
+时钟域图、CDC 信号清单及方案、异步 FIFO 深度计算。
+
+模块: ${modules.join(', ') || '项目默认'}`, { agentType: 'logic-engineer', label: 'p1b-logic-arch', phase: 'Phase 1b 微架构设计' }),
+    ]);
 
     // ── 校验 architecture.yaml 完整性 ─────────────────────────
     const archPath = path.join(projectRoot, '06_doc', 'architecture.yaml');
+        // ── 校验 architecture.yaml 完整性 ─────────────────────────
+    const archPath = path.join(projectRoot, '06_doc', 'architecture.yaml');
     log(`🔍 校验 architecture.yaml: ${archPath}`);
     if (!fs.existsSync(archPath)) {
-      throw new Error(`❌ architecture.yaml 不存在于 ${archPath}\n   Phase 1 未产出架构文件, 请确保写入 06_doc/architecture.yaml`);
+      throw new Error(`❌ architecture.yaml 不存在于 ${archPath}\n   P1b 未产出微架构文件, 请确保写入 06_doc/architecture.yaml`);
     }
     const archContent = fs.readFileSync(archPath, 'utf-8');
     const requiredFields = ['modules', 'pipeline_stages', 'fsm_states', 'bit_width', 'latency'];
@@ -193,22 +291,38 @@ ${String(infra).slice(0, 300)}
     log('📌 === 压缩保留块: Phase 1 架构 ===');
     log('保留原因: 架构方案是后续所有 RTL 的契约，压缩时丢失 = 全部重来');
     log(`模块列表: ${modules.join(', ') || '项目默认'}`);
-    log(`文件产出: 06_doc/architecture.yaml, 06_doc/pipeline_diagram.md, 06_doc/algorithm_spec.md`);
+    log('文件产出: 06_doc/architecture.yaml, 06_doc/pipeline_diagram.md, 06_doc/algorithm_spec.md');
     log(`流水线级数: ${(() => { try { return JSON.parse(fs.readFileSync(archPath,'utf8'))?.pipeline_stages?.length || '未知'; } catch { return '未知'; } })()}`);
-    log(`关键决策: FSM 状态图、模块接口定义、定点 Q 格式`);
+    log('关键决策: FSM 状态图、模块接口定义、定点 Q 格式');
     log('=== 保留块结束 ===');
     log('');
 
-    return result;
+    ━━ 检查点 (P1b 门禁) ━━
+等待调度层使用 gate-checklist-p1b.md 检查:
+  [MUST] B1 架构空间: ≥2 方案+4 维对比+定量数据
+  [MUST] B2 资源预算: 逐级累加+vs 预算对比+超 10% 告警
+  [MUST] B3 时序预估: 每级组合深度+关键路径+pipeline 方案
+  [MUST] B4 接口契约: 全部端口握手+背压+错误传播+时序波形
+  [MUST] B5 验证感知: 每模块自检+可观察性+覆盖率
+  [MUST] B6 时钟域: 时钟域图+CDC 清单+异步 FIFO 深度计算
+  🔴 红线1: 全部复位必须为 i_rst (同步高有效)
+  🔴 红线2: B4接口未定义/B6 CDC漏同步
+
+用户审查门禁后再进入 Phase 2 定点量化。
+return `[算法方案]
+${String(algoArch).slice(0, 1500)}
+
+[逻辑评估]
+${String(logicArch).slice(0, 1500)}`;
   },
 };
 
 // ── Phase 2: 定点量化 ───────────────────────────────────────────────────────
 
 nodes.p2_fixedpt = {
-  deps: ['p1_arch'],
+  deps: ['p1b_micro_arch'],
   run: async (ctx) => {
-    const arch = ctx.p1_arch?.data || '';
+    const arch = ctx.p1b_micro_arch?.data || '';
     const result = await agent(`执行 HDL 工作流 Phase 2: 定点量化
 
 架构设计: ${String(arch).slice(0, 300)}
@@ -227,9 +341,9 @@ nodes.p2_fixedpt = {
 // ── Phase 3: TB + MATLAB 向量生成 ──────────────────────────────────────────
 
 nodes.p3_tb = {
-  deps: ['p1_arch'],
+  deps: ['p1b_micro_arch'],
   run: async (ctx) => {
-    const arch = ctx.p1_arch?.data || '';
+    const arch = ctx.p1b_micro_arch?.data || '';
     const [tbResult, vecResult] = await parallel([
       // ── 子任务 1: 逻辑工程师 — Testbench ─────────────────────────
       () => agent(`执行 HDL 工作流 Phase 3 (TB): 编写 Testbench (逻辑工程师)
@@ -638,7 +752,8 @@ nodes.verifier = {
 
     const summary = [
       '## Phase 0 基础设施',     ctx.p0_infra?.data || 'N/A',
-      '## Phase 1 架构设计',     ctx.p1_arch?.data || 'N/A',
+      '## Phase 1a 系统方案',   ctx.p1a_sys_design?.data?.slice(0, 300) || 'N/A',
+      '## Phase 1b 微架构',     ctx.p1b_micro_arch?.data || 'N/A',
       '## Phase 2 定点量化',     ctx.p2_fixedpt?.data || 'N/A',
       '## Phase 3 TB+向量生成',  ctx.p3_tb?.data || 'N/A',
       '## Phase 4 RTL+脚本对比', ctx.p4_rtl?.data || 'N/A',
@@ -688,7 +803,7 @@ if (liteMode) {
   nodes.p2_fixedpt.run = async () => '[SKIPPED] Lite 模式 — 定点量化跳过';
   nodes.p6_regression.run = async () => '[SKIPPED] Lite 模式 — 覆盖率回归跳过';
 
-  log('   依赖链: P0→P1→P3→P4→P45→P5→P7→P8→Verifier');
+  log('   依赖链: P0→P1a→P1b→P3→P4→P45→P5→P7→P8→Verifier');
   log('   (跳过节点: P2 定点量化, P6 覆盖率回归)');
 }
 
@@ -713,15 +828,18 @@ const preflightSummary = [
   '  4. 项目目录结构是否符合预期 (01_src/02_sim/...)?',
   '  5. 如果任一答案是否 → 请先澄清，不要直接开始。',
   '',
-  '📋 检查点流程 (NEW):',
-  '  此工作流在 Phase 1/2/3/4.5/5/7 完成后产出 artifact',
+  '📋 门禁检查点流程:',
+  '  Phase 1a: gate-checklist-p1a.md (18 MUST 项)',
+  '  Phase 1b: gate-checklist-p1b.md (30 MUST + 5 红线项)',
+  '  Phase 4.5: evidence JSON 门禁 (所有模块 PASS + compared_points > 0)',
+  '  以上每个门禁通过后才进入下一阶段',
   '  调度层将暂停并呈报审查 → 用户确认后继续',
   '  未确认不跨 Phase',
   '',
   'DAG 依赖链:',
   liteMode
-    ? '  P0→P1→P3→P4→P45→P5→P7→P8→Verifier (跳过 P2,P6)'
-    : '  P0→P1→P2/P3并行→P4→P45→P5→P6/P7并行→P8→Verifier',
+    ? '  P0→P1a→P1b→P3→P4→P45→P5→P7→P8→Verifier (跳过 P2,P6)'
+    : '  P0→P1a→P1b→P2/P3并行→P4→P45→P5→P6/P7并行→P8→Verifier',
   '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━',
 ].join('\n');
 

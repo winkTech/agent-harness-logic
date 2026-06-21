@@ -177,8 +177,11 @@ if (require.main === module) {
   } else if (cmd === 'reset') {
     writeState({ toolCount: 0, totalWeight: 0, lastWarningLevel: 0, startedAt: new Date().toISOString() });
     console.error('context-monitor: 计数器已重置');
+  } else if (cmd === '--check') {
+    // PreToolUse 模式：运行监控逻辑（作为 command-type hook 的子进程）
+    main(undefined, undefined);
   } else {
-    console.error('用法: node context-monitor.cjs [status|reset]');
+    console.error('用法: node context-monitor.cjs [--check|status|reset]');
   }
 }
 
