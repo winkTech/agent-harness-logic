@@ -58,6 +58,17 @@
         "hooks": [
           {
             "type": "command",
+            "command": "node engine/scripts/context-resume.cjs --inject",
+            "description": "Context resume: read pre-compact state and inject restore prompt after /compact (P2)",
+            "id": "session:context-resume"
+          }
+        ]
+      },
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "command",
             "command": "node engine/scripts/dream-startup-inject.cjs",
             "description": "Dream startup inject: check pending events, detect patterns, inject recent learnings into context (P3+P4)",
             "id": "session:dream-inject"
@@ -142,6 +153,12 @@
             "command": "node engine/scripts/memory-retrieve-hook.cjs",
             "description": "Memory retrieve hook: query FTS5 BM25 on user message keywords, inject relevant memory summaries into context (P0-B1)",
             "id": "pre:cognition:memory-retrieve"
+          },
+          {
+            "type": "command",
+            "command": "node engine/hooks/safety/context-monitor.cjs --check",
+            "description": "Context monitor: track tool call count/weight, warn at 40%/60%/80% usage (P2)",
+            "id": "pre:safety:context-monitor"
           }
         ]
       },
@@ -326,9 +343,14 @@
           {
             "type": "command",
             "command": "node engine/scripts/hooks/ecc-runner.cjs scripts/hooks/run-with-flags.js pre:compact scripts/hooks/pre-compact.js standard,strict"
+          },
+          {
+            "type": "command",
+            "command": "node engine/hooks/session/pre-compact.cjs",
+            "timeout": 5000
           }
         ],
-        "description": "Save state before context compaction",
+        "description": "Save state before context compaction (ECC + engine dual-write)",
         "id": "pre:compact"
       }
     ],

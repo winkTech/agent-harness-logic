@@ -42,9 +42,11 @@ const COMPACT_LOG = path.join(HARNESS, 'var', 'sessions', 'compaction-log.txt');
 // 阈值配置（上下文占比估算）
 // 与 engine/hooks/safety/context-monitor.cjs 统一
 // 更新说明: 2026-06-19, 与 hook 对齐为 40%/60%/80%
+// 2026-06-19 追加 50% ORANGE 红线 — 对应 rules/13-context-management.md 的 H1
 const THRESHOLDS = {
-  YELLOW: 0.40,  // ≥40% → 黄色预警，注意安排关键操作
-  RED: 0.60,     // ≥60% → 红 X + 强制压缩信号
+  YELLOW: 0.40,   // ≥40% → 黄色预警，注意安排关键操作
+  ORANGE: 0.50,   // ≥50% → 🟠 红线，必须 /compact（对应 H1）
+  RED: 0.60,      // ≥60% → 红 X + 强制压缩信号
   CRITICAL: 0.80, // ≥80% → 紧急，立即收尾并压缩
 };
 
@@ -158,12 +160,16 @@ function estimateContextRatio() {
 
 /**
  * 获取上下文健康级别。
- * @returns { 'GREEN' | 'YELLOW' | 'RED' | 'CRITICAL' }
+ * @returns { 'GREEN' | 'YELLOW' | 'ORANGE' | 'RED' | 'CRITICAL' }
  */
 function getHealthLevel(ratio) {
   if (ratio >= THRESHOLDS.CRITICAL) return 'CRITICAL';
   if (ratio >= THRESHOLDS.RED) return 'RED';
   if (ratio >= THRESHOLDS.AUTO_COMPACT) return 'AUTO_COMPACT';
+  if (ratio >= THRESHOLDS.ORANGE) return 'ORANGE';
+  if (ratio >= THRESHOLDS.YELLOW) return 'YELLOW';
+  return 'GREEN';
+} (feat(architecture): 补齐三大缺口 — 架构模式库+资源估算工具+门禁检查+复位红线)
   if (ratio >= THRESHOLDS.YELLOW) return 'YELLOW';
   return 'GREEN';
 }
@@ -196,20 +202,24 @@ function evaluate() {
   const toolCalls = details.toolCalls;
 
   let flag, message, suggestion, instruction;
-  if (ratio >= THRESHOLDS.CRITICAL) {
-    level = 'CRITICAL';
+  if (level === 'CRITICAL') {
     flag = '🚨';
-    message = `上下文使用率 ${Math.round(ratio * 100)}%，超过 80% 紧急红线！`;
+    message = `上下文使用率 ${Math.round(ratio * 100)}%，超过 ${Math.round(THRESHOLDS.CRITICAL * 100)}% 紧急红线！`;
     suggestion = '立即执行 /compact。当前会话已接近极限，继续操作将导致严重的质量下降。先保存状态，然后压缩。';
-    instruction = '【紧急指令】上下文超过 80%。立即执行 node engine/hooks/session/pre-compact.cjs save 保存状态，然后 /compact。压缩后执行 node engine/hooks/session/pre-compact.cjs read 恢复上下文。';
+    instruction = '【紧急指令】上下文超过 80%。立即保存状态后 /compact。压缩前禁止新任务。';
   } else if (level === 'RED') {
     flag = '❌';
-    message = `上下文使用率 ${Math.round(ratio * 100)}%，超过 60% 红线！`;
+    message = `上下文使用率 ${Math.round(ratio * 100)}%，超过 ${Math.round(THRESHOLDS.RED * 100)}% 红线！`;
     suggestion = '建议立即执行 /compact 或启动新的 session。当前会话上下文已接近满载，继续执行可能导致质量下降或幻觉。';
-    instruction = '【强制指令】上下文超过 60% 红线。保存状态后立即 /compact。压缩前禁止开始新任务。';
+    instruction = '【强制指令】上下文超过 60% 红线。保存状态后立即 /compact。压缩前不要开始新任务。';
+  } else if (level === 'ORANGE') {
+    flag = '🟠';
+    message = `上下文使用率 ${Math.round(ratio * 100)}%，触及 ${Math.round(THRESHOLDS.ORANGE * 100)}% 红线！`;
+    suggestion = '必须执行 /compact。根据规则 H1，≥50% 时必须压缩后才能开始新任务。优先完成当前操作，然后立即压缩。';
+    instruction = '【红线指令】上下文超过 50%。必须 /compact 后才能继续新任务。保存状态后立即执行。';
   } else {
     flag = '⚠️';
-    message = `上下文使用率 ${Math.round(ratio * 100)}%，超过 40% 警戒线。`;
+    message = `上下文使用率 ${Math.round(ratio * 100)}%，超过 ${Math.round(THRESHOLDS.YELLOW * 100)}% 警戒线。`;
     suggestion = '建议在下次阶段切换时执行 /compact。当前上下文仍有空间，但建议控制 prompt 长度，优先完成当前阶段。';
     instruction = '【上下文提醒】使用率超过 40%。注意控制后续操作，在阶段切换时执行 /compact。';
   }
@@ -237,6 +247,7 @@ function evaluate() {
     suggestion,
     compactHint,
     instruction,
+  };
   };
 
   // Subagent 溢出: AUTO_COMPACT 且有足够工作量时，派子 agent 继续
