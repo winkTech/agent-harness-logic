@@ -32,13 +32,29 @@ const path = require('node:path');
 // 仅在 memory/ 目录下的 .md 文件才处理
 const MEMORY_DIR = path.resolve(__dirname, '..', '..', '..', 'memory');
 
+/**
+ * Windows 路径兼容: 将 Unix 风格 /c/Users/... 转为 C:\Users\...
+ * Claude Code 在 Git Bash 中可能传递 MSYS 格式路径
+ */
+function normalizePath(p) {
+  if (!p) return p;
+  const normalized = path.normalize(p);
+  if (process.platform === 'win32') {
+    const driveMatch = normalized.match(/^[/\\]([a-zA-Z])[/\\]/);
+    if (driveMatch) {
+      return driveMatch[1].toUpperCase() + ':\\' + normalized.slice(3);
+    }
+  }
+  return normalized;
+}
+
 function isMemoryFile(filePath) {
   if (!filePath || !filePath.endsWith('.md')) return false;
-  const normalized = path.normalize(filePath);
+  const normalized = normalizePath(filePath);
   return normalized.startsWith(MEMORY_DIR);
 }
 
-// 简易 frontmatter 解析 (与 migrate 脚本相同逻辑, 内嵌避免交叉引用)
+// 简易 frontmatter 解析
 function parseFrontmatter(content) {
   const lines = content.split('\n');
   const fm = {};
@@ -69,117 +85,85 @@ function inferName(filePath) {
 }
 
 /**
- * 尝试从 hook 上下文中提取文件路径。
- * 优先级: CLAUDE_TOOL 环境变量 > stdin JSON > CLAUDE_DATA env。
- * @returns {string|null}
+ * 从 stdin JSON 中提取 file_path（支持多种 Hook 格式）
  */
-function extractFilePath() {
-  // 1. 首选: CLAUDE_TOOL env (Claude Code 标准的 tool 上下文传递方式)
-  const toolEnv = process.env.CLAUDE_TOOL;
-  if (toolEnv) {
-    try {
-      const toolData = JSON.parse(toolEnv);
-      if (toolData.toolInput?.file_path) return toolData.toolInput.file_path;
-      if (toolData.toolInput?.path) return toolData.toolInput.path;
-      if (toolData.filePath) return toolData.filePath;
-      if (toolData.path) return toolData.path;
-    } catch { /* 解析失败，继续尝试其他方式 */ }
-  }
-
-  // 2. 第二优先: CLAUDE_DATA env (多级嵌套)
-  const dataEnv = process.env.CLAUDE_DATA;
-  if (dataEnv) {
-    try {
-      const parsed = JSON.parse(dataEnv);
-      // 递归查找 file_path
-      const search = (obj) => {
-        if (!obj || typeof obj !== 'object') return null;
-        if (obj.file_path) return obj.file_path;
-        if (obj.path) return obj.path;
-        return null;
-      };
-      const direct = search(parsed);
-      if (direct) return direct;
-      // 检查嵌套: { tool: "...", toolInput: { file_path: "..." } }
-      if (parsed.toolInput) {
-        const fromInput = search(parsed.toolInput);
-        if (fromInput) return fromInput;
-      }
-      // 检查 HookEvent: { event: { tool: "Write", toolInput: {...} } }
-      if (parsed.event?.toolInput) {
-        const fromEvent = search(parsed.event.toolInput);
-        if (fromEvent) return fromEvent;
-      }
-    } catch { /* 解析失败，继续 */ }
-  }
-
-  // 3. 从 stdin 解析
+function extractFilePathFromStdin(input) {
+  if (!input) return null;
   try {
-    let input = '';
-    try {
-      input = fs.readFileSync(0, 'utf8');
-    } catch { /* stdin 不可用 */ }
-    if (!input) return null;
+    const parsed = JSON.parse(input);
+    if (parsed.tool?.input?.file_path) return parsed.tool.input.file_path;
+    if (parsed.toolInput?.file_path) return parsed.toolInput.file_path;
+    if (parsed.filePath) return parsed.filePath;
+    if (parsed.path) return parsed.path;
+    if (parsed.event?.toolInput?.file_path) return parsed.event.toolInput.file_path;
+    if (parsed.params?.file_path) return parsed.params.file_path;
+  } catch { /* 非标准 JSON */ }
 
-    // 尝试 JSON 解析
+  for (const line of input.split('\n')) {
     try {
-      const parsed = JSON.parse(input);
+      const parsed = JSON.parse(line);
+      if (parsed.tool?.input?.file_path) return parsed.tool.input.file_path;
       if (parsed.toolInput?.file_path) return parsed.toolInput.file_path;
       if (parsed.filePath) return parsed.filePath;
       if (parsed.path) return parsed.path;
-      // 检查 HookEvent 格式: { event: { ... } }
-      if (parsed.event?.toolInput?.file_path) return parsed.event.toolInput.file_path;
-      if (parsed.params?.file_path) return parsed.params.file_path;
-    } catch { /* 不是标准 JSON，尝试行级解析 */ }
-
-    // 行级 JSON lines 兼容
-    const lines = input.split('\n');
-    for (const line of lines) {
-      try {
-        const parsed = JSON.parse(line);
-        if (parsed.toolInput?.file_path) return parsed.toolInput.file_path;
-        if (parsed.filePath) return parsed.filePath;
-        if (parsed.path) return parsed.path;
-      } catch { /* 不是 JSON，继续 */ }
-    }
-  } catch { /* stdin 读取失败 */ }
-
+    } catch { /* 跳过非 JSON 行 */ }
+  }
   return null;
 }
 
 async function main() {
   try {
-    const targetPath = extractFilePath();
-    if (!targetPath) {
-      // 诊断：解析失败时输出 stderr 但不阻塞
-      const diagMsg = `[memory-sqlite-sync] 无法从 hook 上下文提取文件路径. CLAUDE_TOOL=${!!process.env.CLAUDE_TOOL} CLAUDE_DATA=${!!process.env.CLAUDE_DATA} stdin=${!!process.env.CLAUDE_HOOK_STDIN}`;
-      console.error(diagMsg);
-      // 上报 signal (静默)
+    // 优先级: CLAUDE_TOOL env > stdin > CLAUDE_DATA env
+    let rawPath = null;
+
+    const toolEnv = process.env.CLAUDE_TOOL;
+    if (toolEnv) {
       try {
-        const { emitSync } = require('../../learning/signal-collector.cjs');
-        emitSync('memory_miss', {
-          reason: 'extractFilePath_failed',
-          toolEnv: !!process.env.CLAUDE_TOOL,
-          dataEnv: !!process.env.CLAUDE_DATA,
-        });
-      } catch { /* 静默 */ }
-      return;
+        const toolData = JSON.parse(toolEnv);
+        rawPath = toolData.toolInput?.file_path || toolData.toolInput?.path || toolData.filePath || toolData.path;
+      } catch { /* 继续 */ }
     }
 
-    if (!isMemoryFile(targetPath)) return;
+    if (!rawPath) {
+      // 从 stdin 读取 — 仅在 Hook 运行时有数据管道
+      try {
+        // fs.readFileSync(0) 在 Git Bash 无管道时会阻塞,
+        // 但 Hook 系统始终提供 stdin 且自带超时, 故安全
+        const input = fs.readFileSync(0, 'utf8');
+        if (input) rawPath = extractFilePathFromStdin(input);
+      } catch { /* stdin 不可用 */ }
+    }
+
+    if (!rawPath) {
+      const dataEnv = process.env.CLAUDE_DATA;
+      if (dataEnv) {
+        try {
+          const parsed = JSON.parse(dataEnv);
+          const search = (o) => { if (!o || typeof o !== 'object') return null; return o.file_path || o.path || null; };
+          rawPath = search(parsed);
+          if (!rawPath && parsed.toolInput) rawPath = search(parsed.toolInput);
+          if (!rawPath && parsed.event?.toolInput) rawPath = search(parsed.event.toolInput);
+        } catch { /* 继续 */ }
+      }
+    }
+
+    if (!rawPath) return; // 非 Hook 上下文或无法提取路径
+
+    const normalizedPath = normalizePath(rawPath);
+    if (!isMemoryFile(normalizedPath)) return;
 
     // 读文件内容
     let content;
     try {
-      content = fs.readFileSync(targetPath, 'utf8');
-    } catch { return; } // 文件可能已被删除
+      content = fs.readFileSync(normalizedPath, 'utf8');
+    } catch { return; }
 
     // 解析 frontmatter
     const { frontmatter, body } = parseFrontmatter(content);
     if (!body) return;
 
-    const namespace = frontmatter.metadata?.type || inferNamespace(targetPath);
-    const name = frontmatter.name || inferName(targetPath);
+    const namespace = frontmatter.metadata?.type || inferNamespace(normalizedPath);
+    const name = frontmatter.name || inferName(normalizedPath);
 
     // 写入 SQLite
     const { writeMemory } = require('../../sqlite/store-memory.cjs');

@@ -16,8 +16,9 @@ for BASE in \
 done
 
 if [ -z "${PLUGIN_DIR:-}" ] || [ ! -d "$PLUGIN_DIR" ]; then
-  echo "ERROR: ECC plugin not found (tried var/plugins/marketplaces/, cache/)" >&2
-  exit 1
+  # 无插件 = 合法配置，不阻断启动流程
+  echo "INFO: No ECC plugin installed — skipping" >&2
+  exit 0
 fi
 
 HOOK_FILE="${PLUGIN_DIR}/scripts/hooks/${PLUGIN_HOOK}"

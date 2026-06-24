@@ -2,7 +2,23 @@
 /**
  * engine/scripts/hooks/verification-gate.cjs — 验证闭环硬门禁 (P0)
  *
- * 强制规则: 编辑文件后必须先运行验证命令，否则阻断后续 Bash 操作。
+ * ⚠️ 验证必须是功能验证，不只是语法检查 ⚠️
+ *
+ * 强制规则: 编辑文件后必须先运行**功能验证**命令，否则阻断后续 Bash 操作。
+ * 所谓"功能验证"是指：用真实场景确认修改生效，而不是跑 lint/type-check 清门禁。
+ *
+ * 示例（正确）:
+ *   - 改 Hook 脚本 → 用真实 stdin 格式调用 + 检查副作用
+ *   - 改 RTL 模块   → vsim 仿真 + 波形检查
+ *   - 改 Python 逻辑 → pytest 真实测试用例
+ *
+ * 示例（错误 — 仅清门禁，不算验证）:
+ *   - 改 Hook 脚本 → 只跑 node --check
+ *   - 改 RTL 模块   → 只跑 vlog -lint
+ *   - 改 Python 逻辑 → 只跑 ruff check
+ *
+ * 门禁自身无法判断命令质量，它只检查命令名。真正的验证质量依赖开发者自律。
+ * 见 memory: verification-must-be-functional
  *
  * 机制:
  *   PostToolUse(Edit|Write|MultiEdit) — 标记「有待验证的修改」
@@ -31,40 +47,77 @@ const STATE_FILE = path.join(STATE_DIR, 'verify-gate.json');
 
 // ── 模式定义 ────────────────────────────────────────────────────────────────
 
-/** 验证命令模式 — 执行后清除「待验证」标记 */
-const VERIFY_PATTERNS = [
+/**
+ * ⚠️ 两层验证模式 ⚠️
+ *
+ * 第一层 — 语法检查 (LINT_PATTERNS): 仅检查语法/风格，不清除待验证标记。
+ *   匹配时输出 "仅语法检查通过，仍需功能验证"，保留 edited=true 状态。
+ *   目的: 防止"跑个 lint 就算验证了"的虚假通过。
+ *
+ * 第二层 — 功能验证 (TEST_PATTERNS): 用真实场景确认修改生效。
+ *   匹配时输出 "✅ 功能验证通过" + 清除待验证标记。
+ *   例: 改 Hook 脚本 → 用真实 stdin 格式调用 + 检查 SQLite
+ *       改 RTL 模块   → vsim 仿真 + 波形/数据对比
+ *       改 Python 逻辑 → pytest 加真实测试用例
+ *
+ * 自定义验证 (CUSTOM_PATTERNS): 项目特有功能验证，行为同第二层。
+ */
+
+/** 第二层: 功能验证命令 — 清除「待验证」标记 ✅ */
+const TEST_PATTERNS = [
+  // Python 测试
   /^pytest\b/,
   /^python\s+-m\s+pytest\b/,
   /^python\s+-m\s+unittest\b/,
-  /^vlog\b/,
-  /^vsim\b/,
   /^make\b/,
   /^make\s+test\b/,
   /^make\s+check\b/,
-  /^ruff\s+check\b/,
-  /^ruff\s+format\s+--check\b/,
-  /^flake8\b/,
-  /^mypy\b/,
-  /^black\s+--check\b/,
+  // HDL 仿真
+  /^vsim\b/,
+  /^vlog\b/,                      // vlog -lint 是语法检查，但 vlog 加仿真也是功能验证的基础入口
+  // Node/JS 测试
   /^npm\s+test\b/,
   /^npm\s+run\s+test\b/,
-  /^npm\s+run\s+check\b/,
-  /^cargo\s+test\b/,
-  /^cargo\s+check\b/,
-  /^go\s+test\b/,
-  /^go\s+vet\b/,
-  /^sbt\s+test\b/,
-  /^mvn\s+test\b/,
-  /^gradle\s+test\b/,
   /^jest\b/,
   /^vitest\b/,
   /^uv\s+run\s+pytest\b/,
   /^uvx\s+pytest\b/,
+  // Go
+  /^go\s+test\b/,
+  // Java/Scala
+  /^sbt\s+test\b/,
+  /^mvn\s+test\b/,
+  /^gradle\s+test\b/,
+  // Rust
+  /^cargo\s+test\b/,
+  /** 项目自定义功能验证 — 编辑此数组添加 */
+];
+
+/** 第一层: 仅语法/风格检查 — 不清除待验证标记，提示仍需功能验证 ⚠️ */
+const LINT_PATTERNS = [
+  // Python
+  /^ruff\s+check\b/,
+  /^ruff\s+format\s+--check\b/,
+  /^flake8\b/,
+  /^black\s+--check\b/,
+  /^mypy\b/,
+  // Node/JS
   /^tsc\s+--noEmit\b/,
   /^eslint\b/,
   /^biome\s+check\b/,
   /^biome\s+ci\b/,
-  /** 用户自定义验证命令 — 可编辑此数组添加项目特有验证 */
+  /^npm\s+run\s+check\b/,
+  /^npm\s+run\s+lint\b/,
+  // Go
+  /^go\s+vet\b/,
+  // Rust
+  /^cargo\s+check\b/,
+  // HDL
+  // HDL 语法检查本身不能独立作为验证，应紧跟仿真
+  // (vlog 已放在 TEST_PATTERNS，因为实际使用中 vlog 后通常跟仿真)
+  // Node 脚本检查
+  /^node\s+--check\b/,
+  /** 项目自定义语法检查 — 编辑此数组添加 */
 ];
 
 /** 安全只读命令 — 放行但保留「待验证」标记 */
@@ -187,9 +240,27 @@ async function main() {
     // 没有待验证的修改 → 放行
     if (!state.edited) process.exit(0);
 
-    // 命令是验证命令 → 放行 + 清除标记
-    if (matchesAny(command, VERIFY_PATTERNS)) {
+    // 命令是第二层: 功能验证 → 放行 + 清除标记 ✅
+    if (matchesAny(command, TEST_PATTERNS)) {
       markVerified();
+      process.exit(0);
+    }
+
+    // 命令是第一层: 仅语法检查 → 放行但不清除标记，提示仍需功能验证 ⚠️
+    if (matchesAny(command, LINT_PATTERNS)) {
+      console.error('');
+      console.error('╔══════════════════════════════════════════════════════════════╗');
+      console.error('║  ⚠️  LINT PASSED — 仍需功能验证                           ║');
+      console.error('╠══════════════════════════════════════════════════════════════╣');
+      console.error('║  语法检查通过，但验证门禁仍为「待验证」状态。                ║');
+      console.error('║  根据 rules/00-core.md: "验证 = 功能验证，不只是语法检查"     ║');
+      console.error('║                                                              ║');
+      console.error('║  请继续运行功能验证命令 (如 pytest / vsim / E2E stdin 调用):  ║');
+      console.error('║  - Hook 脚本 → echo \'{"hook_event":...}\' | node hook.cjs   ║');
+      console.error('║  - Python   → pytest <test_file>                            ║');
+      console.error('║  - HDL      → vsim -c -do "run -all" <testbench>             ║');
+      console.error('╚══════════════════════════════════════════════════════════════╝');
+      console.error('');
       process.exit(0);
     }
 
@@ -204,12 +275,12 @@ async function main() {
     console.error('║    🔒 VERIFICATION GATE — 验证闭环硬门禁                   ║');
     console.error('╠══════════════════════════════════════════════════════════════╣');
     console.error('║                                                              ║');
-    console.error('║  已编辑文件但尚未验证。                                       ║');
+    console.error('║  已编辑文件但尚未通过功能验证。                               ║');
     console.error('║  根据 rules/00-core.md 验证闭环铁律:                          ║');
     console.error('║    「改代码后必须跑对应的验证，不验证不提交」                 ║');
     console.error('║                                                              ║');
-    console.error('║  请先运行验证命令 (如 pytest / vlog / make / ruff check)      ║');
-    console.error('║  然后重试此操作。                                             ║');
+    console.error('║  ❌ 仅跑语法检查不算验证。                                     ║');
+    console.error('║  ✅ 请运行功能验证 (pytest / vsim / E2E stdin 调用)           ║');
     console.error('║                                                              ║');
     console.error('║  [VerificationGate] 命令被阻断:                              ║');
     console.error(`║  ${command.slice(0, 72).padEnd(72)}║`);

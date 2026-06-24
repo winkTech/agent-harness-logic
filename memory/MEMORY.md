@@ -31,7 +31,8 @@
 | [[fix-in-place-discipline]] | Fix-in-Place 纪律 — 禁止文件变体，agent 必须原地修改 |
 | [[sim-governance]] | 仿真治理 — 自动清理 wlft*/transcript, 生成 JSON 证据 |
 | [[per-module-pipeline]] | Phase 4 分拆 — 每模块独立 agent, 35 模块不溢出 |
-| [[2026-06-23-self-learning-boot]] | 自学习系统启动：CHECK 修复 + Dream 激活 + Skill-Evolve 验证 |
+| [[2026-06-23-self-learning-boot]] | 自学习系统启动：CHECK 修复 + Dream 激活 + Skill-Evolve 验证
+| [[verification-must-be-functional]] | ⚠️ 验证必须是功能验证，不只是语法检查 — lint 不清除门禁标记 |
 
 ## 当前进度
 
@@ -61,6 +62,10 @@
 [[memory-link-graph]] — 记忆关联图
 
 [hooks-fix-2026-06-24](reference/hooks-fix-2026-06-24.md) — 三大闸门修复：路径格式是根因，settings.json 绝对路径后全部生效
+
+## 反馈 (feedback/)
+
+- [No Direct Push Main](feedback_no_direct_push_main.md) — 禁止直接推送 main 分支，必须走 PR 流程
 
 ## Agent 定义 (agents/)
 
