@@ -9,6 +9,10 @@
  *   从 stdin 接收 JSON，包含 { tool, input: { command } }
  *   仅匹配 Bash(tool) + git commit 开头(command)
  *
+ * 退出码:
+ *   0 — lint 通过
+ *   2 — 硬拦截（hook 系统 exit 2 = 阻断操作；exit 1 仅警告不阻断）
+ *
  * 跳过方式：git commit --no-verify
  */
 
@@ -93,7 +97,7 @@ async function main() {
 
     if (failed) {
       log('✖ 预提交 lint 检查未通过，已阻断 commit');
-      process.exit(1);
+      process.exit(2); // exit 2 = Hook 系统硬拦截（exit 1 仅警告不阻断）
     }
 
     log('✓ 预提交检查全部通过');

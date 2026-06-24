@@ -104,9 +104,8 @@ work/
 # 仿真缓存
 *.svf
 
-# 插件缓存（运行时下载，不应入库）
-plugins/cache/
-plugins/.cache-archive/
+# 插件目录（运行时下载，不应入库）
+plugins/
 
 # 运行时成本追踪
 metrics/
@@ -129,11 +128,18 @@ session-data/
 # PDF 参考文档（本地保存，不入 git）
 *.pdf
 
+# 依赖/虚拟环境
 node_modules/
 .venv/
 venv/
 *.egg-info/
-*.pyc
-__pycache__/
+
+# 编辑器临时文件
 *.swp
 *.swo
+
+# 记忆库运行时状态（自动更新，不应入库）
+memory/.last-active
+
+# 运行时统计缓存（自动生成，无需版本控制）
+stats-cache.json

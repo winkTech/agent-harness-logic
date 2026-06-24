@@ -28,9 +28,9 @@
 
 'use strict';
 
-const fs = require('node:fs');
-const path = require('node:path');
-const os = require('node:os');
+const fs = require('fs');
+const path = require('path');
+const os = require('os');
 
 // ── 配置 ────────────────────────────────────────────────────────────────────
 
@@ -40,16 +40,43 @@ const STATE_FILE = path.join(HARNESS, 'var', 'index', 'runtime-state.json');
 const COMPACT_LOG = path.join(HARNESS, 'var', 'sessions', 'compaction-log.txt');
 
 // 阈值配置（上下文占比估算）
-// 与 engine/hooks/safety/context-monitor.cjs 统一
-// 更新说明: 2026-06-19, 与 hook 对齐为 40%/60%/80%
-// 2026-06-19 追加 50% ORANGE 红线 — 对应 rules/13-context-management.md 的 H1
 const THRESHOLDS = {
-  YELLOW: 0.40,   // ≥40% → 黄色预警，注意安排关键操作
-  ORANGE: 0.50,   // ≥50% → 🟠 红线，必须 /compact（对应 H1）
-  AUTO_COMPACT: 0.55, // ≥55% → 自动派生子 agent 继续，主 session 执行 /compact
-  RED: 0.60,      // ≥60% → 红 X + 强制压缩信号
-  CRITICAL: 0.80, // ≥80% → 紧急，立即收尾并压缩
+  YELLOW: 0.50,  // ≥50% → 建议压缩
+  RED: 0.60,     // ≥60% → 红 X + 强制压缩信号
 };
+
+// ── 降级计数器（环境变量缺失时的后备方案）──────────
+const COUNTER_FILE = path.join(HARNESS, 'var', 'index', 'post-counter.json');
+// 当 env 指标全为零时的硬阈值:
+// 10 次 PostMessage = YELLOW, 20 次 = RED
+const FALLBACK_YELLOW_AFTER = 10;
+const FALLBACK_RED_AFTER = 20;
+
+/**
+ * 基于 PostMessage 调用次数的降级估算。
+ * 每次调用递增计数器，用调用次数估算上下文使用率。
+ * 这是在不依赖 env 变量/会话文件时的最终后备。
+ */
+function getFallbackRatio() {
+  let count = 0;
+  try {
+    if (fs.existsSync(COUNTER_FILE)) {
+      const data = JSON.parse(fs.readFileSync(COUNTER_FILE, 'utf8'));
+      count = (data.count || 0) + 1;
+    } else {
+      count = 1;
+    }
+    fs.writeFileSync(COUNTER_FILE, JSON.stringify({ count, updated: new Date().toISOString() }), 'utf8');
+  } catch { count = 1; }
+
+  // 10次 → 50%, 20次 → 100%, 线性插值
+  const ratio = count >= FALLBACK_RED_AFTER
+    ? 1.0
+    : count <= FALLBACK_YELLOW_AFTER
+      ? count / (FALLBACK_YELLOW_AFTER * 2)  // 10次=50%
+      : 0.5 + (count - FALLBACK_YELLOW_AFTER) / (FALLBACK_RED_AFTER - FALLBACK_YELLOW_AFTER) * 0.5;
+  return { ratio, count };
+}
 
 // ── 辅助函数 ────────────────────────────────────────────────────────────────
 
@@ -58,7 +85,7 @@ function readJSON(filePath) {
     if (fs.existsSync(filePath)) {
       return JSON.parse(fs.readFileSync(filePath, 'utf8'));
     }
-  } catch (e) { console.error('[context-monitor-gate] 错误:', e.message); }
+  } catch { /* ignore */ }
   return null;
 }
 
@@ -140,14 +167,34 @@ function estimateContextRatio() {
         compactAgo = Math.max(0, toolCalls - lines.length * 20);
       }
     }
-  } catch (e) { console.error('[context-monitor-gate] 错误:', e.message); }
+  } catch { /* ignore */ }
   const compactRatio = Math.min(compactAgo / 100, 1.0);
 
   // 综合: 取最大值（最悲观的估计）
-  const ratio = Math.max(fileRatio, callRatio, compactRatio);
+  const envRatio = Math.max(fileRatio, callRatio, compactRatio);
+
+  // ── 降级检测 ──────────────────────────────────
+  // 如果 env 指标全为零（环境变量/会话文件不可用），使用降级计数器
+  if (envRatio === 0 && toolCalls === 0 && transcriptKB === 0) {
+    const fb = getFallbackRatio();
+    return {
+      ratio: fb.ratio,
+      details: {
+        transcriptKB: 0,
+        toolCalls: 0,
+        compactAgo: 0,
+        fileRatio: 0,
+        callRatio: 0,
+        compactRatio: 0,
+        fallbackActive: true,
+        fallbackCount: fb.count,
+        fallbackThresholds: `YELLOW@${FALLBACK_YELLOW_AFTER} RED@${FALLBACK_RED_AFTER}`,
+      },
+    };
+  }
 
   return {
-    ratio,
+    ratio: envRatio,
     details: {
       transcriptKB: Math.round(transcriptKB * 10) / 10,
       toolCalls,
@@ -161,13 +208,10 @@ function estimateContextRatio() {
 
 /**
  * 获取上下文健康级别。
- * @returns { 'GREEN' | 'YELLOW' | 'ORANGE' | 'RED' | 'CRITICAL' }
+ * @returns { 'GREEN' | 'YELLOW' | 'RED' }
  */
 function getHealthLevel(ratio) {
-  if (ratio >= THRESHOLDS.CRITICAL) return 'CRITICAL';
   if (ratio >= THRESHOLDS.RED) return 'RED';
-  if (ratio >= THRESHOLDS.AUTO_COMPACT) return 'AUTO_COMPACT';
-  if (ratio >= THRESHOLDS.ORANGE) return 'ORANGE';
   if (ratio >= THRESHOLDS.YELLOW) return 'YELLOW';
   return 'GREEN';
 }
@@ -182,6 +226,10 @@ function statusBar(ratio, width = 20) {
   const pct = Math.round(ratio * 100);
   return `${bar} ${pct}%`;
 }
+
+// ── 导入 ───────────────────────────────────────────────────────────────────
+
+const preCompact = require('./pre-compact.cjs');
 
 // ── 主入口 ───────────────────────────────────────────────────────────────────
 
@@ -199,27 +247,23 @@ function evaluate() {
   const bar = statusBar(ratio);
   const toolCalls = details.toolCalls;
 
-  let flag, message, suggestion, instruction;
-  if (level === 'CRITICAL') {
-    flag = '🚨';
-    message = `上下文使用率 ${Math.round(ratio * 100)}%，超过 ${Math.round(THRESHOLDS.CRITICAL * 100)}% 紧急红线！`;
-    suggestion = '立即执行 /compact。当前会话已接近极限，继续操作将导致严重的质量下降。先保存状态，然后压缩。';
-    instruction = '【紧急指令】上下文超过 80%。立即保存状态后 /compact。压缩前禁止新任务。';
-  } else if (level === 'RED') {
+  let flag, message, suggestion;
+  if (level === 'RED') {
     flag = '❌';
-    message = `上下文使用率 ${Math.round(ratio * 100)}%，超过 ${Math.round(THRESHOLDS.RED * 100)}% 红线！`;
-    suggestion = '建议立即执行 /compact 或启动新的 session。当前会话上下文已接近满载，继续执行可能导致质量下降或幻觉。';
-    instruction = '【强制指令】上下文超过 60% 红线。保存状态后立即 /compact。压缩前不要开始新任务。';
-  } else if (level === 'ORANGE') {
-    flag = '🟠';
-    message = `上下文使用率 ${Math.round(ratio * 100)}%，触及 ${Math.round(THRESHOLDS.ORANGE * 100)}% 红线！`;
-    suggestion = '必须执行 /compact。根据规则 H1，≥50% 时必须压缩后才能开始新任务。优先完成当前操作，然后立即压缩。';
-    instruction = '【红线指令】上下文超过 50%。必须 /compact 后才能继续新任务。保存状态后立即执行。';
+    message = `上下文使用率 ${Math.round(ratio * 100)}%，超过 60% 红线！`;
+
+    // RED: 强制压缩信号 + 保存检查点
+    try { preCompact.signalCompact(); } catch { /* ignore */ }
+
+    suggestion = '立即自动压缩。已保存检查点。';
   } else {
     flag = '⚠️';
-    message = `上下文使用率 ${Math.round(ratio * 100)}%，超过 ${Math.round(THRESHOLDS.YELLOW * 100)}% 警戒线。`;
-    suggestion = '建议在下次阶段切换时执行 /compact。当前上下文仍有空间，但建议控制 prompt 长度，优先完成当前阶段。';
-    instruction = '【上下文提醒】使用率超过 40%。注意控制后续操作，在阶段切换时执行 /compact。';
+    message = `上下文使用率 ${Math.round(ratio * 100)}%，超过 50% 警戒线。`;
+
+    // YELLOW: 自动保存检查点（模拟压缩事件）
+    try { preCompact.saveCheckpoint(); } catch { /* ignore */ }
+
+    suggestion = '已自动保存压缩检查点。后续输出请精简：摘要而非全文、引用而非重复、结论在前细节在后。';
   }
 
   // Emit signal: 上下文压力事件
@@ -231,13 +275,9 @@ function evaluate() {
       toolCalls: details.toolCalls,
       transcriptKB: details.transcriptKB,
     });
-  } catch (e) { console.error('[context-monitor-gate] 错误:', e.message); }
+  } catch { /* 静默 */ }
 
-    // 是否建议自动子 agent 溢出
-  const autoSpawnSubagent = level === 'AUTO_COMPACT' && details.toolCalls > 30;
-  const compactHint = level === 'AUTO_COMPACT' ? '即将自动执行 /compact' : undefined;
-
-var result = {
+  return {
     source: 'context-monitor-gate',
     type: 'context-pressure',
     level,
@@ -247,17 +287,17 @@ var result = {
     flag,
     message,
     suggestion,
-    compactHint,
-    instruction,
+    // 注入到 Claude 上下文的指令
+    instruction: level === 'RED'
+      ? '【自动压缩】上下文超过 60% 红线。检查点已保存。请立即：'
+        + '(1) 当前轮输出控制在 500 token 以内'
+        + '(2) 用摘要代替全文，用引用代替重复'
+        + '(3) 不要在回答中重复用户的问题或完整历史'
+      : '【自动压缩】上下文超过 50%。检查点已保存。请：'
+        + '(1) 回答只给结论和关键数据，去掉过渡句'
+        + '(2) 引用文件行号代替贴大段代码'
+        + '(3) 不要在输出中重复已确认的上下文',
   };
-
-  // Subagent 溢出: AUTO_COMPACT 且有足够工作量时，派子 agent 继续
-  if (level === 'AUTO_COMPACT' && autoSpawnSubagent) {
-    result.autoAction = 'subagent';
-    result.continuationPrompt = '上下文超过 55%，主 session 即将压缩。请接收当前上下文中的进度摘要、文件列表和待办事项，在全新的上下文中继续当前任务。完成后返回结果摘要。';
-  }
-
-  return result;
 }
 
 // ── CLI ──────────────────────────────────────────────────────────────────────

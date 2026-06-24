@@ -10,7 +10,11 @@
  *
  * Exit code:
  *   0 — allow (no match or not an Edit/Write)
- *   1 — block (file matches a protected pattern)
+ *   2 — block (file matches a protected pattern)
+ *
+ * ⚠️ 必须用 exit 2 才能被 Claude Code Hook 系统识别为"拦截"。
+ *    exit 1 会被视为非阻断错误，操作仍然继续。
+ *    参见: ~/.claude/CLAUDE.md → 铁律第零条
  */
 
 'use strict';
@@ -59,10 +63,23 @@ function parseToolCall() {
     const input = fs.readFileSync(0, 'utf8');
     if (input && input.trim()) {
       const data = JSON.parse(input);
-      const tool = data?.tool || data;
-      const name = tool?.name || tool?.toolName || '';
-      const filePath = tool?.input?.file_path || tool?.arguments?.file_path || '';
-      if (name && filePath) return { toolName: name, filePath };
+
+      // Format (a): {tool: {name: "Write", input: {file_path: "..."}}}
+      if (data?.tool?.name && data?.tool?.input?.file_path) {
+        return { toolName: data.tool.name, filePath: data.tool.input.file_path };
+      }
+      // Format (b): {tool_name: "Write", tool_input: {file_path: "..."}}
+      if (data?.tool_name && data?.tool_input?.file_path) {
+        return { toolName: data.tool_name, filePath: data.tool_input.file_path };
+      }
+      // Format (c): flat {name: "Write", input: {file_path: "..."}}
+      if (data?.name && data?.input?.file_path) {
+        return { toolName: data.name, filePath: data.input.file_path };
+      }
+      // Format (d): flat {arguments: {file_path: "..."}}
+      if (data?.name && data?.arguments?.file_path) {
+        return { toolName: data.name, filePath: data.arguments.file_path };
+      }
     }
   } catch (_e) {
     // fall through to env var strategy
@@ -133,7 +150,7 @@ function main() {
       console.error('║  To allow: edit file-protection-guard.cjs PROTECTED_PATTERNS  ║');
       console.error('╚══════════════════════════════════════════════════════════════╝');
       console.error('');
-      process.exit(1);
+      process.exit(2); // 必须 exit 2 才被 Hook 系统识别为"拦截"；exit 1 仅警告不阻断
     }
   }
 

@@ -16,9 +16,9 @@
 
 'use strict';
 
-const path = require('node:path');
-const fs = require('node:fs');
-const os = require('node:os');
+const path = require('path');
+const fs = require('fs');
+const os = require('os');
 
 // ── ECC 根目录解析（与 ecc-root-resolver.cjs 同步） ─────────────────────────
 
@@ -63,8 +63,8 @@ function eccRoot() {
 
 const root = eccRoot();
 if (!root) {
-  // ECC 未安装 — 安静退出，不产生错误
-  process.exit(0);
+  console.error('[ecc-runner] 无法解析 ECC 插件根目录 (未安装 ECC 插件)');
+  process.exit(1);
 }
 
 const bootstrap = path.join(root, 'scripts', 'hooks', 'plugin-hook-bootstrap.js');

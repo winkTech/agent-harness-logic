@@ -69,9 +69,32 @@ skip: "永不跳过"
 - MATLAB: 使用 MCP `check_matlab_code`
 - 仅改 Markdown/注释/README 时免检
 
-### 验证闭环
+### 验证闭环 (硬约束 — 三道闸门)
 - 改代码后必须跑对应的验证（类型检查/测试/simulation）
 - 不验证不提交
+- **三道闸门强制执行**:
+
+  **闸门1: Write Gate** — 写入时自动检查
+  - Testbench-First: 新建 HDL 模块前必须有 TB 文件 (exit 2)
+  - 代码规范: initial/ri_ro_/逻辑级数/扇出扫描 (exit 2)
+  - 黄金模型保护: 禁止修改 matlab/golden 文件 (exit 2)
+
+  **闸门2: Bash Gate** — 运行时安全检查
+  - 验证门禁: 编辑后未验证 → 阻断非只读操作 (exit 2)
+  - Bash 安全: 拦截 curl @.env / python open matlab / 数据泄露 (exit 2)
+  - 已知例外: `ls`/`cd`/`git status`/`which` 等只读命令可通过
+
+  **闸门3: Commit Gate** — 提交前全面检查 (exit 2)
+  - HDL 语法 (vlog -lint)
+  - 综合违规 (initial/disable/force)
+  - 命名规范 (ri_/ro_)
+  - 逻辑级数/扇出
+  - 黄金模型保护
+  - Python lint (ruff check)
+  - 验证门禁状态
+  - 全部违规列在一张表中 -> 修复后才能提交
+
+- 如果想强制绕过: `git commit --no-verify`
 
 ### 指令-技能对齐检查
 

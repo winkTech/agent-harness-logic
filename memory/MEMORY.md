@@ -31,6 +31,7 @@
 | [[fix-in-place-discipline]] | Fix-in-Place 纪律 — 禁止文件变体，agent 必须原地修改 |
 | [[sim-governance]] | 仿真治理 — 自动清理 wlft*/transcript, 生成 JSON 证据 |
 | [[per-module-pipeline]] | Phase 4 分拆 — 每模块独立 agent, 35 模块不溢出 |
+| [[2026-06-23-self-learning-boot]] | 自学习系统启动：CHECK 修复 + Dream 激活 + Skill-Evolve 验证 |
 
 ## 当前进度
 
@@ -52,11 +53,14 @@
 [[fullframe-tb-frame-boundary-bug]] — 全帧TB: rx_fifo反压修复完成, viterbi双traceback已修复, 帧边界2562正确
 [[viterbi-double-traceback-fix]] — viterbi DONE→IDLE跨block NBA竞态, r_tb_pending_clear门控修复
 [[skill-evolve-harness]] — SkillOpt 蒸馏到本地 harness: session模式挖掘+held-out门禁+PostStop自动stage
+[[self-learning-system]] — 自学习系统启动报告: 2026-06-23 激活 Dream + Skill-Evolve + 信号采集 pipeline
 
 ## 参考链接
 
 [[cross-project-experience-ref]] — 新 FPGA 项目启动模板
 [[memory-link-graph]] — 记忆关联图
+
+[hooks-fix-2026-06-24](reference/hooks-fix-2026-06-24.md) — 三大闸门修复：路径格式是根因，settings.json 绝对路径后全部生效
 
 ## Agent 定义 (agents/)
 
