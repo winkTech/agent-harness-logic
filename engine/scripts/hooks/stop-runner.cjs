@@ -132,8 +132,7 @@ function main() {
     process.exit(Number.isInteger(result.status) ? result.status : 0);
   }
 
-  // 3. 降级：ECC 插件不可用，原样透传 stdin
-  process.stderr.write(`[stop-runner] WARNING: 无法解析 ECC 插件根目录，跳过 ${flagName}\n`);
+  // 3. 降级：ECC 插件不可用，原样透传 stdin（无插件 = 合法配置）
   process.stdout.write(raw);
   process.exit(0);
 }

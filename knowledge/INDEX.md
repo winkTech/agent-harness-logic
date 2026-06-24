@@ -10,7 +10,7 @@ tags: [index, navigation, knowledge-base]
 # 知识库索引
 
 > 导航: [场景入口卡](SCENE_CARDS.md) — [标签索引](TAG_INDEX.md) — [知识库规则](KNOWLEDGE_RULES.md)
-> 最后更新: 2026-06-24 | 文档: 87 篇 primary + 37 篇 source + 40 篇 鸢尾花书蒸馏 + 5 篇 methodology + 2 篇 references
+> 最后更新: 2026-06-24 | 文档: 97 篇 primary + 37 篇 source + 40 篇 鸢尾花书蒸馏 + 4 篇 methodology + 17 篇 references + 19 篇 templates
 
 ---
 
