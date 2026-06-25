@@ -143,6 +143,79 @@ function computeSummary(records) {
   return { total, correctBlock, falsePositive, falseNegative, fpRate, fnRate, accuracy, byGate, recent };
 }
 
+/**
+ * auto-record — 从 SQLite runtime_events 自动推断门禁准确率.
+ * 读取当前 session 的 tool_fail 事件，解析 payload 判断是哪道门禁触发的，
+ * 自动写入 fp-rate-log.jsonl.
+ */
+function autoRecord() {
+  try {
+    const { openDb } = require(path.join(HOME, 'engine/sqlite/index.cjs'));
+    const wright = openDb();
+    if (!wright || !wright.db) {
+      console.log('[fp-rate-tracker] auto-record: SQLite 不可用，跳过');
+      return;
+    }
+    const db = wright.db;
+
+    const sessionId = process.env.CLAUDE_SESSION_ID || 'unknown';
+
+    // 查询当前 session 的 tool_fail 事件
+    const events = db.prepare(`
+      SELECT payload, created_at FROM runtime_events
+      WHERE type = 'tool_fail' AND session_id = ?
+      ORDER BY event_id
+    `).all(sessionId);
+
+    if (!events || events.length === 0) {
+      console.log(`[fp-rate-tracker] auto-record: 无 tool_fail 事件 (session=${sessionId})`);
+      return;
+    }
+
+    let recorded = 0;
+    for (const ev of events) {
+      let payload;
+      try { payload = typeof ev.payload === 'string' ? JSON.parse(ev.payload) : ev.payload; } catch { continue; }
+
+      // 解析 tool_name/error 推断门禁
+      const toolName = (payload?.tool_name || payload?.tool || '').toLowerCase();
+      const error = (payload?.error || payload?.stderr || '').toLowerCase();
+      const command = (payload?.command || payload?.tool_input?.command || '').toLowerCase();
+
+      let gate = null;
+      if (error.includes('verification gate') || error.includes('verify first')) gate = 'verification';
+      else if (error.includes('commit gate') || error.includes('commit-gate')) gate = 'commit';
+      else if (error.includes('bash safety') || error.includes('bash-safety')) gate = 'bash-safety';
+      else if (error.includes('file protection') || error.includes('file-protection')) gate = 'file-protection';
+      else if (error.includes('diff size') || error.includes('diff-size')) gate = 'diff-size';
+      else if (error.includes('resource budget') || error.includes('resource-budget')) gate = 'resource-budget';
+      else if (error.includes('hdl gate') || error.includes('hdl-gate')) gate = 'hdl';
+      else if (error.includes('python gate') || error.includes('python-gate')) gate = 'verification';
+      else if (error.includes('matlab gate') || error.includes('matlab-gate')) gate = 'verification';
+      else if (error.includes('coverage gate') || error.includes('coverage-gate')) gate = 'verification';
+
+      if (gate) {
+        const entry = {
+          gate,
+          action: 'block',
+          correct: true, // 默认假设正确，人工可后续纠正
+          note: `auto: ${gate} 触发拦截`,
+          timestamp: ev.created_at || new Date().toISOString(),
+          sessionId,
+        };
+
+        ensureDir(path.dirname(STORE_FILE));
+        fs.appendFileSync(STORE_FILE, JSON.stringify(entry) + '\n', 'utf8');
+        recorded++;
+      }
+    }
+
+    console.log(`[fp-rate-tracker] auto-record: ✅ 记录了 ${recorded} 条门禁事件 (session=${sessionId})`);
+  } catch (e) {
+    console.error(`[fp-rate-tracker] auto-record: ⚠️ ${e.message}`);
+  }
+}
+
 function main() {
   const cmd = process.argv[2] || 'report';
   const args = {};
@@ -161,6 +234,9 @@ function main() {
     case 'record':
       record(args);
       break;
+    case 'auto-record':
+      autoRecord();
+      break;
     case 'report':
       report(args.json);
       break;
@@ -169,6 +245,7 @@ function main() {
 用法:
   node engine/scripts/fp-rate-tracker.cjs init
   node engine/scripts/fp-rate-tracker.cjs record --gate=<name> --correct=true/false [--note="..."]
+  node engine/scripts/fp-rate-tracker.cjs auto-record
   node engine/scripts/fp-rate-tracker.cjs report [--json]
 
 参数:

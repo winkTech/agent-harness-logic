@@ -101,23 +101,9 @@ function initSamples() {
   console.log('\n提示: 用实际 RTL 代码替换 input.description，人工标注 expected 后运行 calibration。');
 }
 
-// ── 模拟 Judge 运行 ─────────────────────────────────────────────────────────
-// 实际使用时，这里应调用 Verifier agent。当前为 mock 演示。
+// ── Judge 服务 ──────────────────────────────────────────────────────────────
 
-function mockJudge(sample) {
-  // 简单基于 category 的 mock 判断
-  const verdicts = {
-    hdl_correctness: 'fail',
-    hdl_performance: 'warn',
-    general: 'pass',
-    hdl_security: 'fail',
-  };
-  return {
-    verdict: verdicts[sample.category] || 'pass',
-    issues: sample.expected.issues,
-    confidence: 0.85,
-  };
-}
+const { callJudge, runMultipleJudges, updateElo, getEloState, saveEloState, recordEloMatch } = require('./lib/judge-service.cjs');
 
 // ── 运行校准 ─────────────────────────────────────────────────────────────────
 
@@ -157,22 +143,25 @@ function runCalibration(sampleFile) {
     total++;
     process.stdout.write(`  ${sample.id.padEnd(16)} `);
 
-    const judgeResult = mockJudge(sample);
-    const expected = sample.expected;
-
-    // 判断 verdict 是否一致
-    const verdictMatch = judgeResult.verdict === expected.verdict;
-    // 判断 issues 覆盖
-    const foundIssues = expected.issues.every(issue =>
-      judgeResult.issues.some(ji => ji.includes(issue) || issue.includes(ji))
-    );
-    const isCorrect = verdictMatch && foundIssues;
-
-    if (isCorrect) {
+    const isMulti = parseInt(process.argv.find(a => a.startsWith('--judges='))?.split('=')[1] || 0);
+let judgeResult;
+if (isMulti > 0) {
+  const multi = runMultipleJudges(sample, isMulti);
+  judgeResult = {
+    verdict: multi.majorityVerdict,
+    issues: multi.results[0]?.issues || [],
+    confidence: multi.unanimous ? 0.95 : 0.75,
+    correct: multi.correct,
+    multiJudge: true,
+  };
+} else {
+  judgeResult = callJudge(sample);
+}
+    if (judgeResult.correct) {
       console.log(`✅ (verdict=${judgeResult.verdict})`);
       correct++;
     } else {
-      console.log(`❌ 期望=(${expected.verdict}:${expected.issues.join(',')}) 实际=(${judgeResult.verdict}:${judgeResult.issues.join(',')})`);
+      console.log(`❌ 期望=(${sample.expected.verdict}:${sample.expected.issues.join(',')}) 实际=(${judgeResult.verdict}:${judgeResult.issues.join(',')})`);
     }
 
     results.push({
@@ -180,8 +169,8 @@ function runCalibration(sampleFile) {
       category: sample.category,
       expected: sample.expected,
       actual: judgeResult,
-      correct: isCorrect,
-      details: { verdictMatch, foundIssues },
+      correct: judgeResult.correct,
+      details: { verdictMatch: judgeResult.verdict === sample.expected.verdict },
     });
   }
 
@@ -202,6 +191,15 @@ function runCalibration(sampleFile) {
     console.log(`  [${cat}] ${rate}% (${stats.correct}/${stats.total})`);
   }
 
+  // ELO 更新
+  const includeElo = process.argv.includes('--elo');
+  if (includeElo && total > 0) {
+    const score = correct / total;  // 0-1
+    recordEloMatch('judge-service', 'ground-truth', score, 32);
+    const elo = getEloState();
+    console.log(`🏆 ELO: judge-service=${elo.ratings['judge-service']} ground-truth=${elo.ratings['ground-truth']}`);
+  }
+
   // 保存
   const output = {
     runAt: new Date().toISOString(),
@@ -210,12 +208,12 @@ function runCalibration(sampleFile) {
     accuracy: parseFloat(accuracy),
     byCategory: byCat,
     results,
+    elo: includeElo ? getEloState() : undefined,
   };
 
   ensureDir(path.dirname(RESULTS_FILE));
   fs.writeFileSync(RESULTS_FILE, JSON.stringify(output, null, 2), 'utf8');
   console.log(`\n结果已保存: ${RESULTS_FILE}`);
-  console.log('\n💡 提示: 将 mockJudge() 替换为实际 Verifier agent 调用以获得真实校准数据。');
 }
 
 // ── 报告 ────────────────────────────────────────────────────────────────────
@@ -270,17 +268,30 @@ function main() {
       initSamples();
       break;
     case 'run':
-      runCalibration(process.argv[3]);
+      const runFile = process.argv.slice(3).find(a => !a.startsWith('--'));
+      runCalibration(runFile);
       break;
     case 'report':
       generateReport(process.argv.includes('--json'));
       break;
+    case 'elo':
+      const eloState = getEloState();
+      console.log('\n━━━ ELO 排行榜 ━━━');
+      const sorted = Object.entries(eloState.ratings).sort((a, b) => b[1] - a[1]);
+      for (const [name, rating] of sorted) {
+        console.log(`  ${name.padEnd(20)} ${rating}`);
+      }
+      console.log(`\n历史记录: ${eloState.history.length} 场`);
+      break;
     default:
       console.log(`
 用法:
-  node engine/scripts/judge-calibration.cjs init              # 初始化基准样本
-  node engine/scripts/judge-calibration.cjs run [sample-file] # 运行校准
-  node engine/scripts/judge-calibration.cjs report [--json]   # 查看报告
+  node engine/scripts/judge-calibration.cjs init                    # 初始化基准样本
+  node engine/scripts/judge-calibration.cjs run [sample-file]       # 运行校准
+  node engine/scripts/judge-calibration.cjs run --judges=3 [file]   # 多 judge 投票
+  node engine/scripts/judge-calibration.cjs run --elo               # 含 ELO 评分
+  node engine/scripts/judge-calibration.cjs report [--json]         # 查看报告
+  node engine/scripts/judge-calibration.cjs elo                     # 查看 ELO 排行榜
 `);
   }
 }

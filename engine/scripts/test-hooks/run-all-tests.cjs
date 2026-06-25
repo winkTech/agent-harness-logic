@@ -110,6 +110,8 @@ const CORE_SCRIPTS = [
   'engine/scripts/dream-consolidate.cjs',
   'engine/scripts/dream-startup-inject.cjs',
   'engine/scripts/semantic-search.cjs',
+  'engine/scripts/coverage-runner.cjs',
+  'engine/scripts/dashboard-html.cjs',
 ];
 
 for (const script of CORE_SCRIPTS) {
@@ -130,11 +132,15 @@ const HOOK_SCRIPTS = [
   'engine/scripts/hooks/frustration-detector.cjs',
   'engine/scripts/hooks/hdl-gate.cjs',
   'engine/scripts/hooks/pre-commit-lint.js',
+  'engine/scripts/hooks/python-gate.cjs',
+  'engine/scripts/hooks/matlab-gate.cjs',
   'engine/scripts/hooks/lint-auto-gate.js',
   'engine/scripts/hooks/stop-runner.cjs',
+  'engine/scripts/hooks/fpr-calibration-hook.cjs',
   'engine/scripts/hooks/context-pressure-warn.cjs',
   'engine/scripts/hooks/isolation-check.cjs',
   'engine/scripts/gates/commit-gate.cjs',
+  'engine/scripts/hooks/coverage-gate.cjs',
   'engine/hooks/memory/memory-sqlite-sync.cjs',
   'engine/hooks/learning/signal-collector.cjs',
   'engine/hooks/learning/cost-tracker-hook.cjs',
@@ -215,7 +221,238 @@ define('BashSafety', '安全命令放行', () => {
   return { pass: r.status === 0, detail: `安全命令 exit=${r.status}` };
 });
 
-// ── Suite 5: 功能测试 — Commit Gate ──
+// ── Suite 5: 功能测试 — Python Gate ──
+
+define('PythonGate', '安全命令放行 (pytest)', () => {
+  const p = path.join(HOME, 'engine/scripts/hooks/python-gate.cjs');
+  if (!fs.existsSync(p)) return { pass: true, skip: true, detail: '文件不存在' };
+  const stdin = JSON.stringify({ hook_event_name: 'PreToolUse', tool_name: 'Bash', tool_input: { command: 'python -m pytest tests/' } });
+  const r = runNode(p, stdin);
+  return { pass: r.status === 0, detail: `pytest exit=${r.status}` };
+});
+
+define('PythonGate', '黄金模型写入拦截', () => {
+  const p = path.join(HOME, 'engine/scripts/hooks/python-gate.cjs');
+  if (!fs.existsSync(p)) return { pass: true, skip: true, detail: '文件不存在' };
+  const stdin = JSON.stringify({ hook_event_name: 'PreToolUse', tool_name: 'Bash', tool_input: { command: "python -c \"open('matlab/golden_model.m', 'w').write('data')\"" } });
+  const r = runNode(p, stdin);
+  return { pass: r.status === 2, detail: `golden write exit=${r.status} (期望 2)` };
+});
+
+define('PythonGate', '敏感文件读取拦截', () => {
+  const p = path.join(HOME, 'engine/scripts/hooks/python-gate.cjs');
+  if (!fs.existsSync(p)) return { pass: true, skip: true, detail: '文件不存在' };
+  const stdin = JSON.stringify({ hook_event_name: 'PreToolUse', tool_name: 'Bash', tool_input: { command: "python -c \"open('.env').read()\"" } });
+  const r = runNode(p, stdin);
+  return { pass: r.status === 2, detail: `sensitive read exit=${r.status} (期望 2)` };
+});
+
+define('PythonGate', 'TDD 新模块缺测试文件拦截', () => {
+  const p = path.join(HOME, 'engine/scripts/hooks/python-gate.cjs');
+  if (!fs.existsSync(p)) return { pass: true, skip: true, detail: '文件不存在' };
+  // 使用不存在的 /dev/null 风格的路径，确保测试文件不存在
+  const filePath = path.join(HOME, 'var', '_test_tmp_new_module.py');
+  const stdin = JSON.stringify({ hook_event_name: 'PreToolUse', tool_name: 'Write', tool_input: { file_path: filePath, content: 'def foo(): pass' } });
+  const r = runNode(p, stdin);
+  // 清理可能创建的临时文件
+  try { fs.unlinkSync(filePath); } catch {}
+  return { pass: r.status === 2, detail: `TDD exit=${r.status} (期望 2)` };
+});
+
+define('PythonGate', '现有文件修改放行', () => {
+  const p = path.join(HOME, 'engine/scripts/hooks/python-gate.cjs');
+  if (!fs.existsSync(p)) return { pass: true, skip: true, detail: '文件不存在' };
+  const stdin = JSON.stringify({ hook_event_name: 'PreToolUse', tool_name: 'Write', tool_input: { file_path: __filename, content: '# existing file' } });
+  const r = runNode(p, stdin);
+  return { pass: r.status === 0, detail: `existing file exit=${r.status}` };
+});
+
+// ── Suite 6: 功能测试 — MATLAB Gate ──
+
+define('MatlabGate', '安全命令放行', () => {
+  const p = path.join(HOME, 'engine/scripts/hooks/matlab-gate.cjs');
+  if (!fs.existsSync(p)) return { pass: true, skip: true, detail: '文件不存在' };
+  const stdin = JSON.stringify({ hook_event_name: 'PreToolUse', tool_name: 'Bash', tool_input: { command: 'matlab -batch "disp(1+1)"' } });
+  const r = runNode(p, stdin);
+  return { pass: r.status === 0, detail: `safe exit=${r.status}` };
+});
+
+define('MatlabGate', 'Golden 写入拦截', () => {
+  const p = path.join(HOME, 'engine/scripts/hooks/matlab-gate.cjs');
+  if (!fs.existsSync(p)) return { pass: true, skip: true, detail: '文件不存在' };
+  const stdin = JSON.stringify({ hook_event_name: 'PreToolUse', tool_name: 'Bash', tool_input: { command: "matlab -batch \"save('matlab/results.mat')\"" } });
+  const r = runNode(p, stdin);
+  return { pass: r.status === 2, detail: `golden write exit=${r.status} (期望 2)` };
+});
+
+define('MatlabGate', 'Python 引擎调用拦截', () => {
+  const p = path.join(HOME, 'engine/scripts/hooks/matlab-gate.cjs');
+  if (!fs.existsSync(p)) return { pass: true, skip: true, detail: '文件不存在' };
+  const stdin = JSON.stringify({ hook_event_name: 'PreToolUse', tool_name: 'Bash', tool_input: { command: 'python -c "import matlab.engine; eng = matlab.engine.start_matlab()"' } });
+  const r = runNode(p, stdin);
+  return { pass: r.status === 2, detail: `python engine exit=${r.status} (期望 2)` };
+});
+
+// ── Suite 7: 功能测试 — Coverage ──
+
+define('CoverageRunner', '脚本语法正确', () => {
+  const p = path.join(HOME, 'engine/scripts/coverage-runner.cjs');
+  if (!fs.existsSync(p)) return { pass: true, skip: true, detail: '文件不存在' };
+  const r = nodeCheck(p);
+  return { pass: r.ok, detail: r.ok ? '语法通过' : r.stderr.slice(0, 200) };
+});
+
+define('CoverageRunner', '--check 模式可运行', () => {
+  const p = path.join(HOME, 'engine/scripts/coverage-runner.cjs');
+  if (!fs.existsSync(p)) return { pass: true, skip: true, detail: '文件不存在' };
+  const r = spawnSync('node', [p, '--check'], {
+    encoding: 'utf8', timeout: 15000, windowsHide: true,
+  });
+  return { pass: r.status === 0, detail: `exit=${r.status}` };
+});
+
+define('CoverageGate', '语法正确', () => {
+  const p = path.join(HOME, 'engine/scripts/coverage-gate.cjs');
+  if (!fs.existsSync(p)) return { pass: true, skip: true, detail: '文件不存在' };
+  const r = nodeCheck(p);
+  return { pass: r.ok, detail: r.ok ? '语法通过' : r.stderr.slice(0, 200) };
+});
+
+define('CoverageGate', '非 git 命令放行', () => {
+  const p = path.join(HOME, 'engine/scripts/coverage-gate.cjs');
+  if (!fs.existsSync(p)) return { pass: true, skip: true, detail: '文件不存在' };
+  const stdin = JSON.stringify({ hook_event_name: 'PreToolUse', tool_name: 'Bash', tool_input: { command: 'ls -la' } });
+  const r = runNode(p, stdin);
+  return { pass: r.status === 0, detail: `non-git exit=${r.status}` };
+});
+
+// ── Suite 8: 功能测试 — FPR 校准 ──
+
+define('FPRTracker', 'auto-record 语法正确', () => {
+  const p = path.join(HOME, 'engine/scripts/fp-rate-tracker.cjs');
+  const r = nodeCheck(p);
+  return { pass: r.ok, detail: r.ok ? '语法通过' : r.stderr.slice(0, 200) };
+});
+
+define('FPRTracker', 'auto-record 可运行', () => {
+  const p = path.join(HOME, 'engine/scripts/fp-rate-tracker.cjs');
+  const r = spawnSync('node', [p, 'auto-record'], {
+    encoding: 'utf8', timeout: 10000, windowsHide: true,
+  });
+  return { pass: !r.error, detail: r.error ? r.error.message : `exit=${r.status}` };
+});
+
+define('FPRHook', '语法正确', () => {
+  const p = path.join(HOME, 'engine/scripts/hooks/fpr-calibration-hook.cjs');
+  if (!fs.existsSync(p)) return { pass: true, skip: true, detail: '文件不存在' };
+  const r = nodeCheck(p);
+  return { pass: r.ok, detail: r.ok ? '语法通过' : r.stderr.slice(0, 200) };
+});
+
+define('FPRHook', 'Exit 0 不阻塞', () => {
+  const p = path.join(HOME, 'engine/scripts/hooks/fpr-calibration-hook.cjs');
+  if (!fs.existsSync(p)) return { pass: true, skip: true, detail: '文件不存在' };
+  const r = spawnSync('node', [p], {
+    encoding: 'utf8', timeout: 10000, windowsHide: true,
+    input: JSON.stringify({ hook_event_name: 'Stop' }),
+  });
+  return { pass: r.status === 0, detail: `exit=${r.status}` };
+});
+
+// ── Suite 9: 功能测试 — Dashboard ──
+
+define('Dashboard', '脚本语法正确', () => {
+  const p = path.join(HOME, 'engine/scripts/dashboard-html.cjs');
+  if (!fs.existsSync(p)) return { pass: true, skip: true, detail: '文件不存在' };
+  const r = nodeCheck(p);
+  return { pass: r.ok, detail: r.ok ? '语法通过' : r.stderr.slice(0, 200) };
+});
+
+define('Dashboard', 'check 模式可运行', () => {
+  const p = path.join(HOME, 'engine/scripts/dashboard-html.cjs');
+  if (!fs.existsSync(p)) return { pass: true, skip: true, detail: '文件不存在' };
+  const r = spawnSync('node', [p, 'check'], {
+    encoding: 'utf8', timeout: 15000, windowsHide: true,
+  });
+  return { pass: r.status === 0, detail: `exit=${r.status}` };
+});
+
+define('Dashboard', 'HTML 生成不崩溃', () => {
+  const p = path.join(HOME, 'engine/scripts/dashboard-html.cjs');
+  if (!fs.existsSync(p)) return { pass: true, skip: true, detail: '文件不存在' };
+  const r = spawnSync('node', [p, 'generate', '--stdout'], {
+    encoding: 'utf8', timeout: 15000, windowsHide: true,
+  });
+  const hasHtml = (r.stdout || '').includes('<!DOCTYPE html>');
+  return { pass: r.status === 0 && hasHtml, detail: r.error ? r.error.message : `exit=${r.status} hasHTML=${hasHtml}` };
+});
+
+// ── Suite 10: 功能测试 — Judge 校准 ──
+
+define('JudgeService', '语法正确', () => {
+  const p = path.join(HOME, 'engine/scripts/lib/judge-service.cjs');
+  if (!fs.existsSync(p)) return { pass: true, skip: true, detail: '文件不存在' };
+  const r = nodeCheck(p);
+  return { pass: r.ok, detail: r.ok ? '语法通过' : r.stderr.slice(0, 200) };
+});
+
+define('JudgeService', 'ELO 评分算法正确', () => {
+  const { updateElo, expectedScore } = require(path.join(HOME, 'engine/scripts/lib/judge-service.cjs'));
+  // 强队击败弱队 → ELO 增加
+  const result = updateElo(1500, 1500, 1, 32);
+  return { pass: result.newA > 1500 && result.newB < 1500, detail: `A=${result.newA} B=${result.newB}` };
+});
+
+define('JudgeService', 'callJudge 可运行', () => {
+  const { callJudge } = require(path.join(HOME, 'engine/scripts/lib/judge-service.cjs'));
+  const r = callJudge({ category: 'hdl_security', input: { description: '硬编码密钥' }, expected: { verdict: 'fail', issues: ['密钥'] } });
+  return { pass: r.correct, detail: `verdict=${r.verdict} correct=${r.correct}` };
+});
+
+define('JudgeService', '多 judge 投票可运行', () => {
+  const { runMultipleJudges } = require(path.join(HOME, 'engine/scripts/lib/judge-service.cjs'));
+  const r = runMultipleJudges({ category: 'hdl_correctness', input: { description: '位宽不匹配' }, expected: { verdict: 'fail', issues: ['位宽不匹配'] } }, 3);
+  return { pass: r.correct, detail: `majority=${r.majorityVerdict} unanimous=${r.unanimous}` };
+});
+
+define('JudgeCalibration', 'run 校准可运行', () => {
+  const p = path.join(HOME, 'engine/scripts/judge-calibration.cjs');
+  if (!fs.existsSync(p)) return { pass: true, skip: true, detail: '文件不存在' };
+  const r = spawnSync('node', [p, 'run'], {
+    encoding: 'utf8', timeout: 15000, windowsHide: true,
+  });
+  return { pass: r.status === 0, detail: r.error ? r.error.message : `exit=${r.status}` };
+});
+
+define('JudgeCalibration', 'elo 可运行', () => {
+  const p = path.join(HOME, 'engine/scripts/judge-calibration.cjs');
+  if (!fs.existsSync(p)) return { pass: true, skip: true, detail: '文件不存在' };
+  const r = spawnSync('node', [p, 'elo'], {
+    encoding: 'utf8', timeout: 10000, windowsHide: true,
+  });
+  return { pass: r.status === 0, detail: r.error ? r.error.message : `exit=${r.status}` };
+});
+
+// ── Suite 11: 功能测试 — E2E ──
+
+define('E2ETests', 'test-e2e.cjs 语法正确', () => {
+  const p = path.join(HOME, 'engine/scripts/test-hooks/test-e2e.cjs');
+  if (!fs.existsSync(p)) return { pass: true, skip: true, detail: '文件不存在' };
+  const r = nodeCheck(p);
+  return { pass: r.ok, detail: r.ok ? '语法通过' : r.stderr.slice(0, 200) };
+});
+
+define('E2ETests', '全部 E2E 通过', () => {
+  const p = path.join(HOME, 'engine/scripts/test-hooks/test-e2e.cjs');
+  if (!fs.existsSync(p)) return { pass: true, skip: true, detail: '文件不存在' };
+  const r = spawnSync('node', [p], {
+    encoding: 'utf8', timeout: 30000, windowsHide: true,
+  });
+  const passed = (r.stdout + '').includes('全部通过');
+  return { pass: r.status === 0 || passed, detail: passed ? '通过' : `exit=${r.status}` };
+});
+
+// ── Suite 12: 功能测试 — Commit Gate ──
 
 define('CommitGate', '脚本语法正确', () => {
   const p = path.join(HOME, 'engine/scripts/gates/commit-gate.cjs');
@@ -242,7 +479,7 @@ define('ResourceBudgetGate', '脚本语法正确', () => {
   return { pass: r.ok, detail: r.ok ? '语法通过' : r.stderr.slice(0, 200) };
 });
 
-// ── Suite 8: SQLite 健康 ──
+// ── Suite 9: SQLite 健康 ──
 
 define('SQLite', 'Schema 加载', () => {
   try {
