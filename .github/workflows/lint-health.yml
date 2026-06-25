@@ -75,3 +75,35 @@ jobs:
             echo "WARNING: $config not found, skipping hook check"
           fi
           [ "$errors" -eq 0 ] || exit 1
+
+  hook-tests:
+    name: Hook Unit Tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Use Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Check Node.js syntax for all engine CJS files
+        run: |
+          errors=0
+          while IFS= read -r file; do
+            if ! node --check "$file" 2>/dev/null; then
+              echo "FAIL: $file"
+              errors=$((errors + 1))
+            fi
+          done < <(find engine -name '*.cjs' -o -name '*.js' | grep -v node_modules | sort)
+          echo "Syntax errors: $errors"
+          [ "$errors" -eq 0 ] || exit 1
+      - name: Check evaluation tool files exist
+        run: |
+          for f in engine/scripts/test-hooks/run-all-tests.cjs \
+                   engine/scripts/delivery-tracker.cjs \
+                   engine/scripts/fp-rate-tracker.cjs \
+                   engine/scripts/config-consistency-checker.cjs \
+                   engine/scripts/judge-calibration.cjs \
+                   engine/scripts/quality-regression-dashboard.cjs \
+                   engine/scripts/domain-extension-scanner.cjs; do
+            [ -f "$f" ] && echo "OK: $f" || { echo "MISSING: $f"; exit 1; }
+          done
