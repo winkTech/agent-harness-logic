@@ -45,8 +45,16 @@
 │   │       └── memory-sqlite-sync.cjs ← 记忆文件 ↔ SQLite 同步
 │   ├── scripts/
 │   │   ├── hooks/          ←     本地 hook 脚本（lint/diff/挫败检测/文件保护）
+│   │   │   ├── python-gate.cjs        ←     Python 专用门禁 (TDD + 安全)
+│   │   │   ├── matlab-gate.cjs        ←     MATLAB 专用门禁 (golden 保护)
+│   │   │   ├── coverage-gate.cjs      ←     覆盖率退化门禁
+│   │   │   └── fpr-calibration-hook.cjs  ← 自动假阳性校准
+│   │   ├── test-hooks/
+│   │   │   ├── run-all-tests.cjs     ←     115 条 Hook 测试套件
+│   │   │   └── test-e2e.cjs          ←     E2E 恢复测试 (6 项)
 │   │   ├── lib/
-│   │   │   └── lint-utils.cjs         ← lint 工具共享库
+│   │   │   ├── lint-utils.cjs         ←     lint 工具共享库
+│   │   │   └── judge-service.cjs      ←     ELO 评分 + 多 Judge 投票
 │   │   ├── dream-consolidate.cjs      ← Dream 自学习提炼器
 │   │   ├── memory-health-check.cjs    ← 记忆系统健康检查
 │   │   ├── ecc-root-resolver.cjs      ← ECC 插件根路径共享解析
@@ -54,7 +62,13 @@
 │   │   ├── memory-retrieve.sh         ← L2: 统一检索入口
 │   │   ├── runtime-state.cjs          ← L3: 运行时状态管理器
 │   │   ├── agent-context-budget.cjs   ← 上下文预算 + 智能压缩
-│   │   └── agent-context-watchdog.cjs ← Agent 上下文监测
+│   │   ├── agent-context-watchdog.cjs ← Agent 上下文监测
+│   │   ├── coverage-runner.cjs        ← V8 代码覆盖率检测
+│   │   ├── dashboard-html.cjs         ← 静态 HTML 仪表盘生成器
+│   │   ├── delivery-tracker.cjs       ← 交付率追踪
+│   │   ├── fp-rate-tracker.cjs        ← 门禁假阳性率追踪
+│   │   ├── judge-calibration.cjs      ← LLM-as-Judge 校准度评估
+│   │   └── quality-regression-dashboard.cjs  ← 质量退化仪表盘
 │   └── schemas/           ← JSON Schema 定义
 │
 ├── memory/                ← L2 记忆：活跃记忆
@@ -92,12 +106,12 @@
 
 > CLAUDE.md 写承诺，hooks 写执行。承诺可以被合理化，执行不可以。
 
-### 9 种 Hook 事件 · 37 条注册 Hook
+### 9 种 Hook 事件 · 42 条注册 Hook
 
 | 事件 | 时机 | 本地钩子 | ECC 插件钩子 |
 |:-----|:-----|:---------|:-------------|
 | `SessionStart` | 新 session 开局 | memory-track, resolve-plugin-path | session-start-bootstrap |
-| `PreToolUse` | 工具调用前 | 挫败检测, pre-commit-lint, diff-size-gate, file-protection-guard, **resource-budget-gate** | run-with-flags(6 个场景) |
+| `PreToolUse` | 工具调用前 | 挫败检测, pre-commit-lint, diff-size-gate, file-protection-guard, **resource-budget-gate**, **python-gate**, **matlab-gate**, **coverage-gate** | run-with-flags(6 个场景) |
 | `PostToolUse` | 工具调用后 | memory-sqlite-sync, skill-tracker | 观测/指标/监控/质量门 |
 | `PostToolUseFailure` | 工具失败 | signal-collector(tool_fail) | MCP 健康检查 |
 | `Stop` | 响应结束 | lint-auto-gate, cost-tracker | 格式化/检查/Session 持久化 |
@@ -240,6 +254,73 @@ node engine/scripts/harness-init.cjs
 
 ---
 
+## 📐 评估基础设施（Benchmarking & Observability）
+
+Harness 配备 7 个评估工具，覆盖质量度量、交付追踪、Judge 校准和端到端验证。
+
+```
+质量退化 ─→ quality-regression-dashboard.cjs  ← 跨 session 指标趋势
+交付率   ─→ delivery-tracker.cjs              ← DAG 阶段完成率/重试率
+假阳性率 ─→ fp-rate-tracker.cjs               ← 门禁拦截准确率 (auto-record)
+代码覆盖 ─→ coverage-runner.cjs               ← V8 行覆盖率 (阈值 60%)
+HTML 仪表 ─→ dashboard-html.cjs               ← 自包含 Chart.js 仪表盘
+Judge 校准─→ judge-calibration.cjs            ← 6 样本 100% + ELO 评分
+E2E 验证   ─→ test-hooks/test-e2e.cjs          ← 6 项集成测试
+```
+
+### 一键套件
+
+```bash
+# 全量测试 (115 条)
+node engine/scripts/test-hooks/run-all-tests.cjs
+
+# 覆盖率 (目标 ≥60%)
+node engine/scripts/coverage-runner.cjs
+
+# E2E 恢复测试
+node engine/scripts/test-hooks/test-e2e.cjs
+
+# 生成实时仪表盘 (自动弹出浏览器)
+node engine/scripts/dashboard-html.cjs generate
+```
+
+### 交付率追踪 (DAG 工作流)
+
+```bash
+node engine/scripts/delivery-tracker.cjs record --phase=P4 --status=pass --modules=3
+node engine/scripts/delivery-tracker.cjs report   # 柱状图按阶段
+```
+
+### 门禁假阳性/假阴性率
+
+```bash
+node engine/scripts/fp-rate-tracker.cjs record --gate=verification --correct=true
+node engine/scripts/fp-rate-tracker.cjs auto-record  # 从 SQLite 自动推断
+node engine/scripts/fp-rate-tracker.cjs report        # 按 gate 分层报告
+```
+
+### ELO Judge 校准
+
+```bash
+node engine/scripts/judge-calibration.cjs init       # 创建 6 个基准样本
+node engine/scripts/judge-calibration.cjs run         # 运行校准 (默认规则)
+node engine/scripts/judge-calibration.cjs run --judges=3  # 多 Judge 投票
+node engine/scripts/judge-calibration.cjs run --elo       # 含 ELO 评分
+node engine/scripts/judge-calibration.cjs elo             # 查看 ELO 排行
+```
+
+### 质量退化检测
+
+```bash
+node engine/scripts/quality-regression-dashboard.cjs record --metric=fmax --value=250
+node engine/scripts/quality-regression-dashboard.cjs trend --metric=coverage --days=30
+node engine/scripts/quality-regression-dashboard.cjs report  # 自动 10% 退化警报
+```
+
+所有工具遵循统一的 `report --json` 接口，数据直接由 HTML 仪表盘读取。
+
+---
+
 ## MCP 服务器
 
 | MCP | 配置来源 | 用途 |
@@ -287,3 +368,10 @@ node engine/scripts/harness-init.cjs
 | 看当前任务 | `/start` 或 `cat var/active-task.yaml` |
 | 起始/收尾 | `/start` 或 `/handoff` |
 | 清理运行时 | `rm -rf var/*`（不影响代码） |
+| Hook 测试套件 | `node engine/scripts/test-hooks/run-all-tests.cjs` |
+| E2E 恢复测试 | `node engine/scripts/test-hooks/test-e2e.cjs` |
+| 代码覆盖率 | `node engine/scripts/coverage-runner.cjs` |
+| HTML 仪表盘 | `node engine/scripts/dashboard-html.cjs generate` |
+| Judge 校准 | `node engine/scripts/judge-calibration.cjs run` |
+| 门禁假阳性率 | `node engine/scripts/fp-rate-tracker.cjs report` |
+| 交付率追踪 | `node engine/scripts/delivery-tracker.cjs report` |
