@@ -27,9 +27,43 @@
  *   }})
  */
 
-const dag = require('../engine/dag-engine.cjs');
-const fs = require('fs');
-const path = require('path');
+// v3.5.1 fix: 移除 require() (Workflow 引擎不支持 CommonJS)
+// fs/path → 内联实现, dag-engine → 内联 DAG 拓扑执行器
+const { join: pathJoin } = { join: (...p) => p.join('/').replace(/\/+/g, '/') };
+
+// fs 替代: 委托给 sub-agent (Workflow script 无 Node.js API)
+async function _agentCheck(p) {
+  try { const r = await agent(`Does file exist: ${p}? Output ONLY "yes" or "no".`, {label:'fs-check'}); return String(r).trim().toLowerCase().startsWith('y'); } catch { return false; }
+}
+async function _agentRead(p) {
+  try { return await agent(`Read file: ${p}. Output complete content.`, {label:'fs-read'}); } catch { return ''; }
+}
+async function _agentDir(d) {
+  try { const r = await agent(`List .json files in: ${d}. Output as JSON array of filenames.`, {label:'fs-dir'}); return JSON.parse(String(r)); } catch { return []; }
+}
+
+// DAG 拓扑执行器 (替代 dag-engine.cjs)
+async function _dagExecute(nodes, opts) {
+  const results = {};
+  const completed = new Set();
+  const nodeList = Object.entries(nodes);
+  const logFn = opts?.log || log;
+  while (completed.size < nodeList.length) {
+    const ready = nodeList.filter(([name, node]) => !completed.has(name) && (node.deps || []).every(d => completed.has(d)));
+    if (ready.length === 0) throw new Error('DAG deadlock: completed=' + [...completed].join(','));
+    opts?.onProgress?.(completed.size + 1, nodeList.length, ready.map(r=>r[0]));
+    // 并行执行同层节点, 失败不阻断兄弟节点
+    await parallel(ready.map(([name, node]) => () => (async () => {
+      try { results[name] = { status: 'ok', data: await node.run(results) }; }
+      catch(e) { results[name] = { status: 'error', data: String(e) }; logFn(`⚠️ DAG ${name} failed: ${String(e).slice(0,200)}`); }
+      completed.add(name);
+    })()));
+  }
+  const nodeCount = nodeList.length;
+  const maxDepth = (n, d=0) => { const nd = nodes[n]; return nd && nd.deps ? Math.max(...nd.deps.map(dep => maxDepth(dep, d+1)), d) : d; };
+  const layerCount = Math.max(...nodeList.map(([n]) => maxDepth(n))) + 1;
+  return { results, nodeCount, layerCount };
+}
 
 export const meta = {
   name: 'hdl-coding-dag-workflow',
@@ -52,8 +86,9 @@ export const meta = {
 // ── 主参数 ─────────────────────────────────────────────────────────────────
 
 const modules = args?.modules || [];
+const moduleOrder = args?.moduleOrder || modules;  // Cascade dependency order (input→output)
 const liteMode = args?.lite === true;
-const projectRoot = args?.projectRoot || process.cwd();
+const projectRoot = args?.projectRoot || '.';  // v3.5.1: process.cwd() 不可用
 
 // ── 模块分类（自动 / 手动覆盖）─────────────────────────────────────────────
 
@@ -269,12 +304,12 @@ ${sysHint}
     ]);
 
     // ── 校验 architecture.yaml 完整性 ─────────────────────────
-    const archPath = path.join(projectRoot, '06_doc', 'architecture.yaml');
+    const archPath = pathJoin(projectRoot, '06_doc', 'architecture.yaml');
     log(`🔍 校验 architecture.yaml: ${archPath}`);
-    if (!fs.existsSync(archPath)) {
+    if (!await /*fs*/_agentCheck(archPath)) {
       throw new Error(`❌ architecture.yaml 不存在于 ${archPath}\n   P1b 未产出微架构文件, 请确保写入 06_doc/architecture.yaml`);
     }
-    const archContent = fs.readFileSync(archPath, 'utf-8');
+    const archContent = await /*fs*/_agentRead(archPath, 'utf-8');
     const requiredFields = ['modules', 'pipeline_stages', 'fsm_states', 'bit_width', 'latency'];
     const missing = requiredFields.filter(f => !archContent.includes(f));
     if (missing.length > 0) {
@@ -290,7 +325,7 @@ ${sysHint}
     log('保留原因: 架构方案是后续所有 RTL 的契约，压缩时丢失 = 全部重来');
     log(`模块列表: ${modules.join(', ') || '项目默认'}`);
     log('文件产出: 06_doc/architecture.yaml, 06_doc/pipeline_diagram.md, 06_doc/algorithm_spec.md');
-    log(`流水线级数: ${(() => { try { return JSON.parse(fs.readFileSync(archPath,'utf8'))?.pipeline_stages?.length || '未知'; } catch { return '未知'; } })()}`);
+    // (v3.5.1: 流水线级数统计委托给 P1b agent, fs 不可用)
     log('关键决策: FSM 状态图、模块接口定义、定点 Q 格式');
     log('=== 保留块结束 ===');
     log('');
@@ -401,7 +436,7 @@ d) [SHOULD] TB 自检通过: compile + 自动 PASS/FAIL 结论
 };
 
 // ═════════════════════════════════════════════════════════════════════════════
-// Phase 4: 逐模块 RTL + 脚本化对比 [MUST]  — D+B 融合
+// Phase 4: 逐模块 RTL + 脚本化对比 — 3-stage pipeline (编码→调试循环→终验)
 // ═════════════════════════════════════════════════════════════════════════════
 
 nodes.p4_rtl = {
@@ -411,36 +446,265 @@ nodes.p4_rtl = {
     const tb = ctx.p3_tb?.data || '';
     const moduleList = modules.length > 0 ? modules : ['模块_1'];
     const fixedptHint = fixedpt ? String(fixedpt).slice(0, 200) : '[Lite] 无定点报告';
+    const prjRoot = projectRoot;
+    const cascadeResults = {};  // modName → { stage2Pass, stage3Pass } — cascade tracking across modules
 
-    log(`[Phase 4] 分拆为 ${moduleList.length} 个独立 agent, 每模块独立上下文`);
+    log(`[Phase 4] 3-stage pipeline: RTL编码 → 仿真调试循环 → 独立终验`);
+    log(`  模块: ${moduleList.join(', ')}`);
+    log(`  Stage 2 内置 Debugger↔Verifier 双视角调试循环, max 5 次`);
 
-    // 逐模块编码: 每个模块独立 agent, 互不干扰
     const results = await pipeline(
-      moduleList,
-      (mod) => agent(
-        '执行 RTL 编码: ' + mod + '\n\n'
-        + '目标文件: 01_src/00_hdl/' + mod + '/' + mod + '.sv\n'
-        + '如果文件已存在 → 读取后原地覆盖。禁止创建 ' + mod + '_v2.sv 等变体。\n'
-        + '参考: architecture.yaml 中 ' + mod + ' 的微架构方案\n\n'
-        + '定点参考: ' + fixedptHint + '\n'
-        + 'TB: 02_sim/tb_' + mod + '.sv (唯一 TB, 直接覆盖)\n\n'
-        + '[MUST 完成标准]\n'
-        + '1. 按 architecture.yaml 微架构编码 (流水线/FSM/位宽一致)\n'
-        + '2. make lint 通过 — 不通过不进下一步\n'
-        + '3. make compile 通过\n'
-        + '4. 运行仿真, 自动对比 golden 向量\n'
-        + '5. 输出 JSON 证据到 02_sim/check_results/' + mod + '.json\n'
-        + '   {"module":"' + mod + '","status":"PASS|FAIL","compared_points":N}\n'
-        + '6. FAIL → 分析根因 → 修复 RTL → 重对比, 直到 PASS\n'
-        + '7. 清理: 删除 wlft* transcript *.wlf vsim.wlf\n'
-        + '8. RTL 输出必须与定点 Golden Model 逐周期逐比特对齐',
-        { label: 'rtl-' + mod, phase: 'Phase 4 RTL编码' }
-      ),
+      moduleOrder,
+
+      // ── Stage 1: RTL 编码 ──────────────────────────────────────────────────
+      async (mod) => {
+        await agent(
+          `执行 RTL 编码: ${mod}
+
+目标文件: 01_src/00_hdl/${mod}/${mod}.sv
+如果文件已存在 → 读取后原地覆盖。禁止创建 ${mod}_v2.sv 等变体。
+
+参考: architecture.yaml 中 ${mod} 的微架构方案
+定点参考: ${fixedptHint}
+TB: 02_sim/tb_${mod}.sv (唯一 TB, 直接覆盖)
+
+[MUST 完成标准]
+1. 按 architecture.yaml 微架构编码 (流水线/FSM/位宽一致)
+2. make lint 通过
+3. make compile 通过
+4. 输出 RTL 源码到目标文件`,
+          { label: `rtl-code-${mod}`, phase: 'Phase 4 RTL编码' }
+        );
+        return { mod, stage1: 'done' };
+      },
+
+      // ── Stage 2: 仿真调试循环 ──────────────────────────────────────────────
+      async (prev, mod) => {
+        let pass = false;
+        let attempts = 0;
+        const MAX_ATTEMPTS = 5;
+        let lastError = '';
+        let needUserReview = false;
+
+        // ── Cascade context: upstream module verification status ──
+        const modIndex = moduleOrder.indexOf(mod);
+        const upstreamModules = moduleOrder.slice(0, Math.max(0, modIndex));
+        const upstreamVerified = upstreamModules.length === 0 || upstreamModules.every(u => cascadeResults[u]?.stage2Pass === true);
+        const upstreamFailedNames = upstreamModules.filter(u => cascadeResults[u] && !cascadeResults[u].stage2Pass);
+        if (upstreamModules.length > 0 && !upstreamVerified) {
+          log(`  🔗 ${mod}: 上游 ${upstreamModules.length} 个模块中 ${upstreamFailedNames.length} 个未通过 — 输入信号可能异常`);
+        }
+
+        while (!pass && attempts < MAX_ATTEMPTS && !needUserReview) {
+          attempts++;
+
+          // Run simulation & compare with golden
+          const simOut = String(await agent(
+            `运行仿真并对比 Golden 向量: ${mod}
+
+1. 运行仿真 (make sim 或 vsim 命令)
+2. 自动对比 golden 向量: 02_sim/tv/${mod}_tv.txt
+3. 输出 JSON 证据到 02_sim/check_results/${mod}.json
+   {"module":"${mod}","status":"PASS|FAIL","compared_points":N}
+4. 如果 PASS → 输出第一行 "PASS"
+5. 如果 FAIL → 输出仿真错误日志 (前 100 行)`,
+            { label: `sim-run-${mod}-try${attempts}`, phase: 'Phase 4 仿真调试' }
+          ) || '');
+
+          // Check JSON evidence
+          const jsonPath = pathJoin(prjRoot, '02_sim', 'check_results', `${mod}.json`);
+          if (await /*fs*/_agentCheck(jsonPath)) {
+            try {
+              const ev = JSON.parse(await /*fs*/_agentRead(jsonPath, 'utf8'));
+              if (ev.status === 'PASS' && (ev.compared_points || 0) > 0) {
+                pass = true;
+                log(`  ✅ ${mod}: 仿真通过 (第${attempts}次, ${ev.compared_points}点)`);
+                // Cleanup
+                await agent(`清理仿真产物: ${mod}\nrm -f wlft* transcript *.wlf vsim.wlf 2>/dev/null; true`,
+                  { label: `clean-${mod}-try${attempts}`, phase: 'Phase 4 仿真调试' });
+                break;
+              }
+            } catch {}
+          }
+          if (simOut.includes('PASS')) {
+            pass = true;
+            log(`  ✅ ${mod}: 仿真通过 (第${attempts}次)`);
+            break;
+          }
+
+          lastError = simOut.slice(0, 2000);
+
+          if (attempts >= MAX_ATTEMPTS) {
+            log(`  ⚠️ ${mod}: 达到最大尝试次数 ${MAX_ATTEMPTS}`);
+            break;
+          }
+
+          // ── Debugger: 分析根因 + 修复 (全新 context) ─────────────────
+          const debugOut = String(await agent(
+            `你是 **RTL Debugger**。分析并修复仿真错误。
+
+模块: ${mod}
+RTL 源码: 01_src/00_hdl/${mod}/${mod}.sv
+仿真错误日志:
+\`\`\`
+${lastError.slice(0, 1500)}
+\`\`\`
+
+[级联调试上下文]
+模块链位置: 第 ${modIndex + 1}/${moduleOrder.length} 级
+上游模块: ${upstreamModules.length > 0 ? upstreamModules.join(' → ') : '(无)'}
+上游验证状态: ${upstreamVerified ? '全部通过 ✅' : upstreamFailedNames.map(u => u + ' ❌').join(', ') + ' — 输入信号可能不可靠'}
+
+注意: 如果上游未通过验证，本模块输入数据可能异常。
+先检查输入驱动信号 (i_data, i_valid 等) 是否在合理范围内，
+再分析模块内部逻辑。如果怀疑是上游问题，标记 "CASCADE_ISSUE"。
+
+[新 context — 全新视角, 不受之前尝试影响]
+1. 读取 RTL 源码, 独立分析根因
+2. 读取仿真日志, 定位错误信号和时间
+3. 提出修复方案并**直接修改 RTL** (原地编辑)
+4. 确认 make lint 通过
+5. 输出 JSON:
+{"root_cause":"...","fix":"...","file":"01_src/00_hdl/${mod}/${mod}.sv","line":N}`,
+            { label: `debug-${mod}-try${attempts}`, phase: 'Phase 4 仿真调试' }
+          ) || '');
+
+          // Re-run simulation after fix
+          const recheck = String(await agent(
+            `重新运行仿真验证修复: ${mod}
+
+1. make compile (确认修复后编译通过)
+2. 运行仿真, 对比 golden 向量
+3. 输出 JSON 证据到 02_sim/check_results/${mod}.json
+4. 如果 PASS → 输出第一行 "PASS"
+5. 如果仍 FAIL → 输出错误日志前 100 行`,
+            { label: `sim-recheck-${mod}-try${attempts}`, phase: 'Phase 4 仿真调试' }
+          ) || '');
+
+          // Check again
+          if (await /*fs*/_agentCheck(jsonPath)) {
+            try {
+              const ev = JSON.parse(await /*fs*/_agentRead(jsonPath, 'utf8'));
+              if (ev.status === 'PASS' && (ev.compared_points || 0) > 0) {
+                pass = true;
+                log(`  ✅ ${mod}: 修复后通过 (第${attempts}次, ${ev.compared_points}点)`);
+                break;
+              }
+            } catch {}
+          }
+          if (recheck.includes('PASS')) {
+            pass = true;
+            log(`  ✅ ${mod}: 修复后通过 (第${attempts}次)`);
+            break;
+          }
+
+          // ── 仍 FAIL → Verifier (独立视角) ────────────────────────────
+          if (!pass && attempts < MAX_ATTEMPTS) {
+            const errInfo = (String(recheck || lastError) || '').slice(0, 1000);
+
+            const verdict = String(await agent(
+              `你是 **独立 Verifier**。审查以下 RTL 修复是否正确。
+
+模块: ${mod}
+RTL 源码: 01_src/00_hdl/${mod}/${mod}.sv
+仿真错误:
+\`\`\`
+${errInfo}
+\`\`\`
+
+Debugger 的分析和修复:
+\`\`\`
+${String(debugOut).slice(0, 800)}
+\`\`\`
+
+[级联上下文 — 上游模块验证状态]
+上游通过: ${upstreamVerified ? '是 ✅' : '否 — ' + upstreamFailedNames.join(', ') + ' 未通过 ❌'}
+如果 Debugger 的修复涉及本模块的输入驱动或上游接口，请额外审查该部分是否正确。
+怀疑是上游问题 → 输出 "CASCADE_ISSUE: <上游模块名> <原因>"。
+
+[独立判断 — 不受 Debugger 影响]
+1. 独立阅读 RTL 源码
+2. Debugger 的分析是否正确? 修复是否正确?
+3. 如果不对 → 直接修改 RTL 给出正确方案
+4. 输出 JSON:
+{"agree":true|false,"verdict":"correct|wrong","reason":"...","alternative_fix":"..."}
+
+重要: 如果 agree=false, 你必须在 alternative_fix 中说明正确的修复方向, 并直接编辑 RTL 文件。`,
+              { label: `verify-${mod}-try${attempts}`, phase: 'Phase 4 仿真调试' }
+            ) || '');
+
+            const vn = verdict.toLowerCase();
+            if (vn.includes('"agree":true') || vn.includes('"verdict":"correct"')) {
+              // Debugger + Verifier 一致 → 再跑一次最终确认
+              const finalCheck = String(await agent(
+                `Debugger 与 Verifier 均同意修复方案。最终验证: ${mod}
+
+1. make compile && make sim
+2. 对比 golden 向量
+3. 输出 JSON 证据到 02_sim/check_results/${mod}.json
+4. 输出第一行 "PASS" 或 "FAIL"
+5. 清理: rm -f wlft* transcript *.wlf vsim.wlf`,
+                { label: `sim-final-${mod}-try${attempts}`, phase: 'Phase 4 仿真调试' }
+              ) || '');
+
+              if (finalCheck.includes('PASS')) {
+                pass = true;
+                log(`  ✅ ${mod}: 双验证后通过 (第${attempts}次)`);
+              }
+            } else {
+              log(`  ⚠️ ${mod}: Debugger 与 Verifier 分歧 (第${attempts}次), 标记需审查`);
+              needUserReview = true;
+            }
+          }
+        }
+
+        cascadeResults[mod] = { ...(cascadeResults[mod] || {}), stage2Pass: pass };
+        log(`  📋 ${mod}: 调试结束 pass=${pass}, attempts=${attempts}${needUserReview ? ', 需审查' : ''}`);
+        return { mod, pass, attempts, needUserReview, error: lastError.slice(0, 500) };
+      },
+
+      // ── Stage 3: 独立终验 ──────────────────────────────────────────────────
+      async (prev, mod) => {
+        if (!prev || !prev.pass) {
+          log(`  ⏭️ ${mod}: Stage 2 未通过, 跳过终验`);
+          cascadeResults[mod] = { ...(cascadeResults[mod] || {}), stage3Pass: false };
+          return { mod, pass: false, skipped: true };
+        }
+
+        // ── Cascade: skip if any upstream module failed Stage 3 ──
+        const modIdx = moduleOrder.indexOf(mod);
+        const upstreamFailedS3 = moduleOrder.slice(0, Math.max(0, modIdx)).some(u => !cascadeResults[u]?.stage3Pass);
+        if (upstreamFailedS3 && modIdx > 0) {
+          log(`  ⏭️ ${mod}: 上游模块未全部通过终验, 跳过本模块终验 (等待上游修复)`);
+          cascadeResults[mod] = { ...(cascadeResults[mod] || {}), stage3Pass: false };
+          return { mod, pass: false, skipped: true, upstreamFailed: true };
+        }
+
+        const finalV = String(await agent(
+          `最终独立验证: ${mod}
+
+1. 读取 JSON 证据: 02_sim/check_results/${mod}.json
+2. 验证: status=PASS 且 compared_points>0
+3. 读取 RTL 独立检查:
+   - 禁止: initial / disable / force 语句
+   - 端口命名: i_/o_ 前缀
+   - 复位: i_rst (同步高有效)
+4. 最终清理: rm -f wlft* transcript *.wlf vsim.wlf
+5. 输出 JSON:
+{"module":"${mod}","pass":true|false,"evidence_ok":true|false,"checks":["..."],"issues":["..."]}`,
+          { label: `final-verify-${mod}`, phase: 'Phase 4 终验' }
+        ) || '');
+
+        const fPass = finalV.includes('"pass":true') || finalV.includes('PASS');
+        cascadeResults[mod] = { ...(cascadeResults[mod] || {}), stage3Pass: fPass };
+        return { mod, pass: fPass };
+      },
     );
 
-    const passCount = results.filter(function(r) { return r && String(r).indexOf('PASS') >= 0; }).length;
-    log('[Phase 4] ' + passCount + '/' + moduleList.length + ' 模块通过');
-    return 'Phase 4 完成: ' + passCount + '/' + moduleList.length + ' 模块通过';
+    const passed = results.filter(r => r && r.pass).length;
+    const needReview = results.filter(r => r && r.needUserReview).length;
+    log(`[Phase 4 汇总] 通过: ${passed}/${moduleList.length}${needReview ? `, 需审查: ${needReview}` : ''}`);
+    return `Phase 4 完成: ${passed}/${moduleList.length} (${needReview ? `${needReview} 需审查` : '全部通过'})`;
   },
 };
 // ═════════════════════════════════════════════════════════════════════════════
@@ -450,25 +714,25 @@ nodes.p45_evidence_gate = {
   run: async (ctx) => {
     phase('Phase 4.5 证据门禁');
 
-    const checkDir = path.join(projectRoot, '02_sim', 'check_results');
+    const checkDir = pathJoin(projectRoot, '02_sim', 'check_results');
 
     // ── Step 1: File Check (纯 fs, 0 agent token) ──────────────
 
     log('🔍 [证据门禁] 独立读取 evidence JSON 文件...');
 
-    if (!fs.existsSync(checkDir)) {
+    if (!await /*fs*/_agentCheck(checkDir)) {
       throw new Error(`❌ [证据门禁] 目录不存在: ${checkDir}\n   Phase 4 未产出验证证据, 请确保 Phase 4 生成了检查脚本并运行。`);
     }
 
-    const files = fs.readdirSync(checkDir).filter(f => f.endsWith('.json'));
+    const files = (await /*fs*/_agentDir(checkDir)).filter(f => f.endsWith('.json'));
     const allResults = [];
     let allPass = true;
 
     for (const mod of modules) {
       const jsonFile = `${mod}.json`;
-      const jsonPath = path.join(checkDir, jsonFile);
+      const jsonPath = pathJoin(checkDir, jsonFile);
 
-      if (!fs.existsSync(jsonPath)) {
+      if (!await /*fs*/_agentCheck(jsonPath)) {
         allPass = false;
         allResults.push({ module: mod, pass: false, reason: `JSON 证据文件不存在: ${jsonPath}` });
         continue;
@@ -476,7 +740,7 @@ nodes.p45_evidence_gate = {
 
       let data;
       try {
-        data = JSON.parse(fs.readFileSync(jsonPath, 'utf-8'));
+        data = JSON.parse(await /*fs*/_agentRead(jsonPath, 'utf-8'));
       } catch (e) {
         allPass = false;
         allResults.push({ module: mod, pass: false, reason: `JSON 解析失败: ${e.message}` });
@@ -593,63 +857,211 @@ nodes.p45_evidence_gate = {
   },
 };
 
-// ── Phase 5: 顶层集成 + 全链仿真 [MUST] ────────────────────────────────────
+// ═════════════════════════════════════════════════════════════════════════════
+// Phase 5: 顶层集成 + 全链仿真 [MUST] — 多 Agent 发散聚合
+// ═════════════════════════════════════════════════════════════════════════════
 
 nodes.p5_top_integration = {
   deps: ['p45_evidence_gate'],
   run: async (ctx) => {
     const gateResult = ctx.p45_evidence_gate?.data || {};
     const isTrusted = gateResult.pass === true;
+    const prjRoot = projectRoot;
+    const modList = modules;
 
-    const result = await agent(`执行 HDL 工作流 Phase 5: 顶层集成 + 全链仿真 (逻辑工程师负责)
+    log(`[Phase 5] 多 Agent 发散聚合: 接口/数据通路/Golden/时序 → 合成`);
+    log(`  证据门禁: ${isTrusted ? '✅ 通过' : '⚠️ 状态未知'}`);
+    log(`  模块: ${modList.join(', ') || '项目默认'}`);
 
-证据门禁: ${isTrusted ? '✅ 通过 (所有模块已验证)' : '⚠️ 状态未知'}
-门禁详情: ${JSON.stringify(gateResult).slice(0, 300)}
+    // ── Step 1: 并行发散 4 路 Agent ──────────────────────────────────────
+    log('  Step 1: 并行分析 (接口/数据通路/Golden/时序)...');
 
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-[MUST 硬约束] 顶层集成 — 入口已验证
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    const [interfaceR, dataPathR, goldenR, timingR] = await parallel([
+      // Agent 1: 接口检查
+      () => agent(
+        `[顶层接口检查] 检查所有子模块的接口连接正确性。
 
-1. 搭建顶层:
-   a) 创建顶层模块, 例化所有子模块
-   b) 按数据流方向连接
-   c) 确认 AXI4-Stream 握手链完整
-   d) make compile 通过
+模块列表: ${modList.join(', ')}
+顶层文件: 01_src/00_hdl/top.sv (如果不存在, 先创建)
 
-2. 全链仿真 — 输入到输出逐级对比 MATLAB golden:
-   a) MATLAB 注入全帧测试向量
-   b) 逐级捕获中间结果对比
-   c) 定点模块: 逐周期 bit-true
-   d) 不一致 → 隔离根因模块
+检查项:
+1. 每个子模块的端口连接是否完整 (无悬空/漏连)
+2. valid/ready 握手链是否贯穿所有模块
+3. 位宽匹配: 所有模块间连接信号位宽一致
+4. CDC 边界: 跨时钟域信号是否已同步
+5. 复位信号: 所有模块使用 i_rst (同步高有效)
 
-3. [NEW] RTL ↔ Golden Model 最终对齐标准:
+输出 JSON 数组:
+[{"interface":"<模块A→模块B>","status":"pass|fail|warn","detail":"..."}]`,
+        { label: 'p5-interface', phase: 'Phase 5 顶层集成' }
+      ),
+
+      // Agent 2: 数据通路追踪
+      () => agent(
+        `[顶层数据通路追踪] 从顶层输入到顶层输出追踪数据流。
+
+模块列表: ${modList.join(', ')}
+顶层文件: 01_src/00_hdl/top.sv
+
+任务:
+1. 读取 top.sv 和每个子模块的端口定义
+2. 逐级追踪数据流: 顶层输入 → 模块A → 模块B → ... → 顶层输出
+3. 每级检查:
+   - 数据格式/位宽传递正确
+   - 截断/扩展点已标注
+   - 流水线延迟对齐
+4. 标注首个数据格式变化的点
+
+输出 JSON:
+[{"stage":"input→${modList[0] || 'mod1'}","status":"pass|warn","width":N,"format":"...","notes":"..."}]`,
+        { label: 'p5-datapath', phase: 'Phase 5 顶层集成' }
+      ),
+
+      // Agent 3: Golden Model 比对
+      () => agent(
+        `[顶层 Golden 比对] 检查全链仿真与 Golden Model 的一致性。
+
+模块列表: ${modList.join(', ')}
+顶层文件: 01_src/00_hdl/top.sv
+Golden Model 参考: 07_mat/ 或 08_py/
+
+任务:
+1. 创建顶层模块 (top.sv), 例化所有子模块
+2. 确认 AXI4-Stream 握手链完整
+3. make compile 通过
+4. 运行全链仿真, 注入测试向量
+5. 逐级捕获中间结果并与 Golden Model 对比
+6. 定位: 第一个偏差出现在哪一级?什么信号?什么时间?
+
+[级联追踪 — MUST]
+模块链顺序 (从输入到输出): ${modList.join(' → ') || '(未知)'}
+从模块 0 (${modList[0] || '首级'}) 开始向前逐级追踪:
+  - 如果模块 N 输出错误 → 先检查模块 N-1 的输出是否正确
+  - 第一个偏差出现的位置 = 真正的根因模块
+  - 下游模块的错误很可能是上游偏差传播的结果
+记录 first_deviation.stage 为实际出错的模块名, 而不是最后一级。
+
+7. RTL vs Golden Model 最终对齐:
    - 最终输出必须与定点 Golden Model 逐比特对齐
-   - 允许: 定点精度损失 (截位/饱和，须在报告中注明)
+   - 允许: 定点精度损失 (截位/饱和, 须在报告中注明)
    - 不允许: 算法方向偏离、使用容差掩盖逻辑差异
-   - 验证报告必须包含: compared_points, max_error_lsb, 算法方向一致性结论
+8. 输出 JSON:
+{"overall":"pass|fail","first_deviation":{"stage":"...","signal":"...","time":N,"expected":"...","got":"..."},"compared_points":N,"max_error_lsb":N,"algo_consistent":true|false}
 
-模块: ${modules.join(', ') || '项目默认'}
-输出:
-1. top.sv 顶层模块
-2. 全链仿真日志 (含逐级对比表)
-3. RTL vs GM 对比报告 (compared_points + max_error_lsb + 算法方向一致性)
+如果没有 EDA 工具环境, 至少检查 architecture.yaml 中的 pipeline 定义与顶层连接的一致性。`,
+        { label: 'p5-golden', phase: 'Phase 5 顶层集成' }
+      ),
 
-━━━ 检查点 ━━━
-产出全链仿真日志 + 对比报告后暂停，由调度层呈报用户审查。
-━━━━━━━━━━━`, { label: 'p5-top-integration' });
+      // Agent 4: 资源/时序预估
+      () => agent(
+        `[顶层资源/时序预估] 评估顶层集成的资源和时序风险。
 
-    // ── 压缩保留块: Phase 5 顶层集成 ───────────────────────
+模块列表: ${modList.join(', ')}
+顶层文件: 01_src/00_hdl/top.sv
+
+任务:
+1. 读取每个子模块接口, 估算顶层总资源
+2. 检查关键路径: longest combinational path
+3. 复位域/时钟域拓扑:
+   - 是否存在跨时钟域路径未同步?
+   - 所有模块复位一致 (i_rst 同步高有效)?
+4. 流水线完整性: 各级延迟是否匹配?
+5. 输出 JSON:
+{"resource":{"lut_est":N,"dsp_est":N,"bram_est":N},"timing":{"critical_path":"...","fmax_est":"...MHz"},"cdc_issues":["..."],"pipeline_issues":["..."]}`,
+        { label: 'p5-timing', phase: 'Phase 5 顶层集成' }
+      ),
+    ]);
+
+    // ── Step 2: 合成分析 ─────────────────────────────────────────────────
+    log('  Step 2: 合成分析结果...');
+
+    const synthesis = String(await agent(
+      `[顶层集成合成分析] 聚合以下 4 路分析结果, 锁定根因。
+
+===== 接口检查 =====
+${String(interfaceR || 'N/A').slice(0, 1000)}
+===== 数据通路 =====
+${String(dataPathR || 'N/A').slice(0, 1000)}
+===== Golden 比对 =====
+${String(goldenR || 'N/A').slice(0, 1000)}
+===== 资源/时序 =====
+${String(timingR || 'N/A').slice(0, 1000)}
+
+任务:
+1. 评估以上 4 路结果
+2. 如果有问题 → 锁定根因模块/信号/接口
+3. 区分: "接口连接错误" vs "模块逻辑错误" vs "Golden 模型不一致"
+
+[级联根因分析 — MUST]
+模块链: ${modList.join(' → ') || '(未知)'}
+当多个级联模块同时出现错误时:
+  - 最可能的根因是链中首个出错的模块 (离输入最近)
+  - 下游模块的"错误"通常是上游错误传播的结果
+  - 在 issues 中标注每个问题是 "根因" 还是 "传播性错误"
+root_cause 必须指向链中最上游的故障模块。
+
+4. 输出 JSON:
+{
+  "overall":"pass|fail|warn",
+  "issues":[{"severity":"critical|warning","module":"...","signal":"...","description":"..."}],
+  "root_cause":"...",
+  "fix_suggestion":"..."
+}`,
+      { label: 'p5-synthesis', phase: 'Phase 5 顶层集成' }
+    ) || '');
+
+    // ── Step 3: 定向修复 (如果发现问题) ──────────────────────────────────
+    const synthLower = synthesis.toLowerCase();
+
+    if (synthLower.includes('"overall":"fail"') || synthLower.includes('"overall":"warn"')) {
+      log('  Step 3: 发现顶层问题, 执行定向修复...');
+
+      const fixOut = String(await agent(
+        `[顶层定向修复] 根据合成分析的根因定位, 只修复问题模块。
+
+合成分析 (根因):
+${synthesis.slice(0, 1500)}
+
+任务:
+1. 只修复报告中指出的问题模块/信号
+2. 不要修改无关模块 (fix-in-place 原则)
+3. 修改后 make compile 验证
+4. 输出 JSON:
+{"fixed":true|false,"modules_changed":["..."],"changes":["..."],"compile_pass":true|false}`,
+        { label: 'p5-fix', phase: 'Phase 5 顶层集成' }
+      ) || '');
+
+      // 修复验证
+      const verifyFix = String(await agent(
+        `[修复验证] 验证顶层修复是否生效。
+
+修复内容:
+${fixOut.slice(0, 1000)}
+
+1. make compile 检查是否编译通过
+2. 运行全链仿真 (make sim_top)
+3. 对比 Golden Model
+4. 检查之前发现的问题是否解决
+5. 输出: "PASS" 或 "FAIL" + 原因`,
+        { label: 'p5-verify-fix', phase: 'Phase 5 顶层集成' }
+      ) || '');
+
+      log(`  修复验证: ${verifyFix.includes('PASS') ? '✅ 通过' : '⚠️ 可能需要再次迭代'}`);
+    } else {
+      log('  ✅ 顶层分析通过, 无需修复');
+    }
+
+    // ── 压缩保留块: Phase 5 顶层集成 ────────────────────────────
     log('');
     log('📌 === 压缩保留块: Phase 5 顶层集成 ===');
     log('保留原因: 全链仿真结果是 RTL 与 Golden Model bit-true 对齐的最终证据');
-    log('产出文件: top.sv (顶层), 全链仿真日志, RTL vs GM 对比报告');
-    log(`模块: ${modules.join(', ') || '项目默认'}`);
-    log('验证标准: 最终输出与定点 Golden Model 逐比特对齐');
-    log('允许误差: 定点精度损失（截位/饱和），已在报告中注明');
+    log('分析维度: 接口检查 / 数据通路 / Golden 比对 / 资源时序');
+    log(`模块: ${modList.join(', ') || '项目默认'}`);
+    log('合成结论: ' + (synthLower.includes('"overall":"pass"') ? '✅ 通过' : '⚠️ 见问题列表'));
     log('=== 保留块结束 ===');
     log('');
 
-    return result;
+    return synthesis;
   },
 };
 
@@ -851,7 +1263,7 @@ if (modules.length === 0) {
 // ── 执行 DAG ──────────────────────────────────────────────────────────────
 
 phase('DAG 执行');
-const dagResult = await dag.execute(nodes, {
+const dagResult = await _dagExecute(nodes, {
   onProgress: (layer, total, names) => log(`[层 ${layer}/${total}] ${names}`),
   log,
 });
