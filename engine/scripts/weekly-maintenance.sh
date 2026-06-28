@@ -7,7 +7,14 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+# 从 hook 调用时路径为 engine/scripts/ → PROJECT_ROOT = ~/.claude
+if [ -d "$SCRIPT_DIR/../../memory" ]; then
+  PROJECT_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
+elif [ -d "$SCRIPT_DIR/../memory" ]; then
+  PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+else
+  PROJECT_ROOT="$HOME/.claude"
+fi
 
 echo "=== 每周记忆维护 | $(date) ==="
 echo ""

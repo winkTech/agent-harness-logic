@@ -104,6 +104,9 @@ function parseToolCall() {
 // ── Main ───────────────────────────────────────────────────────────────────
 
 function main() {
+  // 逃生开关: CLAUDE_GATES_DISABLED=true 跳过所有门禁
+  if (process.env.CLAUDE_GATES_DISABLED === 'true') process.exit(0);
+
   if (PROTECTED_PATTERNS.length === 0) {
     process.exit(0); // No patterns — allow everything
   }

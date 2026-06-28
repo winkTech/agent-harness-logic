@@ -178,13 +178,32 @@ function detectPatterns(events, sessionCount) {
 
   // ── 8. 已有类型: 用户纠正 ──────────────────────────────
   const corrections = byType['user_correct'] || [];
-  if (corrections.length >= 2) {
+  if (corrections.length >= 1) {
+    // 用户纠正是最有价值的信号 — 即使只有1次也提炼
+    const msgs = corrections.map(f => (f.payload?.message || '').slice(0, 120)).filter(Boolean);
     patterns.push({
       signal: `user_correct×${corrections.length}`,
       count: corrections.length,
-      examples: corrections.slice(0, 3).map(f => (f.payload?.message || '').slice(0, 80)).filter(Boolean),
-      suggestion: '用户多次纠正。建议: 审查工作流中是否遗漏了关键验证步骤。',
-      severity: 'medium',
+      examples: msgs.slice(0, 5),
+      suggestion: msgs.length > 0
+        ? `用户纠正: "${msgs[0]}". 建议: 将此纠正提炼为规则或记忆, 防止同类错误重现。`
+        : '用户多次纠正。建议: 审查工作流中是否遗漏了关键验证步骤。',
+      severity: 'high', // 用户纠正始终是高严重度
+    });
+  }
+
+  // ── 9. 难题模式 (新增) ──────────────────────────────────
+  const hardProblems = byType['hard_problem'] || [];
+  if (hardProblems.length >= 1) {
+    const descs = hardProblems.map(f => (f.payload?.description || f.payload?.message || '').slice(0, 120)).filter(Boolean);
+    patterns.push({
+      signal: `hard_problem×${hardProblems.length}`,
+      count: hardProblems.length,
+      examples: descs.slice(0, 3),
+      suggestion: descs.length > 0
+        ? `难题: "${descs[0]}". 建议: 分析根因并记录解决方案。`
+        : '检测到难题。建议: 复盘分析是否需要新工具或流程。',
+      severity: 'high',
     });
   }
 
@@ -285,7 +304,16 @@ function writeLearnings(patterns, db, isDryRun) {
   let written = 0;
 
   for (const p of patterns) {
-    if (p.severity === 'high' || p.count >= 3) {
+    // 高严重度始终写，中严重度需 count>=3，低严重度需 count>=5
+    const shouldWrite = p.severity === 'high' ||
+      (p.severity === 'medium' && p.count >= 3) ||
+      (p.severity === 'low' && p.count >= 5);
+    if (!shouldWrite) continue;
+
+    // 生成可检索的 description (不只是信号名)
+    const descText = p.examples.length > 0
+      ? `Dream: ${p.signal} — ${p.examples[0].slice(0, 80)}`
+      : `Dream: ${p.signal} — ${p.suggestion.slice(0, 80)}`;
       const content = [
         `# Dream 提炼: ${p.signal}`,
         '',
@@ -311,16 +339,15 @@ function writeLearnings(patterns, db, isDryRun) {
         const baseConfidence = p.severity === 'high' ? 0.6 : 0.4;
         writeMemory({
           namespace: 'learnings',
-          name: `dream-${dateStr}-${p.signal.replace(/[^a-zA-Z0-9]/g, '-').slice(0, 40)}`,
+          name: `dream-${dateStr}-${p.signal.replace(/[^a-zA-Z0-9一-鿿]/g, '-').slice(0, 40)}`,
           content,
-          description: `Dream 自动: ${p.signal}`,
+          description: descText,
           source: 'script:dream',
           confidence: baseConfidence,
           ttlDays: 180,
         }, { db });
         written++;
       }
-    }
   }
 
   return written;

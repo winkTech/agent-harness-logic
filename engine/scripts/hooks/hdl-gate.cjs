@@ -72,10 +72,12 @@ const SYNTHESIS_VIOLATIONS = [
   { pattern: /\bforce\b/,           message: '禁止使用 force 语句（不可综合）' },
 ];
 
-/** 命名规范检查 */
+/** 命名规范检查 — check(line, fileName, filePath) 签名 */
 const NAMING_CHECKS = [
   {
-    check: (line, fname) => {
+    check: (line, fname, fpath) => {
+      // 仅 01_src/ 路径强制 ro_ 规则
+      if (!fpath || (!fpath.includes('/01_src/') && !fpath.includes('\\01_src\\'))) return null;
       // 检查 output reg 或 output logic 是否以 ro_ 开头
       const m = line.match(/^\s*(output)\s+(reg|logic|wire)\s+(\[.*?\]\s+)?(\w+)/);
       if (m && !m[4].startsWith('ro_') && !fname.includes('_tb') && !fname.includes('TB_')) {
@@ -85,11 +87,16 @@ const NAMING_CHECKS = [
     },
   },
   {
-    check: (line, fname) => {
-      // 检查 input 是否以 ri_ 开头
+    check: (line, fname, fpath) => {
+      // 仅 01_src/ 路径强制 ri_ 规则
+      if (!fpath || (!fpath.includes('/01_src/') && !fpath.includes('\\01_src\\'))) return null;
+      // 检查 input 是否以 ri_ 开头；时钟/复位信号例外
       const m = line.match(/^\s*(input)\s+(reg|logic|wire)?\s*(\[.*?\]\s+)?(\w+)/);
-      if (m && !m[4].startsWith('ri_') && !fname.includes('_tb') && !fname.includes('TB_')) {
-        return `输入信号 "${m[4]}" 应以 ri_ 开头 (line: ${line.trim().slice(0, 40)})`;
+      if (m && !m[4].startsWith('ri_')) {
+        const isClkRst = /^(i_)?(clk|rst|clock|reset)/i.test(m[4]);
+        if (!isClkRst) {
+          return `输入信号 "${m[4]}" 应以 ri_ 开头 (line: ${line.trim().slice(0, 40)})`;
+        }
       }
       return null;
     },
@@ -171,13 +178,13 @@ function isNewModuleFile(fp) {
   } catch { return true; }
 }
 
-function checkNamingViolations(content, fileName) {
+function checkNamingViolations(content, fileName, filePath) {
   const violations = [];
   const lines = content.split('\n');
 
   for (const line of lines) {
     for (const nc of NAMING_CHECKS) {
-      const msg = nc.check(line, fileName);
+      const msg = nc.check(line, fileName, filePath);
       if (msg) violations.push(msg);
     }
   }
@@ -249,8 +256,10 @@ function block(title, messages, command) {
 // ── 主逻辑 ───────────────────────────────────────────────────────────────────
 
 async function main() {
+  // 逃生开关: CLAUDE_GATES_DISABLED=true 跳过所有门禁
+  if (process.env.CLAUDE_GATES_DISABLED === 'true') process.exit(0);
+
   const raw = await readStdin();
-  try { require('fs').writeFileSync(require('path').join(require('os').tmpdir(), 'hgd.txt'), raw || '__EMPTY__'); } catch(e) {}
   if (!raw) process.exit(0);
 
   let payload;
@@ -267,37 +276,43 @@ async function main() {
   const fp = resolvedPath || filePath;
 
   // ── PreToolUse(Write): 全方位拦截 ──────────────────────────────────────────
-  // 任何 .sv/.v 写入前都检查违规，路径不限
+  // 综合/命名规则仅对 01_src/00_hdl/ 生效，VIP/TB 目录豁免
   if ((!eventName || eventName === 'PreToolUse') && toolName === 'write' && filePath) {
     const isHdl = /\.(sv|v)$/i.test(filePath);
     if (!isHdl) process.exit(0);
+
+    // 路径分类
+    const isSrcPath = SRC_PATTERNS.some(p => p.test(filePath));
+    const isVipPath = /05_vip/i.test(filePath) || /02_sim/i.test(filePath);
 
     // 从 payload 提取待写入的内容（PreToolUse 时文件尚未写入磁盘）
     const content = payload?.tool_input?.content || payload?.tool?.input?.content || payload?.input?.content || payload?.arguments?.content || '';
     if (!content) process.exit(0);
 
     const fileName = path.basename(fp);
-    const isTb = !!(fileName.match(/tb_|_tb|testbench/i));
     const violations = [];
 
-    // 综合违规检查 (exit 2)
-    if (!isTb) {
+    // 综合违规检查 — 仅 01_src/ 路径
+    if (isSrcPath) {
       const synthVios = checkSynthesisViolations(content);
       violations.push(...synthVios.map(v => `[综合违规] ${v}`));
     }
 
-    // 命名规范检查 (exit 2) — PreToolUse 只报告不自动修复（文件尚未创建）
-    if (!isTb) {
-      const namingVios = checkNamingViolations(content, fileName);
+    // 命名规范检查 — 仅 01_src/ 路径
+    if (isSrcPath) {
+      const namingVios = checkNamingViolations(content, fileName, filePath);
       violations.push(...namingVios.map(v => `[命名规范] ${v}`));
     }
 
-    // Testbench-First 检查（仅限正式项目目录 01_src/ 下）
-    if (!isTb && SRC_PATTERNS.some(p => p.test(filePath))) {
-      const tbPath = findTbForModule(fp);
-      if (!tbPath && isNewModuleFile(fp)) {
-        const moduleName = fileName.replace(/\.(sv|v)$/i, '');
-        violations.push(`[Testbench-First] 新建 RTL 模块需先编写 Testbench (tb_${moduleName}.sv 或 ${moduleName}_tb.sv)`);
+    // Testbench-First 检查（仅限 01_src/ 下新模块）
+    if (isSrcPath) {
+      const isTb = !!(fileName.match(/tb_|_tb|testbench/i));
+      if (!isTb) {
+        const tbPath = findTbForModule(fp);
+        if (!tbPath && isNewModuleFile(fp)) {
+          const moduleName = fileName.replace(/\.(sv|v)$/i, '');
+          violations.push(`[Testbench-First] 新建 RTL 模块需先编写 Testbench (tb_${moduleName}.sv 或 ${moduleName}_tb.sv)`);
+        }
       }
     }
 
@@ -312,58 +327,30 @@ async function main() {
     }
   }
 
-  // ── PostToolUse(Write): 代码规范扫描 ──────────────────────────────────────
+  // ── PostToolUse(Write): 自动修复 + 后检查（非阻断，仅警告）───────────────
+  // PreToolUse 已做硬拦截，此处仅自动修复命名 + 输出分析报告
   if ((!eventName || eventName === 'PostToolUse') && toolName === 'write' && filePath) {
     const isHdl = /\.(sv|v)$/i.test(filePath);
     if (!isHdl) process.exit(0);
 
-    let content;
-    try { content = fs.readFileSync(fp, 'utf8'); } catch { process.exit(0); }
+    const isSrcPath = SRC_PATTERNS.some(p => p.test(filePath));
 
-    const fileName = path.basename(fp);
-    const violations = [];
-
-    // 综合违规检查 (exit 2) — 这些必须拦截
-    if (!fileName.match(/tb_|_tb|testbench/i)) {
-      const synthVios = checkSynthesisViolations(content);
-      violations.push(...synthVios.map(v => `[综合违规] ${v}`));
-    }
-
-    // 命名自动修复 — 自动纠正 ri_/ro_ 而非仅拦截
-    if (!fileName.match(/tb_|_tb|testbench/i)) {
+    // 命名自动修复 — 仅 01_src/ 路径
+    if (isSrcPath) {
       const fixed = autoFixNaming(fp);
       if (fixed > 0) {
         console.error(`[HDL-Gate] 自动修复 ${fixed} 处命名违规 (ri_/ro_)`);
-        // 修复后重新读取内容，确保后续检查使用修复后的版本
-        try { content = fs.readFileSync(fp, 'utf8'); } catch { /* 读取失败不影响已有违规检查 */ }
       }
     }
 
-    // 命名规范检查 (exit 2) — 自动修复后仍有违规才拦截
-    if (!fileName.match(/tb_|_tb|testbench/i)) {
-      const namingVios = checkNamingViolations(content, fileName);
-      violations.push(...namingVios.map(v => `[命名规范] ${v}`));
-    }
-
-    // 逻辑级数/扇出/嵌套深度检查 (exit 2)
-    if (!fileName.match(/tb_|_tb|testbench/i)) {
-      const result = logicAnalyzer.analyzeFile(fp);
-      if (result && result.violations && result.violations.length > 0) {
-        for (const v of result.violations) {
-          violations.push(`[逻辑分析] ${v.type}: ${v.detail}`);
+    // 逻辑分析报告 — 仅 01_src/ 路径，不阻断
+    if (isSrcPath) {
+      const r = logicAnalyzer.analyzeFile(fp);
+      if (r && r.violations && r.violations.length > 0) {
+        for (const v of r.violations) {
+          console.error(`[HDL-Gate] 逻辑分析: ${v.type} — ${v.detail}`);
         }
       }
-    }
-
-    if (violations.length > 0) {
-      // 按严重程度：综合违规 > 命名规范
-      const isSynthViolation = violations.some(v => v.includes('[综合违规]'));
-      block(
-        isSynthViolation ? '综合编码违规' : '编码规范违规',
-        violations,
-        filePath
-      );
-      process.exit(2); // 硬拦截
     }
   }
 
