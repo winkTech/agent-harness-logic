@@ -1,28 +1,48 @@
----
-name: hdl-rules
-description: "HDL 编码规则 — 新项目流程、模块规范"
-priority: L1
-trigger: ".sv / .v 文件被打开或编辑时自动加载 / 新建项目 / 添加模块 / 初始化项目 / 新建模块 / 脚手架"
-skip: "只改文档/配置/Python/MATLAB"
----
-
 # HDL 编码规则
 
-> L1 优先级：涉及 RTL/TB 工作时自动加载。
+> L1 优先级。涉及 .sv/.v 时加载。详细规范 & 模板见 `skills/hdl-coding/SKILL.md`。
 
-## 新项目 / 新模块启动
+---
 
-- 用户表示"新建项目/工程" → 调用 `/project-init` 技能
-- 用户表示"添加模块" → 调用 `/project-init` 技能的 module 子流程
+## 五条红线（违反 = FAIL）
 
-### 建项目后要点
-1. 先 `git init` + 首提交 `"init: 项目名"`
-2. 新建模块立刻写 TB，遵循 Testbench-First
-3. 每加一个模块，同步更新仿真目录和文档
+1. **[MUST]** 输入寄存 `ri_`，禁止直通
+2. **[MUST]** 输出由 `ro_` 驱动，禁止组合直出
+3. **[MUST]** 同步复位高有效 `i_rst`，异步须做同步释放
+4. **[MUST]** 三段式状态机 + `default` 分支
+5. **[MUST]** 无锁存器：if→else, case→default, assign→完整条件
 
-## 详细规范
-- 见 `knowledge/primary/cross-project-experience.md`
-- HDL Skill: `skills/hdl-coding/SKILL.md`
+---
 
-### 违反后果
-未调用 /project-init 直接写代码 → 项目结构可能不符合规范，需在 review 中修复。
+## 命名规范
+
+| 前缀 | 含义 | 前缀 | 含义 |
+|:-----|:-----|:-----|:-----|
+| `i_` | 模块输入 | `o_` | 模块输出 |
+| `ri_` | 寄存输入 | `ro_` | 寄存输出 |
+| `r_` | 内部寄存器 | `w_` | 内部连线 |
+| `P_` | 参数/状态 | `_cdc` | 跨时钟域 |
+
+例外：标准总线（AXI/Wishbone/JTAG）保持协议原名。
+
+---
+
+## 代码结构
+
+```
+模块声明 → 参数 → ri_ 输入寄存 → ro_ 输出寄存 → 例化 → 状态机 → 组合逻辑 → 时序逻辑
+```
+每模块 ≤300 行，每 always ≤50 行。阻塞(=)组合，非阻塞(<=)时序，禁止混用。
+
+---
+
+## 模板参考（按需 Read）
+
+| 需求 | 文件 |
+|:-----|:-----|
+| 三段式 FSM 模板 | `skills/hdl-coding/references/fsm-templates.md` |
+| 流水线模板 | `skills/hdl-coding/references/pipeline-templates.md` |
+| 复位模板 | `skills/hdl-coding/references/reset-templates.md` |
+| TB 模板 | `skills/hdl-coding/references/tb-templates.md` |
+| RTL 审查清单 | `skills/hdl-coding/references/rtl-code-review.md` |
+| 代码对齐 & LUT 门禁 | `skills/hdl-coding/references/RTL_DESIGN_RULE.md` |

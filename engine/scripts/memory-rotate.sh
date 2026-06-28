@@ -10,7 +10,9 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+if [ -d "$SCRIPT_DIR/../../memory" ]; then PROJECT_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
+elif [ -d "$SCRIPT_DIR/../memory" ]; then PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+else PROJECT_ROOT="$HOME/.claude"; fi
 MEMORY_WORK="$PROJECT_ROOT/memory/work"
 MEMORY_ARCHIVE="$PROJECT_ROOT/memory/archive"
 STALE_DAYS="${2:-14}"

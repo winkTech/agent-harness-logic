@@ -67,6 +67,18 @@
       "frequency": "medium",
       "description": "仿真治理 — 清理 wlft*/transcript, 自动生成 JSON 证据文件",
       "trigger": "PostToolUse (Bash vsim 后)"
+    },
+    "safety/requirements-gate-guard.cjs": {
+      "enabled": true,
+      "frequency": "high",
+      "description": "需求澄清门禁守卫 — 创建新代码文件前检查六维澄清是否完成，未完成 → exit 2 硬阻断",
+      "trigger": "PreToolUse (Write/Edit 新 .sv/.v/.py)"
+    },
+    "safety/verification-quality-guard.cjs": {
+      "enabled": true,
+      "frequency": "high",
+      "description": "验证质量门禁守卫 — 创建新 TB 文件前检查环境画像+最少场景集是否完成，未完成 → exit 2 硬阻断",
+      "trigger": "PreToolUse (Write 新 tb_*/test_*)"
     }
   }
 }

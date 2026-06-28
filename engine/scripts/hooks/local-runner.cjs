@@ -69,6 +69,11 @@ function runSingle(scriptName, extraArgs, stdinData) {
 }
 
 function main() {
+  // 逃生开关: CLAUDE_GATES_DISABLED=true 跳过所有门禁
+  if (process.env.CLAUDE_GATES_DISABLED === 'true') {
+    process.exit(0);
+  }
+
   const args = process.argv.slice(2);
   if (args.length === 0) {
     console.error('[local-runner] 用法:');

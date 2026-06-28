@@ -1,14 +1,39 @@
-# rules/ 目录说明
+# rules/ 目录
 
-本目录存放按优先级分层加载的规则文件，供 Claude Code 工作框架使用。
+> 5 个核心规则 + archive/ 低频规则。**规则是检查点的输入，不是背景噪音。**
 
-## frontmatter `priority` 字段含义
+## 核心规则
 
-| 优先级 | 加载机制 | 示例文件 | 说明 |
-|:-------|:---------|:---------|:-----|
-| **L0** | 始终自动加载，不可跳过 | `00-core.md` | 全局基础规则，每个 session 启动时注入 |
-| **L1** | 按文件类型自动加载 | `01-hdl.md` (.sv/.v), `02-python.md` (.py) | 检测到对应语言/工具链时自动附加 |
-| **L2** | 按场景关键词触发加载 | `03-debugging.md`, `04-security.md`, `07-system.md`, `08-constraints.md`, `09-search-tools.md`, `10-drawing.md` | 命中特定关键词（如"安装"、"搜索"、"画图"）时按需加载 |
-| **L3** | 按工作流触发加载 | `05-workflow-trigger.md`, `12-tdd.md` | 在工作流或特定 action 执行时加载 |
+| 文件 | 优先级 | 内容 | 加载条件 |
+|:-----|:-------|:-----|:---------|
+| `00-core.md` | L0 | 铁律 + 四检查点 + Lint First + 验证闭环 | 始终 |
+| `01-hdl.md` | L1 | HDL 五条红线 + 命名 + 模板参考 | .sv/.v |
+| `02-python.md` | L1 | Python ruff + 硬件调试 | .py |
+| `03-gates.md` | L0 | 两道门禁（需求澄清 + 验证质量）含触发/退出/阻断/hook | 始终 |
+| `04-git.md` | L2 | Git 提交/分支规范 | commit/push |
 
-> **注意**：`priority` 表示**加载时机**（何时注入到 context），而非规则约束力。约束力在各文件正文中另行说明（如 `08-constraints.md` 标注"约束力最高"）。L0 文件（始终加载）不一定约束力最高，反之亦然。
+## archive/ — 低频规则（按需 Read，不自动加载）
+
+| 文件 | 场景 |
+|:-----|:-----|
+| `03-debugging.md` | 仿真报错/波形不对 |
+| `04-security.md` | auth/token/encrypt |
+| `05-workflow-trigger.md` | 关键词→工作流映射（已集成到 CLAUDE.md） |
+| `06-cognition.md` | 7 种推理模式 |
+| `07-system.md` | 安装/下载 |
+| `08-constraints.md` | Golden Model 保护 |
+| `09-search-tools.md` | 代码搜索优先级 |
+| `10-drawing.md` | 画图/架构图 |
+| `12-tdd.md` | TDD/测试驱动 |
+| `13-context-management.md` | 上下文管理（已集成到 CLAUDE.md） |
+| `14-fix-in-place.md` | 文件变体禁止（已由 hook 执行） |
+
+## L0 始终加载量
+
+```
+CLAUDE.md    138 行
+00-core.md    62 行
+03-gates.md   63 行
+─────────────────
+总计         263 行  (原 ~950 行，精简 72%)
+```

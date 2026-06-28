@@ -11,7 +11,16 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+# 从 hook 调用时 $0 是绝对路径，PROJECT_ROOT 需指向 ~/.claude
+# 兼容直接调用和 hook 调用两种场景
+if [ -d "$SCRIPT_DIR/../../memory" ]; then
+  # hook 调用: engine/scripts/memory-health-score.sh → ../../ = ~/.claude
+  PROJECT_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
+elif [ -d "$SCRIPT_DIR/../memory" ]; then
+  PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+else
+  PROJECT_ROOT="$HOME/.claude"
+fi
 MEMORY_DIR="$PROJECT_ROOT/memory"
 NOW=$(date +%s)
 STALE_DAYS=14

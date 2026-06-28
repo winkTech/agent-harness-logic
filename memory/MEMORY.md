@@ -33,6 +33,9 @@
 | [[per-module-pipeline]] | Phase 4 分拆 — 每模块独立 agent, 35 模块不溢出 |
 | [[2026-06-23-self-learning-boot]] | 自学习系统启动：CHECK 修复 + Dream 激活 + Skill-Evolve 验证
 | [[verification-must-be-functional]] | ⚠️ 验证必须是功能验证，不只是语法检查 — lint 不清除门禁标记 |
+| [[requirements-gate-wifi-evidence]] | 🔍 需求澄清门禁设计依据 — WiFi PHY 10条泛化教训 + MD Spec Only 场景预防 |
+| [[verification-quality-wifi-evidence]] | 🧪 验证质量门禁设计依据 — 环境失真 8 条教训 → 环境画像+最少场景集+增量集成 |
+| [[knowledge-base-search-mandate]] | 📚 知识库强制检索 — 规则写了但不遵守的根因 + 设计前必搜 knowledge/ 示例代码 |
 
 ## 当前进度
 

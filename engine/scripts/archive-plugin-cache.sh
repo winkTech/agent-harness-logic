@@ -17,9 +17,11 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
-PLUGINS_CACHE="$PROJECT_ROOT/plugins/cache"
-ARCHIVE_DIR="$PROJECT_ROOT/plugins/.cache-archive"
+if [ -d "$SCRIPT_DIR/../../var/plugins" ]; then PROJECT_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
+elif [ -d "$SCRIPT_DIR/../var/plugins" ]; then PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+else PROJECT_ROOT="$HOME/.claude"; fi
+PLUGINS_CACHE="$PROJECT_ROOT/var/plugins/cache"
+ARCHIVE_DIR="$PROJECT_ROOT/var/plugins/.cache-archive"
 TIMESTAMP=$(date +%Y%m%d_%H%M%S)
 ARCHIVE_NAME="plugin-cache-${TIMESTAMP}.tar.gz"
 MANIFEST_NAME="cache-manifest-${TIMESTAMP}.txt"

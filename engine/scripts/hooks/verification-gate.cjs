@@ -69,12 +69,11 @@ const TEST_PATTERNS = [
   /^pytest\b/,
   /^python\s+-m\s+pytest\b/,
   /^python\s+-m\s+unittest\b/,
-  /^make\b/,
-  /^make\s+test\b/,
-  /^make\s+check\b/,
-  // HDL 仿真
+  // HDL 仿真 — 运行仿真 = 功能验证
   /^vsim\b/,
-  /^vlog\b/,                      // vlog -lint 是语法检查，但 vlog 加仿真也是功能验证的基础入口
+  /^xsim\b/,
+  /^make\b/,
+  /^make\s+(regress|sim|test|check|run)\b/,
   // Node/JS 测试
   /^npm\s+test\b/,
   /^npm\s+run\s+test\b/,
@@ -112,9 +111,8 @@ const LINT_PATTERNS = [
   /^go\s+vet\b/,
   // Rust
   /^cargo\s+check\b/,
-  // HDL
-  // HDL 语法检查本身不能独立作为验证，应紧跟仿真
-  // (vlog 已放在 TEST_PATTERNS，因为实际使用中 vlog 后通常跟仿真)
+  // HDL — vlog 单独调用是语法检查，不算功能验证
+  /^vlog\b/,
   // Node 脚本检查
   /^node\s+--check\b/,
   /** 项目自定义语法检查 — 编辑此数组添加 */
@@ -212,6 +210,16 @@ function matchesAny(cmd, patterns) {
 // ── 主逻辑 ───────────────────────────────────────────────────────────────────
 
 async function main() {
+  // 逃生开关: CLAUDE_GATES_DISABLED=true 跳过所有门禁
+  if (process.env.CLAUDE_GATES_DISABLED === 'true') process.exit(0);
+
+  // --reset: 清除待验证标记
+  if (process.argv.includes('--reset')) {
+    writeState({ edited: false, verified: false, editCount: 0, lastEditTime: null, lastVerifyTime: null });
+    console.error('[VerificationGate] ✅ 验证状态已重置');
+    process.exit(0);
+  }
+
   const raw = await readStdin();
   if (!raw) process.exit(0);
 
@@ -227,9 +235,15 @@ async function main() {
   const toolName = (payload?.tool?.name || payload?.tool_name || payload?.name || '').toLowerCase();
   const command = (payload?.tool_input?.command || payload?.tool?.input?.command || payload?.input?.command || payload?.command || '').trim();
 
-  // ── PostToolUse: 编辑工具 → 标记待验证 ───────────────────────────────────
+  // ── PostToolUse: 编辑代码文件 → 标记待验证 ───────────────────────────────
   if ((eventName === 'PostToolUse' || !eventName) && ['edit', 'write', 'multiedit'].includes(toolName)) {
-    markEdited();
+    // 仅代码文件触发验证标记，文档/配置/gate 文件不触发
+    const fp = (payload?.tool_input?.file_path || payload?.tool?.input?.file_path || payload?.input?.file_path || '').toLowerCase();
+    const isCode = /\.(sv|v|vh|py|c|cpp|h|vhd)$/i.test(fp);
+    const isGateFile = /[\/\\]var[\/\\]gates[\/\\]/.test(fp) || fp.endsWith('verify-gate.json');
+    if (isCode && !isGateFile) {
+      markEdited();
+    }
     process.exit(0);
   }
 

@@ -54,11 +54,13 @@ function isMemoryFile(filePath) {
   return normalized.startsWith(MEMORY_DIR);
 }
 
-// 简易 frontmatter 解析
+// 简易 frontmatter 解析（兼容 CRLF）
 function parseFrontmatter(content) {
-  const lines = content.split('\n');
+  // 预先去除 \r 避免 Windows CRLF 导致 (.+)$ 在 $ 之前无法跨过 \r 而匹配失败
+  const sanitized = content.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
+  const lines = sanitized.split('\n');
   const fm = {};
-  let body = content;
+  let body = sanitized;
   if (lines.length > 0 && lines[0].trim() === '---') {
     for (let i = 1; i < lines.length; i++) {
       if (lines[i].trim() === '---') { body = lines.slice(i + 1).join('\n').trim(); break; }
@@ -69,6 +71,17 @@ function parseFrontmatter(content) {
         fm[m[1]] = v;
       }
     }
+  }
+  // metadata.type 映射到 namespace
+  if (fm.metadata) {
+    try {
+      const metaLines = fm.metadata.split('\n').filter(l => l.trim());
+      fm._meta = {};
+      for (const ml of metaLines) {
+        const mm = ml.trim().match(/^(\w[\w_-]*)\s*:\s*(.+)$/);
+        if (mm) fm._meta[mm[1]] = mm[2].trim();
+      }
+    } catch { /* metadata 解析失败不影响 */ }
   }
   return { frontmatter: fm, body };
 }
@@ -162,7 +175,7 @@ async function main() {
     const { frontmatter, body } = parseFrontmatter(content);
     if (!body) return;
 
-    const namespace = frontmatter.metadata?.type || inferNamespace(normalizedPath);
+    const namespace = frontmatter._meta?.type || inferNamespace(normalizedPath);
     const name = frontmatter.name || inferName(normalizedPath);
 
     // 写入 SQLite
