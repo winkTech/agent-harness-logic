@@ -40,27 +40,20 @@ const MAX_STDIN = 64 * 1024;
 // ── 模式定义 ────────────────────────────────────────────────────────────────
 
 /** 源码路径模式 — 匹配 RTL 源文件写入 */
-const SRC_PATTERNS = [
-  /01_src[\\/]00_hdl/i,
-  /src[\\/]hdl/i,
-  /rtl/i,
+const SRC_SEGMENT_PATTERNS = [
+  /(?:^|\/)01_src\/00_hdl(?:\/|$)/i,
+  /(?:^|\/)src\/hdl(?:\/|$)/i,
+  /(?:^|\/)rtl(?:\/|$)/i,
 ];
 
 /** 仿真路径模式 — 匹配对应的 TB 目录 */
-const SIM_PATTERNS = [
-  /02_sim/i,
-  /sim/i,
-  /testbench/i,
-  /tb/i,
-];
+const SIM_SEGMENT_PATTERN = /(?:^|\/)(?:02_sim|sim|testbench|tb|05_vip)(?:\/|$)/i;
 
 /** TB 文件模式 — 识别 TB 文件 */
-const TB_FILE_PATTERNS = [
-  /tb_/i,
-  /_tb\./i,
-  /testbench/i,
-  /test\.sv/i,
-];
+const PORT_DECL_KEYWORDS = new Set([
+  'input', 'output', 'inout', 'wire', 'reg', 'logic', 'signed', 'unsigned',
+  'tri', 'var',
+]);
 
 /** 综合禁止的模式 (exit 2) */
 const SYNTHESIS_VIOLATIONS = [
@@ -73,11 +66,28 @@ const SYNTHESIS_VIOLATIONS = [
 ];
 
 /** 命名规范检查 — check(line, fileName, filePath) 签名 */
+function normalizedForMatch(p) {
+  return String(p || '').replace(/\\/g, '/');
+}
+
+function isSimulationPath(filePath) {
+  return SIM_SEGMENT_PATTERN.test(normalizedForMatch(filePath));
+}
+
+function isSourcePath(filePath) {
+  const normalized = normalizedForMatch(filePath);
+  return !isSimulationPath(normalized) && SRC_SEGMENT_PATTERNS.some(p => p.test(normalized));
+}
+
+function isTbFileName(fileName) {
+  return /(?:^tb_|_tb\.|testbench|test\.sv)/i.test(fileName || '');
+}
+
 const NAMING_CHECKS = [
   {
     check: (line, fname, fpath) => {
       // 仅 01_src/ 路径强制 ro_ 规则
-      if (!fpath || (!fpath.includes('/01_src/') && !fpath.includes('\\01_src\\'))) return null;
+      if (!isSourcePath(fpath)) return null;
       // 检查 output reg 或 output logic 是否以 ro_ 开头
       const m = line.match(/^\s*(output)\s+(reg|logic|wire)\s+(\[.*?\]\s+)?(\w+)/);
       if (m && !m[4].startsWith('ro_') && !fname.includes('_tb') && !fname.includes('TB_')) {
@@ -89,7 +99,7 @@ const NAMING_CHECKS = [
   {
     check: (line, fname, fpath) => {
       // 仅 01_src/ 路径强制 ri_ 规则
-      if (!fpath || (!fpath.includes('/01_src/') && !fpath.includes('\\01_src\\'))) return null;
+      if (!isSourcePath(fpath)) return null;
       // 检查 input 是否以 ri_ 开头；时钟/复位信号例外
       const m = line.match(/^\s*(input)\s+(reg|logic|wire)?\s*(\[.*?\]\s+)?(\w+)/);
       if (m && !m[4].startsWith('ri_')) {
@@ -140,7 +150,7 @@ function findTbForModule(fp) {
   const normalized = fp.replace(/\\/g, '/');
 
   // 匹配 src 目录中的模块路径: .../01_src/00_hdl/<module>/<file>.sv
-  const srcMatch = normalized.match(/(?:01_src\/00_hdl|src\/hdl|rtl)\/([^/]+)\/([^/]+)\.(sv|v)$/);
+  const srcMatch = normalized.match(/(?:^|\/)(?:01_src\/00_hdl|src\/hdl|rtl)\/([^/]+)\/([^/]+)\.(sv|v)$/i);
   if (!srcMatch) return null;
 
   const moduleDir = srcMatch[1]; // 模块名目录
@@ -179,16 +189,67 @@ function isNewModuleFile(fp) {
 }
 
 function checkNamingViolations(content, fileName, filePath) {
-  const violations = [];
-  const lines = content.split('\n');
+  if (!isSourcePath(filePath) || isTbFileName(fileName)) return [];
 
-  for (const line of lines) {
-    for (const nc of NAMING_CHECKS) {
-      const msg = nc.check(line, fileName, filePath);
-      if (msg) violations.push(msg);
+  const violations = [];
+  for (const port of extractDirectedPorts(content)) {
+    if (port.direction === 'input' && !port.name.startsWith('ri_')) {
+      const isClkRst = /^(i_)?(clk|rst|clock|reset)/i.test(port.name);
+      if (!isClkRst) {
+        violations.push(`杈撳叆淇″彿 "${port.name}" 搴斾互 ri_ 寮€澶?(declaration: ${port.declaration})`);
+      }
+    }
+    if (port.direction === 'output' && !port.name.startsWith('ro_')) {
+      violations.push(`杈撳嚭淇″彿 "${port.name}" 搴斾互 ro_ 寮€澶?(declaration: ${port.declaration})`);
     }
   }
   return violations;
+}
+
+function stripComments(content) {
+  return String(content || '')
+    .replace(/\/\*[\s\S]*?\*\//g, ' ')
+    .replace(/\/\/.*$/gm, ' ');
+}
+
+function nextBoundary(text, start, nextDirectionIndex) {
+  const semicolon = text.indexOf(';', start);
+  const paren = text.indexOf(')', start);
+  return Math.min(
+    nextDirectionIndex >= 0 ? nextDirectionIndex : Infinity,
+    semicolon >= 0 ? semicolon : Infinity,
+    paren >= 0 ? paren : Infinity,
+  );
+}
+
+function namesFromPortTail(tail) {
+  const withoutRanges = String(tail || '').replace(/\[[^\]]+\]/g, ' ');
+  const names = [];
+  for (const part of withoutRanges.split(',')) {
+    const cleaned = part.replace(/=.*$/g, ' ').trim();
+    const words = cleaned.match(/[A-Za-z_]\w*/g) || [];
+    const candidates = words.filter(w => !PORT_DECL_KEYWORDS.has(w.toLowerCase()));
+    if (candidates.length) names.push(candidates[candidates.length - 1]);
+  }
+  return names;
+}
+
+function extractDirectedPorts(content) {
+  const text = stripComments(content);
+  const matches = [...text.matchAll(/\b(input|output)\b/g)];
+  const ports = [];
+
+  for (let i = 0; i < matches.length; i++) {
+    const direction = matches[i][1].toLowerCase();
+    const start = matches[i].index + matches[i][0].length;
+    const nextDirectionIndex = i + 1 < matches.length ? matches[i + 1].index : -1;
+    const end = nextBoundary(text, start, nextDirectionIndex);
+    const tail = text.slice(start, Number.isFinite(end) ? end : text.length);
+    const declaration = `${direction}${tail}`.replace(/\s+/g, ' ').trim().slice(0, 80);
+    for (const name of namesFromPortTail(tail)) ports.push({ direction, name, declaration });
+  }
+
+  return ports;
 }
 
 /**
@@ -231,8 +292,9 @@ function autoFixNaming(fp) {
 
 function checkSynthesisViolations(content) {
   const violations = [];
+  const scanContent = stripComments(content);
   for (const v of SYNTHESIS_VIOLATIONS) {
-    if (v.pattern.test(content)) {
+    if (v.pattern.test(scanContent)) {
       violations.push(v.message);
     }
   }
@@ -282,8 +344,7 @@ async function main() {
     if (!isHdl) process.exit(0);
 
     // 路径分类
-    const isSrcPath = SRC_PATTERNS.some(p => p.test(filePath));
-    const isVipPath = /05_vip/i.test(filePath) || /02_sim/i.test(filePath);
+    const isSrcPath = isSourcePath(filePath);
 
     // 从 payload 提取待写入的内容（PreToolUse 时文件尚未写入磁盘）
     const content = payload?.tool_input?.content || payload?.tool?.input?.content || payload?.input?.content || payload?.arguments?.content || '';
@@ -333,7 +394,7 @@ async function main() {
     const isHdl = /\.(sv|v)$/i.test(filePath);
     if (!isHdl) process.exit(0);
 
-    const isSrcPath = SRC_PATTERNS.some(p => p.test(filePath));
+    const isSrcPath = isSourcePath(filePath);
 
     // 命名自动修复 — 仅 01_src/ 路径
     if (isSrcPath) {
