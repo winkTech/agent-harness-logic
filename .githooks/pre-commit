@@ -77,7 +77,7 @@ fi
 EXCLUDE_DIRS="memory/work/|plugins/cache/|knowledge/|.git/"
 
 # ---- 5a. 暂存区检查：禁止仿真文件被提交 ----
-FORBIDDEN_STAGED_PATTERNS="transcript|vsim\.wlf|\.vcd$|\.wlftmp|vsim\.dump|\.wdb$|xsim\.jou|xsim\.log|xsim\.tcl|xelab\.pb|xvlog\.pb|tr_db\.log|wev\.log|vlog\.log"
+FORBIDDEN_STAGED_PATTERNS="(^|/)transcript$|vsim\.wlf|\.vcd$|\.wlftmp|vsim\.dump|\.wdb$|xsim\.jou|xsim\.log|xsim\.tcl|xelab\.pb|xvlog\.pb|tr_db\.log|wev\.log|vlog\.log"
 MATCH_STAGED=$(echo "$ALL_STAGED" | grep -E "$FORBIDDEN_STAGED_PATTERNS" | grep -vE "$EXCLUDE_DIRS" | head -10)
 if [ -n "$MATCH_STAGED" ]; then
   echo "❌ 仿真产物不应提交到 git（已在暂存区）："

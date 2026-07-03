@@ -1,3 +1,12 @@
+---
+name: wifi-golden-model-setup
+title: Golden Model 设置指南
+domain: comm
+type: guide
+tags: [wifi, golden-model, python, setup]
+updated: 2026-07-03
+---
+
 # Golden Model 设置指南
 
 ## 语言选择：Python 优先

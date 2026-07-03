@@ -20,9 +20,35 @@
 const p = require('node:path');
 const f = require('node:fs');
 const os = require('node:os');
+const scope = require('./lib/project-scope.cjs');
 
 const HOME = p.join(os.homedir(), '.claude');
 const STATE_FILE = p.join(HOME, 'var', 'index', 'pre-compact-state.json');
+const HOME_ROOT = HOME;
+
+function normalizePath(value) {
+  return scope.keyPath(value);
+}
+
+function isSamePath(a, b) {
+  return scope.isSamePath(a, b);
+}
+
+function isInsidePath(child, parent) {
+  return scope.isInsidePath(child, parent);
+}
+
+function snapshotRoot(snapshot) {
+  return snapshot?.projectRoot || snapshot?.workspaceRoot || snapshot?.cwd || '';
+}
+
+function shouldInjectForCwd(snapshot, cwd) {
+  const root = snapshotRoot(snapshot);
+  if (root) return isInsidePath(cwd, root);
+
+  // Legacy snapshots have no scope. They are only safe at the harness root.
+  return isSamePath(cwd, HOME_ROOT);
+}
 
 /**
  * 读取 pre-compact 保存的状态。
@@ -120,6 +146,14 @@ function formatInjectPrompt(snapshot) {
  */
 function resume() {
   const snapshot = readSnapshot();
+  if (snapshot && !shouldInjectForCwd(snapshot, process.cwd())) {
+    return {
+      hasState: false,
+      snapshot: null,
+      summary: '',
+      injectPrompt: '',
+    };
+  }
   return {
     hasState: !!snapshot,
     snapshot,

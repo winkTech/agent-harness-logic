@@ -17,6 +17,7 @@ const { spawnSync } = require('node:child_process');
 const fs = require('node:fs');
 const path = require('node:path');
 const eda = require('./eda-detect.cjs');
+const { parseCommandLine } = require('./lib/hook-registry.cjs');
 
 // ── 仿真器检测 (使用统一 eda-detect 结果) ──────────────────────────────────
 
@@ -61,11 +62,11 @@ function dumpWaveforms(dumpDir) {
   }
 
   console.log(`执行: ${cmd}`);
-  const result = spawnSync(cmd, [], {
+  const parts = parseCommandLine(cmd);
+  const result = spawnSync(parts[0], parts.slice(1), {
     encoding: 'utf8',
     timeout: 60000,
     windowsHide: true,
-    shell: true,
   });
 
   if (result.status === 0) {

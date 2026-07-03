@@ -1,3 +1,11 @@
+---
+name: knowledge-archive-index
+title: Archive
+type: reference
+tags: [knowledge-base, archive, index]
+updated: 2026-07-03
+---
+
 # Archive
 
 > 最后更新: 2026-06-19

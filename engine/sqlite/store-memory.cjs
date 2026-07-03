@@ -352,10 +352,23 @@ function retrieveMemorySummary(query, opts = {}) {
     id: r.id,
     namespace: r.namespace,
     name: r.name,
-    summary: r.content.replace(/\n{3,}/g, '\n\n').slice(0, maxChars),
+    summary: summarizeContent(r).slice(0, maxChars),
     confidence: r.confidence,
     hit_count: r.hit_count,
   }));
+}
+
+function stripFrontmatter(content) {
+  return String(content || '').replace(/^---\r?\n[\s\S]*?\r?\n---\s*/, '');
+}
+
+function summarizeContent(record) {
+  const body = stripFrontmatter(record.content).replace(/\n{3,}/g, '\n\n').trim();
+  const description = String(record.description || '').trim();
+  if (description && body && !body.startsWith(description)) {
+    return `${description}\n\n${body}`;
+  }
+  return body || description || '';
 }
 
 function memoryStats(opts = {}) {

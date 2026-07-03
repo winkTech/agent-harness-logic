@@ -31,7 +31,7 @@ const TIERS = {
     enableMemory: false,
     enableEntityGraph: false,
     skillSectionMode: 'names_only',
-    enableConstitution: false,
+    enableConstitution: true,
     enableSoul: false,
     selfCompactPrompt: true,     // inject auto-compaction reminder
   },

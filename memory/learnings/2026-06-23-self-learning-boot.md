@@ -1,3 +1,11 @@
+---
+name: 2026-06-23-self-learning-boot
+aliases: [self-learning-system, self-learning-boot]
+description: 自学习系统启动报告：Dream、Skill-Evolve、信号采集 pipeline 激活
+created: 2026-06-23
+type: learning
+---
+
 # 自学习系统启动报告
 
 > 2026-06-23，全面激活自学习 pipeline。

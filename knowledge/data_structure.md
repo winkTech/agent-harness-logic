@@ -1,3 +1,11 @@
+---
+name: knowledge-data-structure
+title: 知识库目录结构
+type: reference
+tags: [knowledge-base, structure, index]
+updated: 2026-07-03
+---
+
 # 知识库目录结构
 
 > 最后更新: 2026-06-02

@@ -1,3 +1,11 @@
+---
+name: hdl-rules
+description: "HDL coding rules for Verilog/SystemVerilog work."
+priority: L1
+trigger: ".sv, .v, .vh, Verilog, SystemVerilog, RTL, HDL"
+skip: "not HDL"
+---
+
 # HDL 编码规则
 
 > L1 优先级。涉及 .sv/.v 时加载。详细规范 & 模板见 `skills/hdl-coding/SKILL.md`。

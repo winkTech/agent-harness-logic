@@ -202,6 +202,7 @@ async function runNode(name, run, ctx, opts = {}) {
  * @param {number} [opts.retryCount=0] - 节点失败重试次数
  * @param {number} [opts.timeoutMs=0] - 单节点超时
  * @param {boolean} [opts.failFast=true] - true=某节点失败立即中止，false=尽量执行完
+ * @param {boolean} [opts.allowLoopSkip=false] - true=允许 loop_skip 不计入失败
  * @param {(layer: number, total: number, names: string) => void} [opts.onProgress]
  * @param {(msg: string) => void} [opts.log]
  * @returns {Promise<{
@@ -213,7 +214,7 @@ async function runNode(name, run, ctx, opts = {}) {
  * }>}
  */
 async function execute(nodes, opts = {}) {
-  const { failFast = true, retryCount = 0, timeoutMs = 300000, maxLoopRetries = 3 } = opts;
+  const { failFast = true, retryCount = 0, timeoutMs = 300000, maxLoopRetries = 3, allowLoopSkip = false } = opts;
   const log = opts.log || (() => {});
   const onProgress = opts.onProgress || (() => {});
 
@@ -248,7 +249,7 @@ async function execute(nodes, opts = {}) {
     );
 
     // 处理失败和循环跳过的节点
-    const failures = layerResults.filter(r => r.result.status !== 'ok' && r.result.status !== 'loop_skip');
+    const failures = layerResults.filter(r => r.result.status !== 'ok' && (allowLoopSkip || r.result.status !== 'loop_skip'));
     const loopSkips = layerResults.filter(r => r.result.status === 'loop_skip');
     for (const f of failures) {
       failedNodes.push(f.name);
@@ -259,17 +260,19 @@ async function execute(nodes, opts = {}) {
       log(`  🔄 ${s.name}: 循环跳过 — ${s.result.error}`);
     }
 
-    if (failFast && failedNodes.length > 0) {
-      throw new Error(`[DAG] 层 ${i + 1} 节点失败: ${failedNodes.join(', ')}`);
+    if (failFast && (failedNodes.length > 0 || (!allowLoopSkip && loopSkippedNodes.length > 0))) {
+      const blocked = [...failedNodes, ...(!allowLoopSkip ? loopSkippedNodes : [])];
+      throw new Error(`[DAG] 层 ${i + 1} 节点失败: ${blocked.join(', ')}`);
     }
   }
 
   return {
-    success: failedNodes.length === 0,
+    success: failedNodes.length === 0 && (allowLoopSkip || loopSkippedNodes.length === 0),
     results,
     layerCount,
     nodeCount,
     failedNodes,
+    loopSkippedNodes,
     dependencyMatrix: depMatrix,
   };
 }

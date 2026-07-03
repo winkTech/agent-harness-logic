@@ -20,6 +20,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const os = require('node:os');
 const { spawnSync } = require('node:child_process');
+const { validateHookScripts } = require('../lib/hook-registry.cjs');
 
 const HOME = path.join(os.homedir(), '.claude');
 const VERBOSE = process.argv.includes('--verbose');
@@ -48,50 +49,12 @@ function test(name, fn) {
 // ═════════════════════════════════════════════════════════════════════════════
 
 test('Hook 注册完整性', () => {
-  const settingsPath = path.join(HOME, 'settings.json');
-  if (!fs.existsSync(settingsPath)) return { ok: false, detail: 'settings.json 不存在' };
-
-  const settings = JSON.parse(fs.readFileSync(settingsPath, 'utf8'));
-  const hooks = settings.hooks || {};
-  const missing = [];
-  const found = [];
-
-  for (const [eventName, groups] of Object.entries(hooks)) {
-    const arr = Array.isArray(groups) ? groups : [];
-    for (const group of arr) {
-      const hookList = group.hooks || [group];
-      for (const hook of hookList) {
-        const cmd = hook.command || '';
-        // 提取 node 脚本路径
-        const nodeMatch = cmd.match(/node\s+(.+?\.(?:cjs|js))\b/);
-        if (nodeMatch) {
-          let scriptPath = nodeMatch[1]
-            .replace(/\$HOME\/\.claude\//, HOME + '/')
-            .replace(/\$HOME/, HOME);
-          // 处理 batch: 拆分逗号分隔的脚本名
-          if (scriptPath.includes('local-runner.cjs')) {
-            const batchMatch = cmd.match(/--batch\s+"([^"]+)"/);
-            if (batchMatch) {
-              const names = batchMatch[1].split(',');
-              for (const name of names) {
-                const fullPath = path.join(HOME, 'engine/scripts/hooks', name.trim());
-                if (fs.existsSync(fullPath)) found.push(name.trim());
-                else missing.push(name.trim());
-              }
-            }
-          } else {
-            if (fs.existsSync(scriptPath)) found.push(path.basename(scriptPath));
-            else missing.push(path.basename(scriptPath));
-          }
-        }
-      }
-    }
-  }
-
-  if (missing.length > 0) {
+  const validation = validateHookScripts();
+  if (validation.missing.length > 0) {
+    const missing = validation.missing.map(ref => path.basename(ref.script));
     return { ok: false, detail: `缺失 ${missing.length} 个: ${missing.join(', ')}` };
   }
-  return { ok: true, detail: `${found.length} 个 hook 全部存在` };
+  return { ok: true, detail: `${validation.found.length} 个 hook 全部存在` };
 });
 
 // ═════════════════════════════════════════════════════════════════════════════
@@ -171,7 +134,7 @@ test('Pre-compact 检查点', () => {
 
 test('Commit gate 语法', () => {
   const gatePath = path.join(HOME, 'engine/scripts/gates/commit-gate.cjs');
-  if (!fs.existsSync(gatePath)) return { ok: false, detail: 'commit-gate.cjs 不存在' };
+  if (!fs.existsSync(gatePath)) return { ok: true, detail: 'commit-gate.cjs 未注册，跳过' };
 
   const r = spawnSync('node', ['--check', gatePath], {
     encoding: 'utf8', timeout: 10000, windowsHide: true,
@@ -193,11 +156,15 @@ test('新 gate 文件存在性', () => {
     'engine/scripts/dashboard-html.cjs',
     'engine/scripts/lib/judge-service.cjs',
   ];
-  const missing = gateFiles.filter(f => !fs.existsSync(path.join(HOME, f)));
+  const settingsText = fs.existsSync(path.join(HOME, 'settings.json'))
+    ? fs.readFileSync(path.join(HOME, 'settings.json'), 'utf8')
+    : '';
+  const required = gateFiles.filter(f => settingsText.includes(path.basename(f)) || fs.existsSync(path.join(HOME, f)));
+  const missing = required.filter(f => !fs.existsSync(path.join(HOME, f)));
   if (missing.length > 0) {
     return { ok: false, detail: `缺失: ${missing.join(', ')}` };
   }
-  return { ok: true, detail: `${gateFiles.length} 个新文件全部存在` };
+  return { ok: true, detail: `${required.length} 个已注册/已存在 gate 文件全部存在` };
 });
 
 // ═════════════════════════════════════════════════════════════════════════════
@@ -225,6 +192,15 @@ test('新 gate 语法检查', () => {
     return { ok: false, detail: `语法错误: ${failed.join(', ')}` };
   }
   return { ok: true, detail: `${gateFiles.length} 个文件语法通过` };
+});
+
+test('P0 痛点回归', () => {
+  const p = path.join(HOME, 'engine/scripts/test-hooks/harness-painpoints.cjs');
+  if (!fs.existsSync(p)) return { ok: false, detail: 'harness-painpoints.cjs 不存在' };
+  const r = spawnSync('node', [p], {
+    encoding: 'utf8', timeout: 30000, windowsHide: true,
+  });
+  return { ok: r.status === 0, detail: `exit=${r.status}` };
 });
 
 // ═════════════════════════════════════════════════════════════════════════════

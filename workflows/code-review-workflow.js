@@ -7,6 +7,19 @@ export const meta = {
     { title: 'Pass 3 HDL 专项审查' },
     { title: '报告合成' },
   ],
+  contract: {
+    version: 1,
+    strict: true,
+    inputs: ['files', 'lang', 'intent/requirements optional but must not be invented'],
+    checkpoints: ['preflight-files-present', 'blocking-findings-gate', 'report-synthesis'],
+    evidence: ['exact file:line for each finding', 'localized evidence snippet', 'severity and impact'],
+    completionCriteria: [
+      'every requested file is included in the review scope',
+      'CRITICAL/HIGH Pass 1 findings make the workflow fail',
+      'CRITICAL/HIGH HDL Pass 3 findings make the workflow fail',
+      'summary reports blocking findings explicitly',
+    ],
+  },
 };
 
 // ── 两轮 + HDL 专项审查工作流 ────────────────────────────────────────────
@@ -49,6 +62,8 @@ const pass1Result = await agent(`你是一名**代码审查员**，执行 Pass 1
 审查以下文件：
 ${fileList.map(f => `- ${f}`).join('\n')}
 语言: ${language}
+用户需求/审查意图（不得自行补全）:
+${args?.intent || args?.requirements || '未提供；仅基于文件内容、显式接口和本工作流审查规则判断，不得臆测产品需求。'}
 
 审查四大维度（必须逐文件覆盖）：
 
@@ -83,6 +98,7 @@ ${fileList.map(f => `- ${f}`).join('\n')}
     "file": "path:line",
     "title": "问题简述",
     "description": "详细说明",
+    "evidence": "本地证据摘要",
     "impact": "不修复的影响",
     "suggestion": "修复建议"
   }
@@ -92,7 +108,9 @@ ${fileList.map(f => `- ${f}`).join('\n')}
 
 约束：
 - CRITICAL/HIGH severity 为零阻塞 → 不通过 Pass 1
-- 每条发现必须标注 severity`, { label: 'p1-correctness', phase: 'Pass 1 正确性审查', schema: {
+- 每条发现必须标注 severity
+- 每条发现必须绑定精确 file:line，并给出 evidence 字段；没有本地证据不得报 finding
+- 不确定时输出 openQuestions，不要把假设写成事实`, { label: 'p1-correctness', phase: 'Pass 1 正确性审查', schema: {
     type: 'object',
     properties: {
       findings: {
@@ -106,12 +124,14 @@ ${fileList.map(f => `- ${f}`).join('\n')}
             file: { type: 'string' },
             title: { type: 'string' },
             description: { type: 'string' },
+            evidence: { type: 'string' },
             impact: { type: 'string' },
             suggestion: { type: 'string' },
           },
-          required: ['pass', 'severity', 'category', 'file', 'title', 'description'],
+          required: ['pass', 'severity', 'category', 'file', 'title', 'description', 'evidence'],
         },
       },
+      openQuestions: { type: 'array', items: { type: 'string' } },
     },
     required: ['findings'],
   }});
@@ -187,11 +207,15 @@ ${fileList.map(f => `- ${f}`).join('\n')}
     "file": "path:line",
     "title": "问题简述",
     "description": "详细说明",
+    "evidence": "本地证据摘要",
     "suggestion": "改进建议"
   }
 ]
 
-如果没有发现问题，返回空数组 []。`, { label: 'p2-quality', phase: 'Pass 2 代码质量审查', schema: {
+如果没有发现问题，返回空数组 []。
+
+约束:
+- 每条建议必须有精确 file:line 和 evidence 字段；没有证据不得输出`, { label: 'p2-quality', phase: 'Pass 2 代码质量审查', schema: {
     type: 'object',
     properties: {
       findings: {
@@ -205,9 +229,10 @@ ${fileList.map(f => `- ${f}`).join('\n')}
             file: { type: 'string' },
             title: { type: 'string' },
             description: { type: 'string' },
+            evidence: { type: 'string' },
             suggestion: { type: 'string' },
           },
-          required: ['pass', 'severity', 'category', 'file', 'title', 'description'],
+          required: ['pass', 'severity', 'category', 'file', 'title', 'description', 'evidence'],
         },
       },
     },
@@ -268,9 +293,10 @@ ${hdlFiles.map(f => '- ' + f).join('\n')}
               file: { type: 'string' },
               title: { type: 'string' },
               description: { type: 'string' },
+              evidence: { type: 'string' },
               suggestion: { type: 'string' },
             },
-            required: ['severity', 'category', 'file', 'title', 'description'],
+            required: ['severity', 'category', 'file', 'title', 'description', 'evidence'],
           },
         },
       },
@@ -303,9 +329,10 @@ ${hdlFiles.map(f => '- ' + f).join('\n')}
               file: { type: 'string' },
               title: { type: 'string' },
               description: { type: 'string' },
+              evidence: { type: 'string' },
               suggestion: { type: 'string' },
             },
-            required: ['severity', 'category', 'file', 'title', 'description'],
+            required: ['severity', 'category', 'file', 'title', 'description', 'evidence'],
           },
         },
       },
@@ -340,9 +367,10 @@ ${hdlFiles.map(f => '- ' + f).join('\n')}
               file: { type: 'string' },
               title: { type: 'string' },
               description: { type: 'string' },
+              evidence: { type: 'string' },
               suggestion: { type: 'string' },
             },
-            required: ['severity', 'category', 'file', 'title', 'description'],
+            required: ['severity', 'category', 'file', 'title', 'description', 'evidence'],
           },
         },
       },
@@ -377,9 +405,10 @@ ${hdlFiles.map(f => '- ' + f).join('\n')}
               file: { type: 'string' },
               title: { type: 'string' },
               description: { type: 'string' },
+              evidence: { type: 'string' },
               suggestion: { type: 'string' },
             },
-            required: ['severity', 'category', 'file', 'title', 'description'],
+            required: ['severity', 'category', 'file', 'title', 'description', 'evidence'],
           },
         },
       },
@@ -409,7 +438,7 @@ const allFindings = [...p1Findings, ...p2Findings, ...p3Findings];
 
 log('\n📋 ===== 审查总结 =====');
 log(`   审查文件: ${fileList.length} 个`);
-log(`   Pass 1 (正确性): ✅ 通过 — ${p1Findings.length} 条发现, 0 阻塞`);
+log(`   Pass 1 (正确性): ${pass1Passed ? '✅ 通过' : '❌ 未通过'} — ${p1Findings.length} 条发现, ${blockingIssues.length} 条阻塞`);
 log(`   Pass 2 (代码质量): ${p2Findings.length} 条建议`);
 if (isHDL) log(`   Pass 3 (HDL 专项): ${p3Findings.length} 条发现 (架构/正确性/性能/接口)`);
 
@@ -423,11 +452,18 @@ Object.entries(bySeverity).forEach(([sev, count]) => {
   log(`     ${sev}: ${count}`);
 });
 
+const p3BlockingIssues = p3Findings.filter(f =>
+  f.severity === 'CRITICAL' || f.severity === 'HIGH'
+);
+const workflowPassed = pass1Passed && p3BlockingIssues.length === 0;
+const allBlockingIssues = [...blockingIssues, ...p3BlockingIssues];
+
 return {
-  pass: true,
+  pass: workflowPassed,
   pass1: {
-    passed: true,
+    passed: pass1Passed,
     total: p1Findings.length,
+    blocking: blockingIssues.length,
     findings: p1Findings,
   },
   pass2: {
@@ -435,9 +471,12 @@ return {
     findings: p2Findings,
   },
   pass3: isHDL ? {
+    passed: p3BlockingIssues.length === 0,
     total: p3Findings.length,
+    blocking: p3BlockingIssues.length,
     findings: p3Findings,
   } : null,
+  blockingIssues: allBlockingIssues,
   summary: {
     files: fileList,
     totalFindings: allFindings.length,

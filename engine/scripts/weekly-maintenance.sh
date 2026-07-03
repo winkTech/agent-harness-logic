@@ -29,9 +29,9 @@ echo "--- 模式挖掘 ---"
 bash "$SCRIPT_DIR/memory-pattern-miner.sh" --topics
 echo ""
 
-# 3. 归档过期工作记忆
-echo "--- 归档过期 ---"
-bash "$SCRIPT_DIR/memory-rotate.sh" --execute
+# 3. 记忆/知识库维护：过期压缩、归档降权、语义索引重建
+echo "--- 记忆/知识库维护 ---"
+node "$SCRIPT_DIR/memory-knowledge-maintenance.cjs" --auto --execute --interval-days 7
 echo ""
 
 echo "=== 维护完成 ==="

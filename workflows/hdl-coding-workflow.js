@@ -25,6 +25,14 @@ export const meta = {
     { title: 'Phase 7 代码审查' },
     { title: 'Phase 8 报告+Verifier' },
   ],
+  contract: {
+    version: 1,
+    strict: true,
+    inputs: ['modules', 'projectRoot', 'confirmed/checkpoints.preflight.confirmed'],
+    checkpoints: ['delegated to hdl-coding-dag-workflow'],
+    evidence: ['delegated to hdl-coding-dag-workflow'],
+    completionCriteria: ['hdl-coding-dag-workflow verifier pass=true'],
+  },
 };
 
 // 代理：调用真实 dag 工作流

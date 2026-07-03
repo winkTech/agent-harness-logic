@@ -20,11 +20,13 @@
 
 const fs = require('node:fs');
 const path = require('node:path');
+const scope = require('./lib/project-scope.cjs');
 
 const HOMEDIR = require('node:os').homedir();
 const STATE_FILE = path.join(HOMEDIR, '.claude', 'var', 'index', 'runtime-state.json');
 const TASK_FILE = path.join(HOMEDIR, '.claude', 'var', 'active-task.yaml');
 const WORK_DIR = path.join(HOMEDIR, '.claude', 'memory', 'work');
+const HOME_ROOT = path.join(HOMEDIR, '.claude');
 
 function readJSON(filePath) {
   try {
@@ -33,6 +35,40 @@ function readJSON(filePath) {
     }
   } catch { /* ignore */ }
   return null;
+}
+
+function normalizePath(p) {
+  return scope.keyPath(p);
+}
+
+function isSamePath(a, b) {
+  return scope.isSamePath(a, b);
+}
+
+function isInsidePath(child, parent) {
+  return scope.isInsidePath(child, parent);
+}
+
+function readTaskProjectRoot() {
+  try {
+    if (!fs.existsSync(TASK_FILE)) return '';
+    const raw = fs.readFileSync(TASK_FILE, 'utf8');
+    const match = raw.match(/^\s*(?:project_root|workspace_root|root|cwd)\s*:\s*["']?([^"'\r\n#]+)["']?/mi);
+    return match ? match[1].trim() : '';
+  } catch {
+    return '';
+  }
+}
+
+function shouldInjectForCwd(cwd) {
+  const projectRoot = readTaskProjectRoot();
+  if (projectRoot) {
+    return isInsidePath(cwd, projectRoot);
+  }
+
+  // Legacy active-task.yaml has no project scope. Inject it only at the harness
+  // root, not inside child workspaces/evals where it becomes stale context.
+  return isSamePath(cwd, HOME_ROOT);
 }
 
 function main() {
@@ -47,6 +83,10 @@ function main() {
   const currentSessionId = process.env.CLAUDE_SESSION_ID || '';
   if (state.sessionId === currentSessionId) {
     // 同一 session 继续 → 不输出 handoff 摘要
+    return;
+  }
+
+  if (!shouldInjectForCwd(process.cwd())) {
     return;
   }
 

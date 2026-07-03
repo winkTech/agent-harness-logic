@@ -1,3 +1,12 @@
+---
+name: wifi-qam-mapper-golden-model
+title: 802.11 QAM Mapper — Golden Model
+domain: comm
+type: golden-model
+tags: [wifi, 802.11, qam, mapper, golden-model]
+updated: 2026-07-03
+---
+
 # 802.11 QAM Mapper — Golden Model
 
 IEEE 802.11-2016 compliant QAM modulation/demodulation Golden Model in Python.

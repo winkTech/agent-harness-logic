@@ -1,3 +1,12 @@
+---
+name: memory-cdc-backpressure-patterns
+title: 存储/CDC/背压 架构模式
+domain: fpga
+type: architecture-pattern
+tags: [fpga, memory, cdc, backpressure, pattern]
+updated: 2026-07-03
+---
+
 # 存储/CDC/背压 架构模式
 
 > FIFO 深度选型、跨时钟域同步方案、AXI-Stream 背压链设计的

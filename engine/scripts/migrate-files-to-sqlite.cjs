@@ -20,6 +20,7 @@ const path = require('node:path');
 
 const { openDb } = require('../sqlite/index.cjs');
 const { writeMemory, writeBatch, memoryStats } = require('../sqlite/store-memory.cjs');
+const { shouldMigrateMemoryFile } = require('./lib/memory-file-policy.cjs');
 
 // ── 配置 ───────────────────────────────────────────────────────────────────
 
@@ -145,6 +146,10 @@ function extractDescription(fm, body, filePath) {
  * @returns {{ fact: object|null, links: string[] }}
  */
 function fileToFact(filePath) {
+  if (!shouldMigrateMemoryFile(filePath, { memoryDir: MEMORY_DIR })) {
+    return { fact: null, links: [], filePath, skipped: true };
+  }
+
   const content = fs.readFileSync(filePath, 'utf8');
   const { frontmatter, body } = parseFrontmatter(content);
 
@@ -189,6 +194,7 @@ function scanMemoryFiles() {
         walk(fullPath);
       } else if (entry.isFile() && entry.name.endsWith('.md')) {
         if (SKIP_FILES.has(entry.name)) continue;
+        if (!shouldMigrateMemoryFile(fullPath, { memoryDir: MEMORY_DIR })) continue;
         files.push(fullPath);
       }
     }

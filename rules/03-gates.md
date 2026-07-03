@@ -1,3 +1,11 @@
+---
+name: gate-rules
+description: "Requirements and verification-quality gates."
+priority: L0
+trigger: "always"
+skip: ""
+---
+
 # 两道门禁 — Requirements + Verification Quality
 
 > L0 优先级。合并原 rules/15 + rules/16。WiFi PHY 教训见 memory/。

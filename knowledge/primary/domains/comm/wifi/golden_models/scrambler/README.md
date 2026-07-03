@@ -1,3 +1,12 @@
+---
+name: wifi-scrambler-golden-model
+title: 802.11 Scrambler Golden Model
+domain: comm
+type: golden-model
+tags: [wifi, 802.11, scrambler, golden-model]
+updated: 2026-07-03
+---
+
 # 802.11 Scrambler Golden Model
 
 WiFi 802.11 加扰器 Python 黄金模型。

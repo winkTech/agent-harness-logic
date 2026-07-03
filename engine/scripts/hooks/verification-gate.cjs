@@ -40,6 +40,15 @@
 const fs = require('fs');
 const os = require('os');
 const path = require('path');
+const {
+  markEditedFromPayload,
+  markVerifiedForCwd,
+  pendingForPayload,
+  readVerificationState,
+  resetVerificationState,
+  writeVerificationState,
+} = require('../lib/verification-state.cjs');
+const { payloadCwd, payloadFilePath } = require('../lib/project-scope.cjs');
 
 const HOMEDIR = os.homedir();
 const STATE_DIR = path.join(HOMEDIR, '.claude', 'var');
@@ -72,11 +81,11 @@ const TEST_PATTERNS = [
   // HDL 仿真 — 运行仿真 = 功能验证
   /^vsim\b/,
   /^xsim\b/,
-  /^make\b/,
   /^make\s+(regress|sim|test|check|run)\b/,
   // Node/JS 测试
   /^npm\s+test\b/,
   /^npm\s+run\s+test\b/,
+  /^node\s+.*engine[\/\\]scripts[\/\\]test-hooks[\/\\].+\.(?:cjs|js)\b/,
   /^jest\b/,
   /^vitest\b/,
   /^uv\s+run\s+pytest\b/,
@@ -157,34 +166,20 @@ function ensureDir(dir) {
 }
 
 function readState() {
-  try {
-    if (fs.existsSync(STATE_FILE)) {
-      return JSON.parse(fs.readFileSync(STATE_FILE, 'utf8'));
-    }
-  } catch { /* 忽略损坏文件 */ }
-  return { edited: false, verified: false, editCount: 0, lastEditTime: null, lastVerifyTime: null };
+  return readVerificationState();
 }
 
 function writeState(state) {
   ensureDir(STATE_DIR);
-  fs.writeFileSync(STATE_FILE, JSON.stringify(state, null, 2), 'utf8');
+  writeVerificationState(state);
 }
 
-function markEdited() {
-  const state = readState();
-  state.edited = true;
-  state.verified = false;
-  state.editCount = (state.editCount || 0) + 1;
-  state.lastEditTime = new Date().toISOString();
-  writeState(state);
+function markEdited(payload, toolName) {
+  markEditedFromPayload(payload, { toolName });
 }
 
-function markVerified() {
-  const state = readState();
-  state.edited = false;
-  state.verified = true;
-  state.lastVerifyTime = new Date().toISOString();
-  writeState(state);
+function markVerified(payload, command) {
+  markVerifiedForCwd(payloadCwd(payload), { command });
 }
 
 // ── stdin 读取 ───────────────────────────────────────────────────────────────
@@ -215,7 +210,7 @@ async function main() {
 
   // --reset: 清除待验证标记
   if (process.argv.includes('--reset')) {
-    writeState({ edited: false, verified: false, editCount: 0, lastEditTime: null, lastVerifyTime: null });
+    resetVerificationState();
     console.error('[VerificationGate] ✅ 验证状态已重置');
     process.exit(0);
   }
@@ -238,11 +233,12 @@ async function main() {
   // ── PostToolUse: 编辑代码文件 → 标记待验证 ───────────────────────────────
   if ((eventName === 'PostToolUse' || !eventName) && ['edit', 'write', 'multiedit'].includes(toolName)) {
     // 仅代码文件触发验证标记，文档/配置/gate 文件不触发
-    const fp = (payload?.tool_input?.file_path || payload?.tool?.input?.file_path || payload?.input?.file_path || '').toLowerCase();
-    const isCode = /\.(sv|v|vh|py|c|cpp|h|vhd)$/i.test(fp);
+    const filePath = payloadFilePath(payload);
+    const fp = filePath.toLowerCase();
+    const isCode = /\.(sv|v|vh|py|c|cpp|h|vhd)$/i.test(filePath);
     const isGateFile = /[\/\\]var[\/\\]gates[\/\\]/.test(fp) || fp.endsWith('verify-gate.json');
     if (isCode && !isGateFile) {
-      markEdited();
+      markEdited(payload, toolName);
     }
     process.exit(0);
   }
@@ -250,13 +246,14 @@ async function main() {
   // ── PreToolUse: Bash 命令 → 检查验证状态 ─────────────────────────────────
   if ((eventName === 'PreToolUse' || !eventName) && (toolName === 'bash' || payload?.tool_name === 'Bash') && command) {
     const state = readState();
+    const pending = pendingForPayload(state, payload);
 
     // 没有待验证的修改 → 放行
-    if (!state.edited) process.exit(0);
+    if (pending.length === 0) process.exit(0);
 
     // 命令是第二层: 功能验证 → 放行 + 清除标记 ✅
     if (matchesAny(command, TEST_PATTERNS)) {
-      markVerified();
+      markVerified(payload, command);
       process.exit(0);
     }
 

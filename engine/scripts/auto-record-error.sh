@@ -5,6 +5,11 @@
 
 set -euo pipefail
 
+if [[ "${CLAUDE_HARNESS_VERIFY_READONLY:-}" == "1" || "${CLAUDE_NO_DIAGNOSTIC_WRITES:-}" == "1" || "${CLAUDE_BENCH:-}" == "1" ]]; then
+  echo "auto-record-error: skipped in read-only verification mode" >&2
+  exit 0
+fi
+
 MEMORY_DIR="$HOME/.claude/memory"
 ERRORS_DIR="$MEMORY_DIR/errors"
 mkdir -p "$ERRORS_DIR"

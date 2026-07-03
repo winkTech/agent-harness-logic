@@ -1,3 +1,12 @@
+---
+name: architecture-pattern-library
+title: 架构模式库 (Architecture Pattern Library)
+domain: fpga
+type: index
+tags: [fpga, architecture, pattern, index]
+updated: 2026-07-03
+---
+
 # 架构模式库 (Architecture Pattern Library)
 
 > 本库为逻辑工程师提供 B1 架构空间探索环节所需的**定量对比数据**，

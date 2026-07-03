@@ -68,6 +68,14 @@ function parseFrontmatter(content) {
   return { frontmatter, body, parsed: true };
 }
 
+function splitFrontmatterList(value) {
+  if (!value || typeof value !== 'string') return [];
+  return value
+    .split(/[;,，、|/]/)
+    .map(s => s.trim())
+    .filter(Boolean);
+}
+
 // ── 规则索引 ─────────────────────────────────────────────────────────────────
 
 /**
@@ -98,17 +106,11 @@ function buildRuleIndex() {
 
       // 解析 trigger 字符串 → 关键词数组
       const triggerStr = frontmatter.trigger || '';
-      const triggers = triggerStr
-        .split(/[，,、\/]/)
-        .map(s => s.trim())
-        .filter(Boolean);
+      const triggers = splitFrontmatterList(triggerStr);
 
       // 解析 skip 字符串 → 关键词数组
       const skipStr = frontmatter.skip || '';
-      const skips = skipStr
-        .split(/[，,、\/]/)
-        .map(s => s.trim())
-        .filter(Boolean);
+      const skips = splitFrontmatterList(skipStr);
 
       rules.push({
         file,
@@ -199,8 +201,8 @@ function matchTriggerPatterns(input, patterns, openFiles, toolNames, strict) {
   for (const pattern of patterns) {
     if (!pattern) continue;
 
-    // 特殊关键词: "始终加载" / "永不跳过" — 总是匹配
-    if (pattern === '始终加载' || pattern === '永不跳过') {
+    // 特殊关键词: "始终加载" / "永不跳过" / "always" — 总是匹配
+    if (pattern === '始终加载' || pattern === '永不跳过' || ['always', 'always_load', 'always load'].includes(pattern.toLowerCase())) {
       return { type: 'always', term: pattern };
     }
 
@@ -321,11 +323,16 @@ function evaluate(userMessage, opts = {}) {
     return null; // 无匹配 → 不注入任何东西
   }
 
-  // 只加载 L0/L1 优先级的规则（高优先级），最多 2 个
-  const highPriority = matches.filter(m => ['L0', 'L1'].includes(m.priority)).slice(0, 2);
-  // 如果高优先级不够，补充 L2
-  const supplement = matches.filter(m => m.priority === 'L2').slice(0, 2 - highPriority.length);
-  const toLoad = [...highPriority, ...supplement];
+  // L0 是硬约束，必须全部加载；L1/L2 再按相关性补充。
+  const l0 = matches.filter(m => m.priority === 'L0');
+  const l1 = matches.filter(m => m.priority === 'L1').slice(0, 3);
+  const supplement = matches.filter(m => m.priority === 'L2').slice(0, Math.max(0, 4 - l0.length - l1.length));
+  const seenFiles = new Set();
+  const toLoad = [...l0, ...l1, ...supplement].filter(rule => {
+    if (seenFiles.has(rule.file)) return false;
+    seenFiles.add(rule.file);
+    return true;
+  });
 
   // 加载规则内容
   const ruleContents = {};

@@ -17,9 +17,9 @@ skip: "纯执行无需工作流"
 | 新模块/写RTL/写TB/算法实现/定点 | `hdl-coding-dag-workflow` | 多 Agent 并行流水线，必须从 Phase 0 开始 |
 | hdl编码/写RTL(别名) | `hdl-coding-workflow` | 与 `hdl-coding-dag-workflow` 等价 |
 | hdl编码/快速修复(别名) | `hdl-coding-workflow` | 与 `hdl-coding-dag-workflow` 等价，Lite模式兼容 |
-| 审查代码/代码质量/PR审查 | `code-review-workflow` | Adversarial 审查：Writer→Reviewer→Arbiter |
-| 架构审查/代码库评估/技术债 | `architecture-review-workflow` | 四维并行：性能/资源/时序/接口 |
-| 安全审查/认证/密钥/支付 | `security-review-workflow` | 调用 `/security-review` skill |
+| 审查代码/代码质量/PR审查 | `code-review-workflow` | Pass 1 正确性阻塞 → Pass 2 质量建议 → HDL 专项证据审查 |
+| 架构审查/代码库评估/技术债 | `architecture-review-workflow` | 上下文收集 → 架构/安全并行分析 → 证据化建议 |
+| 安全审查/认证/密钥/支付 | `security-review-workflow` | 威胁建模 → `workflow-evidence-scan.cjs` 确定性扫描 → 手动验证 → 修复计划 |
 | HDL 编码时问知识/查参考 | rag-skill（自动 Hook） | 系统侧拦截，无感执行 |
 | 小改动/快速修复/改位宽 | `hdl-coding-dag-workflow` (Lite) | 跳过 P2+P6 |
 | 用户指定了实现方向 | 退出分析 → `hdl-coding-dag-workflow` | 区分"调试"和"实现" |

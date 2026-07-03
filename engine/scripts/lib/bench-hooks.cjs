@@ -17,20 +17,61 @@ const fs = require('node:fs');
 const path = require('node:path');
 const { spawnSync } = require('node:child_process');
 const os = require('node:os');
+const { collectHookEntries } = require('./hook-registry.cjs');
 
 const HOME = path.join(os.homedir(), '.claude');
-const SETTINGS = path.join(HOME, 'settings.local.json');
+const SETTINGS_FILES = [
+  path.join(HOME, 'settings.json'),
+  path.join(HOME, 'settings.local.json'),
+];
 
 // ── 工具 ───────────────────────────────────────────────────────────────────
 
 function now() { return Date.now(); }
+
+function parseCommandLine(cmd) {
+  const parts = [];
+  const re = /"([^"]*)"|'([^']*)'|(\S+)/g;
+  let match;
+  while ((match = re.exec(cmd)) !== null) {
+    parts.push(match[1] ?? match[2] ?? match[3]);
+  }
+  return parts;
+}
+
+function expandPathArg(arg) {
+  if (!arg || typeof arg !== 'string') return arg;
+  return arg
+    .replace(/\$HOME/g, os.homedir().replace(/\\/g, '/'))
+    .replace(/^~(?=\/|\\|$)/, os.homedir().replace(/\\/g, '/'));
+}
+
+function mergeHookConfigs(base, next) {
+  const merged = { ...(base || {}) };
+  const hooks = { ...(merged.hooks || {}) };
+  for (const [point, entries] of Object.entries(next?.hooks || {})) {
+    hooks[point] = [...(hooks[point] || []), ...(Array.isArray(entries) ? entries : [])];
+  }
+  merged.hooks = hooks;
+  return merged;
+}
+
+function readSettings() {
+  let config = {};
+  for (const file of SETTINGS_FILES) {
+    if (!fs.existsSync(file)) continue;
+    const parsed = JSON.parse(fs.readFileSync(file, 'utf8'));
+    config = mergeHookConfigs(config, parsed);
+  }
+  return config;
+}
 
 /**
  * 执行一条 hook 命令并测量耗时。
  * @returns {{ ok: boolean, elapsed: number, script: string, id: string, isAsync: boolean }}
  */
 function benchHook(cmd, id, isAsync) {
-  const parts = cmd.split(/\s+/);
+  const parts = parseCommandLine(cmd).map(expandPathArg);
   if (parts.length === 0) return { ok: false, elapsed: 0, script: 'empty', id, isAsync };
 
   const executable = parts[0];
@@ -66,28 +107,12 @@ function benchHook(cmd, id, isAsync) {
  * @returns {Array<{ point: string, cmd: string, id: string, isAsync: boolean }>}
  */
 function collectHooks() {
-  const config = JSON.parse(fs.readFileSync(SETTINGS, 'utf8'));
-  const hooks = config.hooks || {};
-  const entries = [];
-
-  for (const [point, groups] of Object.entries(hooks)) {
-    const arr = Array.isArray(groups) ? groups : [];
-    for (const group of arr) {
-      const hookList = group.hooks || [group];
-      for (const h of hookList) {
-        const cmd = h.command || h.run || '';
-        if (!cmd) continue;
-        entries.push({
-          point,
-          cmd,
-          id: h.id || cmd.slice(0, 40),
-          isAsync: !!h.async || !!h.async,
-        });
-      }
-    }
-  }
-
-  return entries;
+  return collectHookEntries().map(entry => ({
+    point: entry.point,
+    cmd: entry.command,
+    id: entry.id,
+    isAsync: entry.isAsync,
+  }));
 }
 
 // ── 主流程 ─────────────────────────────────────────────────────────────────

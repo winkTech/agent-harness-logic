@@ -45,6 +45,20 @@ const DANGEROUS_PATTERNS = [
     message: '绕过黄金模型保护: 脚本子进程写入受保护路径',
   },
 
+  // ===== 1b. 脚本子进程绕过 Edit/Write 门禁写源码 =====
+  {
+    category: 'source-write-bypass',
+    severity: 'CRITICAL',
+    patterns: [
+      /python[\s\S]*open\([^)]*(?:src|rtl|tb|tests?)[\\/][^)]*\.(?:py|sv|v|vh|svh|c|cc|cpp|h|hpp|js|cjs|mjs|ts|tsx|jsx)[^)]*["'](?:w|a|x|wb|ab|xb)\b/i,
+      /python[\s\S]*Path\([^)]*(?:src|rtl|tb|tests?)[\\/][^)]*\.(?:py|sv|v|vh|svh|c|cc|cpp|h|hpp|js|cjs|mjs|ts|tsx|jsx)[^)]*\)[\s\S]*\.write_(?:text|bytes)\b/i,
+      /node[\s\S]*(?:writeFileSync|writeFile)\([^)]*(?:src|rtl|tb|tests?)[\\/][^)]*\.(?:py|sv|v|vh|svh|c|cc|cpp|h|hpp|js|cjs|mjs|ts|tsx|jsx)/i,
+      /(?:Set-Content|Add-Content|Out-File)[\s\S]*(?:src|rtl|tb|tests?)[\\/][^"'\s]+\.(?:py|sv|v|vh|svh|c|cc|cpp|h|hpp|js|cjs|mjs|ts|tsx|jsx)\b/i,
+      />>?\s*["']?[^"'\s]*(?:src|rtl|tb|tests?)[\\/][^"'\s]+\.(?:py|sv|v|vh|svh|c|cc|cpp|h|hpp|js|cjs|mjs|ts|tsx|jsx)\b/i,
+    ],
+    message: 'Bash 写源码绕过: 请使用 Edit/Write 工具，让写入门禁检查源码变更',
+  },
+
   // ===== 2. 数据泄露 =====
   {
     category: 'data-exfiltration',
@@ -198,7 +212,7 @@ function scanCommand(command) {
 
 async function main() {
   try {
-    const raw = await readStdin();
+    const raw = (await readStdin()).replace(/^\uFEFF/, '');
     if (!raw) process.exit(0);
 
     const payload = JSON.parse(raw);

@@ -1,3 +1,12 @@
+---
+name: dsp-architecture-patterns
+title: DSP 架构模式
+domain: fpga
+type: architecture-pattern
+tags: [fpga, dsp, architecture, pattern]
+updated: 2026-07-03
+---
+
 # DSP 架构模式
 
 > DSP 原语的硬件实现架构对比。每个模式给出 ≥2 种方案的
