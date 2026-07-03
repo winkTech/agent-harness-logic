@@ -1,3 +1,12 @@
+---
+name: architecture-gate-checklist-p1a
+title: Phase 1a 门禁检查清单 — 系统级方案
+domain: fpga
+type: checklist
+tags: [fpga, architecture, gate, checklist]
+updated: 2026-07-03
+---
+
 # Phase 1a 门禁检查清单 — 系统级方案
 
 > 调度层在 Phase 1a 产出后执行此检查。

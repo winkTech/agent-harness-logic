@@ -33,6 +33,8 @@
 'use strict';
 
 const { spawnSync } = require('node:child_process');
+const fs = require('node:fs');
+const path = require('node:path');
 
 // ── 工具检测定义 ────────────────────────────────────────────────────────────
 
@@ -91,29 +93,19 @@ function findVivadoInstallDirs() {
   const results = [];
 
   for (const drive of drives) {
-    // shell:true 模式下 cmd.exe 需要反斜杠
-    const searchPath = `${drive}\\Xilinx\\Vivado`;
+    const candidates = [
+      path.join(`${drive}\\`, 'Xilinx', 'Vivado'),
+      path.join(`${drive}\\`, 'Xilinx', 'vivado'),
+    ];
     try {
-      const ls = spawnSync(`dir /b "${searchPath}" 2>nul`, [], {
-        encoding: 'utf8', timeout: 5000, shell: true, windowsHide: true,
-      });
-      if (!ls.stdout) {
-        // 也试小写
-        const ls2 = spawnSync(`dir /b "${drive}\\Xilinx\\vivado" 2>nul`, [], {
-          encoding: 'utf8', timeout: 5000, shell: true, windowsHide: true,
-        });
-        if (ls2.stdout) ls.stdout = ls2.stdout;
-      }
-      if (!ls.stdout) continue;
-      for (const line of ls.stdout.trim().split(/\r?\n/)) {
-        const v = line.trim();
+      const searchPath = candidates.find(dir => fs.existsSync(dir));
+      if (!searchPath) continue;
+      for (const entry of fs.readdirSync(searchPath, { withFileTypes: true })) {
+        if (!entry.isDirectory()) continue;
+        const v = entry.name.trim();
         if (/^\d{4}\.\d+$/.test(v)) {
-          const absDir = `${drive}\\Xilinx\\Vivado\\${v}`;
-          // 确认 bin/vivado.bat 存在
-          const check = spawnSync(`if exist "${absDir}\\bin\\vivado.bat" (echo 1) else (echo 0)`, [], {
-            encoding: 'utf8', timeout: 3000, shell: true, windowsHide: true,
-          });
-          if (check.stdout && check.stdout.trim() === '1') {
+          const absDir = path.join(searchPath, v);
+          if (fs.existsSync(path.join(absDir, 'bin', 'vivado.bat'))) {
             results.push({ dir: absDir, version: v });
           }
         }

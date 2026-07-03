@@ -1,3 +1,12 @@
+---
+name: wifi-ofdm-interleaver-golden-model
+title: 802.11 OFDM Block Interleaver Golden Model
+domain: comm
+type: golden-model
+tags: [wifi, 802.11, ofdm, interleaver, golden-model]
+updated: 2026-07-03
+---
+
 # 802.11 OFDM Block Interleaver Golden Model
 
 802.11a/n/ac 发射端块交织器 (Block Interleaver) 与接收端去交织器 (Deinterleaver) 的 Python Golden Model。

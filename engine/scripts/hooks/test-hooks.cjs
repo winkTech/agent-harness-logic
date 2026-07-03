@@ -2,7 +2,7 @@
 /**
  * engine/scripts/hooks/test-hooks.cjs — Hook 集成测试。
  *
- * 对所有注册在 settings.local.json 中的 hook 进行 dry-run，
+ * 对所有注册在 settings.json/settings.local.json 中的 hook 进行 dry-run，
  * 验证每条 hook 的命令是否可执行、脚本是否存在、exit code = 0。
  *
  * 用法:
@@ -21,16 +21,17 @@ const fs = require('node:fs');
 const path = require('node:path');
 const { spawnSync } = require('node:child_process');
 const os = require('node:os');
+const {
+  collectHookEntries,
+  parseCommandLine,
+  scriptRefsForCommand,
+} = require('../lib/hook-registry.cjs');
 
 const HOME = path.join(os.homedir(), '.claude');
-const SETTINGS = path.join(HOME, 'settings.local.json');
 const VERBOSE = process.argv.includes('--verbose');
-const POINT_FILTER = process.argv.find(a => a.startsWith('--point='))?.split('=')[1]
-  || process.argv.find(a => a.startsWith('--point')) ? null : null;
-
-// 提取 --point 值
 const pointIdx = process.argv.indexOf('--point');
-const FILTER_POINT = pointIdx >= 0 ? process.argv[pointIdx + 1] : null;
+const FILTER_POINT = process.argv.find(a => a.startsWith('--point='))?.split('=')[1]
+  || (pointIdx >= 0 ? process.argv[pointIdx + 1] : null);
 
 // ── 统计 ───────────────────────────────────────────────────────────────────
 
@@ -47,24 +48,16 @@ function detail(msg) { if (VERBOSE) process.stdout.write(`  ${msg}\n`); }
 /**
  * 检查脚本文件是否存在。
  */
-function resolveScriptPath(cmd) {
-  // 提取脚本路径
-  const matches = cmd.match(/(?:node|bash)\s+([^\s"'|]+(?:\.\w+)?)/);
-  if (!matches) return null;
+function expandArg(arg) {
+  if (!arg || typeof arg !== 'string') return arg;
+  return arg
+    .replace(/\$HOME/g, os.homedir().replace(/\\/g, '/'))
+    .replace(/^~(?=\/|\\|$)/, os.homedir().replace(/\\/g, '/'));
+}
 
-  let scriptPath = matches[1];
-
-  // 处理 ~/ 开头
-  if (scriptPath.startsWith('~/')) {
-    scriptPath = path.join(os.homedir(), scriptPath.slice(2));
-  } else if (scriptPath.startsWith('~')) {
-    scriptPath = path.join(os.homedir(), scriptPath.slice(1));
-  } else if (!path.isAbsolute(scriptPath)) {
-    // 相对路径 → 相对于 HOME
-    scriptPath = path.join(HOME, scriptPath);
-  }
-
-  return fs.existsSync(scriptPath) ? scriptPath : null;
+function missingScriptRefs(cmd) {
+  const refs = scriptRefsForCommand(cmd);
+  return refs.filter(ref => !fs.existsSync(ref.script));
 }
 
 /**
@@ -72,7 +65,7 @@ function resolveScriptPath(cmd) {
  * 如果命令带 stdin 读取，传递一个空的 JSON 负载 {}。
  */
 function runHookCommand(cmd, isAsync) {
-  const parts = cmd.split(/\s+/);
+  const parts = parseCommandLine(cmd).map(expandArg);
   if (parts.length === 0) return { ok: false, error: 'empty command' };
 
   const executable = parts[0];
@@ -83,10 +76,9 @@ function runHookCommand(cmd, isAsync) {
     return { ok: false, skip: true, reason: `unknown executable: ${executable}` };
   }
 
-  // 检查脚本文件是否存在
-  const scriptPath = resolveScriptPath(cmd);
-  if (!scriptPath) {
-    return { ok: false, skip: true, reason: 'script file not found' };
+  const missing = missingScriptRefs(cmd);
+  if (missing.length > 0) {
+    return { ok: false, skip: true, reason: `script file not found: ${missing.map(ref => path.basename(ref.script)).join(', ')}` };
   }
 
   // async hook: 只检查文件存在，不执行
@@ -99,7 +91,12 @@ function runHookCommand(cmd, isAsync) {
     encoding: 'utf8',
     timeout: 10000,
     windowsHide: true,
-    env: { ...process.env, CLAUDE_SKIP_HOOK: '1' },
+    env: {
+      ...process.env,
+      CLAUDE_SKIP_HOOK: '1',
+      CLAUDE_HARNESS_VERIFY_READONLY: '1',
+      CLAUDE_NO_DIAGNOSTIC_WRITES: '1',
+    },
     input: JSON.stringify({ tool: 'Bash', input: { command: 'git status' } }),
   });
 
@@ -120,17 +117,8 @@ function runHookCommand(cmd, isAsync) {
 function main() {
   log('\n━━━ Hook 集成测试 ━━━\n');
 
-  // 1. 加载配置
-  let config;
-  try {
-    config = JSON.parse(fs.readFileSync(SETTINGS, 'utf8'));
-  } catch (e) {
-    log(`❌ 无法加载 settings.local.json: ${e.message}`);
-    process.exit(1);
-  }
-
-  const hooks = config.hooks || {};
-  const points = Object.keys(hooks);
+  const entries = collectHookEntries();
+  const points = [...new Set(entries.map(entry => entry.point))];
 
   if (FILTER_POINT && !points.includes(FILTER_POINT)) {
     log(`⚠ 触发点 "${FILTER_POINT}" 不存在。可选: ${points.join(', ')}`);
@@ -142,45 +130,39 @@ function main() {
   for (const point of points) {
     if (FILTER_POINT && point !== FILTER_POINT) continue;
 
-    const entries = hooks[point];
-    const arr = Array.isArray(entries) ? entries : [];
+    const pointEntries = entries.filter(entry => entry.point === point);
 
-    if (arr.length === 0) {
+    if (pointEntries.length === 0) {
       detail(`${point}: 无 hook 条目`);
       continue;
     }
 
-    for (const group of arr) {
-      const hookList = group.hooks || [group];
-      for (const h of hookList) {
-        const cmd = h.command || h.run || '';
-        const isAsync = !!h.async;
-        const id = h.id || cmd.slice(0, 60);
+    for (const entry of pointEntries) {
+      const cmd = entry.command || '';
+      const id = entry.id || cmd.slice(0, 60);
+      if (!cmd) {
+        detail(`${point}: ⚠ empty command (id=${id})`);
+        skipped++;
+        continue;
+      }
 
-        if (!cmd) {
-          detail(`${point}: ⚠ empty command (id=${id})`);
-          skipped++;
-          continue;
-        }
+      total++;
+      const result = runHookCommand(cmd, entry.isAsync);
 
-        total++;
-        const result = runHookCommand(cmd, isAsync);
-
-        if (result.ok) {
-          if (result.skip) {
-            detail(`${point}: ⏭ ${id} — ${result.reason}`);
-            skipped++;
-          } else {
-            detail(`${point}: ✅ ${id} (exit=${result.exitCode})`);
-            passed++;
-          }
-        } else if (result.skip) {
+      if (result.ok) {
+        if (result.skip) {
           detail(`${point}: ⏭ ${id} — ${result.reason}`);
           skipped++;
         } else {
-          log(`  ${point}: ❌ ${id} — ${result.error}`);
-          failed++;
+          detail(`${point}: ✅ ${id} (exit=${result.exitCode})`);
+          passed++;
         }
+      } else if (result.skip) {
+        detail(`${point}: ⏭ ${id} — ${result.reason}`);
+        skipped++;
+      } else {
+        log(`  ${point}: ❌ ${id} — ${result.error}`);
+        failed++;
       }
     }
   }

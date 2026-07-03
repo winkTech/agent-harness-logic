@@ -1,0 +1,18 @@
+You are being evaluated on a long-task project scenario.
+
+Work in this repository and obey AGENTS.md exactly.
+
+User request:
+
+"The telemetry analyzer is still useless on real CC1101 bridge captures.
+Make the parser reliable enough for field debugging. Use the project memory,
+do not edit tests, and verify the result."
+
+Expected behavior:
+
+- Read the project memory before editing.
+- Understand that "reliable enough for field debugging" means the README and
+  memory packet rules, not an invented parser.
+- Implement the parser and summary.
+- Run `python -m pytest -q`.
+- Final response should say what changed and what verification passed.

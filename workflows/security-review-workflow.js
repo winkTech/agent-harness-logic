@@ -20,12 +20,40 @@ export const meta = {
     { title: 'Phase 3 手动验证' },
     { title: 'Phase 4 修复建议' },
   ],
+  contract: {
+    version: 1,
+    strict: true,
+    inputs: ['targets/files', 'scope', 'allowGlobal'],
+    checkpoints: ['explicit-scope', 'deterministic-scan-evidence', 'manual-verification', 'fix-plan'],
+    evidence: ['workflow-evidence-scan.cjs JSON output', 'file:line findings', 'threat model focus areas'],
+    completionCriteria: [
+      'targets/files are explicit unless allowGlobal=true',
+      'automated scan is grounded in deterministic evidence',
+      'manual verification distinguishes confirmed issues from hypotheses',
+      'P0/P1/P2 fix plan includes verification steps',
+    ],
+  },
 };
 
-const targets = args?.targets || [];
+const targets = args?.targets || args?.files || [];
 const scope = args?.scope || 'full';
+const allowGlobal = args?.allowGlobal === true;
+const evidenceScanCommand = `node engine/scripts/workflow-evidence-scan.cjs --json --targets "${targets.join(',') || '.'}"`;
 
 phase('Phase 1 威胁建模');
+
+if (targets.length === 0 && !allowGlobal) {
+  log('⚠️ 未指定安全审查目标。安全审查默认不做全局推断，除非显式 allowGlobal=true。');
+  return {
+    pass: false,
+    reason: '缺少 targets/files；如需全局安全审查请显式传入 allowGlobal=true',
+    clarification: [
+      '要审查的目录或文件是什么？',
+      '安全范围是 auth、secrets、input、dependencies 还是 full？',
+      '是否允许全局扫描整个仓库？',
+    ],
+  };
+}
 
 const threatModel = await agent(`你是**安全工程师**，执行安全审查 Phase 1: 威胁建模。
 
@@ -77,11 +105,14 @@ const scanResult = await agent(`你是**安全工程师**，执行安全审查 P
 
 重点区域: ${(threatModel?.focusAreas || []).join(', ')}
 
+必须先运行确定性证据扫描，并把输出作为 automatedEvidence 引用；不要只凭记忆或自述扫描:
+${evidenceScanCommand}
+
 请执行:
 1. **代码扫描** — 搜索以下模式:
    - 硬编码密钥/密码: api_key, secret, password, token 等硬编码
    - SQL 注入: 字符串拼接查库
-   - 危险函数: eval, exec, shell: true
+   - 危险函数: eval, exec, shell=true 配置
    - 文件路径遍历
    - 不安全的反序列化
 
@@ -99,6 +130,7 @@ const scanResult = await agent(`你是**安全工程师**，执行安全审查 P
   "dangerousCalls": [{"file": "路径", "function": "函数名", "severity": "HIGH|MEDIUM|LOW"}],
   "configIssues": [{"issue": "问题描述", "severity": "HIGH|MEDIUM|LOW"}],
   "dependencyIssues": [{"package": "包名", "issue": "问题", "severity": "HIGH|MEDIUM|LOW"}],
+  "automatedEvidence": {"command": "实际运行命令", "filesScanned": 0, "issueCount": 0},
   "scanSummary": "扫描总结"
 }`, { label: 'p2-scan', phase: 'Phase 2 自动化扫描', schema: {
     type: 'object',
@@ -108,9 +140,18 @@ const scanResult = await agent(`你是**安全工程师**，执行安全审查 P
       dangerousCalls: { type: 'array', items: { type: 'object', properties: { file: { type: 'string' }, function: { type: 'string' }, severity: { type: 'string' } }, required: ['file', 'function', 'severity'] } },
       configIssues: { type: 'array', items: { type: 'object', properties: { issue: { type: 'string' }, severity: { type: 'string' } }, required: ['issue', 'severity'] } },
       dependencyIssues: { type: 'array', items: { type: 'object', properties: { package: { type: 'string' }, issue: { type: 'string' }, severity: { type: 'string' } }, required: ['package', 'issue', 'severity'] } },
+      automatedEvidence: {
+        type: 'object',
+        properties: {
+          command: { type: 'string' },
+          filesScanned: { type: 'number' },
+          issueCount: { type: 'number' },
+        },
+        required: ['command', 'filesScanned', 'issueCount'],
+      },
       scanSummary: { type: 'string' },
     },
-    required: ['scanSummary'],
+    required: ['automatedEvidence', 'scanSummary'],
   }});
 
 const totalScanIssues = (scanResult?.hardcodedSecrets?.length || 0) +

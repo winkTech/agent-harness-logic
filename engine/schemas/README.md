@@ -60,7 +60,7 @@ All validation is **advisory only** - failures generate warnings but never block
 
 ### Workflow & Hook Schemas (2)
 
-- `workflow-definition.schema.json` (DOCS ONLY - no workflow-creator scripts)
+- `workflow-definition.schema.json` (WIRED via `engine/scripts/test-hooks/workflow-contracts.cjs`)
 - `hook-definition.schema.json` (DOCS ONLY - no hook-creator scripts)
 
 ### Evolution & Project Schemas (2)
@@ -173,6 +173,7 @@ All validation is **advisory only** - failures generate warnings but never block
 - **WIRED schemas:** Data is validated at runtime (warnings only)
 - **DOCS ONLY schemas:** Reference templates for structure guidance
 - **SOFT-WIRED schemas:** Path defined but validation may be skipped
+- **Workflow contracts:** Static runtime checks validate `meta.contract`, strict checkpoints, evidence expectations, and unsupported workflow APIs.
 
 ---
 

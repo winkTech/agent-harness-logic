@@ -1,3 +1,12 @@
+---
+name: wifi-bcc-encoder-golden-model
+title: 802.11 BCC Encoder Golden Model
+domain: comm
+type: golden-model
+tags: [wifi, 802.11, bcc, encoder, golden-model]
+updated: 2026-07-03
+---
+
 # 802.11 BCC Encoder Golden Model
 
 IEEE 802.11 Binary Convolutional Code (BCC) encoder reference implementation in pure Python.

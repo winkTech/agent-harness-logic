@@ -18,6 +18,7 @@
 const p = require('node:path');
 const f = require('node:fs');
 const os = require('node:os');
+const { shouldIndexSemanticFile } = require('./lib/memory-file-policy.cjs');
 
 const HOME = p.join(os.homedir(), '.claude');
 const INDEX_DIR = p.join(HOME, 'var', 'index');
@@ -145,9 +146,14 @@ function walkMd(dir, files = []) {
   try {
     for (const entry of f.readdirSync(dir, { withFileTypes: true })) {
       if (entry.isDirectory()) {
-        walkMd(p.join(dir, entry.name), files);
-      } else if (entry.name.endsWith('.md') && entry.name !== 'MEMORY.md' && entry.name !== 'MEMORY_RULES.md') {
-        files.push(p.join(dir, entry.name));
+        if (!entry.name.startsWith('.') && entry.name !== '__pycache__') {
+          walkMd(p.join(dir, entry.name), files);
+        }
+      } else if (entry.name.endsWith('.md')) {
+        const full = p.join(dir, entry.name);
+        if (shouldIndexSemanticFile(full, { home: HOME, memoryDir: MEMORY_DIR })) {
+          files.push(full);
+        }
       }
     }
   } catch { /* skip unreadable */ }

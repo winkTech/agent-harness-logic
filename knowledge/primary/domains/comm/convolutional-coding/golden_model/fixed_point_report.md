@@ -1,3 +1,12 @@
+---
+name: conv-coding-viterbi-fixed-point-report
+title: 卷积编码 + Viterbi 译码 Golden Model 定点量化报告
+domain: comm
+type: fixed-point-report
+tags: [convolutional-code, viterbi, golden-model, fixed-point]
+updated: 2026-07-03
+---
+
 # 卷积编码 + Viterbi 译码 Golden Model 定点量化报告
 
 > 版本: 1.0

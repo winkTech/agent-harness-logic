@@ -11,9 +11,6 @@
  *   Workflow({name: 'architecture-review-workflow', args: {targets: ['src/'], depth: 'full'}})
  */
 
-const path = require('path');
-const fs = require('fs');
-
 export const meta = {
   name: 'architecture-review-workflow',
   description: '四维架构审查 — 上下文 → (架构分析 ∥ 安全审查) → 建议',
@@ -22,6 +19,19 @@ export const meta = {
     { title: 'Phase 2/3 并行分析' },
     { title: 'Phase 4 建议合成' },
   ],
+  contract: {
+    version: 1,
+    strict: true,
+    inputs: ['targets', 'depth'],
+    checkpoints: ['targets-present', 'evidence-backed-analysis', 'synthesis'],
+    evidence: ['repository structure evidence', 'file:line citations for risks', 'explicit uncertainty/open questions'],
+    completionCriteria: [
+      'targets are explicit and non-empty',
+      'architecture risks include evidence',
+      'recommendations are prioritized and tied to observed evidence',
+      'critical health fails the workflow',
+    ],
+  },
 };
 
 const targets = args?.targets || [];

@@ -31,15 +31,42 @@
 // fs/path → 内联实现, dag-engine → 内联 DAG 拓扑执行器
 const { join: pathJoin } = { join: (...p) => p.join('/').replace(/\/+/g, '/') };
 
-// fs 替代: 委托给 sub-agent (Workflow script 无 Node.js API)
-async function _agentCheck(p) {
-  try { const r = await agent(`Does file exist: ${p}? Output ONLY "yes" or "no".`, {label:'fs-check'}); return String(r).trim().toLowerCase().startsWith('y'); } catch { return false; }
+// Evidence reads must be performed by a real filesystem/tool bridge.
+// Falling back to agent narration recreates the hallucination failure mode this
+// workflow is meant to prevent, so missing bridge support fails closed.
+function _workflowFs() {
+  const bridge = globalThis.workflowFs || globalThis.WorkflowFS || globalThis.fsBridge;
+  if (!bridge) {
+    throw new Error('Workflow filesystem bridge is unavailable; evidence checks cannot rely on agent self-report.');
+  }
+  return bridge;
 }
-async function _agentRead(p) {
-  try { return await agent(`Read file: ${p}. Output complete content.`, {label:'fs-read'}); } catch { return ''; }
+async function _fileExists(p) {
+  const fsBridge = _workflowFs();
+  if (typeof fsBridge.exists !== 'function') throw new Error('Workflow filesystem bridge missing exists(path).');
+  return Boolean(await fsBridge.exists(p));
 }
-async function _agentDir(d) {
-  try { const r = await agent(`List .json files in: ${d}. Output as JSON array of filenames.`, {label:'fs-dir'}); return JSON.parse(String(r)); } catch { return []; }
+async function _readFileText(p) {
+  const fsBridge = _workflowFs();
+  if (typeof fsBridge.readText !== 'function') throw new Error('Workflow filesystem bridge missing readText(path).');
+  return String(await fsBridge.readText(p));
+}
+async function _listJsonFiles(d) {
+  const fsBridge = _workflowFs();
+  if (typeof fsBridge.listJson !== 'function') throw new Error('Workflow filesystem bridge missing listJson(dir).');
+  return await fsBridge.listJson(d);
+}
+
+function _checkpointConfirmed(name) {
+  return args?.confirmed === true ||
+    args?.userConfirmed === true ||
+    args?.acknowledged === true ||
+    args?.checkpoints?.[name]?.confirmed === true;
+}
+
+function _requireUserCheckpoint(name, detail) {
+  if (_checkpointConfirmed(name)) return;
+  throw new Error(`[WorkflowCheckpoint:${name}] user confirmation required before continuing. ${detail || ''}`);
 }
 
 // DAG 拓扑执行器 (替代 dag-engine.cjs)
@@ -52,10 +79,9 @@ async function _dagExecute(nodes, opts) {
     const ready = nodeList.filter(([name, node]) => !completed.has(name) && (node.deps || []).every(d => completed.has(d)));
     if (ready.length === 0) throw new Error('DAG deadlock: completed=' + [...completed].join(','));
     opts?.onProgress?.(completed.size + 1, nodeList.length, ready.map(r=>r[0]));
-    // 并行执行同层节点, 失败不阻断兄弟节点
+    // 并行执行同层节点；任一节点失败即停止，避免在坏证据上级联。
     await parallel(ready.map(([name, node]) => () => (async () => {
-      try { results[name] = { status: 'ok', data: await node.run(results) }; }
-      catch(e) { results[name] = { status: 'error', data: String(e) }; logFn(`⚠️ DAG ${name} failed: ${String(e).slice(0,200)}`); }
+      results[name] = { status: 'ok', data: await node.run(results) };
       completed.add(name);
     })()));
   }
@@ -81,6 +107,33 @@ export const meta = {
     { title: 'Phase 7 代码审查' },
     { title: 'Phase 8 报告+Verifier' },
   ],
+  contract: {
+    version: 1,
+    strict: true,
+    inputs: ['modules', 'projectRoot', 'confirmed/checkpoints.preflight.confirmed'],
+    checkpoints: ['preflight', 'phase-gates', 'evidence-gate', 'verifier'],
+    evidence: [
+      'workflowFs.exists/readText/listJson',
+      '06_doc/architecture.yaml',
+      '02_sim/check_results/*.json',
+      'Phase 4.5 evidence gate',
+    ],
+    completionCriteria: [
+      'preflight user checkpoint is confirmed',
+      'all required evidence files exist and pass structural checks',
+      'verifier returns valid JSON with pass=true',
+    ],
+    modeContracts: {
+      full: {
+        allowedSkips: [],
+        requiredEvidence: ['architecture.yaml', 'check_results/*.json', 'regression result'],
+      },
+      lite: {
+        allowedSkips: ['p2_fixedpt', 'p6_regression'],
+        requiredEvidence: ['architecture.yaml', 'check_results/*.json', 'verifier JSON'],
+      },
+    },
+  },
 };
 
 // ── 主参数 ─────────────────────────────────────────────────────────────────
@@ -172,34 +225,34 @@ nodes.p1a_sys_design = {
 
 【核心方法论 — 系统级思维】
 不要在写代码前就直接拆模块。先理解系统, 再推导算法, 再对比选型, 最后才拆模块。
-每一步的产出都写入 06_doct/ 目录。
+每一步的产出都写入 06_doc/ 目录。
 
 === A1 — 系统上下文分析 ===
-回答并写入 06_doct/system_context.md:
+回答并写入 06_doc/system_context.md:
 - 这个算法在全局链路中的位置？前级是什么？输出给谁？
 - 输入信号特性: 信噪比范围、带宽、符号率、最大/最小幅度
 - 系统约束: Fclk、最大延迟(cycles)、最低吞吐(samples/s)、面积预算
 - 输出要求: EVM(dB)、BER、锁定时间
 
 === A2 — 数学原理推导 ===
-写入 06_doct/algorithm_derivation.md:
+写入 06_doc/algorithm_derivation.md:
 从第一性原理导出算法，不靠记忆。完整推导链。
 关键的近似/简化及其误差分析。
 
 === A3 — 多方案对比选型 ===
-写入 06_doct/tradeoff_analysis.md:
+写入 06_doc/tradeoff_analysis.md:
 至少 2-3 候选，从性能/复杂度/存储/收敛速度/数值稳定性五维对比，表格呈现。
 
 === A4 — 信号链分析 ===
-写入 06_doct/signal_chain_analysis.md:
+写入 06_doc/signal_chain_analysis.md:
 每级处理后的信号形态、幅度范围、SNR变化、需要的动态余量。标注瓶颈级。
 
 === A5 — 定界分析 ===
-写入 06_doct/performance_bounds.md:
+写入 06_doc/performance_bounds.md:
 理论性能界(CRLB/Shannon限等) vs 预期性能的差距。
 
 === A6 — 定点策略 ===
-写入 06_doct/fixed_point_strategy.md:
+写入 06_doc/fixed_point_strategy.md:
 每级的预期位宽范围、溢出/截断策略、Q格式草案。
 
 === 🔴 复位约定 (红线 — 全项目统一) ===
@@ -212,7 +265,7 @@ nodes.p1a_sys_design = {
 模块: ${modules.join(', ') || '项目默认'}
 
 ━━━ 检查点 (P1a 门禁) ━━━
-产出 06_doct/ 下 6 份文档后暂停。
+产出 06_doc/ 下 6 份文档后暂停。
 
 调度层将使用 knowledge/primary/architecture-patterns/gate-checklist-p1a.md 检查:
   [MUST] A1 系统上下文: 链路位置+信号特性+系统约束+性能指标
@@ -247,7 +300,7 @@ ${sysHint}
 任务:
 1. 划分模块: 根据信号链分析, 将系统拆为 RTL 模块
 2. 模块接口定义: 每个模块的端口信号、位宽、握手协议
-3. **写入 06_doct/architecture.yaml [MUST]**:
+3. **写入 06_doc/architecture.yaml [MUST]**:
    modules:
      - name: <模块名>
        type: <datapath/control/memory>
@@ -259,9 +312,9 @@ ${sysHint}
          - {name, description, transitions}
    pair_conventions:
      - <对称对分析>
-4. **写入 06_doct/interface_contract.md**: 每个端口握手协议、时序波形
-5. **写入 06_doct/algorithm_spec.md**: 细化到每模块的算法步骤
-6. **写入 06_doct/pipeline_diagram.md**: 流水线图 + 数据流
+4. **写入 06_doc/interface_contract.md**: 每个端口握手协议、时序波形
+5. **写入 06_doc/algorithm_spec.md**: 细化到每模块的算法步骤
+6. **写入 06_doc/pipeline_diagram.md**: 流水线图 + 数据流
 
 7. **[MUST — 红线]** 所有模块复位信号必须为 i_rst (同步高有效)，禁止 rst_n/reset_n/arst_n。所有时序 always_ff @(posedge clk) + if(i_rst)
 模块: ${modules.join(', ') || '项目默认'}
@@ -276,15 +329,15 @@ ${sysHint}
 任务 — 在写任何 RTL 之前完成以下分析:
 
 === B1 — 架构空间探索 ===
-写入 06_doct/architecture_tradeoff.md:
+写入 06_doc/architecture_tradeoff.md:
 至少 2 种微架构对比（全并行/半折叠/全串行），从面积/延迟/吞吐/预估 Fmax 四维比较。
 
 === B2 — 资源预算跟踪 ===
-写入 06_doct/resource_budget_tracking.md:
+写入 06_doc/resource_budget_tracking.md:
 根据算法工程师的预算(DSP48×N/LUT×M/BRAM×K)出发，预估每个数据通路的资源消耗。
 
 === B3 — 时序预估 ===
-写入 06_doct/timing_estimate.md:
+写入 06_doc/timing_estimate.md:
 每级组合逻辑级数估算、关键路径标注、pipeline 插入策略。
 
 === B4 — 接口契约审查 ===
@@ -293,11 +346,11 @@ ${sysHint}
      - [MUST - 红线] 所有复位信号必须为 i_rst (同步高有效)，禁止异步/低有效复位。
 
 === B5 — 验证策略 ===
-写入 06_doct/verification_strategy.md:
+写入 06_doc/verification_strategy.md:
 每模块的自检方法、关键信号可观察性、调试 hook、覆盖率收集策略。
 
 === B6 — 时钟域分析 ===
-写入 06_doct/clock_domain.md:
+写入 06_doc/clock_domain.md:
 时钟域图、CDC 信号清单及方案、异步 FIFO 深度计算。
 
 模块: ${modules.join(', ') || '项目默认'}`, { agentType: 'logic-engineer', label: 'p1b-logic-arch', phase: 'Phase 1b 微架构设计' }),
@@ -306,10 +359,10 @@ ${sysHint}
     // ── 校验 architecture.yaml 完整性 ─────────────────────────
     const archPath = pathJoin(projectRoot, '06_doc', 'architecture.yaml');
     log(`🔍 校验 architecture.yaml: ${archPath}`);
-    if (!await /*fs*/_agentCheck(archPath)) {
+    if (!await _fileExists(archPath)) {
       throw new Error(`❌ architecture.yaml 不存在于 ${archPath}\n   P1b 未产出微架构文件, 请确保写入 06_doc/architecture.yaml`);
     }
-    const archContent = await /*fs*/_agentRead(archPath, 'utf-8');
+    const archContent = await _readFileText(archPath);
     const requiredFields = ['modules', 'pipeline_stages', 'fsm_states', 'bit_width', 'latency'];
     const missing = requiredFields.filter(f => !archContent.includes(f));
     if (missing.length > 0) {
@@ -330,7 +383,7 @@ ${sysHint}
     log('=== 保留块结束 ===');
     log('');
 
-    ━━ 检查点 (P1b 门禁) ━━
+    log(`━━ 检查点 (P1b 门禁) ━━
 等待调度层使用 gate-checklist-p1b.md 检查:
   [MUST] B1 架构空间: ≥2 方案+4 维对比+定量数据
   [MUST] B2 资源预算: 逐级累加+vs 预算对比+超 10% 告警
@@ -341,8 +394,8 @@ ${sysHint}
   🔴 红线1: 全部复位必须为 i_rst (同步高有效)
   🔴 红线2: B4接口未定义/B6 CDC漏同步
 
-用户审查门禁后再进入 Phase 2 定点量化。
-return `[算法方案]
+用户审查门禁后再进入 Phase 2 定点量化。`);
+    return `[算法方案]
 ${String(algoArch).slice(0, 1500)}
 
 [逻辑评估]
@@ -513,9 +566,9 @@ TB: 02_sim/tb_${mod}.sv (唯一 TB, 直接覆盖)
 
           // Check JSON evidence
           const jsonPath = pathJoin(prjRoot, '02_sim', 'check_results', `${mod}.json`);
-          if (await /*fs*/_agentCheck(jsonPath)) {
+          if (await _fileExists(jsonPath)) {
             try {
-              const ev = JSON.parse(await /*fs*/_agentRead(jsonPath, 'utf8'));
+              const ev = JSON.parse(await _readFileText(jsonPath));
               if (ev.status === 'PASS' && (ev.compared_points || 0) > 0) {
                 pass = true;
                 log(`  ✅ ${mod}: 仿真通过 (第${attempts}次, ${ev.compared_points}点)`);
@@ -582,9 +635,9 @@ ${lastError.slice(0, 1500)}
           ) || '');
 
           // Check again
-          if (await /*fs*/_agentCheck(jsonPath)) {
+          if (await _fileExists(jsonPath)) {
             try {
-              const ev = JSON.parse(await /*fs*/_agentRead(jsonPath, 'utf8'));
+              const ev = JSON.parse(await _readFileText(jsonPath));
               if (ev.status === 'PASS' && (ev.compared_points || 0) > 0) {
                 pass = true;
                 log(`  ✅ ${mod}: 修复后通过 (第${attempts}次, ${ev.compared_points}点)`);
@@ -720,11 +773,11 @@ nodes.p45_evidence_gate = {
 
     log('🔍 [证据门禁] 独立读取 evidence JSON 文件...');
 
-    if (!await /*fs*/_agentCheck(checkDir)) {
+    if (!await _fileExists(checkDir)) {
       throw new Error(`❌ [证据门禁] 目录不存在: ${checkDir}\n   Phase 4 未产出验证证据, 请确保 Phase 4 生成了检查脚本并运行。`);
     }
 
-    const files = (await /*fs*/_agentDir(checkDir)).filter(f => f.endsWith('.json'));
+    const files = (await _listJsonFiles(checkDir)).filter(f => f.endsWith('.json'));
     const allResults = [];
     let allPass = true;
 
@@ -732,7 +785,7 @@ nodes.p45_evidence_gate = {
       const jsonFile = `${mod}.json`;
       const jsonPath = pathJoin(checkDir, jsonFile);
 
-      if (!await /*fs*/_agentCheck(jsonPath)) {
+      if (!await _fileExists(jsonPath)) {
         allPass = false;
         allResults.push({ module: mod, pass: false, reason: `JSON 证据文件不存在: ${jsonPath}` });
         continue;
@@ -740,7 +793,7 @@ nodes.p45_evidence_gate = {
 
       let data;
       try {
-        data = JSON.parse(await /*fs*/_agentRead(jsonPath, 'utf-8'));
+        data = JSON.parse(await _readFileText(jsonPath));
       } catch (e) {
         allPass = false;
         allResults.push({ module: mod, pass: false, reason: `JSON 解析失败: ${e.message}` });
@@ -1255,6 +1308,11 @@ const preflightSummary = [
 
 log(preflightSummary);
 
+_requireUserCheckpoint(
+  'preflight',
+  'Review the preflight summary, clarify any ambiguity with the user, then rerun with args.confirmed=true or args.checkpoints.preflight.confirmed=true.'
+);
+
 if (modules.length === 0) {
   log('⚠️ 警告: 模块列表为空。如果是有意初始化新项目请忽略此警告。');
   log('   如果是执行已有模块的开发流程，请传入 modules 参数。');
@@ -1273,16 +1331,19 @@ const dagResult = await _dagExecute(nodes, {
 const verifierOutput = dagResult.results.verifier?.data || '';
 log('=== DAG 工作流完成 ===');
 
+let parsedVerifier;
 try {
-  const parsed = typeof verifierOutput === 'string' ? JSON.parse(verifierOutput) : verifierOutput;
-  if (parsed.pass) {
-    log(`✅ Verifier: 通过 — ${parsed.reason || ''}`);
-  } else {
-    log(`❌ Verifier: 不通过 — ${parsed.reason || ''}`);
-    if (parsed.missing) log(`缺失: ${parsed.missing.join(', ')}`);
-  }
-} catch {
-  log('Verifier 输出 (raw): ' + String(verifierOutput).slice(0, 500));
+  parsedVerifier = typeof verifierOutput === 'string' ? JSON.parse(verifierOutput) : verifierOutput;
+} catch (e) {
+  throw new Error(`Verifier output must be valid JSON. parse_error=${e.message}; raw=${String(verifierOutput).slice(0, 500)}`);
+}
+
+if (parsedVerifier.pass) {
+  log(`✅ Verifier: 通过 — ${parsedVerifier.reason || ''}`);
+} else {
+  log(`❌ Verifier: 不通过 — ${parsedVerifier.reason || ''}`);
+  if (parsedVerifier.missing) log(`缺失: ${parsedVerifier.missing.join(', ')}`);
+  throw new Error(`Verifier failed: ${parsedVerifier.reason || 'missing pass=true'}`);
 }
 
 if (stdModules.length > 0) {
@@ -1302,5 +1363,5 @@ return {
     standard: stdModules,
     highSecurity: highSecModules,
   },
-  verifier: verifierOutput,
+  verifier: parsedVerifier,
 };

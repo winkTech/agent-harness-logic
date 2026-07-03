@@ -16,6 +16,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const { spawnSync } = require('node:child_process');
 const os = require('node:os');
+const { readSettingsFiles, validateHookScripts } = require('./scripts/lib/hook-registry.cjs');
 
 const HOME = path.join(os.homedir(), '.claude');
 
@@ -108,45 +109,13 @@ function checkSQLite() {
 function checkHooks() {
   section('Hook 配置');
   try {
-    const cfg = require(path.join(HOME, 'settings.local.json'));
+    const { config: cfg } = readSettingsFiles();
     const hooks = cfg.hooks || {};
-    let total = 0, missing = 0, resolved = 0;
-
-    const ECC = (() => {
-      try { return require('./scripts/ecc-root-resolver.cjs')(); }
-      catch { return null; }
-    })();
-
-    function checkPath(p) {
-      total++;
-      if (!p || p === '-e') return;
-      // 本地文件（处理 ~/ 开头和 ~ 开头的路径）
-      const normalized = p.startsWith('~') ? path.join(os.homedir(), p.slice(1)) : p;
-      const localPath = path.resolve(normalized);
-      if (fs.existsSync(localPath)) { resolved++; return; }
-      // ECC 插件路径
-      if (ECC && p.startsWith('scripts/')) {
-        const eccPath = path.join(ECC, p);
-        if (fs.existsSync(eccPath)) { resolved++; return; }
-      }
-      missing++;
-      warn(`脚本不存在: ${p}`);
-    }
-
-    for (const [point, entries] of Object.entries(hooks)) {
-      const arr = Array.isArray(entries) ? entries : [];
-      for (const group of arr) {
-        const hookList = group.hooks || [group];
-        for (const h of hookList) {
-          const cmd = h.command || h.run || '';
-          const scripts = cmd.match(/(?:node|bash)\s+([^\s"'|]+(?:\.\w+)?)/g);
-          if (scripts) scripts.forEach(s => {
-            const p = s.replace(/^(?:node|bash)\s+/, '');
-            checkPath(p);
-          });
-        }
-      }
-    }
+    const validation = validateHookScripts({ config: cfg });
+    const total = validation.found.length + validation.missing.length;
+    const resolved = validation.found.length;
+    const missing = validation.missing.length;
+    for (const ref of validation.missing) warn(`脚本不存在: ${ref.script}`);
 
     info(`当前 Hook 配置: ${Object.keys(hooks).length} 个触发点`);
     info(`脚本文件: ${total} 个引用, ${resolved} 个存在, ${missing} 个缺失`);

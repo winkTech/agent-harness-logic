@@ -146,6 +146,8 @@ const CORE_SCRIPTS = [
   'engine/scripts/test-hooks/agent-managed-action-report.cjs',
   'engine/scripts/test-hooks/agent-managed-action-eval.cjs',
   'engine/scripts/test-hooks/rtl-long-task-eval.cjs',
+  'engine/scripts/test-hooks/rtl-managed-task-eval.cjs',
+  'engine/scripts/test-hooks/rtl-live-task-eval.cjs',
   'engine/scripts/test-hooks/agent-transcript-compliance.cjs',
   'engine/scripts/test-hooks/workflow-contracts.cjs',
   'engine/scripts/test-hooks/workflow-scenario-eval.cjs',
@@ -382,6 +384,65 @@ define('HDLGate', 'forbidden words in comments do not trigger synthesis block', 
     ].join('\n');
     const r = runHdlGate(path.join(srcDir, 'foo.sv'), content);
     return { pass: r.status === 0, detail: `exit=${r.status} stderr=${r.stderr.slice(0, 200)}` };
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+define('GateScope', 'requirements and verification quality gates prefer project-local state', () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'gate-scope-'));
+  try {
+    fs.mkdirSync(path.join(root, 'var', 'gates'), { recursive: true });
+    fs.mkdirSync(path.join(root, '01_src', '00_hdl', 'foo'), { recursive: true });
+    fs.mkdirSync(path.join(root, '02_sim', 'foo'), { recursive: true });
+    fs.writeFileSync(path.join(root, 'AGENTS.md'), '# scoped project\n', 'utf8');
+    fs.writeFileSync(path.join(root, 'var', 'gates', 'requirements-gate.json'), `\uFEFF${JSON.stringify({
+      status: 'completed',
+      projectRoot: root,
+      dimensions: {
+        D1_scope: 'confirmed',
+        D2_data_contract: 'confirmed',
+        D3_success_criteria: 'confirmed',
+        D4_algorithm: 'confirmed',
+        D5_micro_arch: 'confirmed',
+        D6_risks: 'confirmed',
+      },
+    }, null, 2)}`, 'utf8');
+    fs.writeFileSync(path.join(root, 'var', 'gates', 'verification-quality.json'), `\uFEFF${JSON.stringify({
+      status: 'completed',
+      projectRoot: root,
+      env_profile: {
+        clock: true,
+        reset: true,
+        interface: true,
+        data_format: true,
+        frame_struct: true,
+        backpressure: true,
+        throughput: true,
+        neighbor: true,
+      },
+      scenarios: {
+        S1_basic: true,
+        S2_backpressure: true,
+        S3_frame_boundary: true,
+        S4_reset: true,
+        S5_throughput: true,
+      },
+    }, null, 2)}`, 'utf8');
+    const rtlPayload = JSON.stringify({
+      tool_name: 'Write',
+      tool_input: { file_path: path.join(root, '01_src', '00_hdl', 'foo', 'foo.sv') },
+    });
+    const tbPayload = JSON.stringify({
+      tool_name: 'Write',
+      tool_input: { file_path: path.join(root, '02_sim', 'foo', 'tb_foo.sv') },
+    });
+    const req = runNode(path.join(HOME, 'engine/scripts/hooks/requirements-gate-guard.cjs'), rtlPayload, { cwd: root });
+    const qual = runNode(path.join(HOME, 'engine/scripts/hooks/verification-quality-guard.cjs'), tbPayload, { cwd: root });
+    return {
+      pass: req.status === 0 && qual.status === 0,
+      detail: `requirements=${req.status} verificationQuality=${qual.status}`,
+    };
   } finally {
     fs.rmSync(root, { recursive: true, force: true });
   }
@@ -1127,6 +1188,62 @@ define('RTLLongTaskEval', 'rtl-long-task-eval.cjs dry-run passes hidden RTL chec
   return {
     pass: manifest.status === 'passed' && checks['hidden-rtl-contract'] === 'passed' && checks['hdl-gate'] === 'passed',
     detail: `status=${manifest.status} hidden=${checks['hidden-rtl-contract']} hdl=${checks['hdl-gate']}`,
+  };
+});
+
+define('RTLManagedTaskEval', 'rtl-managed-task-eval.cjs dry-run passes managed E2E checks', () => {
+  const p = path.join(HOME, 'engine/scripts/test-hooks/rtl-managed-task-eval.cjs');
+  if (!fs.existsSync(p)) return { pass: false, detail: 'rtl-managed-task-eval.cjs missing' };
+  const outDir = fs.mkdtempSync(path.join(os.tmpdir(), 'rtl-managed-task-eval-'));
+  fs.rmSync(outDir, { recursive: true, force: true });
+  const r = spawnSync('node', [p, '--dry-run', '--out', outDir], {
+    encoding: 'utf8', timeout: 30000, windowsHide: true,
+  });
+  if (r.status !== 0) return { pass: false, detail: `exit=${r.status}: ${r.stderr || r.stdout}` };
+  const manifestPath = path.join(outDir, 'rtl-managed-task-eval.json');
+  if (!fs.existsSync(manifestPath)) return { pass: false, detail: 'rtl-managed-task-eval.json missing' };
+  const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf8'));
+  const checks = Object.fromEntries((manifest.finalFunctionalChecks || []).map((check) => [check.name, check.status]));
+  const firstAttempt = manifest.attempts?.[0] || {};
+  const gateNames = new Set((firstAttempt.gateChecks || []).map((check) => check.name));
+  const pass = manifest.status === 'passed'
+    && manifest.dimensions?.protocolCompliance === 'passed'
+    && manifest.dimensions?.gateCompliance === 'passed'
+    && manifest.dimensions?.stateIsolation === 'passed'
+    && manifest.dimensions?.functionalStatus === 'passed'
+    && checks['public-rtl-contract'] === 'passed'
+    && checks['hdl-gate-rtl'] === 'passed'
+    && checks['hdl-gate-tb'] === 'passed'
+    && gateNames.has('prewrite-requirements-gate')
+    && gateNames.has('prewrite-verification-quality-gate');
+  return {
+    pass,
+    detail: `status=${manifest.status} protocol=${manifest.dimensions?.protocolCompliance} gate=${manifest.dimensions?.gateCompliance} functional=${manifest.dimensions?.functionalStatus}`,
+  };
+});
+
+define('RTLLiveTaskEval', 'rtl-live-task-eval.cjs dry-run verifies transcript and RTL artifacts', () => {
+  const p = path.join(HOME, 'engine/scripts/test-hooks/rtl-live-task-eval.cjs');
+  if (!fs.existsSync(p)) return { pass: false, detail: 'rtl-live-task-eval.cjs missing' };
+  const outDir = fs.mkdtempSync(path.join(os.tmpdir(), 'rtl-live-task-eval-'));
+  fs.rmSync(outDir, { recursive: true, force: true });
+  const r = spawnSync('node', [p, '--dry-run', '--out', outDir], {
+    encoding: 'utf8', timeout: 30000, windowsHide: true,
+  });
+  if (r.status !== 0) return { pass: false, detail: `exit=${r.status}: ${r.stderr || r.stdout}` };
+  const manifestPath = path.join(outDir, 'rtl-live-task-eval.json');
+  if (!fs.existsSync(manifestPath)) return { pass: false, detail: 'rtl-live-task-eval.json missing' };
+  const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf8'));
+  const checks = Object.fromEntries((manifest.functionalChecks || []).map((check) => [check.name, check.status]));
+  const pass = manifest.status === 'passed'
+    && manifest.dimensions?.transcriptCompliance === 'passed'
+    && manifest.dimensions?.functionalStatus === 'passed'
+    && checks['public-rtl-contract'] === 'passed'
+    && checks['hdl-gate-rtl'] === 'passed'
+    && checks['hdl-gate-tb'] === 'passed';
+  return {
+    pass,
+    detail: `status=${manifest.status} transcript=${manifest.dimensions?.transcriptCompliance} functional=${manifest.dimensions?.functionalStatus}`,
   };
 });
 

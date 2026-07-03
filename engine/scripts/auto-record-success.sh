@@ -3,6 +3,11 @@
 # 从 stdin 读取 hook 上下文，记录项目进度
 set -euo pipefail
 
+if [[ "${CLAUDE_HARNESS_VERIFY_READONLY:-}" == "1" || "${CLAUDE_NO_DIAGNOSTIC_WRITES:-}" == "1" || "${CLAUDE_BENCH:-}" == "1" ]]; then
+  echo "auto-record-success: skipped in read-only verification mode" >&2
+  exit 0
+fi
+
 WORK_DIR="$HOME/.claude/memory/work"
 mkdir -p "$WORK_DIR"
 DATE=$(date +%Y-%m-%d)

@@ -49,8 +49,17 @@ function buildNameIndex() {
   const scanDir = (dir) => {
     if (!fs.existsSync(dir)) return;
     for (const f of fs.readdirSync(dir)) {
-      if (!f.endsWith('.md')) continue;
       const filePath = path.join(dir, f);
+      try {
+        const st = fs.statSync(filePath);
+        if (st.isDirectory()) {
+          if (!f.startsWith('.') && f !== '__pycache__') scanDir(filePath);
+          continue;
+        }
+      } catch {
+        continue;
+      }
+      if (!f.endsWith('.md')) continue;
       try {
         const content = fs.readFileSync(filePath, 'utf8');
         const match = content.match(/^---\r?\n([\s\S]*?)\r?\n---/);
@@ -69,9 +78,17 @@ function buildNameIndex() {
         const names = new Set();
         const fmName = fm.name || fm['metadata.name'];
         if (fmName) names.add(fmName);
+        if (fm.aliases) {
+          for (const alias of fm.aliases.replace(/^\[/, '').replace(/\]$/, '').split(',')) {
+            const clean = alias.trim().replace(/^['"]|['"]$/g, '');
+            if (clean) names.add(clean);
+          }
+        }
 
         // 去日期前缀的文件名也作为别名
-        const baseName = path.basename(f, '.md').replace(/^\d{4}-\d{2}-\d{2}-/, '');
+        const rawBaseName = path.basename(f, '.md');
+        if (rawBaseName) names.add(rawBaseName);
+        const baseName = rawBaseName.replace(/^\d{4}-\d{2}-\d{2}-/, '');
         if (baseName) names.add(baseName);
 
         // 提取第一行作为摘要
@@ -98,6 +115,7 @@ function buildNameIndex() {
   scanDir(path.join(MEMORY_DIR, 'references'));
   scanDir(path.join(MEMORY_DIR, 'agents'));
   scanDir(path.join(HOMEDIR, '.claude', 'knowledge', 'methodology'));
+  scanDir(path.join(HOMEDIR, '.claude', 'knowledge', 'primary'));
   scanDir(path.join(HOMEDIR, '.claude', 'knowledge', 'references'));
 
   // 从 MEMORY.md 补充索引（仅取名称，路径从索引行推断）

@@ -1,3 +1,11 @@
+---
+name: core-rules
+description: "Core instruction priority, checkpoints, lint-first, and verification loop."
+priority: L0
+trigger: "always"
+skip: ""
+---
+
 # 核心规则
 
 > L0 优先级。所有 session 加载。**规则是检查点的输入，不是背景噪音。**

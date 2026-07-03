@@ -1,3 +1,11 @@
+---
+name: git-rules
+description: "Git commit, branch, and push rules."
+priority: L2
+trigger: "git, commit, push, branch, merge, rebase"
+skip: ""
+---
+
 # Git 操作规则
 
 > L2 优先级。涉及 commit/push 时加载。

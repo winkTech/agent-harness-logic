@@ -1,0 +1,11 @@
+{
+  "maxSkips": 20,
+  "allowedSuites": [
+    "PythonGate",
+    "MatlabGate",
+    "CoverageGate",
+    "FPRHook",
+    "CommitGate"
+  ],
+  "reason": "Optional legacy gates may be absent when they are not registered. Unknown skips fail the harness regression."
+}

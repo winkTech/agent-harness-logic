@@ -31,10 +31,11 @@
 const fs = require('fs');
 const os = require('os');
 const path = require('path');
+const { findProjectRoot, stateHasScopeForFile } = require('../lib/project-scope.cjs');
 
 const HOMEDIR = os.homedir();
-const GATES_DIR = path.join(HOMEDIR, '.claude', 'var', 'gates');
-const STATE_FILE = path.join(GATES_DIR, 'verification-quality.json');
+const HOME_GATES_DIR = path.join(HOMEDIR, '.claude', 'var', 'gates');
+const HOME_STATE_FILE = path.join(HOME_GATES_DIR, 'verification-quality.json');
 
 // ── 哪些文件触发验证质量门禁 ────────────────────────────────────────────
 const TB_PATTERNS = [
@@ -84,14 +85,61 @@ function fileExists(filePath) {
   }
 }
 
-function loadState() {
-  try {
-    if (!fs.existsSync(STATE_FILE)) return null;
-    const raw = fs.readFileSync(STATE_FILE, 'utf8');
-    return JSON.parse(raw);
-  } catch {
-    return null;
+function candidateStateFiles(filePath) {
+  const files = [];
+  const projectRoot = findProjectRoot(filePath || process.cwd(), { fallback: process.cwd() });
+  files.push(path.join(projectRoot, 'var', 'gates', 'verification-quality.json'));
+  files.push(HOME_STATE_FILE);
+  const seen = new Set();
+  return files.filter((file) => {
+    const key = path.resolve(file).toLowerCase();
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
+function loadState(filePath = '') {
+  for (const stateFile of candidateStateFiles(filePath)) {
+    try {
+      if (!fs.existsSync(stateFile)) continue;
+      const raw = fs.readFileSync(stateFile, 'utf8').replace(/^\uFEFF/, '');
+      return JSON.parse(raw);
+    } catch {
+      return null;
+    }
   }
+  return null;
+}
+
+function normalizePath(p) {
+  if (!p || typeof p !== 'string') return '';
+  return path.resolve(p).toLowerCase();
+}
+
+function isInsidePath(child, parent) {
+  const childPath = normalizePath(child);
+  const parentPath = normalizePath(parent);
+  if (!childPath || !parentPath) return false;
+  return childPath === parentPath || childPath.startsWith(parentPath + path.sep);
+}
+
+function getScopeRoots(state) {
+  const roots = [];
+  if (!state || typeof state !== 'object') return roots;
+  if (typeof state.projectRoot === 'string') roots.push(state.projectRoot);
+  if (Array.isArray(state.projectRoots)) roots.push(...state.projectRoots);
+  if (state.scope && typeof state.scope.projectRoot === 'string') roots.push(state.scope.projectRoot);
+  if (state.scope && Array.isArray(state.scope.projectRoots)) roots.push(...state.scope.projectRoots);
+  return roots.filter(Boolean);
+}
+
+function hasValidScopeForFile(state, filePath) {
+  return stateHasScopeForFile(state, filePath);
+}
+
+function isGateCompletedForFile(state, filePath) {
+  return state && state.status === 'completed' && hasValidScopeForFile(state, filePath);
 }
 
 function getMissingProfileItems(state) {
@@ -121,8 +169,8 @@ function checkGate(filePath) {
 
   // ── 新 TB 文件 → 检查门禁状态 ──────────────────────────────────────
 
-  const state = loadState();
-  const gateCompleted = state && state.status === 'completed';
+  const state = loadState(filePath);
+  const gateCompleted = isGateCompletedForFile(state, filePath);
 
   if (gateCompleted) {
     return false;

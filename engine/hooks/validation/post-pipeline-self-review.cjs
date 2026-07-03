@@ -20,7 +20,7 @@
 
 const p = require('node:path');
 const f = require('node:fs');
-const { execSync } = require('node:child_process');
+const { spawnSync } = require('node:child_process');
 
 const HOME = p.join(require('node:os').homedir(), '.claude');
 const REVIEW_FILE = p.join(HOME, 'var', 'index', 'self-review-state.json');
@@ -38,8 +38,8 @@ const DEBUG_PATTERNS = [
 ];
 
 const SYNTAX_CHECK = [
-  { ext: '.cjs', cmd: function(file) { return 'node -c "' + file + '" 2>&1'; } },
-  { ext: '.js', cmd: function(file) { return 'node -c "' + file + '" 2>&1'; } },
+  { ext: '.cjs', cmd: 'node', args: function(file) { return ['--check', file]; } },
+  { ext: '.js', cmd: 'node', args: function(file) { return ['--check', file]; } },
 ];
 
 /**
@@ -71,12 +71,14 @@ function writeReviewState(state) {
  */
 function getRecentFiles() {
   try {
-    const result = execSync('git diff --name-only --diff-filter=M HEAD 2>/dev/null', {
+    const result = spawnSync('git', ['diff', '--name-only', '--diff-filter=M', 'HEAD'], {
       cwd: HOME,
       encoding: 'utf8',
       timeout: 5000,
+      windowsHide: true,
     });
-    return result.split('\n').filter(Boolean).map(function(f) { return p.join(HOME, f); });
+    if (result.status !== 0) return [];
+    return result.stdout.split('\n').filter(Boolean).map(function(f) { return p.join(HOME, f); });
   } catch {
     // 不是 git 仓库或 git 命令失败，使用文件系统时间
     return [];
@@ -92,8 +94,14 @@ function checkSyntax(filePath) {
   for (const check of SYNTAX_CHECK) {
     if (filePath.endsWith(check.ext)) {
       try {
-        const cmd = check.cmd(filePath);
-        execSync(cmd, { timeout: 5000, encoding: 'utf8' });
+        const result = spawnSync(check.cmd, check.args(filePath), {
+          timeout: 5000,
+          encoding: 'utf8',
+          windowsHide: true,
+        });
+        if (result.status !== 0) {
+          return (result.stderr || result.stdout || '语法检查失败').trim();
+        }
       } catch (e) {
         return (e.stderr || e.stdout || '语法检查失败').trim();
       }

@@ -1,3 +1,12 @@
+---
+name: architecture-gate-checklist-p1b
+title: Phase 1b 门禁检查清单 — 微架构设计
+domain: fpga
+type: checklist
+tags: [fpga, microarchitecture, gate, checklist]
+updated: 2026-07-03
+---
+
 # Phase 1b 门禁检查清单 — 微架构设计
 
 > 调度层在 Phase 1b 产出后执行此检查。

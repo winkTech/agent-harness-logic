@@ -28,6 +28,7 @@
 
 const fs = require('node:fs');
 const path = require('node:path');
+const { shouldSyncMemoryFile } = require('../../scripts/lib/memory-file-policy.cjs');
 
 // 仅在 memory/ 目录下的 .md 文件才处理
 const MEMORY_DIR = path.resolve(__dirname, '..', '..', '..', 'memory');
@@ -164,6 +165,7 @@ async function main() {
 
     const normalizedPath = normalizePath(rawPath);
     if (!isMemoryFile(normalizedPath)) return;
+    if (!shouldSyncMemoryFile(normalizedPath, { memoryDir: MEMORY_DIR })) return;
 
     // 读文件内容
     let content;
