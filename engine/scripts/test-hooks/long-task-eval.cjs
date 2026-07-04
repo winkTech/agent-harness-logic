@@ -60,6 +60,11 @@ function sameFile(a, b) {
   return read(a) === read(b);
 }
 
+function ensureAmbiguousBaseline(target) {
+  if (fs.existsSync(target.dir)) return;
+  fs.cpSync(SCENARIO, target.dir, { recursive: true });
+}
+
 function includesAny(text, terms) {
   return terms.some((term) => text.includes(term));
 }
@@ -117,6 +122,7 @@ function verifyImplementation(target) {
 }
 
 function verifyAmbiguous(target) {
+  ensureAmbiguousBaseline(target);
   assert(
     sameFile(
       path.join(SCENARIO, 'src', 'telemetry.py'),

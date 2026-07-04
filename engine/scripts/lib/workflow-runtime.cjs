@@ -134,6 +134,22 @@ function validateWorkflowFile(filePath) {
     if (!content.includes('Phase 4.5') || !content.includes('evidence')) {
       errors.push('hdl-coding-dag-workflow must include a hard evidence gate');
     }
+    const forbiddenPathHints = [
+      { text: '02_sim/tb_', message: 'testbench path must be 02_sim/<module>/tb_<module>.sv, not 02_sim/tb_<module>.sv' },
+      { text: '01_src/00_hdl/top.sv', message: 'top path must include a module directory, e.g. 01_src/00_hdl/top/top.sv' },
+      { text: 'prj/01_src', message: 'workflow must not switch to legacy prj/ root layout' },
+      { text: 'rtl/', message: 'workflow must not ask agents to create legacy rtl/ roots' },
+      { text: 'tb/', message: 'workflow must not ask agents to create legacy tb/ roots' },
+      { text: 'constraints/', message: 'workflow must not ask agents to create legacy constraints/ roots' },
+      { text: 'reports/', message: 'workflow must not ask agents to create legacy reports/ roots' },
+      { text: 'build/', message: 'workflow must not ask agents to create legacy build/ roots' },
+    ];
+    for (const item of forbiddenPathHints) {
+      if (content.includes(item.text)) errors.push(item.message);
+    }
+    if (!content.includes('directory-contract.json')) {
+      errors.push('hdl-coding-dag-workflow must require var/project-init/directory-contract.json evidence');
+    }
   }
 
   return { file: filePath, name, metaName, errors, warnings };

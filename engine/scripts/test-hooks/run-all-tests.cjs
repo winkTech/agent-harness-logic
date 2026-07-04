@@ -137,6 +137,8 @@ const CORE_SCRIPTS = [
   'engine/scripts/lib/verification-state.cjs',
   'engine/scripts/lib/memory-file-policy.cjs',
   'engine/scripts/lib/workflow-runtime.cjs',
+  'engine/scripts/lib/project-directory-contract.cjs',
+  'engine/scripts/init-module.cjs',
   'engine/scripts/workflow-evidence-scan.cjs',
   'engine/scripts/test-hooks/agent-eval-runner.cjs',
   'engine/scripts/test-hooks/agent-eval-verify.cjs',
@@ -148,6 +150,7 @@ const CORE_SCRIPTS = [
   'engine/scripts/test-hooks/rtl-long-task-eval.cjs',
   'engine/scripts/test-hooks/rtl-managed-task-eval.cjs',
   'engine/scripts/test-hooks/rtl-live-task-eval.cjs',
+  'engine/scripts/test-hooks/hdl-project-directory-eval.cjs',
   'engine/scripts/test-hooks/agent-transcript-compliance.cjs',
   'engine/scripts/test-hooks/workflow-contracts.cjs',
   'engine/scripts/test-hooks/workflow-scenario-eval.cjs',
@@ -171,6 +174,7 @@ const HOOK_SCRIPTS = [
   'engine/scripts/hooks/resource-budget-gate.js',
   'engine/scripts/hooks/frustration-detector.cjs',
   'engine/scripts/hooks/hdl-gate.cjs',
+  'engine/scripts/hooks/project-directory-guard.cjs',
   'engine/scripts/hooks/pre-commit-lint.js',
   'engine/scripts/hooks/lint-auto-gate.js',
   'engine/scripts/hooks/stop-runner.cjs',
@@ -1494,6 +1498,97 @@ define('Dream', 'startup-inject 可执行', () => {
 });
 
 // ── 运行器 ──────────────────────────────────────────────────────────────────
+
+define('ProjectDirectoryContract', 'canonical HDL layout passes and FSK-style layout fails', () => {
+  const lib = require(path.join(HOME, 'engine/scripts/lib/project-directory-contract.cjs'));
+  const good = fs.mkdtempSync(path.join(os.tmpdir(), 'hdl-dir-good-'));
+  lib.ensureProjectDirs(good, { modules: ['foo'] });
+  lib.writeDirectoryContract(good, { projectName: 'good', modules: ['foo'], createdAt: '2026-07-04T00:00:00.000Z' });
+  fs.writeFileSync(path.join(good, 'Makefile'), 'lint:\ncompile:\nsim:\nclean:\n', 'utf8');
+  fs.writeFileSync(path.join(good, '.gitignore'), '*.vcd\n*.vvp\nwork/\n', 'utf8');
+  fs.writeFileSync(path.join(good, 'README.md'), '# good\n', 'utf8');
+  fs.writeFileSync(path.join(good, '01_src', '00_hdl', 'foo', 'foo.sv'), 'module foo; endmodule\n', 'utf8');
+  fs.writeFileSync(path.join(good, '02_sim', 'foo', 'tb_foo.sv'), 'module tb_foo; endmodule\n', 'utf8');
+  const goodResult = lib.validateProjectDirs(good, { modules: ['foo'], requireRootFiles: true });
+  if (!goodResult.ok) return { pass: false, detail: `canonical failed: ${goodResult.failures.join('|')}` };
+
+  const bad = fs.mkdtempSync(path.join(os.tmpdir(), 'hdl-dir-bad-'));
+  for (const rel of ['rtl/foo', 'tb/foo', 'constraints', 'build', 'reports']) {
+    fs.mkdirSync(path.join(bad, rel), { recursive: true });
+  }
+  fs.writeFileSync(path.join(bad, 'rtl', 'foo', 'foo.sv'), 'module foo; endmodule\n', 'utf8');
+  fs.writeFileSync(path.join(bad, 'tb', 'foo', 'tb_foo.sv'), 'module tb_foo; endmodule\n', 'utf8');
+  fs.writeFileSync(path.join(bad, 'tb_top.vcd'), 'vcd\n', 'utf8');
+  const badResult = lib.validateProjectDirs(bad, { scanFiles: true });
+  const failureText = badResult.failures.join('|');
+  const pass = !badResult.ok
+    && failureText.includes('forbidden top-level directory exists: rtl/')
+    && failureText.includes('root transient artifact is forbidden: tb_top.vcd')
+    && failureText.includes('HDL files must be under 01_src/00_hdl/<module>/ or 02_sim/<module>/');
+  return { pass, detail: pass ? 'bad layout rejected with concrete failures' : failureText };
+});
+
+define('ProjectDirectoryGuard', 'PreToolUse blocks wrong HDL roots and allows canonical paths', () => {
+  const lib = require(path.join(HOME, 'engine/scripts/lib/project-directory-contract.cjs'));
+  const p = path.join(HOME, 'engine/scripts/hooks/project-directory-guard.cjs');
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'hdl-dir-guard-'));
+  lib.ensureProjectDirs(root, { modules: ['foo'] });
+  lib.writeDirectoryContract(root, { projectName: 'guard', modules: ['foo'], createdAt: '2026-07-04T00:00:00.000Z' });
+
+  const blocked = runNode(p, JSON.stringify({
+    hook_event_name: 'PreToolUse',
+    tool_name: 'Write',
+    cwd: root,
+    tool_input: { file_path: path.join(root, 'rtl', 'foo', 'foo.sv'), content: 'module foo; endmodule\n' },
+  }));
+  if (blocked.status !== 2) return { pass: false, detail: `bad rtl/ path was not blocked, exit=${blocked.status}` };
+
+  const allowed = runNode(p, JSON.stringify({
+    hook_event_name: 'PreToolUse',
+    tool_name: 'Write',
+    cwd: root,
+    tool_input: { file_path: path.join(root, '01_src', '00_hdl', 'foo', 'foo.sv'), content: 'module foo; endmodule\n' },
+  }));
+  return { pass: allowed.status === 0, detail: `blocked=${blocked.status}, allowed=${allowed.status}` };
+});
+
+define('ProjectDirectoryContract', 'harness-init emits canonical module/TB directories', () => {
+  const lib = require(path.join(HOME, 'engine/scripts/lib/project-directory-contract.cjs'));
+  const p = path.join(HOME, 'engine/scripts/harness-init.cjs');
+  const root = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'harness-init-dir-')), 'demo_project');
+  const r = spawnSync('node', [p, '--project', 'demo_project', '--dir', root], {
+    cwd: HOME,
+    encoding: 'utf8',
+    timeout: 30000,
+    windowsHide: true,
+  });
+  if (r.status !== 0) return { pass: false, detail: `harness-init exit=${r.status}: ${r.stderr || r.stdout}` };
+  const result = lib.validateProjectDirs(root, { modules: ['demo_project_top'], requireRootFiles: true });
+  const flatTb = fs.existsSync(path.join(root, '02_sim', 'tb_demo_project_top.sv'));
+  const nestedTb = fs.existsSync(path.join(root, '02_sim', 'demo_project_top', 'tb_demo_project_top.sv'));
+  const pass = result.ok && nestedTb && !flatTb;
+  return { pass, detail: pass ? 'canonical harness-init output verified' : `ok=${result.ok} nested=${nestedTb} flat=${flatTb} failures=${result.failures.join('|')}` };
+});
+
+define('HDLProjectDirectoryEval', 'hdl-project-directory-eval.cjs dry-run passes directory checks', () => {
+  const p = path.join(HOME, 'engine/scripts/test-hooks/hdl-project-directory-eval.cjs');
+  if (!fs.existsSync(p)) return { pass: false, detail: 'hdl-project-directory-eval.cjs missing' };
+  const outDir = fs.mkdtempSync(path.join(os.tmpdir(), 'hdl-project-directory-eval-'));
+  fs.rmSync(outDir, { recursive: true, force: true });
+  const r = spawnSync('node', [p, '--dry-run', '--out', outDir], {
+    cwd: HOME,
+    encoding: 'utf8',
+    timeout: 30000,
+    windowsHide: true,
+  });
+  if (r.status !== 0) return { pass: false, detail: `exit=${r.status}: ${r.stderr || r.stdout}` };
+  const manifestPath = path.join(outDir, 'hdl-project-directory-eval.json');
+  if (!fs.existsSync(manifestPath)) return { pass: false, detail: 'hdl-project-directory-eval.json missing' };
+  const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf8'));
+  const checks = Object.fromEntries((manifest.finalFunctionalChecks || []).map((check) => [check.name, check.status]));
+  const pass = manifest.status === 'passed' && checks['project-directory-contract'] === 'passed';
+  return { pass, detail: `status=${manifest.status} directory=${checks['project-directory-contract']}` };
+});
 
 function runSuite() {
   if (LIST_ONLY) {

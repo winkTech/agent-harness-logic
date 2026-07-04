@@ -122,7 +122,7 @@ Workflow({name: 'architecture-review-workflow', args: {targets: ['路径']}})
 |:-----|:-----|
 | `PreToolUse(*)` | 认知层（rule-loader / memory-retrieve / frustration-detector） |
 | `PreToolUse(Bash)` | 验证门禁 + 安全门禁 + diff-size + resource-budget |
-| `PreToolUse(Edit\|Write)` | 文件保护 + 需求澄清门禁 + 验证质量门禁 |
+| `PreToolUse(Edit\|Write)` | 文件保护 + 项目目录门禁 + 需求澄清门禁 + 验证质量门禁 |
 | `PreToolUse(Write)` | HDL-Gate + requirements-gate-guard + verification-quality-guard |
 | `PostToolUse(Edit\|Write)` | 验证门禁状态标记 |
 | `SessionStart` | 交接注入 + 记忆健康 + 知识库统计 + 隔离检查 |
