@@ -147,6 +147,7 @@ const CORE_SCRIPTS = [
   'engine/scripts/test-hooks/agent-managed-action-matrix.cjs',
   'engine/scripts/test-hooks/agent-managed-action-report.cjs',
   'engine/scripts/test-hooks/agent-managed-action-eval.cjs',
+  'engine/scripts/test-hooks/agent-alignment-dialogue-eval.cjs',
   'engine/scripts/test-hooks/rtl-long-task-eval.cjs',
   'engine/scripts/test-hooks/rtl-managed-task-eval.cjs',
   'engine/scripts/test-hooks/rtl-live-task-eval.cjs',
@@ -1174,6 +1175,27 @@ define('ManagedActionEval', 'blocked agent readiness emits blocked manifest', ()
     && manifest.dimensions?.overallStatus === 'blocked'
     && manifest.readiness?.agent?.status === 'blocked';
   return { pass, detail: `status=${manifest.status} readiness=${manifest.readiness?.agent?.status}` };
+});
+
+define('AlignmentDialogueEval', 'agent-alignment-dialogue-eval.cjs dry-run asks one question at a time', () => {
+  const p = path.join(HOME, 'engine/scripts/test-hooks/agent-alignment-dialogue-eval.cjs');
+  if (!fs.existsSync(p)) return { pass: false, detail: 'agent-alignment-dialogue-eval.cjs missing' };
+  const outDir = fs.mkdtempSync(path.join(os.tmpdir(), 'agent-alignment-dialogue-'));
+  fs.rmSync(outDir, { recursive: true, force: true });
+  const r = spawnSync('node', [p, '--dry-run', '--out', outDir], {
+    cwd: HOME,
+    encoding: 'utf8',
+    timeout: 30000,
+    windowsHide: true,
+  });
+  if (r.status !== 0) return { pass: false, detail: `exit=${r.status}: ${r.stderr || r.stdout}` };
+  const manifestPath = path.join(outDir, 'alignment-dialogue-eval.json');
+  if (!fs.existsSync(manifestPath)) return { pass: false, detail: 'alignment-dialogue-eval.json missing' };
+  const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf8'));
+  const pass = manifest.status === 'passed'
+    && manifest.turns?.length === 3
+    && manifest.dimensions?.sequentialClarification === 'passed';
+  return { pass, detail: `status=${manifest.status} turns=${manifest.turns?.length}` };
 });
 
 define('RTLLongTaskEval', 'rtl-long-task-eval.cjs dry-run passes hidden RTL checks', () => {
