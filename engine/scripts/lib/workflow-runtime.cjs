@@ -3,6 +3,7 @@
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
+const vm = require('node:vm');
 
 const HOME = path.join(os.homedir(), '.claude');
 const DEFAULT_WORKFLOW_DIR = path.join(HOME, 'workflows');
@@ -36,6 +37,45 @@ function extractMetaName(content) {
   return match ? match[1] : '';
 }
 
+function extractObjectLiteralAfter(content, marker) {
+  const markerIndex = content.indexOf(marker);
+  if (markerIndex < 0) return '';
+  const start = content.indexOf('{', markerIndex + marker.length);
+  if (start < 0) return '';
+
+  let depth = 0;
+  let quote = '';
+  let escaped = false;
+  for (let idx = start; idx < content.length; idx += 1) {
+    const char = content[idx];
+    if (escaped) {
+      escaped = false;
+      continue;
+    }
+    if (quote) {
+      if (char === '\\') escaped = true;
+      else if (char === quote) quote = '';
+      continue;
+    }
+    if (char === '"' || char === "'" || char === '`') {
+      quote = char;
+      continue;
+    }
+    if (char === '{') depth += 1;
+    else if (char === '}') {
+      depth -= 1;
+      if (depth === 0) return content.slice(start, idx + 1);
+    }
+  }
+  return '';
+}
+
+function extractWorkflowMeta(content) {
+  const literal = extractObjectLiteralAfter(content, 'export const meta');
+  if (!literal) return null;
+  return vm.runInNewContext(`(${literal})`, Object.create(null), { timeout: 1000 });
+}
+
 function activeCodeLines(content) {
   return content
     .split(/\r?\n/)
@@ -54,19 +94,28 @@ function hasAll(content, terms) {
 function validateWorkflowFile(filePath) {
   const content = readWorkflow(filePath);
   const name = workflowNameFromFile(filePath);
-  const metaName = extractMetaName(content);
+  let meta = null;
+  try {
+    meta = extractWorkflowMeta(content);
+  } catch (error) {
+    meta = null;
+  }
+  const metaName = meta?.name || extractMetaName(content);
   const errors = [];
   const warnings = [];
 
   if (!content.includes('export const meta')) {
     errors.push('missing export const meta');
   }
+  if (!meta) {
+    errors.push('meta must be a parseable object literal');
+  }
   if (!metaName) {
     errors.push('missing meta.name');
   } else if (metaName !== name) {
     errors.push(`meta.name "${metaName}" does not match file name "${name}"`);
   }
-  if (!content.includes('contract:')) {
+  if (!meta?.contract) {
     errors.push('missing meta.contract');
   }
 
@@ -86,14 +135,23 @@ function validateWorkflowFile(filePath) {
   }
 
   if (STRICT_WORKFLOWS.has(metaName || name)) {
-    const requiredContractTerms = [
-      'strict: true',
-      'checkpoints',
-      'evidence',
-      'completionCriteria',
-    ];
-    if (!hasAll(content, requiredContractTerms)) {
-      errors.push(`strict workflow contract must include ${requiredContractTerms.join(', ')}`);
+    const contract = meta?.contract || {};
+    if (contract.strict !== true) {
+      errors.push('strict workflow contract must set contract.strict=true');
+    }
+    for (const field of ['inputs', 'checkpoints', 'evidence', 'completionCriteria']) {
+      if (!Array.isArray(contract[field]) || contract[field].length === 0) {
+        errors.push(`strict workflow contract must include non-empty contract.${field}`);
+      } else {
+        contract[field].forEach((item, idx) => {
+          if (typeof item !== 'string' || item.trim().length === 0) {
+            errors.push(`strict workflow contract.${field}[${idx}] must be a non-empty string`);
+          }
+        });
+      }
+    }
+    if (Array.isArray(meta?.phases) && Array.isArray(contract.checkpoints) && contract.checkpoints.length > meta.phases.length + 2) {
+      warnings.push('strict workflow has more checkpoints than phases; confirm they are intentional');
     }
   }
 
@@ -207,6 +265,7 @@ module.exports = {
   DEFAULT_WORKFLOW_DIR,
   listWorkflowFiles,
   readWorkflow,
+  extractWorkflowMeta,
   validateWorkflowFile,
   validateWorkflowSet,
 };

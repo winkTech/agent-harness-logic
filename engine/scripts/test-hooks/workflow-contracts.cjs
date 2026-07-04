@@ -28,6 +28,37 @@ test('all workflow files satisfy the strict runtime contract', () => {
   assert(result.ok, result.errors.join('\n'));
 });
 
+test('strict workflow contract rejects empty checkpoint and evidence arrays', () => {
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'workflow-contract-bad-'));
+  const bad = path.join(tmp, 'code-review-workflow.js');
+  fs.writeFileSync(bad, [
+    'export const meta = {',
+    "  name: 'code-review-workflow',",
+    '  contract: {',
+    '    version: 1,',
+    '    strict: true,',
+    '    inputs: ["target"],',
+    '    checkpoints: [],',
+    '    evidence: [],',
+    '    completionCriteria: ["done"],',
+    '  },',
+    '};',
+    "phase('noop');",
+    'const workflowPassed = false;',
+    'const blockingIssues = [];',
+    'return { pass: workflowPassed, blockingIssues };',
+    '',
+  ].join('\n'), 'utf8');
+
+  const result = validateWorkflowSet(tmp);
+  assert(!result.ok, 'malformed strict workflow unexpectedly passed');
+  assert(
+    result.errors.some((error) => error.includes('contract.checkpoints')) &&
+      result.errors.some((error) => error.includes('contract.evidence')),
+    `missing structured contract errors: ${result.errors.join('|')}`
+  );
+});
+
 test('workflow evidence scanner produces concrete file-line findings', () => {
   const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'workflow-evidence-'));
   const fixture = path.join(tmp, 'app.js');

@@ -120,13 +120,13 @@ Workflow({name: 'architecture-review-workflow', args: {targets: ['路径']}})
 
 | 事件 | 功能 |
 |:-----|:-----|
-| `PreToolUse(*)` | 认知层（rule-loader / memory-retrieve / frustration-detector） |
+| `PreToolUse(*)` | 认知层（rule-loader / memory-retrieve / frustration-detector / progress-watchdog） |
 | `PreToolUse(Bash)` | 验证门禁 + 安全门禁 + diff-size + resource-budget |
 | `PreToolUse(Edit\|Write)` | 文件保护 + 项目目录门禁 + 需求澄清门禁 + 验证质量门禁 |
 | `PreToolUse(Write)` | HDL-Gate + requirements-gate-guard + verification-quality-guard |
 | `PostToolUse(Edit\|Write)` | 验证门禁状态标记 |
 | `SessionStart` | 交接注入 + 记忆健康 + 知识库统计 + 隔离检查 |
-| `Stop` | Lint 自动 + 上下文压力预警 |
+| `Stop` | Lint 自动 + 上下文压力预警 + 无进展失败归档 |
 
 ## 🔄 上下文管理
 

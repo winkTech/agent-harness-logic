@@ -173,6 +173,43 @@ function readManifest(runDir) {
   }
 }
 
+function isSha256(value) {
+  return /^[a-f0-9]{64}$/i.test(String(value || ''));
+}
+
+function verifyRunManifest(manifest, runDir, kind, label, checks) {
+  const failures = [];
+  const manifestFile = path.join(runDir, 'eval-run.json');
+  if (!fs.existsSync(manifestFile)) failures.push('missing eval-run.json');
+  if (manifest.schemaVersion !== 2) failures.push('eval-run.json schemaVersion must be 2');
+  if (manifest.kind !== kind) failures.push(`eval-run.json kind mismatch: expected ${kind}, got ${manifest.kind || 'missing'}`);
+  if (manifest.outDirFresh !== true || manifest.outDirReused === true) {
+    failures.push('eval run must use a fresh output directory; reused/stale directories are not valid pass evidence');
+  }
+  if (manifest.promptScaffold !== 'visible-tool-checklist-v1') {
+    failures.push('eval-run.json missing visible checklist scaffold marker');
+  }
+  if (manifest.scenarioSha256 !== hashDirectory(SCENARIO)) {
+    failures.push('scenario hash does not match the current fixture');
+  }
+  for (const key of ['promptSha256', 'rawPromptSha256', 'scenarioSha256', 'initialWorkspaceSha256', 'finalWorkspaceSha256']) {
+    if (!isSha256(manifest[key])) failures.push(`${key} is missing or not a sha256`);
+  }
+  if (manifest.transcriptRequired && !manifest.transcriptFile) {
+    failures.push('transcript is required but eval-run.json does not name transcriptFile');
+  }
+
+  checks.push({
+    name: 'run-manifest-freshness',
+    status: failures.length === 0 ? 'passed' : 'failed',
+    manifestFile,
+    outDirFresh: manifest.outDirFresh,
+    outDirReused: manifest.outDirReused,
+    failures,
+  });
+  if (failures.length > 0) throw new Error(`${label}: stale or incomplete run manifest: ${failures.join('; ')}`);
+}
+
 function looksLikeToolTranscript(filePath) {
   if (!filePath || !fs.existsSync(filePath)) return false;
   const parsed = parseJsonl(readText(filePath));
@@ -297,6 +334,7 @@ function main() {
   };
 
   try {
+    verifyRunManifest(manifest, runDir, kind, label, checks);
     if (kind === 'implementation') verifyImplementation(runDir, label, checks);
     else verifyAmbiguous(runDir, responseFile, label, checks);
     if (resolvedTranscript.required && !resolvedTranscript.file) {

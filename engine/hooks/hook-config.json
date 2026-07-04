@@ -38,6 +38,12 @@
       "description": "分析瘫痪守卫 — 检测连续只读操作(≥3轮)，触发收敛检查",
       "trigger": "每次工具调用"
     },
+    "session/progress-watchdog.cjs": {
+      "enabled": true,
+      "frequency": "high",
+      "description": "任务进展守卫 — 连续无产出/无验证进展达到阈值时写入失败归档并 exit 2",
+      "trigger": "每次工具调用 / Stop"
+    },
     "session/pre-compact.cjs": {
       "enabled": true,
       "frequency": "low",

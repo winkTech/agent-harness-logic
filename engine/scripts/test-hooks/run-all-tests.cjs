@@ -186,6 +186,7 @@ const HOOK_SCRIPTS = [
   'engine/hooks/learning/cost-tracker-hook.cjs',
   'engine/hooks/learning/skill-tracker-hook.cjs',
   'engine/hooks/safety/context-monitor.cjs',
+  'engine/hooks/session/progress-watchdog.cjs',
   'engine/hooks/session/pre-compact.cjs',
   'engine/hooks/validation/post-pipeline-self-review.cjs',
 ];
@@ -478,6 +479,55 @@ define('HookRegistry', 'legacy dry-run 入口使用统一注册表', () => {
     },
   });
   return { pass: r.status === 0, detail: `exit=${r.status}` };
+});
+
+define('ProgressWatchdog', '连续无进展达到阈值会失败归档', () => {
+  const p = path.join(HOME, 'engine/hooks/session/progress-watchdog.cjs');
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'progress-watchdog-'));
+  const env = {
+    PROGRESS_WATCHDOG_STATE_FILE: path.join(tmp, 'state.json'),
+    PROGRESS_WATCHDOG_ARCHIVE_DIR: path.join(tmp, 'archive'),
+    PROGRESS_WATCHDOG_MAX_NO_PROGRESS_TURNS: '2',
+    PROGRESS_WATCHDOG_MODE: 'enforce',
+  };
+  const payload = JSON.stringify({ hook_event_name: 'PreToolUse', tool_name: 'Read', cwd: tmp });
+  const first = runNode(p, payload, { cwd: tmp, env });
+  if (first.status !== 0) return { pass: false, detail: `first read blocked early: exit=${first.status}` };
+  const second = runNode(p, payload, { cwd: tmp, env });
+  const archiveFiles = fs.existsSync(env.PROGRESS_WATCHDOG_ARCHIVE_DIR)
+    ? fs.readdirSync(env.PROGRESS_WATCHDOG_ARCHIVE_DIR).filter((name) => name.endsWith('.json'))
+    : [];
+  if (second.status !== 2) return { pass: false, detail: `second read exit=${second.status}, expected 2` };
+  if (archiveFiles.length !== 1) return { pass: false, detail: `archive count=${archiveFiles.length}` };
+  const archive = JSON.parse(fs.readFileSync(path.join(env.PROGRESS_WATCHDOG_ARCHIVE_DIR, archiveFiles[0]), 'utf8'));
+  return {
+    pass: archive.status === 'failed_archived' && archive.reason === 'no_progress_turn_threshold',
+    detail: `status=${archive.status} reason=${archive.reason}`,
+  };
+});
+
+define('ProgressWatchdog', '生产性写入和验证命令会重置无进展计数', () => {
+  const p = path.join(HOME, 'engine/hooks/session/progress-watchdog.cjs');
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'progress-watchdog-reset-'));
+  const env = {
+    PROGRESS_WATCHDOG_STATE_FILE: path.join(tmp, 'state.json'),
+    PROGRESS_WATCHDOG_ARCHIVE_DIR: path.join(tmp, 'archive'),
+    PROGRESS_WATCHDOG_MAX_NO_PROGRESS_TURNS: '3',
+    PROGRESS_WATCHDOG_MODE: 'enforce',
+  };
+  runNode(p, JSON.stringify({ hook_event_name: 'PreToolUse', tool_name: 'Read', cwd: tmp }), { cwd: tmp, env });
+  runNode(p, JSON.stringify({ hook_event_name: 'PreToolUse', tool_name: 'Write', cwd: tmp }), { cwd: tmp, env });
+  runNode(p, JSON.stringify({ hook_event_name: 'PreToolUse', tool_name: 'Read', cwd: tmp }), { cwd: tmp, env });
+  const verify = runNode(p, JSON.stringify({
+    hook_event_name: 'PreToolUse',
+    tool_name: 'Bash',
+    cwd: tmp,
+    tool_input: { command: 'python -m pytest -q' },
+  }), { cwd: tmp, env });
+  if (verify.status !== 0) return { pass: false, detail: `verification command blocked: exit=${verify.status}` };
+  const state = JSON.parse(fs.readFileSync(env.PROGRESS_WATCHDOG_STATE_FILE, 'utf8'));
+  const session = Object.values(state.sessions)[0];
+  return { pass: session.noProgressTurns === 0, detail: `noProgressTurns=${session.noProgressTurns}` };
 });
 
 define('DAGEngine', 'loop_skip 默认计为失败', () => {
@@ -1147,6 +1197,40 @@ define('ManagedActionEval', 'unverified test-pass claim fails protocol', () => {
   return { pass: manifest.status === 'failed' && found, detail: `status=${manifest.status} failures=${(manifest.complianceFailures || []).join('|')}` };
 });
 
+define('ManagedActionEval', 'checklist must quote the real user instruction boundary', () => {
+  const p = path.join(HOME, 'engine/scripts/test-hooks/agent-managed-action-eval.cjs');
+  if (!fs.existsSync(p)) return { pass: false, detail: 'agent-managed-action-eval.cjs missing' };
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'agent-managed-action-wrong-instruction-'));
+  const fakeAgent = path.join(tmp, 'fake-wrong-instruction.cjs');
+  const wrongChecklist = [
+    '\u884c\u52a8: write parser',
+    '\u7528\u6237\u6307\u4ee4: "Please do a quick cleanup."',
+    '\u5339\u914d: ok',
+    '\u95e8\u7981: \u9700\u6c42\u6f84\u6e05[ ok ] \u9a8c\u8bc1\u8d28\u91cf[ N/A ]',
+  ].join('\n');
+  const content = [
+    'def parse_capture(capture: bytes) -> list[dict]:',
+    '    return []',
+    '',
+  ].join('\n');
+  const response = {
+    schemaVersion: 1,
+    classification: 'implementation_with_spec',
+    actions: [{ type: 'write_file', path: 'src/telemetry.py', checklistText: wrongChecklist, content }],
+    verification: [{ command: 'python -m pytest -q', checklistText: wrongChecklist.replace('write parser', 'run pytest') }],
+    finalResponse: 'Prepared parser changes for harness verification.',
+  };
+  fs.writeFileSync(fakeAgent, `process.stdout.write(${JSON.stringify(JSON.stringify(response))});\n`, 'utf8');
+  const outDir = path.join(tmp, 'run');
+  const r = spawnSync('node', [p, '--agent', 'fake', '--kind', 'implementation', '--command', `node "${fakeAgent}"`, '--out', outDir], {
+    encoding: 'utf8', timeout: 30000, windowsHide: true,
+  });
+  if (r.status === 0) return { pass: false, detail: 'wrong user instruction checklist was accepted' };
+  const manifest = JSON.parse(fs.readFileSync(path.join(outDir, 'managed-eval.json'), 'utf8'));
+  const found = (manifest.complianceFailures || []).some((failure) => /implementation request boundary|verification request boundary/.test(failure));
+  return { pass: manifest.status === 'failed' && found, detail: `status=${manifest.status} failures=${(manifest.complianceFailures || []).join('|')}` };
+});
+
 define('ManagedActionEval', 'blocked agent readiness emits blocked manifest', () => {
   const evalScript = path.join(HOME, 'engine/scripts/test-hooks/agent-managed-action-eval.cjs');
   const readinessScript = path.join(HOME, 'engine/scripts/test-hooks/agent-live-readiness.cjs');
@@ -1332,13 +1416,18 @@ define('ManagedActionMatrix', 'codex blocked live row stays blocked when readine
   return { pass, detail: `summary=${manifest.summary?.overallStatus} row=${row?.status}` };
 });
 
-define('LongTaskEval', '固定产物长任务 eval 全部通过 (artifact, 非 fresh live)', () => {
+define('LongTaskEval', '固定历史产物不再计为 fresh live 通过', () => {
   const p = path.join(HOME, 'engine/scripts/test-hooks/long-task-eval.cjs');
   if (!fs.existsSync(p)) return { pass: false, detail: 'long-task-eval.cjs 不存在' };
-  const r = spawnSync('node', [p], {
+  const r = spawnSync('node', [p, '--json'], {
     encoding: 'utf8', timeout: 60000, windowsHide: true,
   });
-  return { pass: r.status === 0, detail: `exit=${r.status}` };
+  if (r.status !== 2) return { pass: false, detail: `exit=${r.status}: ${r.stderr || r.stdout}` };
+  const manifest = JSON.parse(r.stdout || '{}');
+  return {
+    pass: manifest.status === 'historical_only' && manifest.liveEvidence === false,
+    detail: `status=${manifest.status} live=${manifest.liveEvidence}`,
+  };
 });
 
 define('LongTaskEval', 'agent-eval-runner dry-run 支持 Claude/Codex', () => {
