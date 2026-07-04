@@ -48,6 +48,32 @@
       "Bash(git commit --amend:*)"
     ]
   },
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node C:/Users/Lihan/.claude/engine/hooks/session/progress-watchdog.cjs",
+            "timeout": 3000
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node C:/Users/Lihan/.claude/engine/hooks/session/progress-watchdog.cjs",
+            "timeout": 3000
+          }
+        ]
+      }
+    ]
+  },
   "mcpServers": {
     "matlab": {
       "command": "D:\\Program Files\\MATLAB-MCP\\matlab-mcp-server.exe",
