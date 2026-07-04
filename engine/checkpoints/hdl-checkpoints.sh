@@ -77,7 +77,7 @@ check_phase_3() {
   # TB 编译检查
   make compile >/dev/null 2>&1 && PASS "TB 编译通过" || WARN "TB 编译未通过 (可能无 EDA 工具)"
   # 检查 TB 文件 (标准位置)
-  tb_files=$(ls 02_sim/tb_*.sv 02_sim/*_tb.sv 2>/dev/null | head -5)
+  tb_files=$(find 02_sim -mindepth 2 -maxdepth 2 \( -name 'tb_*.sv' -o -name '*_tb.sv' \) 2>/dev/null | head -5)
   if [ -n "$tb_files" ]; then
     PASS "TB 文件存在: $(echo $tb_files | tr '\n' ' ')"
     # SVA 断言检查
@@ -177,7 +177,7 @@ except Exception as e:
 check_phase_5() {
   total_errors=0; echo "=== Phase 5 检查点 ==="
   # 顶层模块
-  top_file=$(ls 01_src/00_hdl/top*.sv 2>/dev/null | head -1)
+  top_file=$(ls 01_src/00_hdl/top/top*.sv 2>/dev/null | head -1)
   [ -n "$top_file" ] && PASS "顶层模块存在: $top_file" || WARN "未找到顶层模块 (01_src/00_hdl/top*.sv)"
   # 仿真日志
   sim_log=$(ls -t 02_sim/*.log 2>/dev/null | head -1)

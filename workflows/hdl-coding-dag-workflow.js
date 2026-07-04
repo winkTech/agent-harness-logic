@@ -203,6 +203,7 @@ nodes.p0_infra = {
 模块: ${modules.join(', ') || '项目默认'}
 输出检查清单:
 - 目录结构符合跨项目标准
+- var/project-init/directory-contract.json 存在且记录 canonical HDL layout
 - Makefile 存在且 lint/compile/sim/clean 目标完整
 - .gitignore 排除 transient
 - make lint 通过
@@ -519,7 +520,7 @@ nodes.p4_rtl = {
 
 参考: architecture.yaml 中 ${mod} 的微架构方案
 定点参考: ${fixedptHint}
-TB: 02_sim/tb_${mod}.sv (唯一 TB, 直接覆盖)
+TB: 02_sim/${mod}/tb_${mod}.sv (唯一 TB, 直接覆盖)
 
 [MUST 完成标准]
 1. 按 architecture.yaml 微架构编码 (流水线/FSM/位宽一致)
@@ -935,7 +936,7 @@ nodes.p5_top_integration = {
         `[顶层接口检查] 检查所有子模块的接口连接正确性。
 
 模块列表: ${modList.join(', ')}
-顶层文件: 01_src/00_hdl/top.sv (如果不存在, 先创建)
+顶层文件: 01_src/00_hdl/top/top.sv (如果不存在, 先创建)
 
 检查项:
 1. 每个子模块的端口连接是否完整 (无悬空/漏连)
@@ -954,7 +955,7 @@ nodes.p5_top_integration = {
         `[顶层数据通路追踪] 从顶层输入到顶层输出追踪数据流。
 
 模块列表: ${modList.join(', ')}
-顶层文件: 01_src/00_hdl/top.sv
+顶层文件: 01_src/00_hdl/top/top.sv
 
 任务:
 1. 读取 top.sv 和每个子模块的端口定义
@@ -975,7 +976,7 @@ nodes.p5_top_integration = {
         `[顶层 Golden 比对] 检查全链仿真与 Golden Model 的一致性。
 
 模块列表: ${modList.join(', ')}
-顶层文件: 01_src/00_hdl/top.sv
+顶层文件: 01_src/00_hdl/top/top.sv
 Golden Model 参考: 07_mat/ 或 08_py/
 
 任务:
@@ -1010,7 +1011,7 @@ Golden Model 参考: 07_mat/ 或 08_py/
         `[顶层资源/时序预估] 评估顶层集成的资源和时序风险。
 
 模块列表: ${modList.join(', ')}
-顶层文件: 01_src/00_hdl/top.sv
+顶层文件: 01_src/00_hdl/top/top.sv
 
 任务:
 1. 读取每个子模块接口, 估算顶层总资源

@@ -114,7 +114,7 @@
       "nmse_db": -300,
       "files": [
         { "role": "rtl", "path": "01_src/tx/scrambler.sv" },
-        { "role": "tb", "path": "02_sim/tb/tb_scrambler.sv" },
+        { "role": "tb", "path": "02_sim/scrambler/tb_scrambler.sv" },
         { "role": "golden", "path": "03_golden/scrambler_golden.m" },
         { "role": "script", "path": "02_sim/check_scrambler.py" },
         { "role": "log", "path": "02_sim/logs/scrambler_sim.log" }

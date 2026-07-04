@@ -10,7 +10,7 @@ tags: [maintenance, memory, compaction, hook-failure]
 
 ## Scope
 
-This summary distills 29 untracked `memory/errors/*-hook_failure_*.md`
+This summary distills 45 untracked `memory/errors/*-hook_failure_*.md`
 auto-record files generated while validating the harness. The raw files were
 short transient tool-failure logs, mostly duplicate symptoms, and were removed
 after this summary was written so they do not pollute long-term retrieval.
@@ -29,6 +29,12 @@ Tracked curated error memories under `memory/errors/` were kept.
 - One directory/file mismatch produced `EISDIR`.
 - A few command probes exited with generic status codes during CLI readiness
   and environment checks.
+- FSK foreground debug generated repeated `sync_fifo` failures before the
+  testbench and RTL stabilized: non-numeric `$fatal`, wildcard port mismatch,
+  `usedw` expectation drift, read-data latency mismatch, and temporary syntax
+  errors in ad-hoc `rtl/` files.
+- Windows command/path quoting produced one `scriptsrun_iverilog.bat` probe
+  failure and repeated stale `clean_runs/.../claude_code_impl` path lookups.
 
 ## Result
 
@@ -36,3 +42,7 @@ The useful lesson is captured in durable harness docs and eval manifests:
 transient hook failures should not be indexed as long-term memory. Keep
 dimensioned eval manifests and maintenance summaries; prune raw auto failure
 logs once the regression is fixed and verified.
+
+For HDL project work, raw simulator churn belongs in the project run
+directory, not durable memory. Long-term memory should keep only root causes,
+verified fixes, and harness policy changes.
