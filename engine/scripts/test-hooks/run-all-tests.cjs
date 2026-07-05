@@ -25,6 +25,10 @@ const fs = require('node:fs');
 const path = require('node:path');
 const { spawnSync } = require('node:child_process');
 const os = require('node:os');
+const {
+  computeHarnessMetrics,
+  formatHarnessMetrics,
+} = require('../lib/harness-metrics.cjs');
 
 const HOME = path.join(os.homedir(), '.claude');
 const VERBOSE = process.argv.includes('--verbose');
@@ -141,6 +145,7 @@ const CORE_SCRIPTS = [
   'engine/scripts/lib/repair-contract.cjs',
   'engine/scripts/lib/evidence-ledger.cjs',
   'engine/scripts/lib/toolchain-health.cjs',
+  'engine/scripts/lib/harness-metrics.cjs',
   'engine/scripts/init-module.cjs',
   'engine/scripts/workflow-evidence-scan.cjs',
   'engine/scripts/test-hooks/agent-eval-runner.cjs',
@@ -156,6 +161,7 @@ const CORE_SCRIPTS = [
   'engine/scripts/test-hooks/rtl-live-task-eval.cjs',
   'engine/scripts/test-hooks/claude-patch-executor.cjs',
   'engine/scripts/test-hooks/claude-patch-eval.cjs',
+  'engine/scripts/test-hooks/harness-metrics-eval.cjs',
   'engine/scripts/test-hooks/hdl-project-directory-eval.cjs',
   'engine/scripts/test-hooks/agent-transcript-compliance.cjs',
   'engine/scripts/test-hooks/workflow-contracts.cjs',
@@ -1351,8 +1357,28 @@ define('ClaudePatchEval', 'claude-patch-eval.cjs dry-run passes exact patch harn
   if (r.status !== 0) return { pass: false, detail: `exit=${r.status}: ${r.stderr || r.stdout}` };
   const manifest = JSON.parse(r.stdout);
   const failed = (manifest.results || []).filter((result) => result.status !== 'passed');
-  const pass = manifest.status === 'passed' && failed.length === 0;
-  return { pass, detail: pass ? 'repair/content/evidence/toolchain gates passed' : failed.map((result) => result.name).join('|') };
+  const fpr = manifest.harnessMetrics?.overall?.falsePositiveRate;
+  const pass = manifest.status === 'passed' && failed.length === 0 && fpr === 0;
+  return {
+    pass,
+    detail: pass ? `repair/content/evidence/toolchain gates passed; FPR=${fpr}` : failed.map((result) => result.name).join('|'),
+    harnessCases: manifest.harnessCases || [],
+  };
+});
+
+define('HarnessMetricsEval', 'harness-metrics-eval.cjs computes TPR/TNR/FPR correctly', () => {
+  const p = path.join(HOME, 'engine/scripts/test-hooks/harness-metrics-eval.cjs');
+  if (!fs.existsSync(p)) return { pass: false, detail: 'harness-metrics-eval.cjs missing' };
+  const r = spawnSync('node', [p], {
+    cwd: HOME,
+    encoding: 'utf8',
+    timeout: 30000,
+    windowsHide: true,
+  });
+  if (r.status !== 0) return { pass: false, detail: `exit=${r.status}: ${r.stderr || r.stdout}` };
+  const manifest = JSON.parse(r.stdout);
+  const pass = manifest.status === 'passed';
+  return { pass, detail: pass ? 'metrics eval passed' : r.stdout };
 });
 
 define('RTLLiveTaskEval', 'rtl-live-task-eval.cjs dry-run verifies transcript and RTL artifacts', () => {
@@ -1752,6 +1778,7 @@ function runSuite() {
   let passed = 0, failed = 0, skipped = 0;
   const skipManifest = loadSkipManifest();
   const unknownSkips = [];
+  const harnessCases = [];
 
   for (const [suiteName, suiteTests] of Object.entries(bySuite)) {
     console.log(`\n${C.cyan}═══ ${suiteName} ═══${C.reset}`);
@@ -1760,6 +1787,15 @@ function runSuite() {
       process.stdout.write(`  ${t.name.padEnd(42)} `);
       try {
         const result = t.fn();
+        if (Array.isArray(result.harnessCases)) {
+          for (const testCase of result.harnessCases) {
+            harnessCases.push({
+              ...testCase,
+              sourceSuite: t.suite,
+              sourceTest: t.name,
+            });
+          }
+        }
         if (result.skip) {
           if (isAllowedSkip(t, skipManifest)) {
             console.log(warn('跳过'));
@@ -1797,13 +1833,25 @@ function runSuite() {
     console.log(fail(`未知 skip: ${unknownSkips.join(', ')}`));
   }
   const score = total > 0 ? Math.round((passed / total) * 100) : 0;
+  const harnessMetrics = harnessCases.length > 0 ? computeHarnessMetrics(harnessCases) : null;
+  if (harnessMetrics) {
+    const fpr = harnessMetrics.overall.falsePositiveRate;
+    if (fpr !== null && fpr > 0) {
+      failed++;
+      console.log(fail(`Harness false-positive rate > 0: ${formatHarnessMetrics(harnessMetrics)}`));
+    }
+  }
   const grade = score === 100 ? '🟢' : score >= 80 ? '🟡' : '🔴';
 
   console.log('\n━━━ 汇总 ━━━');
   console.log(`  总计: ${total}  |  通过: ${passed}  |  失败: ${failed}  |  跳过: ${skipped}`);
   console.log(`  分数: ${grade} ${score}%`);
 
-  saveResults({ total, passed, failed, skipped, score });
+  if (harnessMetrics) {
+    console.log(`  Harness verification: ${formatHarnessMetrics(harnessMetrics)}`);
+  }
+
+  saveResults({ total, passed, failed, skipped, score, harnessMetrics });
 
   if (failed > 0) process.exit(1);
   console.log(`\n${ok('全部通过')}\n`);

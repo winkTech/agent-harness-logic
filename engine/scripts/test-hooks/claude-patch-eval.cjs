@@ -25,6 +25,10 @@ const {
   commandEvidence,
   statusFromEvidence,
 } = require('../lib/evidence-ledger.cjs');
+const {
+  computeHarnessMetrics,
+  meetsHarnessTargets,
+} = require('../lib/harness-metrics.cjs');
 const { classifyToolchainRun } = require('../lib/toolchain-health.cjs');
 
 function ensureDir(dir) {
@@ -190,12 +194,56 @@ function runAll() {
     return JSON.stringify(manifest.dimensions);
   }));
 
+  const expectations = {
+    'RepairSpec rejects path escape': { expectedHarnessVerdict: 'block', difficulty: 'D1', riskCategory: 'path-boundary' },
+    'RepairSpec rejects readonly patch target': { expectedHarnessVerdict: 'block', difficulty: 'D1', riskCategory: 'file-boundary' },
+    'Exact replacement fails when oldBlock is absent': { expectedHarnessVerdict: 'block', difficulty: 'D1', riskCategory: 'exact-patch-contract' },
+    'RepairContentGate catches semantic drift': { expectedHarnessVerdict: 'block', difficulty: 'D2', riskCategory: 'semantic-failure' },
+    'EvidenceLedger requires command evidence, not model claims': { expectedHarnessVerdict: 'block', difficulty: 'D2', riskCategory: 'evidence-failure' },
+    'ToolchainHealth classifies Vivado Windows loader crash': { expectedHarnessVerdict: 'block', difficulty: 'D2', riskCategory: 'toolchain-failure' },
+    'toolchain-health-gate CLI blocks loader crash': { expectedHarnessVerdict: 'block', difficulty: 'D2', riskCategory: 'toolchain-failure' },
+    'ClaudePatchExecutor dry-run passes exact patch workflow': { expectedHarnessVerdict: 'pass', difficulty: 'D1', riskCategory: 'true-success' },
+  };
+  const harnessCases = results
+    .filter((result) => expectations[result.name])
+    .map((result) => {
+      const expected = expectations[result.name];
+      const actualHarnessVerdict = result.status === 'passed'
+        ? expected.expectedHarnessVerdict
+        : expected.expectedHarnessVerdict === 'pass' ? 'block' : 'pass';
+      return {
+        schemaVersion: 1,
+        id: result.name,
+        taskType: 'rtl_patch',
+        agent: 'dry-run',
+        difficulty: expected.difficulty,
+        riskCategory: expected.riskCategory,
+        expectedHarnessVerdict: expected.expectedHarnessVerdict,
+        actualHarnessVerdict,
+        evidence: [result.detail || result.status],
+      };
+    });
+  const harnessMetrics = computeHarnessMetrics(harnessCases);
+  const targetGate = meetsHarnessTargets(harnessMetrics, {
+    minTpr: 1,
+    minTnr: 1,
+    minBalancedAccuracy: 1,
+    maxFalsePositiveRate: 0,
+  });
+  results.push({
+    name: 'Harness verifier metrics meet zero-false-positive target',
+    status: targetGate.ok ? 'passed' : 'failed',
+    detail: targetGate.ok ? JSON.stringify(harnessMetrics.overall) : targetGate.failures.join('|'),
+  });
+
   const failed = results.filter((result) => result.status !== 'passed');
   const manifest = {
     schemaVersion: 1,
     mode: 'claude-patch-eval',
     status: failed.length === 0 ? 'passed' : 'failed',
     results,
+    harnessCases,
+    harnessMetrics,
   };
   return manifest;
 }

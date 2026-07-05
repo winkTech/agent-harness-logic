@@ -1,0 +1,58 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://claude-code/schemas/harness-eval-case",
+  "title": "Harness Evaluation Case",
+  "description": "A single expected-vs-actual verdict used to measure harness TPR/TNR and false-positive risk.",
+  "type": "object",
+  "required": [
+    "schemaVersion",
+    "id",
+    "difficulty",
+    "riskCategory",
+    "expectedHarnessVerdict",
+    "actualHarnessVerdict"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "schemaVersion": {
+      "type": "integer",
+      "const": 1
+    },
+    "id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "difficulty": {
+      "type": "string",
+      "enum": ["D1", "D2", "D3", "D4"]
+    },
+    "riskCategory": {
+      "type": "string",
+      "minLength": 1
+    },
+    "agent": {
+      "type": "string"
+    },
+    "taskType": {
+      "type": "string"
+    },
+    "expectedHarnessVerdict": {
+      "type": "string",
+      "enum": ["pass", "block"]
+    },
+    "actualHarnessVerdict": {
+      "type": "string",
+      "enum": ["pass", "block"]
+    },
+    "evidence": {
+      "type": "array",
+      "default": [],
+      "items": {
+        "type": "string"
+      }
+    },
+    "notes": {
+      "type": "string"
+    }
+  }
+}
