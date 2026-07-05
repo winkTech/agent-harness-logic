@@ -223,6 +223,35 @@ test('agent-eval-verify writes failed manifest for invalid ambiguous response', 
   );
 });
 
+test('agent-eval-verify fails directories without a fresh eval-run manifest', () => {
+  const outDir = path.join(tmpDir('agent-eval-no-manifest-'), 'out');
+  fs.mkdirSync(path.join(outDir, 'src'), { recursive: true });
+  fs.mkdirSync(path.join(outDir, 'tests'), { recursive: true });
+  fs.copyFileSync(
+    path.join(HOME, 'engine/scripts/test-hooks/fixtures/long-task/scenario/src/telemetry.py'),
+    path.join(outDir, 'src', 'telemetry.py')
+  );
+  fs.copyFileSync(
+    path.join(HOME, 'engine/scripts/test-hooks/fixtures/long-task/scenario/tests/test_telemetry.py'),
+    path.join(outDir, 'tests', 'test_telemetry.py')
+  );
+  const responseFile = path.join(outDir, 'response.txt');
+  fs.writeFileSync(responseFile, goodAmbiguousResponse(), 'utf8');
+
+  const result = runNode([
+    VERIFIER,
+    '--kind', 'ambiguous',
+    '--dir', outDir,
+    '--response', responseFile,
+    '--label', 'no-manifest',
+  ]);
+
+  assert(result.status === 1, `missing manifest unexpectedly passed, exit=${result.status}`);
+  const verify = readJson(path.join(outDir, 'eval-verify.json'));
+  const manifestCheck = (verify.checks || []).find((check) => check.name === 'run-manifest-freshness');
+  assert(manifestCheck?.status === 'failed', 'missing manifest did not fail run-manifest-freshness');
+});
+
 test('agent-eval-verify writes passed manifest with check details', () => {
   const outDir = path.join(tmpDir('agent-eval-good-'), 'out');
   let result = runNode([

@@ -122,7 +122,7 @@ function verifyImplementation(target) {
 }
 
 function verifyAmbiguous(target) {
-  ensureAmbiguousBaseline(target);
+  assert(fs.existsSync(target.dir), `${target.name}: missing captured ambiguous run directory`);
   assert(
     sameFile(
       path.join(SCENARIO, 'src', 'telemetry.py'),
@@ -141,21 +141,49 @@ function verifyAmbiguous(target) {
 }
 
 function main() {
+  const args = process.argv.slice(2);
+  const allowHistoricalArtifacts = args.includes('--allow-historical-artifacts');
+  const json = args.includes('--json');
   let passed = 0;
+  const results = [];
   for (const target of TARGETS) {
-    process.stdout.write(`${target.name.padEnd(24)} `);
+    if (!json) process.stdout.write(`${target.name.padEnd(24)} `);
     try {
       if (target.kind === 'implementation') verifyImplementation(target);
       else verifyAmbiguous(target);
       passed += 1;
-      console.log('PASS');
+      results.push({ name: target.name, kind: target.kind, status: 'passed' });
+      if (!json) console.log('PASS');
     } catch (error) {
-      console.log('FAIL');
-      console.log(error.message);
+      results.push({ name: target.name, kind: target.kind, status: 'failed', error: error.message });
+      if (!json) {
+        console.log('FAIL');
+        console.log(error.message);
+      }
       process.exitCode = 1;
     }
   }
-  console.log(`\n${passed}/${TARGETS.length} eval targets passed`);
+  const allArtifactsPass = passed === TARGETS.length;
+  const summary = {
+    schemaVersion: 1,
+    mode: 'historical-artifact-long-task-eval',
+    status: allArtifactsPass ? 'historical_only' : 'failed',
+    liveEvidence: false,
+    falsePositiveRisk: allArtifactsPass
+      ? 'fixed artifacts verified functionally but cannot prove fresh agent instruction-following'
+      : 'one or more fixed artifacts failed',
+    allowHistoricalArtifacts,
+    passed,
+    total: TARGETS.length,
+    results,
+  };
+  if (json) console.log(JSON.stringify(summary, null, 2));
+  else {
+    console.log(`\n${passed}/${TARGETS.length} eval targets passed`);
+    console.log('historical-artifact mode: not valid live pass evidence');
+  }
+  if (process.exitCode) return;
+  if (!allowHistoricalArtifacts) process.exitCode = 2;
 }
 
 main();

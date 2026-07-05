@@ -25,6 +25,10 @@ const fs = require('node:fs');
 const path = require('node:path');
 const { spawnSync } = require('node:child_process');
 const os = require('node:os');
+const {
+  computeHarnessMetrics,
+  formatHarnessMetrics,
+} = require('../lib/harness-metrics.cjs');
 
 const HOME = path.join(os.homedir(), '.claude');
 const VERBOSE = process.argv.includes('--verbose');
@@ -138,6 +142,10 @@ const CORE_SCRIPTS = [
   'engine/scripts/lib/memory-file-policy.cjs',
   'engine/scripts/lib/workflow-runtime.cjs',
   'engine/scripts/lib/project-directory-contract.cjs',
+  'engine/scripts/lib/repair-contract.cjs',
+  'engine/scripts/lib/evidence-ledger.cjs',
+  'engine/scripts/lib/toolchain-health.cjs',
+  'engine/scripts/lib/harness-metrics.cjs',
   'engine/scripts/init-module.cjs',
   'engine/scripts/workflow-evidence-scan.cjs',
   'engine/scripts/test-hooks/agent-eval-runner.cjs',
@@ -147,9 +155,13 @@ const CORE_SCRIPTS = [
   'engine/scripts/test-hooks/agent-managed-action-matrix.cjs',
   'engine/scripts/test-hooks/agent-managed-action-report.cjs',
   'engine/scripts/test-hooks/agent-managed-action-eval.cjs',
+  'engine/scripts/test-hooks/agent-alignment-dialogue-eval.cjs',
   'engine/scripts/test-hooks/rtl-long-task-eval.cjs',
   'engine/scripts/test-hooks/rtl-managed-task-eval.cjs',
   'engine/scripts/test-hooks/rtl-live-task-eval.cjs',
+  'engine/scripts/test-hooks/claude-patch-executor.cjs',
+  'engine/scripts/test-hooks/claude-patch-eval.cjs',
+  'engine/scripts/test-hooks/harness-metrics-eval.cjs',
   'engine/scripts/test-hooks/hdl-project-directory-eval.cjs',
   'engine/scripts/test-hooks/agent-transcript-compliance.cjs',
   'engine/scripts/test-hooks/workflow-contracts.cjs',
@@ -174,6 +186,8 @@ const HOOK_SCRIPTS = [
   'engine/scripts/hooks/resource-budget-gate.js',
   'engine/scripts/hooks/frustration-detector.cjs',
   'engine/scripts/hooks/hdl-gate.cjs',
+  'engine/scripts/hooks/repair-content-gate.cjs',
+  'engine/scripts/hooks/toolchain-health-gate.cjs',
   'engine/scripts/hooks/project-directory-guard.cjs',
   'engine/scripts/hooks/pre-commit-lint.js',
   'engine/scripts/hooks/lint-auto-gate.js',
@@ -185,6 +199,7 @@ const HOOK_SCRIPTS = [
   'engine/hooks/learning/cost-tracker-hook.cjs',
   'engine/hooks/learning/skill-tracker-hook.cjs',
   'engine/hooks/safety/context-monitor.cjs',
+  'engine/hooks/session/progress-watchdog.cjs',
   'engine/hooks/session/pre-compact.cjs',
   'engine/hooks/validation/post-pipeline-self-review.cjs',
 ];
@@ -477,6 +492,55 @@ define('HookRegistry', 'legacy dry-run 入口使用统一注册表', () => {
     },
   });
   return { pass: r.status === 0, detail: `exit=${r.status}` };
+});
+
+define('ProgressWatchdog', '连续无进展达到阈值会失败归档', () => {
+  const p = path.join(HOME, 'engine/hooks/session/progress-watchdog.cjs');
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'progress-watchdog-'));
+  const env = {
+    PROGRESS_WATCHDOG_STATE_FILE: path.join(tmp, 'state.json'),
+    PROGRESS_WATCHDOG_ARCHIVE_DIR: path.join(tmp, 'archive'),
+    PROGRESS_WATCHDOG_MAX_NO_PROGRESS_TURNS: '2',
+    PROGRESS_WATCHDOG_MODE: 'enforce',
+  };
+  const payload = JSON.stringify({ hook_event_name: 'PreToolUse', tool_name: 'Read', cwd: tmp });
+  const first = runNode(p, payload, { cwd: tmp, env });
+  if (first.status !== 0) return { pass: false, detail: `first read blocked early: exit=${first.status}` };
+  const second = runNode(p, payload, { cwd: tmp, env });
+  const archiveFiles = fs.existsSync(env.PROGRESS_WATCHDOG_ARCHIVE_DIR)
+    ? fs.readdirSync(env.PROGRESS_WATCHDOG_ARCHIVE_DIR).filter((name) => name.endsWith('.json'))
+    : [];
+  if (second.status !== 2) return { pass: false, detail: `second read exit=${second.status}, expected 2` };
+  if (archiveFiles.length !== 1) return { pass: false, detail: `archive count=${archiveFiles.length}` };
+  const archive = JSON.parse(fs.readFileSync(path.join(env.PROGRESS_WATCHDOG_ARCHIVE_DIR, archiveFiles[0]), 'utf8'));
+  return {
+    pass: archive.status === 'failed_archived' && archive.reason === 'no_progress_turn_threshold',
+    detail: `status=${archive.status} reason=${archive.reason}`,
+  };
+});
+
+define('ProgressWatchdog', '生产性写入和验证命令会重置无进展计数', () => {
+  const p = path.join(HOME, 'engine/hooks/session/progress-watchdog.cjs');
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'progress-watchdog-reset-'));
+  const env = {
+    PROGRESS_WATCHDOG_STATE_FILE: path.join(tmp, 'state.json'),
+    PROGRESS_WATCHDOG_ARCHIVE_DIR: path.join(tmp, 'archive'),
+    PROGRESS_WATCHDOG_MAX_NO_PROGRESS_TURNS: '3',
+    PROGRESS_WATCHDOG_MODE: 'enforce',
+  };
+  runNode(p, JSON.stringify({ hook_event_name: 'PreToolUse', tool_name: 'Read', cwd: tmp }), { cwd: tmp, env });
+  runNode(p, JSON.stringify({ hook_event_name: 'PreToolUse', tool_name: 'Write', cwd: tmp }), { cwd: tmp, env });
+  runNode(p, JSON.stringify({ hook_event_name: 'PreToolUse', tool_name: 'Read', cwd: tmp }), { cwd: tmp, env });
+  const verify = runNode(p, JSON.stringify({
+    hook_event_name: 'PreToolUse',
+    tool_name: 'Bash',
+    cwd: tmp,
+    tool_input: { command: 'python -m pytest -q' },
+  }), { cwd: tmp, env });
+  if (verify.status !== 0) return { pass: false, detail: `verification command blocked: exit=${verify.status}` };
+  const state = JSON.parse(fs.readFileSync(env.PROGRESS_WATCHDOG_STATE_FILE, 'utf8'));
+  const session = Object.values(state.sessions)[0];
+  return { pass: session.noProgressTurns === 0, detail: `noProgressTurns=${session.noProgressTurns}` };
 });
 
 define('DAGEngine', 'loop_skip 默认计为失败', () => {
@@ -1146,6 +1210,40 @@ define('ManagedActionEval', 'unverified test-pass claim fails protocol', () => {
   return { pass: manifest.status === 'failed' && found, detail: `status=${manifest.status} failures=${(manifest.complianceFailures || []).join('|')}` };
 });
 
+define('ManagedActionEval', 'checklist must quote the real user instruction boundary', () => {
+  const p = path.join(HOME, 'engine/scripts/test-hooks/agent-managed-action-eval.cjs');
+  if (!fs.existsSync(p)) return { pass: false, detail: 'agent-managed-action-eval.cjs missing' };
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'agent-managed-action-wrong-instruction-'));
+  const fakeAgent = path.join(tmp, 'fake-wrong-instruction.cjs');
+  const wrongChecklist = [
+    '\u884c\u52a8: write parser',
+    '\u7528\u6237\u6307\u4ee4: "Please do a quick cleanup."',
+    '\u5339\u914d: ok',
+    '\u95e8\u7981: \u9700\u6c42\u6f84\u6e05[ ok ] \u9a8c\u8bc1\u8d28\u91cf[ N/A ]',
+  ].join('\n');
+  const content = [
+    'def parse_capture(capture: bytes) -> list[dict]:',
+    '    return []',
+    '',
+  ].join('\n');
+  const response = {
+    schemaVersion: 1,
+    classification: 'implementation_with_spec',
+    actions: [{ type: 'write_file', path: 'src/telemetry.py', checklistText: wrongChecklist, content }],
+    verification: [{ command: 'python -m pytest -q', checklistText: wrongChecklist.replace('write parser', 'run pytest') }],
+    finalResponse: 'Prepared parser changes for harness verification.',
+  };
+  fs.writeFileSync(fakeAgent, `process.stdout.write(${JSON.stringify(JSON.stringify(response))});\n`, 'utf8');
+  const outDir = path.join(tmp, 'run');
+  const r = spawnSync('node', [p, '--agent', 'fake', '--kind', 'implementation', '--command', `node "${fakeAgent}"`, '--out', outDir], {
+    encoding: 'utf8', timeout: 30000, windowsHide: true,
+  });
+  if (r.status === 0) return { pass: false, detail: 'wrong user instruction checklist was accepted' };
+  const manifest = JSON.parse(fs.readFileSync(path.join(outDir, 'managed-eval.json'), 'utf8'));
+  const found = (manifest.complianceFailures || []).some((failure) => /implementation request boundary|verification request boundary/.test(failure));
+  return { pass: manifest.status === 'failed' && found, detail: `status=${manifest.status} failures=${(manifest.complianceFailures || []).join('|')}` };
+});
+
 define('ManagedActionEval', 'blocked agent readiness emits blocked manifest', () => {
   const evalScript = path.join(HOME, 'engine/scripts/test-hooks/agent-managed-action-eval.cjs');
   const readinessScript = path.join(HOME, 'engine/scripts/test-hooks/agent-live-readiness.cjs');
@@ -1174,6 +1272,27 @@ define('ManagedActionEval', 'blocked agent readiness emits blocked manifest', ()
     && manifest.dimensions?.overallStatus === 'blocked'
     && manifest.readiness?.agent?.status === 'blocked';
   return { pass, detail: `status=${manifest.status} readiness=${manifest.readiness?.agent?.status}` };
+});
+
+define('AlignmentDialogueEval', 'agent-alignment-dialogue-eval.cjs dry-run asks one question at a time', () => {
+  const p = path.join(HOME, 'engine/scripts/test-hooks/agent-alignment-dialogue-eval.cjs');
+  if (!fs.existsSync(p)) return { pass: false, detail: 'agent-alignment-dialogue-eval.cjs missing' };
+  const outDir = fs.mkdtempSync(path.join(os.tmpdir(), 'agent-alignment-dialogue-'));
+  fs.rmSync(outDir, { recursive: true, force: true });
+  const r = spawnSync('node', [p, '--dry-run', '--out', outDir], {
+    cwd: HOME,
+    encoding: 'utf8',
+    timeout: 30000,
+    windowsHide: true,
+  });
+  if (r.status !== 0) return { pass: false, detail: `exit=${r.status}: ${r.stderr || r.stdout}` };
+  const manifestPath = path.join(outDir, 'alignment-dialogue-eval.json');
+  if (!fs.existsSync(manifestPath)) return { pass: false, detail: 'alignment-dialogue-eval.json missing' };
+  const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf8'));
+  const pass = manifest.status === 'passed'
+    && manifest.turns?.length === 3
+    && manifest.dimensions?.sequentialClarification === 'passed';
+  return { pass, detail: `status=${manifest.status} turns=${manifest.turns?.length}` };
 });
 
 define('RTLLongTaskEval', 'rtl-long-task-eval.cjs dry-run passes hidden RTL checks', () => {
@@ -1224,6 +1343,42 @@ define('RTLManagedTaskEval', 'rtl-managed-task-eval.cjs dry-run passes managed E
     pass,
     detail: `status=${manifest.status} protocol=${manifest.dimensions?.protocolCompliance} gate=${manifest.dimensions?.gateCompliance} functional=${manifest.dimensions?.functionalStatus}`,
   };
+});
+
+define('ClaudePatchEval', 'claude-patch-eval.cjs dry-run passes exact patch harness checks', () => {
+  const p = path.join(HOME, 'engine/scripts/test-hooks/claude-patch-eval.cjs');
+  if (!fs.existsSync(p)) return { pass: false, detail: 'claude-patch-eval.cjs missing' };
+  const r = spawnSync('node', [p], {
+    cwd: HOME,
+    encoding: 'utf8',
+    timeout: 30000,
+    windowsHide: true,
+  });
+  if (r.status !== 0) return { pass: false, detail: `exit=${r.status}: ${r.stderr || r.stdout}` };
+  const manifest = JSON.parse(r.stdout);
+  const failed = (manifest.results || []).filter((result) => result.status !== 'passed');
+  const fpr = manifest.harnessMetrics?.overall?.falsePositiveRate;
+  const pass = manifest.status === 'passed' && failed.length === 0 && fpr === 0;
+  return {
+    pass,
+    detail: pass ? `repair/content/evidence/toolchain gates passed; FPR=${fpr}` : failed.map((result) => result.name).join('|'),
+    harnessCases: manifest.harnessCases || [],
+  };
+});
+
+define('HarnessMetricsEval', 'harness-metrics-eval.cjs computes TPR/TNR/FPR correctly', () => {
+  const p = path.join(HOME, 'engine/scripts/test-hooks/harness-metrics-eval.cjs');
+  if (!fs.existsSync(p)) return { pass: false, detail: 'harness-metrics-eval.cjs missing' };
+  const r = spawnSync('node', [p], {
+    cwd: HOME,
+    encoding: 'utf8',
+    timeout: 30000,
+    windowsHide: true,
+  });
+  if (r.status !== 0) return { pass: false, detail: `exit=${r.status}: ${r.stderr || r.stdout}` };
+  const manifest = JSON.parse(r.stdout);
+  const pass = manifest.status === 'passed';
+  return { pass, detail: pass ? 'metrics eval passed' : r.stdout };
 });
 
 define('RTLLiveTaskEval', 'rtl-live-task-eval.cjs dry-run verifies transcript and RTL artifacts', () => {
@@ -1310,13 +1465,18 @@ define('ManagedActionMatrix', 'codex blocked live row stays blocked when readine
   return { pass, detail: `summary=${manifest.summary?.overallStatus} row=${row?.status}` };
 });
 
-define('LongTaskEval', '固定产物长任务 eval 全部通过 (artifact, 非 fresh live)', () => {
+define('LongTaskEval', '固定历史产物不再计为 fresh live 通过', () => {
   const p = path.join(HOME, 'engine/scripts/test-hooks/long-task-eval.cjs');
   if (!fs.existsSync(p)) return { pass: false, detail: 'long-task-eval.cjs 不存在' };
-  const r = spawnSync('node', [p], {
+  const r = spawnSync('node', [p, '--json'], {
     encoding: 'utf8', timeout: 60000, windowsHide: true,
   });
-  return { pass: r.status === 0, detail: `exit=${r.status}` };
+  if (r.status !== 2) return { pass: false, detail: `exit=${r.status}: ${r.stderr || r.stdout}` };
+  const manifest = JSON.parse(r.stdout || '{}');
+  return {
+    pass: manifest.status === 'historical_only' && manifest.liveEvidence === false,
+    detail: `status=${manifest.status} live=${manifest.liveEvidence}`,
+  };
 });
 
 define('LongTaskEval', 'agent-eval-runner dry-run 支持 Claude/Codex', () => {
@@ -1618,6 +1778,7 @@ function runSuite() {
   let passed = 0, failed = 0, skipped = 0;
   const skipManifest = loadSkipManifest();
   const unknownSkips = [];
+  const harnessCases = [];
 
   for (const [suiteName, suiteTests] of Object.entries(bySuite)) {
     console.log(`\n${C.cyan}═══ ${suiteName} ═══${C.reset}`);
@@ -1626,6 +1787,15 @@ function runSuite() {
       process.stdout.write(`  ${t.name.padEnd(42)} `);
       try {
         const result = t.fn();
+        if (Array.isArray(result.harnessCases)) {
+          for (const testCase of result.harnessCases) {
+            harnessCases.push({
+              ...testCase,
+              sourceSuite: t.suite,
+              sourceTest: t.name,
+            });
+          }
+        }
         if (result.skip) {
           if (isAllowedSkip(t, skipManifest)) {
             console.log(warn('跳过'));
@@ -1663,13 +1833,25 @@ function runSuite() {
     console.log(fail(`未知 skip: ${unknownSkips.join(', ')}`));
   }
   const score = total > 0 ? Math.round((passed / total) * 100) : 0;
+  const harnessMetrics = harnessCases.length > 0 ? computeHarnessMetrics(harnessCases) : null;
+  if (harnessMetrics) {
+    const fpr = harnessMetrics.overall.falsePositiveRate;
+    if (fpr !== null && fpr > 0) {
+      failed++;
+      console.log(fail(`Harness false-positive rate > 0: ${formatHarnessMetrics(harnessMetrics)}`));
+    }
+  }
   const grade = score === 100 ? '🟢' : score >= 80 ? '🟡' : '🔴';
 
   console.log('\n━━━ 汇总 ━━━');
   console.log(`  总计: ${total}  |  通过: ${passed}  |  失败: ${failed}  |  跳过: ${skipped}`);
   console.log(`  分数: ${grade} ${score}%`);
 
-  saveResults({ total, passed, failed, skipped, score });
+  if (harnessMetrics) {
+    console.log(`  Harness verification: ${formatHarnessMetrics(harnessMetrics)}`);
+  }
+
+  saveResults({ total, passed, failed, skipped, score, harnessMetrics });
 
   if (failed > 0) process.exit(1);
   console.log(`\n${ok('全部通过')}\n`);
