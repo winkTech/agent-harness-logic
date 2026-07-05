@@ -138,6 +138,9 @@ const CORE_SCRIPTS = [
   'engine/scripts/lib/memory-file-policy.cjs',
   'engine/scripts/lib/workflow-runtime.cjs',
   'engine/scripts/lib/project-directory-contract.cjs',
+  'engine/scripts/lib/repair-contract.cjs',
+  'engine/scripts/lib/evidence-ledger.cjs',
+  'engine/scripts/lib/toolchain-health.cjs',
   'engine/scripts/init-module.cjs',
   'engine/scripts/workflow-evidence-scan.cjs',
   'engine/scripts/test-hooks/agent-eval-runner.cjs',
@@ -151,6 +154,8 @@ const CORE_SCRIPTS = [
   'engine/scripts/test-hooks/rtl-long-task-eval.cjs',
   'engine/scripts/test-hooks/rtl-managed-task-eval.cjs',
   'engine/scripts/test-hooks/rtl-live-task-eval.cjs',
+  'engine/scripts/test-hooks/claude-patch-executor.cjs',
+  'engine/scripts/test-hooks/claude-patch-eval.cjs',
   'engine/scripts/test-hooks/hdl-project-directory-eval.cjs',
   'engine/scripts/test-hooks/agent-transcript-compliance.cjs',
   'engine/scripts/test-hooks/workflow-contracts.cjs',
@@ -175,6 +180,8 @@ const HOOK_SCRIPTS = [
   'engine/scripts/hooks/resource-budget-gate.js',
   'engine/scripts/hooks/frustration-detector.cjs',
   'engine/scripts/hooks/hdl-gate.cjs',
+  'engine/scripts/hooks/repair-content-gate.cjs',
+  'engine/scripts/hooks/toolchain-health-gate.cjs',
   'engine/scripts/hooks/project-directory-guard.cjs',
   'engine/scripts/hooks/pre-commit-lint.js',
   'engine/scripts/hooks/lint-auto-gate.js',
@@ -1330,6 +1337,22 @@ define('RTLManagedTaskEval', 'rtl-managed-task-eval.cjs dry-run passes managed E
     pass,
     detail: `status=${manifest.status} protocol=${manifest.dimensions?.protocolCompliance} gate=${manifest.dimensions?.gateCompliance} functional=${manifest.dimensions?.functionalStatus}`,
   };
+});
+
+define('ClaudePatchEval', 'claude-patch-eval.cjs dry-run passes exact patch harness checks', () => {
+  const p = path.join(HOME, 'engine/scripts/test-hooks/claude-patch-eval.cjs');
+  if (!fs.existsSync(p)) return { pass: false, detail: 'claude-patch-eval.cjs missing' };
+  const r = spawnSync('node', [p], {
+    cwd: HOME,
+    encoding: 'utf8',
+    timeout: 30000,
+    windowsHide: true,
+  });
+  if (r.status !== 0) return { pass: false, detail: `exit=${r.status}: ${r.stderr || r.stdout}` };
+  const manifest = JSON.parse(r.stdout);
+  const failed = (manifest.results || []).filter((result) => result.status !== 'passed');
+  const pass = manifest.status === 'passed' && failed.length === 0;
+  return { pass, detail: pass ? 'repair/content/evidence/toolchain gates passed' : failed.map((result) => result.name).join('|') };
 });
 
 define('RTLLiveTaskEval', 'rtl-live-task-eval.cjs dry-run verifies transcript and RTL artifacts', () => {

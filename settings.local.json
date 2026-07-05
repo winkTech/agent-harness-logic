@@ -59,6 +59,28 @@
             "timeout": 3000
           }
         ]
+      },
+      {
+        "matcher": "Edit|Write|MultiEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node C:/Users/Lihan/.claude/engine/scripts/hooks/repair-content-gate.cjs",
+            "timeout": 3000
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node C:/Users/Lihan/.claude/engine/scripts/hooks/toolchain-health-gate.cjs",
+            "timeout": 3000
+          }
+        ]
       }
     ],
     "Stop": [
