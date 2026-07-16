@@ -8,6 +8,7 @@
  * - cleanup commands must not count as functional verification
  * - workflow evidence checks must not be delegated to agent self-report
  * - context compression must preserve hard constraints
+ * - persistent prompts must keep authorization, evidence, scope, and test integrity explicit
  */
 
 'use strict';
@@ -100,6 +101,29 @@ test('rule loader scopes gates to new assets while preserving HDL/Python file ru
   assert(newPyFiles.has('00-core.md'), '00-core.md was not loaded for new Python work');
   assert(newPyFiles.has('02-python.md'), '02-python.md was not loaded for new .py work');
   assert(newPyFiles.has('03-gates.md'), '03-gates.md was not loaded for new Python work');
+});
+
+test('persistent prompts share a scoped evidence-driven contract with a Claude delta', () => {
+  const agents = fs.readFileSync(path.join(HOME, 'AGENTS.md'), 'utf8').replace(/\r\n/g, '\n');
+  const claude = fs.readFileSync(path.join(HOME, 'CLAUDE.md'), 'utf8').replace(/\r\n/g, '\n');
+  const core = fs.readFileSync(path.join(HOME, 'rules/00-core.md'), 'utf8');
+  const gates = fs.readFileSync(path.join(HOME, 'rules/03-gates.md'), 'utf8');
+
+  const normalizedAgents = agents.replace(/^# Codex 项目指导/m, '# 共享项目指导').trim();
+  const claudeCommon = claude.split('\n## Claude 模型校准\n')[0]
+    .replace(/^# Claude Code 项目指导/m, '# 共享项目指导')
+    .trim();
+
+  assert(normalizedAgents === claudeCommon, 'Codex and Claude common guidance drifted');
+  assert(agents.includes('明确请求“提交、推送、发布、发送”即授权'), 'explicit external action authorization missing');
+  assert(agents.includes('无需重复确认'), 'prompt may ask twice for already explicit authorization');
+  assert(agents.includes('先读取或验证再作结论'), 'evidence-before-claims guidance missing');
+  assert(agents.includes('不顺带重构、增加抽象、扩展功能'), 'anti-overengineering guidance missing');
+  assert(agents.includes('普通任务不创建进度文件'), 'long-task state is not scoped away from simple work');
+  assert(claude.includes('## Claude 模型校准'), 'Claude-specific calibration layer missing');
+  assert(claude.includes('默认直接完成简单、单文件或强顺序任务'), 'Claude subagent overuse guard missing');
+  assert(core.includes('不重复授权、沟通、验证和停止规则'), '00-core still duplicates the persistent contract');
+  assert(gates.includes('不得仅为制造通过而削弱、删除或跳过测试'), 'test-integrity rule missing');
 });
 
 test('requirements gate rejects completed state scoped to another project', () => {

@@ -1,31 +1,26 @@
 ---
 name: core-rules
-description: "Core outcome, autonomy, communication, validation, and stop rules."
+description: "Core routing bridge for persistent guidance and contextual rules."
 priority: L0
 trigger: "always"
 skip: ""
 ---
 
-# 核心运行规则
+# 核心规则路由
 
-## 结果与授权
+## 常驻契约
 
-- 以用户可见结果为目标；完成改动、验证和阻塞说明后停止。
-- 回答、审查、诊断和规划不授权写入；修改、构建和修复授权范围内的本地改动与验证。
-- 外部写入、破坏性操作、付费操作或重大范围扩张需要确认。
+- Codex 的常驻行为契约由 `AGENTS.md` 提供，Claude Code 的常驻行为契约由 `CLAUDE.md` 提供。
+- 本文件只向 Rule Loader 提供稳定路由，不重复授权、沟通、验证和停止规则，避免双重加权与内容漂移。
 
-## 沟通
+## 按需规则
 
-- 多步骤任务首次工具调用前简短说明目标和第一步；后续只在阶段变化、计划改变或阻塞时更新。
-- 结构化动作合同和门禁由 Hook 审计，不逐工具复述可见检查表。
+- 新代码、新模块、新功能、接口或行为契约变化、正确行为不明：加载 `03-gates.md`。
+- HDL、Testbench、FPGA/ASIC 架构或审查：加载 `01-hdl.md` 与 `hdl-coding`。
+- Python：加载 `02-python.md`；Git：加载 `04-git.md`。
+- 其他领域只加载与当前任务直接相关的 Skill 或规则，不扩展到无关流程。
 
-## 上下文路由
+## 加载纪律
 
-- 明确的已有文件修复直接实施；新代码、新契约或行为不明时加载 `03-gates.md`。
-- HDL 加载 `01-hdl.md` 与 `hdl-coding`；Python 加载 `02-python.md`；Git 加载 `04-git.md`。
-- 先用现有证据补齐门禁，只询问会实质改变结果的最小未知项。
-
-## 验证与停止
-
-- 使用与风险匹配的最小充分验证；语法检查不替代功能验证。
-- 有足够证据时回答；同一方法连续失败两次后改变方法或报告阻塞。
+- 使用 Rule Loader 返回的最窄规则集合；capsule 足够时不读取全文。
+- 只有实现细节确实依赖某条规则时才读取对应全文，不批量加载规则目录。
