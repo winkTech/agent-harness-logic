@@ -62,27 +62,44 @@ function withFileBackup(filePath, fn) {
   }
 }
 
-test('rule loader injects core gates plus HDL/Python file rules', () => {
+test('rule loader scopes gates to new assets while preserving HDL/Python file rules', () => {
   const loader = require(path.join(HOME, 'engine/scripts/rule-loader.cjs'));
   loader.invalidateRuleIndex();
 
-  const hdl = loader.evaluate('write RTL module and verify it', { openFiles: ['src/top.sv'] });
-  assert(hdl, 'HDL evaluation returned no rules');
-  const hdlFiles = new Set([...(hdl.matches || []), ...(hdl.allMatches || [])].map(item => (
+  const filesFor = (result) => new Set([...(result.matches || []), ...(result.allMatches || [])].map(item => (
     typeof item === 'string' ? item.replace(/\[.*$/, '') : item.file
   )));
+
+  const hdl = loader.evaluate('review existing RTL module', { openFiles: ['src/top.sv'] });
+  assert(hdl, 'HDL evaluation returned no rules');
+  assert(hdl.mode === 'capsule', `rule loader default mode should be capsule, got ${hdl.mode}`);
+  assert(!hdl.ruleContents, 'rule loader injected full ruleContents by default');
+  assert(typeof hdl.capsule === 'string' && hdl.capsule.length <= 1800, 'rule capsule missing or too large');
+  const hdlFiles = filesFor(hdl);
   assert(hdlFiles.has('00-core.md'), '00-core.md was not loaded for HDL work');
   assert(hdlFiles.has('01-hdl.md'), '01-hdl.md was not loaded for .sv work');
-  assert(hdlFiles.has('03-gates.md'), '03-gates.md was not loaded for HDL work');
+  assert(!hdlFiles.has('03-gates.md'), '03-gates.md should not load for read-only HDL review');
 
-  const py = loader.evaluate('modify code and run tests', { openFiles: ['tools/analyze.py'] });
+  const newHdl = loader.evaluate('create a new module and verification plan', { openFiles: ['src/new_top.sv'] });
+  assert(newHdl, 'new HDL evaluation returned no rules');
+  const newHdlFiles = filesFor(newHdl);
+  assert(newHdlFiles.has('00-core.md'), '00-core.md was not loaded for new HDL work');
+  assert(newHdlFiles.has('01-hdl.md'), '01-hdl.md was not loaded for new .sv work');
+  assert(newHdlFiles.has('03-gates.md'), '03-gates.md was not loaded for new HDL work');
+
+  const py = loader.evaluate('modify existing code', { openFiles: ['tools/analyze.py'] });
   assert(py, 'Python evaluation returned no rules');
-  const pyFiles = new Set([...(py.matches || []), ...(py.allMatches || [])].map(item => (
-    typeof item === 'string' ? item.replace(/\[.*$/, '') : item.file
-  )));
+  const pyFiles = filesFor(py);
   assert(pyFiles.has('00-core.md'), '00-core.md was not loaded for Python work');
   assert(pyFiles.has('02-python.md'), '02-python.md was not loaded for .py work');
-  assert(pyFiles.has('03-gates.md'), '03-gates.md was not loaded for Python work');
+  assert(!pyFiles.has('03-gates.md'), '03-gates.md should not load for an existing Python edit');
+
+  const newPy = loader.evaluate('create a new code file and verification plan', { openFiles: ['tools/new_parser.py'] });
+  assert(newPy, 'new Python evaluation returned no rules');
+  const newPyFiles = filesFor(newPy);
+  assert(newPyFiles.has('00-core.md'), '00-core.md was not loaded for new Python work');
+  assert(newPyFiles.has('02-python.md'), '02-python.md was not loaded for new .py work');
+  assert(newPyFiles.has('03-gates.md'), '03-gates.md was not loaded for new Python work');
 });
 
 test('requirements gate rejects completed state scoped to another project', () => {

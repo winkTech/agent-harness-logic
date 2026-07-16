@@ -1175,6 +1175,39 @@ define('ManagedActionEval', 'codex JSONL agent_message is parsed', () => {
   };
 });
 
+define('ManagedActionEval', 'all of the above does not trigger a false self-contained failure', () => {
+  const p = path.join(HOME, 'engine/scripts/test-hooks/agent-managed-action-eval.cjs');
+  if (!fs.existsSync(p)) return { pass: false, detail: 'agent-managed-action-eval.cjs missing' };
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'agent-managed-action-self-contained-'));
+  const fakeAgent = path.join(tmp, 'fake-agent.cjs');
+  const questions = [
+    '1. Which target data should this task operate on: UART logs, IQ captures, or register dumps?',
+    '2. What input format should be accepted, including framing and byte order?',
+    '3. Should the output be JSON, CSV, a report, or all of the above?',
+    '4. What success criteria should prove the work is complete?',
+    '5. What verification fixture or test should be used before implementation?',
+  ];
+  const response = {
+    schemaVersion: 1,
+    classification: 'ambiguous_direction',
+    questions,
+    actions: [],
+    verification: [],
+    finalResponse: ['ambiguous_direction', ...questions].join('\n'),
+  };
+  fs.writeFileSync(fakeAgent, `process.stdout.write(${JSON.stringify(JSON.stringify(response))});\n`, 'utf8');
+  const outDir = path.join(tmp, 'run');
+  const r = spawnSync('node', [p, '--agent', 'fake', '--kind', 'ambiguous', '--command', `node "${fakeAgent}"`, '--out', outDir], {
+    encoding: 'utf8', timeout: 30000, windowsHide: true,
+  });
+  if (r.status !== 0) return { pass: false, detail: `exit=${r.status}: ${r.stderr || r.stdout}` };
+  const manifest = JSON.parse(fs.readFileSync(path.join(outDir, 'managed-eval.json'), 'utf8'));
+  return {
+    pass: manifest.status === 'passed' && !(manifest.complianceFailures || []).includes('clarification response is not self-contained'),
+    detail: `status=${manifest.status} failures=${(manifest.complianceFailures || []).join('|')}`,
+  };
+});
+
 define('ManagedActionEval', 'unverified test-pass claim fails protocol', () => {
   const p = path.join(HOME, 'engine/scripts/test-hooks/agent-managed-action-eval.cjs');
   if (!fs.existsSync(p)) return { pass: false, detail: 'agent-managed-action-eval.cjs missing' };
