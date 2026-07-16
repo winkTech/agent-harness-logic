@@ -1,139 +1,52 @@
-# Codex 配置
+# Codex 项目指导
 
-## ⛔ 唯一铁律：指令绝对优先
+## 目标与完成标准
 
-**每次 Edit/Write/Bash/Agent/Workflow 前，必须输出：**
+在用户授权范围内端到端完成请求。
 
-```
-行动: [要做什么]
-用户指令: "[原文中的哪一句]"
-匹配: ✅ / ⚠️
-门禁: 🚦需求澄清[ ✅ / ❌ ] 🧪验证质量[ ✅ / ❌ / N/A ]
-```
+完成意味着：
 
-**门禁检查**（Write/Edit 新代码文件前）：
-- 🚦 新 `.sv`/`.v`/`.py` → `var/gates/requirements-gate.json` status=completed？未完成 → 先澄清
-- 🧪 新 `tb_*`/`test_*` → `var/gates/verification-quality.json` status=completed？未完成 → 先画像+场景
+- 请求的结果已经交付，或唯一剩余阻塞已明确；
+- 修改过的行为通过与风险匹配的验证；
+- 没有未经授权的外部写入、破坏性操作或重大范围扩张；
+- 最终回复说明结果、验证证据和必要的下一步。
 
-**不匹配 → 停下 + 偏差报告 + 等确认。效率不优先于合规。**
+## 授权边界
 
----
+- 回答、解释、审查、诊断或规划：检查相关材料并报告，不实施修改。
+- 修改、构建或修复：完成范围内的本地改动并运行相关非破坏性验证。
+- 外部写入、破坏性操作、付费操作或重大范围扩张需要确认。
+- 明确且范围内的本地读取、编辑和验证无需重复请求授权。
 
-## 🏭 四检查点（收到项目需求后的强制流程）
+## 协作与工具沟通
 
-> **规则不是背景噪音。每个检查点必须输出可见产物，不可跳过。**
+- 多步骤或工具密集任务在首次工具调用前，用一到两句话说明目标和第一步。
+- 后续只在阶段变化、重要发现改变计划或出现阻塞时更新，不逐条叙述例行工具调用。
+- 结构化工具动作合同与门禁状态由 Hook 写入透明度账本，无需在对话中重复用户原文或四字段检查表。
+- 动作与用户指令不匹配时，停止并报告偏差。
 
-### 检查点 0：知识库检索（设计前）
+## 任务路由与检查点
 
-```
-[0.1] Glob knowledge/**/*.sv,*.v,*.py  →  Grep 功能关键词搜 knowledge/
-[0.2] Read 最相关 2-5 个示例全文
-[0.3] Read skills/hdl-coding/SKILL.md（HDL 项目）
-[0.4] 输出「示例分析」：命名模式 / 代码结构 / 接口风格 / 位宽约定
-      + 引用来源：每个模式 → 示例文件:行号
-[0.5] 知识库无相关 → 告知用户 + 询问参考项目
-```
+- 回答、审查、诊断和规划：读取并报告；除非用户要求修改，否则不进入写入门禁。
+- 修改已有文件且正确行为明确：直接做范围内的最小修改，不要求二次确认。
+- 新代码文件、新模块/功能、接口或行为契约变化、正确行为不明的修复：进入 `rules/03-gates.md` 的需求门禁。
+- 新 TB、Testbench、测试文件或验证方案：进入 `rules/03-gates.md` 的验证质量门禁。
+- 门禁信息先从规格、现有代码、测试、Golden Model 和知识库提取；只询问仍会实质改变结果的未知项。
+- RTL、Testbench、FPGA/ASIC 架构或 HDL 审查：加载 `hdl-coding` 与 `rules/01-hdl.md`。
+- Python：加载 `rules/02-python.md`；硬件调试任务使用 `python-hardware-debug`。
+- 调试、代码审查、Git：分别加载对应 Skill 与规则；其他任务不加载 HDL 流程。
 
-### 检查点 1：设计方案（编码前）
+## 验证
 
-```
-[1.1] 输出设计方案：
-      - 接口定义：端口列表（精确到 bit）+ 时序波形
-      - 微架构：FSM 状态图 + 流水线级数 + 数据通路位宽
-      - 示例对标：每个决策 → 知识库示例:行号
-      - 规则对标：每个决策 → hdl-coding 具体条款
-[1.2] 方案有模糊 → 「待澄清清单」一次性问完
-[1.3] 用户确认 → 方可编码
-```
+- 功能验证不等于语法检查；语法、lint 或类型检查不能替代行为验证。
+- 文档或配置改动：检查结构、解析和引用完整性。
+- 局部代码改动：运行针对性测试，并补充适用的 lint、类型或构建检查。
+- RTL 行为改动：运行 lint 与针对性仿真；共享核心或高风险改动再运行相关回归。
+- 无法运行验证时，说明原因和下一最佳检查。
+- 门禁状态疑似过期时，不直接删除状态文件；报告原因并使用经过审计的 reset/repair 路径。
 
-### 检查点 2：编码自检（Write 前）
+## 停止规则
 
-```
-✅ ri_ 输入寄存 → hdl-coding §1.2    对标示例: ___
-✅ ro_ 输出寄存 → hdl-coding §1.3    对标示例: ___
-✅ 三段式FSM  → hdl-coding §4      对标示例: ___
-✅ 同步复位   → hdl-coding §1.1    对标示例: ___
-✅ 无锁存器   → hdl-coding §8      if→else, case→default
-✅ 位宽匹配   → hdl-coding §5
-```
-
-### 检查点 3：验证闭环（编码后）
-
-```
-功能验证（仿真/pytest）≠ 语法检查（vlog -lint/ruff check）
-→ 规则见 rules/03-gates.md 门禁二
-→ Hook: verification-gate.cjs（编辑后未验证 → exit 2 阻断）
-```
-
----
-
-## 规则索引
-
-| 文件 | 内容 | 加载 |
-|:-----|:-----|:-----|
-| `rules/00-core.md` | 铁律 + 四检查点 + Lint First + 验证闭环 | 始终 |
-| `rules/01-hdl.md` | HDL 五条红线 + 命名 + 模板参考 | .sv/.v |
-| `rules/02-python.md` | Python ruff + 硬件调试 | .py |
-| `rules/03-gates.md` | 两道门禁（需求澄清 + 验证质量）含触发/退出/阻断 | 始终 |
-| `rules/04-git.md` | Git 提交/分支规范 | commit/push |
-| `rules/archive/` | 低频规则（调试/安全/绘图/TDD等） | 按需 Read |
-
----
-
-## 技能
-
-| Skill | 触发 |
-|:------|:-----|
-| `/hdl-coding` | 写 RTL / TB |
-| `/debugging` | 调查 / debug |
-| `/code-review` | 审查 / review |
-| `/rag-skill` | 查知识库 |
-| `/git-expert` | git / 提交 |
-| `/start` `/handoff` | 开局 / 收尾 |
-| 完整列表 | `knowledge/references/skills-catalog.md` |
-
-## 工作流
-
-```js
-Workflow({name: 'hdl-coding-dag-workflow', args: {modules: ['模块名']}})
-Workflow({name: 'code-review-workflow', args: {files: ['文件']}})
-Workflow({name: 'architecture-review-workflow', args: {targets: ['路径']}})
-```
-
----
-
-## 🔒 验证门禁（硬约束）
-
-编辑文件后 → 标记「待验证」→ 下一非验证命令被 `exit 2` 拦截。
-**功能验证 ≠ 语法检查**。`ruff check` / `vlog -lint` 只清标记，不算验证。
-绕过：删 `var/verify-gate.json`
-
-## 🏗️ 三道闸门
-
-```
-闸门1 Write Gate  — 写入前: TB-First / ri_ro_扫描 / GM保护
-闸门2 Bash Gate   — 运行时: 安全拦截 / 验证门禁 / 资源预算
-闸门3 Commit Gate — 提交前: vlog-lint / 综合违规 / 命名 / 扇出 / ruff / GM保护
-```
-
-## 🪝 Hook 注册表
-
-| 事件 | 功能 |
-|:-----|:-----|
-| `PreToolUse(*)` | 认知层（rule-loader / memory-retrieve / frustration-detector / progress-watchdog） |
-| `PreToolUse(Bash)` | 验证门禁 + 安全门禁 + diff-size + resource-budget |
-| `PreToolUse(Edit\|Write)` | 文件保护 + 项目目录门禁 + 修复内容门禁 + 需求澄清门禁 + 验证质量门禁 |
-| `PreToolUse(Write)` | HDL-Gate + requirements-gate-guard + verification-quality-guard |
-| `PostToolUse(Edit\|Write)` | 验证门禁状态标记 |
-| `PostToolUse(Bash)` | 工具链健康分类（Vivado/xvlog/xsim 异常与 RTL 失败分离） |
-| `SessionStart` | 交接注入 + 记忆健康 + 知识库统计 + 隔离检查 |
-| `Stop` | Lint 自动 + 上下文压力预警 + 无进展失败归档 |
-
-## 🔄 上下文管理
-
-| 场景 | 操作 |
-|:-----|:-----|
-| 同问题纠正两次仍不对 | `/clear` 重开 |
-| 切换不相关任务 | 先 `/clear` |
-| 聊了很久 | `/compact` |
-| Codex 开始变笨 | `/context` → `/compact` |
+- 已有足够证据回答核心请求时停止继续检索。
+- 必要信息缺失时，只询问最小缺失项。
+- 同一方法连续失败两次后改变方法；没有安全路径时报告具体阻塞。

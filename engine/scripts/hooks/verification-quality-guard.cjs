@@ -146,7 +146,7 @@ function getMissingProfileItems(state) {
   if (!state || !state.env_profile) return REQUIRED_PROFILE_ITEMS;
   return REQUIRED_PROFILE_ITEMS.filter(d => {
     const v = state.env_profile[d.key];
-    return v !== true && v !== 'done';
+    return v !== true && v !== 'done' && v !== 'na';
   });
 }
 
@@ -154,7 +154,7 @@ function getMissingScenarios(state) {
   if (!state || !state.scenarios) return REQUIRED_SCENARIO_CATEGORIES;
   return REQUIRED_SCENARIO_CATEGORIES.filter(d => {
     const v = state.scenarios[d.key];
-    return v !== true && v !== 'done';
+    return v !== true && v !== 'done' && v !== 'na';
   });
 }
 
@@ -209,10 +209,10 @@ function checkGate(filePath) {
 ║  🧪 验证质量门禁 — VERIFICATION QUALITY GATE                     ║
 ╠${line}╣
 ║                                                                ║
-║  创建新 Testbench 前，必须先完成:                                ║
+║  创建新 Testbench 前，必须先完成或标记不适用:                    ║
 ║    A.1 项目环境画像 (8 项)                                       ║
 ║    A.2 最少场景集 (5 类)                                         ║
-║  根据 rules/16-verification-quality-gate.md:                     ║
+║  根据 rules/03-gates.md 的验证质量门禁:                          ║
 ║    「单元验证失真 → 集成爆炸 → agent 无法独立调试 → 人工救火」 ║
 ║                                                                ║
 ║  ${state && state.module ? `目标模块: ${state.module}`.padEnd(boxWidth - 4) + '║' : '暂无活跃模块记录'.padEnd(boxWidth - 4) + '║'}
@@ -224,7 +224,7 @@ ${sections}║  操作:                                                         
 ║     var/gates/verification-quality.json (status: "completed")     ║
 ║  4. 重新执行 Write                                               ║
 ║                                                                ║
-║  详细: rules/16-verification-quality-gate.md                     ║
+║  详细: rules/03-gates.md                                        ║
 ║  证据: memory/learnings/verification-quality-wifi-evidence.md    ║
 ╚${line}╝
 `);

@@ -435,7 +435,8 @@ function clarificationStatus(plan) {
     /^(?:\s*[*_`]*q?[*_`]*\s*)?[1-5]\s*(?:[.)]|-|--|:|\u2014)\s+.*\?/i.test(question)
   ));
   if (numberedQuestions.length !== 5) failures.push(`expected exactly five numbered clarification questions, got ${numberedQuestions.length}`);
-  if (includesAny(response, ['above', 'previous questions', 'earlier questions'])) {
+  const questionBackReference = /\b(?:above|previous|earlier)\s+questions\b|\bquestions\s+(?:above|previous|earlier)\b/i;
+  if (questionBackReference.test(response)) {
     failures.push('clarification response is not self-contained');
   }
   return { ok: failures.length === 0, failures, numberedQuestions: numberedQuestions.length };

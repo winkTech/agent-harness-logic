@@ -178,7 +178,7 @@ function checkGate(filePath) {
 ╠${line}╣
 ║                                                                ║
 ║  创建新代码文件前，必须先完成六维需求澄清。                      ║
-║  根据 rules/15-requirements-gate.md:                             ║
+║  根据 rules/03-gates.md 的需求澄清门禁:                          ║
 ║    「认知边界不清晰 → 代码可靠性不可能高」                      ║
 ║                                                                ║
 ║  ${state && state.task ? `当前任务: ${state.task}`.padEnd(boxWidth - 4) + '║' : '暂无活跃任务记录'.padEnd(boxWidth - 4) + '║'}
@@ -192,7 +192,7 @@ ${pendingList.split('\n').map(l => `║  ${l}`.padEnd(boxWidth + 1) + '║').joi
 ║     var/gates/requirements-gate.json (status: "completed")       ║
 ║  3. 重新执行 Write/Edit                                         ║
 ║                                                                ║
-║  详细: rules/15-requirements-gate.md                             ║
+║  详细: rules/03-gates.md                                        ║
 ║  证据: memory/learnings/requirements-gate-wifi-evidence.md       ║
 ╚${line}╝
 `);
