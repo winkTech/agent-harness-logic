@@ -83,6 +83,22 @@ function isTbFileName(fileName) {
   return /(?:^tb_|_tb\.|testbench|test\.sv)/i.test(fileName || '');
 }
 
+// 标准总线协议信号豁免 ri_/ro_ 前缀
+// 依据 rules/01-hdl.md §命名例外 / SKILL.md §2: AXI/Wishbone/JTAG 保持协议原名。
+const BUS_SIGNAL_RE = /^[sm]_axi(s)?_|_axi(s)?_|^wb_|_wb_|^(tck|tms|tdi|tdo|trst)$/i;
+const CLK_RST_RE = /^(i_)?(clk|rst|clock|reset)/i;
+function isBusSignal(name) { return BUS_SIGNAL_RE.test(String(name || '')); }
+function isClkRstName(name) { return CLK_RST_RE.test(String(name || '')); }
+// 端口豁免 ri_ (输入): 时钟/复位 + 标准总线协议
+function isExemptInputPort(name) { return isClkRstName(name) || isBusSignal(name); }
+
+// 去除 function/task 体, 避免其形参被误当作模块端口
+function stripFunctionTaskBodies(text) {
+  return String(text || '')
+    .replace(/\bfunction\b[\s\S]*?\bendfunction\b/g, ' ')
+    .replace(/\btask\b[\s\S]*?\bendtask\b/g, ' ');
+}
+
 const NAMING_CHECKS = [
   {
     check: (line, fname, fpath) => {
@@ -149,6 +165,16 @@ function findTbForModule(fp) {
   // 从文件路径推断模块名和对应的 TB 路径
   const normalized = fp.replace(/\\/g, '/');
 
+  // engineering-assets CBB 包布局: <asset>/rtl/<file>.sv 的 TB 在 <asset>/tb/ 或同级
+  {
+    const dir = path.dirname(fp);
+    const base = path.basename(fp).replace(/\.(sv|v)$/i, '');
+    for (const c of [
+      path.join(dir, `tb_${base}.sv`), path.join(dir, `${base}_tb.sv`),
+      path.join(dir, '..', 'tb', `tb_${base}.sv`), path.join(dir, '..', 'tb', `${base}_tb.sv`),
+    ]) { if (fs.existsSync(c)) return c; }
+  }
+
   // 匹配 src 目录中的模块路径: .../01_src/00_hdl/<module>/<file>.sv
   const srcMatch = normalized.match(/(?:^|\/)(?:01_src\/00_hdl|src\/hdl|rtl)\/([^/]+)\/([^/]+)\.(sv|v)$/i);
   if (!srcMatch) return null;
@@ -194,12 +220,12 @@ function checkNamingViolations(content, fileName, filePath) {
   const violations = [];
   for (const port of extractDirectedPorts(content)) {
     if (port.direction === 'input' && !port.name.startsWith('ri_')) {
-      const isClkRst = /^(i_)?(clk|rst|clock|reset)/i.test(port.name);
-      if (!isClkRst) {
+      const isClkRst = isClkRstName(port.name);
+      if (!isClkRst && !isBusSignal(port.name)) {
         violations.push(`杈撳叆淇″彿 "${port.name}" 搴斾互 ri_ 寮€澶?(declaration: ${port.declaration})`);
       }
     }
-    if (port.direction === 'output' && !port.name.startsWith('ro_')) {
+    if (port.direction === 'output' && !port.name.startsWith('ro_') && !isBusSignal(port.name)) {
       violations.push(`杈撳嚭淇″彿 "${port.name}" 搴斾互 ro_ 寮€澶?(declaration: ${port.declaration})`);
     }
   }
@@ -235,7 +261,7 @@ function namesFromPortTail(tail) {
 }
 
 function extractDirectedPorts(content) {
-  const text = stripComments(content);
+  const text = stripFunctionTaskBodies(stripComments(content));
   const matches = [...text.matchAll(/\b(input|output)\b/g)];
   const ports = [];
 
@@ -268,14 +294,14 @@ function autoFixNaming(fp) {
 
       // 修复 output 缺 ro_
       let m = line.match(/^(\s*output\s+(reg|logic|wire)?\s*(\[.*?\]\s+)?)([a-z]\w*)/);
-      if (m && !m[4].startsWith('ro_')) {
+      if (m && !m[4].startsWith('ro_') && !isBusSignal(m[4])) {
         fixed++;
         return m[1] + 'ro_' + m[4];
       }
 
       // 修复 input 缺 ri_
       m = line.match(/^(\s*input\s+(reg|logic|wire)?\s*(\[.*?\]\s+)?)([a-z]\w*)/);
-      if (m && !m[4].startsWith('ri_')) {
+      if (m && !m[4].startsWith('ri_') && !isExemptInputPort(m[4])) {
         fixed++;
         return m[1] + 'ri_' + m[4];
       }
