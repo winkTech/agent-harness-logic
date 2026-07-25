@@ -1,5 +1,6 @@
 # ModelSim 验证 do 脚本 — channel_est_top
-# 用法: vsim -c -do run.do
+# 用法（务必从 build 目录启动，否则 ModelSim 的启动残桩会落进资产包）:
+#   cd <ROOT>/var/build/<uid> && vsim -c -do <PKG>/run.do
 #
 # 库级约定（治理规范 §5.5）: 向量权威位置 = models/<domain>/<algo>/vectors/,
 # 由本脚本经 +VEC_DIR 注入; TB 内不得硬编码绝对路径或指向包外的相对路径。
