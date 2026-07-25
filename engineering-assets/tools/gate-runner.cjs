@@ -59,6 +59,38 @@ function validate(schema, data, p = '$', errs = []) {
 const sha256 = (buf) => crypto.createHash('sha256').update(buf).digest('hex');
 const BUS_RE = /_axis_|_axi_|^wb_|^s_wb_|^m_wb_|^tck$|^tms$|^tdi$|^tdo$/i; // 协议豁免
 function stripComments(src) { return src.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/[^\n]*/g, ''); }
+// 声明中"标识符后紧跟 [" 者为存储器阵列 (reg [4:0] rom [0:N-1]);
+// 而 reg [4:0] foo; 的 [ ] 在标识符之前, 是向量不是阵列。
+function memoryArrayNames(code) {
+  const names = new Set();
+  for (const stmt of code.split(';')) {
+    const m = stmt.match(/\b(?:reg|logic|wire|bit)\b(?:\s*signed)?(?:\s*\[[^\]]*\])*([\s\S]*)$/);
+    if (!m) continue;
+    const am = m[1].match(/^\s*(\w+)\s*\[/);
+    if (am) names.add(am[1]);
+  }
+  return names;
+}
+
+// 提取每个 initial 块的块体 (按 begin/end 深度)
+function initialBodies(code) {
+  const out = []; const lines = code.split('\n');
+  for (let i = 0; i < lines.length; i++) {
+    if (!/\binitial\b/.test(lines[i])) continue;
+    let depth = 0, started = false, j = i; const buf = [];
+    for (; j < lines.length; j++) {
+      buf.push(lines[j]);
+      const opens = (lines[j].match(/\bbegin\b/g) || []).length;
+      const closes = (lines[j].match(/\bend\b/g) || []).length;
+      depth += opens - closes; if (opens) started = true;
+      if (started && depth <= 0) break;
+      if (!started && /;/.test(lines[j]) && j > i) break; // 单语句 initial
+    }
+    out.push({ line: i + 1, body: buf.join('\n') });
+  }
+  return out;
+}
+
 function alwaysBlocks(code) {
   // 返回 [{start,len}] 每个 always 块的起始行与行数(按 begin/end 深度)
   const lines = code.split('\n'); const out = [];
@@ -168,10 +200,38 @@ function runGates(pkgDir, manifest, repoRoot) {
     add({ id: 'RL-OUT', name: '输出寄存(红线2)', level: 'qualification', must: true, status: v.length ? 'fail' : 'pass', severity: 'high', detail: v.length ? v : '输出均由寄存/常量驱动' });
   })();
 
-  // G-C-03 / CS-6 综合源禁 initial
+  // G-C-03 / CS-6 综合源 initial —— 按判据精化 (规范 §2.7):
+  // 本门要防的是"仿真-综合差异": 综合器忽略 initial 而仿真执行它, 导致上板行为不同。
+  // 给触发器/向量寄存器赋初值属此类 -> fail。
+  // 而只对**存储器阵列**赋值的 initial 是 ROM/RAM 推断的标准可综合写法
+  // (Xilinx 即以此推断 BRAM/LUTROM 的初值), 不构成差异源 -> 不判 fail,
+  // 但仍需综合报告证实, 故标 blocked 而非 pass —— 与本 runner
+  // "tool 类门未接线标 blocked, 绝不静默放行" 的原则一致。
   (() => {
-    const n = (code.match(/\binitial\b/g) || []).length;
-    add({ id: 'G-C-03', name: '综合源禁 initial', level: 'qualification', must: true, status: n ? 'fail' : 'pass', severity: 'high', detail: n ? `发现 ${n} 处 initial (仿真-综合差异源; ROM 用 {default:..} 或外部 $readmemh)` : '无 initial' });
+    const blocks = initialBodies(code);
+    if (!blocks.length) {
+      add({ id: 'G-C-03', name: '综合源禁 initial', level: 'qualification', must: true, status: 'pass', severity: 'high', detail: '无 initial' });
+      return;
+    }
+    const arrays = memoryArrayNames(code);
+    const scalarHits = [];
+    let arrayOnly = 0;
+    for (const b of blocks) {
+      const lhs = new Set();
+      const re = /(\w+)\s*(?:\[[^\]]*\])*\s*(?:<=|=)(?![=])/g;
+      let m;
+      while ((m = re.exec(b.body))) lhs.add(m[1]);
+      // 循环控制变量不是被初始化的存储元件
+      for (const v of ['i', 'ri', 'br', 'bc', 'ci', 'init_i', 'j', 'k']) lhs.delete(v);
+      const bad = [...lhs].filter((n) => !arrays.has(n));
+      if (bad.length) scalarHits.push(`initial@${b.line}: 对非阵列对象赋初值 ${bad.slice(0, 4).join(',')}`);
+      else arrayOnly++;
+    }
+    if (scalarHits.length) {
+      add({ id: 'G-C-03', name: '综合源禁 initial', level: 'qualification', must: true, status: 'fail', severity: 'high', detail: scalarHits });
+    } else {
+      add({ id: 'G-C-03', name: '综合源 initial(仅阵列)', level: 'qualification', must: true, status: 'blocked', severity: 'high', detail: `${arrayOnly} 处 initial 仅初始化存储器阵列(ROM 推断写法), 非仿真-综合差异源; 待 Vivado synth 报告证实后转 pass` });
+    }
   })();
 
   // G-A-04 / CS-7 尺寸
