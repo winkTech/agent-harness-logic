@@ -287,7 +287,7 @@ Layer 3: 系统测试
 
 ```matlab
 % 步骤 1: 生成 RTL 测试向量
-run('golden_model/gen_rtl_test_vectors.m');
+run('engineering-assets/models/comm/ldpc/gen_rtl_test_vectors.m');
 % → tb_llr_input_N.hex, tb_expected_output_N.hex
 
 % 步骤 2: RTL 仿真 (ModelSim)

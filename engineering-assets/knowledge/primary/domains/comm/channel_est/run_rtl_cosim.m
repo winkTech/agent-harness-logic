@@ -235,8 +235,16 @@ function status = run_simulation(rtl_dir, ~)
     if vsim_ok
         fprintf('  检测到 ModelSim\n');
         old_dir = cd(rtl_dir);
-        cmd = 'vsim -c -novopt -suppress 12110 +VEC_DIR=../../golden_model/vectors/ ' ...
-            + '-do "vsim work.tb_chEst_cosim; run -all; quit"';
+        % 向量权威位置 = models/comm/channel_est/vectors/（治理规范 §5.5 V-1）。
+        % 原值 ../../golden_model/vectors/ 指向的目录从未存在, 该 cosim 一直是死路径。
+        % 由 root_dir 上溯到 engineering-assets 再下行, 避免脆弱的多级相对路径:
+        %   root_dir = <ea>/knowledge/primary/domains/comm/channel_est  → 上溯 5 级
+        % 该目录当前为空(向量未由 MATLAB 导出), TB 会 fail-closed —— 这是正确行为:
+        % 向量到位前不得产出可作门禁证据的 PASS。
+        vec_dir = fullfile(root_dir, '..', '..', '..', '..', '..', ...
+                           'models', 'comm', 'channel_est', 'vectors');
+        cmd = ['vsim -c -novopt -suppress 12110 +VEC_DIR=' strrep(vec_dir, '\', '/') '/ ' ...
+               '-do "vsim work.tb_chEst_cosim; run -all; quit"'];
         fprintf('  执行: %s\n', cmd);
         [run_code, ~] = system(char(cmd));
         cd(old_dir);

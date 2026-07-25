@@ -31,12 +31,12 @@ tags: [comm, rrc, report, fpga]
 | 阶段 | 文件 | 说明 |
 |:----:|------|------|
 | 1 | `algorithm_spec.md` | 算法规格书 |
-| 2 | `golden_model/config.m` | 系统配置 |
-| 2 | `golden_model/rrc_coeff_gen.m` | RRC 系数生成 |
-| 2 | `golden_model/rrc_pulse_shaping.m` | 脉冲成形函数 |
-| 2 | `golden_model/run_rrc_sim.m` | 主仿真脚本 |
-| 2 | `golden_model/run_all_tests.m` | 回归测试 |
-| 2 | `golden_model/tests/` (5 files) | 测试用例 |
+| 2 | `engineering-assets/models/comm/rrc/config.m` | 系统配置 |
+| 2 | `engineering-assets/models/comm/rrc/rrc_coeff_gen.m` | RRC 系数生成 |
+| 2 | `engineering-assets/models/comm/rrc/rrc_pulse_shaping.m` | 脉冲成形函数 |
+| 2 | `engineering-assets/models/comm/rrc/run_rrc_sim.m` | 主仿真脚本 |
+| 2 | `engineering-assets/models/comm/rrc/run_all_tests.m` | 回归测试 |
+| 2 | `engineering-assets/models/comm/rrc/tests/` (5 files) | 测试用例 |
 | 3 | `fixed_point_report.md` | 定点量化报告 |
 | 4 | `resource_estimate.md` | 资源评估报告 |
 | 5 | `rtl/src/rrc_top.sv` | 顶层模块 |

@@ -58,7 +58,7 @@ $$x[n] = \frac{1}{\sqrt{N}} \sum_{k=0}^{N-1} X_k \cdot e^{j2\pi kn/N}, \quad n=0
 
 ### 3.1 模型结构
 
-`golden_model/` 包含完整 OFDM 收发链路:
+`engineering-assets/models/comm/ofdm/` 包含完整 OFDM 收发链路:
 
 | 文件 | 功能 |
 |------|------|
@@ -219,7 +219,7 @@ MATLAB 浮点模型 → 生成测试向量 (.bin)
 | 交付物 | 位置 |
 |--------|------|
 | 算法规格书 | `algorithm_spec.md` |
-| MATLAB 黄金模型 | `golden_model/` (11个文件) |
+| MATLAB 黄金模型 | `engineering-assets/models/comm/ofdm/` (11个文件) |
 | 定点量化报告 | `fixed_point_report.md` |
 | 资源评估报告 | `resource_estimate.md` |
 | RTL 源码 | `rtl/src/` (4个SV模块) |
