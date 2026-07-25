@@ -6,7 +6,7 @@
 # 让残桩落在已 gitignore 的构建区, 而不是污染资产包。
 # (命令以 vsim 开头, 被 verification-gate 识别为功能验证)
 set ROOT  {C:/Users/Lihan/.claude/engineering-assets}
-set PKG   "$ROOT/incubator/qualification/rrc_polyphase_fir"
+set PKG   "$ROOT/cbb/rrc_polyphase_fir"
 set BUILD "$ROOT/var/build/rrc_pilot"
 # 库级约定（治理规范 §5.5）：向量权威位置 = models/<domain>/<algo>/vectors/，
 # 由 do 脚本经 +VEC_DIR 注入，TB 内不得硬编码绝对路径或指向包外的相对路径。
@@ -14,6 +14,7 @@ set VEC   "$ROOT/models/comm/rrc/vectors/"
 set EVID  "$ROOT/var/gates/pg/rrc_polyphase_fir"
 set RPT   "$EVID/alignment-report.json"
 file mkdir $EVID
+file mkdir $EVID/stability
 
 file mkdir $BUILD
 set LAUNCH [pwd]
@@ -28,6 +29,6 @@ echo "=========== VLOG LINT ==========="
 vlog -sv -work work "$PKG/rtl/rrc_polyphase_fir.sv" "$PKG/tb/tb_rrc_polyphase_fir.sv"
 
 echo "=========== VSIM RUN ==========="
-vsim -c -quiet +VEC_DIR=$VEC +RPT_F=$RPT work.tb_rrc_polyphase_fir
+vsim -c -quiet +VEC_DIR=$VEC +RPT_F=$RPT +EVID_DIR=$EVID/ work.tb_rrc_polyphase_fir
 run -all
 quit -f

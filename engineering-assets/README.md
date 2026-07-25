@@ -39,8 +39,8 @@ node tools/gate-runner.cjs <asset-package-dir> --repo-root ..
 
 ## 参考样板
 
-**`incubator/qualification/rrc_polyphase_fir/`** 是库内的 CBB 参考样板：
-15 道 MUST 门中 14 道已过（仅余具名签字），其 `README.md` 演示了一个生产级资产
+**`cbb/rrc_polyphase_fir/`** 是库内首个 certified 资产，也是 CBB 参考样板：
+18 道 MUST 门全绿，其 `README.md` 演示了一个生产级资产
 应当交付什么 —— 数值契约、准确接口、**实测**时序/资源包络、验证证据及其边界、
 三条命令的证据复现、以及明确列出的已知限制。新建资产建议照该结构组织。
 
@@ -50,7 +50,7 @@ node tools/gate-runner.cjs <asset-package-dir> --repo-root ..
 
 | 资产 | 达到级别 | 阻塞门 |
 |---|---|---|
-| `rrc_polyphase_fir` | qualification | `G-SIGN-01`（待签字） |
+| `cbb/rrc_polyphase_fir` | **certified** | — (18/18 全绿, signoff.by=lihan) |
 | `ldpc_codec` | qualification | `G-B-03`（译码器重写中，见包内 `ARCHITECTURE-GAP.md`）、`G-SIGN-01` |
 | `ofdm_tx_top` / `channel_est_top` / `sync_top` | reference | `G-A-02` 命名红线（且均违反红线 3 复位极性，缺可用验证） |
 

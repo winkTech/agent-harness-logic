@@ -2,10 +2,10 @@
   "schema_version": "1.0",
   "asset_uid": "rrc_polyphase_fir",
   "name": "rrc_polyphase_fir",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "owner": "lihan",
   "maturity": {
-    "level": "qualification",
+    "level": "certified",
     "evidence_ref": "engineering-assets/var/gates/pg/rrc_polyphase_fir/"
   },
   "requirement_ref": "engineering-assets/knowledge/primary/domains/comm/rrc/algorithm_spec.md",
@@ -104,12 +104,12 @@
     {
       "path": "rtl/rrc_polyphase_fir.sv",
       "role": "rtl",
-      "sha256": "aac46124e02a5d13ee70ac1a906f578b38e15eac373de7d21274bfb57b24bc93"
+      "sha256": "9632a42a8e8734e57bd9f961ebb4ec74e4165ad1b1d3b3ac75951307cce5abd2"
     },
     {
       "path": "tb/tb_rrc_polyphase_fir.sv",
       "role": "tb",
-      "sha256": "6eaca3a5f0d1dfc2bf74460737031e1613f61eace18a639dce0c6a5eeebe7eb9"
+      "sha256": "93c7763b272274e047a1db55a4fa8e28dd012b8a967824d10a6a446833225068"
     },
     {
       "path": "constraints/rrc_polyphase_fir.xdc",
@@ -120,14 +120,55 @@
   ],
   "generality": {
     "param_space": [
-      { "name": "DATA_W",  "values": [16], "support": true },
-      { "name": "COEFF_W", "values": [16], "support": true },
-      { "name": "ACC_W",   "values": [38], "support": true },
-      { "name": "SPS",     "values": [4],  "support": true },
-      { "name": "TAPS_PP", "values": [9],  "support": true }
+      {
+        "name": "DATA_W",
+        "values": [
+          16
+        ],
+        "support": true
+      },
+      {
+        "name": "COEFF_W",
+        "values": [
+          16
+        ],
+        "support": true
+      },
+      {
+        "name": "ACC_W",
+        "values": [
+          38
+        ],
+        "support": true
+      },
+      {
+        "name": "SPS",
+        "values": [
+          4
+        ],
+        "support": true
+      },
+      {
+        "name": "TAPS_PP",
+        "values": [
+          9
+        ],
+        "support": true
+      }
     ],
     "note": "参数表与 rtl/rrc_polyphase_fir.sv 的实际 parameter 一致。原先列的 SPAN 在 RTL 中不存在(span=8 体现为 TAPS_PP=9), 且漏列 COEFF_W/ACC_W —— 已按源码更正。仅默认值经过验证, 改参数须重跑全部证据。"
   },
   "waivers": [],
-  "superseded_by": null
+  "superseded_by": null,
+  "signoff": {
+    "by": "lihan",
+    "at": "2026-07-25",
+    "scope": [
+      "证据已复核: timing-summary.rpt / utilization.rpt / alignment-report.json / reset-sim.json / cdc-report.json / stability/*.json",
+      "已接受限制: DSP 零裕量(24/24)",
+      "已接受限制: 综合级 hold 未收敛(-0.163ns), 上板前须以实现后时序为准",
+      "已接受限制: 仅默认参数经验证",
+      "已接受限制: cdc_tool=na — 单时钟域, 仅结构扫描, 未经具名 CDC 工具"
+    ]
+  }
 }

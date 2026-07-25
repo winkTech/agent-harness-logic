@@ -67,9 +67,26 @@ module rrc_polyphase_fir #(
     //==========================================================================
     data_t sym_buf_i[0:TAPS_PP-1];
     data_t sym_buf_q[0:TAPS_PP-1];
-    logic  w_accept;
+    //==========================================================================
+    // AXI4-Stream 流控 (0.4.0 新增)
+    //
+    // 0.3.0 之前: s_axis_tready 恒 1 且 m_axis_tready 完全不参与节流 —— 该核
+    // 对两侧都不做流控, 集成方必须自行保证"输入间隔 >= 4 拍且下游无条件收下
+    // 4x 采样率输出", 这使 G-C-05 的背压子结果无法通过, 也不符合 AXI 语义。
+    //
+    // 现在:
+    //   入口 — 仅在空闲(上一符号的 4 个相位算完)且未被下游堵住时接收;
+    //   出口 — 下游未就绪且当前输出有效时, 用 w_en 冻结整条数据通路,
+    //          数据与 tvalid 保持不变直到被接收 (AXI 要求 valid 不得撤回)。
+    //==========================================================================
+    logic [2:0] r_slots;          // 剩余计算槽 (声明前置: 入口 ready 依赖它)
+    logic       w_stall, w_en;
+    logic       w_accept;
+
+    assign w_stall       = m_axis_tvalid && !m_axis_tready;
+    assign w_en          = !w_stall;
+    assign s_axis_tready = (r_slots == '0) && w_en;
     assign w_accept      = s_axis_tvalid && s_axis_tready;
-    assign s_axis_tready = 1'b1;
 
     always_ff @(posedge i_clk) begin
         if (i_rst) begin
@@ -90,7 +107,6 @@ module rrc_polyphase_fir #(
     //==========================================================================
     // 相位调度: 接收后调度 4 个计算槽 (缓存移位后逐相计算, 停止即静默)
     //==========================================================================
-    logic [2:0]             r_slots;
     logic [$clog2(SPS)-1:0] r_phase;
     logic                   w_slot_go;
     assign w_slot_go = (r_slots != 0);
@@ -102,7 +118,7 @@ module rrc_polyphase_fir #(
         end else if (w_accept) begin
             r_slots <= 3'd4;           // 下一拍起计算相 0..3
             r_phase <= '0;
-        end else if (w_slot_go) begin
+        end else if (w_en && w_slot_go) begin
             r_slots <= r_slots - 3'd1;
             r_phase <= r_phase + 1'b1;
         end
@@ -132,7 +148,7 @@ module rrc_polyphase_fir #(
                 mac_i[k] <= '0;
                 mac_q[k] <= '0;
             end
-        end else if (w_slot_go) begin
+        end else if (w_en && w_slot_go) begin
             for (int k = 0; k < TAPS_PP; k++) begin
                 mac_i[k] <= acc_t'(sym_buf_i[k]) * acc_t'(H[r_phase][k]);
                 mac_q[k] <= acc_t'(sym_buf_q[k]) * acc_t'(H[r_phase][k]);
@@ -147,7 +163,7 @@ module rrc_polyphase_fir #(
                 addA_i[k] <= '0;
                 addA_q[k] <= '0;
             end
-        end else begin
+        end else if (w_en) begin
             addA_i[0] <= mac_i[0] + mac_i[1];
             addA_i[1] <= mac_i[2] + mac_i[3];
             addA_i[2] <= mac_i[4] + mac_i[5];
@@ -168,7 +184,7 @@ module rrc_polyphase_fir #(
                 addB_i[k] <= '0;
                 addB_q[k] <= '0;
             end
-        end else begin
+        end else if (w_en) begin
             addB_i[0] <= addA_i[0] + addA_i[1];
             addB_i[1] <= addA_i[2] + addA_i[3];
             addB_i[2] <= addA_i[4];
@@ -183,7 +199,7 @@ module rrc_polyphase_fir #(
         if (i_rst) begin
             sum_i <= '0;
             sum_q <= '0;
-        end else begin
+        end else if (w_en) begin
             sum_i <= (addB_i[0] + addB_i[1]) + addB_i[2];
             sum_q <= (addB_q[0] + addB_q[1]) + addB_q[2];
         end
@@ -196,7 +212,7 @@ module rrc_polyphase_fir #(
             r_mag_q <= '0;
             r_neg_i <= 1'b0;
             r_neg_q <= 1'b0;
-        end else begin
+        end else if (w_en) begin
             r_mag_i <= round_mag(sum_i);
             r_mag_q <= round_mag(sum_q);
             r_neg_i <= sum_i[ACC_W-1];
@@ -209,7 +225,7 @@ module rrc_polyphase_fir #(
         if (i_rst) begin
             ro_i <= '0;
             ro_q <= '0;
-        end else begin
+        end else if (w_en) begin
             ro_i <= sat_sign(r_mag_i, r_neg_i);
             ro_q <= sat_sign(r_mag_q, r_neg_q);
         end
@@ -224,7 +240,7 @@ module rrc_polyphase_fir #(
     always_ff @(posedge i_clk) begin
         if (i_rst)
             r_vpipe <= '0;
-        else
+        else if (w_en)
             r_vpipe <= {r_vpipe[4:0], w_slot_go};
     end
 

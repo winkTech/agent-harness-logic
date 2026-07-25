@@ -483,6 +483,82 @@ function runGates(pkgDir, manifest, repoRoot) {
 
     try { fs.mkdirSync(pgDir, { recursive: true }); fs.writeFileSync(path.join(pgDir, 'envelope-check.json'), `${JSON.stringify(envelope, null, 2)}\n`, 'utf8'); } catch {}
   })();
+  // G-C-04 / G-C-05 / G-GATE-01 —— 规范 §5 晋级 certified 要求 G-C-01..05 全绿,
+  // 但此前 runner 只实现了 G-C-01/02/03, 另两道与证据齐备门**根本没有出现在
+  // 结果里**。缺席比 blocked 更危险: 资产看起来"只差签字"就能被推上 certified。
+  // 现按 fail-closed 补齐 —— 无证据即 blocked, 绝不静默放行。
+  (() => {
+    const pgDir = path.join(repoRoot, 'engineering-assets', 'var', 'gates', 'pg', manifest.asset_uid || 'x');
+    const has = (rel) => fs.existsSync(path.join(pgDir, rel));
+
+    // CDC 结构扫描 (规范 §2.7: 无 CDC 工具时降级为结构扫描并标 cdc_tool=na,
+    // **禁止在无工具时声称 clean**)。单时钟域资产由此得到可复核的报告。
+    if (!has('cdc-report.json')) {
+      const clocks = new Set();
+      for (const m of code.matchAll(/@\s*\(\s*(?:posedge|negedge)\s+([A-Za-z_]\w*)/g)) clocks.add(m[1]);
+      const declared = ((manifest.clock || {}).name || '').trim();
+      const rpt = {
+        id: 'G-C-04.cdc',
+        cdc_tool: 'na',
+        method: 'structural-scan (gate-runner)',
+        note: '无具名 CDC 工具, 按规范降级为结构扫描; 不声称 clean, 仅陈述所扫结果',
+        clocks_found: [...clocks],
+        declared_clock: declared || null,
+        single_clock_domain: clocks.size <= 1,
+        cross_clock_paths_detected: clocks.size <= 1 ? 0 : null,
+        pass: clocks.size <= 1 && (!declared || clocks.has(declared)),
+      };
+      try { fs.mkdirSync(pgDir, { recursive: true }); fs.writeFileSync(path.join(pgDir, 'cdc-report.json'), `${JSON.stringify(rpt, null, 2)}\n`, 'utf8'); } catch {}
+    }
+
+    // G-C-04 复位/CDC 健壮
+    const missing04 = ['reset-sim.json', 'cdc-report.json'].filter((f) => !has(f));
+    add({
+      id: 'G-C-04', name: '复位/CDC 健壮', level: 'certified', must: true,
+      status: missing04.length ? 'blocked' : 'pass', severity: 'high',
+      detail: missing04.length
+        ? `缺证据 ${missing04.join(', ')} — 需 TB 产出逐寄存器复位比对与 CDC 报告(单时钟域可标 cdc_tool=na 但须出报告)`
+        : '复位逐寄存器比对与 CDC 报告齐备',
+    });
+
+    // G-C-05 边界/压力/回归 — 四个具名子结果的机器 AND, 不接受聚合散文
+    const SUBS = ['boundary', 'stress', 'regression', 'backpressure'];
+    const sub = SUBS.map((s) => {
+      const rel = path.join('stability', `${s}.json`);
+      if (!has(rel)) return { s, status: 'blocked', detail: '缺证据' };
+      try {
+        const j = JSON.parse(fs.readFileSync(path.join(pgDir, rel), 'utf8'));
+        return { s, status: j.pass === true ? 'pass' : 'fail', detail: j.reason || (j.pass === true ? 'pass' : 'fail') };
+      } catch { return { s, status: 'fail', detail: '非法 JSON' }; }
+    });
+    const bad05 = sub.filter((x) => x.status === 'fail');
+    const blk05 = sub.filter((x) => x.status === 'blocked');
+    add({
+      id: 'G-C-05', name: '边界/压力/回归', level: 'certified', must: true,
+      status: bad05.length ? 'fail' : blk05.length ? 'blocked' : 'pass', severity: 'high',
+      detail: bad05.length ? `子结果失败: ${bad05.map((x) => `${x.s}(${x.detail})`).join(', ')}`
+        : blk05.length ? `缺子结果: ${blk05.map((x) => x.s).join(', ')} — 须为 stability/<name>.json 且 pass=true`
+          : '四个子结果均 pass',
+    });
+
+    // G-GATE-01 证据齐备 — 判 pass 的 tool 类门必须有对应产物文件
+    const REQ = [
+      { f: 'timing-summary.rpt', for: 'G-C-01' },
+      { f: 'utilization.rpt', for: 'G-C-02' },
+      { f: 'envelope-check.json', for: 'G-C-01/02' },
+      { f: 'synth.log', for: 'G-C-03' },
+      { f: 'alignment-report.json', for: 'G-B-03' },
+    ];
+    const missingEv = REQ.filter((r) => !has(r.f));
+    add({
+      id: 'G-GATE-01', name: '证据齐备', level: 'certified', must: true,
+      status: missingEv.length ? 'blocked' : 'pass', severity: 'high',
+      detail: missingEv.length
+        ? `缺产物: ${missingEv.map((r) => `${r.f}(${r.for})`).join(', ')}`
+        : `${REQ.length} 项证据产物齐备`,
+    });
+  })();
+
   add({ id: 'G-SIGN-01', name: '具名签字+面板', level: 'certified', must: true, status: manifest.signoff ? 'pass' : 'blocked', severity: 'high', detail: manifest.signoff ? `signoff.by=${manifest.signoff.by}` : '无 signoff (认证前置)' });
 
   return gates;
