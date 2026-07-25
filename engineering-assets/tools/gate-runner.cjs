@@ -125,8 +125,16 @@ function runGates(pkgDir, manifest, repoRoot) {
     for (const s of manifest.sources) {
       const abs = path.join(pkgDir, s.path);
       if (!fs.existsSync(abs)) { bad.push(`${s.path}: 文件缺失`); continue; }
-      const actual = sha256(fs.readFileSync(abs));
-      if (actual !== s.sha256) bad.push(`${s.path}: sha256 不符 (声明 ${s.sha256.slice(0, 12)}… 实为 ${actual.slice(0, 12)}…)`);
+      // 源身份按 **LF 归一内容** 判定, 不按检出字节。
+      // 理由: git 在 Windows 检出为 CRLF、Linux 为 LF, 同一 commit 的同一文件
+      // 原始字节哈希随平台而变 —— 按原始字节比对会让 CS-2 在 Windows 上整体误报。
+      // 归一只吸收行结束符差异, 不掩盖任何实质内容改动。
+      const buf = fs.readFileSync(abs);
+      const actual = sha256(buf);
+      const normalized = sha256(Buffer.from(buf.toString('utf8').replace(/\r\n/g, '\n'), 'utf8'));
+      if (actual !== s.sha256 && normalized !== s.sha256) {
+        bad.push(`${s.path}: sha256 不符 (声明 ${s.sha256.slice(0, 12)}… 实为 ${actual.slice(0, 12)}… / LF 归一 ${normalized.slice(0, 12)}…)`);
+      }
     }
     const rtlDir = path.join(pkgDir, 'rtl');
     const declared = new Set(manifest.sources.map((s) => path.resolve(path.join(pkgDir, s.path))));
@@ -229,9 +237,39 @@ function runGates(pkgDir, manifest, repoRoot) {
     }
     if (scalarHits.length) {
       add({ id: 'G-C-03', name: '综合源禁 initial', level: 'qualification', must: true, status: 'fail', severity: 'high', detail: scalarHits });
-    } else {
-      add({ id: 'G-C-03', name: '综合源 initial(仅阵列)', level: 'qualification', must: true, status: 'blocked', severity: 'high', detail: `${arrayOnly} 处 initial 仅初始化存储器阵列(ROM 推断写法), 非仿真-综合差异源; 待 Vivado synth 报告证实后转 pass` });
+      return;
     }
+    // 仅阵列初始化: 由 Vivado synth 日志裁决 —— 综合器是否真的采纳了这些初值。
+    // [Synth 8-6896] 明示 initial 块被整体忽略 => 仿真-综合差异确凿, FAIL。
+    // [Synth 8-3848] 网络无驱动源, 作为后果佐证一并列出。
+    const synthLog = path.join(repoRoot, 'engineering-assets', 'var', 'gates', 'pg', manifest.asset_uid || 'x', 'synth.log');
+    if (!fs.existsSync(synthLog)) {
+      add({ id: 'G-C-03', name: '综合源 initial(仅阵列)', level: 'qualification', must: true, status: 'blocked', severity: 'high', detail: `${arrayOnly} 处 initial 仅初始化存储器阵列(ROM 推断写法), 非仿真-综合差异源; 待 Vivado synth 报告证实后转 pass (缺 synth.log)` });
+      return;
+    }
+    const lines = fs.readFileSync(synthLog, 'utf8').split(/\r?\n/);
+    const ignored = new Map();
+    const nodriver = new Map();
+    for (const l of lines) {
+      if (l.includes('Synth 8-6896')) {
+        const loc = (l.match(/\[([^\]\s]+\.(?:v|sv)):(\d+)\]/) || []).slice(1).join(':');
+        ignored.set(loc || '?', (ignored.get(loc || '?') || 0) + 1);
+      } else if (l.includes('Synth 8-3848')) {
+        const net = (l.match(/Net\s+(\S+)/) || [])[1];
+        if (net) nodriver.set(net.replace(/\[\d+\]\[\d+\]$/, '[*][*]'), (nodriver.get(net.replace(/\[\d+\]\[\d+\]$/, '[*][*]')) || 0) + 1);
+      }
+    }
+    if (ignored.size) {
+      const where = [...ignored.entries()].map(([loc, n]) => `${loc} (${n}×)`);
+      const conseq = [...nodriver.entries()].slice(0, 3).map(([n, c]) => `${n} 无驱动 (${c}×)`);
+      add({
+        id: 'G-C-03', name: '综合源 initial 被综合器忽略', level: 'qualification', must: true,
+        status: 'fail', severity: 'high',
+        detail: [`Vivado [Synth 8-6896] 判定 initial 块被忽略: ${where.join('; ')}`, ...(conseq.length ? [`后果: ${conseq.join('; ')}`] : []), '仿真执行而综合丢弃 => 上板行为与仿真不一致'],
+      });
+      return;
+    }
+    add({ id: 'G-C-03', name: '综合源 initial(仅阵列)', level: 'qualification', must: true, status: 'pass', severity: 'high', detail: `${arrayOnly} 处 initial 仅初始化存储器阵列, Vivado 综合日志无 [Synth 8-6896] 忽略告警 — 初值被综合器采纳` });
   })();
 
   // G-A-04 / CS-7 尺寸
@@ -299,8 +337,152 @@ function runGates(pkgDir, manifest, repoRoot) {
     // 声明 bit_true 却有 mismatch => FAIL (规范 §2.6 G-B-03)
     add({ id: 'G-B-03', name: 'bit-true 对标', level: 'certified', must: true, status: ok ? 'pass' : 'fail', severity: 'high', detail: ok ? `bit-true: ${r.total} 样点 0 失配 (流水偏移 ${r.pipeline_offset}) [${r.tool}]` : `mismatch=${r.mismatch}/${r.total}${claimsBitTrue ? ' — 声明 bit_true 却有失配, FAIL' : ''}` });
   })();
-  add({ id: 'G-C-01', name: '目标 fmax 收敛', level: 'certified', must: true, status: 'blocked', severity: 'high', detail: 'Vivado STA 未接线' });
-  add({ id: 'G-C-02', name: '资源在包络内', level: 'certified', must: true, status: 'blocked', severity: 'high', detail: 'Vivado synth util 未接线' });
+  // G-C-01 / G-C-02 — Vivado synth 证据接线 (规范 §2.7)
+  // 证据目录: engineering-assets/var/gates/pg/<asset_uid>/
+  //   timing-summary.rpt / utilization.rpt  由 tools/pg-synth.tcl 生成
+  // 两门共同产出 envelope-check.json (constrained vs required / budget vs achieved)
+  (() => {
+    const pgDir = path.join(repoRoot, 'engineering-assets', 'var', 'gates', 'pg', manifest.asset_uid || 'x');
+    const timingRpt = path.join(pgDir, 'timing-summary.rpt');
+    const utilRpt = path.join(pgDir, 'utilization.rpt');
+    const target = (manifest.constraints || {}).target || {};
+    const envelope = { asset_uid: manifest.asset_uid, generated_by: 'gate-runner.cjs', timing: null, resources: null };
+
+    // ── G-C-01 紧时钟交叉核对 ──────────────────────────────────────────
+    (() => {
+      const fmaxMhz = Number(target.fmax_mhz);
+      if (!Number.isFinite(fmaxMhz) || fmaxMhz <= 0) {
+        add({ id: 'G-C-01', name: '目标 fmax 收敛', level: 'certified', must: true, status: 'fail', severity: 'high', detail: 'constraints.target.fmax_mhz 未声明 — 无目标则无从判定收敛' });
+        return;
+      }
+      const requiredPeriod = 1000 / fmaxMhz;
+      const clkName = ((manifest.clock || {}).name || '').trim();
+
+      // 约束文件: manifest sources role=constraint, 否则扫包内 *.xdc/*.sdc
+      const cfiles = (manifest.sources || []).filter((s) => s.role === 'constraint').map((s) => path.join(pkgDir, s.path))
+        .filter((p) => fs.existsSync(p));
+      if (!cfiles.length) {
+        for (const d of ['constraints', '.']) {
+          const dir = path.join(pkgDir, d);
+          if (!fs.existsSync(dir)) continue;
+          for (const f of fs.readdirSync(dir)) if (/\.(xdc|sdc)$/i.test(f)) cfiles.push(path.join(dir, f));
+        }
+      }
+      if (!cfiles.length) {
+        add({ id: 'G-C-01', name: '目标 fmax 收敛', level: 'certified', must: true, status: 'fail', severity: 'high', detail: `无 XDC/SDC 约束文件 — 约束缺失即 FAIL (目标 ${fmaxMhz}MHz / ${requiredPeriod.toFixed(3)}ns)` });
+        return;
+      }
+      // create_clock -name <n> -period <p> [get_ports <port>]
+      const clocks = [];
+      for (const cf of cfiles) {
+        const txt = fs.readFileSync(cf, 'utf8');
+        for (const line of txt.split(/\r?\n/)) {
+          if (/^\s*#/.test(line) || !/create_clock/.test(line)) continue;
+          const per = line.match(/-period\s+([\d.]+)/);
+          if (!per) continue;
+          const nm = line.match(/-name\s+(\S+)/);
+          const pt = line.match(/get_ports\s+\{?\s*([^\s\]}]+)/);
+          clocks.push({ file: path.basename(cf), name: (nm ? nm[1] : (pt ? pt[1] : '')).replace(/[{}]/g, ''), port: pt ? pt[1] : '', period_ns: Number(per[1]) });
+        }
+      }
+      if (!clocks.length) {
+        add({ id: 'G-C-01', name: '目标 fmax 收敛', level: 'certified', must: true, status: 'fail', severity: 'high', detail: `约束文件存在但无 create_clock — 约束缺失即 FAIL (${cfiles.map((f) => path.basename(f)).join(',')})` });
+        return;
+      }
+      const clk = clocks.find((c) => clkName && (c.name === clkName || c.port === clkName)) || clocks[0];
+      envelope.timing = { target_fmax_mhz: fmaxMhz, required_period_ns: Number(requiredPeriod.toFixed(4)), constrained_period_ns: clk.period_ns, clock: clk.name || clk.port, source: clk.file };
+
+      // 约束不得松于目标 (堵"松时钟白 WNS"后门)
+      if (clk.period_ns > requiredPeriod + 1e-6) {
+        envelope.timing.status = 'fail';
+        envelope.timing.reason = 'constraint-looser-than-target';
+        add({ id: 'G-C-01', name: '目标 fmax 收敛', level: 'certified', must: true, status: 'fail', severity: 'high', detail: `约束松于目标: create_clock ${clk.period_ns}ns > 目标 ${requiredPeriod.toFixed(3)}ns (${fmaxMhz}MHz)` });
+        return;
+      }
+      if (!fs.existsSync(timingRpt)) {
+        envelope.timing.status = 'blocked';
+        add({ id: 'G-C-01', name: '目标 fmax 收敛', level: 'certified', must: true, status: 'blocked', severity: 'high', detail: `约束合规 (${clk.period_ns}ns ≤ ${requiredPeriod.toFixed(3)}ns) 但无 timing-summary.rpt — 先跑 tools/pg-synth.tcl` });
+        return;
+      }
+      const trpt = fs.readFileSync(timingRpt, 'utf8').split(/\r?\n/);
+      // Clock Summary: "<name>  {0.000 2.000}   4.000   250.000"
+      let rptPeriod = null;
+      for (const l of trpt) {
+        const m = l.match(/^(\S+)\s+\{[^}]*\}\s+([\d.]+)\s+([\d.]+)\s*$/);
+        if (m && (!clk.name || m[1] === clk.name || m[1] === clk.port)) { rptPeriod = Number(m[2]); break; }
+      }
+      // Intra-Clock Table: "<name>  <WNS> <TNS> <fail> <total> <WHS> ..."
+      let wns = null; let whs = null; let failEp = null;
+      for (const l of trpt) {
+        const m = l.match(/^(\S+)\s+(-?\d+\.\d+)\s+(-?\d+\.\d+)\s+(\d+)\s+(\d+)\s+(-?\d+\.\d+)/);
+        if (m && (!clk.name || m[1] === clk.name || m[1] === clk.port)) { wns = Number(m[2]); failEp = Number(m[4]); whs = Number(m[6]); break; }
+      }
+      if (wns === null) {
+        envelope.timing.status = 'blocked';
+        add({ id: 'G-C-01', name: '目标 fmax 收敛', level: 'certified', must: true, status: 'blocked', severity: 'high', detail: `timing-summary.rpt 中未找到时钟 ${clk.name || clk.port} 的 WNS 行 — 报告格式不符, 拒绝据此判 pass` });
+        return;
+      }
+      // 报告所用周期须与约束一致, 防止拿另一份宽约束的报告顶账
+      if (rptPeriod !== null && Math.abs(rptPeriod - clk.period_ns) > 1e-6) {
+        envelope.timing.status = 'fail';
+        add({ id: 'G-C-01', name: '目标 fmax 收敛', level: 'certified', must: true, status: 'fail', severity: 'high', detail: `报告周期 ${rptPeriod}ns 与约束 ${clk.period_ns}ns 不一致 — 证据与约束不匹配` });
+        return;
+      }
+      const achievedFmax = 1000 / (clk.period_ns - wns); // wns<0 时周期变大, fmax 变小
+      Object.assign(envelope.timing, { wns_ns: wns, whs_ns: whs, failing_endpoints: failEp, achieved_fmax_mhz: Number(achievedFmax.toFixed(2)), status: wns >= 0 ? 'pass' : 'fail' });
+      add({
+        id: 'G-C-01', name: '目标 fmax 收敛', level: 'certified', must: true,
+        status: wns >= 0 ? 'pass' : 'fail', severity: 'high',
+        detail: wns >= 0
+          ? `WNS ${wns}ns ≥ 0 @ ${clk.period_ns}ns (目标 ${fmaxMhz}MHz), achieved ≈ ${achievedFmax.toFixed(1)}MHz`
+          : `WNS ${wns}ns < 0 @ ${clk.period_ns}ns — 未收敛; achieved ≈ ${achievedFmax.toFixed(1)}MHz vs 目标 ${fmaxMhz}MHz, ${failEp} 个失败端点`,
+      });
+    })();
+
+    // ── G-C-02 资源包络 fail-closed ────────────────────────────────────
+    (() => {
+      const KEYS = [
+        { k: 'lut', rpt: 'Slice LUTs' },
+        { k: 'ff', rpt: 'Slice Registers' },
+        { k: 'bram', rpt: 'Block RAM Tile' },
+        { k: 'dsp', rpt: 'DSPs' },
+      ];
+      const missing = KEYS.filter((e) => !Number.isFinite(Number(target[e.k]))).map((e) => e.k);
+      if (missing.length) {
+        envelope.resources = { status: 'blocked', missing_budget: missing };
+        add({ id: 'G-C-02', name: '资源在包络内', level: 'certified', must: true, status: 'blocked', severity: 'high', detail: `constraints.target 缺资源预算 [${missing.join(', ')}] — 无包络不得认证资源稳定 (fail-closed, 非 pass)` });
+        return;
+      }
+      if (!fs.existsSync(utilRpt)) {
+        envelope.resources = { status: 'blocked', reason: 'no-utilization-report' };
+        add({ id: 'G-C-02', name: '资源在包络内', level: 'certified', must: true, status: 'blocked', severity: 'high', detail: '预算齐备但无 utilization.rpt — 先跑 tools/pg-synth.tcl' });
+        return;
+      }
+      const urpt = fs.readFileSync(utilRpt, 'utf8').split(/\r?\n/);
+      const rows = {};
+      for (const l of urpt) {
+        const m = l.match(/^\|\s*([A-Za-z0-9 ]+?)\*?\s*\|\s*([\d.]+)\s*\|/);
+        if (m && rows[m[1].trim()] === undefined) rows[m[1].trim()] = Number(m[2]);
+      }
+      const items = KEYS.map((e) => {
+        const budget = Number(target[e.k]);
+        const achieved = rows[e.rpt];
+        return { resource: e.k, budget, achieved: achieved === undefined ? null : achieved, status: achieved === undefined ? 'blocked' : (achieved <= budget ? 'pass' : 'fail') };
+      });
+      envelope.resources = { status: items.some((i) => i.status === 'fail') ? 'fail' : items.some((i) => i.status === 'blocked') ? 'blocked' : 'pass', items };
+      const bad = items.filter((i) => i.status === 'fail');
+      const unk = items.filter((i) => i.status === 'blocked');
+      add({
+        id: 'G-C-02', name: '资源在包络内', level: 'certified', must: true,
+        status: envelope.resources.status, severity: 'high',
+        detail: bad.length ? `超包络: ${bad.map((i) => `${i.resource} ${i.achieved}>${i.budget}`).join(', ')}`
+          : unk.length ? `utilization.rpt 缺行: ${unk.map((i) => i.resource).join(', ')}`
+            : `全部在包络内: ${items.map((i) => `${i.resource} ${i.achieved}/${i.budget}`).join(', ')}`,
+      });
+    })();
+
+    try { fs.mkdirSync(pgDir, { recursive: true }); fs.writeFileSync(path.join(pgDir, 'envelope-check.json'), `${JSON.stringify(envelope, null, 2)}\n`, 'utf8'); } catch {}
+  })();
   add({ id: 'G-SIGN-01', name: '具名签字+面板', level: 'certified', must: true, status: manifest.signoff ? 'pass' : 'blocked', severity: 'high', detail: manifest.signoff ? `signoff.by=${manifest.signoff.by}` : '无 signoff (认证前置)' });
 
   return gates;

@@ -88,6 +88,18 @@
         }
       }
     },
+    "top": { "type": "string", "description": "综合顶层模块名；缺省时 pg-synth 回退到 name" },
+    "device": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "目标器件。G-C-01/02 的 WNS 与资源数只对特定 part+speed grade 成立，不声明则综合证据无法解释",
+      "required": ["part"],
+      "properties": {
+        "part": { "type": "string", "description": "Vivado 完整 part 名，如 xc7k325tffg900-2" },
+        "family": { "type": "string" },
+        "note": { "type": "string" }
+      }
+    },
     "clock": {
       "type": "object",
       "additionalProperties": false,

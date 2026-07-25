@@ -79,7 +79,10 @@ fi
 # 注意: 排除按路径子串匹配，资产迁出 knowledge/ 后必须由这几条接住。
 # engineering-assets/var/build/ 是门禁 runner 与 run.do 的独立构建目录（已 gitignore），
 # transcript/work 等仿真产物本就该落在那里，不构成仓库污染。
-EXCLUDE_DIRS="memory/work/|plugins/cache/|knowledge/|.git/|engineering-assets/.*/vectors/|engineering-assets/.*/vectors-ref/|engineering-assets/reference-assets/|engineering-assets/var/build/"
+# engineering-assets/var/gates/ 是门禁证据目录（已 gitignore）：G-C-01/02 的判据
+# 就来自其中的 timing-summary.rpt / utilization.rpt，它们是刻意产出的证据而非垃圾，
+# 由 tools/pg-synth.cjs 可重生。误删会让门禁失去判据来源。
+EXCLUDE_DIRS="memory/work/|plugins/cache/|knowledge/|.git/|engineering-assets/.*/vectors/|engineering-assets/.*/vectors-ref/|engineering-assets/reference-assets/|engineering-assets/var/build/|engineering-assets/var/gates/"
 
 # ---- 5a. 暂存区检查：禁止仿真文件被提交 ----
 FORBIDDEN_STAGED_PATTERNS="(^|/)transcript$|vsim\.wlf|\.vcd$|\.wlftmp|vsim\.dump|\.wdb$|xsim\.jou|xsim\.log|xsim\.tcl|xelab\.pb|xvlog\.pb|tr_db\.log|wev\.log|vlog\.log"

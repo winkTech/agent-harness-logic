@@ -71,6 +71,12 @@
       "bus": "axi-stream"
     }
   ],
+  "top": "rrc_polyphase_fir",
+  "device": {
+    "part": "xc7k325tffg900-2",
+    "family": "kintex7",
+    "note": "与设计报告 §5.1 声明的 XC7K325T 一致"
+  },
   "clock": {
     "name": "i_clk",
     "period_ns": 4
@@ -98,6 +104,12 @@
       "path": "tb/tb_rrc_polyphase_fir.sv",
       "role": "tb",
       "sha256": "6eaca3a5f0d1dfc2bf74460737031e1613f61eace18a639dce0c6a5eeebe7eb9"
+    },
+    {
+      "path": "constraints/rrc_polyphase_fir.xdc",
+      "role": "constraint",
+      "sha256": "1ca5afbc925b87924f7474becefbfe7ce239a4420eabaa889c105c8eb407ff92",
+      "note": "由 manifest.clock/constraints.target 机器化而来; I/O 预算为显式假设, 集成时须以板级实数复核"
     }
   ],
   "generality": {

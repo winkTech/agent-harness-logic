@@ -66,6 +66,12 @@
       "bus": "axi-stream"
     }
   ],
+  "top": "ldpc_decoder_top",
+  "device": {
+    "part": "xc7k325tffg900-2",
+    "family": "kintex7",
+    "note": "XDC 抬头写 XCZU67DR 但本地未装该器件, 且项目其余资产统一 XC7K325T; 器件归一待 owner 确认"
+  },
   "clock": {
     "name": "i_clk_sys",
     "period_ns": 10
