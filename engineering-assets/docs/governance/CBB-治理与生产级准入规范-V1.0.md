@@ -1,7 +1,7 @@
 # FPGA CBB 库治理与生产级准入规范 V1.0
 
 > 基线蓝本。合并 production-grade-gate / doc-standards / code-standards / library-management 四支柱草案，并**已吸收** checkability / solo-realism / consistency 三视角红队修正。
-> 权威依据：`skills/hdl-coding/SKILL.md`、`skills/hdl-coding/references/rtl-code-review.md`、`RTL_DESIGN_RULE.md`、`comment-standards.md`、`engine/schemas/hdl-project-spec.schema.json`、`engine/schemas/fpga-constraints.schema.json`、`engine/schemas/artifact-manifest.schema.json`、`rules/03-gates.md`、`rules/archive/08-constraints.md`。冲突一律以这些既有资产为准。
+> 权威依据：`skills/hdl-coding/SKILL.md`、`skills/hdl-coding/references/rtl-code-review.md`、`RTL_DESIGN_RULE.md`、`comment-standards.md`、`engine/schemas/hdl-project-spec.schema.json`、`engine/schemas/fpga-constraints.schema.json`、`engine/schemas/artifact-manifest.schema.json`、`rules/03-gates.md`、`docs/rules-archive/08-constraints.md`。冲突一律以这些既有资产为准。
 
 ---
 
@@ -165,7 +165,7 @@ stateDiagram-v2
 | 契约破坏性变更（端口/位宽/延迟改） | 不变 | major 递增 | changelog 标 breaking |
 | 针对特定设计 fork 出专用变体（拓展可信基线） | **新 uid** | 从 `1.0.0` 起 | `parent_uid=基线uid`，`base_version=基线版本` |
 
-semver 由机器校验；major 递增必须伴随 breaking changelog；fork 必须写 `parent_uid`。**基线 vs 变更**通过 `lineage{parent_uid,base_version,changelog}` 表达，**禁止用文件名后缀**（`_v2`/`_new`）承载版本（与 `rules/archive/14-fix-in-place.md` 一致）。
+semver 由机器校验；major 递增必须伴随 breaking changelog；fork 必须写 `parent_uid`。**基线 vs 变更**通过 `lineage{parent_uid,base_version,changelog}` 表达，**禁止用文件名后缀**（`_v2`/`_new`）承载版本（与 `docs/rules-archive/14-fix-in-place.md` 一致）。
 
 ### 3.3 waiver（certified-with-waiver）与退役
 
