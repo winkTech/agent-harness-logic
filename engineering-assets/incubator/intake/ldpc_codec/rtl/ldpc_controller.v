@@ -116,51 +116,25 @@ module ldpc_controller #(
         r_nxt_state = r_cur_state;
 
         case (r_cur_state)
-            P_ST_IDLE: begin
-                if (ri_llr_loaded) begin
-                    r_nxt_state = P_ST_INIT;
-                end
-            end
-
-            P_ST_INIT: begin
-                r_nxt_state = P_ST_PROCESS;
-            end
-
-            P_ST_PROCESS: begin
-                if (w_row_last_conn) begin
-                    r_nxt_state = P_ST_CHECK;
-                end
-            end
+            // 单语句状态臂省去冗余 begin/end（惯用写法）；多分支臂保留块结构。
+            P_ST_IDLE:     if (ri_llr_loaded)  r_nxt_state = P_ST_INIT;
+            P_ST_INIT:                         r_nxt_state = P_ST_PROCESS;
+            P_ST_PROCESS:  if (w_row_last_conn) r_nxt_state = P_ST_CHECK;
 
             P_ST_CHECK: begin
-                if (ri_early_term) begin
-                    r_nxt_state = P_ST_DONE;
-                end else if (w_row_is_last) begin
-                    r_nxt_state = P_ST_ITER_INC;
-                end else begin
-                    r_nxt_state = P_ST_PROCESS;
-                end
+                if      (ri_early_term)  r_nxt_state = P_ST_DONE;
+                else if (w_row_is_last)  r_nxt_state = P_ST_ITER_INC;
+                else                     r_nxt_state = P_ST_PROCESS;
             end
 
             P_ST_ITER_INC: begin
-                if (w_iter_is_last) begin
-                    r_nxt_state = P_ST_DONE;
-                end else begin
-                    r_nxt_state = P_ST_PROCESS;
-                end
+                if (w_iter_is_last) r_nxt_state = P_ST_DONE;
+                else                r_nxt_state = P_ST_PROCESS;
             end
 
-            P_ST_DONE: begin
-                r_nxt_state = P_ST_OUTPUT;
-            end
-
-            P_ST_OUTPUT: begin
-                r_nxt_state = P_ST_IDLE;
-            end
-
-            default: begin
-                r_nxt_state = P_ST_IDLE;
-            end
+            P_ST_DONE:     r_nxt_state = P_ST_OUTPUT;
+            P_ST_OUTPUT:   r_nxt_state = P_ST_IDLE;
+            default:       r_nxt_state = P_ST_IDLE;
         endcase
     end
 

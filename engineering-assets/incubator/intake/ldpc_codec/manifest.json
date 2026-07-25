@@ -100,7 +100,7 @@
     {
       "path": "rtl/ldpc_controller.v",
       "role": "rtl",
-      "sha256": "0ac7c4c2cb9211a5671b7d4ca27a5d94dffc52d6a78225f6b5b4b29faa3fd7f5"
+      "sha256": "e99b96f9692af6286f9e5d32e9ef00175bb4c347e32b31d3bd4cc61a55520c6b"
     },
     {
       "path": "rtl/ldpc_decoder_top.v",
