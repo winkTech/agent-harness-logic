@@ -106,7 +106,7 @@
     {
       "path": "rtl/h_matrix_addr.v",
       "role": "rtl",
-      "sha256": "441cfbf05fdf8b8140f70ce64b2692a60706c92165b4afa12a81e2bf03b163a3"
+      "sha256": "da52f29ae8c0c413d34e552144263006cdb046cd27764d7b03775ed2b43cc6d9"
     },
     {
       "path": "rtl/ldpc_controller.v",

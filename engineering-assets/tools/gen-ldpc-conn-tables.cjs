@@ -82,7 +82,17 @@ for (let br = 0; br < P_MB; br++) {
 }
 if (selfcheckFail) { console.error(`[gen] 自检失败: ${selfcheckFail} 处与原算法不一致, 拒绝输出`); process.exit(1); }
 
+// msg_buffer 块基址: base[b] = sum_{b'<b} Z * cnt[b']
+// msg_buffer.v 契约为 "地址 = row_base[row] + conn_idx", 其中
+// row_base[r] = base[blockrow(r)] + blockoff(r) * cnt[blockrow(r)]。
+const P_Z = param('P_Z');
+const blkBase = [];
+let acc = 0;
+for (let br = 0; br < P_MB; br++) { blkBase.push(acc); acc += P_Z * connCnt[br]; }
+const P_H_NNZ = acc;
+
 console.error(`[gen] P 矩阵: ${assigned} 条非默认项 / ${DEPTH} 槽`);
+console.error(`[gen] 块基址: ${blkBase.join(', ')}  总边数 ${P_H_NNZ}`);
 console.error(`[gen] 每 block row 连接数: ${connCnt.join(', ')}  (max=${Math.max(...connCnt)}, 上限 ${P_MAX_ROW_WT})`);
 console.error('[gen] 自检通过: 生成结果与原 initial 算法逐条一致');
 
@@ -114,5 +124,16 @@ for (let br = 0; br < P_MB; br++) {
   }
   for (let i = 0; i < cells.length; i += 2) out.push(`        ${cells.slice(i, i + 2).join('').trimEnd()}`);
 }
+out.push('');
+out.push('        // ---- msg_buffer 块基址 (同源生成): base[b] = sum_{b\'<b} Z*cnt[b\'] ----');
+for (let br = 0; br < P_MB; br += 4) {
+  const cells = [];
+  for (let i = br; i < Math.min(br + 4, P_MB); i++) {
+    cells.push(`r_blk_base[${i}]=${blkBase[i] === 0 ? "12'd0" : `12'd${blkBase[i]}`};`.padEnd(22));
+  }
+  out.push(`        ${cells.join('').trimEnd()}`);
+}
 out.push('    end');
+out.push('');
+out.push(`    // 校验: 总边数 = ${P_H_NNZ}, 应等于 msg_buffer 的 P_H_NNZ 深度`);
 console.log(out.join('\n'));

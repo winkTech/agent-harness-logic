@@ -30,7 +30,8 @@ module h_matrix_addr #(
     parameter P_ROW_ADDR_W       = 9,
     parameter P_COL_ADDR_W       = 10,
     parameter P_SHIFT_W          = 5,
-    parameter P_CONN_CNT_W       = 4
+    parameter P_CONN_CNT_W       = 4,
+    parameter P_MSG_ADDR_W       = 12   // msg_buffer 深度 2376 -> 12 bit
 )(
     // 时钟和复位
     input  wire                             i_clk_sys,
@@ -45,6 +46,9 @@ module h_matrix_addr #(
     output wire [P_COL_ADDR_W-1:0]          o_col_addr,
     output wire [P_SHIFT_W-1:0]             o_shift,
     output wire [P_CONN_CNT_W-1:0]          o_conn_count,
+    // msg_buffer 地址 = row_base[row]+conn (msg_buffer.v 契约); 与 o_col_addr
+    // 同级寄存。原 decoder 自拼 {row,conn} 方案不符且越界, 见 ARCHITECTURE-GAP.md
+    output wire [P_MSG_ADDR_W-1:0]          o_msg_addr,
     output wire                             o_valid
 );
 
@@ -127,6 +131,7 @@ module h_matrix_addr #(
     reg [5:0]              r_conn_col  [0:P_MB-1][0:P_MAX_ROW_WT-1];
     reg [P_SHIFT_W-1:0]    r_conn_shft [0:P_MB-1][0:P_MAX_ROW_WT-1];
     reg [P_CONN_CNT_W-1:0] r_conn_cnt  [0:P_MB-1];
+    reg [P_MSG_ADDR_W-1:0] r_blk_base  [0:P_MB-1];   // 块行在 msg_buffer 中的起始地址
 
     // 原实现在此用 `if (r_p_rom[...] != 5'd31)` 扫描构建三张表。该条件依赖 reg
     // 数组内容, Vivado 判为非常量条件并报 [Synth 8-6896] **丢弃整个 initial 块**:
@@ -206,6 +211,12 @@ module h_matrix_addr #(
         r_conn_col[11][2]=6'd7; r_conn_shft[11][2]=5'd2;  r_conn_col[11][3]=6'd8; r_conn_shft[11][3]=5'd25;
         r_conn_col[11][4]=6'd9; r_conn_shft[11][4]=5'd5;  r_conn_col[11][5]=6'd12;r_conn_shft[11][5]=5'd1;
         r_conn_col[11][6]=6'd23;r_conn_shft[11][6]=5'd0;
+
+        // ---- msg_buffer 块基址 (同源生成): base[b] = sum_{b'<b} Z*cnt[b'] ----
+        r_blk_base[0]=12'd0;  r_blk_base[1]=12'd189;r_blk_base[2]=12'd405;r_blk_base[3]=12'd594;
+        r_blk_base[4]=12'd783;r_blk_base[5]=12'd972;r_blk_base[6]=12'd1188;r_blk_base[7]=12'd1377;
+        r_blk_base[8]=12'd1566;r_blk_base[9]=12'd1782;r_blk_base[10]=12'd1971;r_blk_base[11]=12'd2187;
+        // 总边数 2187+27*7 = 2376, 与 msg_buffer 的 P_H_NNZ 深度一致
     end
 
     //-----------------------------------------------------------------
@@ -250,9 +261,17 @@ module h_matrix_addr #(
                                           (w_diff[P_SHIFT_W-1:0] + P_Z[P_SHIFT_W-1:0]);
 
     // 输出寄存器
+    // msg 地址 = 块基址 + 块内行偏移*该块行连接数 + 连接索引; 上界
+    // 2187+26*7+6 = 2375 < 2376, 前提是 conn < conn_count (见 GAP 文档 G1)
+    wire [P_MSG_ADDR_W-1:0] w_msg_addr;
+    assign w_msg_addr = r_blk_base[w_block_row]
+                      + (w_block_off * w_conn_count)
+                      + ri_conn;
+
     reg [P_COL_ADDR_W-1:0]     ro_col_addr;
     reg [P_SHIFT_W-1:0]        ro_shift;
     reg [P_CONN_CNT_W-1:0]     ro_conn_count;
+    reg [P_MSG_ADDR_W-1:0]     ro_msg_addr;
     reg                         ro_valid;
 
     always @(posedge i_clk_sys) begin
@@ -260,11 +279,13 @@ module h_matrix_addr #(
             ro_col_addr   <= 'd0;
             ro_shift      <= 'd0;
             ro_conn_count <= 'd0;
+            ro_msg_addr   <= 'd0;
             ro_valid      <= 1'b0;
         end else begin
             ro_col_addr   <= w_block_col * P_Z + w_mod_result;
             ro_shift      <= w_shift_val;
             ro_conn_count <= w_conn_count;
+            ro_msg_addr   <= w_msg_addr;
             ro_valid      <= ri_en;
         end
     end
@@ -272,6 +293,7 @@ module h_matrix_addr #(
     assign o_col_addr   = ro_col_addr;
     assign o_shift      = ro_shift;
     assign o_conn_count = ro_conn_count;
+    assign o_msg_addr   = ro_msg_addr;
     assign o_valid      = ro_valid;
 
 endmodule
