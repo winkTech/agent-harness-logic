@@ -78,12 +78,19 @@ module tb_ldpc_decoder_top;
         reg [15:0] hex_val;
         reg [7:0]  bit_char;
         // Verilog-2001 字符串缓冲 (本文件为 .v, 按 Verilog 编译, 无 SV string 类型)
-        reg [8*64-1:0] llr_file;
-        reg [8*64-1:0] exp_file;
+        reg [8*64-1:0]  llr_file;
+        reg [8*64-1:0]  exp_file;
+        reg [8*256-1:0] vec_dir;
     begin
         // 构造文件名
-        $sformat(llr_file, "../02_sim/tb_llr_input_%0d.hex", test_id);
-        $sformat(exp_file, "../02_sim/tb_expected_output_%0d.hex", test_id);
+        // 向量目录由 run_sim.do 经 +VEC_DIR 注入（规范 §5.5 V-2）。
+        // 原值 "../02_sim/..." 是原工程布局的相对路径，打包后已失效。
+        if (!$value$plusargs("VEC_DIR=%s", vec_dir)) begin
+            $display("FATAL: 缺 +VEC_DIR — 向量权威位置 models/comm/ldpc/vectors/, 须由 run_sim.do 注入");
+            $finish;
+        end
+        $sformat(llr_file, "%0stb_llr_input_%0d.hex", vec_dir, test_id);
+        $sformat(exp_file, "%0stb_expected_output_%0d.hex", vec_dir, test_id);
 
         // 加载 LLR 输入
         $display("  Loading LLR: %s", llr_file);

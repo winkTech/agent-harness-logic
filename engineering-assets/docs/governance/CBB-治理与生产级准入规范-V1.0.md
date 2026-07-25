@@ -280,6 +280,36 @@ MVP **去掉 `documents_hash` staleness 硬门**（单人=唯一读者，收益�
 
 硬 300 行会误杀合法 CBB（如系数表，仓库已知 `twiddle_1024_32b.v` 98KB）。CS-7 超限不直接 fail：属白名单类别（`coeff_table`/`rom_lut`/`generated`）且 `manifest.size_metrics.waivers[]` 记 `{file,reason,owner}` → conditional-pass；无 waiver 超限 → fail。waiver 走审计路径，不得当万能后门。
 
+### 5.5 向量路径与 TB 反假绿约定（库级裁决，2026-07-25）
+
+> 起因：全库 5 个包的 TB 向量路径 `../golden_model/vectors/` 指向不存在的目录，
+> 而 `ofdm_tx_top` 在实际捕获输出**全为 `zzzzxxxx`** 的情况下报告 "Matched 80/80,
+> 0 LSB 误差, TEST PASSED"。三层机制叠加造成"假绿"，本节把它们一次性堵死。
+
+**V-1 向量权威位置**：`models/<domain>/<algo>/vectors/`，由 golden-model 资产
+（`kind=golden-model`）拥有并在其 manifest `vectors` 字段登记。资产包**不复制**向量。
+
+**V-2 注入而非硬编码**：TB 经 `+VEC_DIR` / `+RPT_F` plusarg 取路径，由包内 `run.do`
+提供。TB 内**禁止**硬编码绝对路径，也禁止指向包外的相对路径（`../golden_model/...`
+这类跨包相对路径是本次全库失效的直接原因）。plusarg 缺失 ⇒ `$fatal`，不得回落默认值。
+
+**V-3 空载即失败**：激励或期望装载样点数为 0 ⇒ `$fatal`。
+理由：0 个样点的比对必然得到 0 失配，是假绿的最短路径。
+
+**V-4 计数必须被赋值**：捕获长度这类循环上界必须由实际驱动量推出并断言非零。
+`ofdm_tx_top` 原 `int expected_len;` 声明后从未赋值（automatic int 默认 0），
+`while (capture_cnt < 0)` 一次不执行 ⇒ 捕获 0 ⇒ 比对 0 ⇒ PASS。
+
+**V-5 X/Z 必须显式计为失配**（本次最隐蔽的一条）：
+比对前先判 `(^captured[i]) === 1'bx`，命中即记失配。
+理由：`$signed(x) - $signed(golden)` 得 X，而 `if (X > 1)` 求值为 X、被 `if` 当作
+**假** —— 失配分支永不进入，逐样点静默"匹配"。**仅靠容差比较无法发现全 X 输出。**
+
+**V-6 证据落盘**：cosim 报告写入 `var/gates/pg/<asset_uid>/`，路径同样由 plusarg 注入。
+
+门禁挂靠：V-1..V-6 属 G-A-06（Testbench）与 G-B-03（bit-true 对标）的前置条件；
+任一条不满足，该 TB 产出的 PASS **不得作为 gate_results 证据**。
+
 ---
 
 ## 6. CBB manifest schema

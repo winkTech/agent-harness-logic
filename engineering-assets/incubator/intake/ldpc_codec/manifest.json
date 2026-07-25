@@ -130,7 +130,7 @@
     {
       "path": "tb/tb_ldpc_decoder_top.v",
       "role": "tb",
-      "sha256": "4fc2b24179afeda4ee4036e70c968e7c6e680b02e082adc2830d56fafe27e417"
+      "sha256": "f8c6228ac4d27b5bdcad384691096d889e2dab8e5811925464d3d396832d88ed"
     },
     {
       "path": "tb/tb_ldpc_encoder_top.v",

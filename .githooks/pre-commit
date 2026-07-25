@@ -77,7 +77,9 @@ fi
 # engineering-assets/ 三条: golden 向量(.bin)、资产包 vectors-ref/(规范 §5.1)、
 # vendored 上游工程(含 Quartus .rpt) 均是受治理资产，不是仿真垃圾。
 # 注意: 排除按路径子串匹配，资产迁出 knowledge/ 后必须由这几条接住。
-EXCLUDE_DIRS="memory/work/|plugins/cache/|knowledge/|.git/|engineering-assets/.*/vectors/|engineering-assets/.*/vectors-ref/|engineering-assets/reference-assets/"
+# engineering-assets/var/build/ 是门禁 runner 与 run.do 的独立构建目录（已 gitignore），
+# transcript/work 等仿真产物本就该落在那里，不构成仓库污染。
+EXCLUDE_DIRS="memory/work/|plugins/cache/|knowledge/|.git/|engineering-assets/.*/vectors/|engineering-assets/.*/vectors-ref/|engineering-assets/reference-assets/|engineering-assets/var/build/"
 
 # ---- 5a. 暂存区检查：禁止仿真文件被提交 ----
 FORBIDDEN_STAGED_PATTERNS="(^|/)transcript$|vsim\.wlf|\.vcd$|\.wlftmp|vsim\.dump|\.wdb$|xsim\.jou|xsim\.log|xsim\.tcl|xelab\.pb|xvlog\.pb|tr_db\.log|wev\.log|vlog\.log"

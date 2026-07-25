@@ -20,13 +20,18 @@ module tb_ofdm_tx_top;
     localparam DATA_WIDTH = 32;     // {Q3.13[15:0], I3.13[15:0]}
     localparam CLK_PERIOD = 10;     // 100MHz
 
-    localparam N_SYM      = 10;     // symbols per test
-    localparam VEC_DIR    = "../golden_model/vectors/";
+    localparam N_SYM      = 10;     // 驱动符号数上限（实际以向量 EOF 为准）
+
+    // 向量目录由 run.do 经 +VEC_DIR 注入（库级约定，见治理规范 §5.5）。
+    // 权威位置 = models/comm/ofdm/vectors/；TB 内禁硬编码绝对路径或包外相对路径。
+    // 原值 "../golden_model/vectors/" 指向不存在的目录，导致向量从未被真正读到。
+    string VEC_DIR;
 
     // ========================================================================
     // Signals
     // ========================================================================
     reg         clk, rst_n;
+    int         driven_symbols = 0;   // 由 drive_stimulus 按向量实际长度写入
     reg  [5:0]  s_axis_tdata;
     reg         s_axis_tvalid, s_axis_tlast;
     wire        s_axis_tready;
@@ -119,15 +124,15 @@ module tb_ofdm_tx_top;
         reg [15:0] vec_i, vec_q;
         int sample_cnt;
 
+        if (!$value$plusargs("VEC_DIR=%s", VEC_DIR))
+            $fatal(1, "缺 +VEC_DIR — 向量权威位置 models/comm/ofdm/vectors/, 须由 run.do 注入");
+
         $display("Loading vectors from %s...", VEC_DIR);
         fd_i = $fopen({VEC_DIR, "freq_i.bin"}, "r");
         fd_q = $fopen({VEC_DIR, "freq_q.bin"}, "r");
 
-        if (fd_i == 0 || fd_q == 0) begin
-            $display("ERROR: Cannot open vector files at %s", VEC_DIR);
-            $display("       Run MATLAB golden model first to generate vectors.");
-            $finish;
-        end
+        if (fd_i == 0 || fd_q == 0)
+            $fatal(1, "打不开向量文件于 %s — 先跑 MATLAB golden model 导出", VEC_DIR);
 
         // Drive each sample
         sample_cnt = 0;
@@ -149,7 +154,10 @@ module tb_ofdm_tx_top;
 
         $fclose(fd_i);
         $fclose(fd_q);
-        $display("Driven %d samples", sample_cnt);
+        if (sample_cnt == 0)
+            $fatal(1, "驱动 0 个子载波 (%s) — 拒绝在空激励上比对", VEC_DIR);
+        driven_symbols = sample_cnt / FFT_LEN;
+        $display("Driven %0d subcarriers = %0d symbol(s)", sample_cnt, driven_symbols);
     endtask
 
     // ========================================================================
@@ -158,14 +166,32 @@ module tb_ofdm_tx_top;
     logic [31:0] captured_data [$];
     logic        captured_last;
 
+    // ⚠ 未解决缺口（不在向量路径裁决范围内，另行记入差距清单）:
+    // drive_stimulus 把 freq_i/freq_q 读进 vec_i/vec_q 后并未使用, 实际驱动的是
+    // 硬编码常量 6'b0001_01。DUT 入口是比特流, 而 freq_*.bin 是 golden 的频域
+    // 中间量, 二者不同层。故本 TB 与 expected_tx.bin 的比对在语义上不成立,
+    // 需 golden 导出比特激励后重做。修复本文件只是消除"假绿", 不等于 cosim 有效。
+
     task automatic capture_output();
         int capture_cnt;
         int expected_len;
+        int guard;
 
-        $display("Capturing output (expect ~%d samples)...", expected_len);
+        // 缺陷修复: 原实现 expected_len 声明后从未赋值 (automatic int 默认 0),
+        // 于是 while (capture_cnt < 0) 一次都不执行 -> 捕获 0 样点 -> 比对 0 样点
+        // -> 报 PASS。这就是本包"假绿"的确切机制。
+        // 正确值由实际驱动的符号数推出: 每符号 FFT_LEN + CP_LEN 个时域样点。
+        capture_cnt  = 0;
+        expected_len = driven_symbols * (FFT_LEN + CP_LEN);
+        if (expected_len == 0)
+            $fatal(1, "expected_len=0 — 未驱动任何符号, 拒绝进入比对");
 
-        while (capture_cnt < expected_len * 2) begin
+        $display("Capturing output (expect %0d samples)...", expected_len);
+
+        guard = 0;
+        while (capture_cnt < expected_len && guard < expected_len * 100) begin
             @(posedge clk);
+            guard++;
             if (m_axis_tvalid && m_axis_tready) begin
                 captured_data.push_back(m_axis_tdata);
                 // 同时写入文件供 MATLAB 外部分析
@@ -174,7 +200,13 @@ module tb_ofdm_tx_top;
             end
         end
 
-        $display("Captured %0d output samples", captured_data.size());
+        $display("Captured %0d output samples (expected %0d)", captured_data.size(), expected_len);
+        if (captured_data.size() == 0)
+            $fatal(1, "捕获 0 个输出样点 — 拒绝在空捕获上比对");
+        if (captured_data.size() < expected_len) begin
+            errors++;
+            $display("ERROR: 捕获不足 %0d < %0d (超时 guard 触发)", captured_data.size(), expected_len);
+        end
     endtask
 
     // ========================================================================
@@ -187,6 +219,7 @@ module tb_ofdm_tx_top;
         int        diff_i, diff_q;
         int        match_cnt;
         int        scan_ret;
+        int        x_cnt;
 
         $display("Loading golden expected output from expected_tx.bin...");
 
@@ -198,6 +231,7 @@ module tb_ofdm_tx_top;
         end
 
         match_cnt    = 0;
+        x_cnt        = 0;
         mismatch_cnt = 0;
         max_err_i    = 0;
         max_err_q    = 0;
@@ -229,8 +263,18 @@ module tb_ofdm_tx_top;
             if (diff_q > max_err_q) max_err_q = diff_q;
             if (-diff_q > max_err_q) max_err_q = -diff_q;
 
+            // X/Z 必须显式计为失配（库级约定，见治理规范 §5.5）。
+            // 否则 $signed(x) - $signed(golden) 得 X，而 (X > 1) 求值为 X、被 if
+            // 当作假 —— 失配分支永不进入，逐样点静默"匹配"，报满分 PASS。
+            // 本包此前 80/80 "匹配、0 LSB 误差" 即由此产生: 实际捕获全为 zzzzxxxx。
+            if ((^captured_data[i]) === 1'bx) begin
+                x_cnt++;
+                if (x_cnt <= 10)
+                    $display("  [X/Z @ %0d] rtl=%08x — 输出未定义, 计为失配", i, captured_data[i]);
+                mismatch_cnt++;
+            end
             // Compare with tolerance ±1 LSB
-            if ((diff_i > 1) || (diff_i < -1) || (diff_q > 1) || (diff_q < -1)) begin
+            else if ((diff_i > 1) || (diff_i < -1) || (diff_q > 1) || (diff_q < -1)) begin
                 if (mismatch_cnt < 10) begin  // 只打印前10个错误
                     $display("  [MISMATCH @ %0d] golden={%04x,%04x} rtl={%04x,%04x} diff={%0d,%0d}",
                         i, golden_q, golden_i, rtl_q, rtl_i, diff_q, diff_i);

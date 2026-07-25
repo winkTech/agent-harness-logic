@@ -111,9 +111,9 @@ module tb_rrc_polyphase_fir;
     localparam int N_OUT = 2048;
     localparam int N_CAP = N_OUT + 96;
     localparam int MAX_OFF = 24;     // 流水延迟搜索上限 (理论 16 = 4 符号群延迟)
-    localparam string STIM_F = "C:/Users/Lihan/.claude/engineering-assets/models/comm/rrc/vectors/rrc_stimulus.hex";
-    localparam string EXP_F  = "C:/Users/Lihan/.claude/engineering-assets/models/comm/rrc/vectors/expected_tx.hex";
-    localparam string RPT_F  = "C:/Users/Lihan/.claude/engineering-assets/var/gates/pg/rrc_polyphase_fir/alignment-report.json";
+    // 向量路径由 run.do 经 +VEC_DIR / +RPT_F 注入（库级约定，见治理规范 §5.5）。
+    // 权威位置 = models/comm/<algo>/vectors/；TB 内禁硬编码绝对路径。
+    string VEC_DIR, STIM_F, EXP_F, RPT_F;
 
     logic [31:0] stim_mem [0:N_IN-1];
     logic [31:0] exp_mem  [0:N_OUT-1];
@@ -134,17 +134,28 @@ module tb_rrc_polyphase_fir;
         integer first_bad;
         logic [31:0] w;
         begin
+            // 向量目录由 run.do 注入; 缺失即 fail-closed, 不得回落到任何默认路径
+            if (!$value$plusargs("VEC_DIR=%s", VEC_DIR))
+                $fatal(1, "[cosim] 缺 +VEC_DIR — 向量权威位置 models/comm/<algo>/vectors/, 须由 run.do 注入");
+            if (!$value$plusargs("RPT_F=%s", RPT_F))
+                $fatal(1, "[cosim] 缺 +RPT_F — 证据须写入 var/gates/pg/<asset_uid>/");
+            STIM_F = {VEC_DIR, "rrc_stimulus.hex"};
+            EXP_F  = {VEC_DIR, "expected_tx.hex"};
+
             // 读激励/期望
             fd = $fopen(STIM_F, "r"); n = 0;
-            if (fd == 0) begin err_count = err_count + 1; $display("ERR: 打不开激励 %s", STIM_F); return; end
+            if (fd == 0) $fatal(1, "[cosim] 打不开激励 %s", STIM_F);
             while (!$feof(fd) && n < N_IN) begin code = $fscanf(fd, "%h\n", w); if (code == 1) stim_mem[n++] = w; end
             $fclose(fd);
+            // 装载 0 样点必须炸, 否则后续比对 0 个样点会得到 0 失配 = 假绿
+            if (n == 0) $fatal(1, "[cosim] 激励装载 0 符号 (%s) — 拒绝在空向量上比对", STIM_F);
             $display("[cosim] 载入激励 %0d 符号", n);
 
             fd = $fopen(EXP_F, "r"); n = 0;
-            if (fd == 0) begin err_count = err_count + 1; $display("ERR: 打不开期望 %s", EXP_F); return; end
+            if (fd == 0) $fatal(1, "[cosim] 打不开期望 %s", EXP_F);
             while (!$feof(fd) && n < N_OUT) begin code = $fscanf(fd, "%h\n", w); if (code == 1) exp_mem[n++] = w; end
             $fclose(fd);
+            if (n == 0) $fatal(1, "[cosim] 期望装载 0 样点 (%s) — 拒绝在空向量上比对", EXP_F);
             $display("[cosim] 载入期望 %0d 样点", n);
 
             // 复位后连续驱动 512 符号 (1 符号/4 拍)
