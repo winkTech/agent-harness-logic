@@ -55,7 +55,12 @@ module ldpc_decoder_top #(
 
     wire [P_COL_ADDR_W-1:0]         w_h_col_addr;
     wire [P_SHIFT_W-1:0]            w_h_shift;
-    wire [P_CONN_CNT_W-1:0]         w_conn_count;
+    // h_matrix_addr.o_conn_count -> cn_update.i_conn_count 的连线。
+    // 原代码在两处例化里写作 w_h_conn_count 却从未声明 -> Verilog 隐式 1-bit
+    // 网线, 把 4-bit 连接计数截成 1 位: 7 连接的行传成 1, 8 连接的行传成 0,
+    // cn_update 的 w_pass1_done/w_pass2_done 据此判完成, 校验节点更新实际只在
+    // 1 条(或 0 条)边上进行。此处声明的 w_conn_count 才是本意, 原先无人使用。
+    wire [P_CONN_CNT_W-1:0]         w_h_conn_count;
     wire                            w_h_valid;
 
     wire signed [P_Q_DATA_W-1:0]    w_llr_rd_data;

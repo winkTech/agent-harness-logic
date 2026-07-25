@@ -116,7 +116,7 @@
     {
       "path": "rtl/ldpc_decoder_top.v",
       "role": "rtl",
-      "sha256": "0045f78817426e122796cca582da303940b810d6154f8b1605139b40f5c2ae7c"
+      "sha256": "bdde8948ffab4c1aed0406c354f22cfb4eda084593d99c30fde48bbb2cb0ce58"
     },
     {
       "path": "rtl/ldpc_defines.vh",
@@ -141,7 +141,7 @@
     {
       "path": "tb/tb_ldpc_decoder_top.v",
       "role": "tb",
-      "sha256": "f8c6228ac4d27b5bdcad384691096d889e2dab8e5811925464d3d396832d88ed"
+      "sha256": "0faba7d80ad17ced5be96ce000bf8e096695c862dd0bcb88d1c509d5f955e84c"
     },
     {
       "path": "tb/tb_ldpc_encoder_top.v",

@@ -25,7 +25,11 @@ module tb_ldpc_decoder_top;
 
     parameter P_CLK_PERIOD = 10;         // 100 MHz
     parameter P_NUM_TESTS  = 5;          // 测试向量组数
-    parameter P_TIMEOUT    = 200000;     // 超时保护 (cycles)
+    // 看门狗按**每个测试**的周期预算计, 总预算 = 该值 x P_NUM_TESTS。
+    // 原值 200000 是覆盖全部测试的总预算, 而实测单次译码约 55k 周期,
+    // 5 组向量需 ~275k —— 看门狗在第 4 组中途误报 timeout, 看起来像解码器
+    // 挂死, 实为预算按测试数算漏。改为按单测试计, 与 P_NUM_TESTS 解耦。
+    parameter P_TIMEOUT    = 100000;     // 单个测试的周期上限 (实测 ~55k, 约 1.8x 余量)
 
     //-----------------------------------------------------------------
     // 信号
@@ -78,8 +82,12 @@ module tb_ldpc_decoder_top;
         reg [15:0] hex_val;
         reg [7:0]  bit_char;
         // Verilog-2001 字符串缓冲 (本文件为 .v, 按 Verilog 编译, 无 SV string 类型)
-        reg [8*64-1:0]  llr_file;
-        reg [8*64-1:0]  exp_file;
+        // 容量必须容得下 "<VEC_DIR>tb_llr_input_N.hex" 全长。原为 8*64=64 字符,
+        // 而受治理向量目录的绝对路径已达 67 字符 —— 拼接后被截去开头, $readmemh
+        // 静默失败, 数组保持未初始化, 比对却仍报 "All bits match"。属假绿路径,
+        // 故同时放大缓冲并在下方加装载校验。
+        reg [8*512-1:0] llr_file;
+        reg [8*512-1:0] exp_file;
         reg [8*256-1:0] vec_dir;
     begin
         // 构造文件名
@@ -92,6 +100,14 @@ module tb_ldpc_decoder_top;
         $sformat(llr_file, "%0stb_llr_input_%0d.hex", vec_dir, test_id);
         $sformat(exp_file, "%0stb_expected_output_%0d.hex", vec_dir, test_id);
 
+        // 装载前把首尾置 X 作哨兵: $readmemh 不返回状态, 文件打不开或行数不足
+        // 时数组会保持原值。以哨兵是否被覆盖判定"确实装进来了"。
+        // 治理规范 §5.5 V-4: 空载入必须 $fatal, 不得在空向量上比对。
+        r_llr_mem[0]        = 10'bx;   // 宽度同 r_llr_mem 声明 (reg signed [9:0])
+        r_llr_mem[`P_N-1]   = 10'bx;
+        r_exp_mem[0]        = 1'bx;
+        r_exp_mem[`P_K-1]   = 1'bx;
+
         // 加载 LLR 输入
         $display("  Loading LLR: %s", llr_file);
         $readmemh(llr_file, r_llr_mem);
@@ -99,6 +115,15 @@ module tb_ldpc_decoder_top;
         // 加载期望输出 (每行 1 个 0/1 字符)
         $display("  Loading Expected: %s", exp_file);
         $readmemb(exp_file, r_exp_mem);
+
+        if ((^r_llr_mem[0]) === 1'bx || (^r_llr_mem[`P_N-1]) === 1'bx) begin
+            $display("FATAL: LLR 向量未装载或行数不足 (%0s) — 拒绝在空向量上比对", llr_file);
+            $finish(1);
+        end
+        if ((^r_exp_mem[0]) === 1'bx || (^r_exp_mem[`P_K-1]) === 1'bx) begin
+            $display("FATAL: 期望向量未装载或行数不足 (%0s) — 拒绝在空向量上比对", exp_file);
+            $finish(1);
+        end
 
         $display("  Loaded %0d LLRs and %0d expected bits", `P_N, `P_K);
     end
@@ -286,8 +311,9 @@ module tb_ldpc_decoder_top;
     // 超时保护
     //-----------------------------------------------------------------
     initial begin
-        #(P_CLK_PERIOD * P_TIMEOUT);
-        $display("FAIL: Simulation timeout (%0d cycles)", P_TIMEOUT);
+        #(P_CLK_PERIOD * P_TIMEOUT * P_NUM_TESTS);
+        $display("FAIL: Simulation timeout (%0d cycles = %0d/test x %0d tests)",
+                 P_TIMEOUT * P_NUM_TESTS, P_TIMEOUT, P_NUM_TESTS);
         $finish(1);
     end
 
