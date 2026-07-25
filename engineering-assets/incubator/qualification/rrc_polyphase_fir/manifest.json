@@ -120,28 +120,13 @@
   ],
   "generality": {
     "param_space": [
-      {
-        "name": "DATA_W",
-        "values": [
-          16
-        ],
-        "support": true
-      },
-      {
-        "name": "SPS",
-        "values": [
-          4
-        ],
-        "support": true
-      },
-      {
-        "name": "SPAN",
-        "values": [
-          8
-        ],
-        "support": true
-      }
-    ]
+      { "name": "DATA_W",  "values": [16], "support": true },
+      { "name": "COEFF_W", "values": [16], "support": true },
+      { "name": "ACC_W",   "values": [38], "support": true },
+      { "name": "SPS",     "values": [4],  "support": true },
+      { "name": "TAPS_PP", "values": [9],  "support": true }
+    ],
+    "note": "参数表与 rtl/rrc_polyphase_fir.sv 的实际 parameter 一致。原先列的 SPAN 在 RTL 中不存在(span=8 体现为 TAPS_PP=9), 且漏列 COEFF_W/ACC_W —— 已按源码更正。仅默认值经过验证, 改参数须重跑全部证据。"
   },
   "waivers": [],
   "superseded_by": null
