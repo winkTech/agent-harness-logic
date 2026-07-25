@@ -97,7 +97,7 @@ The following hooks govern this agent's behavior at runtime:
 | `pre-completion-validation.cjs` | PreToolUse(TaskUpdate)  | Validates work before marking complete | --              |
 | `sync-memory-index.cjs`         | PostToolUse(Edit/Write) | Updates memory search index            | --              |
 
-See `knowledge/docs/@HOOK_AGENT_MAP.md` for the complete hook-agent matrix.
+See `engineering-assets/knowledge/docs/@HOOK_AGENT_MAP.md` for the complete hook-agent matrix.
 
 ## Role
 

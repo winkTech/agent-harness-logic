@@ -1,0 +1,17 @@
+{
+  "schema_version": "1.0",
+  "asset_uid": "basic_verilog",
+  "name": "basic_verilog",
+  "owner": "Lihan",
+  "maturity": { "level": "reference" },
+  "banner": "未认证 — 第三方上游工程，仅作参考。未过任何 CBB 准入门，不得直接复用进产品设计。",
+  "provenance": {
+    "source": "https://github.com/pConst/basic_verilog",
+    "license": "见 license/ 目录",
+    "retrieved": "2026-06-10",
+    "retrieved_basis": "目录 mtime 下界；原始归档为 GitHub 分支 ZIP，无 .git，commit SHA 不可复原",
+    "commit": null
+  },
+  "content": { "files": 1997, "size": "66M" },
+  "notes": "含 XilinxBoardStore_with_Alveo_cards_support/ 子树 660 文件/33M/67 张板卡图片，非参考 RTL，可单独处置（须与 filter-repo 同窗口，否则体积永久留在 history）"
+}

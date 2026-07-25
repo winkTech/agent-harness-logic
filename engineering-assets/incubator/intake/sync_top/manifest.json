@@ -7,11 +7,11 @@
   "maturity": {
     "level": "intake"
   },
-  "requirement_ref": "knowledge/primary/domains/comm/synch/algorithm_spec.md",
+  "requirement_ref": "engineering-assets/knowledge/primary/domains/comm/synch/algorithm_spec.md",
   "doc_refs": [
-    "knowledge/primary/domains/comm/synch/fixed_point_report.md",
-    "knowledge/primary/domains/comm/synch/report_sync_fpga_implementation.md",
-    "knowledge/primary/domains/comm/synch/resource_estimate.md"
+    "engineering-assets/knowledge/primary/domains/comm/synch/fixed_point_report.md",
+    "engineering-assets/knowledge/primary/domains/comm/synch/report_sync_fpga_implementation.md",
+    "engineering-assets/knowledge/primary/domains/comm/synch/resource_estimate.md"
   ],
   "golden_model_ref": "model_comm_synch",
   "fidelity": {

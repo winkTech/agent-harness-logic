@@ -79,7 +79,7 @@ The following hooks govern this agent's behavior at runtime:
 | `sync-memory-index.cjs`         | PostToolUse(Edit/Write) | Updates memory search index            | --              |
 | `code-index-updater.cjs`        | PostToolUse(Edit/Write) | Updates code search index              | --              |
 
-See `knowledge/docs/@HOOK_AGENT_MAP.md` for the complete hook-agent matrix.
+See `engineering-assets/knowledge/docs/@HOOK_AGENT_MAP.md` for the complete hook-agent matrix.
 
 ## Related Workflows
 

@@ -442,7 +442,7 @@ function replaceSkillsSection(text) {
   if (skillsEnd === -1) return text;
 
   return text.slice(0, skillsStart) +
-    '## AVAILABLE_SKILLS (Compact)\nSee `knowledge/references/skills-catalog.md` for full list.\n' +
+    '## AVAILABLE_SKILLS (Compact)\nSee `engineering-assets/knowledge/references/skills-catalog.md` for full list.\n' +
     text.slice(skillsEnd);
 }
 

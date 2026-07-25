@@ -10,7 +10,7 @@
 |---|---|
 | `cbb/` | **仅认证通过**的 RTL CBB |
 | `models/` | **仅认证通过**的 MATLAB 模型 |
-| `knowledge/` | 领域知识/方法论/索引（迁自 `~/.claude/knowledge/`） |
+| `knowledge/` | 领域知识/方法论/索引（已自 `~/.claude/knowledge/` 迁入） |
 | `incubator/{intake,qualification}` | 孵化中、未认证资产 |
 | `reference-assets/vendor/` | 第三方完整工程（仅参考，不认证） |
 | `schemas/` | `cbb-manifest.schema.json` 等 |

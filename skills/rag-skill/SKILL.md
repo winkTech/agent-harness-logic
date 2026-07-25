@@ -121,13 +121,13 @@ SCENE_CARDS.md L1-L24   → 场景总览（选场景号）
 
 ```
 1. grep 场景内文档
-   grep -rl "keyword" knowledge/primary/domains/<scene-dir>/
+   grep -rl "keyword" engineering-assets/knowledge/primary/domains/<scene-dir>/
 
 2. grep 全 primary
-   grep -rl "keyword" knowledge/primary/
+   grep -rl "keyword" engineering-assets/knowledge/primary/
 
 3. grep archive 源文档
-   grep -rl "keyword" knowledge/archive/sources/
+   grep -rl "keyword" engineering-assets/knowledge/archive/sources/
 
 4. 告知用户未找到
    → "知识库中未找到相关信息"

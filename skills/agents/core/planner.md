@@ -88,11 +88,11 @@ manifest:
 # Planner Agent
 
 <ui_patterns>
-knowledge/docs/reference/ui-patterns.md
+engineering-assets/knowledge/docs/reference/ui-patterns.md
 </ui_patterns>
 
 <continuation_format>
-knowledge/docs/reference/continuation-format.md
+engineering-assets/knowledge/docs/reference/continuation-format.md
 </continuation_format>
 
 ## Enforcement Hooks
@@ -115,7 +115,7 @@ The following hooks govern this agent's behavior at runtime (same as developer):
 
 Note: `unified-creator-guard.cjs` includes plan-evolution-guard logic to prevent direct writes to `var/plans/`.
 
-See `knowledge/docs/@HOOK_AGENT_MAP.md` for the complete hook-agent matrix.
+See `engineering-assets/knowledge/docs/@HOOK_AGENT_MAP.md` for the complete hook-agent matrix.
 
 ## Related Workflows
 
@@ -223,7 +223,7 @@ Target Agent: `developer`  ← WRONG: this is documentation work → use technic
 Before assigning Target Agents to tasks, read the routing card:
 
 ```
-Read('knowledge/docs/AGENT_ROUTING_CARD.md')
+Read('engineering-assets/knowledge/docs/AGENT_ROUTING_CARD.md')
 ```
 
 This contains ALL 49 agents organized by category. Your Agent Selection Guide below covers common cases, but the routing card covers ALL cases including:
@@ -264,7 +264,7 @@ Recommended Skills: `tdd`, `verification-before-completion`
 | Session ending             | `insight-extraction`, `session-handoff`                                     |
 | Creating new artifacts     | `research-synthesis` + appropriate creator skill                            |
 
-**Skill Catalog Reference:** `knowledge/references/skills-catalog.md`
+**Skill Catalog Reference:** `engineering-assets/knowledge/references/skills-catalog.md`
 
 **Rule:** Agents invoke skills via `Skill({ skill: "name" })`, NOT by reading skill files. Including skill recommendations in the task description ensures agents use the right tools.
 
@@ -377,7 +377,7 @@ Skip this phase for GREENFIELD projects.
 
 After Phase 0 complete and constitution checkpoint passed:
 
-1. **Read Context**: Run hybrid discovery first (`pnpm search:code`, `Skill({ skill: 'ripgrep' })`, semantic/structural search). Use `Grep` only as fallback. Then do targeted `Read` on top-ranked files and read `knowledge/docs/AGENT_ROUTING_CARD.md` before assigning agents.
+1. **Read Context**: Run hybrid discovery first (`pnpm search:code`, `Skill({ skill: 'ripgrep' })`, semantic/structural search). Use `Grep` only as fallback. Then do targeted `Read` on top-ranked files and read `engineering-assets/knowledge/docs/AGENT_ROUTING_CARD.md` before assigning agents.
 
 - For incident/debug plans, include a first-class trace step: `pnpm trace:query --trace-id <traceId> --compact --since <ISO-8601> --limit 200` (or component/event fallback when trace id is unknown).
 
@@ -973,7 +973,7 @@ Invoke based on task context:
 
 ### Skill Discovery
 
-1. Consult skill catalog: `knowledge/references/skills-catalog.md`
+1. Consult skill catalog: `engineering-assets/knowledge/references/skills-catalog.md`
 2. Search by category or keyword
 3. Invoke with: `Skill({ skill: "<skill-name>" })`
 
@@ -1179,7 +1179,7 @@ Total: 15 files → Checkpoint REQUIRED
 
 **Documentation**:
 
-- Template: See `knowledge/docs/templates/plan-template.md` (Phase 3 section)
+- Template: See `engineering-assets/knowledge/docs/templates/plan-template.md` (Phase 3 section)
 - Skill: See `skills/plan-generator/SKILL.md` (file count detection)
 
 ## Token Saver Invocation Rule

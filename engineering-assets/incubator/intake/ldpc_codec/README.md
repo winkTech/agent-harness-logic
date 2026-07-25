@@ -12,7 +12,7 @@
 | 定点格式 | LLR Q(10,4) |
 | 顶层 | `ldpc_decoder_top` (主资产, manifest ports 依此登记); `ldpc_encoder_top` 为同包第二顶层 |
 | Golden | `model_comm_ldpc` (engineering-assets/models/comm/ldpc/) |
-| 源 | knowledge/primary/domains/comm/ldpc/ |
+| 源 | engineering-assets/knowledge/primary/domains/comm/ldpc/ |
 
 ## 包结构
 

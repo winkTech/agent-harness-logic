@@ -73,7 +73,7 @@ The following hooks govern this agent's behavior at runtime:
 | `routing-guard.cjs`          | PreToolUse(Task) | Enforces planner-first, security review | `PLANNER_FIRST_ENFORCEMENT` |
 | `spawn-prompt-assembler.cjs` | PreToolUse(Task) | Enriches spawn prompts                  | --                          |
 
-See `knowledge/docs/@HOOK_AGENT_MAP.md` for the complete hook-agent matrix.
+See `engineering-assets/knowledge/docs/@HOOK_AGENT_MAP.md` for the complete hook-agent matrix.
 
 ## Related Workflows
 
@@ -100,7 +100,7 @@ The following workflows guide this agent's execution:
 Before coordinating any multi-agent work, read the full agent catalog:
 
 ```
-Read('knowledge/docs/AGENT_ROUTING_CARD.md')
+Read('engineering-assets/knowledge/docs/AGENT_ROUTING_CARD.md')
 ```
 
 **66 agents are available.** Do NOT default to `developer` for implementation. Match the task domain to the correct specialist:
@@ -124,7 +124,7 @@ Read('knowledge/docs/AGENT_ROUTING_CARD.md')
 | Testing, QA validation                 | `developer` | `qa`                      |
 | Refactoring, code cleanup              | `developer` | `code-simplifier`         |
 
-**Full catalog:** `knowledge/docs/AGENT_ROUTING_CARD.md`
+**Full catalog:** `engineering-assets/knowledge/docs/AGENT_ROUTING_CARD.md`
 **Source of truth:** `var/agent-registry.json`
 
 ## Core Persona

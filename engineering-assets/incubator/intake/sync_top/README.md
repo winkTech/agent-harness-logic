@@ -1,6 +1,6 @@
 # sync_top — OFDM 同步顶层 (802.11a) [intake]
 
-评估性打包：RTL 源码从 `knowledge/primary/domains/comm/synch/` **原样迁入，未做任何修改**。
+评估性打包：RTL 源码从 `engineering-assets/knowledge/primary/domains/comm/synch/` **原样迁入，未做任何修改**。
 本 README 如实记录现状，包括红线违规与编译级缺陷——它们是评估结论，不在 intake 阶段修复。
 
 ## 功能

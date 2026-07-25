@@ -3,7 +3,7 @@
 802.11a 风格 OFDM 发射链: 比特流 → 调制映射 → 导频/子载波映射 → 64 点 IFFT → CP 插入 → AXI-Stream 输出。
 定点: 16bit, Q2.14 (频域) / Q3.13 (时域)。
 
-> 本包为**评估性打包** (intake): RTL 自 `knowledge/primary/domains/comm/ofdm/rtl/` 原样复制, **未做任何修改**。
+> 本包为**评估性打包** (intake): RTL 自 `engineering-assets/knowledge/primary/domains/comm/ofdm/rtl/` 原样复制, **未做任何修改**。
 > 所有红线违规如实记录于下文, 不在打包阶段修复。
 
 ## 结构
@@ -19,8 +19,8 @@
 | `tb/tb_tx_top.sv` | 黄金向量比对 TB (`tb_ofdm_tx_top`), 读 freq_i/q.bin 驱动, 比对 expected_tx.bin ±1LSB |
 
 Golden model: `engineering-assets/models/comm/ofdm/` (asset_uid: `model_comm_ofdm`)。
-UVM 环境: 源库另有 `knowledge/primary/domains/comm/ofdm/uvm_tb/README.md`, 指向 `docs/templates/uvm/` 的共享模板 (ofdm_uvm_pkg.sv / axi_stream_if.sv / tb_ofdm_uvm_top.sv), 未随包复制。
-原仿真脚本 `knowledge/primary/domains/comm/ofdm/rtl/run_sim.do` 引用源库相对路径, 未随包复制 (避免携带失效路径)。
+UVM 环境: 源库另有 `engineering-assets/knowledge/primary/domains/comm/ofdm/uvm_tb/README.md`, 指向 `docs/templates/uvm/` 的共享模板 (ofdm_uvm_pkg.sv / axi_stream_if.sv / tb_ofdm_uvm_top.sv), 未随包复制。
+原仿真脚本 `engineering-assets/knowledge/primary/domains/comm/ofdm/rtl/run_sim.do` 引用源库相对路径, 未随包复制 (避免携带失效路径)。
 
 ## 红线违规清单 (如实记录, 未修复)
 

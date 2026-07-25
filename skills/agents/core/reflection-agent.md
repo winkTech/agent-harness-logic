@@ -82,7 +82,7 @@ The following hooks govern this agent's behavior at runtime:
 
 Note: `unified-reflection-handler.cjs` monitors Bash errors for reflection triggers (error recovery reflection), but reflection-agent does NOT have Bash tool permission (observation only).
 
-See `knowledge/docs/@HOOK_AGENT_MAP.md` for the complete hook-agent matrix.
+See `engineering-assets/knowledge/docs/@HOOK_AGENT_MAP.md` for the complete hook-agent matrix.
 
 ## Related Workflows
 
@@ -478,7 +478,7 @@ If trigger condition is NOT met, log `"Step 4.7 skipped (non-creator task)"` and
 
 **Checks to perform** (when triggered) for each artifact created or updated in the task:
 
-1. **Catalog Presence** — Read `knowledge/references/skills-catalog.md`
+1. **Catalog Presence** — Read `engineering-assets/knowledge/references/skills-catalog.md`
    - Search for `` `skill-name` `` pattern in table rows
    - If missing: flag as `CATALOG_MISSING`
 

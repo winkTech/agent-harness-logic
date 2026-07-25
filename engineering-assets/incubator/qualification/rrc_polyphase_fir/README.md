@@ -32,8 +32,8 @@ RRC（根升余弦）脉冲成形多相 FIR 滤波器核。33 抽头（α=0.5, s
 
 ## 反偏离锚链
 
-- 需求/算法: `knowledge/primary/domains/comm/rrc/algorithm_spec.md`
-- 定点报告: `knowledge/primary/domains/comm/rrc/fixed_point_report.md`
+- 需求/算法: `engineering-assets/knowledge/primary/domains/comm/rrc/algorithm_spec.md`
+- 定点报告: `engineering-assets/knowledge/primary/domains/comm/rrc/fixed_point_report.md`
 - Golden 模型: `model_comm_rrc`（**待纳入 models/ 治理**）
 
 ## 已知限制 / 认证阻塞

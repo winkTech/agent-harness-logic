@@ -5,9 +5,13 @@
   "kind": "golden-model",
   "version": "1.0.0",
   "owner": "lihan",
-  "maturity": { "level": "qualification" },
-  "requirement_ref": "knowledge/primary/domains/comm/rrc/algorithm_spec.md",
-  "implements_for": ["rrc_polyphase_fir"],
+  "maturity": {
+    "level": "qualification"
+  },
+  "requirement_ref": "engineering-assets/knowledge/primary/domains/comm/rrc/algorithm_spec.md",
+  "implements_for": [
+    "rrc_polyphase_fir"
+  ],
   "models": [
     {
       "role": "reference",
@@ -27,10 +31,22 @@
     "provenance": "expected_tx.hex 于 2026-07-25 由 tools/regen-vectors.cjs 按 golden 代码语义(rrc_pulse_shaping.m 定点路径, rrc_coeff.hex Q1.15)忠实复算再生; 原始导出损坏(2048 行全为 00008001 负裁剪轨), 证据保留于 vectors/expected_tx.broken-orig.hex。golden .m 代码未改动。建议后续用 MATLAB 原生重跑 run_rrc_sim.m 复核再生向量。"
   },
   "sources": [
-    { "path": "rrc_pulse_shaping.m", "role": "reference" },
-    { "path": "rrc_coeff_gen.m",     "role": "reference" },
-    { "path": "rrc_coeff.hex",       "role": "fixed_point" },
-    { "path": "config.m",            "role": "config" }
+    {
+      "path": "rrc_pulse_shaping.m",
+      "role": "reference"
+    },
+    {
+      "path": "rrc_coeff_gen.m",
+      "role": "reference"
+    },
+    {
+      "path": "rrc_coeff.hex",
+      "role": "fixed_point"
+    },
+    {
+      "path": "config.m",
+      "role": "config"
+    }
   ],
   "waivers": [],
   "superseded_by": null

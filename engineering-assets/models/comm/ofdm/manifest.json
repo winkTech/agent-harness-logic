@@ -5,9 +5,13 @@
   "kind": "golden-model",
   "version": "1.0.0",
   "owner": "lihan",
-  "maturity": { "level": "intake" },
-  "requirement_ref": "knowledge/primary/domains/comm/ofdm/algorithm_spec.md",
-  "implements_for": ["ofdm_tx_top"],
+  "maturity": {
+    "level": "intake"
+  },
+  "requirement_ref": "engineering-assets/knowledge/primary/domains/comm/ofdm/algorithm_spec.md",
+  "implements_for": [
+    "ofdm_tx_top"
+  ],
   "models": [
     {
       "role": "reference",
@@ -39,27 +43,90 @@
     "provenance": "自 knowledge/primary/domains/comm/ofdm/vectors/ 原样迁入 (2026-07-25), 未修改。健康度抽查: expected_tx.bin 80 行 64 唯一值, tx_i/tx_q 80 行 63-64 唯一值, 无常量轨/全同值损坏; freq_i/freq_q 唯一值 5/3 属 QPSK 星座离散取值的正常表现。注意: RTL TB (tb_tx_top.sv) 的 VEC_DIR 指向 ../golden_model/vectors/, 与源库 vectors/ 实际位置不符, cosim 前需对齐路径。"
   },
   "sources": [
-    { "path": "config.m",                 "role": "config" },
-    { "path": "run_ofdm_sim.m",           "role": "reference" },
-    { "path": "run_all_tests.m",          "role": "reference" },
-    { "path": "src/tx_chain.m",           "role": "reference" },
-    { "path": "src/rx_chain.m",           "role": "reference" },
-    { "path": "src/mod_mapper.m",         "role": "reference" },
-    { "path": "src/mod_demapper.m",       "role": "reference" },
-    { "path": "src/subcarrier_map.m",     "role": "reference" },
-    { "path": "src/ifft_chain.m",         "role": "reference" },
-    { "path": "src/add_cp.m",             "role": "reference" },
-    { "path": "src/generate_vectors.m",   "role": "fixed_point" },
-    { "path": "tests/test_modulations.m", "role": "test" },
-    { "path": "tests/test_ber.m",         "role": "test" },
-    { "path": "tests/test_boundary.m",    "role": "test" },
-    { "path": "vectors/freq_i.bin",       "role": "vector" },
-    { "path": "vectors/freq_q.bin",       "role": "vector" },
-    { "path": "vectors/expected_tx.bin",  "role": "vector" },
-    { "path": "vectors/tx_i.bin",         "role": "vector" },
-    { "path": "vectors/tx_q.bin",         "role": "vector" },
-    { "path": "vectors/time-domain-iq.txt", "role": "vector" },
-    { "path": "vectors/vector_config.txt", "role": "config" }
+    {
+      "path": "config.m",
+      "role": "config"
+    },
+    {
+      "path": "run_ofdm_sim.m",
+      "role": "reference"
+    },
+    {
+      "path": "run_all_tests.m",
+      "role": "reference"
+    },
+    {
+      "path": "src/tx_chain.m",
+      "role": "reference"
+    },
+    {
+      "path": "src/rx_chain.m",
+      "role": "reference"
+    },
+    {
+      "path": "src/mod_mapper.m",
+      "role": "reference"
+    },
+    {
+      "path": "src/mod_demapper.m",
+      "role": "reference"
+    },
+    {
+      "path": "src/subcarrier_map.m",
+      "role": "reference"
+    },
+    {
+      "path": "src/ifft_chain.m",
+      "role": "reference"
+    },
+    {
+      "path": "src/add_cp.m",
+      "role": "reference"
+    },
+    {
+      "path": "src/generate_vectors.m",
+      "role": "fixed_point"
+    },
+    {
+      "path": "tests/test_modulations.m",
+      "role": "test"
+    },
+    {
+      "path": "tests/test_ber.m",
+      "role": "test"
+    },
+    {
+      "path": "tests/test_boundary.m",
+      "role": "test"
+    },
+    {
+      "path": "vectors/freq_i.bin",
+      "role": "vector"
+    },
+    {
+      "path": "vectors/freq_q.bin",
+      "role": "vector"
+    },
+    {
+      "path": "vectors/expected_tx.bin",
+      "role": "vector"
+    },
+    {
+      "path": "vectors/tx_i.bin",
+      "role": "vector"
+    },
+    {
+      "path": "vectors/tx_q.bin",
+      "role": "vector"
+    },
+    {
+      "path": "vectors/time-domain-iq.txt",
+      "role": "vector"
+    },
+    {
+      "path": "vectors/vector_config.txt",
+      "role": "config"
+    }
   ],
   "waivers": [],
   "superseded_by": null

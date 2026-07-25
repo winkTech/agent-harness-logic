@@ -114,9 +114,9 @@ function buildNameIndex() {
   scanDir(MEMORY_DIR);
   scanDir(path.join(MEMORY_DIR, 'references'));
   scanDir(path.join(MEMORY_DIR, 'agents'));
-  scanDir(path.join(HARNESS_ROOT, 'knowledge', 'methodology'));
-  scanDir(path.join(HARNESS_ROOT, 'knowledge', 'primary'));
-  scanDir(path.join(HARNESS_ROOT, 'knowledge', 'references'));
+  scanDir(path.join(HARNESS_ROOT, 'engineering-assets', 'knowledge','methodology'));
+  scanDir(path.join(HARNESS_ROOT, 'engineering-assets', 'knowledge','primary'));
+  scanDir(path.join(HARNESS_ROOT, 'engineering-assets', 'knowledge','references'));
 
   // 从 MEMORY.md 补充索引（仅取名称，路径从索引行推断）
   if (fs.existsSync(MEMORY_INDEX)) {

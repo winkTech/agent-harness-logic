@@ -37,7 +37,7 @@ triggers:
 
 **目的**: 先卡片后详情，避免一次加载过多
 
-1. **标签匹配** — 按 `knowledge/INDEX.md` 中的标签体系命中目标卡片
+1. **标签匹配** — 按 `engineering-assets/knowledge/INDEX.md` 中的标签体系命中目标卡片
 2. **卡片浏览** — 读取匹配卡片的摘要和链接
 3. **深度加载** — 根据卡片指引加载具体文档
 4. **置信度检查** — 答案是否完整？是否需要跨域检索？
@@ -63,4 +63,4 @@ triggers:
 ## 关联资源
 
 - [RAG Skill](../skills/rag-skill/SKILL.md) — 详细检索方法和参数配置
-- [Knowledge INDEX](../knowledge/INDEX.md) — 知识库标签索引
+- [Knowledge INDEX](../../engineering-assets/knowledge/INDEX.md) — 知识库标签索引

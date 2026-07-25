@@ -30,10 +30,10 @@
 
 ## 反偏离锚链
 
-- 需求/算法: `knowledge/primary/domains/comm/channel_est/algorithm_spec.md`
-- 定点报告: `knowledge/primary/domains/comm/channel_est/fixed_point_report.md`
-- 实现报告: `knowledge/primary/domains/comm/channel_est/report_channel_est_fpga_implementation.md`
-- 资源估算: `knowledge/primary/domains/comm/channel_est/resource_estimate.md`
+- 需求/算法: `engineering-assets/knowledge/primary/domains/comm/channel_est/algorithm_spec.md`
+- 定点报告: `engineering-assets/knowledge/primary/domains/comm/channel_est/fixed_point_report.md`
+- 实现报告: `engineering-assets/knowledge/primary/domains/comm/channel_est/report_channel_est_fpga_implementation.md`
+- 资源估算: `engineering-assets/knowledge/primary/domains/comm/channel_est/resource_estimate.md`
 - Golden 模型: `model_comm_channel_est`（已迁入 `engineering-assets/models/comm/channel_est/`）
 
 ## 已知红线违规（评估性打包，如实记录，未修复）

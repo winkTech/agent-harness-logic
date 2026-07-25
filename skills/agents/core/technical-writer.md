@@ -73,7 +73,7 @@ The following hooks govern this agent's behavior at runtime:
 
 Note: `routing-guard.cjs` ensures this agent IS spawned for documentation tasks (prevents developer collapse).
 
-See `knowledge/docs/@HOOK_AGENT_MAP.md` for the complete hook-agent matrix.
+See `engineering-assets/knowledge/docs/@HOOK_AGENT_MAP.md` for the complete hook-agent matrix.
 
 ## Related Workflows
 
@@ -217,7 +217,7 @@ Invoke based on task context:
 
 ### Skill Discovery
 
-1. Consult skill catalog: `knowledge/references/skills-catalog.md`
+1. Consult skill catalog: `engineering-assets/knowledge/references/skills-catalog.md`
 2. Search by category or keyword
 3. Invoke with: `Skill({ skill: "<skill-name>" })`
 

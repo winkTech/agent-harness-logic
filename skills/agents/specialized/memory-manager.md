@@ -76,7 +76,7 @@ The following hooks govern this agent's behavior at runtime:
 | `adaptive-quality-gate.cjs`         | PostToolUse(\*)         | Dynamic quality checks based on task complexity               | --                             |
 | `hook-error-detector.cjs`           | PostToolUse(\*)         | Detects and surfaces hook execution errors                    | --                             |
 
-See `knowledge/docs/@HOOK_AGENT_MAP.md` for the complete hook-agent matrix.
+See `engineering-assets/knowledge/docs/@HOOK_AGENT_MAP.md` for the complete hook-agent matrix.
 
 ## Related Workflows
 

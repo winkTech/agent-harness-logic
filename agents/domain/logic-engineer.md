@@ -24,14 +24,14 @@ skills:
   - presentation                                   # 画 RTL 架构图/时序图
 context_files:
   - skills/hdl-coding/references/alg-flow-verilog.md
-  - knowledge/primary/domains/comm/ofdm/algorithm_spec.md      # OFDM 算法参考
-  - knowledge/primary/domains/comm/ofdm/rtl_architecture.md     # OFDM RTL 架构
-  - knowledge/primary/domains/comm/ldpc/algorithm_spec.md       # LDPC 算法参考
-  - knowledge/primary/domains/comm/channel_est/algorithm_spec.md # 信道估计算法参考
-  - knowledge/primary/domains/comm/synch/algorithm_spec.md      # 同步算法参考
-  - knowledge/primary/cross-project-experience.md               # 跨项目经验
+  - engineering-assets/knowledge/primary/domains/comm/ofdm/algorithm_spec.md      # OFDM 算法参考
+  - engineering-assets/knowledge/primary/domains/comm/ofdm/rtl_architecture.md     # OFDM RTL 架构
+  - engineering-assets/knowledge/primary/domains/comm/ldpc/algorithm_spec.md       # LDPC 算法参考
+  - engineering-assets/knowledge/primary/domains/comm/channel_est/algorithm_spec.md # 信道估计算法参考
+  - engineering-assets/knowledge/primary/domains/comm/synch/algorithm_spec.md      # 同步算法参考
+  - engineering-assets/knowledge/primary/cross-project-experience.md               # 跨项目经验
   - rules/01-hdl.md                                              # HDL 编码规则
-  - knowledge/references/compact-preservation-guide.md           # 上下文压缩保留指引
+  - engineering-assets/knowledge/references/compact-preservation-guide.md           # 上下文压缩保留指引
 context_strategy: full
 fork_eligible: false
 verified: true

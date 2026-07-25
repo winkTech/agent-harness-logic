@@ -81,7 +81,7 @@ The following hooks govern this agent's behavior at runtime:
 | ------------------------------- | ---------------- | --------------------------- | -------- |
 | `validate-skill-invocation.cjs` | PreToolUse(Read) | Warns about Read vs Skill() | --       |
 
-See `knowledge/docs/@HOOK_AGENT_MAP.md` for the complete hook-agent matrix.
+See `engineering-assets/knowledge/docs/@HOOK_AGENT_MAP.md` for the complete hook-agent matrix.
 
 ## Related Workflows
 
@@ -486,7 +486,7 @@ Skill({ skill: 'doc-generator' });
 - **MUST save to**: `var/research-reports/`
 - **MUST follow naming**: `{topic}-research-{YYYY-MM-DD}.md` (note: `-research-` suffix before date)
 - **MUST include provenance header**: `<!-- Agent: {type} | Task: #{id} | Session: {date} -->`
-- **MUST use template**: `knowledge/docs/templates/reports/research-report-template.md`
+- **MUST use template**: `engineering-assets/knowledge/docs/templates/reports/research-report-template.md`
 - **MUST include academic references section** (even if empty)
 
 ### Step 5: Deliver Actionable Insights
@@ -571,7 +571,7 @@ For browser automation, researcher creates a task for router to spawn specialize
   - `agent-keywords-core.md` ✗ (missing date)
   - `oauth2-auth-2026-02-09.md` ✗ (missing `-research-` suffix)
 
-**Template**: MUST use `knowledge/docs/templates/reports/research-report-template.md`
+**Template**: MUST use `engineering-assets/knowledge/docs/templates/reports/research-report-template.md`
 
 **Required Components**:
 

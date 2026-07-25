@@ -5,9 +5,13 @@
   "kind": "golden-model",
   "version": "1.0.0",
   "owner": "lihan",
-  "maturity": { "level": "intake" },
-  "requirement_ref": "knowledge/primary/domains/comm/channel_est/algorithm_spec.md",
-  "implements_for": ["channel_est_top"],
+  "maturity": {
+    "level": "intake"
+  },
+  "requirement_ref": "engineering-assets/knowledge/primary/domains/comm/channel_est/algorithm_spec.md",
+  "implements_for": [
+    "channel_est_top"
+  ],
   "models": [
     {
       "role": "reference",
@@ -33,17 +37,50 @@
     "provenance": "向量产物 (rx_chEst.bin / expected_chEst.bin / vector_config.txt) 未随源入库 — 源树 knowledge/primary/domains/comm/channel_est/ 下无 vectors/ 目录, generate_vectors.m 的导出产物从未提交。tb_chEst_cosim.sv 与 run_rtl_cosim.m 依赖这些文件, cosim 当前不可运行, 无法抽查常量轨/全同值健康度。需 MATLAB 跑 run_channel_sim.m -> generate_vectors.m 生成后方可做 bit-true 对标。golden .m 源码未改动。"
   },
   "sources": [
-    { "path": "ls_channel_est.m",        "role": "reference" },
-    { "path": "sim_channel.m",           "role": "reference" },
-    { "path": "config.m",                "role": "config" },
-    { "path": "run_channel_sim.m",       "role": "harness" },
-    { "path": "run_all_tests.m",         "role": "harness" },
-    { "path": "src/generate_vectors.m",  "role": "fixed_point" },
-    { "path": "tests/test_ls_linear.m",  "role": "test" },
-    { "path": "tests/test_ls_dft.m",     "role": "test" },
-    { "path": "tests/test_awgn.m",       "role": "test" },
-    { "path": "tests/test_snr_range.m",  "role": "test" },
-    { "path": "tests/test_mod_order.m",  "role": "test" }
+    {
+      "path": "ls_channel_est.m",
+      "role": "reference"
+    },
+    {
+      "path": "sim_channel.m",
+      "role": "reference"
+    },
+    {
+      "path": "config.m",
+      "role": "config"
+    },
+    {
+      "path": "run_channel_sim.m",
+      "role": "harness"
+    },
+    {
+      "path": "run_all_tests.m",
+      "role": "harness"
+    },
+    {
+      "path": "src/generate_vectors.m",
+      "role": "fixed_point"
+    },
+    {
+      "path": "tests/test_ls_linear.m",
+      "role": "test"
+    },
+    {
+      "path": "tests/test_ls_dft.m",
+      "role": "test"
+    },
+    {
+      "path": "tests/test_awgn.m",
+      "role": "test"
+    },
+    {
+      "path": "tests/test_snr_range.m",
+      "role": "test"
+    },
+    {
+      "path": "tests/test_mod_order.m",
+      "role": "test"
+    }
   ],
   "waivers": [],
   "superseded_by": null

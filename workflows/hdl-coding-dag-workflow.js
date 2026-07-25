@@ -177,7 +177,7 @@ nodes.p0_infra = {
   run: async () => {
     const result = await agent(`执行 HDL 工作流 Phase 0: 基础设施 + 建目录
 
-[MUST] 按跨项目标准建目录 (knowledge/primary/cross-project-experience.md):
+[MUST] 按跨项目标准建目录 (engineering-assets/knowledge/primary/cross-project-experience.md):
 <project_root>/
 ├── 01_src/00_hdl/      # RTL 源码 (每个模块独立子目录)
 ├── 01_src/01_ip/        # IP 核
@@ -268,7 +268,7 @@ nodes.p1a_sys_design = {
 ━━━ 检查点 (P1a 门禁) ━━━
 产出 06_doc/ 下 6 份文档后暂停。
 
-调度层将使用 knowledge/primary/architecture-patterns/gate-checklist-p1a.md 检查:
+调度层将使用 engineering-assets/knowledge/primary/architecture-patterns/gate-checklist-p1a.md 检查:
   [MUST] A1 系统上下文: 链路位置+信号特性+系统约束+性能指标
   [MUST] A2 数学推导: 完整链+每步公式+近似误差
   [MUST] A3 多方案对比: ≥2 候选+4 维对比表+否选理由

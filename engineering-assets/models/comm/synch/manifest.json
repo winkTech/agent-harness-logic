@@ -5,9 +5,13 @@
   "kind": "golden-model",
   "version": "1.0.0",
   "owner": "lihan",
-  "maturity": { "level": "intake" },
-  "requirement_ref": "knowledge/primary/domains/comm/synch/algorithm_spec.md",
-  "implements_for": ["sync_top"],
+  "maturity": {
+    "level": "intake"
+  },
+  "requirement_ref": "engineering-assets/knowledge/primary/domains/comm/synch/algorithm_spec.md",
+  "implements_for": [
+    "sync_top"
+  ],
   "models": [
     {
       "role": "reference",
@@ -57,21 +61,66 @@
     "provenance": "仓库内无已导出的 expected/stimulus 向量文件 (src/generate_vectors.m 输出目标 ../vectors/expected_sync_out.bin + vector_config.txt 不存在, 从未生成或未入库)。向量健康度无从抽查; 需 MATLAB 跑 run_synch_sim.m + generate_vectors.m 首次生成。"
   },
   "sources": [
-    { "path": "config.m",                    "role": "config" },
-    { "path": "packet_detect.m",             "role": "reference" },
-    { "path": "coarse_cfo_est.m",            "role": "reference" },
-    { "path": "fine_cfo_est.m",              "role": "reference" },
-    { "path": "cfo_correct.m",               "role": "reference" },
-    { "path": "fine_timing.m",               "role": "reference" },
-    { "path": "generate_preamble.m",         "role": "reference" },
-    { "path": "run_synch_sim.m",             "role": "sim" },
-    { "path": "run_all_tests.m",             "role": "test" },
-    { "path": "src/generate_vectors.m",      "role": "fixed_point" },
-    { "path": "tests/test_packet_detect.m",  "role": "test" },
-    { "path": "tests/test_cfo_est.m",        "role": "test" },
-    { "path": "tests/test_cfo_range.m",      "role": "test" },
-    { "path": "tests/test_snr_robust.m",     "role": "test" },
-    { "path": "tests/test_timing.m",         "role": "test" }
+    {
+      "path": "config.m",
+      "role": "config"
+    },
+    {
+      "path": "packet_detect.m",
+      "role": "reference"
+    },
+    {
+      "path": "coarse_cfo_est.m",
+      "role": "reference"
+    },
+    {
+      "path": "fine_cfo_est.m",
+      "role": "reference"
+    },
+    {
+      "path": "cfo_correct.m",
+      "role": "reference"
+    },
+    {
+      "path": "fine_timing.m",
+      "role": "reference"
+    },
+    {
+      "path": "generate_preamble.m",
+      "role": "reference"
+    },
+    {
+      "path": "run_synch_sim.m",
+      "role": "sim"
+    },
+    {
+      "path": "run_all_tests.m",
+      "role": "test"
+    },
+    {
+      "path": "src/generate_vectors.m",
+      "role": "fixed_point"
+    },
+    {
+      "path": "tests/test_packet_detect.m",
+      "role": "test"
+    },
+    {
+      "path": "tests/test_cfo_est.m",
+      "role": "test"
+    },
+    {
+      "path": "tests/test_cfo_range.m",
+      "role": "test"
+    },
+    {
+      "path": "tests/test_snr_robust.m",
+      "role": "test"
+    },
+    {
+      "path": "tests/test_timing.m",
+      "role": "test"
+    }
   ],
   "waivers": [],
   "superseded_by": null

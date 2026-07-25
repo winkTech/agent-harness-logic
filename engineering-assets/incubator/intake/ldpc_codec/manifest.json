@@ -7,12 +7,12 @@
   "maturity": {
     "level": "intake"
   },
-  "requirement_ref": "knowledge/primary/domains/comm/ldpc/algorithm_spec.md",
+  "requirement_ref": "engineering-assets/knowledge/primary/domains/comm/ldpc/algorithm_spec.md",
   "doc_refs": [
-    "knowledge/primary/domains/comm/ldpc/encoding_spec.md",
-    "knowledge/primary/domains/comm/ldpc/stage3_fixed_point_report.md",
-    "knowledge/primary/domains/comm/ldpc/stage4_resource_estimation.md",
-    "knowledge/primary/domains/comm/ldpc/stage7_fpga_implementation_report.md"
+    "engineering-assets/knowledge/primary/domains/comm/ldpc/encoding_spec.md",
+    "engineering-assets/knowledge/primary/domains/comm/ldpc/stage3_fixed_point_report.md",
+    "engineering-assets/knowledge/primary/domains/comm/ldpc/stage4_resource_estimation.md",
+    "engineering-assets/knowledge/primary/domains/comm/ldpc/stage7_fpga_implementation_report.md"
   ],
   "golden_model_ref": "model_comm_ldpc",
   "fidelity": {

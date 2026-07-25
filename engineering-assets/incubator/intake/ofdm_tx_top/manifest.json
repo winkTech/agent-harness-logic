@@ -7,13 +7,13 @@
   "maturity": {
     "level": "intake"
   },
-  "requirement_ref": "knowledge/primary/domains/comm/ofdm/algorithm_spec.md",
+  "requirement_ref": "engineering-assets/knowledge/primary/domains/comm/ofdm/algorithm_spec.md",
   "doc_refs": [
-    "knowledge/primary/domains/comm/ofdm/rtl_architecture.md",
-    "knowledge/primary/domains/comm/ofdm/fixed_point_report.md",
-    "knowledge/primary/domains/comm/ofdm/report_ofdm_fpga_implementation.md",
-    "knowledge/primary/domains/comm/ofdm/resource_estimate.md",
-    "knowledge/primary/domains/comm/ofdm/testbench_plan.md"
+    "engineering-assets/knowledge/primary/domains/comm/ofdm/rtl_architecture.md",
+    "engineering-assets/knowledge/primary/domains/comm/ofdm/fixed_point_report.md",
+    "engineering-assets/knowledge/primary/domains/comm/ofdm/report_ofdm_fpga_implementation.md",
+    "engineering-assets/knowledge/primary/domains/comm/ofdm/resource_estimate.md",
+    "engineering-assets/knowledge/primary/domains/comm/ofdm/testbench_plan.md"
   ],
   "golden_model_ref": "model_comm_ofdm",
   "fidelity": {

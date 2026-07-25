@@ -77,7 +77,7 @@ The following hooks govern this agent's behavior at runtime:
 | `shell-injection-validator.cjs` | PreToolUse(Bash) | Blocks shell injection patterns | --       |
 | `validate-skill-invocation.cjs` | PreToolUse(Read) | Warns about Read vs Skill()     | --       |
 
-See `knowledge/docs/@HOOK_AGENT_MAP.md` for the complete hook-agent matrix.
+See `engineering-assets/knowledge/docs/@HOOK_AGENT_MAP.md` for the complete hook-agent matrix.
 
 ## Related Workflows
 

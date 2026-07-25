@@ -1,0 +1,17 @@
+{
+  "schema_version": "1.0",
+  "asset_uid": "r22sdf",
+  "name": "r22sdf",
+  "owner": "Lihan",
+  "maturity": { "level": "reference" },
+  "banner": "未认证 — 第三方上游工程，仅作参考。未过任何 CBB 准入门，不得直接复用进产品设计。",
+  "provenance": {
+    "source": "unresolved",
+    "license": "MIT",
+    "retrieved": "2019-04-14",
+    "retrieved_basis": "目录 mtime 下界；原始归档为 GitHub 分支 ZIP，无 .git，commit SHA 不可复原",
+    "commit": null
+  },
+  "content": { "files": 61, "size": "4.2M" },
+  "notes": "Radix-2^2 SDF 流水 FFT。README 无 upstream URL；LICENSE 记 Copyright (c) 2017 Nanamaru Namake。source 待人工补全，不臆造。"
+}

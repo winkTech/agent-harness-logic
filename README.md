@@ -78,7 +78,7 @@
 │   ├── references/        ←     跨项目参考链接
 │   └── archive/           ←     已归档历史
 │
-├── knowledge/             ← L2 记忆：领域知识库（3414 文件）
+├── engineering-assets/knowledge/             ← L2 记忆：领域知识库（3414 文件）
 │   ├── primary/domains/   ←     核心领域（fpga / comm / matlab / python）
 │   ├── docs/              ←     技术文档与模板
 │   ├── source/            ←     原始资料 PDF（本地引用，不入 git）
@@ -183,7 +183,7 @@ SQLite FTS5 (BM25 排序) → Grep/Glob → git log → rag-skill/code-search �
 
 ## L5 技能层
 
-13 核心技能（slash 命令）+ 17 Agent 角色 + 6 工作流。完整列表见 `knowledge/references/skills-catalog.md`。
+13 核心技能（slash 命令）+ 17 Agent 角色 + 6 工作流。完整列表见 `engineering-assets/knowledge/references/skills-catalog.md`。
 
 **DAG 工作流**（`hdl-coding-dag-workflow.js`）：10 阶段 HDL 开发流程 v3.4，Phase 2(定点)+Phase 3(TB) 并行、Phase 6(回归)+Phase 7(审查) 并行，含证据门禁 + Verifier 终验节点。
 
@@ -360,8 +360,8 @@ node engine/scripts/quality-regression-dashboard.cjs report  # 自动 10% 退化
 | 绘图规则 | `rules/10-drawing.md` |
 | Git 操作规则 | `rules/11-git.md` |
 | TDD 测试驱动 | `rules/12-tdd.md` |
-| 查技能列表 | `knowledge/references/skills-catalog.md` |
-| 查完整索引 | `knowledge/references/reference-index.md` |
+| 查技能列表 | `engineering-assets/knowledge/references/skills-catalog.md` |
+| 查完整索引 | `engineering-assets/knowledge/references/reference-index.md` |
 | SQLite 文档 | `engine/sqlite/README.md` |
 | 系统诊断 | `node engine/diagnostics.cjs` |
 | 记忆健康 | `node engine/scripts/memory-health-check.cjs` |

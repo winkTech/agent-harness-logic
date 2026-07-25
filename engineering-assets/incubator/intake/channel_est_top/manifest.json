@@ -7,11 +7,11 @@
   "maturity": {
     "level": "intake"
   },
-  "requirement_ref": "knowledge/primary/domains/comm/channel_est/algorithm_spec.md",
+  "requirement_ref": "engineering-assets/knowledge/primary/domains/comm/channel_est/algorithm_spec.md",
   "doc_refs": [
-    "knowledge/primary/domains/comm/channel_est/fixed_point_report.md",
-    "knowledge/primary/domains/comm/channel_est/report_channel_est_fpga_implementation.md",
-    "knowledge/primary/domains/comm/channel_est/resource_estimate.md"
+    "engineering-assets/knowledge/primary/domains/comm/channel_est/fixed_point_report.md",
+    "engineering-assets/knowledge/primary/domains/comm/channel_est/report_channel_est_fpga_implementation.md",
+    "engineering-assets/knowledge/primary/domains/comm/channel_est/resource_estimate.md"
   ],
   "golden_model_ref": "model_comm_channel_est",
   "fidelity": {
@@ -142,17 +142,23 @@
     "param_space": [
       {
         "name": "DATA_W",
-        "values": [16],
+        "values": [
+          16
+        ],
         "support": true
       },
       {
         "name": "N_FFT",
-        "values": [64],
+        "values": [
+          64
+        ],
         "support": true
       },
       {
         "name": "N_PILOT",
-        "values": [4],
+        "values": [
+          4
+        ],
         "support": true
       }
     ]

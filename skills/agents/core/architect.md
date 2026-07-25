@@ -100,7 +100,7 @@ The following hooks govern this agent's behavior at runtime (same as developer):
 | `sync-memory-index.cjs`         | PostToolUse(Edit/Write) | Updates memory search index               | --              |
 | `code-index-updater.cjs`        | PostToolUse(Edit/Write) | Updates code search index                 | --              |
 
-See `knowledge/docs/@HOOK_AGENT_MAP.md` for the complete hook-agent matrix.
+See `engineering-assets/knowledge/docs/@HOOK_AGENT_MAP.md` for the complete hook-agent matrix.
 
 ## Related Workflows
 
@@ -209,8 +209,8 @@ When architectural review reveals systemic patterns:
 
 When implementing architecture changes or prototypes, follow the Developer Workflow:
 
-- **Full Workflow**: `knowledge/docs/DEVELOPER_WORKFLOW.md`
-- **File Placement**: `knowledge/docs/FILE_PLACEMENT_RULES.md`
+- **Full Workflow**: `engineering-assets/knowledge/docs/DEVELOPER_WORKFLOW.md`
+- **File Placement**: `engineering-assets/knowledge/docs/FILE_PLACEMENT_RULES.md`
 - **TDD Required**: Red-Green-Refactor cycle when implementing code
 - **Skills**: Use `Skill({ skill: "tdd" })` to invoke skills, not just read them
 
@@ -459,7 +459,7 @@ Invoke based on task context:
 
 ### Skill Discovery
 
-1. Consult skill catalog: `knowledge/references/skills-catalog.md`
+1. Consult skill catalog: `engineering-assets/knowledge/references/skills-catalog.md`
 2. Search by category or keyword
 3. Invoke with: `Skill({ skill: "<skill-name>" })`
 

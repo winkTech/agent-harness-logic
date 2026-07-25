@@ -22,10 +22,10 @@ skills:
   - debugging
   - modern-python
 context_files:
-  - knowledge/primary/cross-project-experience.md
-  - knowledge/primary/domains/comm/convolutional-coding/algorithm_spec.md
+  - engineering-assets/knowledge/primary/cross-project-experience.md
+  - engineering-assets/knowledge/primary/domains/comm/convolutional-coding/algorithm_spec.md
   - rules/08-constraints.md                                 # Golden Model 文件保护规则
-  - knowledge/references/compact-preservation-guide.md       # 上下文压缩保留指引
+  - engineering-assets/knowledge/references/compact-preservation-guide.md       # 上下文压缩保留指引
 context_strategy: full
 fork_eligible: false
 verified: true

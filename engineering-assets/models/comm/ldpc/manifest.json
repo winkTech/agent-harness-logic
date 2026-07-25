@@ -5,9 +5,13 @@
   "kind": "golden-model",
   "version": "1.0.0",
   "owner": "lihan",
-  "maturity": { "level": "intake" },
-  "requirement_ref": "knowledge/primary/domains/comm/ldpc/algorithm_spec.md",
-  "implements_for": ["ldpc_codec"],
+  "maturity": {
+    "level": "intake"
+  },
+  "requirement_ref": "engineering-assets/knowledge/primary/domains/comm/ldpc/algorithm_spec.md",
+  "implements_for": [
+    "ldpc_codec"
+  ],
   "models": [
     {
       "role": "reference",
@@ -45,26 +49,86 @@
     "provenance": "RTL 对标向量 tb_llr_input_*.hex / tb_expected_output_*.hex 由 gen_rtl_test_vectors.m 生成到 rtl/02_sim/, 但源知识库中从未导出入库 (全树无 .hex) — TB 无法独立复跑, 属向量缺失 (与 rrc 的向量损坏不同类)。二进制 .mat (PT_1_2_648.mat, fixed_point_ber_results.mat) 经 2026-07-25 抽查为合法 MATLAB 5.0 格式且字节分布正常, 非常量轨。golden .m 代码未做任何改动。建议后续用 MATLAB 原生跑 gen_rtl_test_vectors.m 补齐向量并入库。"
   },
   "sources": [
-    { "path": "config.m",                    "role": "config" },
-    { "path": "PT_1_2_648.mat",              "role": "fixed_point" },
-    { "path": "src/generate_h_matrix.m",     "role": "reference" },
-    { "path": "src/ldpc_encode.m",           "role": "reference" },
-    { "path": "src/ldpc_encode_80211n.m",    "role": "reference" },
-    { "path": "src/llr_calc.m",              "role": "reference" },
-    { "path": "src/ldpc_decoder_bp.m",       "role": "reference" },
-    { "path": "src/ldpc_decoder_ms.m",       "role": "reference" },
-    { "path": "src/ldpc_decoder_ms_pure.m",  "role": "reference" },
-    { "path": "src/ldpc_decoder_ms_fixed.m", "role": "fixed_point" },
-    { "path": "src/sim_ldpc_ber.m",          "role": "reference" },
-    { "path": "gen_rtl_test_vectors.m",      "role": "vector_gen" },
-    { "path": "compare_fixed_point_v2.m",    "role": "test" },
-    { "path": "run_ldpc_sim.m",              "role": "test" },
-    { "path": "run_all_tests.m",             "role": "test" },
-    { "path": "tests/test_encode_decode.m",  "role": "test" },
-    { "path": "tests/test_ber_awgn.m",       "role": "test" },
-    { "path": "tests/test_convergence.m",    "role": "test" },
-    { "path": "tests/test_min_sum_vs_bp.m",  "role": "test" },
-    { "path": "tests/test_multiple_blocks.m","role": "test" }
+    {
+      "path": "config.m",
+      "role": "config"
+    },
+    {
+      "path": "PT_1_2_648.mat",
+      "role": "fixed_point"
+    },
+    {
+      "path": "src/generate_h_matrix.m",
+      "role": "reference"
+    },
+    {
+      "path": "src/ldpc_encode.m",
+      "role": "reference"
+    },
+    {
+      "path": "src/ldpc_encode_80211n.m",
+      "role": "reference"
+    },
+    {
+      "path": "src/llr_calc.m",
+      "role": "reference"
+    },
+    {
+      "path": "src/ldpc_decoder_bp.m",
+      "role": "reference"
+    },
+    {
+      "path": "src/ldpc_decoder_ms.m",
+      "role": "reference"
+    },
+    {
+      "path": "src/ldpc_decoder_ms_pure.m",
+      "role": "reference"
+    },
+    {
+      "path": "src/ldpc_decoder_ms_fixed.m",
+      "role": "fixed_point"
+    },
+    {
+      "path": "src/sim_ldpc_ber.m",
+      "role": "reference"
+    },
+    {
+      "path": "gen_rtl_test_vectors.m",
+      "role": "vector_gen"
+    },
+    {
+      "path": "compare_fixed_point_v2.m",
+      "role": "test"
+    },
+    {
+      "path": "run_ldpc_sim.m",
+      "role": "test"
+    },
+    {
+      "path": "run_all_tests.m",
+      "role": "test"
+    },
+    {
+      "path": "tests/test_encode_decode.m",
+      "role": "test"
+    },
+    {
+      "path": "tests/test_ber_awgn.m",
+      "role": "test"
+    },
+    {
+      "path": "tests/test_convergence.m",
+      "role": "test"
+    },
+    {
+      "path": "tests/test_min_sum_vs_bp.m",
+      "role": "test"
+    },
+    {
+      "path": "tests/test_multiple_blocks.m",
+      "role": "test"
+    }
   ],
   "waivers": [],
   "superseded_by": null

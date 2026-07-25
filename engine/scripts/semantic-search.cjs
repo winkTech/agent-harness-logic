@@ -27,9 +27,9 @@ const INDEX_DIR = p.join(HOME, 'var', 'index');
 const INDEX_FILE = p.join(INDEX_DIR, 'semantic-index.json');
 const MEMORY_DIR = p.join(HOME, 'memory');
 const KNOWLEDGE_DIRS = [
-  p.join(HOME, 'knowledge', 'primary'),
-  p.join(HOME, 'knowledge', 'docs'),
-  p.join(HOME, 'knowledge', 'references'),
+  p.join(HOME, 'engineering-assets', 'knowledge','primary'),
+  p.join(HOME, 'engineering-assets', 'knowledge','docs'),
+  p.join(HOME, 'engineering-assets', 'knowledge','references'),
 ];
 
 // ── Tokenizer: English words + Chinese char trigrams ─────────────────────
