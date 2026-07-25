@@ -5,10 +5,28 @@
   "description": "生产级 CBB 资产 manifest。单一真相源。字段依据《CBB 库治理与生产级准入规范 V1.0》§6。MVP 子集；scale-up 字段（timing_closure/generality 全维/lineage 等）可选。",
   "type": "object",
   "additionalProperties": false,
+  "comment_levels": "required 按 maturity.level 条件化（规范 §3.1）。reference 级只要求 asset_uid + provenance + owner + 未认证横幅，不得强制 RTL 形状字段（ports/clock/reset/golden_model_ref）——否则 vendored 上游工程与 knowledge 文档资产无法纳入治理。intake 及以上要求完整锚链与 RTL 契约。",
   "required": [
-    "schema_version", "asset_uid", "name", "version", "owner",
-    "maturity", "requirement_ref", "doc_refs", "golden_model_ref",
-    "fidelity", "ports", "clock", "reset", "constraints", "sources"
+    "schema_version", "asset_uid", "name", "owner", "maturity"
+  ],
+  "allOf": [
+    {
+      "if": { "properties": { "kind": { "const": "golden-model" } }, "required": ["kind"] },
+      "then": {
+        "comment": "正确性锚自身：它就是 golden，故无 golden_model_ref；是 .m/.hex，故无 ports/clock/reset。",
+        "required": ["version", "requirement_ref", "models", "sources"]
+      },
+      "else": {
+        "if": { "properties": { "maturity": { "properties": { "level": { "const": "reference" } }, "required": ["level"] } }, "required": ["maturity"] },
+        "then": { "required": ["provenance", "banner"] },
+        "else": {
+          "required": [
+            "version", "requirement_ref", "doc_refs", "golden_model_ref",
+            "fidelity", "ports", "clock", "reset", "constraints", "sources"
+          ]
+        }
+      }
+    }
   ],
   "properties": {
     "schema_version": { "type": "string", "enum": ["1.0"] },
@@ -120,7 +138,15 @@
         "required": ["path", "role", "sha256"],
         "properties": {
           "path": { "type": "string" },
-          "role": { "type": "string", "enum": ["rtl", "tb", "constraint", "vector", "doc"] },
+          "note": { "type": "string" },
+          "role": {
+            "type": "string",
+            "description": "前 5 个为 rtl 域；后 7 个为 golden-model 域（规范 §1 正确性锚的双模型 + 其配套）。",
+            "enum": [
+              "rtl", "tb", "constraint", "vector", "doc",
+              "reference", "fixed_point", "config", "vector_gen", "sim", "test", "harness"
+            ]
+          },
           "sha256": { "type": "string", "pattern": "^[a-f0-9]{64}$" }
         }
       }
@@ -152,6 +178,53 @@
         }
       }
     },
-    "superseded_by": { "type": ["string", "null"] }
+    "superseded_by": { "type": ["string", "null"] },
+
+    "kind": {
+      "type": "string",
+      "enum": ["rtl", "golden-model", "vendor", "knowledge"],
+      "description": "资产域（规范 §1 三个锚 + vendored）。缺省视为 rtl，保持既有 CBB 包向后兼容。"
+    },
+    "implements_for": {
+      "type": "array", "items": { "type": "string" },
+      "description": "golden-model 专用：本模型作为哪些 CBB 的正确性锚（asset_uid 列表）"
+    },
+    "models": {
+      "type": "array",
+      "description": "golden-model 专用：双模型张力（规范 §1）——reference(浮点/普遍性) + fixed_point(定点/设计特性)",
+      "items": {
+        "type": "object", "additionalProperties": false,
+        "required": ["role", "path"],
+        "properties": {
+          "role": { "type": "string", "enum": ["reference", "fixed_point"] },
+          "trait": { "type": "string" },
+          "path": { "type": "string" },
+          "note": { "type": "string" }
+        }
+      }
+    },
+    "vectors": { "type": "object", "additionalProperties": true },
+
+    "provenance": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["source", "license", "retrieved"],
+      "description": "reference 级来源登记（规范 §3.1）。source 未确证时填 unresolved，不得臆造。",
+      "properties": {
+        "source": { "type": "string" },
+        "source_basis": { "type": "string", "description": "来源的确证依据（如与上游 README 逐字比对）" },
+        "license": { "type": "string" },
+        "retrieved": { "type": "string" },
+        "retrieved_basis": { "type": "string" },
+        "commit": { "type": ["string", "null"] }
+      }
+    },
+    "banner": { "type": "string", "description": "reference 级必需的“未认证”横幅文本" },
+    "content": {
+      "type": "object",
+      "additionalProperties": true,
+      "description": "归档内容规模（files/size），仅供人读盘点"
+    },
+    "notes": { "type": "string" }
   }
 }

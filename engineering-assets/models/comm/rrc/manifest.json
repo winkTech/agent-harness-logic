@@ -33,19 +33,23 @@
   "sources": [
     {
       "path": "rrc_pulse_shaping.m",
-      "role": "reference"
+      "role": "reference",
+      "sha256": "8cb69aabded19d7f4f95bedef372bbdb7352ea53d6b9bb5734a3c06040289b3b"
     },
     {
       "path": "rrc_coeff_gen.m",
-      "role": "reference"
+      "role": "reference",
+      "sha256": "7a7c5fa594f6bc755889247be197d2a2ef64795e1ede23196f80cc8076e2cd6d"
     },
     {
       "path": "rrc_coeff.hex",
-      "role": "fixed_point"
+      "role": "fixed_point",
+      "sha256": "3cdd47daa6c41f9c66947b51c05316b19714d7348c87ffb5f472ee46575e6cc0"
     },
     {
       "path": "config.m",
-      "role": "config"
+      "role": "config",
+      "sha256": "aeafbe114d05e8c4ad4c5a2d2fe970207ff1a314ffb2b5a1d1ef43d85075f45b"
     }
   ],
   "waivers": [],

@@ -63,63 +63,78 @@
   "sources": [
     {
       "path": "config.m",
-      "role": "config"
+      "role": "config",
+      "sha256": "91e770f4b0ee30436544a6e1869c2e1394a854efa51046ee817d0d30128d06ae"
     },
     {
       "path": "packet_detect.m",
-      "role": "reference"
+      "role": "reference",
+      "sha256": "6fa05b458ca699967bb50f9ffd5dcf7803c52e6e615acae2d8b314ef86ff0d7f"
     },
     {
       "path": "coarse_cfo_est.m",
-      "role": "reference"
+      "role": "reference",
+      "sha256": "684749e0967e35e583da8b925ec6f3bfe865b9cfcb65dfc49fa0d63ad5803732"
     },
     {
       "path": "fine_cfo_est.m",
-      "role": "reference"
+      "role": "reference",
+      "sha256": "cfbf0959bc318f1a3e71b4370974f7a7de275de3ce14c474467d19546669e6c2"
     },
     {
       "path": "cfo_correct.m",
-      "role": "reference"
+      "role": "reference",
+      "sha256": "614d05dee751687909c65b3d02da4f9ea907274a2e8219c02e21b9dbebdf7a33"
     },
     {
       "path": "fine_timing.m",
-      "role": "reference"
+      "role": "reference",
+      "sha256": "7ee8106d3706024144432be4436d15e7adc787da9f320d6b745cf12080f7c75d"
     },
     {
       "path": "generate_preamble.m",
-      "role": "reference"
+      "role": "reference",
+      "sha256": "e77a64dd20f33b5485dc83528f1bd643111a160dfceb8febbef40cbd04bd9c2c"
     },
     {
       "path": "run_synch_sim.m",
-      "role": "sim"
+      "role": "sim",
+      "sha256": "1938f4e6dec2b72e4b8161a625a45d7e3d34a5f55669d387bb567a0c508079d5"
     },
     {
       "path": "run_all_tests.m",
-      "role": "test"
+      "role": "test",
+      "sha256": "8df0e6bd07a45a4e6ca3124db3b77c6aa92ce789facfa7291d0bbb84dfdcd672"
     },
     {
       "path": "src/generate_vectors.m",
-      "role": "fixed_point"
+      "role": "fixed_point",
+      "sha256": "07de68ee1f79282bcc3b2865e2d0bf9d56d24e5de52f40b6d3d39674853cd53a"
     },
     {
       "path": "tests/test_packet_detect.m",
-      "role": "test"
+      "role": "test",
+      "sha256": "a39316e6e8129ea7d596f08a294187aa2d7615f8101a2fad3435bc87ab23d071"
     },
     {
       "path": "tests/test_cfo_est.m",
-      "role": "test"
+      "role": "test",
+      "sha256": "5d01213dc0ea1d8e2622ff3ddb2b1dd69e19f6c8c060bde6c2268b4b7b673436"
     },
     {
       "path": "tests/test_cfo_range.m",
-      "role": "test"
+      "role": "test",
+      "sha256": "0dcde009ae219de3820bfa4f0586f36a1116401af0b1b4e323e141925f99f074"
     },
     {
       "path": "tests/test_snr_robust.m",
-      "role": "test"
+      "role": "test",
+      "sha256": "c5f1b2a1c3fd46a1fd0a8402fa1acfdb38bf982a04972e7dc069387b9f88f948"
     },
     {
       "path": "tests/test_timing.m",
-      "role": "test"
+      "role": "test",
+      "sha256": "0d9a91f1168b06f11276c58cae5d73c3c96f5badff510d1a760be94087a1b9fe"
     }
   ],
   "waivers": [],

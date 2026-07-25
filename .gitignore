@@ -6,8 +6,15 @@ cache/
 daemon/
 paste-cache/
 
-# Hook 失败诊断模板（生成器按 shell 退出码触发，正文未填，会稀释记忆语料）
+# 自动记录生成器的历史空壳产物（正文无信息量，会稀释记忆语料）。
+# 生成器已修：hook_failure 按 shell 退出码误触发；tool_success 因取错载荷字段
+# 每次 Write/Edit 都写一条 "工具 tool_success 执行成功"（7 天 110 个）。
+# memory-knowledge-maintenance.cjs:119 早已把这两类排除在索引外，此处补上 git 侧。
 memory/errors/*hook_failure*
+memory/work/*tool_success*
+# auto-record-success 的每日汇总记录（运行时产物，memory-file-policy 的
+# shouldSyncMemoryFile 本就跳过 work/，无任何消费者）。TEMPLATE.md 仍入库。
+memory/work/20??-??-??-*.md
 
 # SQLite 运行时数据库（自动创建）
 .wright/
@@ -92,6 +99,9 @@ xsim.jou
 # ModelSim / Questa
 transcript
 work/
+# ModelSim 会在任何执行目录建 work/，故保留宽匹配；但 memory/work/ 是记忆源目录，
+# 曾被本条静默吞掉 109 个文件（git 连 ?? 都不显示），此处显式放行。
+!memory/work/
 *.wlf
 *.vstf
 *.mem
@@ -123,15 +133,17 @@ mcp/*.exe
 mcp/*.dll
 
 # 旧路径兼容（已移入 var/，但确保不会重新跟踪）
-backups/
-sessions/
-shell-snapshots/
-file-history/
-projects/
-plans/
-tasks/
-ide/
-session-data/
+# 必须锚定到仓库根：未锚定时 projects/ 与 plans/ 会静默吞掉 memory/projects/
+# 与 docs/plans/ 下的源文件（ignored 文件连 ?? 都不显示，git 给零信号）。
+/backups/
+/sessions/
+/shell-snapshots/
+/file-history/
+/projects/
+/plans/
+/tasks/
+/ide/
+/session-data/
 
 # PDF 参考文档（本地保存，不入 git）
 *.pdf

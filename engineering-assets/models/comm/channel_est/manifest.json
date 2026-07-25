@@ -39,47 +39,58 @@
   "sources": [
     {
       "path": "ls_channel_est.m",
-      "role": "reference"
+      "role": "reference",
+      "sha256": "640b6ad45e424e99dd988cc2e12d7b36e4f4c457404160d4bc1fd40a7e0b317c"
     },
     {
       "path": "sim_channel.m",
-      "role": "reference"
+      "role": "reference",
+      "sha256": "ab5411542d7ed2c23af4e1384b11f1c2795b0ddc254fd95589bd0e18cc22a7f4"
     },
     {
       "path": "config.m",
-      "role": "config"
+      "role": "config",
+      "sha256": "4a9ab5a70c2ae739084f0c20382cef52481e9c2632ce6c62844d23350d28e50f"
     },
     {
       "path": "run_channel_sim.m",
-      "role": "harness"
+      "role": "harness",
+      "sha256": "f98b64eaba1d21cbe56208f9926748ca415b4b9d5b86bccdc235d48d5f5ff25a"
     },
     {
       "path": "run_all_tests.m",
-      "role": "harness"
+      "role": "harness",
+      "sha256": "483b03072c65d0a011dc64df4e33cd4ba53290c7e4f392acec271147f5b6c053"
     },
     {
       "path": "src/generate_vectors.m",
-      "role": "fixed_point"
+      "role": "fixed_point",
+      "sha256": "ff7dae4f7748bbd83ebf79ca548840a3749e6530930b350aaba14e3e92122b2d"
     },
     {
       "path": "tests/test_ls_linear.m",
-      "role": "test"
+      "role": "test",
+      "sha256": "084558328d241810b6dc5fa3093d6501a89d3b2f4c76b7b189116351bb7df532"
     },
     {
       "path": "tests/test_ls_dft.m",
-      "role": "test"
+      "role": "test",
+      "sha256": "830d5deac0def85a2ae956ac3e01a183e46e851803f298fa73270a42980910fc"
     },
     {
       "path": "tests/test_awgn.m",
-      "role": "test"
+      "role": "test",
+      "sha256": "b82e0fb6f0ffa4d556bb8e99731c087c45740511e4f5ae38bc2dd8f751dec0cd"
     },
     {
       "path": "tests/test_snr_range.m",
-      "role": "test"
+      "role": "test",
+      "sha256": "688e3b050b0a09ec02a526d59fe256edbae665f6e4f376db56a10a52a68ca7e9"
     },
     {
       "path": "tests/test_mod_order.m",
-      "role": "test"
+      "role": "test",
+      "sha256": "1eb7f6e06c77344dfcf06986df893d8784acfef353803e342bc0a42b9668d848"
     }
   ],
   "waivers": [],

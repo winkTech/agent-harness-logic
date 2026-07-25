@@ -12,10 +12,10 @@
 | 目录 | 上游 | 许可 | 文件 | 体积 |
 |:--|:--|:--|--:|--:|
 | `async_fifo-master/` | github.com/dpretet/async_fifo | MIT | 28 | 101K |
-| `axis_udp-main/` | **unresolved** | MIT (c) 2022 Alexander | 20 | 309K |
+| `axis_udp-main/` | github.com/alknvl/axis_udp | MIT (c) 2022 Alexander | 20 | 309K |
 | `basic_verilog-master/` | github.com/pConst/basic_verilog | 见 license/ | 1997 | 66M |
 | `picorv32-main/` | github.com/YosysHQ/picorv32 | ISC | 246 | 1.2M |
-| `r22sdf-master/` | **unresolved** | MIT (c) 2017 Nanamaru Namake | 61 | 4.2M |
+| `r22sdf-master/` | github.com/nanamake/r22sdf | MIT (c) 2017 Nanamaru Namake | 61 | 4.2M |
 | `verilog-pcie-master/` | github.com/alexforencich/verilog-pcie | MIT | 633 | 7.9M |
 
 逐包 provenance 见 `_provenance/<asset_uid>.json`。上游树保持原样不改动，
@@ -23,8 +23,6 @@ provenance 集中存放以便与 upstream 重新同步时 diff 干净。
 
 ## 已知 provenance 缺口
 
-- `axis_udp` 与 `r22sdf` 的 README 未记录 upstream URL，`source` 标 `unresolved`，
-  待人工补全 —— 不臆造来源。
 - 六个包均为 GitHub 分支 ZIP 归档，无 `.git`，**commit SHA 不可复原**；
   `retrieved` 取目录 mtime 作为下界。
 - `basic_verilog-master/XilinxBoardStore_with_Alveo_cards_support/`

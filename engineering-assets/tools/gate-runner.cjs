@@ -29,6 +29,15 @@ function validate(schema, data, p = '$', errs = []) {
     errs.push(`${p}: 期望类型 ${types.join('|')}, 实为 ${jt}`); return errs;
   }
   if (schema.enum && !schema.enum.includes(data)) errs.push(`${p}: 值 ${JSON.stringify(data)} 不在 enum ${JSON.stringify(schema.enum)}`);
+  if (schema.const !== undefined && JSON.stringify(data) !== JSON.stringify(schema.const)) {
+    errs.push(`${p}: 值 ${JSON.stringify(data)} != const ${JSON.stringify(schema.const)}`);
+  }
+  // allOf / if-then-else: 支撑 required 按 maturity.level 条件化（规范 §3.1）
+  if (Array.isArray(schema.allOf)) for (const sub of schema.allOf) validate(sub, data, p, errs);
+  if (schema.if) {
+    const branch = validate(schema.if, data, p, []).length === 0 ? schema.then : schema.else;
+    if (branch) validate(branch, data, p, errs);
+  }
   if (typeof data === 'string' && schema.pattern && !new RegExp(schema.pattern).test(data)) errs.push(`${p}: 不匹配 pattern ${schema.pattern}`);
   if (typeof data === 'number' && schema.minimum != null && data < schema.minimum) errs.push(`${p}: < minimum ${schema.minimum}`);
   if (jt === 'array') {
