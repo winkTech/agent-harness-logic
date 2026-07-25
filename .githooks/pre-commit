@@ -74,7 +74,10 @@ fi
 # ============================================================================
 
 # 排除目录（这些路径下的 work/ 等是正常数据）
-EXCLUDE_DIRS="memory/work/|plugins/cache/|knowledge/|.git/"
+# engineering-assets/ 三条: golden 向量(.bin)、资产包 vectors-ref/(规范 §5.1)、
+# vendored 上游工程(含 Quartus .rpt) 均是受治理资产，不是仿真垃圾。
+# 注意: 排除按路径子串匹配，资产迁出 knowledge/ 后必须由这几条接住。
+EXCLUDE_DIRS="memory/work/|plugins/cache/|knowledge/|.git/|engineering-assets/.*/vectors/|engineering-assets/.*/vectors-ref/|engineering-assets/reference-assets/"
 
 # ---- 5a. 暂存区检查：禁止仿真文件被提交 ----
 FORBIDDEN_STAGED_PATTERNS="(^|/)transcript$|vsim\.wlf|\.vcd$|\.wlftmp|vsim\.dump|\.wdb$|xsim\.jou|xsim\.log|xsim\.tcl|xelab\.pb|xvlog\.pb|tr_db\.log|wev\.log|vlog\.log"
@@ -165,7 +168,9 @@ echo "✅ 工作区无仿真垃圾文件"
 # ============================================================================
 # 6. Verilog / SystemVerilog 语法检查
 # ============================================================================
-SV_FILES=$(echo "$STAGED" | grep -E '\.(v|sv)$' | grep -v '/examples/' | grep -v '/templates/' | grep -v '/uvm_tb/')
+# UVM 源无法用裸 vlog -lint 单文件检查（需 -L uvm 与包编译顺序），故豁免。
+# 资产包布局为 tb/uvm/，旧 knowledge 布局为 uvm_tb/，两者都要排除。
+SV_FILES=$(echo "$STAGED" | grep -E '\.(v|sv)$' | grep -v '/examples/' | grep -v '/templates/' | grep -v '/uvm_tb/' | grep -v '/tb/uvm/')
 if [ -n "$SV_FILES" ]; then
   if check_cmd vlog; then
     echo "--- [vlog] 检查 Verilog/SV 语法 ---"

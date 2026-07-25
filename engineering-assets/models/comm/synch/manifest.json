@@ -1,0 +1,78 @@
+{
+  "schema_version": "1.0",
+  "asset_uid": "model_comm_synch",
+  "name": "ofdm_synch_golden",
+  "kind": "golden-model",
+  "version": "1.0.0",
+  "owner": "lihan",
+  "maturity": { "level": "intake" },
+  "requirement_ref": "knowledge/primary/domains/comm/synch/algorithm_spec.md",
+  "implements_for": ["sync_top"],
+  "models": [
+    {
+      "role": "reference",
+      "trait": "普遍性",
+      "path": "packet_detect.m",
+      "note": "浮点包检测参考 (短前导码周期自相关, 滑窗 L_corr=16, 门限 eta=0.5); 跨项目可当基准"
+    },
+    {
+      "role": "reference",
+      "trait": "普遍性",
+      "path": "coarse_cfo_est.m",
+      "note": "浮点粗 CFO 估计参考 (短前导码自相关相位)"
+    },
+    {
+      "role": "reference",
+      "trait": "普遍性",
+      "path": "fine_cfo_est.m",
+      "note": "浮点细 CFO 估计参考 (长前导码 T1/T2 相关)"
+    },
+    {
+      "role": "reference",
+      "trait": "普遍性",
+      "path": "cfo_correct.m",
+      "note": "浮点 CFO 校正参考 (复指数去旋转)"
+    },
+    {
+      "role": "reference",
+      "trait": "普遍性",
+      "path": "fine_timing.m",
+      "note": "浮点精定时参考 (长前导码互相关峰值检测)"
+    },
+    {
+      "role": "reference",
+      "trait": "普遍性",
+      "path": "generate_preamble.m",
+      "note": "802.11a 前导码生成 (短/长前导码, 激励源头)"
+    },
+    {
+      "role": "fixed_point",
+      "trait": "设计特性",
+      "path": "src/generate_vectors.m",
+      "note": "唯一定点环节: Q2.14 量化+饱和, {Q[15:0],I[15:0]} 打包导出 expected_sync_out.bin; golden 链路本体为纯浮点, 无定点行为模型"
+    }
+  ],
+  "vectors": {
+    "config": "802.11a preamble / N=64 / N_cp=16 / fs=20MHz / CFO=0.3 / SNR=20dB / tau=50 (config.m 默认)",
+    "provenance": "仓库内无已导出的 expected/stimulus 向量文件 (src/generate_vectors.m 输出目标 ../vectors/expected_sync_out.bin + vector_config.txt 不存在, 从未生成或未入库)。向量健康度无从抽查; 需 MATLAB 跑 run_synch_sim.m + generate_vectors.m 首次生成。"
+  },
+  "sources": [
+    { "path": "config.m",                    "role": "config" },
+    { "path": "packet_detect.m",             "role": "reference" },
+    { "path": "coarse_cfo_est.m",            "role": "reference" },
+    { "path": "fine_cfo_est.m",              "role": "reference" },
+    { "path": "cfo_correct.m",               "role": "reference" },
+    { "path": "fine_timing.m",               "role": "reference" },
+    { "path": "generate_preamble.m",         "role": "reference" },
+    { "path": "run_synch_sim.m",             "role": "sim" },
+    { "path": "run_all_tests.m",             "role": "test" },
+    { "path": "src/generate_vectors.m",      "role": "fixed_point" },
+    { "path": "tests/test_packet_detect.m",  "role": "test" },
+    { "path": "tests/test_cfo_est.m",        "role": "test" },
+    { "path": "tests/test_cfo_range.m",      "role": "test" },
+    { "path": "tests/test_snr_robust.m",     "role": "test" },
+    { "path": "tests/test_timing.m",         "role": "test" }
+  ],
+  "waivers": [],
+  "superseded_by": null
+}

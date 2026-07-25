@@ -1,0 +1,152 @@
+{
+  "schema_version": "1.0",
+  "asset_uid": "ofdm_tx_top",
+  "name": "ofdm_tx_top",
+  "version": "0.1.0",
+  "owner": "lihan",
+  "maturity": {
+    "level": "intake"
+  },
+  "requirement_ref": "knowledge/primary/domains/comm/ofdm/algorithm_spec.md",
+  "doc_refs": [
+    "knowledge/primary/domains/comm/ofdm/rtl_architecture.md",
+    "knowledge/primary/domains/comm/ofdm/fixed_point_report.md",
+    "knowledge/primary/domains/comm/ofdm/report_ofdm_fpga_implementation.md",
+    "knowledge/primary/domains/comm/ofdm/resource_estimate.md",
+    "knowledge/primary/domains/comm/ofdm/testbench_plan.md"
+  ],
+  "golden_model_ref": "model_comm_ofdm",
+  "fidelity": {
+    "status": "pending"
+  },
+  "ports": [
+    {
+      "name": "clk",
+      "direction": "input",
+      "width": 1
+    },
+    {
+      "name": "rst_n",
+      "direction": "input",
+      "width": 1
+    },
+    {
+      "name": "s_axis_tdata",
+      "direction": "input",
+      "width": 6,
+      "bus": "axi-stream"
+    },
+    {
+      "name": "s_axis_tvalid",
+      "direction": "input",
+      "width": 1,
+      "bus": "axi-stream"
+    },
+    {
+      "name": "s_axis_tready",
+      "direction": "output",
+      "width": 1,
+      "bus": "axi-stream"
+    },
+    {
+      "name": "s_axis_tlast",
+      "direction": "input",
+      "width": 1,
+      "bus": "axi-stream"
+    },
+    {
+      "name": "m_axis_tdata",
+      "direction": "output",
+      "width": 16,
+      "bus": "axi-stream"
+    },
+    {
+      "name": "m_axis_tvalid",
+      "direction": "output",
+      "width": 1,
+      "bus": "axi-stream"
+    },
+    {
+      "name": "m_axis_tready",
+      "direction": "input",
+      "width": 1,
+      "bus": "axi-stream"
+    },
+    {
+      "name": "m_axis_tlast",
+      "direction": "output",
+      "width": 1,
+      "bus": "axi-stream"
+    },
+    {
+      "name": "cfg_fft_len",
+      "direction": "input",
+      "width": 32
+    },
+    {
+      "name": "cfg_cp_len",
+      "direction": "input",
+      "width": 16
+    },
+    {
+      "name": "cfg_mod_type",
+      "direction": "input",
+      "width": 4
+    }
+  ],
+  "clock": {
+    "name": "clk",
+    "period_ns": 10
+  },
+  "reset": {
+    "name": "rst_n",
+    "polarity": "active_low",
+    "type": "async",
+    "async_release_synchronized": false
+  },
+  "constraints": {
+    "target": {
+      "fmax": "100MHz",
+      "fmax_mhz": 100
+    }
+  },
+  "sources": [
+    {
+      "path": "rtl/ofdm_tx_top.sv",
+      "role": "rtl",
+      "sha256": "7b091e06e29fe99595179f10e46942acd57c8b4fce462fe46e041aecd5087272"
+    },
+    {
+      "path": "rtl/mod_mapper.sv",
+      "role": "rtl",
+      "sha256": "fb30c16b760788f2ca31334b6e34ade6bc544502205ce22c4775272ef8482c0c"
+    },
+    {
+      "path": "rtl/mapper.sv",
+      "role": "rtl",
+      "sha256": "74749cf4fa7af361f88a9e2ce78b68243166a2fbf4154dbe7ed19ec5e8fb4c4a"
+    },
+    {
+      "path": "rtl/pilot_insert.sv",
+      "role": "rtl",
+      "sha256": "7eeda427bce9d5252dd3a973be8850bdcf92502a000e603d3beb3ef464f90bbc"
+    },
+    {
+      "path": "rtl/xfft_64.sv",
+      "role": "rtl",
+      "sha256": "6b9f2c7ef90ab0961567aeac19b1a5dd3bc9f54e4c57b7d06262e8c78b4625ec"
+    },
+    {
+      "path": "rtl/cp_insert.sv",
+      "role": "rtl",
+      "sha256": "7ac22c7a3896b8107af4305ed6ebae3febd857638ff64af36d67328afbecb5f7"
+    },
+    {
+      "path": "tb/tb_tx_top.sv",
+      "role": "tb",
+      "sha256": "00d0531f6b36de1679a7b6ab1998a010613ec19e92eb645bfbfa97b99522d3f1"
+    }
+  ],
+  "waivers": [],
+  "superseded_by": null
+}

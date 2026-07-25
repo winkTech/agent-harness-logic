@@ -1,0 +1,50 @@
+{
+  "schema_version": "1.0",
+  "asset_uid": "model_comm_channel_est",
+  "name": "ls_channel_est_golden",
+  "kind": "golden-model",
+  "version": "1.0.0",
+  "owner": "lihan",
+  "maturity": { "level": "intake" },
+  "requirement_ref": "knowledge/primary/domains/comm/channel_est/algorithm_spec.md",
+  "implements_for": ["channel_est_top"],
+  "models": [
+    {
+      "role": "reference",
+      "trait": "普遍性",
+      "path": "ls_channel_est.m",
+      "note": "浮点 LS 信道估计参考 (H_est = Y(pilot)./X_pilot) + linear/spline/dft 三种插值; DC/保护子载波置 1; 可跨项目当基准"
+    },
+    {
+      "role": "reference",
+      "trait": "普遍性",
+      "path": "sim_channel.m",
+      "note": "信道模型激励生成 (rayleigh/awgn/pedestrian), 供 run_channel_sim.m 端到端仿真"
+    },
+    {
+      "role": "fixed_point",
+      "trait": "设计特性",
+      "path": "src/generate_vectors.m",
+      "note": "Q2.14 量化/饱和/打包语义 ({Q_s16[15:0], I_s16[15:0]} -> uint32 hex 行), RTL cosim 向量导出器; 承载本设计定点契约"
+    }
+  ],
+  "vectors": {
+    "config": "802.11a OFDM: N=64, N_pilot=4 @ {-21,-7,7,21}, est_method=ls_linear, 16qam, SNR=20dB, Q2.14",
+    "provenance": "向量产物 (rx_chEst.bin / expected_chEst.bin / vector_config.txt) 未随源入库 — 源树 knowledge/primary/domains/comm/channel_est/ 下无 vectors/ 目录, generate_vectors.m 的导出产物从未提交。tb_chEst_cosim.sv 与 run_rtl_cosim.m 依赖这些文件, cosim 当前不可运行, 无法抽查常量轨/全同值健康度。需 MATLAB 跑 run_channel_sim.m -> generate_vectors.m 生成后方可做 bit-true 对标。golden .m 源码未改动。"
+  },
+  "sources": [
+    { "path": "ls_channel_est.m",        "role": "reference" },
+    { "path": "sim_channel.m",           "role": "reference" },
+    { "path": "config.m",                "role": "config" },
+    { "path": "run_channel_sim.m",       "role": "harness" },
+    { "path": "run_all_tests.m",         "role": "harness" },
+    { "path": "src/generate_vectors.m",  "role": "fixed_point" },
+    { "path": "tests/test_ls_linear.m",  "role": "test" },
+    { "path": "tests/test_ls_dft.m",     "role": "test" },
+    { "path": "tests/test_awgn.m",       "role": "test" },
+    { "path": "tests/test_snr_range.m",  "role": "test" },
+    { "path": "tests/test_mod_order.m",  "role": "test" }
+  ],
+  "waivers": [],
+  "superseded_by": null
+}

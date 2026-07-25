@@ -1,0 +1,157 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "engineering-assets/schemas/cbb-manifest.schema.json",
+  "title": "CBB Manifest (MVP)",
+  "description": "生产级 CBB 资产 manifest。单一真相源。字段依据《CBB 库治理与生产级准入规范 V1.0》§6。MVP 子集；scale-up 字段（timing_closure/generality 全维/lineage 等）可选。",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version", "asset_uid", "name", "version", "owner",
+    "maturity", "requirement_ref", "doc_refs", "golden_model_ref",
+    "fidelity", "ports", "clock", "reset", "constraints", "sources"
+  ],
+  "properties": {
+    "schema_version": { "type": "string", "enum": ["1.0"] },
+    "asset_uid": { "type": "string", "pattern": "^[a-z0-9_]+$", "description": "唯一引用锚（MVP 允许人读 slug）" },
+    "name": { "type": "string", "description": "人读模块名（非引用锚）" },
+    "version": { "type": "string", "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$" },
+    "owner": { "type": "string", "description": "具名真人 DRI" },
+    "maturity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["level"],
+      "properties": {
+        "level": { "type": "string", "enum": ["reference", "intake", "qualification", "certified", "deprecated"] },
+        "evidence_ref": { "type": "string" }
+      }
+    },
+    "requirement_ref": { "type": "string", "description": "锚链起点：需求条目 id/URI" },
+    "doc_refs": { "type": "array", "items": { "type": "string" }, "minItems": 1, "description": "方向锚：设计前期文档/ADR" },
+    "golden_model_ref": { "type": "string", "description": "正确性锚：配对 golden 资产 asset_uid" },
+    "alignment": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "compare_mode": { "type": "string", "enum": ["cycle_accurate", "transaction_based", "scoreboard"] },
+        "pipeline_delay_min": { "type": "integer", "minimum": 0 },
+        "pipeline_delay_max": { "type": "integer", "minimum": 0 }
+      },
+      "required": ["compare_mode"]
+    },
+    "fidelity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["status"],
+      "properties": {
+        "status": { "type": "string", "enum": ["bit_true", "tolerance", "pending"] },
+        "bit_accurate_against": { "type": "string" },
+        "tolerance": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "value": { "type": "number" },
+            "rationale": { "type": "string" },
+            "set_at": { "type": "string" }
+          }
+        }
+      }
+    },
+    "ports": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["name", "direction", "width"],
+        "properties": {
+          "name": { "type": "string" },
+          "direction": { "type": "string", "enum": ["input", "output", "inout"] },
+          "width": { "type": "integer", "minimum": 1 },
+          "bus": { "type": "string", "description": "协议归属，如 axi-stream；命名门禁据此豁免" }
+        }
+      }
+    },
+    "clock": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name"],
+      "properties": {
+        "name": { "type": "string" },
+        "period_ns": { "type": "number", "minimum": 0.1 }
+      }
+    },
+    "reset": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "polarity", "type"],
+      "properties": {
+        "name": { "type": "string" },
+        "polarity": { "type": "string", "enum": ["active_high", "active_low"] },
+        "type": { "type": "string", "enum": ["sync", "async"] },
+        "async_release_synchronized": { "type": "boolean" }
+      }
+    },
+    "constraints": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["target"],
+      "properties": {
+        "target": {
+          "type": "object",
+          "additionalProperties": true,
+          "required": ["fmax"],
+          "properties": {
+            "fmax": { "type": "string", "pattern": "^[0-9]+(\\.[0-9]+)?\\s*(MHz|kHz|Hz)$" },
+            "fmax_mhz": { "type": "number", "minimum": 0 },
+            "lut": { "type": "integer", "minimum": 0 },
+            "ff": { "type": "integer", "minimum": 0 },
+            "bram": { "type": "integer", "minimum": 0 },
+            "dsp": { "type": "integer", "minimum": 0 },
+            "latency": { "type": "integer", "minimum": 0 }
+          }
+        }
+      }
+    },
+    "sources": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["path", "role", "sha256"],
+        "properties": {
+          "path": { "type": "string" },
+          "role": { "type": "string", "enum": ["rtl", "tb", "constraint", "vector", "doc"] },
+          "sha256": { "type": "string", "pattern": "^[a-f0-9]{64}$" }
+        }
+      }
+    },
+    "generality": { "type": "object" },
+    "signoff": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["by", "at", "scope"],
+      "properties": {
+        "by": { "type": "string" },
+        "at": { "type": "string" },
+        "scope": { "type": "array", "items": { "type": "string" } },
+        "panel_verdicts_ref": { "type": "string" }
+      }
+    },
+    "waivers": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["gate", "reason", "approver", "expires_at"],
+        "properties": {
+          "gate": { "type": "string" },
+          "reason": { "type": "string" },
+          "approver": { "type": "string" },
+          "expires_at": { "type": "string" },
+          "evidence_ref": { "type": "string" }
+        }
+      }
+    },
+    "superseded_by": { "type": ["string", "null"] }
+  }
+}

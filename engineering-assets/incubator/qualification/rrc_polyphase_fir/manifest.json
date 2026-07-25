@@ -1,0 +1,130 @@
+{
+  "schema_version": "1.0",
+  "asset_uid": "rrc_polyphase_fir",
+  "name": "rrc_polyphase_fir",
+  "version": "0.3.0",
+  "owner": "lihan",
+  "maturity": {
+    "level": "qualification",
+    "evidence_ref": "engineering-assets/var/gates/pg/rrc_polyphase_fir/"
+  },
+  "requirement_ref": "knowledge/primary/domains/comm/rrc/algorithm_spec.md",
+  "doc_refs": [
+    "knowledge/primary/domains/comm/rrc/fixed_point_report.md",
+    "knowledge/primary/domains/comm/rrc/report_rrc_fpga_implementation.md"
+  ],
+  "golden_model_ref": "model_comm_rrc",
+  "fidelity": {
+    "status": "bit_true",
+    "bit_accurate_against": "model_comm_rrc@1.0.0"
+  },
+  "alignment": {
+    "compare_mode": "scoreboard",
+    "pipeline_delay_min": 16,
+    "pipeline_delay_max": 16
+  },
+  "ports": [
+    {
+      "name": "i_clk",
+      "direction": "input",
+      "width": 1
+    },
+    {
+      "name": "i_rst",
+      "direction": "input",
+      "width": 1
+    },
+    {
+      "name": "s_axis_tvalid",
+      "direction": "input",
+      "width": 1,
+      "bus": "axi-stream"
+    },
+    {
+      "name": "s_axis_tready",
+      "direction": "output",
+      "width": 1,
+      "bus": "axi-stream"
+    },
+    {
+      "name": "s_axis_tdata",
+      "direction": "input",
+      "width": 32,
+      "bus": "axi-stream"
+    },
+    {
+      "name": "m_axis_tvalid",
+      "direction": "output",
+      "width": 1,
+      "bus": "axi-stream"
+    },
+    {
+      "name": "m_axis_tready",
+      "direction": "input",
+      "width": 1,
+      "bus": "axi-stream"
+    },
+    {
+      "name": "m_axis_tdata",
+      "direction": "output",
+      "width": 32,
+      "bus": "axi-stream"
+    }
+  ],
+  "clock": {
+    "name": "i_clk",
+    "period_ns": 4
+  },
+  "reset": {
+    "name": "i_rst",
+    "polarity": "active_high",
+    "type": "sync"
+  },
+  "constraints": {
+    "target": {
+      "fmax": "250MHz",
+      "fmax_mhz": 250,
+      "dsp": 9,
+      "latency": 4
+    }
+  },
+  "sources": [
+    {
+      "path": "rtl/rrc_polyphase_fir.sv",
+      "role": "rtl",
+      "sha256": "ec33b437389b7b32424cb6573e06a43828e0f646583a0b20188662af08788095"
+    },
+    {
+      "path": "tb/tb_rrc_polyphase_fir.sv",
+      "role": "tb",
+      "sha256": "9b02bf8ef2436637ba4e40d0fb2ca7ac7f997c58f0246f738477c5909f2e1d6e"
+    }
+  ],
+  "generality": {
+    "param_space": [
+      {
+        "name": "DATA_W",
+        "values": [
+          16
+        ],
+        "support": true
+      },
+      {
+        "name": "SPS",
+        "values": [
+          4
+        ],
+        "support": true
+      },
+      {
+        "name": "SPAN",
+        "values": [
+          8
+        ],
+        "support": true
+      }
+    ]
+  },
+  "waivers": [],
+  "superseded_by": null
+}

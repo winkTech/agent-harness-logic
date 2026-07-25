@@ -1,0 +1,66 @@
+{
+  "schema_version": "1.0",
+  "asset_uid": "model_comm_ofdm",
+  "name": "ofdm_tx_golden",
+  "kind": "golden-model",
+  "version": "1.0.0",
+  "owner": "lihan",
+  "maturity": { "level": "intake" },
+  "requirement_ref": "knowledge/primary/domains/comm/ofdm/algorithm_spec.md",
+  "implements_for": ["ofdm_tx_top"],
+  "models": [
+    {
+      "role": "reference",
+      "trait": "普遍性",
+      "path": "src/tx_chain.m",
+      "note": "浮点 OFDM 发射链参考 (mapper→subcarrier_map→IFFT→CP); 802.11a 64点/CP16, 调制类型可配 (BPSK/QPSK/16QAM/64QAM); 配套 src/rx_chain.m + src/mod_demapper.m 提供环回验证"
+    },
+    {
+      "role": "reference",
+      "trait": "普遍性",
+      "path": "src/ifft_chain.m",
+      "note": "浮点 IFFT + add_cp 参考; 与 src/subcarrier_map.m / src/add_cp.m / src/mod_mapper.m 共同构成 tx_chain 的分解模块"
+    },
+    {
+      "role": "fixed_point",
+      "trait": "设计特性",
+      "path": "src/generate_vectors.m",
+      "note": "定点向量导出: 频域输入按 int16 hex (标称 Q2.14, 实际乘 32767=Q1.15 尺度, 与注释不一致——如实记录未修改), 时域期望按 Q3.13 打包 {Q[15:0],I[15:0]} uint32 hex; 量化参数取自 config.m cfg.quant (Q2.14 频域 / Q3.13 时域)"
+    },
+    {
+      "role": "config",
+      "trait": "设计特性",
+      "path": "config.m",
+      "note": "802.11a 参数 + 定点量化位宽配置 (IFFT in Q2.14 / out Q3.13); RTL 定点契约的单一来源"
+    }
+  ],
+  "vectors": {
+    "config": "QPSK / FFT 64 / CP 16 / vector_config.txt 声明 N_SYM=10 但实际导出仅 1 符号 (freq 64 样点, expected_tx 80 样点)",
+    "provenance": "自 knowledge/primary/domains/comm/ofdm/vectors/ 原样迁入 (2026-07-25), 未修改。健康度抽查: expected_tx.bin 80 行 64 唯一值, tx_i/tx_q 80 行 63-64 唯一值, 无常量轨/全同值损坏; freq_i/freq_q 唯一值 5/3 属 QPSK 星座离散取值的正常表现。注意: RTL TB (tb_tx_top.sv) 的 VEC_DIR 指向 ../golden_model/vectors/, 与源库 vectors/ 实际位置不符, cosim 前需对齐路径。"
+  },
+  "sources": [
+    { "path": "config.m",                 "role": "config" },
+    { "path": "run_ofdm_sim.m",           "role": "reference" },
+    { "path": "run_all_tests.m",          "role": "reference" },
+    { "path": "src/tx_chain.m",           "role": "reference" },
+    { "path": "src/rx_chain.m",           "role": "reference" },
+    { "path": "src/mod_mapper.m",         "role": "reference" },
+    { "path": "src/mod_demapper.m",       "role": "reference" },
+    { "path": "src/subcarrier_map.m",     "role": "reference" },
+    { "path": "src/ifft_chain.m",         "role": "reference" },
+    { "path": "src/add_cp.m",             "role": "reference" },
+    { "path": "src/generate_vectors.m",   "role": "fixed_point" },
+    { "path": "tests/test_modulations.m", "role": "test" },
+    { "path": "tests/test_ber.m",         "role": "test" },
+    { "path": "tests/test_boundary.m",    "role": "test" },
+    { "path": "vectors/freq_i.bin",       "role": "vector" },
+    { "path": "vectors/freq_q.bin",       "role": "vector" },
+    { "path": "vectors/expected_tx.bin",  "role": "vector" },
+    { "path": "vectors/tx_i.bin",         "role": "vector" },
+    { "path": "vectors/tx_q.bin",         "role": "vector" },
+    { "path": "vectors/time-domain-iq.txt", "role": "vector" },
+    { "path": "vectors/vector_config.txt", "role": "config" }
+  ],
+  "waivers": [],
+  "superseded_by": null
+}

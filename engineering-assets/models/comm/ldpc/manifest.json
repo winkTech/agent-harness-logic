@@ -1,0 +1,71 @@
+{
+  "schema_version": "1.0",
+  "asset_uid": "model_comm_ldpc",
+  "name": "ldpc_min_sum_golden",
+  "kind": "golden-model",
+  "version": "1.0.0",
+  "owner": "lihan",
+  "maturity": { "level": "intake" },
+  "requirement_ref": "knowledge/primary/domains/comm/ldpc/algorithm_spec.md",
+  "implements_for": ["ldpc_codec"],
+  "models": [
+    {
+      "role": "reference",
+      "trait": "普遍性",
+      "path": "src/ldpc_decoder_bp.m",
+      "note": "浮点 BP (sum-product) 参考译码器; 算法上界基准"
+    },
+    {
+      "role": "reference",
+      "trait": "普遍性",
+      "path": "src/ldpc_decoder_ms.m",
+      "note": "浮点归一化 Min-Sum 译码器 (alpha=0.75); RTL 算法方向的浮点参考; ldpc_decoder_ms_pure.m 为纯 Min-Sum 对照"
+    },
+    {
+      "role": "reference",
+      "trait": "普遍性",
+      "path": "src/ldpc_encode_80211n.m",
+      "note": "802.11n R=1/2 N=648 Z=27 QC-LDPC 双对角回代编码; 与 RTL ldpc_encoder_top 同算法路径"
+    },
+    {
+      "role": "fixed_point",
+      "trait": "设计特性",
+      "path": "src/ldpc_decoder_ms_fixed.m",
+      "note": "Q(10,4) 定点 Min-Sum (alpha=12/16 移位加法); 承载本设计量化/饱和特性, 作 RTL bit-true 对标基准"
+    },
+    {
+      "role": "fixed_point",
+      "trait": "设计特性",
+      "path": "PT_1_2_648.mat",
+      "note": "802.11n R=1/2 Z=27 基础矩阵/置换表数据 (MAT 5.0, 健康)"
+    }
+  ],
+  "vectors": {
+    "config": "802.11n QC-LDPC R=1/2 N=648 K=324 Z=27 / LLR Q(10,4) / max_iter=20 / alpha=0.75",
+    "provenance": "RTL 对标向量 tb_llr_input_*.hex / tb_expected_output_*.hex 由 gen_rtl_test_vectors.m 生成到 rtl/02_sim/, 但源知识库中从未导出入库 (全树无 .hex) — TB 无法独立复跑, 属向量缺失 (与 rrc 的向量损坏不同类)。二进制 .mat (PT_1_2_648.mat, fixed_point_ber_results.mat) 经 2026-07-25 抽查为合法 MATLAB 5.0 格式且字节分布正常, 非常量轨。golden .m 代码未做任何改动。建议后续用 MATLAB 原生跑 gen_rtl_test_vectors.m 补齐向量并入库。"
+  },
+  "sources": [
+    { "path": "config.m",                    "role": "config" },
+    { "path": "PT_1_2_648.mat",              "role": "fixed_point" },
+    { "path": "src/generate_h_matrix.m",     "role": "reference" },
+    { "path": "src/ldpc_encode.m",           "role": "reference" },
+    { "path": "src/ldpc_encode_80211n.m",    "role": "reference" },
+    { "path": "src/llr_calc.m",              "role": "reference" },
+    { "path": "src/ldpc_decoder_bp.m",       "role": "reference" },
+    { "path": "src/ldpc_decoder_ms.m",       "role": "reference" },
+    { "path": "src/ldpc_decoder_ms_pure.m",  "role": "reference" },
+    { "path": "src/ldpc_decoder_ms_fixed.m", "role": "fixed_point" },
+    { "path": "src/sim_ldpc_ber.m",          "role": "reference" },
+    { "path": "gen_rtl_test_vectors.m",      "role": "vector_gen" },
+    { "path": "compare_fixed_point_v2.m",    "role": "test" },
+    { "path": "run_ldpc_sim.m",              "role": "test" },
+    { "path": "run_all_tests.m",             "role": "test" },
+    { "path": "tests/test_encode_decode.m",  "role": "test" },
+    { "path": "tests/test_ber_awgn.m",       "role": "test" },
+    { "path": "tests/test_convergence.m",    "role": "test" },
+    { "path": "tests/test_min_sum_vs_bp.m",  "role": "test" },
+    { "path": "tests/test_multiple_blocks.m","role": "test" }
+  ],
+  "waivers": [],
+  "superseded_by": null
+}
