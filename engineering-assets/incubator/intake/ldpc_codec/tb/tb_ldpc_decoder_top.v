@@ -21,7 +21,7 @@ module tb_ldpc_decoder_top;
     //-----------------------------------------------------------------
     // 参数
     //-----------------------------------------------------------------
-    `include "../01_rtl/ldpc_defines.vh"
+    `include "../rtl/ldpc_defines.vh"
 
     parameter P_CLK_PERIOD = 10;         // 100 MHz
     parameter P_NUM_TESTS  = 5;          // 测试向量组数

@@ -1,0 +1,158 @@
+{
+  "schema_version": "1.0",
+  "asset_uid": "sync_top",
+  "name": "ofdm_sync_top",
+  "version": "0.1.0",
+  "owner": "lihan",
+  "maturity": {
+    "level": "intake"
+  },
+  "requirement_ref": "knowledge/primary/domains/comm/synch/algorithm_spec.md",
+  "doc_refs": [
+    "knowledge/primary/domains/comm/synch/fixed_point_report.md",
+    "knowledge/primary/domains/comm/synch/report_sync_fpga_implementation.md",
+    "knowledge/primary/domains/comm/synch/resource_estimate.md"
+  ],
+  "golden_model_ref": "model_comm_synch",
+  "fidelity": {
+    "status": "pending"
+  },
+  "ports": [
+    {
+      "name": "clk",
+      "direction": "input",
+      "width": 1
+    },
+    {
+      "name": "rst_n",
+      "direction": "input",
+      "width": 1
+    },
+    {
+      "name": "s_axis_tvalid",
+      "direction": "input",
+      "width": 1,
+      "bus": "axi-stream"
+    },
+    {
+      "name": "s_axis_tready",
+      "direction": "output",
+      "width": 1,
+      "bus": "axi-stream"
+    },
+    {
+      "name": "s_axis_tdata",
+      "direction": "input",
+      "width": 32,
+      "bus": "axi-stream"
+    },
+    {
+      "name": "m_axis_tvalid",
+      "direction": "output",
+      "width": 1,
+      "bus": "axi-stream"
+    },
+    {
+      "name": "m_axis_tready",
+      "direction": "input",
+      "width": 1,
+      "bus": "axi-stream"
+    },
+    {
+      "name": "m_axis_tdata",
+      "direction": "output",
+      "width": 32,
+      "bus": "axi-stream"
+    },
+    {
+      "name": "fft_start",
+      "direction": "output",
+      "width": 1
+    },
+    {
+      "name": "sync_locked",
+      "direction": "output",
+      "width": 1
+    }
+  ],
+  "clock": {
+    "name": "clk",
+    "period_ns": 10
+  },
+  "reset": {
+    "name": "rst_n",
+    "polarity": "active_low",
+    "type": "async",
+    "async_release_synchronized": false
+  },
+  "constraints": {
+    "target": {
+      "fmax": "100MHz",
+      "fmax_mhz": 100
+    }
+  },
+  "sources": [
+    {
+      "path": "rtl/sync_pkg.sv",
+      "role": "rtl",
+      "sha256": "4ef46b7535a6f82100893b6c62224290ebfa987af5d6adcdba9d51aa4478d4be"
+    },
+    {
+      "path": "rtl/cordic_core.sv",
+      "role": "rtl",
+      "sha256": "c63b9cdf5cf68edf0e5d678a02e0c360081d9f40e3255ef7611515d147dc365f"
+    },
+    {
+      "path": "rtl/packet_detect.sv",
+      "role": "rtl",
+      "sha256": "d61af178a6449cfeac4c8b0549b51501a0bac4c04adec26b3d71f0f360002127"
+    },
+    {
+      "path": "rtl/fine_timing.sv",
+      "role": "rtl",
+      "sha256": "815646b3bd00a760bbf77f29edc425a6e417e2a3bd3b49d82c498a8045827152"
+    },
+    {
+      "path": "rtl/sync_top.sv",
+      "role": "rtl",
+      "sha256": "ae32b7e1fed2df062182281600aa1e5ffe0717ffb405351ce2367aa804e6739f"
+    },
+    {
+      "path": "tb/tb_sync_top.sv",
+      "role": "tb",
+      "sha256": "740e2731ce985201e51f821d7330ded002d26bc90d97ae650eafc36b177fea60"
+    },
+    {
+      "path": "tb/uvm/sync_uvm_pkg.sv",
+      "role": "tb",
+      "sha256": "81ef9f981c9bdb76d3d74be607d5132bba30ff36c837f5273e640ced8e727766"
+    },
+    {
+      "path": "tb/uvm/sync_sequences.sv",
+      "role": "tb",
+      "sha256": "070c16835bb8cf875edc6da812b2e029993a5617583127133ed0199c7af95528"
+    },
+    {
+      "path": "tb/uvm/sync_scoreboard.sv",
+      "role": "tb",
+      "sha256": "03334bc3856627970877c0a57e919b7f48dc9f45d02277f3f57fd16e7347450f"
+    },
+    {
+      "path": "tb/uvm/sync_base_test.sv",
+      "role": "tb",
+      "sha256": "0d81eb94217017b16675bb486e3605dc977a5698e7fb4162131550d6888445d9"
+    },
+    {
+      "path": "tb/uvm/sync_basic_test.sv",
+      "role": "tb",
+      "sha256": "ec7a6546ce4e289f9ab30f0eda7375539631bbed9d244ad84e21ebb2a5cc44e2"
+    },
+    {
+      "path": "tb/uvm/tb_sync_uvm_top.sv",
+      "role": "tb",
+      "sha256": "cd7c368a6d2465ee88aee9ad678275a2a85efdd72c63a5bf642bd69c18042166"
+    }
+  ],
+  "waivers": [],
+  "superseded_by": null
+}

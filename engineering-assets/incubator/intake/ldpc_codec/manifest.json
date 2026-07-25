@@ -1,0 +1,208 @@
+{
+  "schema_version": "1.0",
+  "asset_uid": "ldpc_codec",
+  "name": "ldpc_codec",
+  "version": "0.1.0",
+  "owner": "lihan",
+  "maturity": {
+    "level": "intake"
+  },
+  "requirement_ref": "knowledge/primary/domains/comm/ldpc/algorithm_spec.md",
+  "doc_refs": [
+    "knowledge/primary/domains/comm/ldpc/encoding_spec.md",
+    "knowledge/primary/domains/comm/ldpc/stage3_fixed_point_report.md",
+    "knowledge/primary/domains/comm/ldpc/stage4_resource_estimation.md",
+    "knowledge/primary/domains/comm/ldpc/stage7_fpga_implementation_report.md"
+  ],
+  "golden_model_ref": "model_comm_ldpc",
+  "fidelity": {
+    "status": "pending"
+  },
+  "ports": [
+    {
+      "name": "i_clk_sys",
+      "direction": "input",
+      "width": 1
+    },
+    {
+      "name": "i_rst_sys",
+      "direction": "input",
+      "width": 1
+    },
+    {
+      "name": "s_axis_llr_tdata",
+      "direction": "input",
+      "width": 10,
+      "bus": "axi-stream"
+    },
+    {
+      "name": "s_axis_llr_tvalid",
+      "direction": "input",
+      "width": 1,
+      "bus": "axi-stream"
+    },
+    {
+      "name": "s_axis_llr_tready",
+      "direction": "output",
+      "width": 1,
+      "bus": "axi-stream"
+    },
+    {
+      "name": "m_axis_data_tdata",
+      "direction": "output",
+      "width": 1,
+      "bus": "axi-stream"
+    },
+    {
+      "name": "m_axis_data_tvalid",
+      "direction": "output",
+      "width": 1,
+      "bus": "axi-stream"
+    },
+    {
+      "name": "m_axis_data_tready",
+      "direction": "input",
+      "width": 1,
+      "bus": "axi-stream"
+    }
+  ],
+  "clock": {
+    "name": "i_clk_sys",
+    "period_ns": 10
+  },
+  "reset": {
+    "name": "i_rst_sys",
+    "polarity": "active_high",
+    "type": "sync"
+  },
+  "constraints": {
+    "target": {
+      "fmax": "100MHz",
+      "fmax_mhz": 100
+    }
+  },
+  "sources": [
+    {
+      "path": "rtl/cn_update.v",
+      "role": "rtl",
+      "sha256": "ee741d0691702631f36b373a916c311c9bba1f1c7b41a419cb2c71318b654e5f"
+    },
+    {
+      "path": "rtl/early_term.v",
+      "role": "rtl",
+      "sha256": "0289363bbbd8003d818a600df86a7592dba859a9df3342066498013494e3a29c"
+    },
+    {
+      "path": "rtl/h_matrix_addr.v",
+      "role": "rtl",
+      "sha256": "148d16ef9474a587d543f94cb8d47f1d6e0045556a8fd7956e4c26b43a0785f7"
+    },
+    {
+      "path": "rtl/ldpc_controller.v",
+      "role": "rtl",
+      "sha256": "0ac7c4c2cb9211a5671b7d4ca27a5d94dffc52d6a78225f6b5b4b29faa3fd7f5"
+    },
+    {
+      "path": "rtl/ldpc_decoder_top.v",
+      "role": "rtl",
+      "sha256": "0045f78817426e122796cca582da303940b810d6154f8b1605139b40f5c2ae7c"
+    },
+    {
+      "path": "rtl/ldpc_defines.vh",
+      "role": "rtl",
+      "sha256": "1b0934d054ddb5f5df2ac745947a5ba8cbf225fed65a7a887c673d730c8ced55"
+    },
+    {
+      "path": "rtl/ldpc_encoder_top.v",
+      "role": "rtl",
+      "sha256": "94abf6e1f405da9cc82fdb8ed1ed4865d1c7efff2f280d279da1d48be3291f60"
+    },
+    {
+      "path": "rtl/llr_buffer.v",
+      "role": "rtl",
+      "sha256": "6a90e0630b546168b28b285a4090a6e41f97eacb25dfa1a03953ea69805fe7c9"
+    },
+    {
+      "path": "rtl/msg_buffer.v",
+      "role": "rtl",
+      "sha256": "e517ac9bb1637a899eff980f09063e1d327e1ac97b12be0b71ebd666a02b4a8a"
+    },
+    {
+      "path": "tb/tb_ldpc_decoder_top.v",
+      "role": "tb",
+      "sha256": "4fc2b24179afeda4ee4036e70c968e7c6e680b02e082adc2830d56fafe27e417"
+    },
+    {
+      "path": "tb/tb_ldpc_encoder_top.v",
+      "role": "tb",
+      "sha256": "73178db26bce39c0b560066b9283ba335a539b48d1ea37054eebd390d46e21f0"
+    },
+    {
+      "path": "tb/tb_ldpc_system.v",
+      "role": "tb",
+      "sha256": "800bbbb4fb6412c5cc34e534a4292ceb3b75efc6162db38dd8ef824104de2217"
+    },
+    {
+      "path": "tb/uvm/ldpc_agent.sv",
+      "role": "tb",
+      "sha256": "9a9db505fb3305fb7b8a6a345158598780969c78f1e84f742646d59fe9bd66ae"
+    },
+    {
+      "path": "tb/uvm/ldpc_base_test.sv",
+      "role": "tb",
+      "sha256": "4fe0a889c1d50e1f8dfd2f0ca579adac0be4683ff0c3c5e5a3b1328e9900c5f0"
+    },
+    {
+      "path": "tb/uvm/ldpc_basic_test.sv",
+      "role": "tb",
+      "sha256": "1cb3e44bf0634e597f33f361261ea5d20de6358fe19cd8f935bf2b62d30b02e5"
+    },
+    {
+      "path": "tb/uvm/ldpc_driver.sv",
+      "role": "tb",
+      "sha256": "31176eecb8a70bae998c8f58bf1aea68a972da332cd3c410faddccd25f200e6d"
+    },
+    {
+      "path": "tb/uvm/ldpc_env.sv",
+      "role": "tb",
+      "sha256": "ecddfd4b002e20a49ee76843ee9915bb77eb7e21ba0076711d442f02486e1dbc"
+    },
+    {
+      "path": "tb/uvm/ldpc_monitor.sv",
+      "role": "tb",
+      "sha256": "f80a0538a616b5e622476a9ade58b8cc715872df2b369d0582e46b4c2ddaa8c0"
+    },
+    {
+      "path": "tb/uvm/ldpc_scoreboard.sv",
+      "role": "tb",
+      "sha256": "e9bcd171661592f0ea0f9c6a77c040ae9aa9075ba1de05118079243f2a9a1051"
+    },
+    {
+      "path": "tb/uvm/ldpc_seq_item.sv",
+      "role": "tb",
+      "sha256": "b7aa1402897ec2c17a6da1bec1eade62266fd4f4f325f5f3a052db447a44ac33"
+    },
+    {
+      "path": "tb/uvm/ldpc_sequences.sv",
+      "role": "tb",
+      "sha256": "61251eccfc4f833b6726cb9ea4e7eae8ac9c3a0af0ad702331984552e0ea36f1"
+    },
+    {
+      "path": "tb/uvm/ldpc_uvm_pkg.sv",
+      "role": "tb",
+      "sha256": "b000547e6e2396eb4b4d86f6ffab4660c65b36c8e8e6809ebbeb6d2ac73e94f5"
+    },
+    {
+      "path": "tb/uvm/tb_ldpc_uvm_top.sv",
+      "role": "tb",
+      "sha256": "a13d808e88b4ff6c35d087bf534c998c6b7707971861a6298aab1017de74c9d4"
+    },
+    {
+      "path": "constraints/ldpc_decoder.xdc",
+      "role": "constraint",
+      "sha256": "b938ab2561f8062171cc8e93713ab01d47076b28e7a30a68f59325d5f371ac90"
+    }
+  ],
+  "waivers": [],
+  "superseded_by": null
+}

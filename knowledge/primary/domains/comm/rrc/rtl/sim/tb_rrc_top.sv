@@ -35,7 +35,7 @@ module tb_rrc_top;
         logic signed [15:0] stim_q [];
         logic signed [15:0] gold_i [];
         logic signed [15:0] gold_q [];
-        int fd_in, fd_gold;
+        int fd_in, fd_gold, gold_count;
         int hex_val_i, hex_val_q;
 
         err_count = 0; sym_count = 0;
@@ -73,7 +73,7 @@ module tb_rrc_top;
 
         gold_i = new [max_symbols * 4];
         gold_q = new [max_symbols * 4];
-        int gold_count = 0;
+        gold_count = 0;
 
         fd_gold = $fopen("rrc_test_qpsk_alpha0.50_sps4_output_quant.hex", "r");
         if (fd_gold == 0) begin
