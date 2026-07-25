@@ -1,11 +1,19 @@
 {
-  "maxSkips": 20,
-  "allowedSuites": [
-    "PythonGate",
-    "MatlabGate",
-    "CoverageGate",
-    "FPRHook",
-    "CommitGate"
+  "maxSkips": 13,
+  "allowedIds": [
+    "PythonGate::安全命令放行 (pytest)",
+    "PythonGate::黄金模型写入拦截",
+    "PythonGate::敏感文件读取拦截",
+    "PythonGate::TDD 新模块缺测试文件拦截",
+    "PythonGate::现有文件修改放行",
+    "MatlabGate::安全命令放行",
+    "MatlabGate::Golden 写入拦截",
+    "MatlabGate::Python 引擎调用拦截",
+    "CoverageGate::语法正确",
+    "CoverageGate::非 git 命令放行",
+    "FPRHook::语法正确",
+    "FPRHook::Exit 0 不阻塞",
+    "CommitGate::脚本语法正确"
   ],
-  "reason": "Optional legacy gates may be absent when they are not registered. Unknown skips fail the harness regression."
+  "reason": "Optional legacy gates are bounded by exact test IDs. New skips fail until explicitly reviewed."
 }

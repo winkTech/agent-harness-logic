@@ -1,0 +1,116 @@
+{
+  "schemaVersion": "1.0",
+  "schemaCount": 22,
+  "entries": [
+    {
+      "file": "adr-template.schema.json",
+      "id": "https://agent-studio.dev/schemas/adr-template.schema.json",
+      "title": "ADR Template Schema"
+    },
+    {
+      "file": "agent-capability-card.schema.json",
+      "id": "https://claude-code.anthropic.com/schemas/agent-capability-card",
+      "title": "Agent Capability Card"
+    },
+    {
+      "file": "agent-config.schema.json",
+      "id": "https://claude-code.anthropic.com/schemas/agent-config",
+      "title": "Agent Config"
+    },
+    {
+      "file": "agent-definition.schema.json",
+      "id": "https://claude-code.anthropic.com/schemas/agent-definition",
+      "title": "Agent Definition Schema"
+    },
+    {
+      "file": "agent-identity.schema.json",
+      "id": "https://agent-studio.dev/schemas/agent-identity.schema.json",
+      "title": "Agent Identity Schema"
+    },
+    {
+      "file": "agent-manifest.schema.json",
+      "id": "https://claude-code.anthropic.com/schemas/agent-manifest",
+      "title": "Agent Manifest Schema"
+    },
+    {
+      "file": "agent-mcp-allowlist.schema.json",
+      "id": "agent-mcp-allowlist",
+      "title": "Per-Agent MCP Server Allowlist"
+    },
+    {
+      "file": "agent-skill-matrix.schema.json",
+      "id": null,
+      "title": "Agent Skill Matrix"
+    },
+    {
+      "file": "artifact-graph.schema.json",
+      "id": "artifact-graph.schema.json",
+      "title": "Artifact Relationship Graph"
+    },
+    {
+      "file": "artifact-manifest.schema.json",
+      "id": null,
+      "title": "Artifact Manifest Schema"
+    },
+    {
+      "file": "artifact-score-entry.schema.json",
+      "id": null,
+      "title": "Artifact Score Entry"
+    },
+    {
+      "file": "capability-routing.schema.json",
+      "id": "https://claude-code.anthropic.com/schemas/capability-routing",
+      "title": "Capability Routing"
+    },
+    {
+      "file": "cat7-record.schema.json",
+      "id": null,
+      "title": "CAT7 Memory Record Schema"
+    },
+    {
+      "file": "checklist-halt-condition.schema.json",
+      "id": "checklist-halt-condition",
+      "title": "Checklist Item with Halt Condition"
+    },
+    {
+      "file": "checkpoint-taxonomy.schema.json",
+      "id": null,
+      "title": "Checkpoint Taxonomy Schema"
+    },
+    {
+      "file": "code-index-config.schema.json",
+      "id": null,
+      "title": "Code Index Configuration"
+    },
+    {
+      "file": "command-definition.schema.json",
+      "id": "https://agent-studio.dev/schemas/command-definition.schema.json",
+      "title": "Command Definition Schema"
+    },
+    {
+      "file": "database_architecture.schema.json",
+      "id": null,
+      "title": "Database Architecture Schema"
+    },
+    {
+      "file": "fpga-constraints.schema.json",
+      "id": null,
+      "title": "FPGA Constraints Schema"
+    },
+    {
+      "file": "hdl-layer-status.schema.json",
+      "id": "https://claude-code.anthropic.com/schemas/hdl-layer-status",
+      "title": "HDL Layer Status"
+    },
+    {
+      "file": "hdl-project-spec.schema.json",
+      "id": "https://claude-code.anthropic.com/schemas/hdl-project-spec",
+      "title": "HDL Project Specification"
+    },
+    {
+      "file": "workflow-definition.schema.json",
+      "id": "https://lihan.local/schemas/workflow-definition.schema.json",
+      "title": "Workflow Definition Contract"
+    }
+  ]
+}

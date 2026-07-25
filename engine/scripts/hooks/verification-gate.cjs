@@ -38,7 +38,6 @@
 'use strict';
 
 const fs = require('fs');
-const os = require('os');
 const path = require('path');
 const {
   markEditedFromPayload,
@@ -49,10 +48,17 @@ const {
   writeVerificationState,
 } = require('../lib/verification-state.cjs');
 const { payloadCwd, payloadFilePath } = require('../lib/project-scope.cjs');
+const { HARNESS_ROOT } = require('../lib/harness-root.cjs');
+const {
+  commandEvidence,
+  ensureEvidenceDir,
+  writeEvidenceLedger,
+} = require('../lib/evidence-ledger.cjs');
 
-const HOMEDIR = os.homedir();
-const STATE_DIR = path.join(HOMEDIR, '.claude', 'var');
+const STATE_DIR = path.join(HARNESS_ROOT, 'var');
 const STATE_FILE = path.join(STATE_DIR, 'verify-gate.json');
+const LEDGER_FILE = process.env.CLAUDE_VERIFICATION_LEDGER_FILE ||
+  path.join(STATE_DIR, 'verification-ledger.json');
 
 // ── 模式定义 ────────────────────────────────────────────────────────────────
 
@@ -182,6 +188,77 @@ function markVerified(payload, command) {
   markVerifiedForCwd(payloadCwd(payload), { command });
 }
 
+function normalizeStatus(status) {
+  if (typeof status === 'number') return status;
+  if (typeof status === 'string' && status.trim() !== '') {
+    const parsed = Number(status);
+    return Number.isFinite(parsed) ? parsed : null;
+  }
+  return null;
+}
+
+function bashResultFromPayload(payload) {
+  const result = payload?.tool_response || payload?.tool_result || payload?.response || {};
+  return {
+    status: normalizeStatus(result.status ?? result.exit_code ?? result.exitCode),
+    signal: result.signal || null,
+    error: result.error || '',
+    stdout: result.stdout || '',
+    stderr: result.stderr || '',
+  };
+}
+
+function verificationVerdict(command, result) {
+  const stdout = String(result?.stdout || '');
+  const stderr = String(result?.stderr || '');
+  const error = String(result?.error || '');
+  const combined = `${stdout}\n${stderr}\n${error}`;
+  const status = normalizeStatus(result?.status);
+
+  if (status !== 0) {
+    return {
+      ok: false,
+      reason: status === null ? 'missing exit status' : `exit=${status}`,
+    };
+  }
+  if (result?.signal) return { ok: false, reason: `signal=${result.signal}` };
+  if (error.trim()) return { ok: false, reason: 'tool error present' };
+  if (/\bRESULT:\s*FAIL\b/i.test(combined)) return { ok: false, reason: 'RESULT: FAIL in output' };
+  const failedCount = combined.match(/\b(\d+)\s+failed\b/i);
+  if (failedCount && Number(failedCount[1]) > 0) return { ok: false, reason: 'failed test count in output' };
+  if (/\b(?:FAILURE|FATAL|ASSERTION\s+FAILED)\b/i.test(combined) ||
+      (/\bFAILED\b/i.test(combined) && !/\b0\s+failed\b/i.test(combined))) {
+    return { ok: false, reason: 'failure marker in output' };
+  }
+
+  const needsLog = /\b(vsim|xsim|iverilog|verilator|make\s+(?:regress|sim|test|check|run))\b/i.test(command);
+  if (needsLog && !combined.trim()) {
+    return { ok: false, reason: 'verification command produced no log evidence' };
+  }
+
+  return { ok: true, reason: 'exit code 0 with no failure markers' };
+}
+
+function recordVerificationEvidence(payload, command, result, verdict) {
+  const entry = commandEvidence(command, result);
+  entry.verification = {
+    accepted: verdict.ok,
+    reason: verdict.reason,
+    gate: 'verification-gate',
+  };
+  if (!verdict.ok) {
+    entry.status = 'failed';
+    entry.classification = {
+      ...entry.classification,
+      status: entry.classification?.status === 'toolchain_failure' ? 'toolchain_failure' : 'command_failed',
+      reason: verdict.reason,
+    };
+  }
+  entry.cwd = payloadCwd(payload);
+  ensureEvidenceDir(LEDGER_FILE);
+  writeEvidenceLedger(LEDGER_FILE, entry);
+}
+
 // ── stdin 读取 ───────────────────────────────────────────────────────────────
 
 function readStdin() {
@@ -243,6 +320,22 @@ async function main() {
     process.exit(0);
   }
 
+  if (eventName === 'PostToolUse' && (toolName === 'bash' || payload?.tool_name === 'Bash') && command) {
+    const state = readState();
+    const pending = pendingForPayload(state, payload);
+    if (pending.length === 0 || !matchesAny(command, TEST_PATTERNS)) process.exit(0);
+
+    const result = bashResultFromPayload(payload);
+    const verdict = verificationVerdict(command, result);
+    recordVerificationEvidence(payload, command, result, verdict);
+    if (verdict.ok) {
+      markVerified(payload, command);
+    } else {
+      console.error(`[VerificationGate] verification result rejected: ${verdict.reason}`);
+    }
+    process.exit(0);
+  }
+
   // ── PreToolUse: Bash 命令 → 检查验证状态 ─────────────────────────────────
   if ((eventName === 'PreToolUse' || !eventName) && (toolName === 'bash' || payload?.tool_name === 'Bash') && command) {
     const state = readState();
@@ -251,9 +344,9 @@ async function main() {
     // 没有待验证的修改 → 放行
     if (pending.length === 0) process.exit(0);
 
-    // 命令是第二层: 功能验证 → 放行 + 清除标记 ✅
+    // Verification commands are allowed to run here. The pending state is
+    // cleared only in PostToolUse after exit code and output evidence exist.
     if (matchesAny(command, TEST_PATTERNS)) {
-      markVerified(payload, command);
       process.exit(0);
     }
 

@@ -1,6 +1,5 @@
 'use strict';
 
-const os = require('node:os');
 const path = require('node:path');
 
 const {
@@ -17,7 +16,7 @@ const {
 } = require('./project-scope.cjs');
 
 const STATE_FILE = process.env.CLAUDE_VERIFY_GATE_STATE_FILE ||
-  path.join(os.homedir(), '.claude', 'var', 'verify-gate.json');
+  path.join(HOME, 'var', 'verify-gate.json');
 
 function emptyState() {
   return {

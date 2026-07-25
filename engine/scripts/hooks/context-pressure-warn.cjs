@@ -14,11 +14,10 @@
 'use strict';
 
 const fs = require('fs');
-const os = require('os');
 const path = require('path');
+const { HARNESS_ROOT } = require('../lib/harness-root.cjs');
 
-const HOMEDIR = os.homedir();
-const HARNESS = path.join(HOMEDIR, '.claude');
+const HARNESS = HARNESS_ROOT;
 const PRESSURE_FILE = path.join(HARNESS, 'var', 'sessions', '.compact-needed');
 
 /**

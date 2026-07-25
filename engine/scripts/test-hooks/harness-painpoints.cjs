@@ -13,12 +13,14 @@
 
 'use strict';
 
+const { HARNESS_ROOT } = require('../lib/harness-root.cjs');
+
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 const { spawnSync } = require('node:child_process');
 
-const HOME = path.join(os.homedir(), '.claude');
+const HOME = HARNESS_ROOT;
 
 const tests = [];
 
@@ -194,6 +196,50 @@ test('verification gate does not treat make clean as functional verification', (
     assert(r.status === 2, `make clean should be blocked while verification is pending, exit=${r.status}`);
     assert(state.edited === true && state.verified !== true, 'make clean cleared the pending verification state');
   });
+});
+
+test('verification gate only clears after successful PostToolUse evidence', () => {
+  const stateFile = path.join(HOME, 'var/verify-gate.json');
+  const ledgerFile = path.join(HOME, 'var/verification-ledger.json');
+  const gate = path.join(HOME, 'engine/scripts/hooks/verification-gate.cjs');
+
+  withFileBackup(stateFile, () => withFileBackup(ledgerFile, () => {
+    fs.writeFileSync(stateFile, JSON.stringify({
+      edited: true,
+      verified: false,
+      editCount: 1,
+      lastEditTime: '2026-01-01T00:00:00.000Z',
+    }, null, 2));
+
+    const pre = runNode(gate, JSON.stringify({
+      hook_event_name: 'PreToolUse',
+      tool_name: 'Bash',
+      tool_input: { command: 'pytest tests' },
+    }));
+    assert(pre.status === 0, `verification command should be allowed to run, exit=${pre.status}`);
+    let state = readJson(stateFile, {});
+    assert(state.edited === true && state.verified !== true, 'PreToolUse cleared verification before execution evidence existed');
+
+    const postFail = runNode(gate, JSON.stringify({
+      hook_event_name: 'PostToolUse',
+      tool_name: 'Bash',
+      tool_input: { command: 'pytest tests' },
+      tool_response: { status: 0, stdout: 'RESULT: FAIL', stderr: '' },
+    }));
+    assert(postFail.status === 0, `failed post evidence should not crash hook, exit=${postFail.status}`);
+    state = readJson(stateFile, {});
+    assert(state.edited === true && state.verified !== true, 'failed verification log cleared pending state');
+
+    const postPass = runNode(gate, JSON.stringify({
+      hook_event_name: 'PostToolUse',
+      tool_name: 'Bash',
+      tool_input: { command: 'pytest tests' },
+      tool_response: { status: 0, stdout: '2 passed', stderr: '' },
+    }));
+    assert(postPass.status === 0, `passing post evidence failed, exit=${postPass.status}`);
+    state = readJson(stateFile, {});
+    assert(state.edited === false && state.verified === true, 'passing PostToolUse evidence did not clear pending state');
+  }));
 });
 
 test('context compression preserves constitution and dynamic rules', () => {

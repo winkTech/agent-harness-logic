@@ -9,6 +9,7 @@
 
 const path = require('node:path');
 const fs = require('node:fs');
+const { HARNESS_ROOT } = require('./harness-root.cjs');
 
 /** 安全读取 JSON 文件 */
 function safeReadJSON(filePath, fallback = null) {
@@ -30,7 +31,7 @@ function ensureDir(dirPath) {
 
 /** 获取 .claude 目录路径 */
 function getClaudeDir() {
-  return path.join(require('node:os').homedir(), '.claude');
+  return HARNESS_ROOT;
 }
 
 module.exports = { safeReadJSON, ensureDir, getClaudeDir };

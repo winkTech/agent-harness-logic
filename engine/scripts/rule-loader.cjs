@@ -28,12 +28,13 @@
 
 const fs = require('node:fs');
 const path = require('node:path');
-const HOMEDIR = require('node:os').homedir();
+const { HARNESS_ROOT } = require('./lib/harness-root.cjs');
 
 // ── 配置 ────────────────────────────────────────────────────────────────────
 
-const RULES_DIR = path.join(HOMEDIR, '.claude', 'rules');
-const STATE_FILE = path.join(HOMEDIR, '.claude', 'var', 'index', 'runtime-state.json');
+const RULES_DIR = path.join(HARNESS_ROOT, 'rules');
+const STATE_FILE = path.join(HARNESS_ROOT, 'var', 'index', 'runtime-state.json');
+const DEFAULT_CAPSULE_MAX_CHARS = 1800;
 
 // ── Frontmatter 解析 ─────────────────────────────────────────────────────────
 
@@ -294,6 +295,35 @@ function getRuleSummary() {
   return lines.join('\n');
 }
 
+function ruleCapsuleLine(rule) {
+  const trigger = rule.matchedTerm ? ` via ${rule.matchedTerm}` : '';
+  const desc = rule.description || rule.name || rule.file;
+  return `[${rule.priority}] ${rule.file}: ${desc}${trigger}`;
+}
+
+function buildRuleCapsule(rules, opts = {}) {
+  const maxChars = Number.parseInt(
+    opts.maxChars || process.env.CLAUDE_RULE_CAPSULE_MAX_CHARS || DEFAULT_CAPSULE_MAX_CHARS,
+    10
+  );
+  const lines = [
+    'Harness rule capsule: obey these rule files; hooks enforce hard gates.',
+    ...rules.map(ruleCapsuleLine),
+    'Read full rule files only when implementation details are needed.',
+  ];
+  const text = lines.join('\n');
+  if (Number.isFinite(maxChars) && maxChars > 0 && text.length > maxChars) {
+    return `${text.slice(0, Math.max(0, maxChars - 32)).trimEnd()}\n...(capsule truncated)`;
+  }
+  return text;
+}
+
+function shouldIncludeRuleContents(opts = {}) {
+  return opts.verbose === true ||
+    process.env.CLAUDE_RULE_VERBOSE === '1' ||
+    process.env.CLAUDE_RULE_FULL_CONTEXT === '1';
+}
+
 // ── 主逻辑 — 供 hook 调用 ────────────────────────────────────────────────────
 
 /**
@@ -314,9 +344,16 @@ function getRuleSummary() {
  * @returns {object|null}
  */
 function evaluate(userMessage, opts = {}) {
+  const openFiles = opts.openFiles || [];
+  const toolNames = opts.toolNames || [];
+  const hasContextSignal = Boolean(userMessage) || openFiles.length > 0 || toolNames.length > 0;
+  if (!hasContextSignal && process.env.CLAUDE_RULE_ALWAYS_LOAD !== '1') {
+    return null;
+  }
+
   const matches = matchRules(userMessage, {
-    openFiles: opts.openFiles || [],
-    toolNames: opts.toolNames || [],
+    openFiles,
+    toolNames,
   });
 
   if (matches.length === 0) {
@@ -334,32 +371,45 @@ function evaluate(userMessage, opts = {}) {
     return true;
   });
 
-  // 加载规则内容
+  const verbose = shouldIncludeRuleContents(opts);
   const ruleContents = {};
-  for (const rule of toLoad) {
-    const content = loadRuleContent(rule.file);
-    if (content) {
-      // 去除 frontmatter，只保留正文
-      const { body } = parseFrontmatter(content);
-      ruleContents[rule.file] = body;
+  if (verbose) {
+    for (const rule of toLoad) {
+      const content = loadRuleContent(rule.file);
+      if (content) {
+        // 去除 frontmatter，只保留正文
+        const { body } = parseFrontmatter(content);
+        ruleContents[rule.file] = body;
+      }
     }
   }
 
   // Emit signal: 规则加载事件
-  try {
-    const { emitSync } = require('../hooks/learning/signal-collector.cjs');
-    emitSync('rule_load', {
-      files: toLoad.map(r => r.file),
-      priorities: toLoad.map(r => r.priority),
-      matchCount: matches.length,
-    });
-  } catch (e) { console.error('[rule-loader] 错误:', e.message); }
+  if (process.env.CLAUDE_RULE_SIGNAL_DISABLED !== '1') {
+    try {
+      const { emitSync } = require('../hooks/learning/signal-collector.cjs');
+      emitSync('rule_load', {
+        files: toLoad.map(r => r.file),
+        priorities: toLoad.map(r => r.priority),
+        matchCount: matches.length,
+      });
+    } catch (e) { console.error('[rule-loader] 错误:', e.message); }
+  }
 
   return {
     source: 'rule-loader',
     type: 'rule-inject-suggest',
+    mode: verbose ? 'verbose' : 'capsule',
     matches: toLoad,
-    ruleContents,
+    ruleRefs: toLoad.map(r => ({
+      file: r.file,
+      priority: r.priority,
+      name: r.name,
+      description: r.description,
+      matchedTerm: r.matchedTerm,
+    })),
+    capsule: buildRuleCapsule(toLoad, opts),
+    ...(verbose ? { ruleContents } : {}),
     allMatches: matches.map(m => `${m.file}[${m.priority}]`),
   };
 }
@@ -389,7 +439,7 @@ function main() {
       // 测试匹配: node rule-loader.cjs match "写RTL" --files="top.sv"
       const input = args[1] || process.env.CLAUDE_USER_MESSAGE || '';
       const files = args.find(a => a.startsWith('--files='))?.split('=')[1]?.split(',') || [];
-      const result = evaluate(input, { openFiles: files });
+      const result = evaluate(input, { openFiles: files, verbose: args.includes('--verbose') });
       if (result) {
         console.log(JSON.stringify(result, null, 2));
         if (result.ruleContents) {

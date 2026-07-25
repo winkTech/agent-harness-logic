@@ -6,7 +6,12 @@
     "SPAWN_PROMPT_BUDGET_LOG": "on",
     "SPAWN_ASSEMBLY_CACHE": "on",
     "SPAWN_ASSEMBLY_CACHE_TTL_MS": "300000",
-    "AGENT_TYPED_MEMORY_INJECTION": "on"
+    "AGENT_TYPED_MEMORY_INJECTION": "on",
+    "CLAUDE_RULE_CAPSULE_MAX_CHARS": "900",
+    "CLAUDE_RULE_SIGNAL_DISABLED": "1",
+    "PROGRESS_WATCHDOG_MODE": "observe",
+    "CLAUDE_TOOL_ACTION_CONTRACT_MODE": "high-risk",
+    "CLAUDE_CONTEXT_MONITOR_AUTO_CHECKPOINT": "0"
   },
   "enabledPlugins": {
     "andrej-karpathy-skills@karpathy-skills": true,
@@ -95,17 +100,5 @@
         ]
       }
     ]
-  },
-  "mcpServers": {
-    "matlab": {
-      "command": "D:\\Program Files\\MATLAB-MCP\\matlab-mcp-server.exe",
-      "args": [
-        "--matlab-root", "D:\\MATLAB\\R2025a",
-        "--initialize-matlab-on-startup", "false",
-        "--matlab-display-mode", "nodesktop",
-        "--disable-telemetry", "true",
-        "--log-folder", "D:\\MATLAB\\MCP-logs"
-      ]
-    }
   }
 }

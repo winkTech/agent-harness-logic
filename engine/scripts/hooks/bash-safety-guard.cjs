@@ -61,6 +61,21 @@ const DANGEROUS_PATTERNS = [
 
   // ===== 2. 数据泄露 =====
   {
+    category: 'no-bit-cfgmem',
+    severity: 'CRITICAL',
+    patterns: [
+      /\bwrite_bitstream\b/i,
+      /\bwrite_cfgmem\b/i,
+      /\bbootgen\b/i,
+      /\bprogram_flash\b/i,
+      /\bopen_hw(?:_manager)?\b/i,
+      /(?:>|>>|Out-File|Set-Content|Add-Content|New-Item|touch|copy|cp|mv)\b[\s\S]*\.(?:bit|mcs|ltx)\b/i,
+      /(?:>|>>|Out-File|Set-Content|Add-Content|New-Item|touch|copy|cp|mv)\b[\s\S]*\.(?:bin)\b[\s\S]*(?:bitstream|cfgmem|boot|flash)/i,
+    ],
+    message: 'No-bit/cfgmem gate: bitstream, cfgmem, hardware-programming, and debug-probe artifacts are forbidden in agent project work.',
+  },
+
+  {
     category: 'data-exfiltration',
     severity: 'CRITICAL',
     patterns: [

@@ -8,11 +8,13 @@
 
 'use strict';
 
+const { HARNESS_ROOT } = require('./harness-root.cjs');
+
 const fs = require('node:fs');
 const path = require('node:path');
 const os = require('node:os');
 
-const HOME = path.join(os.homedir(), '.claude');
+const HOME = HARNESS_ROOT;
 const TEMPLATES_DIR = path.join(HOME, 'skills', 'hdl-coding', 'templates');
 
 // 预期的元数据字段（按域划分）

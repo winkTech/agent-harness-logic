@@ -1,12 +1,14 @@
 #!/usr/bin/env node
 'use strict';
 
+const { HARNESS_ROOT } = require('../lib/harness-root.cjs');
+
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 const { spawnSync } = require('node:child_process');
 
-const HOME = path.join(os.homedir(), '.claude');
+const HOME = HARNESS_ROOT;
 const { validateWorkflowSet } = require(path.join(HOME, 'engine/scripts/lib/workflow-runtime.cjs'));
 
 const tests = [];

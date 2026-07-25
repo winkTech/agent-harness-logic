@@ -17,6 +17,8 @@
 
 'use strict';
 
+const { HARNESS_ROOT } = require('../lib/harness-root.cjs');
+
 const fs = require('node:fs');
 const path = require('node:path');
 const { spawnSync } = require('node:child_process');
@@ -27,7 +29,7 @@ const {
   scriptRefsForCommand,
 } = require('../lib/hook-registry.cjs');
 
-const HOME = path.join(os.homedir(), '.claude');
+const HOME = HARNESS_ROOT;
 const VERBOSE = process.argv.includes('--verbose');
 const pointIdx = process.argv.indexOf('--point');
 const FILTER_POINT = process.argv.find(a => a.startsWith('--point='))?.split('=')[1]

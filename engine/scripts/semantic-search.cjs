@@ -15,12 +15,14 @@
  * 索引位置: var/index/semantic-index.json
  */
 
+const { HARNESS_ROOT } = require('./lib/harness-root.cjs');
+
 const p = require('node:path');
 const f = require('node:fs');
 const os = require('node:os');
 const { shouldIndexSemanticFile } = require('./lib/memory-file-policy.cjs');
 
-const HOME = p.join(os.homedir(), '.claude');
+const HOME = HARNESS_ROOT;
 const INDEX_DIR = p.join(HOME, 'var', 'index');
 const INDEX_FILE = p.join(INDEX_DIR, 'semantic-index.json');
 const MEMORY_DIR = p.join(HOME, 'memory');

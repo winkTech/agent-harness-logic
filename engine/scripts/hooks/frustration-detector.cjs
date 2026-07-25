@@ -13,12 +13,17 @@
  * 输出：命中时打印 JSON 行，hook 框架将其注入到 Claude 的上下文中。
  */
 
+const { HARNESS_ROOT } = require('../lib/harness-root.cjs');
+
 const p = require('node:path');
 const f = require('node:fs');
 const os = require('node:os');
 
-const HOME = p.join(os.homedir(), '.claude');
+const HOME = HARNESS_ROOT;
 const STATE_FILE = p.join(HOME, 'var', 'index', 'runtime-state.json');
+const FAILURE_SIGNAL_THROTTLE_MS = 60 * 1000;
+
+if (process.env.CLAUDE_BENCH === '1') process.exit(0);
 const MODES = ['根因分析', '第一性原理', '减法', '搜索优先', '倒推', '证据驱动', '闭环'];
 
 // ── 挫败关键词（中英双语） ──────────────────────────────────────────────
@@ -49,6 +54,25 @@ function readState() {
 
 function writeState(state) {
   f.writeFileSync(STATE_FILE, JSON.stringify(state, null, 2));
+}
+
+function shouldThrottleFailureSignal(state, signal) {
+  if (!state || !signal) return false;
+  const now = Date.now();
+  const key = [
+    signal.mode || '',
+    signal.forceModeSwitch ? 'force' : 'suggest',
+    signal.deEscalate ? 'deescalate' : 'active',
+    state.failureCount || 0,
+  ].join(':');
+  const last = state.frustrationDetectorLastSignal || {};
+  const lastAt = Date.parse(last.at || '');
+  if (last.key === key && Number.isFinite(lastAt) && now - lastAt < FAILURE_SIGNAL_THROTTLE_MS) {
+    return true;
+  }
+  state.frustrationDetectorLastSignal = { key, at: new Date(now).toISOString() };
+  try { writeState(state); } catch { /* ignore state write failures */ }
+  return false;
 }
 
 function detect(text) {
@@ -147,6 +171,7 @@ const state = readState();
 // 1. Check tool failure count
 const failureSignal = checkToolFailure(state);
 if (failureSignal) {
+  if (shouldThrottleFailureSignal(state, failureSignal)) process.exit(0);
   const isForce = failureSignal.forceModeSwitch === true;
   // Emit signal: 模式切换事件
   try {

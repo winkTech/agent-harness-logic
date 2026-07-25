@@ -8,6 +8,7 @@ const { spawnSync } = require('node:child_process');
 
 const HOME = path.resolve(__dirname, '..', '..', '..');
 const EXECUTOR = path.join(HOME, 'engine/scripts/test-hooks/claude-patch-executor.cjs');
+const HARNESS_CASE_CORPUS = path.join(__dirname, 'fixtures', 'harness-eval-cases.json');
 
 const {
   extractAgentText,
@@ -28,6 +29,7 @@ const {
 const {
   computeHarnessMetrics,
   meetsHarnessTargets,
+  validateHarnessCase,
 } = require('../lib/harness-metrics.cjs');
 const { classifyToolchainRun } = require('../lib/toolchain-health.cjs');
 
@@ -38,6 +40,21 @@ function ensureDir(dir) {
 function writeText(filePath, text) {
   ensureDir(path.dirname(filePath));
   fs.writeFileSync(filePath, String(text).replace(/\r\n/g, '\n'), 'utf8');
+}
+
+function loadHarnessCaseCorpus() {
+  const cases = JSON.parse(fs.readFileSync(HARNESS_CASE_CORPUS, 'utf8'));
+  if (!Array.isArray(cases)) throw new Error('harness eval corpus must be an array');
+  const ids = new Set();
+  for (const testCase of cases) {
+    const validation = validateHarnessCase(testCase);
+    if (!validation.ok) {
+      throw new Error(`${testCase?.id || '<unknown>'}: ${validation.failures.join('|')}`);
+    }
+    if (ids.has(testCase.id)) throw new Error(`duplicate harness eval case id: ${testCase.id}`);
+    ids.add(testCase.id);
+  }
+  return cases;
 }
 
 function fixtureProject() {
@@ -53,11 +70,12 @@ function fixtureProject() {
 }
 
 function test(name, fn) {
+  const startedAt = Date.now();
   try {
     const detail = fn();
-    return { name, status: 'passed', detail: detail || '' };
+    return { name, status: 'passed', detail: detail || '', durationMs: Date.now() - startedAt };
   } catch (error) {
-    return { name, status: 'failed', detail: error.stack || error.message };
+    return { name, status: 'failed', detail: error.stack || error.message, durationMs: Date.now() - startedAt };
   }
 }
 
@@ -67,6 +85,12 @@ function assert(condition, message) {
 
 function runAll() {
   const results = [];
+  let caseCorpus = [];
+
+  results.push(test('Harness eval corpus loads from disk', () => {
+    caseCorpus = loadHarnessCaseCorpus();
+    return `cases=${caseCorpus.length}`;
+  }));
 
   results.push(test('repair spec schema file is valid JSON', () => {
     const schemaPath = path.join(HOME, 'schemas/repair-spec.schema.json');
@@ -194,32 +218,19 @@ function runAll() {
     return JSON.stringify(manifest.dimensions);
   }));
 
-  const expectations = {
-    'RepairSpec rejects path escape': { expectedHarnessVerdict: 'block', difficulty: 'D1', riskCategory: 'path-boundary' },
-    'RepairSpec rejects readonly patch target': { expectedHarnessVerdict: 'block', difficulty: 'D1', riskCategory: 'file-boundary' },
-    'Exact replacement fails when oldBlock is absent': { expectedHarnessVerdict: 'block', difficulty: 'D1', riskCategory: 'exact-patch-contract' },
-    'RepairContentGate catches semantic drift': { expectedHarnessVerdict: 'block', difficulty: 'D2', riskCategory: 'semantic-failure' },
-    'EvidenceLedger requires command evidence, not model claims': { expectedHarnessVerdict: 'block', difficulty: 'D2', riskCategory: 'evidence-failure' },
-    'ToolchainHealth classifies Vivado Windows loader crash': { expectedHarnessVerdict: 'block', difficulty: 'D2', riskCategory: 'toolchain-failure' },
-    'toolchain-health-gate CLI blocks loader crash': { expectedHarnessVerdict: 'block', difficulty: 'D2', riskCategory: 'toolchain-failure' },
-    'ClaudePatchExecutor dry-run passes exact patch workflow': { expectedHarnessVerdict: 'pass', difficulty: 'D1', riskCategory: 'true-success' },
-  };
+  const expectations = new Map(caseCorpus.map((testCase) => [testCase.id, testCase]));
   const harnessCases = results
-    .filter((result) => expectations[result.name])
+    .filter((result) => expectations.has(result.name))
     .map((result) => {
-      const expected = expectations[result.name];
+      const expected = expectations.get(result.name);
       const actualHarnessVerdict = result.status === 'passed'
         ? expected.expectedHarnessVerdict
         : expected.expectedHarnessVerdict === 'pass' ? 'block' : 'pass';
       return {
-        schemaVersion: 1,
-        id: result.name,
-        taskType: 'rtl_patch',
-        agent: 'dry-run',
-        difficulty: expected.difficulty,
-        riskCategory: expected.riskCategory,
-        expectedHarnessVerdict: expected.expectedHarnessVerdict,
+        ...expected,
         actualHarnessVerdict,
+        taskCompleted: result.status === 'passed',
+        durationMs: result.durationMs,
         evidence: [result.detail || result.status],
       };
     });
@@ -229,6 +240,8 @@ function runAll() {
     minTnr: 1,
     minBalancedAccuracy: 1,
     maxFalsePositiveRate: 0,
+    minCompletionRate: 1,
+    maxUserInterventionRate: 0,
   });
   results.push({
     name: 'Harness verifier metrics meet zero-false-positive target',
@@ -257,5 +270,6 @@ function main() {
 if (require.main === module) main();
 
 module.exports = {
+  loadHarnessCaseCorpus,
   runAll,
 };

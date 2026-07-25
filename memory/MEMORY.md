@@ -14,7 +14,7 @@
 | [[ldpc-rtl-review-lessons]] | 编码审查 |
 | [[2026-06-03-daily-summary]] | 日总结 |
 | [[agent-health-audit]] | 定期审查 |
-| [[memory-accumulation-plan]] | 积累策略 |
+| [[memory-accumulation-plan]] | 已废弃：不再以文件数量作为记忆质量指标 |
 | [[uvm-verification-framework]] | UVM 踩坑 |
 | [[uvm-framework-architecture]] | 通用模板选择 |
 | [[knowledge-map-compliance]] | 三同步原则 |
@@ -58,6 +58,7 @@
 [[viterbi-double-traceback-fix]] — viterbi DONE→IDLE跨block NBA竞态, r_tb_pending_clear门控修复
 [[skill-evolve-harness]] — SkillOpt 蒸馏到本地 harness: session模式挖掘+held-out门禁+PostStop自动stage
 [[self-learning-system]] — 自学习系统启动报告: 2026-06-23 激活 Dream + Skill-Evolve + 信号采集 pipeline
+[[2026-07-17-wifi-phy-agent-run-experience]] — WiFi PHY 多 Agent 工作树、路径、门禁与仿真运行经验
 
 ## 参考链接
 

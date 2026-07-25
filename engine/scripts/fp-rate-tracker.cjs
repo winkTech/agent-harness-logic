@@ -16,11 +16,13 @@
 
 'use strict';
 
+const { HARNESS_ROOT } = require('./lib/harness-root.cjs');
+
 const fs = require('node:fs');
 const path = require('node:path');
 const os = require('node:os');
 
-const HOME = path.join(os.homedir(), '.claude');
+const HOME = HARNESS_ROOT;
 const STORE_FILE = path.join(HOME, 'var', 'fp-rate-log.jsonl');
 
 function ensureDir(d) { if (!fs.existsSync(d)) fs.mkdirSync(d, { recursive: true }); }

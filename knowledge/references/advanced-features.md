@@ -53,4 +53,4 @@ metadata:
 
 **安全类**（自动运行）: router-tool-lockdown(防越权)、external-content-guard(拦截注入)、dlp-pretool(数据防护)
 
-**质量类**: pre-completion-validation(完成验证)、post-pipeline-self-review(自动审查)
+**质量类**: pre-completion-validation(完成验证)

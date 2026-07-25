@@ -21,12 +21,12 @@
 const fs = require('node:fs');
 const path = require('node:path');
 const scope = require('./lib/project-scope.cjs');
+const { HARNESS_ROOT } = require('./lib/harness-root.cjs');
 
-const HOMEDIR = require('node:os').homedir();
-const STATE_FILE = path.join(HOMEDIR, '.claude', 'var', 'index', 'runtime-state.json');
-const TASK_FILE = path.join(HOMEDIR, '.claude', 'var', 'active-task.yaml');
-const WORK_DIR = path.join(HOMEDIR, '.claude', 'memory', 'work');
-const HOME_ROOT = path.join(HOMEDIR, '.claude');
+const STATE_FILE = path.join(HARNESS_ROOT, 'var', 'index', 'runtime-state.json');
+const TASK_FILE = path.join(HARNESS_ROOT, 'var', 'active-task.yaml');
+const WORK_DIR = path.join(HARNESS_ROOT, 'memory', 'work');
+const HOME_ROOT = HARNESS_ROOT;
 
 function readJSON(filePath) {
   try {

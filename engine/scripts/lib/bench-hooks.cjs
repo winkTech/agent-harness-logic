@@ -13,13 +13,15 @@
 
 'use strict';
 
+const { HARNESS_ROOT } = require('./harness-root.cjs');
+
 const fs = require('node:fs');
 const path = require('node:path');
 const { spawnSync } = require('node:child_process');
 const os = require('node:os');
 const { collectHookEntries } = require('./hook-registry.cjs');
 
-const HOME = path.join(os.homedir(), '.claude');
+const HOME = HARNESS_ROOT;
 const SETTINGS_FILES = [
   path.join(HOME, 'settings.json'),
   path.join(HOME, 'settings.local.json'),

@@ -10,7 +10,7 @@ tags: [index, navigation, knowledge-base]
 # 知识库索引
 
 > 导航: [场景入口卡](SCENE_CARDS.md) — [标签索引](TAG_INDEX.md) — [知识库规则](KNOWLEDGE_RULES.md)
-> 最后更新: 2026-07-03 | 文档: 97 篇 primary + 37 篇 source + 40 篇 鸢尾花书蒸馏 + 4 篇 methodology + 17 篇 references + 19 篇 templates
+> 最后更新: 2026-07-18 | 文档: 97 篇 primary + 37 篇 source + 40 篇 鸢尾花书蒸馏 + 4 篇 methodology + 17 篇 references + 19 篇 templates
 
 ---
 
@@ -29,7 +29,7 @@ knowledge/
 │   ├── domains/matlab/   # MATLAB 模型
 │   ├── cross-project-experience.md
 │   └── knowledge-graph.md
-├── references/           # 引用文档 + SVA/EDA 调试参考（15 篇）
+├── references/           # 引用文档 + SVA/EDA 调试参考（17 篇）
 │   ├── sva-patterns.md
 │   └── eda-debug-checklist.md
 ├── docs/                 # 文档模板
@@ -152,11 +152,11 @@ knowledge/
 
 | Metric | Value |
 |:-------|:-----:|
-| Primary docs (不含 examples) | 87 (comm 51 + fpga 25 + cross 4 + 其他 7) |
-| Primary docs (含 examples) | 118 |
+| Primary docs (不含 examples) | 97 |
+| Primary docs (含 examples) | 128 |
 | 鸢尾花书蒸馏 | 40 cards (~200KB) |
 | Source extracts | 37 (~200K lines) |
-| 引用文档 (references/) | 16 |
+| 引用文档 (references/) | 17 |
 | 文档模板 (docs/templates/) | 19 |
 | MATLAB models | 37 .m files |
 | RTL modules | 19 .sv files |

@@ -1,4 +1,5 @@
 name: Harness Health Check
+
 on:
   push:
     branches: [main]
@@ -6,138 +7,22 @@ on:
     branches: [main]
 
 jobs:
-  markdown-lint:
-    name: Markdown Format
+  harness-health:
+    name: Static, Registry, Regression, Coverage
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
-      - name: Check markdown files exist
-        run: |
-          count=$(find . -name '*.md' -not -path './.git/*' | wc -l)
-          echo "Found $count markdown files"
-          [ "$count" -gt 0 ] || { echo "No markdown files found!"; exit 1; }
 
-  json-syntax:
-    name: JSON Syntax
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - name: Validate JSON files
-        run: |
-          errors=0
-          while IFS= read -r file; do
-            if ! jq empty "$file" 2>/dev/null; then
-              echo "FAIL: $file is not valid JSON"
-              errors=$((errors + 1))
-            fi
-          done < <(find . -name '*.json' -not -path './.git/*' -not -path './node_modules/*' -not -path './.wright/*' 2>/dev/null)
-          echo "Invalid JSON files: $errors"
-          [ "$errors" -eq 0 ] || exit 1
-
-  python-lint:
-    name: Python Syntax
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - name: Install ruff
-        run: pip install ruff
-      - name: Run ruff check
-        run: |
-          files=$(find . -name '*.py' -not -path './.git/*' -not -path './backups/*' 2>/dev/null | head -50)
-          if [ -n "$files" ]; then
-            echo "$files" | xargs ruff check --exit-non-zero-on-fix
-            echo "Python lint complete"
-          else
-            echo "No Python files to check"
-          fi
-      - name: Check workflow references
-        run: |
-          errors=0
-          for ref in $(grep -oP 'Workflow\(\{name: \"\K[^\"]+' CLAUDE.md 2>/dev/null); do
-            [ -f "workflows/${ref}.js" ] && echo "OK: $ref" || { echo "MISSING: $ref"; errors=$((errors+1)); }
-          done
-          [ "$errors" -eq 0 ] || exit 1
-      - name: Check hook file integrity
-        run: |
-          errors=0
-          config="engine/hooks/hook-config.json"
-          if [ -f "$config" ]; then
-            while IFS= read -r hook_path; do
-              full_path="engine/hooks/${hook_path}"
-              if [ -f "$full_path" ]; then
-                echo "OK: $hook_path"
-              else
-                echo "MISSING: $hook_path"
-                errors=$((errors+1))
-              fi
-            done < <(jq -r '.hooks | to_entries[] | select(.value.enabled == true) | .key' "$config")
-          else
-            echo "WARNING: $config not found, skipping hook check"
-          fi
-          [ "$errors" -eq 0 ] || exit 1
-
-  hook-tests:
-    name: Hook Unit Tests
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - name: Use Node.js
+      - name: Use Node.js 22
         uses: actions/setup-node@v4
         with:
           node-version: '22'
-      - name: Check Node.js syntax for all engine CJS files
-        run: |
-          errors=0
-          while IFS= read -r file; do
-            if ! node --check "$file" 2>/dev/null; then
-              echo "FAIL: $file"
-              errors=$((errors + 1))
-            fi
-          done < <(find engine -name '*.cjs' -o -name '*.js' | grep -v node_modules | sort)
-          echo "Syntax errors: $errors"
-          [ "$errors" -eq 0 ] || exit 1
-      - name: Check evaluation tool files exist
-        run: |
-          for f in engine/scripts/test-hooks/run-all-tests.cjs \
-                   engine/scripts/delivery-tracker.cjs \
-                   engine/scripts/fp-rate-tracker.cjs \
-                   engine/scripts/config-consistency-checker.cjs \
-                   engine/scripts/judge-calibration.cjs \
-                   engine/scripts/quality-regression-dashboard.cjs \
-                   engine/scripts/domain-extension-scanner.cjs \
-                   engine/scripts/coverage-runner.cjs \
-                   engine/scripts/coverage-gate.cjs \
-                   engine/scripts/hooks/python-gate.cjs \
-                   engine/scripts/hooks/matlab-gate.cjs \
-                   engine/scripts/dashboard-html.cjs \
-                   engine/scripts/hooks/fpr-calibration-hook.cjs \
-                   engine/scripts/test-hooks/test-e2e.cjs; do
-            [ -f "$f" ] && echo "OK: $f" || { echo "MISSING: $f"; exit 1; }
-          done
 
-  coverage:
-    name: Hook Code Coverage
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - name: Use Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: '22'
-      - name: Run coverage
-        run: |
-          npm install -g c8 2>/dev/null || true
-          npx c8 --reporter=text --reporter=lcov node engine/scripts/test-hooks/run-all-tests.cjs 2>&1 || true
-          echo "Coverage check complete"
-      - name: Check coverage threshold
-        run: |
-          # Simple syntax check as proxy for coverage baseline
-          errors=0
-          for file in $(find engine -name '*.cjs' -o -name '*.js' | grep -v node_modules | sort); do
-            if ! node --check "$file" 2>/dev/null; then
-              echo "SYNTAX ERROR: $file"
-              errors=$((errors + 1))
-            fi
-          done
-          echo "Syntax errors: $errors"
-          [ "$errors" -eq 0 ] || exit 1
+      - name: Run the fail-closed Harness gate
+        env:
+          CLAUDE_HARNESS_ROOT: ${{ github.workspace }}
+          CLAUDE_HARNESS_NO_PERSIST: '1'
+          CLAUDE_HARNESS_VERIFY_READONLY: '1'
+          CLAUDE_NO_DIAGNOSTIC_WRITES: '1'
+        run: node engine/scripts/harness-ci.cjs

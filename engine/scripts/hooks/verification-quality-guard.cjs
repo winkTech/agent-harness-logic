@@ -29,12 +29,11 @@
 'use strict';
 
 const fs = require('fs');
-const os = require('os');
 const path = require('path');
 const { findProjectRoot, stateHasScopeForFile } = require('../lib/project-scope.cjs');
+const { HARNESS_ROOT } = require('../lib/harness-root.cjs');
 
-const HOMEDIR = os.homedir();
-const HOME_GATES_DIR = path.join(HOMEDIR, '.claude', 'var', 'gates');
+const HOME_GATES_DIR = path.join(HARNESS_ROOT, 'var', 'gates');
 const HOME_STATE_FILE = path.join(HOME_GATES_DIR, 'verification-quality.json');
 
 // ── 哪些文件触发验证质量门禁 ────────────────────────────────────────────

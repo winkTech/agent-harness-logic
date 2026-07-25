@@ -20,10 +20,9 @@
 
 const fs = require('fs');
 const path = require('path');
-const os = require('os');
+const { HARNESS_ROOT } = require('./lib/harness-root.cjs');
 
-const HOMEDIR = os.homedir();
-const HARNESS = path.join(HOMEDIR, '.claude');
+const HARNESS = HARNESS_ROOT;
 const STATE_FILE = path.join(HARNESS, 'var', 'index', 'runtime-state.json');
 const COMPACT_LOG = path.join(HARNESS, 'var', 'sessions', 'compaction-log.txt');
 const PRESSURE_SIGNAL = path.join(HARNESS, 'var', 'sessions', '.compact-needed');

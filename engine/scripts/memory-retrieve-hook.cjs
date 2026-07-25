@@ -16,10 +16,15 @@
 
 'use strict';
 
+const { HARNESS_ROOT } = require('./lib/harness-root.cjs');
+
 const fs = require('node:fs');
 const path = require('node:path');
 const os = require('node:os');
-const HARNESS = path.join(os.homedir(), '.claude');
+const crypto = require('node:crypto');
+const HARNESS = HARNESS_ROOT;
+const CACHE_FILE = path.join(HARNESS, 'var', 'index', 'memory-retrieve-cache.json');
+const DEFAULT_CACHE_TTL_MS = 10 * 60 * 1000;
 
 // ── 层1: 用户消息触发模式 ──────────────────────────────────────────────────
 const TRIGGER_PATTERNS = [
@@ -90,6 +95,52 @@ function extractFilePath(stdinRaw) {
   return null;
 }
 
+function cacheTtlMs() {
+  const value = Number.parseInt(process.env.CLAUDE_MEMORY_HINT_TTL_MS || DEFAULT_CACHE_TTL_MS, 10);
+  return Number.isFinite(value) && value >= 0 ? value : DEFAULT_CACHE_TTL_MS;
+}
+
+function readCache() {
+  try {
+    if (!fs.existsSync(CACHE_FILE)) return {};
+    return JSON.parse(fs.readFileSync(CACHE_FILE, 'utf8'));
+  } catch {
+    return {};
+  }
+}
+
+function writeCache(cache) {
+  try {
+    fs.mkdirSync(path.dirname(CACHE_FILE), { recursive: true });
+    const entries = Object.entries(cache)
+      .sort((a, b) => String(b[1]?.at || '').localeCompare(String(a[1]?.at || '')))
+      .slice(0, 100);
+    fs.writeFileSync(CACHE_FILE, JSON.stringify(Object.fromEntries(entries), null, 2), 'utf8');
+  } catch {
+    // Cache failures should never affect tool use.
+  }
+}
+
+function cacheKey(trigger, query) {
+  return crypto.createHash('sha1').update(`${trigger}\n${query}`).digest('hex');
+}
+
+function recentlyInjected(key) {
+  if (process.env.CLAUDE_MEMORY_HINT_CACHE_DISABLED === '1') return false;
+  const ttl = cacheTtlMs();
+  if (ttl === 0) return false;
+  const cache = readCache();
+  const at = Date.parse(cache[key]?.at || '');
+  return Number.isFinite(at) && Date.now() - at < ttl;
+}
+
+function markInjected(key, detail = {}) {
+  if (process.env.CLAUDE_MEMORY_HINT_CACHE_DISABLED === '1') return;
+  const cache = readCache();
+  cache[key] = { at: new Date().toISOString(), ...detail };
+  writeCache(cache);
+}
+
 function doMemoryQuery(query, label) {
   try {
     const { openDb } = require('../sqlite/index.cjs');
@@ -132,6 +183,11 @@ function main() {
   // 无触发 → 0 token
   if (!userTriggered && !contextQuery) return;
 
+  const triggerKind = contextQuery && userTriggered ? 'context+user' : contextQuery ? 'task-context' : 'user-query';
+  const queryText = [userTriggered ? msg : '', contextQuery || ''].filter(Boolean).join('\n').slice(0, 500);
+  const key = cacheKey(triggerKind, queryText);
+  if (recentlyInjected(key)) return;
+
   try {
     const allMemMatches = [];
 
@@ -158,6 +214,7 @@ function main() {
     }
 
     if (allMemMatches.length === 0) return;
+    markInjected(key, { trigger: triggerKind, query: queryText.slice(0, 120), count: allMemMatches.length });
 
     // wiki-link 解析
     const outputParts = [{

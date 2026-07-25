@@ -21,8 +21,7 @@
  *   6. 检查 check_results/ 目录，空目录则写入基础 JSON 证据
  *   7. 输出清理报告到 console.error
  *
- * 注册 (hook-config.json):
- *   "safety/sim-governance.cjs": { enabled: true, frequency: "medium", ... }
+ * 注册源: settings.json hooks（由 engine/scripts/hooks/hook-registry.cjs 校验）
  */
 
 'use strict';

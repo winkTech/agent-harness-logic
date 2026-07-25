@@ -4,7 +4,9 @@ const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 
-const HOME = path.join(os.homedir(), '.claude');
+const { HARNESS_ROOT } = require('./harness-root.cjs');
+
+const HOME = HARNESS_ROOT;
 
 const ROOT_MARKERS = [
   '.git',

@@ -1,16 +1,13 @@
 'use strict';
 
 const fs = require('node:fs');
-const os = require('node:os');
 const path = require('node:path');
 
 const { expandHome, resolvePath } = require('./project-scope.cjs');
+const { HARNESS_ROOT, settingsFiles } = require('./harness-root.cjs');
 
-const HOME = path.join(os.homedir(), '.claude');
-const DEFAULT_SETTINGS_FILES = [
-  path.join(HOME, 'settings.json'),
-  path.join(HOME, 'settings.local.json'),
-];
+const HOME = HARNESS_ROOT;
+const DEFAULT_SETTINGS_FILES = settingsFiles(HOME);
 
 function parseCommandLine(command) {
   const parts = [];
@@ -45,7 +42,8 @@ function readSettingsFiles(files = DEFAULT_SETTINGS_FILES) {
 }
 
 function collectHookEntries(opts = {}) {
-  const { config } = opts.config ? { config: opts.config } : readSettingsFiles(opts.files);
+  const files = opts.files || settingsFiles(opts.root || HOME);
+  const { config } = opts.config ? { config: opts.config } : readSettingsFiles(files);
   const hooks = config.hooks || {};
   const entries = [];
 
@@ -73,12 +71,22 @@ function collectHookEntries(opts = {}) {
   return entries;
 }
 
-function resolveScriptArg(arg) {
-  if (!arg || arg === '-e') return null;
-  return resolvePath(expandHome(arg), HOME);
+function harnessRelativeParts(arg) {
+  const normalized = String(arg || '').replace(/\\/g, '/');
+  const marker = '/engine/';
+  const markerIndex = normalized.toLowerCase().lastIndexOf(marker);
+  if (markerIndex < 0) return null;
+  return normalized.slice(markerIndex + 1).split('/').filter(Boolean);
 }
 
-function batchScriptsFromCommand(command) {
+function resolveScriptArg(arg, root = HOME) {
+  if (!arg || arg === '-e') return null;
+  const relativeParts = harnessRelativeParts(arg);
+  if (relativeParts) return path.join(root, ...relativeParts);
+  return resolvePath(expandHome(arg), root);
+}
+
+function batchScriptsFromCommand(command, root = HOME) {
   const parts = parseCommandLine(command);
   const scripts = [];
   const batchIndex = parts.indexOf('--batch');
@@ -87,22 +95,23 @@ function batchScriptsFromCommand(command) {
   for (const name of parts[batchIndex + 1].split(',')) {
     const trimmed = name.trim();
     if (!trimmed) continue;
-    scripts.push(path.join(HOME, 'engine', 'scripts', 'hooks', trimmed));
+    scripts.push(path.join(root, 'engine', 'scripts', 'hooks', trimmed));
   }
   return scripts;
 }
 
-function scriptRefsForCommand(command) {
+function scriptRefsForCommand(command, opts = {}) {
+  const root = opts.root || HOME;
   const parts = parseCommandLine(command);
   const refs = [];
-  const batchScripts = batchScriptsFromCommand(command);
+  const batchScripts = batchScriptsFromCommand(command, root);
 
   for (let i = 0; i < parts.length; i++) {
     const token = parts[i];
     const base = path.basename(token || '').toLowerCase();
     if (base === 'node' || base === 'node.exe' || base === 'bash' || base === 'bash.exe') {
       const candidate = parts[i + 1];
-      const script = resolveScriptArg(candidate);
+      const script = resolveScriptArg(candidate, root);
       if (script && /\.(?:cjs|js|mjs|sh)$/i.test(script)) {
         refs.push({ script, source: candidate, kind: base.startsWith('node') ? 'node' : 'bash' });
       }
@@ -123,12 +132,13 @@ function scriptRefsForCommand(command) {
 }
 
 function validateHookScripts(opts = {}) {
+  const root = opts.root || HOME;
   const entries = collectHookEntries(opts);
   const missing = [];
   const found = [];
 
   for (const entry of entries) {
-    const refs = scriptRefsForCommand(entry.command);
+    const refs = scriptRefsForCommand(entry.command, { root });
     for (const ref of refs) {
       const record = { ...ref, point: entry.point, matcher: entry.matcher, command: entry.command };
       if (fs.existsSync(ref.script)) found.push(record);
@@ -143,6 +153,8 @@ module.exports = {
   HOME,
   DEFAULT_SETTINGS_FILES,
   parseCommandLine,
+  harnessRelativeParts,
+  batchScriptsFromCommand,
   mergeHookConfigs,
   readSettingsFiles,
   collectHookEntries,

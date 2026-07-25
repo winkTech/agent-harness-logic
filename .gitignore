@@ -1,5 +1,13 @@
 # Claude Code 运行时文件
 .claude/
+.credentials.json
+.last-update-result.json
+cache/
+daemon/
+paste-cache/
+
+# Hook 失败诊断模板（生成器按 shell 退出码触发，正文未填，会稀释记忆语料）
+memory/errors/*hook_failure*
 
 # SQLite 运行时数据库（自动创建）
 .wright/

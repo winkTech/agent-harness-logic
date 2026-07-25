@@ -12,13 +12,15 @@
 
 'use strict';
 
+const { HARNESS_ROOT } = require('./scripts/lib/harness-root.cjs');
+
 const fs = require('node:fs');
 const path = require('node:path');
 const { spawnSync } = require('node:child_process');
 const os = require('node:os');
 const { readSettingsFiles, validateHookScripts } = require('./scripts/lib/hook-registry.cjs');
 
-const HOME = path.join(os.homedir(), '.claude');
+const HOME = HARNESS_ROOT;
 
 // ── 工具 ───────────────────────────────────────────────────────────────────
 

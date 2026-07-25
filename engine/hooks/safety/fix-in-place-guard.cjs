@@ -14,8 +14,7 @@
  *   4. /^check_rtl_\w+\d+\.sv$/i — check_rtl_freq_recovery21.sv
  *   5. /^run_debug\d+\.do$/i     — run_debug5.do
  *
- * 注册 (hook-config.json):
- *   "safety/fix-in-place-guard.cjs": { enabled: true, frequency: "high", ... }
+ * 注册源: settings.json hooks（由 engine/scripts/hooks/hook-registry.cjs 校验）
  */
 
 'use strict';

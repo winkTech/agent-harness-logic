@@ -1,13 +1,15 @@
 #!/usr/bin/env node
 'use strict';
 
+const { HARNESS_ROOT } = require('../lib/harness-root.cjs');
+
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 
 const CONTROLLED_TOOLS = new Set(['Bash', 'Edit', 'Write', 'MultiEdit', 'Agent', 'Task', 'Workflow']);
 const MAX_TAIL_BYTES = 1024 * 1024;
-const CLAUDE_HOME = path.join(os.homedir(), '.claude');
+const CLAUDE_HOME = HARNESS_ROOT;
 
 function readStdin() {
   return new Promise((resolve) => {

@@ -17,11 +17,13 @@
 
 'use strict';
 
+const { HARNESS_ROOT } = require('./lib/harness-root.cjs');
+
 const fs = require('node:fs');
 const path = require('node:path');
 const os = require('node:os');
 
-const HOME = path.join(os.homedir(), '.claude');
+const HOME = HARNESS_ROOT;
 const SAMPLES_DIR = path.join(HOME, 'var', 'calibration-samples');
 const RESULTS_FILE = path.join(HOME, 'var', 'calibration-results.json');
 

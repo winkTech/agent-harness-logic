@@ -18,11 +18,13 @@
  * 索引位置: var/index/runtime-state.json
  */
 
+const { HARNESS_ROOT } = require('./lib/harness-root.cjs');
+
 const p = require('node:path');
 const f = require('node:fs');
 const os = require('node:os');
 
-const HOME = p.join(os.homedir(), '.claude');
+const HOME = HARNESS_ROOT;
 const INDEX_DIR = p.join(HOME, 'var', 'index');
 const STATE_FILE = p.join(INDEX_DIR, 'runtime-state.json');
 

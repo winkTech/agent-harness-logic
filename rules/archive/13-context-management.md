@@ -53,7 +53,7 @@ skip: "永不跳过"
 
 **手动触发**：
 ```bash
-node engine/hooks/session/pre-compact.cjs save
+node engine/scripts/pre-compact.cjs
 ```
 
 ### H3: 阶段制压缩
@@ -158,17 +158,14 @@ FPGA 模块开发标准阶段:
 # 查看当前 context 状态
 node engine/scripts/context-monitor-gate.cjs --status
 
-# 查看 context-monitor hook 状态
-node engine/hooks/safety/context-monitor.cjs status
+# 查看压缩检查点状态
+node engine/scripts/pre-compact.cjs --status
 
 # 保存压缩前状态
-node engine/hooks/session/pre-compact.cjs save
+node engine/scripts/pre-compact.cjs
 
 # 读取压缩前状态
-node engine/hooks/session/pre-compact.cjs read
-
-# 重置 context-monitor 计数器
-node engine/hooks/safety/context-monitor.cjs reset
+node engine/scripts/context-resume.cjs
 ```
 
 ---

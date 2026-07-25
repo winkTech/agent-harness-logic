@@ -26,9 +26,9 @@
 
 const fs = require('node:fs');
 const path = require('node:path');
+const { HARNESS_ROOT } = require('./lib/harness-root.cjs');
 
-const HOMEDIR = require('node:os').homedir();
-const MEMORY_DIR = path.join(HOMEDIR, '.claude', 'memory');
+const MEMORY_DIR = path.join(HARNESS_ROOT, 'memory');
 const LEARNINGS_DIR = path.join(MEMORY_DIR, 'learnings');
 const ERRORS_DIR = path.join(MEMORY_DIR, 'errors');
 const PROJECTS_DIR = path.join(MEMORY_DIR, 'projects');
@@ -114,9 +114,9 @@ function buildNameIndex() {
   scanDir(MEMORY_DIR);
   scanDir(path.join(MEMORY_DIR, 'references'));
   scanDir(path.join(MEMORY_DIR, 'agents'));
-  scanDir(path.join(HOMEDIR, '.claude', 'knowledge', 'methodology'));
-  scanDir(path.join(HOMEDIR, '.claude', 'knowledge', 'primary'));
-  scanDir(path.join(HOMEDIR, '.claude', 'knowledge', 'references'));
+  scanDir(path.join(HARNESS_ROOT, 'knowledge', 'methodology'));
+  scanDir(path.join(HARNESS_ROOT, 'knowledge', 'primary'));
+  scanDir(path.join(HARNESS_ROOT, 'knowledge', 'references'));
 
   // 从 MEMORY.md 补充索引（仅取名称，路径从索引行推断）
   if (fs.existsSync(MEMORY_INDEX)) {

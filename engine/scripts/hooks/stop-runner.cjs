@@ -24,6 +24,8 @@
 
 'use strict';
 
+const { HARNESS_ROOT } = require('../lib/harness-root.cjs');
+
 const { spawnSync } = require('node:child_process');
 const path = require('node:path');
 const fs = require('node:fs');
@@ -31,7 +33,7 @@ const os = require('node:os');
 
 // ── ECC 根目录解析 ─────────────────────────────────────────────────────────
 
-const HOME = path.join(os.homedir(), '.claude');
+const HOME = HARNESS_ROOT;
 const UTILS_REL = path.join('scripts', 'lib', 'utils.js');
 
 function check(dir) {

@@ -653,6 +653,7 @@ function main() {
   let rawOutput = '';
   let responseText = '';
   let plan;
+  let parseError = null;
   let agentRun = null;
   if (dryRun) {
     plan = cannedManagedResponse(kind);
@@ -663,15 +664,24 @@ function main() {
     agentRun = runAgent(command, prompt, outDir);
     rawOutput = `${agentRun.stdout}${agentRun.stderr}`;
     responseText = extractResponseText(rawOutput);
-    plan = parseManagedJson(responseText);
+    try {
+      plan = parseManagedJson(responseText);
+    } catch (error) {
+      parseError = error;
+      plan = null;
+    }
   }
   fs.writeFileSync(path.join(outDir, 'managed-agent-output.txt'), rawOutput, 'utf8');
-  fs.writeFileSync(path.join(outDir, 'managed-response.json'), JSON.stringify(plan, null, 2), 'utf8');
+  if (plan) fs.writeFileSync(path.join(outDir, 'managed-response.json'), JSON.stringify(plan, null, 2), 'utf8');
 
-  const compliance = validateAndApply(plan, outDir, kind);
-  if (agentRun && agentRun.status !== 0) {
+  const compliance = parseError
+    ? { status: 'failed', failures: [parseError.message] }
+    : validateAndApply(plan, outDir, kind);
+  if (agentRun && (agentRun.status !== 0 || agentRun.signal || agentRun.error)) {
     compliance.status = 'failed';
-    compliance.failures.push(`agent exited with status ${agentRun.status}`);
+    if (agentRun.status !== 0) compliance.failures.push(`agent exited with status ${agentRun.status}`);
+    if (agentRun.signal) compliance.failures.push(`agent terminated by signal ${agentRun.signal}`);
+    if (agentRun.error) compliance.failures.push(`agent runner error: ${agentRun.error}`);
   }
   const functional = compliance.status === 'passed'
     ? verifyFunctional(outDir, kind, plan)
@@ -692,6 +702,9 @@ function main() {
     initialScenarioSha256: hashDirectory(SCENARIO),
     finalWorkspaceSha256: hashDirectory(outDir),
     agentExitCode: agentRun ? agentRun.status : null,
+    agentSignal: agentRun ? agentRun.signal : null,
+    agentError: agentRun ? agentRun.error : null,
+    parseError: parseError ? parseError.message : null,
     status,
     dimensions: {
       protocolCompliance: compliance.status,

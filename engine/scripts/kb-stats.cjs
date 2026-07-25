@@ -13,13 +13,15 @@
 
 'use strict';
 
+const { HARNESS_ROOT } = require('./lib/harness-root.cjs');
+
 const fs = require('node:fs');
 const path = require('node:path');
 const os = require('node:os');
 const { shouldIndexSemanticFile } = require('./lib/memory-file-policy.cjs');
 const { healthCheck } = require('./resolve-wiki-links.cjs');
 
-const HOME_DIR = path.join(os.homedir(), '.claude');
+const HOME_DIR = HARNESS_ROOT;
 const KB_DIR = path.join(HOME_DIR, 'knowledge');
 const MEMORY_DIR = path.join(HOME_DIR, 'memory');
 const SEMANTIC_META = path.join(HOME_DIR, 'var', 'index', 'semantic-index-meta.json');
@@ -128,6 +130,7 @@ function main() {
   const args = process.argv.slice(2);
   const json = args.includes('--json');
   const check = args.includes('--check');
+  const quiet = args.includes('--quiet');
 
   // primary/ 文档
   const primary = count(path.join(KB_DIR, 'primary'));
@@ -241,10 +244,12 @@ function main() {
     }
 
     if (issues.length > 0) {
+      if (quiet) process.exit(0);
       console.log('⚠️ 知识库索引需要更新:');
       for (const i of issues) console.log(`  - ${i}`);
       process.exit(1);
     } else {
+      if (quiet) process.exit(0);
       console.log('✅ 知识库索引最新');
       process.exit(0);
     }

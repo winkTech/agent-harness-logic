@@ -60,7 +60,7 @@ const ROOT_TRANSIENT_PATTERNS = Object.freeze([
   /^vsim\.wlf$/i,
   /^vivado.*\.(log|jou)$/i,
   /^xsim\.(log|jou|tcl)$/i,
-  /\.(vcd|vcd\.lxt|wlf|wlftmp|wdb|vvp|dcp|rpt|jou|log)$/i,
+  /\.(vcd|vcd\.lxt|wlf|wlftmp|wdb|vvp|dcp|rpt|jou|log|bit|mcs|bin|ltx)$/i,
 ]);
 
 function normalizeRel(relPath) {
@@ -149,12 +149,7 @@ function readDirectoryContract(rootDir) {
 }
 
 function looksLikeProjectRoot(dir) {
-  return fs.existsSync(path.join(dir, CONTRACT_FILE))
-    || (
-      fs.existsSync(path.join(dir, '01_src', '00_hdl'))
-      && fs.existsSync(path.join(dir, '02_sim'))
-      && fs.existsSync(path.join(dir, '06_doc'))
-    );
+  return fs.existsSync(path.join(dir, CONTRACT_FILE));
 }
 
 function findProjectRoot(filePath, cwd = process.cwd()) {
@@ -328,12 +323,7 @@ function validateActionPath(filePath, cwd = process.cwd()) {
   }
 
   const relPath = normalizeRel(path.isAbsolute(filePath) ? path.basename(filePath) : filePath);
-  const failures = placementViolations(relPath)
-    .filter((message) => /forbidden top-level|HDL files must|XDC files must|root transient/.test(message));
-  if (failures.length > 0) {
-    failures.unshift('no HDL directory contract was found; run harness-init/project-init before writing project files');
-  }
-  return { ok: failures.length === 0, projectRoot: '', relPath, failures };
+  return { ok: true, projectRoot: '', relPath, failures: [], contractApplied: false };
 }
 
 module.exports = {
