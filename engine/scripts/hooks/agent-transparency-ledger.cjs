@@ -20,6 +20,14 @@ const {
 const HOME = HARNESS_ROOT;
 const MAX_PREVIEW_CHARS = 220;
 const MAX_TRANSCRIPT_TAIL = 1024 * 1024;
+// 找用户消息时的逐级扩大窗口 (见 latestUserText)。上限 32MB 兜底, 避免在
+// 异常巨大的转录上整file读取。
+const TRANSCRIPT_TAIL_WINDOWS = [
+  MAX_TRANSCRIPT_TAIL,
+  4 * 1024 * 1024,
+  12 * 1024 * 1024,
+  32 * 1024 * 1024,
+];
 const MAX_EVENTS_BYTES = 5 * 1024 * 1024;
 
 const CONTROLLED_TOOLS = new Set(['Bash', 'Edit', 'Write', 'MultiEdit', 'Agent', 'Task', 'Workflow']);
@@ -230,9 +238,9 @@ function resolveTranscriptPath(payload) {
   return '';
 }
 
-function readTail(filePath) {
+function readTail(filePath, maxBytes = MAX_TRANSCRIPT_TAIL) {
   const stat = fs.statSync(filePath);
-  const start = Math.max(0, stat.size - MAX_TRANSCRIPT_TAIL);
+  const start = Math.max(0, stat.size - maxBytes);
   const fd = fs.openSync(filePath, 'r');
   try {
     const buffer = Buffer.alloc(stat.size - start);
@@ -256,11 +264,30 @@ function textFromContent(content) {
     .join('\n');
 }
 
+// 逐级扩大尾部窗口, 直到找到用户消息或读完全文。
+// 固定 1MB 窗口在长 agent 轮次上会失效: 大量工具输出把最近一条用户消息挤出
+// 窗口, 合同随即标 missing-user-instruction 并拦下动作 —— 恰好在最复杂、最
+// 该留痕的任务上失灵。扩大只在小窗口找不到时发生, 常规调用仍只读 1MB。
 function latestUserText(transcriptPath) {
   if (!transcriptPath) return '';
+  let size = 0;
+  try {
+    size = fs.statSync(transcriptPath).size;
+  } catch {
+    return '';
+  }
+  for (const window of TRANSCRIPT_TAIL_WINDOWS) {
+    const found = scanLatestUserText(transcriptPath, window);
+    if (found) return found;
+    if (window >= size) break;   // 已读完全文, 再扩大无意义
+  }
+  return '';
+}
+
+function scanLatestUserText(transcriptPath, maxBytes) {
   let text = '';
   try {
-    text = readTail(transcriptPath);
+    text = readTail(transcriptPath, maxBytes);
   } catch {
     return '';
   }
