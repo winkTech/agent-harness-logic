@@ -128,20 +128,84 @@ module h_matrix_addr #(
     reg [P_SHIFT_W-1:0]    r_conn_shft [0:P_MB-1][0:P_MAX_ROW_WT-1];
     reg [P_CONN_CNT_W-1:0] r_conn_cnt  [0:P_MB-1];
 
-    integer br, bc, ci;
+    // 原实现在此用 `if (r_p_rom[...] != 5'd31)` 扫描构建三张表。该条件依赖 reg
+    // 数组内容, Vivado 判为非常量条件并报 [Synth 8-6896] **丢弃整个 initial 块**:
+    // 仿真里表有值, 综合后三张表无驱动源 ([Synth 8-3848]), 上板行为与仿真不一致。
+    // 现改为纯常量赋值 —— 与上方 r_p_rom 相同的写法, 该写法已被同一综合器正确推断。
+    // 常量由 tools/gen-ldpc-conn-tables.cjs 从本文件的 r_p_rom 解析并按原算法展开,
+    // 与原实现逐条等价 (脚本内置自检)。P 矩阵变更后须重跑该脚本重新生成。
+    integer br, ci;
     initial begin
-        ci = 0;
+        // 未用槽位清零 (常量边界循环, 可综合)
         for (br = 0; br < P_MB; br = br + 1) begin
-            ci = 0;
-            for (bc = 0; bc < P_NB; bc = bc + 1) begin
-                if (r_p_rom[br * P_NB + bc] != 5'd31) begin
-                    r_conn_col [br][ci] = bc;
-                    r_conn_shft[br][ci] = r_p_rom[br * P_NB + bc];
-                    ci = ci + 1;
-                end
+            r_conn_cnt[br] = {P_CONN_CNT_W{1'b0}};
+            for (ci = 0; ci < P_MAX_ROW_WT; ci = ci + 1) begin
+                r_conn_col [br][ci] = 6'd0;
+                r_conn_shft[br][ci] = {P_SHIFT_W{1'b0}};
             end
-            r_conn_cnt[br] = ci;
         end
+
+        // ==== 以下由 tools/gen-ldpc-conn-tables.cjs 生成; 请勿手改 ====
+        r_conn_cnt[0] = 4'd7;
+        r_conn_col[0][0]=6'd0;  r_conn_shft[0][0]=5'd0;   r_conn_col[0][1]=6'd4;  r_conn_shft[0][1]=5'd0;
+        r_conn_col[0][2]=6'd5;  r_conn_shft[0][2]=5'd0;   r_conn_col[0][3]=6'd8;  r_conn_shft[0][3]=5'd0;
+        r_conn_col[0][4]=6'd11; r_conn_shft[0][4]=5'd0;   r_conn_col[0][5]=6'd12; r_conn_shft[0][5]=5'd1;
+        r_conn_col[0][6]=6'd13; r_conn_shft[0][6]=5'd0;
+        r_conn_cnt[1] = 4'd8;
+        r_conn_col[1][0]=6'd0;  r_conn_shft[1][0]=5'd22;  r_conn_col[1][1]=6'd1;  r_conn_shft[1][1]=5'd0;
+        r_conn_col[1][2]=6'd4;  r_conn_shft[1][2]=5'd17;  r_conn_col[1][3]=6'd6;  r_conn_shft[1][3]=5'd0;
+        r_conn_col[1][4]=6'd7;  r_conn_shft[1][4]=5'd0;   r_conn_col[1][5]=6'd8;  r_conn_shft[1][5]=5'd12;
+        r_conn_col[1][6]=6'd13; r_conn_shft[1][6]=5'd0;   r_conn_col[1][7]=6'd14; r_conn_shft[1][7]=5'd0;
+        r_conn_cnt[2] = 4'd7;
+        r_conn_col[2][0]=6'd0;  r_conn_shft[2][0]=5'd6;   r_conn_col[2][1]=6'd2;  r_conn_shft[2][1]=5'd0;
+        r_conn_col[2][2]=6'd4;  r_conn_shft[2][2]=5'd10;  r_conn_col[2][3]=6'd8;  r_conn_shft[2][3]=5'd24;
+        r_conn_col[2][4]=6'd10; r_conn_shft[2][4]=5'd0;   r_conn_col[2][5]=6'd14; r_conn_shft[2][5]=5'd0;
+        r_conn_col[2][6]=6'd15; r_conn_shft[2][6]=5'd0;
+        r_conn_cnt[3] = 4'd7;
+        r_conn_col[3][0]=6'd0;  r_conn_shft[3][0]=5'd2;   r_conn_col[3][1]=6'd3;  r_conn_shft[3][1]=5'd0;
+        r_conn_col[3][2]=6'd4;  r_conn_shft[3][2]=5'd20;  r_conn_col[3][3]=6'd8;  r_conn_shft[3][3]=5'd25;
+        r_conn_col[3][4]=6'd9;  r_conn_shft[3][4]=5'd0;   r_conn_col[3][5]=6'd15; r_conn_shft[3][5]=5'd0;
+        r_conn_col[3][6]=6'd16; r_conn_shft[3][6]=5'd0;
+        r_conn_cnt[4] = 4'd7;
+        r_conn_col[4][0]=6'd0;  r_conn_shft[4][0]=5'd23;  r_conn_col[4][1]=6'd4;  r_conn_shft[4][1]=5'd3;
+        r_conn_col[4][2]=6'd8;  r_conn_shft[4][2]=5'd0;   r_conn_col[4][3]=6'd10; r_conn_shft[4][3]=5'd9;
+        r_conn_col[4][4]=6'd11; r_conn_shft[4][4]=5'd11;  r_conn_col[4][5]=6'd16; r_conn_shft[4][5]=5'd0;
+        r_conn_col[4][6]=6'd17; r_conn_shft[4][6]=5'd0;
+        r_conn_cnt[5] = 4'd8;
+        r_conn_col[5][0]=6'd0;  r_conn_shft[5][0]=5'd24;  r_conn_col[5][1]=6'd2;  r_conn_shft[5][1]=5'd23;
+        r_conn_col[5][2]=6'd3;  r_conn_shft[5][2]=5'd1;   r_conn_col[5][3]=6'd4;  r_conn_shft[5][3]=5'd17;
+        r_conn_col[5][4]=6'd6;  r_conn_shft[5][4]=5'd3;   r_conn_col[5][5]=6'd8;  r_conn_shft[5][5]=5'd10;
+        r_conn_col[5][6]=6'd17; r_conn_shft[5][6]=5'd0;   r_conn_col[5][7]=6'd18; r_conn_shft[5][7]=5'd0;
+        r_conn_cnt[6] = 4'd7;
+        r_conn_col[6][0]=6'd0;  r_conn_shft[6][0]=5'd25;  r_conn_col[6][1]=6'd4;  r_conn_shft[6][1]=5'd8;
+        r_conn_col[6][2]=6'd8;  r_conn_shft[6][2]=5'd7;   r_conn_col[6][3]=6'd9;  r_conn_shft[6][3]=5'd18;
+        r_conn_col[6][4]=6'd12; r_conn_shft[6][4]=5'd0;   r_conn_col[6][5]=6'd18; r_conn_shft[6][5]=5'd0;
+        r_conn_col[6][6]=6'd19; r_conn_shft[6][6]=5'd0;
+        r_conn_cnt[7] = 4'd7;
+        r_conn_col[7][0]=6'd0;  r_conn_shft[7][0]=5'd13;  r_conn_col[7][1]=6'd1;  r_conn_shft[7][1]=5'd24;
+        r_conn_col[7][2]=6'd4;  r_conn_shft[7][2]=5'd0;   r_conn_col[7][3]=6'd6;  r_conn_shft[7][3]=5'd8;
+        r_conn_col[7][4]=6'd8;  r_conn_shft[7][4]=5'd6;   r_conn_col[7][5]=6'd18; r_conn_shft[7][5]=5'd0;
+        r_conn_col[7][6]=6'd19; r_conn_shft[7][6]=5'd0;
+        r_conn_cnt[8] = 4'd8;
+        r_conn_col[8][0]=6'd0;  r_conn_shft[8][0]=5'd7;   r_conn_col[8][1]=6'd1;  r_conn_shft[8][1]=5'd20;
+        r_conn_col[8][2]=6'd3;  r_conn_shft[8][2]=5'd16;  r_conn_col[8][3]=6'd4;  r_conn_shft[8][3]=5'd22;
+        r_conn_col[8][4]=6'd5;  r_conn_shft[8][4]=5'd10;  r_conn_col[8][5]=6'd8;  r_conn_shft[8][5]=5'd23;
+        r_conn_col[8][6]=6'd18; r_conn_shft[8][6]=5'd0;   r_conn_col[8][7]=6'd19; r_conn_shft[8][7]=5'd0;
+        r_conn_cnt[9] = 4'd7;
+        r_conn_col[9][0]=6'd0;  r_conn_shft[9][0]=5'd11;  r_conn_col[9][1]=6'd4;  r_conn_shft[9][1]=5'd19;
+        r_conn_col[9][2]=6'd8;  r_conn_shft[9][2]=5'd13;  r_conn_col[9][3]=6'd10; r_conn_shft[9][3]=5'd3;
+        r_conn_col[9][4]=6'd11; r_conn_shft[9][4]=5'd17;  r_conn_col[9][5]=6'd19; r_conn_shft[9][5]=5'd0;
+        r_conn_col[9][6]=6'd20; r_conn_shft[9][6]=5'd0;
+        r_conn_cnt[10] = 4'd8;
+        r_conn_col[10][0]=6'd0; r_conn_shft[10][0]=5'd25; r_conn_col[10][1]=6'd2; r_conn_shft[10][1]=5'd8;
+        r_conn_col[10][2]=6'd4; r_conn_shft[10][2]=5'd23; r_conn_col[10][3]=6'd5; r_conn_shft[10][3]=5'd18;
+        r_conn_col[10][4]=6'd7; r_conn_shft[10][4]=5'd14; r_conn_col[10][5]=6'd8; r_conn_shft[10][5]=5'd9;
+        r_conn_col[10][6]=6'd20;r_conn_shft[10][6]=5'd0;  r_conn_col[10][7]=6'd21;r_conn_shft[10][7]=5'd0;
+        r_conn_cnt[11] = 4'd7;
+        r_conn_col[11][0]=6'd0; r_conn_shft[11][0]=5'd3;  r_conn_col[11][1]=6'd4; r_conn_shft[11][1]=5'd16;
+        r_conn_col[11][2]=6'd7; r_conn_shft[11][2]=5'd2;  r_conn_col[11][3]=6'd8; r_conn_shft[11][3]=5'd25;
+        r_conn_col[11][4]=6'd9; r_conn_shft[11][4]=5'd5;  r_conn_col[11][5]=6'd12;r_conn_shft[11][5]=5'd1;
+        r_conn_col[11][6]=6'd23;r_conn_shft[11][6]=5'd0;
     end
 
     //-----------------------------------------------------------------

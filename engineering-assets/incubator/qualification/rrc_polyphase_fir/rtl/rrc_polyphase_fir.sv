@@ -2,8 +2,9 @@
 // rrc_polyphase_fir — RRC 根升余弦脉冲成形多相 FIR 滤波器核
 // 功能: 33 抽头(alpha=0.5, sps=4, span=8) 4 相多相插值; 符号率入(AXI-S), 4x 采样率出
 // 端口: i_clk/i_rst(同步高有效); s_axis(符号 I/Q Q2.14); m_axis(样点 I/Q Q2.14)
-// 主要逻辑: 9 深符号缓存 -> 槽计数相位调度 -> 9 抽头 MAC(乘积寄存+加法树) ->
+// 主要逻辑: 9 深符号缓存 -> 槽计数相位调度 -> 9 抽头 MAC(乘积寄存 + 3 级寄存加法树) ->
 //           round-half-away(/2^15)+对称饱和(±32767), 与 golden 定点语义逐位一致
+// 延迟: 7 拍 (输入寄存 1 + mac/addA/addB/sum/mag/ro 6); 分级理由见下方说明
 // 系数: models/comm/rrc/rrc_coeff.hex (Q1.15) 逐相展开, 相1-3 补零至 9 抽头
 // 约束: 输入符号间隔 >= 4 拍 (s_axis_tready 恒 1, 无内部背压缓冲)
 //==============================================================================
@@ -41,13 +42,24 @@ module rrc_polyphase_fir #(
     //==========================================================================
     // round-half-away-from-zero(acc / 2^15) + 对称饱和 ±32767
     // 与 golden 一致: round(y*2^14), clip ±max_q (rrc_pulse_shaping.m L41-42)
+    //
+    // 原为单个组合 function, 内含 取模(38b) -> 舍入加(38b) -> 饱和比较(38b) ->
+    // 还原符号(16b) 四条串联进位链, 实测 19 逻辑级 / 15 个 CARRY4 / 4.56ns,
+    // 是分级加法树之后的新瓶颈。现拆成两半, 由两级寄存分担 (见下方级5/级6):
+    //   前半 round_mag: 取模 + 舍入加 + 右移
+    //   后半 sat_sign : 饱和 + 还原符号
+    // 两半合起来与原 function 语义完全相同, 输出逐位不变。
     //==========================================================================
-    function automatic data_t round_clip(input acc_t acc);
-        acc_t mag, q;
+    function automatic acc_t round_mag(input acc_t acc);
+        acc_t mag;
         mag = (acc < 0) ? -acc : acc;
-        q   = (mag + acc_t'(1 <<< 14)) >>> 15;
-        if (q > acc_t'(32767)) q = acc_t'(32767);
-        round_clip = (acc < 0) ? data_t'(-q) : data_t'(q);
+        round_mag = (mag + acc_t'(1 <<< 14)) >>> 15;
+    endfunction
+
+    function automatic data_t sat_sign(input acc_t q_in, input logic neg);
+        acc_t q;
+        q = (q_in > acc_t'(32767)) ? acc_t'(32767) : q_in;
+        sat_sign = neg ? data_t'(-q) : data_t'(q);
     endfunction
 
     //==========================================================================
@@ -97,12 +109,22 @@ module rrc_polyphase_fir #(
     end
 
     //==========================================================================
-    // MAC 流水 — 级1: 9 乘积寄存; 级2: 加法树; 级3: 舍入/饱和输出
+    // MAC 流水 — 级1: 9 乘积寄存; 级2/3/4: 寄存加法树 9->5->3->1; 级5: 舍入/饱和
+    //
+    // 为何分级: 9 项 38-bit 写成单拍连加时, 综合器把它映射成 7 级 DSP48 PCOUT
+    // 级联(实测组合路径 ~11ns), 在 4ns 约束下 WNS = -6.211ns, 实际 fmax 仅 ~98MHz。
+    // 分级后每级组合深度 <= 2 个加法器。
+    // 数值等价: ACC_W=38 足以容纳 9 项 16x16 乘积之和且无截断, 重新结合律不改变
+    // 结果, 输出与分级前逐位相同 —— 时序修复不以数值一致性为代价。
     //==========================================================================
     acc_t mac_i [TAPS_PP];
     acc_t mac_q [TAPS_PP];
-    acc_t sum_i, sum_q;
-    data_t ro_i, ro_q;
+    acc_t addA_i [5], addA_q [5];   // 级2: 9 -> 5
+    acc_t addB_i [3], addB_q [3];   // 级3: 5 -> 3
+    acc_t sum_i, sum_q;             // 级4: 3 -> 1
+    acc_t r_mag_i, r_mag_q;         // 级5: |acc| 舍入后的幅值
+    logic r_neg_i, r_neg_q;         // 级5: 随幅值同行的符号
+    data_t ro_i, ro_q;              // 级6: 饱和 + 还原符号
 
     always_ff @(posedge i_clk) begin
         if (i_rst) begin
@@ -118,41 +140,95 @@ module rrc_polyphase_fir #(
         end
     end
 
+    // 级2: 9 -> 5 (深度 1)
+    always_ff @(posedge i_clk) begin
+        if (i_rst) begin
+            for (int k = 0; k < 5; k++) begin
+                addA_i[k] <= '0;
+                addA_q[k] <= '0;
+            end
+        end else begin
+            addA_i[0] <= mac_i[0] + mac_i[1];
+            addA_i[1] <= mac_i[2] + mac_i[3];
+            addA_i[2] <= mac_i[4] + mac_i[5];
+            addA_i[3] <= mac_i[6] + mac_i[7];
+            addA_i[4] <= mac_i[8];
+            addA_q[0] <= mac_q[0] + mac_q[1];
+            addA_q[1] <= mac_q[2] + mac_q[3];
+            addA_q[2] <= mac_q[4] + mac_q[5];
+            addA_q[3] <= mac_q[6] + mac_q[7];
+            addA_q[4] <= mac_q[8];
+        end
+    end
+
+    // 级3: 5 -> 3 (深度 1)
+    always_ff @(posedge i_clk) begin
+        if (i_rst) begin
+            for (int k = 0; k < 3; k++) begin
+                addB_i[k] <= '0;
+                addB_q[k] <= '0;
+            end
+        end else begin
+            addB_i[0] <= addA_i[0] + addA_i[1];
+            addB_i[1] <= addA_i[2] + addA_i[3];
+            addB_i[2] <= addA_i[4];
+            addB_q[0] <= addA_q[0] + addA_q[1];
+            addB_q[1] <= addA_q[2] + addA_q[3];
+            addB_q[2] <= addA_q[4];
+        end
+    end
+
+    // 级4: 3 -> 1 (深度 2)
     always_ff @(posedge i_clk) begin
         if (i_rst) begin
             sum_i <= '0;
             sum_q <= '0;
         end else begin
-            sum_i <= mac_i[0] + mac_i[1] + mac_i[2] + mac_i[3] + mac_i[4]
-                   + mac_i[5] + mac_i[6] + mac_i[7] + mac_i[8];
-            sum_q <= mac_q[0] + mac_q[1] + mac_q[2] + mac_q[3] + mac_q[4]
-                   + mac_q[5] + mac_q[6] + mac_q[7] + mac_q[8];
+            sum_i <= (addB_i[0] + addB_i[1]) + addB_i[2];
+            sum_q <= (addB_q[0] + addB_q[1]) + addB_q[2];
         end
     end
 
+    // 级5: 取模 + 舍入加 (记住符号, 后半用)
+    always_ff @(posedge i_clk) begin
+        if (i_rst) begin
+            r_mag_i <= '0;
+            r_mag_q <= '0;
+            r_neg_i <= 1'b0;
+            r_neg_q <= 1'b0;
+        end else begin
+            r_mag_i <= round_mag(sum_i);
+            r_mag_q <= round_mag(sum_q);
+            r_neg_i <= sum_i[ACC_W-1];
+            r_neg_q <= sum_q[ACC_W-1];
+        end
+    end
+
+    // 级6: 饱和 + 还原符号
     always_ff @(posedge i_clk) begin
         if (i_rst) begin
             ro_i <= '0;
             ro_q <= '0;
         end else begin
-            ro_i <= round_clip(sum_i);
-            ro_q <= round_clip(sum_q);
+            ro_i <= sat_sign(r_mag_i, r_neg_i);
+            ro_q <= sat_sign(r_mag_q, r_neg_q);
         end
     end
 
     //==========================================================================
-    // 输出 valid: 计算槽标志沿数据流水对齐延迟 3 级 (mac->sum->ro)
+    // 输出 valid: 计算槽标志沿数据流水对齐延迟 6 级
+    // (mac -> addA -> addB -> sum -> mag -> ro)
     //==========================================================================
-    logic [2:0] r_vpipe;
+    logic [5:0] r_vpipe;
 
     always_ff @(posedge i_clk) begin
         if (i_rst)
             r_vpipe <= '0;
         else
-            r_vpipe <= {r_vpipe[1:0], w_slot_go};
+            r_vpipe <= {r_vpipe[4:0], w_slot_go};
     end
 
     assign m_axis_tdata  = {ro_q, ro_i};
-    assign m_axis_tvalid = r_vpipe[2];
+    assign m_axis_tvalid = r_vpipe[5];
 
 endmodule : rrc_polyphase_fir

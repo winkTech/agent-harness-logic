@@ -7,11 +7,16 @@ const crypto = require('node:crypto');
 
 const {
   buildContext,
+  ensureToolActionContract,
   requiresActionContract,
 } = require('./agent-transparency-ledger.cjs');
 
 const CONTROLLED_TOOLS = new Set(['Bash', 'Edit', 'Write', 'MultiEdit', 'Agent', 'Task', 'Workflow']);
 const DEFAULT_MAX_AGE_MS = 30 * 1000;
+
+// 可由"ledger 与本 gate 并发、写入晚于读取"解释的失败: 读到的是上一次调用
+// 的合同, 表现为过期或哈希仍属上一条命令。仅这些允许重建后复验。
+const RACE_RECOVERABLE = /^contract is stale:|hash mismatch$/;
 
 function sha256(value) {
   return crypto.createHash('sha256').update(String(value || ''), 'utf8').digest('hex');
@@ -105,7 +110,22 @@ function run(payload) {
     block('missing contract', filePath);
   }
 
-  const failure = validate(ctx, contract);
+  let failure = validate(ctx, contract);
+  if (failure && RACE_RECOVERABLE.test(failure)) {
+    // ledger 与本 gate 在同一 PreToolUse 组内并发执行, 其写入可能晚于此处的
+    // 读取, 于是读到上一次调用的合同 —— 表现为"越重试越 stale"的死锁。
+    // 只对可由该竞态解释的失败重建: 合同过期, 或哈希仍属上一条命令。
+    // createdBy/runId/tool/event 不符与用户指令缺失不在此列 —— 那些是
+    // 篡改或证据缺失信号, 必须原样上报, 不得被"自动修复"掩盖。
+    // 重建仍由 ledger 代码按当前 payload 生成, 判据不放松。
+    try {
+      ensureToolActionContract(payload);
+      contract = JSON.parse(fs.readFileSync(filePath, 'utf8'));
+      failure = validate(ctx, contract);
+    } catch (error) {
+      failure = `${failure}; 合同重建失败: ${error.message}`;
+    }
+  }
   if (failure) block(failure, filePath);
   return { ok: true, skipped: false };
 }

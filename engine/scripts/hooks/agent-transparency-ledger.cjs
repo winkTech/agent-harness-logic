@@ -747,6 +747,18 @@ function run(payload) {
   return ctx;
 }
 
+// 同组 hook 并发执行时, 本 hook 的写入可能晚于消费者的读取。
+// 供 tool-action-contract-gate 在合同缺失/过期时按同一 payload 重建;
+// 不追加 events.ndjson, 避免同一次工具调用产生重复审计事件。
+function ensureToolActionContract(payload) {
+  const ctx = buildContext(payload);
+  if (!requiresActionContract(ctx)) return null;
+  ensureRunDir(ctx);
+  const plan = buildPlan(ctx);
+  const ledger = writeGateLedger(ctx, plan);
+  return writeToolActionContract(ctx, plan, ledger);
+}
+
 function main() {
   if (process.env.CLAUDE_TRANSPARENCY_LEDGER_DISABLED === '1') process.exit(0);
   const payload = parsePayload(readStdin());
@@ -774,6 +786,7 @@ module.exports = {
   redact,
   requiredRules,
   requiredSkills,
+  ensureToolActionContract,
   requiresActionContract,
   run,
   threadIdFrom,

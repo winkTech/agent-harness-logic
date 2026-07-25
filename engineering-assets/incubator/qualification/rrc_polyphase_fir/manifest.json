@@ -90,15 +90,21 @@
     "target": {
       "fmax": "250MHz",
       "fmax_mhz": 250,
-      "dsp": 9,
-      "latency": 4
+      "lut": 2800,
+      "ff": 1380,
+      "bram": 1,
+      "dsp": 24,
+      "latency": 7,
+      "note_lut_ff_bram": "取自设计报告 §5.1 资源评估 (LUT 2800 / FF 1380 / BRAM 0.5 向上取整为 1)",
+      "note_dsp": "原声明 9、设计报告写 5, 二者均与本 RTL 架构不符: 9 漏计 I/Q 复数双路, 5 假设了对称折叠而 RTL 未实现。按实际架构重新声明 = 9 抽头/相 x 2(I,Q) = 18 个乘法器, 另 6 个被综合器用作加法树后加器, 合计 24。若要压回 5 需实现对称折叠, 属架构重做, 不在本次范围。",
+      "note_latency": "原为 4; 为在 250MHz 收敛, 累加级拆为寄存加法树(+2 级)、round_clip 拆为两级(+1 级), 共 7 拍。依据: requirements-gate 2026-07-25。"
     }
   },
   "sources": [
     {
       "path": "rtl/rrc_polyphase_fir.sv",
       "role": "rtl",
-      "sha256": "ec33b437389b7b32424cb6573e06a43828e0f646583a0b20188662af08788095"
+      "sha256": "aac46124e02a5d13ee70ac1a906f578b38e15eac373de7d21274bfb57b24bc93"
     },
     {
       "path": "tb/tb_rrc_polyphase_fir.sv",

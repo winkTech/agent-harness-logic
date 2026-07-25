@@ -20,7 +20,8 @@ set part   [lindex $argv 0]
 set top    [lindex $argv 1]
 set outdir [lindex $argv 2]
 set incdir [lindex $argv 3]
-set flist  [lrange $argv 4 end]
+set mode   [lindex $argv 4]
+set flist  [lrange $argv 5 end]
 
 file mkdir $outdir
 
@@ -56,7 +57,12 @@ if {[llength $xdcfiles]} {
     }
 }
 
+# CBB 是核而非整片设计: 独立综合会给每个端口插 IBUF/OBUF, 焊盘延时(实测
+# OBUF 约 2.5ns)会把核级时序判死, 而集成后这些端口只是片内网线。故默认按
+# out_of_context 综合(Xilinx 表征 IP 核的标准做法), 不插 I/O 缓冲。
+# 模式写入 synth-meta.json, 不做隐藏假设; 需要整片视角时传 mode=top。
 set synth_args [list -top $top -part $part]
+if {$mode eq "ooc"} { lappend synth_args -mode out_of_context }
 if {$incdir ne "-"} { lappend synth_args -include_dirs $incdir }
 
 if {[catch {synth_design {*}$synth_args} err]} {
@@ -76,6 +82,7 @@ report_clocks         -file $outdir/clocks.rpt
 set fp [open "$outdir/synth-meta.json" w]
 puts $fp "{"
 puts $fp "  \"synth_status\": \"ok\","
+puts $fp "  \"synth_mode\": \"$mode\","
 puts $fp "  \"xdc_status\": \"$xdc_status\","
 puts $fp "  \"xdc_error\": \"[string map {\" ' \\ /} $xdc_error]\","
 puts $fp "  \"top\": \"$top\","

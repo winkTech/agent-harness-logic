@@ -84,7 +84,12 @@
   "constraints": {
     "target": {
       "fmax": "100MHz",
-      "fmax_mhz": 100
+      "fmax_mhz": 100,
+      "lut": 900,
+      "ff": 500,
+      "bram": 3,
+      "dsp": 0,
+      "note_budget": "取自 stage7_fpga_implementation_report §6 资源利用表的**译码器**一列 (LUT ~900 / FF ~500 / BRAM 3 / DSP48 0); 本包综合顶层为 ldpc_decoder_top, 故不取含编码器的合计列。DSP=0 与 §3.4 '纯移位加法实现 α 缩放, 0 DSP48' 一致。"
     }
   },
   "sources": [
@@ -101,7 +106,7 @@
     {
       "path": "rtl/h_matrix_addr.v",
       "role": "rtl",
-      "sha256": "148d16ef9474a587d543f94cb8d47f1d6e0045556a8fd7956e4c26b43a0785f7"
+      "sha256": "441cfbf05fdf8b8140f70ce64b2692a60706c92165b4afa12a81e2bf03b163a3"
     },
     {
       "path": "rtl/ldpc_controller.v",

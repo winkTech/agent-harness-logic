@@ -52,24 +52,31 @@ const repoRoot = path.resolve(__dirname, '..');
 const outDir = path.join(repoRoot, 'var', 'gates', 'pg', manifest.asset_uid || manifest.name);
 fs.mkdirSync(outDir, { recursive: true });
 
+// CBB 默认按 out-of-context 综合(核级, 不插 I/O 缓冲) —— 见 pg-synth.tcl 说明。
+// --mode top 可切到整片视角(端口插 IBUF/OBUF), 用于确实要出芯片引脚的顶层。
+const synthMode = argOf('--mode') === 'top' ? 'top' : 'ooc';
+
 const tcl = path.join(__dirname, 'pg-synth.tcl');
 const vivadoArgs = [
   '-mode', 'batch', '-nojournal',
   '-log', path.join(outDir, 'synth.log'),
   '-source', tcl,
-  '-tclargs', part, top, outDir, incdir, ...rtl, ...xdc,
+  '-tclargs', part, top, outDir, incdir, synthMode, ...rtl, ...xdc,
 ];
 
-console.log(`[pg-synth] ${manifest.asset_uid}: top=${top} part=${part}`);
+console.log(`[pg-synth] ${manifest.asset_uid}: top=${top} part=${part} mode=${synthMode}`);
 console.log(`[pg-synth] rtl=${rtl.length} 个, 约束=${xdc.length} 个 -> ${outDir}`);
 
-// Windows 上 vivado 是 .bat, Node 只能经 shell 启动; shell 模式下参数是
-// 拼接而非转义, 故逐个加引号, 避免路径中的空格/特殊字符被拆解或注入。
+// Windows 上 vivado 是 .bat, Node 只能经 shell 启动。shell 模式下参数是拼接
+// 而非转义, 故自行加引号并整条命令传入(数组+shell 会触发 DEP0190 且不转义),
+// 避免路径中的空格/特殊字符被拆解或注入。
 const useShell = process.platform === 'win32';
-const spawnArgs = useShell ? vivadoArgs.map((a) => `"${String(a).replace(/"/g, '\\"')}"`) : vivadoArgs;
+const quote = (a) => `"${String(a).replace(/"/g, '\\"')}"`;
 
 // Vivado 会在 CWD 留下 .Xil/ 等临时物, 放到 outDir 内避免污染仓库
-const r = spawnSync('vivado', spawnArgs, { cwd: outDir, stdio: 'inherit', shell: useShell });
+const r = useShell
+  ? spawnSync(['vivado', ...vivadoArgs.map(quote)].join(' '), { cwd: outDir, stdio: 'inherit', shell: true })
+  : spawnSync('vivado', vivadoArgs, { cwd: outDir, stdio: 'inherit' });
 if (r.error) die(`无法调用 vivado: ${r.error.message} (确认已在 PATH 中)`);
 if (r.status !== 0) { console.error(`[pg-synth] 综合失败, 退出码 ${r.status}; 见 ${path.join(outDir, 'synth.log')}`); process.exit(r.status || 1); }
 
