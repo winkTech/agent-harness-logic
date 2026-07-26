@@ -20,10 +20,20 @@
         "if": { "properties": { "maturity": { "properties": { "level": { "const": "reference" } }, "required": ["level"] } }, "required": ["maturity"] },
         "then": { "required": ["provenance", "banner"] },
         "else": {
-          "required": [
-            "version", "requirement_ref", "doc_refs", "golden_model_ref",
-            "fidelity", "ports", "clock", "reset", "constraints", "sources"
-          ]
+          "if": { "properties": { "maturity": { "properties": { "level": { "const": "intake" } }, "required": ["level"] } }, "required": ["maturity"] },
+          "then": {
+            "comment": "intake 准入 = schema-valid + 编译干净 + 锚链起点（规范 §3.1 L152-153）。golden 绑定(G-B-02)与资源包络(G-C-02 constraints.target)是晋级 qualification/certified 的门, 不是 intake 的形状要求 —— 否则无算法 golden 的结构原语(skid buffer/RAM 等)永远进不了 intake。",
+            "required": [
+              "version", "requirement_ref", "doc_refs",
+              "ports", "clock", "reset", "sources"
+            ]
+          },
+          "else": {
+            "required": [
+              "version", "requirement_ref", "doc_refs", "golden_model_ref",
+              "fidelity", "ports", "clock", "reset", "constraints", "sources"
+            ]
+          }
         }
       }
     }

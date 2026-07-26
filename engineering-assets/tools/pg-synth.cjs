@@ -20,6 +20,7 @@
 const fs = require('node:fs');
 const path = require('node:path');
 const { spawnSync } = require('node:child_process');
+const { buildTimingEvidence } = require('../../engine/scripts/fpga-timing-parser.cjs');
 
 function die(msg) { console.error(`[pg-synth] ${msg}`); process.exit(2); }
 
@@ -77,6 +78,32 @@ const quote = (a) => `"${String(a).replace(/"/g, '\\"')}"`;
 const r = useShell
   ? spawnSync(['vivado', ...vivadoArgs.map(quote)].join(' '), { cwd: outDir, stdio: 'inherit', shell: true })
   : spawnSync('vivado', vivadoArgs, { cwd: outDir, stdio: 'inherit' });
+
+if (!r.error && r.status === 0) {
+  const timingReportPath = path.join(outDir, 'timing-summary.rpt');
+  const handoffPath = path.join(outDir, 'synthesis-timing-evidence.json');
+  const timingContent = fs.existsSync(timingReportPath) ? fs.readFileSync(timingReportPath, 'utf8') : '';
+  let synthMetadata = {};
+  try {
+    synthMetadata = JSON.parse(fs.readFileSync(path.join(outDir, 'synth-meta.json'), 'utf8'));
+  } catch {}
+  const evidence = buildTimingEvidence(timingContent, timingReportPath, {
+    synthesis: {
+      status: 'completed',
+      tool: 'vivado',
+      top,
+      part,
+      mode: synthMode,
+      ...synthMetadata,
+    },
+  });
+  fs.writeFileSync(handoffPath, `${JSON.stringify(evidence, null, 2)}\n`, 'utf8');
+  if (evidence.status !== 'passed') {
+    console.error(`[pg-synth] timing evidence failed: ${evidence.failure?.code || 'unknown'}; evidence=${handoffPath}`);
+    process.exit(2);
+  }
+  console.log(`[pg-synth] timing evidence passed; this is not full EDA closure. evidence=${handoffPath}`);
+}
 if (r.error) die(`无法调用 vivado: ${r.error.message} (确认已在 PATH 中)`);
 if (r.status !== 0) { console.error(`[pg-synth] 综合失败, 退出码 ${r.status}; 见 ${path.join(outDir, 'synth.log')}`); process.exit(r.status || 1); }
 
