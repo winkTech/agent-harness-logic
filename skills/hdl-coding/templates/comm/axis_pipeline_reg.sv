@@ -44,7 +44,7 @@ reg  [DATA_WIDTH-1:0]   r_tdata  [0:DEPTH-1];
 reg                     r_tvalid [0:DEPTH-1];
 wire                    w_advance;
 
-integer i;
+genvar i;
 //---------------------------------------------------------------------------------------
 //
 //                      Pipeline Stages

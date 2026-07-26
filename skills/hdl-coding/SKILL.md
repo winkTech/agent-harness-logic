@@ -1,7 +1,7 @@
 ---
 name: hdl-coding
-description: HDL 编码规范 — 所有 FPGA/ASIC 相关的 Verilog/SystemVerilog 任务：编写 RTL 模块、Testbench、模块例化、流水线设计、CDC、状态机、代码审查、讲解 FPGA 架构原理、画 RTL 框图和架构图。用户说"写 Verilog/写 RTL/写模块/审查代码/讲FPGA/画架构"时触发。技能强制 ri_/ro_ 命名、时序安全、三段式FSM、锁存器预防——不遵守的代码不能综合。注意：纯 Python/MATLAB、安装工具、搜算法原理、写脚本等非 HDL 任务不要触发。
-version: 3.5.0
+description: HDL 编码规范 — 所有 FPGA/ASIC 相关的 Verilog/SystemVerilog 任务：编写 RTL 模块、Testbench、模块例化、流水线设计、CDC、状态机、代码审查、讲解 FPGA 架构原理、画 RTL 框图和架构图。用户说"写 Verilog/写 RTL/写模块/审查代码/讲FPGA/画架构"时触发。技能强制 ri_/ro_ 命名、时序安全、三段式FSM、锁存器预防——违反红线的代码无法通过本项目审查门禁。注意：纯 Python/MATLAB、安装工具、搜算法原理、写脚本等非 HDL 任务不要触发。
+version: 3.6.0
 ---
 
 # HDL 编码规范
@@ -9,36 +9,35 @@ version: 3.5.0
 ## 适用边界
 **必须使用**: RTL 编写、Testbench、模块例化、时序约束。
 **可跳过**: 纯文档/注释、已完成的代码审查（但 lint 仍需）。
-**前置加载**: 编写 RTL 前必须先读 `references/RTL_DESIGN_RULE.md` 的 §代码对齐规范 和 §LUT/映射门禁。
+**前置加载**: 编写 RTL 前先读 `references/RTL_DESIGN_RULE.md` 的 §代码对齐规范；涉及星座映射、查找表、比特-符号编码的模块，再加读 §LUT/映射门禁。
 
 ---
 
 ## 必读红线（5 条 — 违反任何一条 = FAIL）
 
-> 以下 5 条红线是综合和时序安全的基石。**为什么严格？** 组合直出的信号在 FPGA 中会产生毛刺传播；无寄存的输入在布局后时序收敛困难；复位极性错误导致整个芯片无法初始化。这些都是在实际情况中烧过板的教训。
+> 与 `rules/01-hdl.md` 的红线一一对应，两处必须保持同步。**为什么严格？** 组合直出的信号会把毛刺传播到下一级；未寄存的输入在布局布线后时序收敛困难；锁存器不会被 lint 报错，却导致上板功能随机失败。这些都是实际项目中烧过板的教训。
 
 1. **[MUST]** 输入信号必须寄存为 `ri_`，禁止直通 → 否则 FAIL
 2. **[MUST]** 输出必须由 `ro_` 驱动，禁止组合直出 → 否则 FAIL
 3. **[MUST]** 同步复位高有效 `i_rst`，异步必须做同步释放 → 否则 FAIL
 4. **[MUST]** 三段式状态机 + `default` 分支 → 否则 FAIL
-5. **[MUST]** 仿真工具错误必须先检查语法和位宽，再查逻辑 → 否则 FAIL
+5. **[MUST]** 无锁存器：if→else、case→default、assign→完整条件（排查法见 §8）→ 否则 FAIL
 
 ---
 
 ## §1 时序安全
 
-**为什么这些规则重要**：FPGA 综合工具不会替你检查时序风格。输入直通的信号在布局布线后会有不确定的 clock-to-input delay，组合直出的输出会把毛刺传播到下一级。这些都是在真实项目中烧过板的教训。
+红线 1、2、3、5 的展开理由与补充规则：
 
-1. **同步复位** — 高有效 `i_rst`；异步必须做同步释放
-   - *原因*：低有效复位在不同工艺库中可能被优化掉，高有效是业界统一标准
-2. **输入寄存** — 所有输入在入口寄存为 `ri_`，禁止直通
+1. **同步复位**（红线 3）
+   - *原因*：本项目目标器件（Xilinx 类 FPGA 架构）推荐同步高有效复位，统一极性避免混用出错；异步复位若不做同步释放，复位恢复时会产生亚稳态
+2. **输入寄存**（红线 1）
    - *原因*：组合输入在时序分析中无明确起点，导致时序收敛困难
-3. **输出寄存** — 输出由 `ro_` 驱动，禁止组合直出
+3. **输出寄存**（红线 2）
    - *原因*：组合输出 = 毛刺发射器，下游每级都可能采到错误值
-4. **CDC** — 异步输入双寄存同步，加 `_cdc` 后缀
+4. **CDC** — 异步输入双寄存同步，加 `_cdc` 后缀（模板: `templates/comm/cdc_sync.sv`）
 5. **数据-使能对** — valid/enable 与数据成对传递
-6. **无锁存器** — case→default、if→else、assign→完整条件（详见 §8）
-7. **时钟/复位配对** — `i_clk_xx` / `i_rst_xx` 配对出现，不得缺失
+6. **时钟/复位配对** — `i_clk_xx` / `i_rst_xx` 配对出现，不得缺失
 
 ## §2 命名规范
 
@@ -75,7 +74,7 @@ version: 3.5.0
 
 ---
 
-## §8 锁存器预防
+## §8 锁存器预防（红线 5 的排查法）
 
 **为什么重要**：锁存器在 FPGA 中不会在 lint 报错，但会导致时序异常和功能随机失败——是最难调试的 bug 之一。大多数"仿真对了但上板不对"的案例，根因是组合逻辑推了 latch。
 
@@ -107,7 +106,8 @@ version: 3.5.0
 ---
 
 ## §9 工作流程
-- **[SHOULD]** 实施前先输出执行计划，与用户确认后再开始编码，避免方向偏差
+- **[SHOULD]** 新模块、架构级改动或跨模块任务：实施前先输出执行计划，与用户对齐后再编码
+- 已有文件中行为明确的小修复：直接做范围内最小修改，无需计划确认（与 CLAUDE.md 授权边界一致）
 
 ---
 
@@ -122,10 +122,25 @@ version: 3.5.0
 | 存储器建模 | `memory-templates.md` |
 | 异步复位同步释放 | `reset-templates.md` |
 | Testbench 结构模板 | `tb-templates.md` |
+| TB 记分板 + AXI-Stream VIP | `tb-scoreboard.md`（配套 `axi_stream_if.sv`、`axi-stream-vip.sv`） |
+| 功能覆盖率模板 | `coverage-templates.md` |
+| 时序约束（时钟/IO/例外） | `timing-constraints.md` |
+| 资源与时序优化 | `fpga-optimization.md` |
+| FPGA 开发流程与最佳实践 | `fpga-development.md` / `design-best-practices.md` |
 | 除法器/LUT 技巧 | `division-lut.md` |
 | RTL 审查清单 | `rtl-code-review.md` |
 | 算法→Verilog 参考 | `alg-flow-verilog.md` |
+| ALU/加法器设计 | `alu-design.md` |
+| 常用算法硬件实现（CRC/哈希/CAM…） | `algorithm-hardware.md` |
 | 注释规范 / 代码简化 | `comment-standards.md` / `simplification-guide.md` |
+
+## 代码模板
+`skills/hdl-coding/templates/` 下按域组织：
+
+| 目录 | 状态 | 使用方式 |
+|:-----|:-----|:---------|
+| `comm/`（9 个：AXIS 主/从/流水寄存、CDC、复数乘、LFSR、延迟链、双口 RAM） | **符合本规范**（ri_/ro_/r_ 命名、元数据头） | 可直接例化或改造 |
+| `alu/`（3 个）、`internet/`（8 个：CRC/哈希/LRU/CAM/帧同步/Crossbar/SM4） | **外部资料改编**，命名未按 ri_/ro_ 规范 | 仅参考算法结构；复用前必须按 §1/§2 重写接口与命名 |
 
 ## 关联 Skill
 - [code-review](../code-review/SKILL.md) — 代码审查

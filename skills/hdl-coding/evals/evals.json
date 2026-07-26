@@ -1,7 +1,7 @@
 {
   "skill": "hdl-coding",
-  "version": "3.0.0",
-  "description": "HDL coding skill evals",
+  "version": "3.6.0",
+  "description": "HDL coding skill evals — 断言覆盖 5 条红线（ri_ 输入寄存 / ro_ 输出驱动 / 同步复位 / 三段式 FSM + default / 无锁存器结构）",
   "evals": [
     {
       "name": "verilog-module-basic",
@@ -23,28 +23,38 @@
         },
         {
           "type": "content_match",
-          "pattern": "module.*counter",
+          "pattern": "module\\s+\\w*counter",
           "description": "包含计数器模块"
         },
         {
           "type": "content_match",
-          "pattern": "input.*i_clk",
+          "pattern": "input\\s+(wire\\s+)?i_clk",
           "description": "包含时钟输入（i_ 前缀）"
         },
         {
           "type": "content_match",
-          "pattern": "input.*i_rst",
+          "pattern": "input\\s+(wire\\s+)?i_rst",
           "description": "包含复位输入（i_ 前缀）"
         },
         {
           "type": "content_match",
-          "pattern": "output.*o_",
+          "pattern": "output\\s+[^;]*o_\\w+",
           "description": "包含输出信号（o_ 前缀）"
         },
         {
           "type": "content_match",
-          "pattern": "always @(posedge i_clk)",
-          "description": "使用同步时钟逻辑"
+          "pattern": "\\bri_\\w+",
+          "description": "红线 1：输入寄存为 ri_"
+        },
+        {
+          "type": "content_match",
+          "pattern": "\\bro_\\w+",
+          "description": "红线 2：输出由 ro_ 驱动"
+        },
+        {
+          "type": "content_match",
+          "pattern": "always\\s*@\\s*\\(\\s*posedge\\s+i_clk\\s*\\)",
+          "description": "红线 3：同步时序逻辑（敏感列表仅 posedge i_clk，无异步复位项）"
         }
       ]
     },
@@ -56,23 +66,34 @@
         "has_state_definition": true,
         "has_state_transition": true,
         "has_output_logic": true,
-        "uses_three_block_style": true
+        "uses_three_block_style": true,
+        "has_default_branch": true
       },
       "assertions": [
         {
           "type": "content_match",
-          "pattern": "parameter.*STATE|localparam.*STATE",
-          "description": "包含状态定义"
+          "pattern": "localparam\\s+(\\[[^\\]]+\\]\\s*)?P_\\w+",
+          "description": "状态用 localparam + P_ 前缀定义（§2/§4）"
         },
         {
           "type": "content_match",
-          "pattern": "case.*state",
-          "description": "包含状态转移逻辑"
+          "pattern": "case\\s*\\(",
+          "description": "包含状态转移 case 逻辑"
         },
         {
           "type": "content_match",
-          "pattern": "always @(posedge i_clk)",
-          "description": "使用同步时钟逻辑"
+          "pattern": "default\\s*:",
+          "description": "红线 4/5：case 含 default 分支"
+        },
+        {
+          "type": "content_match",
+          "pattern": "always\\s*@\\s*\\(\\s*posedge\\s+i_clk\\s*\\)",
+          "description": "状态寄存器为同步时序逻辑"
+        },
+        {
+          "type": "content_match",
+          "pattern": "always\\s*@\\s*\\(\\s*\\*\\s*\\)|always_comb",
+          "description": "红线 4：三段式含独立组合逻辑段（次态判断）"
         }
       ]
     },
@@ -88,13 +109,23 @@
       "assertions": [
         {
           "type": "content_match",
-          "pattern": "reg.*stage|reg.*pipe",
+          "pattern": "reg\\s+[^;]*(stage|pipe|r_\\w+)",
           "description": "包含流水线寄存器"
         },
         {
           "type": "content_match",
-          "pattern": "always @(posedge i_clk)",
+          "pattern": "always\\s*@\\s*\\(\\s*posedge\\s+i_clk\\s*\\)",
           "description": "使用同步时钟逻辑"
+        },
+        {
+          "type": "content_match",
+          "pattern": "\\bri_\\w+",
+          "description": "红线 1：输入寄存为 ri_"
+        },
+        {
+          "type": "content_match",
+          "pattern": "\\bro_\\w+",
+          "description": "红线 2：输出由 ro_ 驱动"
         }
       ]
     }

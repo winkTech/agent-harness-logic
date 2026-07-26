@@ -26,6 +26,6 @@ metadata:
 | 语言 | 规则文件 |
 |------|----------|
 | HDL | hdl-coding/SKILL.md |
-| MATLAB | `hdl-coding/references/matlab-rule.md` |
+| MATLAB | `engineering-assets/knowledge/references/matlab-rule.md` |
 | Python | `modern-python/references/python-rule.md` |
 | 绘图 | `diagram-generator/references/draw-rule.md` |

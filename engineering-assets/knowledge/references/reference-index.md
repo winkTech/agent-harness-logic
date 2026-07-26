@@ -1,100 +1,100 @@
----
+﻿---
 name: reference-index
-description: 参考资料索引
+description: 鍙傝€冭祫鏂欑储寮?
 metadata:
   type: reference
 ---
 
-# 参考资料索引
+# 鍙傝€冭祫鏂欑储寮?
 
-> CLAUDE.md 中提到的所有 reference 文档路径。按需加载，不占用启动 token。
+> CLAUDE.md 涓彁鍒扮殑鎵€鏈?reference 鏂囨。璺緞銆傛寜闇€鍔犺浇锛屼笉鍗犵敤鍚姩 token銆?
 
 ---
 
-## 系统与 Agent
+## 绯荤粺涓?Agent
 
-| 文档 | 内容 |
+| 鏂囨。 | 鍐呭 |
 |:----|:-----|
-| `knowledge/references/agent-harness.md` | Agent 循环、权限、钩子、压缩、记忆、任务图 |
-| `knowledge/references/memory-system.md` | 记忆系统规则：工作记忆/错误经验/学习总结 |
+| `knowledge/references/agent-harness.md` | Agent 寰幆銆佹潈闄愩€侀挬瀛愩€佸帇缂┿€佽蹇嗐€佷换鍔″浘 |
+| `knowledge/references/memory-system.md` | 璁板繂绯荤粺瑙勫垯锛氬伐浣滆蹇?閿欒缁忛獙/瀛︿範鎬荤粨 |
 
-## 会话与错误恢复
+## 浼氳瘽涓庨敊璇仮澶?
 
-| 文档 | 内容 |
+| 鏂囨。 | 鍐呭 |
 |:----|:-----|
-| `knowledge/references/session-management.md` | 会话监控、超载应对、恢复策略 |
-| `knowledge/references/error-recovery.md` | 错误分类、恢复指南、止损流程 |
-| `knowledge/references/performance-baseline.md` | 性能基准、预期指标 |
-| `knowledge/references/tool-scripts.md` | 工具脚本说明 |
+| `knowledge/references/session-management.md` | 浼氳瘽鐩戞帶銆佽秴杞藉簲瀵广€佹仮澶嶇瓥鐣?|
+| `knowledge/references/error-recovery.md` | 閿欒鍒嗙被銆佹仮澶嶆寚鍗椼€佹鎹熸祦绋?|
+| `knowledge/references/performance-baseline.md` | 鎬ц兘鍩哄噯銆侀鏈熸寚鏍?|
+| `knowledge/references/tool-scripts.md` | 宸ュ叿鑴氭湰璇存槑 |
 
-## 插件与版本
+## 鎻掍欢涓庣増鏈?
 
-| 文档 | 内容 |
+| 鏂囨。 | 鍐呭 |
 |:----|:-----|
-| `knowledge/references/plugin-management.md` | 插件配置与管理 |
-| `knowledge/references/new-plugins.md` | 新接入插件说明 |
-| `knowledge/references/version-rules.md` | 版本管理规则 |
+| `knowledge/references/plugin-management.md` | 鎻掍欢閰嶇疆涓庣鐞?|
+| `knowledge/references/new-plugins.md` | 鏂版帴鍏ユ彃浠惰鏄?|
+| `knowledge/references/version-rules.md` | 鐗堟湰绠＄悊瑙勫垯 |
 
-## 高级功能与 Skill
+## 楂樼骇鍔熻兘涓?Skill
 
-| 文档 | 内容 |
+| 鏂囨。 | 鍐呭 |
 |:----|:-----|
-| `knowledge/references/advanced-features.md` | 高级功能配置 |
-| `knowledge/references/skills-catalog.md` | Skill 完整目录（含所有注册 Skill） |
+| `knowledge/references/advanced-features.md` | 楂樼骇鍔熻兘閰嶇疆 |
+| `knowledge/references/skills-catalog.md` | Skill 瀹屾暣鐩綍锛堝惈鎵€鏈夋敞鍐?Skill锛?|
 
-## HDL 编码参考
+## HDL 缂栫爜鍙傝€?
 
-| 文档 | 内容 |
+| 鏂囨。 | 鍐呭 |
 |:----|:-----|
-| `skills/hdl-coding/SKILL.md` | HDL 编码 Skill 定义 |
-| `skills/hdl-coding/references/rtl-code-review.md` | RTL 代码审查规范 |
-| `skills/hdl-coding/references/timing-constraints.md` | 时序约束 |
-| `skills/hdl-coding/references/fpga-optimization.md` | FPGA 优化 |
-| `skills/hdl-coding/references/alg-flow-verilog.md` | 算法→Verilog 代码模板（流程见 hdl-coding-workflow） |
+| `skills/hdl-coding/SKILL.md` | HDL 缂栫爜 Skill 瀹氫箟 |
+| `skills/hdl-coding/references/rtl-code-review.md` | RTL 浠ｇ爜瀹℃煡瑙勮寖 |
+| `skills/hdl-coding/references/timing-constraints.md` | 鏃跺簭绾︽潫 |
+| `skills/hdl-coding/references/fpga-optimization.md` | FPGA 浼樺寲 |
+| `skills/hdl-coding/references/alg-flow-verilog.md` | 绠楁硶鈫扸erilog 浠ｇ爜妯℃澘锛堟祦绋嬭 hdl-coding-workflow锛?|
 
-## 工作流
+## 宸ヤ綔娴?
 
-> 渐进式披露结构：骨架文件是快速索引，子文件包含详细内容，按需加载。
+> 娓愯繘寮忔姭闇茬粨鏋勶細楠ㄦ灦鏂囦欢鏄揩閫熺储寮曪紝瀛愭枃浠跺寘鍚缁嗗唴瀹癸紝鎸夐渶鍔犺浇銆?
 
-| 骨架 | 子文件 | 内容 |
+| 楠ㄦ灦 | 瀛愭枃浠?| 鍐呭 |
 |:-----|:-------|:-----|
-| `skills/workflows/hdl-coding-workflow.md` | `skills/workflows/hdl-coding/` (10 个 Phase) | RTL 开发全流程 v3.4 — 架构→定点→TB+向量生成→逐模块RTL+脚本化对比→证据门禁→顶层全链仿真→回归→审查→报告 |
-| `skills/workflows/code-review-workflow.md` | `skills/workflows/code-review/` (2 个 Pass) | 两轮代码审查：正确性→代码质量 |
-| `skills/workflows/architecture-review-skill-workflow.md` | `skills/workflows/architecture-review/` (4 个 Phase) | 多 Agent 架构审查：上下文→分析→安全→建议 |
-| `skills/workflows/rag-skill-workflow.md` | — | 知识库检索流程（66 行，无需拆分） |
-| `skills/workflows/security-review-workflow.md` | — | 安全审查流程（97 行，无需拆分） |
+| `skills/workflows/hdl-coding-workflow.md` | `skills/workflows/hdl-coding/` (10 涓?Phase) | RTL 寮€鍙戝叏娴佺▼ v3.4 鈥?鏋舵瀯鈫掑畾鐐光啋TB+鍚戦噺鐢熸垚鈫掗€愭ā鍧桼TL+鑴氭湰鍖栧姣斺啋璇佹嵁闂ㄧ鈫掗《灞傚叏閾句豢鐪熲啋鍥炲綊鈫掑鏌モ啋鎶ュ憡 |
+| `skills/workflows/code-review-workflow.md` | `skills/workflows/code-review/` (2 涓?Pass) | 涓よ疆浠ｇ爜瀹℃煡锛氭纭€р啋浠ｇ爜璐ㄩ噺 |
+| `skills/workflows/architecture-review-workflow.md` | `skills/workflows/architecture-review/` (4 涓?Phase) | 澶?Agent 鏋舵瀯瀹℃煡锛氫笂涓嬫枃鈫掑垎鏋愨啋瀹夊叏鈫掑缓璁?|
+| `skills/workflows/rag-skill-workflow.md` | 鈥?| 鐭ヨ瘑搴撴绱㈡祦绋嬶紙66 琛岋紝鏃犻渶鎷嗗垎锛?|
+| `skills/workflows/security-review-workflow.md` | 鈥?| 瀹夊叏瀹℃煡娴佺▼锛?7 琛岋紝鏃犻渶鎷嗗垎锛?|
 
-## 工具链
+## 宸ュ叿閾?
 
-| 文档 | 内容 |
+| 鏂囨。 | 鍐呭 |
 |:----|:-----|
-| `knowledge/references/mcp-matlab-usage.md` | MATLAB MCP 使用指南 |
-| `skills/tdd/references/tdd-workflow-local.md` | TDD 工作流 |
-| `skills/rag-skill/references/pdf_reading.md` | PDF 文档读取 |
+| `knowledge/references/mcp-matlab-usage.md` | MATLAB MCP 浣跨敤鎸囧崡 |
+| `skills/tdd/references/tdd-workflow-local.md` | TDD 宸ヤ綔娴?|
+| `skills/rag-skill/references/pdf_reading.md` | PDF 鏂囨。璇诲彇 |
 
-## Agent 上下文管理
+## Agent 涓婁笅鏂囩鐞?
 
-| 脚本 | 用途 |
+| 鑴氭湰 | 鐢ㄩ€?|
 |:----|:-----|
-| `engine/scripts/agent-context-budget.cjs` | 逐 Agent 类型上下文预算（tight/normal/relaxed/full 四档）+ 智能压缩 |
-| `engine/scripts/agent-context-watchdog.cjs` | Agent spawn 追踪 + 自压缩指令注入 + context 统计报表 |
-| `engine/scripts/ctx-checkpoint.sh` | PreCompact hook 调用的压缩前 checkpoint |
-| `engine/scripts/runtime-state.cjs` | 运行时状态管理器（含 spawnedAgents 列表） |
+| `engine/scripts/agent-context-budget.cjs` | 閫?Agent 绫诲瀷涓婁笅鏂囬绠楋紙tight/normal/relaxed/full 鍥涙。锛? 鏅鸿兘鍘嬬缉 |
+| `engine/scripts/agent-context-watchdog.cjs` | Agent spawn 杩借釜 + 鑷帇缂╂寚浠ゆ敞鍏?+ context 缁熻鎶ヨ〃 |
+| `engine/scripts/ctx-checkpoint.sh` | PreCompact hook 璋冪敤鐨勫帇缂╁墠 checkpoint |
+| `engine/scripts/runtime-state.cjs` | 杩愯鏃剁姸鎬佺鐞嗗櫒锛堝惈 spawnedAgents 鍒楄〃锛?|
 
-使用方式：
+浣跨敤鏂瑰紡锛?
 ```bash
-# 查 developer agent 的预算
+# 鏌?developer agent 鐨勯绠?
 node engine/scripts/agent-context-budget.cjs tier developer
 
-# 从 stdin 压缩 prompt
+# 浠?stdin 鍘嬬缉 prompt
 cat prompt.txt | node engine/scripts/agent-context-budget.cjs compress developer
 
-# 查 agent 上下文健康摘要
+# 鏌?agent 涓婁笅鏂囧仴搴锋憳瑕?
 node engine/scripts/agent-context-watchdog.cjs health
 
-# 记录 agent spawn
+# 璁板綍 agent spawn
 node engine/scripts/agent-context-watchdog.cjs track planner
 
-# 查看所有已 spawn agent
+# 鏌ョ湅鎵€鏈夊凡 spawn agent
 node engine/scripts/agent-context-watchdog.cjs status
 ```
