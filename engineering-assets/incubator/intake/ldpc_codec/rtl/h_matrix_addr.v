@@ -6,20 +6,12 @@
 //
 // 展开规则:
 //   对 expanded row r, 其所属 block row b = r / Z, 块内偏移 o = r mod Z
-//   对 P(b, j) != -1: col_addr = j*Z + mod(o - P(b,j), Z)
+//   对 P(b, j) != -1: col_addr = j*Z + mod(o + P(b,j), Z)
+//   (+P 而非 -P: 与 golden 的 ldpcQuasiCyclicMatrix 同向, 见 Stage 2 注释)
 //
-// 输入:
-//   i_cur_row  - 当前展开行号 (0~323)
-//   i_cur_conn - 当前连接索引 (0~row_wt-1)
-// 输出:
-//   o_col_addr - 对应 H 矩阵列地址 (0~647)
-//   o_shift    - 循环移位值
-//   o_conn_count - 当前行连接数
-//-----------------------------------------------------------------
-// 主要逻辑:
-//   1. ROM 存储 P 矩阵 (12×24=288 entries × 5 bits)
-//   2. 行开始: 扫描 P block row, 记录所有非 -1 列
-//   3. 每个连接: 计算展开后的列地址
+// 输入: i_cur_row (0~323) / i_cur_conn (0~row_wt-1) / i_en
+// 输出: o_col_addr (0~647) / o_shift / o_conn_count / o_msg_addr / o_valid
+//   两级流水: 输入寄存 -> 查表 -> 输出寄存, 故比 i_en 晚 2 拍。
 //-----------------------------------------------------------------
 
 module h_matrix_addr #(
@@ -91,16 +83,18 @@ module h_matrix_addr #(
         r_p_rom[156]=5'd0;  r_p_rom[162]=5'd0;  r_p_rom[163]=5'd0;
         // Row 7
         r_p_rom[168]=5'd13; r_p_rom[169]=5'd24; r_p_rom[172]=5'd0;  r_p_rom[174]=5'd8;
-        r_p_rom[176]=5'd6;  r_p_rom[186]=5'd0;  r_p_rom[187]=5'd0;
+        // 块行 7~10 的双对角校验列原先未随块行递进(差 1~2 列), 已按 cfg.P 校正;
+        // tools/check-ldpc-h-matrix.cjs 逐元素守住与参考模型的一致性。
+        r_p_rom[176]=5'd6;  r_p_rom[187]=5'd0;  r_p_rom[188]=5'd0;
         // Row 8
         r_p_rom[192]=5'd7;  r_p_rom[193]=5'd20; r_p_rom[195]=5'd16; r_p_rom[196]=5'd22;
-        r_p_rom[197]=5'd10; r_p_rom[200]=5'd23; r_p_rom[210]=5'd0;  r_p_rom[211]=5'd0;
+        r_p_rom[197]=5'd10; r_p_rom[200]=5'd23; r_p_rom[212]=5'd0;  r_p_rom[213]=5'd0;
         // Row 9
         r_p_rom[216]=5'd11; r_p_rom[220]=5'd19; r_p_rom[224]=5'd13; r_p_rom[226]=5'd3;
-        r_p_rom[227]=5'd17; r_p_rom[235]=5'd0;  r_p_rom[236]=5'd0;
+        r_p_rom[227]=5'd17; r_p_rom[237]=5'd0;  r_p_rom[238]=5'd0;
         // Row 10
         r_p_rom[240]=5'd25; r_p_rom[242]=5'd8;  r_p_rom[244]=5'd23; r_p_rom[245]=5'd18;
-        r_p_rom[247]=5'd14; r_p_rom[248]=5'd9;  r_p_rom[260]=5'd0;  r_p_rom[261]=5'd0;
+        r_p_rom[247]=5'd14; r_p_rom[248]=5'd9;  r_p_rom[262]=5'd0;  r_p_rom[263]=5'd0;
         // Row 11
         r_p_rom[264]=5'd3;  r_p_rom[268]=5'd16; r_p_rom[271]=5'd2;  r_p_rom[272]=5'd25;
         r_p_rom[273]=5'd5;  r_p_rom[276]=5'd1;  r_p_rom[287]=5'd0;
@@ -189,23 +183,23 @@ module h_matrix_addr #(
         r_conn_cnt[7] = 4'd7;
         r_conn_col[7][0]=6'd0;  r_conn_shft[7][0]=5'd13;  r_conn_col[7][1]=6'd1;  r_conn_shft[7][1]=5'd24;
         r_conn_col[7][2]=6'd4;  r_conn_shft[7][2]=5'd0;   r_conn_col[7][3]=6'd6;  r_conn_shft[7][3]=5'd8;
-        r_conn_col[7][4]=6'd8;  r_conn_shft[7][4]=5'd6;   r_conn_col[7][5]=6'd18; r_conn_shft[7][5]=5'd0;
-        r_conn_col[7][6]=6'd19; r_conn_shft[7][6]=5'd0;
+        r_conn_col[7][4]=6'd8;  r_conn_shft[7][4]=5'd6;   r_conn_col[7][5]=6'd19; r_conn_shft[7][5]=5'd0;
+        r_conn_col[7][6]=6'd20; r_conn_shft[7][6]=5'd0;
         r_conn_cnt[8] = 4'd8;
         r_conn_col[8][0]=6'd0;  r_conn_shft[8][0]=5'd7;   r_conn_col[8][1]=6'd1;  r_conn_shft[8][1]=5'd20;
         r_conn_col[8][2]=6'd3;  r_conn_shft[8][2]=5'd16;  r_conn_col[8][3]=6'd4;  r_conn_shft[8][3]=5'd22;
         r_conn_col[8][4]=6'd5;  r_conn_shft[8][4]=5'd10;  r_conn_col[8][5]=6'd8;  r_conn_shft[8][5]=5'd23;
-        r_conn_col[8][6]=6'd18; r_conn_shft[8][6]=5'd0;   r_conn_col[8][7]=6'd19; r_conn_shft[8][7]=5'd0;
+        r_conn_col[8][6]=6'd20; r_conn_shft[8][6]=5'd0;   r_conn_col[8][7]=6'd21; r_conn_shft[8][7]=5'd0;
         r_conn_cnt[9] = 4'd7;
         r_conn_col[9][0]=6'd0;  r_conn_shft[9][0]=5'd11;  r_conn_col[9][1]=6'd4;  r_conn_shft[9][1]=5'd19;
         r_conn_col[9][2]=6'd8;  r_conn_shft[9][2]=5'd13;  r_conn_col[9][3]=6'd10; r_conn_shft[9][3]=5'd3;
-        r_conn_col[9][4]=6'd11; r_conn_shft[9][4]=5'd17;  r_conn_col[9][5]=6'd19; r_conn_shft[9][5]=5'd0;
-        r_conn_col[9][6]=6'd20; r_conn_shft[9][6]=5'd0;
+        r_conn_col[9][4]=6'd11; r_conn_shft[9][4]=5'd17;  r_conn_col[9][5]=6'd21; r_conn_shft[9][5]=5'd0;
+        r_conn_col[9][6]=6'd22; r_conn_shft[9][6]=5'd0;
         r_conn_cnt[10] = 4'd8;
         r_conn_col[10][0]=6'd0; r_conn_shft[10][0]=5'd25; r_conn_col[10][1]=6'd2; r_conn_shft[10][1]=5'd8;
         r_conn_col[10][2]=6'd4; r_conn_shft[10][2]=5'd23; r_conn_col[10][3]=6'd5; r_conn_shft[10][3]=5'd18;
         r_conn_col[10][4]=6'd7; r_conn_shft[10][4]=5'd14; r_conn_col[10][5]=6'd8; r_conn_shft[10][5]=5'd9;
-        r_conn_col[10][6]=6'd20;r_conn_shft[10][6]=5'd0;  r_conn_col[10][7]=6'd21;r_conn_shft[10][7]=5'd0;
+        r_conn_col[10][6]=6'd22;r_conn_shft[10][6]=5'd0;  r_conn_col[10][7]=6'd23;r_conn_shft[10][7]=5'd0;
         r_conn_cnt[11] = 4'd7;
         r_conn_col[11][0]=6'd0; r_conn_shft[11][0]=5'd3;  r_conn_col[11][1]=6'd4; r_conn_shft[11][1]=5'd16;
         r_conn_col[11][2]=6'd7; r_conn_shft[11][2]=5'd2;  r_conn_col[11][3]=6'd8; r_conn_shft[11][3]=5'd25;
@@ -249,16 +243,17 @@ module h_matrix_addr #(
     assign w_conn_count = r_conn_cnt[w_block_row];
     assign w_block_col  = r_conn_col[w_block_row][ri_conn];
 
-    // Stage 2: 展开列地址
-    // col_addr = j * Z + mod(offset - shift, Z)
+    // Stage 2: col_addr = j*Z + mod(offset + shift, Z)
+    //  +P 而非 -P: 参考模型调 ldpcQuasiCyclicMatrix, 单位阵**循环右移 P 位**。
+    //  实证: 第 0 行块列 12 上 P=1 -> 参考 col 325, 原 RTL(-P) col 350。
     wire [P_SHIFT_W-1:0]    w_shift_val;
-    wire signed [P_SHIFT_W:0] w_diff;
+    wire [P_SHIFT_W:0]      w_sum;
     wire [P_SHIFT_W-1:0]    w_mod_result;
 
     assign w_shift_val  = r_conn_shft[w_block_row][ri_conn];
-    assign w_diff       = {1'b0, w_block_off} - {1'b0, w_shift_val};
-    assign w_mod_result = (w_diff >= 0) ? w_diff[P_SHIFT_W-1:0] :
-                                          (w_diff[P_SHIFT_W-1:0] + P_Z[P_SHIFT_W-1:0]);
+    assign w_sum        = {1'b0, w_block_off} + {1'b0, w_shift_val};
+    assign w_mod_result = (w_sum >= P_Z) ? (w_sum[P_SHIFT_W-1:0] - P_Z[P_SHIFT_W-1:0])
+                                         :  w_sum[P_SHIFT_W-1:0];
 
     // 输出寄存器
     // msg 地址 = 块基址 + 块内行偏移*该块行连接数 + 连接索引; 上界

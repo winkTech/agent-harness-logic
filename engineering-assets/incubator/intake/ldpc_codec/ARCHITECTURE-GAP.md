@@ -1,7 +1,26 @@
 # ldpc_codec 译码器 — 控制架构缺口与修复方案
 
-> 状态: **未修复**，阻塞 G-B-03。
-> 记录日期: 2026-07-25。证据来自 Vivado 2023.1 综合与 ModelSim 仿真，非推测。
+> 状态: **已修复并验证**（2026-07-26）。G-B-03 已过: 10 向量 3240 bit 0 失配。
+> 缺口记录日期: 2026-07-25。证据来自 Vivado 2023.1 综合与 ModelSim 仿真，非推测。
+
+## 0. 修复结果（2026-07-26 关闭）
+
+采用**方案 A 的扩展形式**：`ldpc_controller` 重写为 10 状态独热 FSM
+`IDLE → CLEAR → ROWSTART → READ → RDRAIN → WB → WDRAIN → SYND → SDRAIN → DONE`，
+写回相位（WB/WDRAIN）显式存在，RDRAIN/WDRAIN/SDRAIN 吸收 `h_matrix_addr` 流水延迟；
+`i_conn_count` 已接入（G1），msg 寻址切换到 `h_matrix_addr.o_msg_addr` 的
+`row_base + conn` 方案（G2），读/写地址同相位对齐（D1–D3）。
+
+验证证据（ModelSim 10.6c，`tb_ldpc_decoder_top`，向量 = `models/comm/ldpc/vectors/` 10 组）：
+
+- [G-C-05.regression] 10 向量 3240 bit 与定点 golden 全 0 失配，同输入重跑逐位一致
+- [G-C-05.boundary] 全零 LLR 与满幅饱和 LLR：324 bit 输出，无 X/Z，无挂死
+- [G-C-05.backpressure] 下游撤 tready 567 拍：0/324 失配
+- [G-C-05.stress] 单码字端到端 70098 拍（预算 150000）
+- gate-runner: 17/18 门绿（G-A/G-B/G-C/G-DOC/G-GATE 全过），达 **QUALIFICATION**，
+  certified 仅剩 G-SIGN-01 用户签字
+
+以下第 1–6 节为修复前的缺口分析与方案论证，保留作历史记录。
 
 ## 1. 现象
 
@@ -132,14 +151,18 @@ D1–D3 需要补一个写回相位，**存在两种架构取向，需 owner 决
 D1–D3 属"写回通路未设计完整"，A/B 的取舍影响吞吐与后续时序收敛，属架构决策，
 不宜由实施方单方面选定。G1/G2 判据明确，可随方案选定一并落地。
 
-## 6. 当前门禁状态
+## 6. 当前门禁状态（2026-07-26 更新）
 
 | 门 | 状态 | 说明 |
 |:--|:--|:--|
-| G-A-00/01/02/04, RL-OUT, G-C-03 | pass | — |
-| G-C-01 | pass | WNS +4.377ns @10ns，achieved ≈ 140MHz |
-| G-C-02 | pass | lut 875/900, ff 153/500, bram 1/3, dsp 0/0 |
-| **G-B-03** | **blocked** | 译码器实测 324/324 位错，不产出 bit-true 证据 |
-| G-SIGN-01 | blocked | 待具名签字 |
+| CS-1/2, G-A-00/01/02/04, RL-OUT, G-C-03, G-DOC-01, G-B-01/02 | pass | — |
+| G-B-03 | **pass** | bit-true: 3240 样点 0 失配（ModelSim） |
+| G-C-01 | pass | WNS +4.958ns @10ns（修复后重综合） |
+| G-C-02 | pass | lut 410/900, ff 244/500, bram 3/3, dsp 0/0 |
+| G-C-04/05, G-GATE-01 | pass | 复位比对/CDC/四场景/证据产物齐备 |
+| **G-SIGN-01** | **blocked** | 待具名签字（certified 唯一剩余门） |
 
-达到级别 **QUALIFICATION**；G-B-03 未过前不得进 certified。
+达到级别 **QUALIFICATION**；G-SIGN-01 签字后即 certified。
+
+修复前状态（历史）：G-B-03 blocked（324/324 位错），G-C-02 为 lut 875/ff 153/bram 1
+（旧数据通路未接完整）。

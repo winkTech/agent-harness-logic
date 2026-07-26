@@ -2,10 +2,11 @@
   "schema_version": "1.0",
   "asset_uid": "ldpc_codec",
   "name": "ldpc_codec",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "owner": "lihan",
   "maturity": {
-    "level": "intake"
+    "level": "qualification",
+    "evidence_ref": "engineering-assets/var/gates/pg/ldpc_codec/"
   },
   "requirement_ref": "engineering-assets/knowledge/primary/domains/comm/ldpc/algorithm_spec.md",
   "doc_refs": [
@@ -16,7 +17,8 @@
   ],
   "golden_model_ref": "model_comm_ldpc",
   "fidelity": {
-    "status": "pending"
+    "status": "bit_true",
+    "bit_accurate_against": "model_comm_ldpc@1.0.0"
   },
   "ports": [
     {
@@ -96,7 +98,7 @@
     {
       "path": "rtl/cn_update.v",
       "role": "rtl",
-      "sha256": "ee741d0691702631f36b373a916c311c9bba1f1c7b41a419cb2c71318b654e5f"
+      "sha256": "c24632b351d227a655d5b98f509e5cb11ce9c60f51979ad8d2d48ac57a14ee2a"
     },
     {
       "path": "rtl/early_term.v",
@@ -106,17 +108,22 @@
     {
       "path": "rtl/h_matrix_addr.v",
       "role": "rtl",
-      "sha256": "da52f29ae8c0c413d34e552144263006cdb046cd27764d7b03775ed2b43cc6d9"
+      "sha256": "9cfcf8f3ee088b2be51b9789b8bb05202ded955412db8c54f00f41de10745db5"
     },
     {
       "path": "rtl/ldpc_controller.v",
       "role": "rtl",
-      "sha256": "e99b96f9692af6286f9e5d32e9ef00175bb4c347e32b31d3bd4cc61a55520c6b"
+      "sha256": "c67fe4d0e1e96486a191e9255dccd7a18cbc1c16b087ef164c442f24eea8bba2"
     },
     {
       "path": "rtl/ldpc_decoder_top.v",
       "role": "rtl",
-      "sha256": "bdde8948ffab4c1aed0406c354f22cfb4eda084593d99c30fde48bbb2cb0ce58"
+      "sha256": "ddfcfcb7bf7dc937fe21fc6331ef6be893d898ec06cabad883dcde7d2d90ca16"
+    },
+    {
+      "path": "rtl/ldpc_stream_io.v",
+      "role": "rtl",
+      "sha256": "025b657a5819950c0274c0781b3bd747188f7fc9994da7cfdf215ea550b17b64"
     },
     {
       "path": "rtl/ldpc_defines.vh",
@@ -131,17 +138,17 @@
     {
       "path": "rtl/llr_buffer.v",
       "role": "rtl",
-      "sha256": "6a90e0630b546168b28b285a4090a6e41f97eacb25dfa1a03953ea69805fe7c9"
+      "sha256": "53790da18295d3c16115255c5ec4c910298770ae0e7c070615d3176a8315f994"
     },
     {
       "path": "rtl/msg_buffer.v",
       "role": "rtl",
-      "sha256": "e517ac9bb1637a899eff980f09063e1d327e1ac97b12be0b71ebd666a02b4a8a"
+      "sha256": "3fed1989433d80265368bf4356f5048dfff872ba0efc10eafa7780ce896cd8d3"
     },
     {
       "path": "tb/tb_ldpc_decoder_top.v",
       "role": "tb",
-      "sha256": "0faba7d80ad17ced5be96ce000bf8e096695c862dd0bcb88d1c509d5f955e84c"
+      "sha256": "0ef0a9f98de293c8198a10653aae406cb7782ff9c1560624cd6c0d512867ed7d"
     },
     {
       "path": "tb/tb_ldpc_encoder_top.v",
@@ -211,7 +218,7 @@
     {
       "path": "constraints/ldpc_decoder.xdc",
       "role": "constraint",
-      "sha256": "b938ab2561f8062171cc8e93713ab01d47076b28e7a30a68f59325d5f371ac90"
+      "sha256": "52c5a09e7ddb0387d636695431719a17a988a913650364bd18cf4a1cf027536e"
     }
   ],
   "waivers": [],
