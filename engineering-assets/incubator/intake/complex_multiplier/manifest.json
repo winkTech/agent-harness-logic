@@ -1,0 +1,52 @@
+{
+  "schema_version": "1.0",
+  "asset_uid": "complex_multiplier",
+  "name": "complex_multiplier",
+  "version": "0.1.0",
+  "owner": "lihan",
+  "maturity": {
+    "level": "intake"
+  },
+  "requirement_ref": "engineering-assets/docs/comm模块族认证差距清单.md",
+  "doc_refs": [
+    "engineering-assets/docs/governance/CBB-治理与生产级准入规范-V1.0.md"
+  ],
+  "fidelity": {
+    "status": "pending"
+  },
+  "top": "complex_multiplier",
+  "ports": [
+    { "name": "i_clk", "direction": "input", "width": 1 },
+    { "name": "i_rst", "direction": "input", "width": 1 },
+    { "name": "i_valid", "direction": "input", "width": 1 },
+    { "name": "i_a_re", "direction": "input", "width": 16 },
+    { "name": "i_a_im", "direction": "input", "width": 16 },
+    { "name": "i_b_re", "direction": "input", "width": 16 },
+    { "name": "i_b_im", "direction": "input", "width": 16 },
+    { "name": "o_valid", "direction": "output", "width": 1 },
+    { "name": "o_re", "direction": "output", "width": 33 },
+    { "name": "o_im", "direction": "output", "width": 33 }
+  ],
+  "clock": {
+    "name": "i_clk"
+  },
+  "reset": {
+    "name": "i_rst",
+    "polarity": "active_high",
+    "type": "sync"
+  },
+  "sources": [
+    {
+      "path": "rtl/complex_multiplier.sv",
+      "role": "rtl",
+      "sha256": "87762c38caadf1c5ef29c4e16f7600f123a35b47a4c00bbfc506a9148a9affbd"
+    },
+    {
+      "path": "tb/tb_complex_multiplier.sv",
+      "role": "tb",
+      "sha256": "dead4c3916cfb7bfac19a1849a72f983055e86f53cbd3491d91a93a8c3ec3b81"
+    }
+  ],
+  "waivers": [],
+  "superseded_by": null
+}
