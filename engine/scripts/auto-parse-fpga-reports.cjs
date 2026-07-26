@@ -8,11 +8,11 @@
 
 const fs = require('node:fs');
 const path = require('node:path');
-const os = require('node:os');
+const { buildTimingEvidence } = require('./fpga-timing-parser.cjs');
 
 function findReports(cwd) {
   const found = [];
-  const searchDirs = [cwd, path.join(cwd, '..'), path.join(cwd, '02_sim'), path.join(cwd, '04_prj')];
+  const searchDirs = [cwd, path.join(cwd, '02_sim'), path.join(cwd, '04_prj')];
 
   for (const dir of searchDirs) {
     if (!fs.existsSync(dir)) continue;
@@ -24,11 +24,13 @@ function findReports(cwd) {
           try {
             const subs = fs.readdirSync(sub);
             for (const f of subs) {
-              if (f.endsWith('_timing_summary.rpt') || f.includes('timing')) found.push({ type: 'timing', path: path.join(sub, f) });
-              if (f.endsWith('_utilization.rpt') || f.includes('utilization') || f.includes('util')) found.push({ type: 'util', path: path.join(sub, f) });
+              if (/timing.*\.rpt$/i.test(f)) found.push({ type: 'timing', path: path.join(sub, f) });
+              if (/(?:utilization|util).*\.rpt$/i.test(f)) found.push({ type: 'util', path: path.join(sub, f) });
             }
           } catch {}
         } else {
+          if (/timing.*\.rpt$/i.test(e.name)) found.push({ type: 'timing', path: path.join(dir, e.name) });
+          if (/(?:utilization|util).*\.rpt$/i.test(e.name)) found.push({ type: 'util', path: path.join(dir, e.name) });
           if (e.name.endsWith('.xdc')) found.push({ type: 'xdc', path: path.join(dir, e.name) });
         }
       }
@@ -57,12 +59,18 @@ function main() {
   if (reports.length === 0) process.exit(0);
 
   // 解析找到的报告
+  let failed = false;
   for (const r of reports) {
     try {
       if (r.type === 'timing') {
-        const { parseTimingReport } = require('./fpga-timing-parser.cjs');
-        const result = parseTimingReport(r.path);
-        if (result) console.error(`[fpga-timing] ${path.basename(r.path)}: WNS=${result.wns}ns TNS=${result.tns}ns Fmax=${result.fmax}MHz`);
+        const content = fs.readFileSync(r.path, 'utf8');
+        const result = buildTimingEvidence(content, r.path, {
+          synthesis: { status: 'command_completed', source: 'PostToolUse(Bash)' },
+        });
+        const handoffPath = path.join(path.dirname(r.path), 'synthesis-timing-evidence.json');
+        fs.writeFileSync(handoffPath, `${JSON.stringify(result, null, 2)}\n`, 'utf8');
+        console.error(`[fpga-timing] ${path.basename(r.path)}: status=${result.status} WNS=${result.timing.setup?.wns ?? 'N/A'}ns TNS=${result.timing.setup?.tns ?? 'N/A'}ns evidence=${handoffPath}`);
+        if (result.status !== 'passed') failed = true;
       } else if (r.type === 'util') {
         const { parseUtilReport } = require('./fpga-util-parser.cjs');
         const result = parseUtilReport(r.path);
@@ -74,7 +82,7 @@ function main() {
       }
     } catch { /* 解析失败静默 */ }
   }
-  process.exit(0);
+  process.exit(failed ? 2 : 0);
 }
 
 main();

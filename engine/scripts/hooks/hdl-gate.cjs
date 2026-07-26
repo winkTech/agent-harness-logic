@@ -99,35 +99,8 @@ function stripFunctionTaskBodies(text) {
     .replace(/\btask\b[\s\S]*?\bendtask\b/g, ' ');
 }
 
-const NAMING_CHECKS = [
-  {
-    check: (line, fname, fpath) => {
-      // 仅 01_src/ 路径强制 ro_ 规则
-      if (!isSourcePath(fpath)) return null;
-      // 检查 output reg 或 output logic 是否以 ro_ 开头
-      const m = line.match(/^\s*(output)\s+(reg|logic|wire)\s+(\[.*?\]\s+)?(\w+)/);
-      if (m && !m[4].startsWith('ro_') && !fname.includes('_tb') && !fname.includes('TB_')) {
-        return `输出信号 "${m[4]}" 应以 ro_ 开头 (line: ${line.trim().slice(0, 40)})`;
-      }
-      return null;
-    },
-  },
-  {
-    check: (line, fname, fpath) => {
-      // 仅 01_src/ 路径强制 ri_ 规则
-      if (!isSourcePath(fpath)) return null;
-      // 检查 input 是否以 ri_ 开头；时钟/复位信号例外
-      const m = line.match(/^\s*(input)\s+(reg|logic|wire)?\s*(\[.*?\]\s+)?(\w+)/);
-      if (m && !m[4].startsWith('ri_')) {
-        const isClkRst = /^(i_)?(clk|rst|clock|reset)/i.test(m[4]);
-        if (!isClkRst) {
-          return `输入信号 "${m[4]}" 应以 ri_ 开头 (line: ${line.trim().slice(0, 40)})`;
-        }
-      }
-      return null;
-    },
-  },
-];
+// [已移除] NAMING_CHECKS —— 定义后从未被调用的死代码, 且沿用了错误的
+// "端口须以 ri_/ro_ 开头" 判据。判据的唯一权威实现是 checkNamingViolations。
 
 // ── 辅助函数 ─────────────────────────────────────────────────────────────────
 
@@ -214,19 +187,24 @@ function isNewModuleFile(fp) {
   } catch { return true; }
 }
 
+// 端口命名判据 —— 依据 rules/01-hdl.md §命名规范:
+//   i_/o_  = 模块端口 (输入/输出)
+//   ri_/ro_ = 模块**内部**对输入/输出做寄存的信号, 不是端口名
+// 早期版本在此要求端口本身以 ri_/ro_ 开头, 与上述规范相反, 导致合规模块被 exit 2 拦死。
 function checkNamingViolations(content, fileName, filePath) {
   if (!isSourcePath(filePath) || isTbFileName(fileName)) return [];
 
   const violations = [];
   for (const port of extractDirectedPorts(content)) {
-    if (port.direction === 'input' && !port.name.startsWith('ri_')) {
-      const isClkRst = isClkRstName(port.name);
-      if (!isClkRst && !isBusSignal(port.name)) {
-        violations.push(`杈撳叆淇″彿 "${port.name}" 搴斾互 ri_ 寮€澶?(declaration: ${port.declaration})`);
+    if (isBusSignal(port.name)) continue; // 标准总线保持协议原名
+    if (port.direction === 'input') {
+      if (isClkRstName(port.name)) continue; // 时钟/复位允许 clk/rst/i_clk 等写法
+      if (!port.name.startsWith('i_')) {
+        violations.push(`输入端口 "${port.name}" 应以 i_ 开头 (declaration: ${port.declaration})`);
       }
     }
-    if (port.direction === 'output' && !port.name.startsWith('ro_') && !isBusSignal(port.name)) {
-      violations.push(`杈撳嚭淇″彿 "${port.name}" 搴斾互 ro_ 寮€澶?(declaration: ${port.declaration})`);
+    if (port.direction === 'output' && !port.name.startsWith('o_')) {
+      violations.push(`输出端口 "${port.name}" 应以 o_ 开头 (declaration: ${port.declaration})`);
     }
   }
   return violations;
@@ -283,38 +261,12 @@ function extractDirectedPorts(content) {
  * @param {string} fp 文件路径
  * @returns {number} 修复处数
  */
-function autoFixNaming(fp) {
-  try {
-    let content = fs.readFileSync(fp, 'utf8');
-    const lines = content.split('\n');
-    let fixed = 0;
-    const newLines = lines.map(line => {
-      const trimmed = line.trim();
-      if (trimmed.startsWith('//') || trimmed.startsWith('/*')) return line;
-
-      // 修复 output 缺 ro_
-      let m = line.match(/^(\s*output\s+(reg|logic|wire)?\s*(\[.*?\]\s+)?)([a-z]\w*)/);
-      if (m && !m[4].startsWith('ro_') && !isBusSignal(m[4])) {
-        fixed++;
-        return m[1] + 'ro_' + m[4];
-      }
-
-      // 修复 input 缺 ri_
-      m = line.match(/^(\s*input\s+(reg|logic|wire)?\s*(\[.*?\]\s+)?)([a-z]\w*)/);
-      if (m && !m[4].startsWith('ri_') && !isExemptInputPort(m[4])) {
-        fixed++;
-        return m[1] + 'ri_' + m[4];
-      }
-
-      return line;
-    });
-
-    if (fixed > 0) {
-      fs.writeFileSync(fp, newLines.join('\n'), 'utf8');
-    }
-    return fixed;
-  } catch { return 0; }
-}
+// [已移除] autoFixNaming —— 曾在 PostToolUse 静默改写用户源文件, 三重破坏:
+//   1. 把合规端口 i_data / o_data 重命名为 ri_i_data / ro_o_data (判据本身就是错的);
+//   2. 正则只保留匹配段, **丢弃行尾逗号**, 直接产生语法错误;
+//   3. 只改端口声明行, 不更新模块内部对该信号的引用, 模块必然编译失败。
+// Hook 不得在用户不知情的前提下改写源码。命名问题由 PreToolUse 的
+// checkNamingViolations 提示, 交由人/模型显式修改。
 
 function checkSynthesisViolations(content) {
   const violations = [];
@@ -422,13 +374,7 @@ async function main() {
 
     const isSrcPath = isSourcePath(filePath);
 
-    // 命名自动修复 — 仅 01_src/ 路径
-    if (isSrcPath) {
-      const fixed = autoFixNaming(fp);
-      if (fixed > 0) {
-        console.error(`[HDL-Gate] 自动修复 ${fixed} 处命名违规 (ri_/ro_)`);
-      }
-    }
+    // [已移除] 命名自动修复: Hook 不改写用户源码, 见 autoFixNaming 处的说明。
 
     // 逻辑分析报告 — 仅 01_src/ 路径，不阻断
     if (isSrcPath) {

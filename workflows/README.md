@@ -23,6 +23,28 @@ Workflow({name: 'security-review-workflow', args: {targets: ['src/']}})
 Workflow({name: 'rag-skill-workflow', args: {query: '复位命名规则'}})
 ```
 
+## 检查点续跑 (hdl-coding-dag-workflow v3.6)
+
+工作流在 preflight / design-review / evidence-review 检查点暂停
+（抛 `[WorkflowCheckpoint:<name>]`）。用户审查产出后带确认参数续跑，
+`resumeFromRunId` 让已完成阶段命中缓存：
+
+```js
+// 首跑 → 停在 preflight
+Workflow({name: 'hdl-coding-dag-workflow', args: {modules: ['fir']}})
+// 确认 preflight → 停在 design-review
+Workflow({scriptPath, resumeFromRunId, args: {modules: ['fir'], confirmed: true}})
+// 逐点确认继续
+Workflow({scriptPath, resumeFromRunId, args: {modules: ['fir'], confirmed: true,
+  checkpoints: {'design-review': {confirmed: true}}}})
+// 无人值守 (显式跳过全部用户检查点)
+Workflow({name: 'hdl-coding-dag-workflow', args: {modules: ['fir'], confirmAllCheckpoints: true}})
+```
+
+证据判定由 `engine/scripts/hdl-evidence-gate.cjs` 确定性完成
+（读 `06_doc/architecture.yaml` 与 `02_sim/check_results/*.json`，
+输出 JSON + `RESULT: PASS/FAIL`），工作流内的证据 agent 只负责执行并原样带回。
+
 ## Lite 模式
 
 ```js

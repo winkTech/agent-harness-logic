@@ -174,24 +174,16 @@ function estimateContextRatio() {
   // 综合: 取最大值（最悲观的估计）
   const envRatio = Math.max(fileRatio, callRatio, compactRatio);
 
-  // ── 降级检测 ──────────────────────────────────
-  // 如果 env 指标全为零（环境变量/会话文件不可用），使用降级计数器
+  // ── 指标不可用 → 沉默 ────────────────────────────────────────────────
+  // 三项真实指标全为 0 说明数据源不存在 (var/sessions/*.jsonl 为空、
+  // state.toolCalls 无写入方), 而不是"上下文很空"。
+  //
+  // 早期版本在这里退化到一个**全局单调累加**的调用计数器: 它从不按会话
+  // 复位, 实测已累加到 6000+ (阈值 20), 于是每次 Edit/Write 都稳定输出
+  // "上下文使用率 100%" 的假警报。编造的数字比没有数字更有害 —— 它会让
+  // 真的告警失去意义。故改为: 拿不到证据就不说话。
   if (envRatio === 0 && toolCalls === 0 && transcriptKB === 0) {
-    const fb = getFallbackRatio();
-    return {
-      ratio: fb.ratio,
-      details: {
-        transcriptKB: 0,
-        toolCalls: 0,
-        compactAgo: 0,
-        fileRatio: 0,
-        callRatio: 0,
-        compactRatio: 0,
-        fallbackActive: true,
-        fallbackCount: fb.count,
-        fallbackThresholds: `YELLOW@${FALLBACK_YELLOW_AFTER} RED@${FALLBACK_RED_AFTER}`,
-      },
-    };
+    return { ratio: 0, unavailable: true, details: { reason: 'no-metric-source' } };
   }
 
   return {
@@ -252,7 +244,12 @@ function maybeCheckpoint(level) {
  * @returns {object|null} GREEN → null (不注入), YELLOW/RED → 报警对象
  */
 function evaluate(opts = {}) {
-  const { ratio, details } = opts.measurement || estimateContextRatio();
+  const measurement = opts.measurement || estimateContextRatio();
+  const { ratio, details } = measurement;
+
+  // 指标源不存在 → 不报警。见 estimateContextRatio 的说明。
+  if (measurement.unavailable) return null;
+
   const level = getHealthLevel(ratio);
 
   // GREEN: 无需输出

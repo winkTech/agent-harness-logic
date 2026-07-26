@@ -12,7 +12,12 @@
 | `03-gates.md` | L0 | 新资产或契约变化的需求与验证质量门禁 | 按上下文 |
 | `04-git.md` | L2 | Git 提交/分支规范 | commit/push |
 
-## archive/ — 低频规则（按需 Read，不自动加载）
+## docs/rules-archive/ — 低频规则（按需 Read）
+
+> 这些文件原先放在 `rules/archive/`。README 当时声称"不自动加载"，
+> 但实测**被全量注入**了常驻上下文（约 24k 字符 ≈ 8k tokens），
+> 且其中 3 份与 `CLAUDE.md` 的授权边界正面冲突。
+> 已移出 `rules/`，改为按需 `Read docs/rules-archive/<file>`。
 
 | 文件 | 场景 |
 |:-----|:-----|

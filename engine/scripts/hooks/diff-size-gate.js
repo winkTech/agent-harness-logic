@@ -120,8 +120,11 @@ async function main() {
     }
 
     if (isBlock) {
-      log(`✖  变更过大 (文件≥${BLOCK_FILES} 或行≥${BLOCK_LINES})，已阻断 push。`);
-      log(`   建议: 拆分为多个提交，或用 --no-verify 强制推送`);
+      // 注意: 这里是**警告不是阻断**。Claude Code 只把 exit 2 视为阻断,
+      // exit 1 等同放行。大规模重构是合法操作, 不该被变更体积硬拦 ——
+      // 与其伪称"已阻断"(实际没拦), 不如如实说这是建议。
+      log(`⚠  变更很大 (文件≥${BLOCK_FILES} 或行≥${BLOCK_LINES})。`);
+      log(`   强烈建议拆分为多个提交，便于审查与回滚。`);
       process.exit(1);
     }
 

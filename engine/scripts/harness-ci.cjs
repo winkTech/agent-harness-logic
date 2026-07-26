@@ -6,6 +6,7 @@ const path = require('node:path');
 const { spawnSync } = require('node:child_process');
 const { HARNESS_ROOT } = require('./lib/harness-root.cjs');
 const { validateHookScripts } = require('./lib/hook-registry.cjs');
+const { settingsFiles } = require('./lib/harness-root.cjs');
 const { validateSchemaCatalog } = require('./lib/schema-catalog.cjs');
 
 function gitFiles(args) {
@@ -52,6 +53,45 @@ function checkJson(files) {
       JSON.parse(fs.readFileSync(path.join(HARNESS_ROOT, relative), 'utf8'));
     } catch (error) {
       errors.push(`${relative}: ${error.message}`);
+    }
+  }
+  return errors;
+}
+
+// settings.json 被 .gitignore 忽略, 因此不在 sourceFiles() 里 —— 它是全harness
+// 最关键的文件, 却从不参与 CI 的 JSON 语法校验。这里单独校验它, 并检查两类
+// 曾经真实发生过的配置错误。
+const VALID_HOOK_EVENTS = new Set([
+  'PreToolUse', 'PostToolUse', 'UserPromptSubmit', 'Notification',
+  'Stop', 'SubagentStop', 'PreCompact', 'SessionStart', 'SessionEnd',
+]);
+
+function checkSettingsFiles() {
+  const errors = [];
+  for (const file of settingsFiles(HARNESS_ROOT)) {
+    if (!fs.existsSync(file)) continue;
+    const label = path.basename(file);
+    let parsed;
+    try {
+      parsed = JSON.parse(fs.readFileSync(file, 'utf8'));
+    } catch (error) {
+      errors.push(`${label}: invalid JSON — ${error.message}`);
+      continue;
+    }
+    for (const [event, groups] of Object.entries(parsed.hooks || {})) {
+      // 事件名拼错的整块配置会被平台静默忽略, 表现为"配好了但从不触发"。
+      if (!VALID_HOOK_EVENTS.has(event)) {
+        errors.push(`${label}: unknown hook event "${event}" — this whole block never fires`);
+      }
+      for (const group of Array.isArray(groups) ? groups : []) {
+        for (const hook of group.hooks || []) {
+          // timeout 单位是**秒**。按毫秒填 (如 5000) 等于把上限设成 83 分钟,
+          // 所有延迟保护失效。
+          if (typeof hook.timeout === 'number' && hook.timeout > 600) {
+            errors.push(`${label}: ${event} timeout=${hook.timeout} looks like milliseconds (unit is seconds)`);
+          }
+        }
+      }
     }
   }
   return errors;
@@ -136,6 +176,7 @@ function main() {
     ...checkNodeSyntax(files),
     ...checkPythonSyntax(files),
     ...checkJson(files),
+    ...checkSettingsFiles(),
     ...checkHookSecurity(files),
   ];
   if (staticErrors.length > 0) fail(staticErrors);

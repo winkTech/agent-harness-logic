@@ -87,11 +87,31 @@ const TEST_PATTERNS = [
   // HDL 仿真 — 运行仿真 = 功能验证
   /^vsim\b/,
   /^xsim\b/,
+  // Icarus Verilog: iverilog 编译 + vvp 执行都算仿真闭环
+  /^iverilog\b/,
+  /^vvp\b/,
+  /^verilator(?:_bin)?\b/,
+  // Xilinx Vivado 批处理与 xsim 前端
+  /^vivado\b/,
+  /^xvlog\b/,
+  /^xelab\b/,
+  // MATLAB / Octave 批处理 —— 本仓库的 golden model 与向量生成都在这里,
+  // 跑 golden 复算属功能验证 (与 vsim 同级), 不是语法检查。
+  /^matlab\s+(?:-batch|-r)\b/,
+  /^octave(?:-cli)?\b/,
+  // 项目约定的模块校验脚本 02_sim/<mod>/check_<mod>.py
+  // (命名约定见 engine/scripts/lib/project-directory-contract.cjs)
+  /^(?:uv\s+run\s+)?python3?\s+["']?(?:[^\s"']*[\/\\])?check_[A-Za-z0-9_]+\.py\b/,
   /^make\s+(regress|sim|test|check|run)\b/,
   // Node/JS 测试
   /^npm\s+test\b/,
   /^npm\s+run\s+test\b/,
   /^node\s+.*engine[\/\\]scripts[\/\\]test-hooks[\/\\].+\.(?:cjs|js)\b/,
+  // engineering-assets 的准入门 runner —— 它自己就会跑 vlog 并判读仿真/综合
+  // 证据, 是本仓库 CBB 的验收判定, 属功能验证而非语法检查。
+  /^node\s+.*\btools[\/\\]gate-runner\.cjs\b/,
+  // 同一套证据链的综合侧: pg-synth 会真的跑 Vivado 出时序/资源报告
+  /^node\s+.*\btools[\/\\]pg-synth\.cjs\b/,
   /^jest\b/,
   /^vitest\b/,
   /^uv\s+run\s+pytest\b/,
@@ -133,6 +153,12 @@ const LINT_PATTERNS = [
   /** 项目自定义语法检查 — 编辑此数组添加 */
 ];
 
+/** git 的全局选项 (可重复), 出现在 git 与子命令之间: `git -C <path> -c k=v status` */
+const GIT_GLOBAL_OPTS = '(?:(?:-C\\s+(?:"[^"]*"|\'[^\']*\'|\\S+)|-c\\s+\\S+|--no-pager|--git-dir(?:=|\\s+)\\S+|--work-tree(?:=|\\s+)\\S+)\\s+)*';
+
+/** git 只读子命令 — 允许在待验证状态下运行 */
+const GIT_READONLY_SUBCOMMANDS = ['status', 'diff', 'log', 'blame', 'show', 'branch', 'remote', 'config'];
+
 /** 安全只读命令 — 放行但保留「待验证」标记 */
 const SAFE_PATTERNS = [
   /^ls\b/,
@@ -151,16 +177,54 @@ const SAFE_PATTERNS = [
   /^tail\b/,
   /^less\b/,
   /^more\b/,
-  /^git\s+status\b/,
-  /^git\s+diff\b/,
-  /^git\s+log\b/,
-  /^git\s+blame\b/,
-  /^git\s+show\b/,
-  /^git\s+branch\b/,
-  /^git\s+remote\b/,
-  /^git\s+config\b/,
+  // git 全局选项 (-C <path> / -c k=v) 会夹在 git 与子命令之间, 例如
+  // `git -C "D:\repo" status --short`。早期模式把子命令直接锚在 git 后面,
+  // 于是这类极常见的调用被判为不安全而硬拦 —— 又是一条把人逼向 --reset 的路径。
+  ...GIT_READONLY_SUBCOMMANDS.map((sub) => new RegExp(`^git\\s+${GIT_GLOBAL_OPTS}${sub}\\b`)),
   /^(?:python|node|go|rustc|javac)\s+--version\b/,
   /^(?:python|node|go|rustc)\s+-V\b/,
+  // PowerShell 只读 cmdlet —— 本门禁现在也覆盖 PowerShell 工具 (见 isShellTool),
+  // 而上面那批安全模式全是 POSIX 命令名。缺了这一段, Windows 上任何一条
+  // `Get-ChildItem ... | Select-Object ...` 都会被 matchesAll 判为不安全而硬拦,
+  // 反过来逼人 --reset, 等于又把门禁废掉。刻意不含 Remove-Item / Set-Content /
+  // Out-File / New-Item 一类写操作, 它们仍应受门禁管辖。
+  /^Get-(?:ChildItem|Content|Command|Item|ItemProperty|Location|Date|Process|Member|Help|History|Unique)\b/i,
+  /^(?:Select|Where|ForEach|Measure|Sort|Group|Compare)-Object\b/i,
+  /^Select-String\b/i,
+  /^Format-(?:Table|List|Wide)\b/i,
+  /^Out-(?:String|Host|Null)\b/i,
+  /^ConvertFrom-Json\b/i,
+  /^ConvertTo-Json\b/i,
+  /^Test-Path\b/i,
+  /^(?:Resolve|Split|Join)-Path\b/i,
+  /^Write-(?:Output|Host|Verbose|Debug)\b/i,
+  /^Set-Location\b/i,
+  /^Get-ChildItem\b/i,
+  // 变量赋值 / 管道续行 / 表达式求值等 PowerShell 语法片段
+  /^\$[A-Za-z_]\w*\s*=/,
+  /^if\s*\(/i,
+  /^foreach\s*\(/i,
+  /^\}/,
+  /^\{/,
+  // 无害的文件/目录操作 — 建仿真产物目录、拷贝激励向量等，与"是否验证过"无关
+  // 刻意不含 rm / rmdir -r：删除仍应受门禁与 bash-safety-guard 管辖
+  /^mkdir\b/,
+  /^cp\b/,
+  /^mv\b/,
+  /^touch\b/,
+  // 只读检索/统计
+  /^(?:rg|grep|egrep|fgrep)\b/,
+  /^find\b/,
+  /^(?:wc|sort|uniq|diff|tree|du|stat|file|basename|dirname|realpath)\b/,
+  /^sed\s+-n\b/,
+  /^awk\b/,
+  // 刻意不放行 echo: 它对 HDL/Python 工作不是必需命令, 而 `echo ... > x.sv`
+  // 是绕过 Write 工具门禁的写文件向量。保持被拦。
+  // git 暂存与只读查询 — 刻意不含 commit/push/reset，那些仍须先通过验证
+  ...['add', 'rev-parse', 'ls-files', 'check-ignore', 'stash\\s+list']
+    .map((sub) => new RegExp(`^git\\s+${GIT_GLOBAL_OPTS}${sub}\\b`)),
+  // 本门禁自身的自救命令 — 误拦时必须还能解除，否则形成死锁
+  /verification-gate\.cjs["']?\s+--(?:reset|status)\b/,
   /^\s*#/,
   /^\s*$/,
 ];
@@ -208,6 +272,32 @@ function bashResultFromPayload(payload) {
   };
 }
 
+/**
+ * 通过证据 (正面标记)。
+ *
+ * 判定必须是**正面**的: 退出码 0 且没扫到失败标记 ≠ 验证通过。
+ * 反例都是真实发生过的:
+ *   - Icarus 的 `$finish(n)` 里 n 是诊断详细程度 (0/1/2), **不是退出码**,
+ *     所以把 $finish(1) 当"失败退出"用的 TB 永远 exit 0;
+ *   - TB 在 0 时刻就挂掉 / 向量没加载 / 跑的是过期 binary, 都是静默 exit 0;
+ *   - 编译成功但根本没执行仿真, 同样 exit 0 无输出。
+ * 以上在旧的"无失败标记即通过"判据下全部记为验证通过 —— 假绿由此产生。
+ */
+const PASS_MARKERS = [
+  /\bRESULT:\s*PASS\b/i,
+  /\b(?:ALL\s+)?(?:TESTS?|CHECKS?)\s+PASSED\b/i,
+  /\bPASSED\b/,
+  /\bPASS\b/,
+  /\b\d+\s+passed\b/i,
+  /\b0\s+(?:failed|failures|errors|mismatches)\b/i,
+  /\bno\s+(?:errors|mismatches|failures)\b/i,
+  /\bbit-true\b/i,
+  /\bsuccess(?:ful(?:ly)?)?\b/i,
+  /\bcompleted\s+successfully\b/i,
+  /\b(?:ok|OK)\b/,
+  /** 项目自定义通过标记 — 编辑此数组添加 */
+];
+
 function verificationVerdict(command, result) {
   const stdout = String(result?.stdout || '');
   const stderr = String(result?.stderr || '');
@@ -231,12 +321,20 @@ function verificationVerdict(command, result) {
     return { ok: false, reason: 'failure marker in output' };
   }
 
-  const needsLog = /\b(vsim|xsim|iverilog|verilator|make\s+(?:regress|sim|test|check|run))\b/i.test(command);
-  if (needsLog && !combined.trim()) {
+  // 能走到这里的命令必定命中 TEST_PATTERNS (调用方保证), 也就是说它是一条
+  // "功能验证"命令。这类命令静默成功没有意义 —— 早期版本只对手抄的一小份
+  // 名单要求日志, 而那份名单漏掉了 `vvp` (Icarus 真正执行仿真的命令),
+  // 于是 `vvp tb.vvp` 空输出直接算通过。改为对全部验证命令一律要求日志,
+  // 从根上消除"两份名单漂移"这一类缺陷。
+  if (!combined.trim()) {
     return { ok: false, reason: 'verification command produced no log evidence' };
   }
 
-  return { ok: true, reason: 'exit code 0 with no failure markers' };
+  if (!PASS_MARKERS.some((re) => re.test(combined))) {
+    return { ok: false, reason: 'no explicit PASS evidence in output' };
+  }
+
+  return { ok: true, reason: 'exit code 0 with explicit PASS evidence' };
 }
 
 function recordVerificationEvidence(payload, command, result, verdict) {
@@ -272,11 +370,91 @@ function readStdin() {
 
 // ── 模式匹配 ─────────────────────────────────────────────────────────────────
 
+/**
+ * 命令分段。
+ *
+ * 上面所有模式都以 `^` 锚定，而 matchesAny 此前直接测原始整串。真实调用几乎
+ * 总是带前缀的 —— 多根仓库里跑仿真就是 `cd <pkg> && vsim -c -do run.do`。
+ * 于是 `/^vsim\b/` 永远匹配不上：实测一个跑满了 vsim 与 vivado 的会话，
+ * verify-gate.json 的 lastVerifyTime 仍是 null，本门禁从未记录过任何一次验证，
+ * 只会不断累积 pending 然后拦住后续命令，逼人用 --reset 绕开 —— 那等于废掉门禁。
+ *
+ * (SAFE_PATTERNS 里唯一没锚定的 `verification-gate\.cjs\s+--reset` 就是这个
+ *  问题的局部补丁: 它必须能在 `node ...` 前缀下工作。这里做通用修复。)
+ *
+ * 切分后剥掉环境变量赋值与 time/exec 一类包装，让模式作用在真正被执行的命令上。
+ */
+function commandSegments(cmd) {
+  const raw = String(cmd).trim();
+
+  // 按 shell 分隔符切分, 但**跳过引号内的内容**。
+  // 朴素的 split(/[;|]/) 会把 `grep "a\|b" f` 这类模式串切碎成假命令段,
+  // 既造成误拦 (matchesAll 下每段都要安全), 也可能造成误放
+  // (matchesAny 下引号里出现 "vsim" 就被当成跑过验证)。
+  const segs = [];
+  let cur = '';
+  let quote = null;
+  for (let i = 0; i < raw.length; i++) {
+    const c = raw[i];
+    if (quote) {
+      cur += c;
+      if (c === quote && raw[i - 1] !== '\\') quote = null;
+      continue;
+    }
+    if (c === '"' || c === "'") { quote = c; cur += c; continue; }
+    if (c === '\\' && raw[i + 1] === '\n') { i++; continue; }
+    if (c === '\n' || c === '\r' || c === ';' || c === '|' || c === '&') {
+      // 吃掉成对的 && / ||
+      if ((c === '&' || c === '|') && raw[i + 1] === c) i++;
+      segs.push(cur);
+      cur = '';
+      continue;
+    }
+    cur += c;
+  }
+  segs.push(cur);
+
+  const out = segs
+    .map((s) => s.trim())
+    .map((s) => s.replace(/^(?:[A-Za-z_]\w*=(?:"[^"]*"|'[^']*'|\S*)\s+)+/, ''))
+    .map((s) => s.replace(/^(?:time|exec|nohup|command|builtin)\s+/, ''))
+    .filter(Boolean);
+  return out.length ? out : [raw];
+}
+
+/** 任一段命中 → 命中。用于 TEST/LINT/CUSTOM: 链中出现过验证命令就算跑过验证。 */
 function matchesAny(cmd, patterns) {
-  for (const re of patterns) {
-    if (re.test(cmd)) return true;
+  for (const seg of commandSegments(cmd)) {
+    for (const re of patterns) {
+      if (re.test(seg)) return true;
+    }
   }
   return false;
+}
+
+/**
+ * 每一段都命中 → 命中。SAFE_PATTERNS 必须用这个，不能用 matchesAny：
+ * `^cd\b` 在安全表里，若按"任一段命中"判定，`cd x && <任意命令>` 会被整条放行。
+ * 注意这比改动前更严 —— 改动前测原始整串，`/^cd\b/` 同样会让该串通过。
+ */
+function matchesAll(cmd, patterns) {
+  const segs = commandSegments(cmd);
+  if (!segs.length) return false;
+  return segs.every((seg) => patterns.some((re) => re.test(seg)));
+}
+
+/**
+ * 本门禁自身的解除命令 —— 只要**任一段**是它就放行。
+ *
+ * SAFE_PATTERNS 走的是 matchesAll(每段都得安全), 而解除命令常被顺手接上
+ * 别的东西 (`... --reset && echo done`)。那种链条会被整条拒绝, 于是误拦
+ * 之后连解除都做不到 —— 正是 SAFE_PATTERNS 里那条注释想避免的死锁。
+ * 这里单独按"任一段命中"判定, 保住逃生通道。
+ */
+const RESCUE_PATTERN = /verification-gate\.cjs["']?\s+--(?:reset|status)\b/;
+
+function isRescue(cmd) {
+  return commandSegments(cmd).some((seg) => RESCUE_PATTERN.test(seg));
 }
 
 // ── 主逻辑 ───────────────────────────────────────────────────────────────────
@@ -305,6 +483,11 @@ async function main() {
   // 提取事件名和工具名 (兼容多种 stdin 格式)
   const eventName = payload?.hook_event_name || '';
   const toolName = (payload?.tool?.name || payload?.tool_name || payload?.name || '').toLowerCase();
+  // settings.json 一直按 "Bash|PowerShell" 注册本门禁, 但代码只认 Bash ——
+  // 于是在 Windows 这类以 PowerShell 为主 shell 的机器上, 换个工具就能整体绕过
+  // 验证门禁。这里把 PowerShell 一并纳入, 与注册意图对齐。
+  const isShellTool = toolName === 'bash' || toolName === 'powershell'
+    || payload?.tool_name === 'Bash' || payload?.tool_name === 'PowerShell';
   const command = (payload?.tool_input?.command || payload?.tool?.input?.command || payload?.input?.command || payload?.command || '').trim();
 
   // ── PostToolUse: 编辑代码文件 → 标记待验证 ───────────────────────────────
@@ -320,7 +503,7 @@ async function main() {
     process.exit(0);
   }
 
-  if (eventName === 'PostToolUse' && (toolName === 'bash' || payload?.tool_name === 'Bash') && command) {
+  if (eventName === 'PostToolUse' && isShellTool && command) {
     const state = readState();
     const pending = pendingForPayload(state, payload);
     if (pending.length === 0 || !matchesAny(command, TEST_PATTERNS)) process.exit(0);
@@ -332,22 +515,50 @@ async function main() {
       markVerified(payload, command);
     } else {
       console.error(`[VerificationGate] verification result rejected: ${verdict.reason}`);
+      if (verdict.reason === 'no explicit PASS evidence in output') {
+        console.error('  退出码 0 且无失败标记, 但输出里没有任何通过证据 —— 这不算验证通过。');
+        console.error('  常见成因: TB 用 $finish(n) 表示失败 (n 是诊断级别, 不是退出码, 进程仍 exit 0);');
+        console.error('            TB 在 0 时刻挂掉 / 向量未加载 / 跑的是过期 binary。');
+        console.error('  修法: 让验证在结束时打印明确结论 (如 "RESULT: PASS" / "0 errors"),');
+        console.error('        失败路径改用 $fatal(1, ...) 以真正返回非零退出码。');
+      }
+      if (verdict.reason === 'verification command produced no log evidence') {
+        console.error('  验证命令没有产生任何输出 —— 无法证明它真的执行过。');
+        console.error('  请确认命令确实运行了仿真/测试, 而不是只完成了编译。');
+      }
     }
     process.exit(0);
   }
 
   // ── PreToolUse: Bash 命令 → 检查验证状态 ─────────────────────────────────
-  if ((eventName === 'PreToolUse' || !eventName) && (toolName === 'bash' || payload?.tool_name === 'Bash') && command) {
+  if ((eventName === 'PreToolUse' || !eventName) && isShellTool && command) {
     const state = readState();
     const pending = pendingForPayload(state, payload);
 
     // 没有待验证的修改 → 放行
     if (pending.length === 0) process.exit(0);
 
+    // 本门禁自身的解除/查询命令 → 始终放行 (逃生通道, 不受链式命令影响)
+    if (isRescue(command)) process.exit(0);
+
     // Verification commands are allowed to run here. The pending state is
     // cleared only in PostToolUse after exit code and output evidence exist.
+    //
+    // 链中含验证命令即放行, 但**每一段**都必须是验证/语法/安全命令。
+    // 旧版只用 matchesAny(TEST_PATTERNS) 判定, 于是 `pytest && <任意命令>`
+    // 会整条放行 —— 等于给任何命令加个测试前缀就能绕过本门禁。
+    // 用交集判据既保住真实用法 (`cd pkg && vsim -c -do run.do`: cd 安全 + vsim 验证),
+    // 又堵住搭车。搭车链被拦后仍可拆成两条命令分别执行, 不形成死锁。
     if (matchesAny(command, TEST_PATTERNS)) {
-      process.exit(0);
+      if (matchesAll(command, [...TEST_PATTERNS, ...LINT_PATTERNS, ...SAFE_PATTERNS])) {
+        process.exit(0);
+      }
+      console.error('');
+      console.error('[VerificationGate] 拒绝搭车链: 命令链中含验证命令, 但同时含未授权命令段。');
+      console.error('  请把验证命令单独执行, 再执行其余命令 (验证通过后门禁自动放行)。');
+      console.error(`  命令: ${command.slice(0, 160)}`);
+      console.error('');
+      process.exit(2);
     }
 
     // 命令是第一层: 仅语法检查 → 放行但不清除标记，提示仍需功能验证 ⚠️
@@ -369,7 +580,8 @@ async function main() {
     }
 
     // 命令是安全只读命令 → 放行（保留标记）
-    if (matchesAny(command, SAFE_PATTERNS)) {
+    // 用 matchesAll: 每一段都必须安全, 否则 `cd x && <危险命令>` 会整条溜过。
+    if (matchesAll(command, SAFE_PATTERNS)) {
       process.exit(0);
     }
 
@@ -384,7 +596,10 @@ async function main() {
     console.error('║    「改代码后必须跑对应的验证，不验证不提交」                 ║');
     console.error('║                                                              ║');
     console.error('║  ❌ 仅跑语法检查不算验证。                                     ║');
-    console.error('║  ✅ 请运行功能验证 (pytest / vsim / E2E stdin 调用)           ║');
+    console.error('║  ✅ 请运行功能验证 (pytest / vsim / iverilog / check_*.py)    ║');
+    console.error('║                                                              ║');
+    console.error('║  若这是合法验证命令但被误拦，解除方式:                        ║');
+    console.error('║  node engine/scripts/hooks/verification-gate.cjs --reset      ║');
     console.error('║                                                              ║');
     console.error('║  [VerificationGate] 命令被阻断:                              ║');
     console.error(`║  ${command.slice(0, 72).padEnd(72)}║`);

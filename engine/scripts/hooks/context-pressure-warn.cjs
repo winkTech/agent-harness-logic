@@ -82,7 +82,12 @@ function main() {
     );
   }
 
-  if (ctx && ctx.compactCount > 0) {
+  // 只在统计确实可信时才报。runtime-state.json 的 compactCount 是**全局
+  // 累加**且从不按会话复位 (实测 2391), 而 toolCalls 数组全仓没有写入方
+  // (恒为 0) —— 于是会打印 "已压缩 2391 次 / 工具调用 0 次" 这种自相矛盾
+  // 的假统计。数据源不可信时保持沉默。
+  const statsTrustworthy = ctx && ctx.compactCount > 0 && ctx.toolCalls > 0;
+  if (statsTrustworthy) {
     suggestions.push(
       `📈 会话统计: 已压缩 ${ctx.compactCount} 次`,
       `   上次压缩: ${ctx.lastCompact || '未知'}`,

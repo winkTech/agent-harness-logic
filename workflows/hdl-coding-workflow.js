@@ -15,7 +15,8 @@ export const meta = {
   description: 'HDL RTL 开发全流程 (别名 → hdl-coding-dag-workflow)',
   phases: [
     { title: 'Phase 0 基础设施' },
-    { title: 'Phase 1 架构设计' },
+    { title: 'Phase 1a 系统方案设计' },
+    { title: 'Phase 1b 微架构设计' },
     { title: 'Phase 2 定点量化' },
     { title: 'Phase 3 TB+向量生成' },
     { title: 'Phase 4 RTL编码+脚本化对比' },

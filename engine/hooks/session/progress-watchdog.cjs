@@ -14,6 +14,8 @@ const DEFAULT_ARCHIVE_DIR = path.join(HOME, 'var', 'failures', 'progress-watchdo
 const DEFAULT_MAX_NO_PROGRESS_TURNS = 8;
 const DEFAULT_MAX_IDLE_MS = 45 * 60 * 1000;
 const HISTORY_LIMIT = 16;
+const BYPASS_AUDIT_LIMIT = 16;
+const MIN_BYPASS_REASON_LENGTH = 12;
 
 const READ_ONLY_TOOLS = new Set([
   'Read',
@@ -36,10 +38,12 @@ const DIRECT_PROGRESS_TOOLS = new Set([
 ]);
 
 const VERIFICATION_COMMAND = /\b(pytest|npm\s+(?:test|run\s+test)|pnpm\s+(?:test|run\s+test)|node\s+.*(?:test-hooks|\.test\.|spec)|ruff\s+check|vlog|vsim|iverilog|verilator|make\s+(?:test|sim|lint|compile|verify)|git\s+commit)\b/i;
+const FPGA_VERIFICATION_COMMAND = /\b(?:vivado(?:\.bat|\.exe)?\s+.*(?:-mode\s+batch|-source\b)|node(?:\.exe)?\s+.*(?:pg-synth|fpga-timing-parser|auto-parse-fpga-reports)\.cjs\b)/i;
 const READ_ONLY_COMMAND = /^\s*(?:pwd|cd\b|ls\b|dir\b|echo\b|cat\b|type\b|Get-Content\b|rg\b|grep\b|findstr\b)/i;
 
 function watchdogMode(opts = {}) {
-  const value = String(opts.mode || process.env.PROGRESS_WATCHDOG_MODE || 'observe').toLowerCase();
+  const cliMode = process.argv.includes('--enforce') ? 'enforce' : '';
+  const value = String(opts.mode || cliMode || process.env.PROGRESS_WATCHDOG_MODE || 'observe').toLowerCase();
   return value === 'enforce' ? 'enforce' : 'observe';
 }
 
@@ -105,6 +109,30 @@ function eventName(payload) {
   return String(payload?.hook_event_name || payload?.event || '').trim();
 }
 
+function bypassRequest(opts = {}) {
+  const disabled = String(opts.disabled ?? process.env.PROGRESS_WATCHDOG_DISABLED ?? '') === '1';
+  const reason = String(opts.bypassReason ?? process.env.PROGRESS_WATCHDOG_BYPASS_REASON ?? '').trim();
+  const actor = String(opts.bypassActor ?? process.env.PROGRESS_WATCHDOG_BYPASS_ACTOR ?? 'unknown').trim() || 'unknown';
+  return {
+    requested: disabled || Boolean(reason),
+    valid: disabled && reason.length >= MIN_BYPASS_REASON_LENGTH,
+    reason,
+    actor,
+  };
+}
+
+function resultFromPayload(payload) {
+  const result = payload?.tool_response || payload?.tool_result || payload?.response || {};
+  const rawStatus = result.status ?? result.exit_code ?? result.exitCode;
+  const parsedStatus = typeof rawStatus === 'number' ? rawStatus : Number(rawStatus);
+  return {
+    exitCode: Number.isFinite(parsedStatus) ? parsedStatus : null,
+    stdout: String(result.stdout || ''),
+    stderr: String(result.stderr || ''),
+    error: String(result.error || ''),
+  };
+}
+
 function cwdFor(payload) {
   return payload?.cwd || payload?.workspace?.current_dir || process.cwd();
 }
@@ -113,21 +141,37 @@ function classifyEvent(payload) {
   const name = toolName(payload);
   const command = commandText(payload);
   const explicit = String(payload?.progress_status || payload?.progressStatus || '').toLowerCase();
+  const hookEvent = eventName(payload);
 
-  if (['progress', 'no_progress', 'activity'].includes(explicit)) {
+  if (explicit === 'no_progress') {
     return { kind: explicit, evidence: `explicit progress classification: ${explicit}` };
   }
 
   if (DIRECT_PROGRESS_TOOLS.has(name)) {
-    return { kind: 'progress', evidence: `${name} tool use` };
+    return { kind: 'activity', evidence: `${name} tool use without verification outcome` };
   }
 
   if (name === 'Bash') {
-    if (VERIFICATION_COMMAND.test(command)) {
-      return { kind: 'progress', evidence: `verification/build command: ${command.slice(0, 160)}` };
-    }
     if (READ_ONLY_COMMAND.test(command)) {
       return { kind: 'activity', evidence: `read-only shell exploration: ${command.slice(0, 160)}` };
+    }
+    if (VERIFICATION_COMMAND.test(command) || FPGA_VERIFICATION_COMMAND.test(command)) {
+      if (hookEvent === 'PostToolUse' || hookEvent === 'PostToolUseFailure') {
+        const result = resultFromPayload(payload);
+        const failed = hookEvent === 'PostToolUseFailure' || result.exitCode !== 0;
+        const status = failed ? 'failed' : 'passed';
+        return {
+          kind: failed ? 'no_progress' : 'progress',
+          evidence: `verification outcome ${status}: exit=${result.exitCode ?? 'unknown'} command=${command.slice(0, 160)}`,
+          verification: {
+            status,
+            exitCode: result.exitCode,
+            command: command.slice(0, 240),
+            outputHash: sha1(`${result.stdout}\n${result.stderr}\n${result.error}`),
+          },
+        };
+      }
+      return { kind: 'activity', evidence: `verification command awaiting result: ${command.slice(0, 160)}` };
     }
     return { kind: 'activity', evidence: `shell command without artifact proof: ${command.slice(0, 160)}` };
   }
@@ -144,7 +188,7 @@ function classifyEvent(payload) {
 }
 
 function defaultState() {
-  return { schemaVersion: 1, sessions: {} };
+  return { schemaVersion: 2, sessions: {} };
 }
 
 function sessionRecord(state, cwd, sessionId = '', objectiveHash = '') {
@@ -155,6 +199,7 @@ function sessionRecord(state, cwd, sessionId = '', objectiveHash = '') {
       sessionId,
       objectiveHash,
       noProgressTurns: 0,
+      status: 'active',
       lastProgressAt: null,
       lastEventAt: null,
       archivedAt: null,
@@ -169,14 +214,19 @@ function appendHistory(session, event) {
   session.history = [...(session.history || []), event].slice(-HISTORY_LIMIT);
 }
 
-function archiveFailure({ archiveDir, sessionKey, session, reason, now, thresholds }) {
+function appendBypassAudit(session, event) {
+  session.bypassAudit = [...(session.bypassAudit || []), event].slice(-BYPASS_AUDIT_LIMIT);
+}
+
+function freezeRepairLoop({ archiveDir, sessionKey, session, trigger, now, thresholds }) {
   ensureDir(archiveDir);
   const stamp = now.replace(/[:.]/g, '-');
   const archiveFile = path.join(archiveDir, `${stamp}-${sessionKey}.json`);
   const record = {
-    schemaVersion: 1,
-    status: 'failed_archived',
-    reason,
+    schemaVersion: 2,
+    status: 'frozen_escalation_required',
+    reason: 'repair_budget_exhausted',
+    trigger,
     cwd: session.cwd,
     sessionId: session.sessionId || '',
     objectiveHash: session.objectiveHash || '',
@@ -185,6 +235,16 @@ function archiveFailure({ archiveDir, sessionKey, session, reason, now, threshol
     lastProgressAt: session.lastProgressAt,
     lastEventAt: session.lastEventAt,
     thresholds,
+    repairBudget: {
+      limit: thresholds.maxNoProgressTurns,
+      used: session.noProgressTurns,
+      exhausted: true,
+    },
+    escalation: {
+      required: true,
+      type: 'human_alignment_or_architecture_review',
+      reason: 'repair_budget_exhausted',
+    },
     history: session.history || [],
     requiredNextStep: [
       'Summarize confirmed facts and open questions.',
@@ -193,6 +253,10 @@ function archiveFailure({ archiveDir, sessionKey, session, reason, now, threshol
     ],
   };
   writeJson(archiveFile, record);
+  session.status = 'frozen';
+  session.frozenAt = now;
+  session.freezeReason = 'repair_budget_exhausted';
+  session.escalation = record.escalation;
   session.archivedAt = now;
   session.archiveFile = archiveFile;
   return { archiveFile, record };
@@ -218,6 +282,66 @@ function updateProgress(payload, opts = {}) {
   const sessionId = sessionIdFor(payload);
   const objectiveHash = objectiveHashFor(payload);
   const { key, session } = sessionRecord(state, cwd, sessionId, objectiveHash);
+  const bypass = bypassRequest(opts);
+  if (bypass.requested) {
+    if (!bypass.valid) {
+      return {
+        status: 'bypass_reason_required',
+        classification: { kind: 'blocked_bypass', evidence: 'emergency bypass requires an auditable reason' },
+        sessionKey: key,
+        stateFile,
+        archiveFile: session.archiveFile || null,
+        session,
+        mode,
+        thresholds: { maxNoProgressTurns, maxIdleMs },
+      };
+    }
+    const audit = {
+      at: now,
+      actor: bypass.actor,
+      reason: bypass.reason,
+      event: eventName(payload) || 'unknown',
+      tool: toolName(payload) || 'unknown',
+      sessionStatus: session.status || 'active',
+    };
+    appendBypassAudit(session, audit);
+    appendHistory(session, { ...audit, kind: 'bypass', evidence: `audited emergency bypass by ${bypass.actor}` });
+    session.lastEventAt = now;
+    writeJson(stateFile, state);
+    return {
+      status: 'bypassed',
+      classification: { kind: 'bypass', evidence: audit.reason },
+      sessionKey: key,
+      stateFile,
+      archiveFile: session.archiveFile || null,
+      session,
+      bypass: audit,
+      mode,
+      thresholds: { maxNoProgressTurns, maxIdleMs },
+    };
+  }
+  if (session.status === 'frozen') {
+    session.lastEventAt = now;
+    appendHistory(session, {
+      at: now,
+      event: eventName(payload) || 'unknown',
+      tool: toolName(payload) || 'unknown',
+      kind: 'blocked_frozen',
+      evidence: `repair loop frozen: ${session.freezeReason || 'repair_budget_exhausted'}`,
+      objectiveHash,
+    });
+    writeJson(stateFile, state);
+    return {
+      status: 'frozen_escalation_required',
+      classification: { kind: 'blocked_frozen', evidence: session.freezeReason || 'repair_budget_exhausted' },
+      sessionKey: key,
+      stateFile,
+      archiveFile: session.archiveFile || null,
+      session,
+      mode,
+      thresholds: { maxNoProgressTurns, maxIdleMs },
+    };
+  }
   const classification = classifyEvent(payload);
   const historyItem = {
     at: now,
@@ -226,7 +350,10 @@ function updateProgress(payload, opts = {}) {
     kind: classification.kind,
     evidence: classification.evidence,
     objectiveHash,
+    verification: classification.verification || null,
   };
+
+  if (classification.verification) session.lastVerification = classification.verification;
 
   if (classification.kind === 'progress') {
     session.noProgressTurns = 0;
@@ -240,22 +367,24 @@ function updateProgress(payload, opts = {}) {
   appendHistory(session, historyItem);
 
   const idleMs = session.lastProgressAt ? Date.parse(now) - Date.parse(session.lastProgressAt) : 0;
-  const turnExceeded = maxNoProgressTurns > 0 && session.noProgressTurns >= maxNoProgressTurns;
+  const turnExceeded = maxNoProgressTurns > 0
+    && classification.kind === 'no_progress'
+    && session.noProgressTurns >= maxNoProgressTurns;
   const idleExceeded = maxIdleMs > 0 && session.lastProgressAt && idleMs >= maxIdleMs && classification.kind === 'no_progress';
   let archive = null;
   let status = classification.kind;
   if (turnExceeded || idleExceeded) {
     const reason = turnExceeded ? 'no_progress_turn_threshold' : 'idle_time_threshold';
     if (mode === 'enforce') {
-      archive = archiveFailure({
+      archive = freezeRepairLoop({
         archiveDir,
         sessionKey: key,
         session,
-        reason,
+        trigger: reason,
         now,
         thresholds: { maxNoProgressTurns, maxIdleMs },
       });
-      status = 'failed_archived';
+      status = 'frozen_escalation_required';
     } else {
       status = 'warning';
     }
@@ -286,11 +415,22 @@ function readStdin() {
 function main() {
   if (process.argv.includes('reset')) {
     const stateFile = process.env.PROGRESS_WATCHDOG_STATE_FILE || DEFAULT_STATE_FILE;
-    writeJson(stateFile, defaultState());
-    console.error(JSON.stringify({ source: 'progress-watchdog', type: 'reset', stateFile }));
+    const bypass = bypassRequest();
+    if (!bypass.valid) {
+      console.error(JSON.stringify({ source: 'progress-watchdog', type: 'blocked', reason: 'reset requires PROGRESS_WATCHDOG_DISABLED=1 and an auditable PROGRESS_WATCHDOG_BYPASS_REASON' }));
+      process.exit(2);
+    }
+    const state = defaultState();
+    state.bypassAudit = [{
+      at: new Date().toISOString(),
+      actor: bypass.actor,
+      reason: bypass.reason,
+      action: 'reset',
+    }];
+    writeJson(stateFile, state);
+    console.error(JSON.stringify({ source: 'progress-watchdog', type: 'reset', stateFile, reason: bypass.reason, actor: bypass.actor }));
     return;
   }
-  if (process.env.PROGRESS_WATCHDOG_DISABLED === '1') return;
 
   let payload = {};
   const raw = readStdin();
@@ -304,6 +444,33 @@ function main() {
   }
 
   const result = updateProgress(payload);
+  if (result.status === 'bypass_reason_required') {
+    console.error(JSON.stringify({
+      source: 'progress-watchdog',
+      type: 'blocked',
+      severity: 'high',
+      reason: 'emergency bypass requires PROGRESS_WATCHDOG_DISABLED=1 and an auditable reason',
+    }));
+    process.exit(2);
+  }
+  if (result.status === 'bypassed') {
+    process.stdout.write(JSON.stringify({
+      hookSpecificOutput: {
+        hookEventName: eventName(payload) || 'PreToolUse',
+        additionalContext: JSON.stringify({
+          schemaVersion: 1,
+          kind: 'harness-advisory',
+          source: 'progress-watchdog',
+          status: 'bypassed',
+          blocking: false,
+          reason: result.bypass.reason,
+          actor: result.bypass.actor,
+          sessionStatus: result.session.status,
+        }),
+      },
+    }));
+    return;
+  }
   if (result.status === 'warning') {
     console.error(JSON.stringify({
       source: 'progress-watchdog',
@@ -315,12 +482,14 @@ function main() {
       constraint: '记录事实与下一步；不要仅因启发式进度判断阻断模型探索。',
     }));
   }
-  if (result.status === 'failed_archived') {
+  if (result.status === 'frozen_escalation_required') {
     console.error(JSON.stringify({
       source: 'progress-watchdog',
       type: 'blocked',
       severity: 'high',
-      reason: result.session.archiveFile ? 'no progress threshold exceeded; failure archived' : 'no progress threshold exceeded',
+      state: 'frozen',
+      escalationRequired: true,
+      reason: result.session.freezeReason || 'repair_budget_exhausted',
       archiveFile: result.archiveFile,
       noProgressTurns: result.session.noProgressTurns,
       thresholds: result.thresholds,

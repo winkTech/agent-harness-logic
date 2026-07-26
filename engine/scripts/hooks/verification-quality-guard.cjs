@@ -157,6 +157,15 @@ function getMissingScenarios(state) {
   });
 }
 
+function hookSuccessOutput(advisory, eventName = 'PreToolUse') {
+  return {
+    hookSpecificOutput: {
+      hookEventName: eventName || 'PreToolUse',
+      additionalContext: JSON.stringify(advisory),
+    },
+  };
+}
+
 // ── 门禁检查核心逻辑 ─────────────────────────────────────────────────────
 
 function checkGate(filePath) {
@@ -203,32 +212,45 @@ function checkGate(filePath) {
     sections += `║\n`;
   }
 
-  console.error(`
-╔${line}╗
-║  🧪 验证质量门禁 — VERIFICATION QUALITY GATE                     ║
-╠${line}╣
-║                                                                ║
-║  创建新 Testbench 前，必须先完成或标记不适用:                    ║
-║    A.1 项目环境画像 (8 项)                                       ║
-║    A.2 最少场景集 (5 类)                                         ║
-║  根据 rules/03-gates.md 的验证质量门禁:                          ║
-║    「单元验证失真 → 集成爆炸 → agent 无法独立调试 → 人工救火」 ║
-║                                                                ║
-║  ${state && state.module ? `目标模块: ${state.module}`.padEnd(boxWidth - 4) + '║' : '暂无活跃模块记录'.padEnd(boxWidth - 4) + '║'}
-║                                                                ║
-${sections}║  操作:                                                          ║
-║  1. 完成项目环境画像 (A.1: 时钟/复位/接口/数据/帧/背压/吞吐/邻居) ║
-║  2. 定义最少场景集 (A.2: S1~S5 每类至少 1 个用例)                ║
-║  3. 将结果写入                                                   ║
-║     var/gates/verification-quality.json (status: "completed")     ║
-║  4. 重新执行 Write                                               ║
-║                                                                ║
-║  详细: rules/03-gates.md                                        ║
-║  证据: memory/learnings/verification-quality-wifi-evidence.md    ║
-╚${line}╝
-`);
+  // ── 门禁未完成 → 提示, 不阻断 ────────────────────────────────────
+  // 与 requirements-gate-guard 同理: 放行条件是模型自己写一份
+  // var/gates/verification-quality.json, 阻断只会诱导伪造记录。
+  // 验证质量的真实证据是 check_results/<mod>.json (Phase 4.5 校验)。
+  const findings = [
+    ...missingProfile.map(d => ({
+      severity: 'warning',
+      category: 'environment-profile',
+      code: d.key,
+      message: d.label,
+    })),
+    ...missingScenarios.map(d => ({
+      severity: 'warning',
+      category: 'verification-scenario',
+      code: d.key,
+      message: d.label,
+    })),
+  ];
+  if (findings.length === 0) {
+    findings.push({
+      severity: 'warning',
+      category: 'gate-status',
+      code: 'gate-status',
+      message: 'Verification profile exists, but the gate is not completed for this file scope.',
+    });
+  }
 
-  return true; // 需要阻断
+  return {
+    schemaVersion: 1,
+    kind: 'harness-advisory',
+    source: 'verification-quality',
+    status: 'warning',
+    blocking: false,
+    target: filePath,
+    gateStatus: state?.status || 'missing',
+    summary: 'Before creating this test, review the environment profile and applicable scenarios from rules/03-gates.md.',
+    findings,
+    guidance: 'Mark genuinely inapplicable items as na with a reason; do not weaken executable checks to manufacture a pass.',
+  };
 }
 
 // ── 独立运行入口 ──────────────────────────────────────────────────────────
@@ -245,9 +267,11 @@ async function main() {
 
   const toolName = (payload?.tool?.name || payload?.tool_name || payload?.name || '').toLowerCase();
   const filePath = (payload?.tool_input?.file_path || payload?.tool?.input?.file_path || payload?.input?.file_path || payload?.arguments?.file_path || '').trim();
+  const eventName = payload?.hook_event_name || 'PreToolUse';
 
   if (toolName !== 'write') process.exit(0);
-  if (checkGate(filePath)) process.exit(2);
+  const advisory = checkGate(filePath);
+  if (advisory) process.stdout.write(JSON.stringify(hookSuccessOutput(advisory, eventName)));
   process.exit(0);
 }
 
@@ -259,7 +283,7 @@ module.exports = function verificationQualityGuard(toolUse, context) {
   const input = toolUse.input || {};
   const filePath = input.filePath || input.file_path;
   if (!filePath) return;
-  if (checkGate(filePath)) process.exit(2);
+  return checkGate(filePath); // 只提示, 不阻断
 };
 
 if (require.main === module) {

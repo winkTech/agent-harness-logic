@@ -34,6 +34,7 @@ const VERBOSE = process.argv.includes('--verbose');
 const pointIdx = process.argv.indexOf('--point');
 const FILTER_POINT = process.argv.find(a => a.startsWith('--point='))?.split('=')[1]
   || (pointIdx >= 0 ? process.argv[pointIdx + 1] : null);
+const DRY_RUN_STATE_DIR = fs.mkdtempSync(path.join(os.tmpdir(), 'hook-dry-run-state-'));
 
 // ── 统计 ───────────────────────────────────────────────────────────────────
 
@@ -66,7 +67,7 @@ function missingScriptRefs(cmd) {
  * 执行一条 hook 命令（dry-run）。
  * 如果命令带 stdin 读取，传递一个空的 JSON 负载 {}。
  */
-function runHookCommand(cmd, isAsync) {
+function runHookCommand(cmd, isAsync, configuredTimeoutSec) {
   const parts = parseCommandLine(cmd).map(expandArg);
   if (parts.length === 0) return { ok: false, error: 'empty command' };
 
@@ -83,32 +84,62 @@ function runHookCommand(cmd, isAsync) {
     return { ok: false, skip: true, reason: `script file not found: ${missing.map(ref => path.basename(ref.script)).join(', ')}` };
   }
 
-  // async hook: 只检查文件存在，不执行
-  if (isAsync) {
-    return { ok: true, skip: true, reason: 'async hook (checked script existence only)' };
-  }
+  // async hook 同样是普通进程, 只是平台不等它返回 —— 它一样会崩、一样会
+  // 写坏状态文件。测试里没有理由不跑它。(早期版本在这里 skip 掉全部 async
+  // hook, 直接造成 17/41 项从未被测过。)
 
   // 执行命令（短超时）
   const result = spawnSync(executable, args, {
     encoding: 'utf8',
-    timeout: 10000,
+    // 用该 hook **自己配置的** timeout 作为判据: 跑不进自己的配额就是失败,
+    // 因为线上平台正是按这个配额杀进程的。给 2s 余量吸收进程启动开销。
+    timeout: Math.max(10000, (Number(configuredTimeoutSec) || 10) * 1000 + 2000),
     windowsHide: true,
     env: {
       ...process.env,
       CLAUDE_SKIP_HOOK: '1',
       CLAUDE_HARNESS_VERIFY_READONLY: '1',
       CLAUDE_NO_DIAGNOSTIC_WRITES: '1',
+      PROGRESS_WATCHDOG_STATE_FILE: path.join(DRY_RUN_STATE_DIR, 'progress-watchdog-state.json'),
+      PROGRESS_WATCHDOG_ARCHIVE_DIR: path.join(DRY_RUN_STATE_DIR, 'progress-watchdog-archive'),
     },
-    input: JSON.stringify({ tool: 'Bash', input: { command: 'git status' } }),
+    input: JSON.stringify({
+      hook_event_name: 'PreToolUse',
+      tool_name: 'Bash',
+      tool_input: { command: 'git status' },
+      cwd: DRY_RUN_STATE_DIR,
+      session_id: 'hook-registry-dry-run',
+    }),
   });
 
-  // 退出码 0 = 通过；非 0 但脚本功能正常也可能 exit(0) 跳过（如不匹配的命令）
-  // 我们只关心脚本是否 crash
   if (result.error) {
     return { ok: false, error: result.error.message };
   }
   if (result.signal) {
     return { ok: false, error: `signal ${result.signal}` };
+  }
+
+  // 退出码语义 (Claude Code):
+  //   0 — 放行, 正常
+  //   2 — 阻断。喂进去的是一条无害的 git status, 任何 hook 都不该拦它,
+  //       所以这里的 2 是**误报**, 必须计为失败。
+  //   其他非 0 — 脚本内部错误。
+  // 早期版本无条件 return ok:true, 于是 hook 崩溃/误拦都被记成"通过"。
+  if (result.status === 2) {
+    return {
+      ok: false,
+      exitCode: 2,
+      error: `hook blocked a harmless probe command (exit 2) — false positive`,
+      stderr: result.stderr,
+    };
+  }
+  if (result.status !== 0) {
+    return {
+      ok: false,
+      exitCode: result.status,
+      error: `non-zero exit ${result.status}`,
+      stderr: result.stderr,
+    };
   }
 
   return { ok: true, exitCode: result.status, stderr: result.stderr };
@@ -149,7 +180,7 @@ function main() {
       }
 
       total++;
-      const result = runHookCommand(cmd, entry.isAsync);
+      const result = runHookCommand(cmd, entry.isAsync, entry.raw && entry.raw.timeout);
 
       if (result.ok) {
         if (result.skip) {
@@ -182,12 +213,21 @@ function main() {
   const grade = score === 100 ? '🟢' : score >= 80 ? '🟡' : '🔴';
   log(`  得分: ${grade} ${score}%`);
 
+  // skip 预算: 跳过的项不是"通过"。跳过太多说明这套测试没有覆盖力,
+  // 必须显式失败, 否则 "59% + 17 跳过" 也会打印"全部通过"并 exit 0 ——
+  // 一个永远绿灯的自检比没有自检更危险, 因为它会让人以为改动是安全的。
+  const SKIP_BUDGET = Math.max(2, Math.ceil(total * 0.15));
+
   if (failed > 0) {
-    log('\n⚠ 有 hook 执行失败，请检查上述日志。');
+    log('\n❌ 有 hook 执行失败或误拦无害命令，见上述日志。');
     process.exit(1);
-  } else {
-    log('\n✅ 全部 hook 通过');
   }
+  if (skipped > SKIP_BUDGET) {
+    log(`\n❌ 跳过 ${skipped} 项，超出预算 ${SKIP_BUDGET}（总计 ${total}）。`);
+    log('   跳过不等于通过 —— 请补齐这些 hook 的可测性或修正其调用形态。');
+    process.exit(1);
+  }
+  log(`\n✅ 全部 hook 通过（跳过 ${skipped}/${SKIP_BUDGET} 预算内）`);
 }
 
 main();

@@ -38,36 +38,54 @@ function rtlTemplate(moduleName, dataWidth) {
 ) (
   input  logic                    i_clk,
   input  logic                    i_rst,
-  input  logic                    ri_in_valid,
-  input  logic [P_DATA_WIDTH-1:0] ri_in_data,
-  output logic                    ro_in_ready,
-  output logic                    ro_out_valid,
-  output logic [P_DATA_WIDTH-1:0] ro_out_data,
-  input  logic                    ri_out_ready
+  input  logic                    i_in_valid,
+  input  logic [P_DATA_WIDTH-1:0] i_in_data,
+  output logic                    o_in_ready,
+  output logic                    o_out_valid,
+  output logic [P_DATA_WIDTH-1:0] o_out_data,
+  input  logic                    i_out_ready
 );
 
-  logic [P_DATA_WIDTH-1:0] ri_data;
-  logic                   r_valid;
+  // 输入寄存 ri_ — rules/01-hdl.md 红线 1: 禁止输入直通
+  logic                    ri_in_valid;
+  logic [P_DATA_WIDTH-1:0] ri_in_data;
+  logic                    ri_out_ready;
+
+  // 输出寄存 ro_ — rules/01-hdl.md 红线 2: 输出由寄存器驱动, 禁止组合直出
+  logic                    ro_in_ready;
+  logic                    ro_out_valid;
+  logic [P_DATA_WIDTH-1:0] ro_out_data;
+
+  logic                    r_valid;
 
   always_ff @(posedge i_clk) begin
     if (i_rst) begin
-      ri_data      <= '0;
+      ri_in_valid  <= 1'b0;
+      ri_in_data   <= '0;
+      ri_out_ready <= 1'b0;
       r_valid      <= 1'b0;
       ro_in_ready  <= 1'b1;
       ro_out_valid <= 1'b0;
       ro_out_data  <= '0;
     end else begin
+      ri_in_valid  <= i_in_valid;
+      ri_in_data   <= i_in_data;
+      ri_out_ready <= i_out_ready;
+
       ro_in_ready  <= !r_valid || ri_out_ready;
       ro_out_valid <= r_valid;
       if (ri_in_valid && ro_in_ready) begin
-        ri_data     <= ri_in_data;
         ro_out_data <= ri_in_data;
         r_valid     <= 1'b1;
       end else if (ri_out_ready) begin
-        r_valid <= 1'b0;
+        r_valid     <= 1'b0;
       end
     end
   end
+
+  assign o_in_ready  = ro_in_ready;
+  assign o_out_valid = ro_out_valid;
+  assign o_out_data  = ro_out_data;
 
 endmodule
 `;
@@ -80,24 +98,24 @@ function tbTemplate(moduleName, dataWidth) {
 
   logic i_clk;
   logic i_rst;
-  logic ri_in_valid;
-  logic [P_DATA_WIDTH-1:0] ri_in_data;
-  logic ro_in_ready;
-  logic ro_out_valid;
-  logic [P_DATA_WIDTH-1:0] ro_out_data;
-  logic ri_out_ready;
+  logic i_in_valid;
+  logic [P_DATA_WIDTH-1:0] i_in_data;
+  logic o_in_ready;
+  logic o_out_valid;
+  logic [P_DATA_WIDTH-1:0] o_out_data;
+  logic i_out_ready;
 
   ${moduleName} #(
     .P_DATA_WIDTH(P_DATA_WIDTH)
   ) u_dut (
     .i_clk(i_clk),
     .i_rst(i_rst),
-    .ri_in_valid(ri_in_valid),
-    .ri_in_data(ri_in_data),
-    .ro_in_ready(ro_in_ready),
-    .ro_out_valid(ro_out_valid),
-    .ro_out_data(ro_out_data),
-    .ri_out_ready(ri_out_ready)
+    .i_in_valid(i_in_valid),
+    .i_in_data(i_in_data),
+    .o_in_ready(o_in_ready),
+    .o_out_valid(o_out_valid),
+    .o_out_data(o_out_data),
+    .i_out_ready(i_out_ready)
   );
 
   initial i_clk = 1'b0;
@@ -105,18 +123,18 @@ function tbTemplate(moduleName, dataWidth) {
 
   initial begin
     i_rst = 1'b1;
-    ri_in_valid = 1'b0;
-    ri_in_data = '0;
-    ri_out_ready = 1'b1;
+    i_in_valid = 1'b0;
+    i_in_data = '0;
+    i_out_ready = 1'b1;
     repeat (4) @(posedge i_clk);
     i_rst = 1'b0;
     @(posedge i_clk);
-    ri_in_valid = 1'b1;
-    ri_in_data = 'h5a;
+    i_in_valid = 1'b1;
+    i_in_data = 'h5a;
     @(posedge i_clk);
-    ri_in_valid = 1'b0;
+    i_in_valid = 1'b0;
     repeat (4) @(posedge i_clk);
-    if (!ro_out_valid || ro_out_data !== 'h5a) begin
+    if (!o_out_valid || o_out_data !== 'h5a) begin
       $display("FAIL: ${moduleName} basic pass-through");
       $finish;
     end

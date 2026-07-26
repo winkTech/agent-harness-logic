@@ -1,17 +1,24 @@
 ---
 name: code-review-workflow
-description: Two-pass code review process for systematic quality validation.
+description: Two-pass code review with per-finding adversarial verification.
+executable: workflows/code-review-workflow.js
 triggers:
   - pull request created
   - code review requested
-  - code review prep (Phase 6)
+  - code review prep (hdl-coding-workflow Phase 7)
 agents:
-  - code-reviewer
+  - ce-correctness-reviewer
+  - ce-api-contract-reviewer
+  - ce-architecture-strategist
+  - ce-performance-oracle
 ---
 
 # Code Review Workflow
 
-Two-pass code review process ensuring spec compliance, logic correctness, security, and code quality.
+> 可执行的单一真源是 `workflows/code-review-workflow.js`。两者如有出入，以 js 为准。
+
+Two-pass code review ensuring spec compliance, logic correctness, security, and code quality,
+plus a per-finding adversarial verification layer.
 
 ## Overview
 
@@ -19,6 +26,8 @@ Two-pass code review process ensuring spec compliance, logic correctness, securi
 |:----|:-----|:------|
 | **Pass 1: Correctness** | 阻塞性 | 规格合规 + 逻辑正确 + 边界处理 + 安全审查 → 零阻塞才进入 Pass 2 |
 | **Pass 2: Code Quality** | 建议性 | 代码质量 + 风格 + DRY + 命名 + 文档 → 所有结果非阻塞 |
+| **Pass 3: HDL 专项** | 阻塞性 (仅 .sv/.v) | 架构/正确性/性能/接口 4 维并行 (ce-* 专业审查员) |
+| **对抗验证** | 判定层 | 每条 CRITICAL/HIGH 发现派独立怀疑者尝试反驳；被证伪的降级为 REFUTED 不再阻塞；无法验证的保守保留 |
 
 ## Pass 1: Correctness Review (Blocking)
 
@@ -108,7 +117,7 @@ Two-pass code review process ensuring spec compliance, logic correctness, securi
 
 ## Related Workflows
 
-- **hdl-coding-workflow.md** — Phase 6 调用此工作流
+- **hdl-coding-workflow.md** — 其 Phase 7 内置双维审查；需要完整两轮+对抗验证时单独调用本工作流
 - **architecture-review-workflow.md** — 架构问题升级路径
 
 ## Memory Protocol

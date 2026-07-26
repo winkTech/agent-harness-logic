@@ -1,4 +1,4 @@
----
+﻿---
 name: architect
 version: 1.1.0
 description: >-
@@ -108,7 +108,7 @@ The following workflows guide this agent's execution:
 
 | Workflow              | Path                                                           | When to Use                          |
 | --------------------- | -------------------------------------------------------------- | ------------------------------------ |
-| Architecture Review   | `skills/workflows/architecture-review-skill-workflow.md`      | Architecture assessments (via code-review) |
+| Architecture Review   | `skills/workflows/architecture-review-workflow.md`      | Architecture assessments (via code-review) |
 | C4 Architecture       | `skills/workflows/enterprise/c4-architecture-workflow.md`     | C4 documentation                     |
 | Feature Development   | `skills/workflows/enterprise/feature-development-workflow.md` | Design phase                         |
 | External Integration  | `skills/workflows/core/external-integration.md`               | Integrating external systems         |
@@ -260,7 +260,7 @@ Skill({ skill: 'checklist-generator' });
 
 **Integration with Architecture Workflows**:
 
-- Reference `skills/workflows/architecture-review-skill-workflow.md` for comprehensive architecture review process
+- Reference `skills/workflows/architecture-review-workflow.md` for comprehensive architecture review process
 - Use `diagram-generator` skill to create Mermaid/ASCII diagrams for visual validation
 - Document decisions in ADRs (`memory/decisions.md`) with checklist validation results
 
@@ -281,7 +281,7 @@ Skill({ skill: 'checklist-generator' });
 
 This agent can search code efficiently using the **hybrid lazy search system** for instant codebase understanding:
 
-### ⚡ RECOMMENDED: Hybrid Lazy Search (Instant)
+### 鈿?RECOMMENDED: Hybrid Lazy Search (Instant)
 
 For **architectural analysis** of any codebase size without waiting for batch indexing:
 
@@ -439,7 +439,7 @@ Before starting any task, invoke these skills:
 
 | Skill                 | Purpose                        | When                 |
 | --------------------- | ------------------------------ | -------------------- |
-| `code-review` (architecture模式) | Evaluate architecture patterns | Always at task start |
+| `code-review` (architecture妯″紡) | Evaluate architecture patterns | Always at task start |
 | `diagram-generator`   | Create visual diagrams         | Always at task start |
 | `database-architect`  | Database modeling              | Always at task start |
 
@@ -469,7 +469,7 @@ Invoke based on task context:
 
 The architect agent can leverage these workflows for comprehensive analysis:
 
-- **Architecture Review Workflow**: `skills/workflows/architecture-review-skill-workflow.md` (invoke via code-review)
+- **Architecture Review Workflow**: `skills/workflows/architecture-review-workflow.md` (invoke via code-review)
 - **Consensus Voting**: `skills/workflows/consensus-voting-skill-workflow.md` (for multi-agent decisions)
 - **Database Design**: `skills/workflows/database-architect-skill-workflow.md`
 
@@ -567,11 +567,11 @@ Before using Grep/Read for code discovery, prefer framework search tools:
 
 For code discovery and search tasks, follow this priority order:
 
-1. `pnpm search:code "query"` — hybrid BM25 + semantic (primary, recommended default)
-2. `Skill({ skill: 'ripgrep', args: '...' })` — fast text/regex search
-3. `Skill({ skill: 'code-semantic-search', args: '...' })` — conceptual/intent queries
-4. `Skill({ skill: 'code-structural-search', args: '...' })` — AST/shape queries
-5. `Grep` — FALLBACK ONLY (advanced regex edge cases or single-file targeted checks)
+1. `pnpm search:code "query"` 鈥?hybrid BM25 + semantic (primary, recommended default)
+2. `Skill({ skill: 'ripgrep', args: '...' })` 鈥?fast text/regex search
+3. `Skill({ skill: 'code-semantic-search', args: '...' })` 鈥?conceptual/intent queries
+4. `Skill({ skill: 'code-structural-search', args: '...' })` 鈥?AST/shape queries
+5. `Grep` 鈥?FALLBACK ONLY (advanced regex edge cases or single-file targeted checks)
 
 Use `Read` only for known specific file paths. Never use `Read`, `Grep`, or `Glob` for open-ended discovery.
 

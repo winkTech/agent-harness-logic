@@ -1,0 +1,27 @@
+# core.autocrlf=true 会把所有文本文件按 CRLF 检出。对 shell 脚本这是破坏性的:
+# 严格 POSIX shell 会把行尾的 \r 当成命令的一部分, 报出
+#   $'\r': command not found / set: pipefail\r: invalid option name
+# 这类错误 —— 本仓库的 auto-record-*.sh 就因此在 WSL bash 下整体失效过。
+# 下面强制这些格式始终以 LF 存放, 与它们的解释器一致。
+*.sh    text eol=lf
+*.bash  text eol=lf
+
+# Verilog/SystemVerilog 与仿真脚本会被 Linux 侧 EDA 工具直接读取, 统一 LF
+# 可避免跨平台协作时出现整文件级别的假 diff。
+*.v     text eol=lf
+*.sv    text eol=lf
+*.vh    text eol=lf
+*.svh   text eol=lf
+*.do    text eol=lf
+*.tcl   text eol=lf
+*.xdc   text eol=lf
+*.sdc   text eol=lf
+
+# 二进制产物不做行尾转换, 否则会被损坏。
+*.png   binary
+*.jpg   binary
+*.pdf   binary
+*.vcd   binary
+*.wlf   binary
+*.bit   binary
+*.vvp   binary

@@ -459,18 +459,114 @@ function main() {
       break;
 
     default:
-      // 默认模式：从 CLAUDE_USER_MESSAGE 读取用户消息并输出注入结果
-      const userMsg = process.env.CLAUDE_USER_MESSAGE || '';
-      const evalResult = evaluate(userMsg, {
-        openFiles: (process.env.CLAUDE_OPEN_FILES || '').split(',').filter(Boolean),
-      });
-      if (evalResult) {
-        // 输出 JSON 行，hook 框架将其注入到 Claude 上下文
-        console.log(JSON.stringify(evalResult));
-      }
-      // 无匹配 → 无输出（0 token 开销）
+      // 默认模式：作为 Claude Code hook 运行。
+      // 输入走 stdin 的 hook payload —— 平台从不设置 CLAUDE_USER_MESSAGE /
+      // CLAUDE_OPEN_FILES, 早期版本只读这两个环境变量, 导致本 hook 永远
+      // 拿不到上下文信号, evaluate() 每次直接 return null (触发率 0%)。
+      // 环境变量保留为回退, 以兼容手工调用。
+      runAsHook();
       break;
   }
+}
+
+// ── Hook 运行时 ───────────────────────────────────────────────────────────
+
+function readStdinRaw() {
+  try {
+    if (process.stdin.isTTY) return '';
+    return fs.readFileSync(0, 'utf8').replace(/^﻿/, '');
+  } catch {
+    return '';
+  }
+}
+
+function parsePayload(raw) {
+  if (!raw || !raw.trim()) return {};
+  try { return JSON.parse(raw); } catch { return {}; }
+}
+
+/** 同一 session 内已注入过的规则不重复注入, 避免每轮刷屏与 token 浪费。 */
+function injectionMemoPath(sessionId) {
+  const safe = String(sessionId || 'no-session').replace(/[^A-Za-z0-9_-]/g, '_').slice(0, 80);
+  return path.join(HARNESS_ROOT, 'var', 'rule-loader', `injected-${safe}.json`);
+}
+
+function loadInjected(sessionId) {
+  try {
+    const raw = fs.readFileSync(injectionMemoPath(sessionId), 'utf8');
+    const parsed = JSON.parse(raw);
+    return new Set(Array.isArray(parsed.files) ? parsed.files : []);
+  } catch {
+    return new Set();
+  }
+}
+
+function saveInjected(sessionId, files) {
+  try {
+    const target = injectionMemoPath(sessionId);
+    fs.mkdirSync(path.dirname(target), { recursive: true });
+    const tmp = `${target}.${process.pid}.tmp`;
+    fs.writeFileSync(tmp, JSON.stringify({ files: [...files], updatedAt: new Date().toISOString() }), 'utf8');
+    fs.renameSync(tmp, target);
+  } catch { /* 注入记忆写失败不影响主流程 */ }
+}
+
+function runAsHook() {
+  const payload = parsePayload(readStdinRaw());
+  const eventName = payload.hook_event_name || '';
+  const toolInput = payload.tool_input || payload.tool?.input || {};
+
+  // UserPromptSubmit 是主路径; PreToolUse 时退化为按文件类型匹配。
+  const userMessage = payload.prompt
+    || payload.user_prompt
+    || process.env.CLAUDE_USER_MESSAGE
+    || '';
+  const openFiles = [toolInput.file_path, toolInput.notebook_path]
+    .filter(Boolean)
+    .concat((process.env.CLAUDE_OPEN_FILES || '').split(',').filter(Boolean));
+  const toolNames = [payload.tool_name || payload.tool?.name].filter(Boolean);
+
+  const result = evaluate(userMessage, { openFiles, toolNames });
+  if (!result) return;
+
+  // evaluate() 有两种输出形态:
+  //   capsule 模式 — result.capsule (紧凑摘要) + result.ruleRefs
+  //   full 模式    — result.ruleContents (规则全文)
+  // 默认走 capsule, 符合 rules/00-core.md 的"capsule 足够时不读取全文"。
+  const refFiles = Array.isArray(result.ruleRefs)
+    ? result.ruleRefs.map(r => r.file)
+    : Object.keys(result.ruleContents || {});
+  if (refFiles.length === 0) return;
+
+  const sessionId = payload.session_id || payload.sessionId || '';
+  const already = loadInjected(sessionId);
+  const fresh = refFiles.filter(file => !already.has(file));
+  if (fresh.length === 0) return; // 本 session 已注入过 → 0 token
+
+  let body;
+  if (result.ruleContents && Object.keys(result.ruleContents).length > 0) {
+    body = fresh
+      .filter(file => result.ruleContents[file])
+      .map(file => `### ${file}\n${result.ruleContents[file]}`)
+      .join('\n\n');
+  } else {
+    body = String(result.capsule || '');
+  }
+  if (!body.trim()) return;
+
+  const additionalContext = `[rule-loader] 与当前任务相关的规则:\n\n${body}`;
+
+  // Claude Code 只把 hookSpecificOutput.additionalContext 注入模型上下文;
+  // 裸 console.log 的文本只会进日志, 不进上下文。
+  process.stdout.write(JSON.stringify({
+    hookSpecificOutput: {
+      hookEventName: eventName || 'UserPromptSubmit',
+      additionalContext,
+    },
+  }));
+
+  for (const file of fresh) already.add(file);
+  saveInjected(sessionId, already);
 }
 
 if (require.main === module) {

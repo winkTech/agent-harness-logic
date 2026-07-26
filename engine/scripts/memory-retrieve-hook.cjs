@@ -163,8 +163,19 @@ function doMemoryQuery(query, label) {
 }
 
 function main() {
-  const msg = process.env.CLAUDE_USER_MESSAGE || '';
-  const toolName = (process.env.CLAUDE_TOOL_NAME || '').toLowerCase();
+  // 输入走 stdin 的 hook payload。平台从不设置 CLAUDE_USER_MESSAGE /
+  // CLAUDE_TOOL_NAME —— 早期版本只读环境变量, 因此本 hook 触发率恒为 0。
+  // 环境变量保留为回退, 兼容手工调用。
+  let stdinRaw = '';
+  try { stdinRaw = fs.readFileSync(0, 'utf8'); } catch { /* 无 stdin */ }
+  let payload = {};
+  try { payload = stdinRaw.trim().startsWith('{') ? JSON.parse(stdinRaw) : {}; } catch { payload = {}; }
+
+  const msg = payload.prompt || payload.user_prompt || process.env.CLAUDE_USER_MESSAGE || '';
+  const toolName = String(
+    payload.tool_name || payload.tool?.name || process.env.CLAUDE_TOOL_NAME || '',
+  ).toLowerCase();
+  const eventName = payload.hook_event_name || '';
 
   // ── 层1: 用户消息触发 ──
   const userTriggered = shouldUserRetrieve(msg);
@@ -172,8 +183,6 @@ function main() {
   // ── 层2: 任务上下文触发 (Write 代码文件) ──
   let contextQuery = null;
   if (toolName === 'write' || toolName === 'edit') {
-    let stdinRaw = '';
-    try { stdinRaw = fs.readFileSync(0, 'utf8'); } catch { /* 无 stdin */ }
     const filePath = extractFilePath(stdinRaw);
     if (filePath && isCodeFile(filePath)) {
       contextQuery = buildContextQuery(filePath);
@@ -238,12 +247,29 @@ function main() {
       }
     } catch { /* 静默 */ }
 
-    console.log(JSON.stringify({
-      source: 'memory-retrieve-hook',
-      type: 'memory-hint',
-      trigger: contextQuery ? 'task-context' : 'user-query',
-      query: contextQuery ? contextQuery.slice(0, 80) : msg.slice(0, 80),
-      parts: outputParts,
+    // 只有 hookSpecificOutput.additionalContext 才会进入模型上下文;
+    // 裸 JSON 的 console.log 仅进日志, 等于没注入。
+    // 摘要压到单行 —— 记忆条目正文可能是整篇 markdown, 原样注入会淹没上下文。
+    const brief = (s) => String(s || '')
+      .replace(/^#+\s.*$/gm, '')
+      .replace(/\s+/g, ' ')
+      .trim()
+      .slice(0, 180);
+
+    const lines = ['[memory] 与当前任务相关的既往记忆:'];
+    for (const m of allMemMatches.slice(0, 5)) {
+      lines.push(`- (${m.namespace}) ${m.name}: ${brief(m.summary)}`);
+    }
+    for (const part of outputParts) {
+      if (part.type !== 'wiki-links') continue;
+      for (const l of part.linkedMemories) lines.push(`- (link) ${l.name}: ${brief(l.summary)}`);
+    }
+
+    process.stdout.write(JSON.stringify({
+      hookSpecificOutput: {
+        hookEventName: eventName || 'UserPromptSubmit',
+        additionalContext: lines.join('\n'),
+      },
     }));
   } catch {
     // 静默失败

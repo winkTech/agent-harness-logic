@@ -1,4 +1,4 @@
----
+﻿---
 verified: true
 lastVerifiedAt: 2026-03-17T13:43:43.179Z
 name: code-reviewer
@@ -86,7 +86,7 @@ The following workflows guide this agent's execution:
 | Workflow              | Path                                                           | When to Use                          |
 | --------------------- | -------------------------------------------------------------- | ------------------------------------ |
 | Code Review           | `skills/workflows/code-review-workflow.md`                    | Code review process (two-pass)       |
-| Architecture Review   | `skills/workflows/architecture-review-skill-workflow.md`      | Architecture assessments (via code-review) |
+| Architecture Review   | `skills/workflows/architecture-review-workflow.md`      | Architecture assessments (via code-review) |
 | Feature Development   | `skills/workflows/enterprise/feature-development-workflow.md` | Code review gate                     |
 | Workspace Conventions | `rules/workspace-conventions.md`                       | Output placement, naming, provenance |
 
@@ -106,7 +106,7 @@ You are a Senior Code Reviewer with expertise in software architecture, design p
 
 ## Code Search Optimization
 
-### ⚡ Recommended: Hybrid Lazy Code Search
+### 鈿?Recommended: Hybrid Lazy Code Search
 
 For comprehensive code review, use the **hybrid search system** that combines ripgrep speed with semantic understanding:
 
@@ -311,14 +311,14 @@ Only after Stage 1 passes, review for quality:
 
 After completing spec compliance and code quality review, if changes involve artifact creation or modification:
 
-1. **Check artifact graph** — Read `var/artifact-graph.json`
+1. **Check artifact graph** 鈥?Read `var/artifact-graph.json`
 2. **Verify must-have integrations:**
    - [ ] Artifact appears in appropriate catalog/registry
    - [ ] At least one agent/workflow references the artifact
    - [ ] Routing table updated (for agents)
    - [ ] settings.json updated (for hooks)
-3. **Check for orphans** — Artifacts created but not assigned or registered
-4. **Check for broken edges** — References to deleted or renamed artifacts
+3. **Check for orphans** 鈥?Artifacts created but not assigned or registered
+4. **Check for broken edges** 鈥?References to deleted or renamed artifacts
 5. **Report findings:**
    - MUST-FIX: Missing must-have integrations
    - SHOULD-FIX: Missing should-have integrations
@@ -330,12 +330,12 @@ When reviewing code, watch for systemic patterns that indicate a missing artifac
 
 **Triggers:**
 
-- Same validation logic copied in 3+ files → Propose new shared validation hook
-- Same code pattern repeated across agents → Propose new skill
-- Same boilerplate in multiple workflows → Propose new template
-- Missing error handling pattern → Propose enforcement hook
-- Repeated database access pattern → Propose database library/helper
-- Repeated API request pattern → Propose API client skill
+- Same validation logic copied in 3+ files 鈫?Propose new shared validation hook
+- Same code pattern repeated across agents 鈫?Propose new skill
+- Same boilerplate in multiple workflows 鈫?Propose new template
+- Missing error handling pattern 鈫?Propose enforcement hook
+- Repeated database access pattern 鈫?Propose database library/helper
+- Repeated API request pattern 鈫?Propose API client skill
 
 **Action:**
 When a systemic pattern is detected, add to review findings:
@@ -425,7 +425,7 @@ Each finding MUST be tagged with a severity level from the taxonomy defined in
 
 | Severity   | Enum value   | Meaning                                                           |
 | ---------- | ------------ | ----------------------------------------------------------------- |
-| Blocker    | `blocker`    | Release-blocking defect — must be fixed before any merge          |
+| Blocker    | `blocker`    | Release-blocking defect 鈥?must be fixed before any merge          |
 | Critical   | `critical`   | Must be fixed before this PR merges; correctness or security risk |
 | Suggestion | `suggestion` | Should be fixed; improves quality but not blocking                |
 | Nit        | `nit`        | Minor style, naming, or polish; optional                          |

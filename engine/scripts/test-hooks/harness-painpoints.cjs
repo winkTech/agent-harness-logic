@@ -128,7 +128,14 @@ test('persistent prompts share a scoped evidence-driven contract with a Claude d
   assert(gates.includes('不得仅为制造通过而削弱、删除或跳过测试'), 'test-integrity rule missing');
 });
 
-test('requirements gate rejects completed state scoped to another project', () => {
+// 契约变更 (刻意): 这两道门禁已从 exit 2 硬阻断降级为结构化 Hook advisory。
+// 它们唯一的放行条件是模型自己写一份 status:"completed" 的 JSON(无 schema、
+// 无有效期、无写保护), 阻断只会诱导伪造门禁记录, 并对临时脚本大量误报。
+// 但**作用域隔离本身仍必须成立**: 属于别的项目的 completed 状态不得被当作
+// 本项目已澄清 —— 因此这里断言"仍然识别为未完成并通过 additionalContext 提示", 而不是
+// 断言退出码。真正的硬门禁见 hdl-coding-dag-workflow.js 的 Phase 4.5
+// (校验 check_results/<mod>.json 真实存在且 status===PASS)。
+test('requirements gate does not honor completed state scoped to another project', () => {
   const stateFile = path.join(HOME, 'var/gates/requirements-gate.json');
   const guard = path.join(HOME, 'engine/scripts/hooks/requirements-gate-guard.cjs');
   const target = path.join(os.tmpdir(), `harness-unrelated-${Date.now()}`, 'new_module.py');
@@ -147,11 +154,15 @@ test('requirements gate rejects completed state scoped to another project', () =
       tool_input: { file_path: target },
     });
     const r = runNode(guard, payload);
-    assert(r.status === 2, `stale requirements state allowed a new unrelated file, exit=${r.status}`);
+    assert(r.status === 0, `advisory gate must not block, exit=${r.status}`);
+    const hookOutput = JSON.parse(r.stdout);
+    const advisory = JSON.parse(hookOutput.hookSpecificOutput.additionalContext);
+    assert(advisory.source === 'requirements-gate' && advisory.status === 'warning' && advisory.blocking === false,
+      `stale cross-project state was silently honored (no advisory emitted), stdout=${r.stdout.slice(0, 200)}`);
   });
 });
 
-test('verification quality gate rejects completed state scoped to another project', () => {
+test('verification quality gate does not honor completed state scoped to another project', () => {
   const stateFile = path.join(HOME, 'var/gates/verification-quality.json');
   const guard = path.join(HOME, 'engine/scripts/hooks/verification-quality-guard.cjs');
   const target = path.join(os.tmpdir(), `harness-unrelated-${Date.now()}`, 'tb_new_module.sv');
@@ -170,7 +181,11 @@ test('verification quality gate rejects completed state scoped to another projec
       tool_input: { file_path: target },
     });
     const r = runNode(guard, payload);
-    assert(r.status === 2, `stale verification-quality state allowed a new unrelated TB, exit=${r.status}`);
+    assert(r.status === 0, `advisory gate must not block, exit=${r.status}`);
+    const hookOutput = JSON.parse(r.stdout);
+    const advisory = JSON.parse(hookOutput.hookSpecificOutput.additionalContext);
+    assert(advisory.source === 'verification-quality' && advisory.status === 'warning' && advisory.blocking === false,
+      `stale cross-project state was silently honored (no advisory emitted), stdout=${r.stdout.slice(0, 200)}`);
   });
 });
 

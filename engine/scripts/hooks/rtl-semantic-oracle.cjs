@@ -50,9 +50,18 @@ function collectRoOutputs(code) {
   return [...outputs];
 }
 
+// 时序块 = always_ff 或 Verilog-2001 的 always @(posedge/negedge ...)。
+// 早期版本只认 always_ff, 导致所有 Verilog-2001 风格 RTL 被判为"没有时序块"。
+const CLOCKED_BLOCK_RE =
+  /\b(?:always_ff\b|always\s*@\s*\([^)]*\b(?:posedge|negedge)\b[^)]*\))[\s\S]*?\bend\b/g;
+
+function hasClockedBlock(code) {
+  return /\balways_ff\b|\bposedge\b|\bnegedge\b/.test(code);
+}
+
 function collectAlwaysFfRoAssignments(code) {
   const assigned = new Set();
-  const blocks = code.match(/\balways_ff\b[\s\S]*?\bend\b/g) || [];
+  const blocks = code.match(CLOCKED_BLOCK_RE) || [];
   for (const block of blocks) {
     const lhs = /\b(ro_[A-Za-z_][A-Za-z0-9_$]*)\b\s*(?:<=|=)/g;
     let match;
@@ -61,17 +70,92 @@ function collectAlwaysFfRoAssignments(code) {
   return [...assigned];
 }
 
+/**
+ * Testbench 分析 —— 只查"这个 TB 能不能如实报告失败", 不查 RTL 编码规范。
+ *
+ * 动机: `$finish` 的参数在 IEEE 1364/1800 里是**诊断信息详细程度** (0/1/2),
+ * 不是退出码, 且缺省就是 1。所以用 `$finish(1)` 表示失败的 TB 依然 exit 0,
+ * 上游只要按退出码判读就是假绿。只有 `$fatal` 才会返回非零退出码。
+ * 与 verification-gate 的"必须有正面通过证据"判据配套: 一个管进程退出码,
+ * 一个管日志结论, 两侧都堵上, 静默失败才无处可逃。
+ */
+function analyzeTestbench(content, filePath = '') {
+  const code = stripComments(content);
+  const findings = [];
+  const add = (severity, rule, message) => findings.push({ severity, rule, message });
+
+  if (!/\bmodule\b/.test(code)) return { ok: true, filePath, findings: [] };
+
+  const hasFatal = /\$fatal\b/.test(code);
+  // 自检 TB 的判据: 存在失败判定 (比较不一致 / 错误计数 / $error / 打印 FAIL)。
+  const selfChecking =
+    /\$error\b/.test(code) ||
+    /\b(?:errors?|mismatch(?:es)?|fail(?:ures?)?)\b\s*(?:=|\+\+|<=)/i.test(code) ||
+    /\$display\s*\(\s*"[^"]*\b(?:FAIL|ERROR|MISMATCH)\b/i.test(code);
+
+  if (selfChecking && !hasFatal) {
+    add('error', 'tb-no-failure-exit',
+      'Self-checking testbench has failure detection but never calls $fatal, so a failing run still exits 0 '
+      + 'and reads as a pass upstream. Use $fatal(1, "...") on the failure path.');
+  }
+
+  const finishArg = /\$finish\s*\(\s*([1-9]\d*)\s*\)/.exec(code);
+  if (finishArg) {
+    add(selfChecking ? 'warning' : 'warning', 'tb-finish-arg-not-exit-code',
+      `$finish(${finishArg[1]}) does not set the process exit code — the argument is a diagnostic verbosity `
+      + 'level (0/1/2, default 1) per IEEE 1364/1800, and the process still exits 0. '
+      + 'Use $fatal(1, "...") to signal failure.');
+  }
+
+  const hasPassMarker =
+    /\bRESULT:\s*PASS\b/i.test(code) ||
+    /\b(?:ALL\s+)?(?:TESTS?|CHECKS?)\s+PASSED\b/i.test(code) ||
+    /\bPASS(?:ED)?\b/.test(code) ||
+    /\b0\s+(?:errors|failures|mismatches)\b/i.test(code);
+  if (!hasPassMarker) {
+    add('warning', 'tb-no-pass-marker',
+      'Testbench never prints an explicit pass conclusion. verification-gate requires positive PASS evidence '
+      + 'in the log, so a silent success will not clear the verification state. '
+      + 'Print something like "RESULT: PASS" (or "0 errors") on the success path.');
+  }
+
+  return {
+    ok: !findings.some((finding) => finding.severity === 'error'),
+    filePath,
+    findings,
+  };
+}
+
 function analyzeRtl(content, filePath = '') {
   const code = stripComments(content);
   const findings = [];
   const add = (severity, rule, message) => findings.push({ severity, rule, message });
 
-  if (!/\bmodule\s+[A-Za-z_][A-Za-z0-9_$]*\b/.test(code)) {
+  // SystemVerilog package / interface 文件不是 RTL 模块, 模块级判据
+  // (输出寄存 / 复位 / 时序块) 对它们没有意义 —— 直接放行。
+  const hasModule = /\bmodule\s+[A-Za-z_][A-Za-z0-9_$]*\b/.test(code);
+  const hasPackage = /\bpackage\s+[A-Za-z_][A-Za-z0-9_$]*[\s\S]*\bendpackage\b/.test(code);
+  const hasInterface = /\binterface\s+[A-Za-z_][A-Za-z0-9_$]*[\s\S]*\bendinterface\b/.test(code);
+  if (!hasModule && (hasPackage || hasInterface)) {
+    return { ok: true, filePath, findings: [] };
+  }
+
+  if (!hasModule) {
     add('error', 'module-required', 'RTL source must contain a module declaration.');
   }
 
   if (/\binitial\b/.test(code)) {
-    add('error', 'no-initial-in-rtl', 'Production RTL source must not contain initial blocks.');
+    // 存储器初始化 ($readmemh/$readmemb) 是 Xilinx/Altera 流程里可综合的
+    // 标准 ROM/BRAM 写法, 不应与仿真专用的 initial 激励一概而论。
+    // 仿真专用写法 (#延时 / force) 由 no-delay-in-rtl / no-force-release 单独拦截。
+    const isMemoryInit = /\$readmem[bh]\b/.test(code);
+    add(
+      isMemoryInit ? 'warning' : 'error',
+      'no-initial-in-rtl',
+      isMemoryInit
+        ? 'initial block used for memory initialization ($readmemh/$readmemb); confirm your synthesis target supports it.'
+        : 'Production RTL source must not contain initial blocks.',
+    );
   }
   if (/(^|[^A-Za-z0-9_$])#\s*\d/.test(code)) {
     add('error', 'no-delay-in-rtl', 'Production RTL source must not contain delay controls.');
@@ -88,8 +172,40 @@ function analyzeRtl(content, filePath = '') {
   while ((directMatch = directAssign.exec(code))) {
     add('error', 'ro-output-register', `Output ${directMatch[1]} is driven by continuous assign; ro_ outputs must be registered.`);
   }
+  // rules/01-hdl.md 红线 2 在正确命名下的等价检查:
+  // 端口叫 o_, 内部寄存叫 ro_, 所以"输出由寄存器驱动"表现为
+  //   assign o_x = ro_x;   或   o_x 直接在时序块里赋值。
+  // 早期版本只匹配 `output ... ro_`, 那是建立在"端口须叫 ro_"这个**错误
+  // 约定**之上的; 端口名改正后该检查对合规代码永不触发, 这里补回来。
+  // 用 warning 而非 error: 组合直出在某些场合是有意为之(如低延迟旁路),
+  // 硬拦会重蹈误报覆辙。
+  if (hasClockedBlock(code)) {
+    const oPorts = [];
+    const oDecl = /\boutput\b([^;,)]*?)\b(o_[A-Za-z_][A-Za-z0-9_$]*)/gi;
+    let m;
+    while ((m = oDecl.exec(code))) oPorts.push(m[2]);
+
+    const clockedBlocks = (code.match(CLOCKED_BLOCK_RE) || []).join('\n');
+    for (const port of [...new Set(oPorts)]) {
+      const assignedInClocked = new RegExp(`\\b${port}\\b\\s*<=`).test(clockedBlocks);
+      const fromRegistered = new RegExp(`\\bassign\\s+${port}\\b[^;]*=\\s*[^;]*\\bro_`).test(code);
+      if (!assignedInClocked && !fromRegistered) {
+        add('warning', 'o-output-register',
+          `Output ${port} is not driven by a register (expected assignment inside a clocked block, or "assign ${port} = ro_...").`);
+      }
+    }
+  }
+
+  // 纯组合模块 (无任何时序块) 不可能把输出在时序块里赋值 —— 那是合法设计,
+  // 不是缺陷。只有当模块确实含时序逻辑时, "ro_ 输出未被寄存" 才是真问题。
   if (roOutputs.length > 0 && roAssignedInAlwaysFf.length === 0) {
-    add('error', 'ro-output-register', 'No ro_ output assignment was found inside always_ff.');
+    add(
+      hasClockedBlock(code) ? 'error' : 'warning',
+      'ro-output-register',
+      hasClockedBlock(code)
+        ? 'No ro_ output assignment was found inside a clocked block.'
+        : 'Module has ro_ outputs but no clocked logic; treated as purely combinational.',
+    );
   }
   for (const signal of roOutputs) {
     if (!roAssignedSet.has(signal)) {
@@ -138,16 +254,46 @@ function block(report) {
   process.exit(2);
 }
 
+function hookSuccessOutput(advisory, eventName = 'PreToolUse') {
+  return {
+    hookSpecificOutput: {
+      hookEventName: eventName || 'PreToolUse',
+      additionalContext: JSON.stringify(advisory),
+    },
+  };
+}
+
 function run(payload) {
   if (toolNameFrom(payload) !== 'Write') return { ok: true, skipped: true };
   if ((eventNameFrom(payload) || '') && eventNameFrom(payload) !== 'PreToolUse') return { ok: true, skipped: true };
   const cwd = payloadCwd(payload);
   const filePath = payloadFilePath(payload, cwd);
-  if (!isRtlSource(filePath) || isTestbenchOrSimulation(filePath)) return { ok: true, skipped: true };
+  if (!isRtlSource(filePath)) return { ok: true, skipped: true };
   const content = contentFrom(payload);
   if (!content) return { ok: true, skipped: true };
-  const report = analyzeRtl(content, filePath);
+  // TB 不适用 RTL 编码规范 (initial/延时/ro_ 寄存都是合法的), 但仍须能如实
+  // 报告失败 —— 走独立的 TB 判据, 而不是像早期版本那样整体跳过不查。
+  const report = isTestbenchOrSimulation(filePath)
+    ? analyzeTestbench(content, filePath)
+    : analyzeRtl(content, filePath);
   if (!report.ok) block(report);
+  // warning 此前只在 block() 内部打印, 而 block() 只在有 error 时才调用 ——
+  // 于是所有 warning 从来不可见。放行时也要把它们说出来, 否则等于没写。
+  const warnings = report.findings.filter((finding) => finding.severity === 'warning');
+  if (warnings.length > 0) {
+    const advisory = {
+      schemaVersion: 1,
+      kind: 'harness-advisory',
+      source: 'rtl-semantic-oracle',
+      status: 'warning',
+      blocking: false,
+      target: filePath,
+      summary: `${path.basename(filePath)} has ${warnings.length} non-blocking RTL semantic warning(s).`,
+      findings: warnings,
+    };
+    process.stdout.write(JSON.stringify(hookSuccessOutput(advisory, payload?.hook_event_name)));
+    return { ok: true, skipped: false, report, advisory };
+  }
   return { ok: true, skipped: false, report };
 }
 
@@ -166,5 +312,6 @@ if (require.main === module) main();
 
 module.exports = {
   analyzeRtl,
+  analyzeTestbench,
   run,
 };

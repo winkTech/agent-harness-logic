@@ -28,7 +28,21 @@ function compileWorkflow(name) {
   const filePath = workflowPath(name);
   const source = fs.readFileSync(filePath, 'utf8')
     .replace(/export\s+const\s+meta\s*=/, 'const meta =');
-  return new AsyncFunction('args', 'agent', 'parallel', 'phase', 'log', 'workflow', source);
+  // 注入面与真实 Workflow 运行时对齐: 缺 pipeline 曾让 hdl 工作流的深路径
+  // 在本 eval 中根本不可执行 (ReferenceError), 假绿掩盖了 fs 桥缺失。
+  return new AsyncFunction('args', 'agent', 'parallel', 'pipeline', 'phase', 'log', 'workflow', source);
+}
+
+// pipeline(items, ...stages): 每个 item 独立走完所有 stage, stage 收
+// (prevResult, originalItem, index) —— 与 Workflow 工具语义一致 (无层间屏障)。
+async function pipelineImpl(items, ...stages) {
+  return Promise.all(items.map(async (item, index) => {
+    let prev = item;
+    for (let s = 0; s < stages.length; s += 1) {
+      prev = s === 0 ? await stages[s](item, item, index) : await stages[s](prev, item, index);
+    }
+    return prev;
+  }));
 }
 
 async function runWorkflow(name, args = {}, opts = {}) {
@@ -140,6 +154,7 @@ async function runWorkflow(name, args = {}, opts = {}) {
       args,
       agent,
       parallel,
+      pipelineImpl,
       (name) => phases.push(name),
       (message) => logs.push(String(message)),
       workflow
@@ -148,6 +163,37 @@ async function runWorkflow(name, args = {}, opts = {}) {
   } catch (error) {
     return { ok: false, error, calls, phases, logs };
   }
+}
+
+// ── hdl DAG 深路径测试的 stub agent ─────────────────────────────────────────
+// 覆盖 v3.6 的证据门禁/仿真/终验/verifier 全部结构化契约。
+function hdlDeepStubAgent(overrides = {}) {
+  return (prompt, agentOpts) => {
+    const label = agentOpts.label || '';
+    if (overrides[label]) return overrides[label](prompt, agentOpts);
+    for (const key of Object.keys(overrides)) {
+      if (key.endsWith('*') && label.startsWith(key.slice(0, -1))) return overrides[key](prompt, agentOpts);
+    }
+    if (label === 'p1b-arch-evidence') {
+      return { executed: true, ok: true, failures: [], gateJson: '{"gate":"hdl-evidence-gate","ok":true,"arch":{"exists":true}}' };
+    }
+    if (label === 'p45-evidence') {
+      return {
+        executed: true, ok: true, failures: [],
+        gateJson: '{"gate":"hdl-evidence-gate","ok":true,"modules":[{"module":"demo","pass":true,"compared_points":2048,"max_error_lsb":0}]}',
+      };
+    }
+    if (label.startsWith('sim-run-') || label.startsWith('sim-recheck-') || label.startsWith('sim-final-')) {
+      return { gate_executed: true, gate_ok: true, compared_points: 2048, log_tail: 'sim ok' };
+    }
+    if (label.startsWith('final-verify-')) {
+      return '{"module":"demo","pass":true,"evidence_ok":true,"checks":["naming"],"issues":[]}';
+    }
+    if (label === 'p45-adversarial') return '[]';
+    if (label === 'p5-synthesis') return '{"overall":"pass","issues":[],"root_cause":"","fix_suggestion":""}';
+    if (label === 'verifier') return '{"pass":true,"reason":"all phases produced evidence"}';
+    return 'stub-output';
+  };
 }
 
 test('missing required inputs stop read/review/security/rag workflows before work', async () => {
@@ -192,6 +238,71 @@ test('hdl dag workflow blocks until the preflight checkpoint is confirmed', asyn
   const run = await runWorkflow('hdl-coding-dag-workflow', { modules: ['demo'] });
   assert(!run.ok, 'hdl workflow should throw without preflight confirmation');
   assert(String(run.error.message).includes('WorkflowCheckpoint:preflight'), 'missing checkpoint error was not explicit');
+});
+
+test('hdl dag workflow pauses at design-review checkpoint after preflight confirmed', async () => {
+  const run = await runWorkflow('hdl-coding-dag-workflow', { modules: ['demo'], confirmed: true }, {
+    agent: hdlDeepStubAgent(),
+  });
+  assert(!run.ok, 'workflow should pause (throw) at design-review checkpoint');
+  assert(String(run.error.message).includes('WorkflowCheckpoint:design-review'),
+    `expected design-review checkpoint error, got: ${run.error.message.slice(0, 200)}`);
+  assert(String(run.error.message).includes('resumeFromRunId'),
+    'checkpoint error must carry resume instructions');
+  const labels = run.calls.map((c) => c.opts.label || '');
+  assert(labels.includes('p1b-arch-evidence'), 'P1b must route arch check through the evidence gate agent');
+});
+
+test('hdl dag workflow deep run completes with deterministic evidence gates', async () => {
+  const run = await runWorkflow('hdl-coding-dag-workflow', { modules: ['demo'], confirmAllCheckpoints: true }, {
+    agent: hdlDeepStubAgent(),
+  });
+  assert(run.ok, `deep run threw: ${run.error?.message?.slice(0, 300)}`);
+  assert(run.result?.verifier?.pass === true, 'verifier did not report pass=true');
+  const labels = run.calls.map((c) => c.opts.label || '');
+  assert(labels.includes('p45-evidence'), 'Phase 4.5 must invoke the evidence gate agent');
+  const gateCall = run.calls.find((c) => c.opts.label === 'p45-evidence');
+  assert(gateCall.prompt.includes('hdl-evidence-gate.cjs'), 'evidence gate prompt must reference the deterministic script');
+  const simCall = run.calls.find((c) => (c.opts.label || '').startsWith('sim-run-'));
+  assert(simCall && simCall.opts.schema, 'sim agents must use structured-output schema');
+  assert(simCall.opts.agentType === 'logic-engineer', 'sim agents must be wired to logic-engineer');
+  const advCall = run.calls.find((c) => c.opts.label === 'p45-adversarial');
+  assert(!advCall, 'standard module must not trigger adversarial review');
+});
+
+test('hdl dag executor terminates on node failure instead of looping', async () => {
+  const run = await runWorkflow('hdl-coding-dag-workflow', { modules: ['demo'], confirmAllCheckpoints: true }, {
+    agent: hdlDeepStubAgent({
+      'p0-infra': () => { throw new Error('infra tooling unavailable'); },
+    }),
+  });
+  assert(!run.ok, 'workflow should fail when a DAG node fails');
+  assert(String(run.error.message).includes('p0_infra'), `failure must name the failed node, got: ${run.error.message.slice(0, 200)}`);
+  assert(run.calls.length <= 3, `failed node must not be re-run in a loop (agent calls=${run.calls.length})`);
+});
+
+test('code-review adversarial verify demotes refuted findings', async () => {
+  const run = await runWorkflow('code-review-workflow', { files: ['src/app.py'] }, {
+    blockingReview: true,
+    agent: (prompt, agentOpts) => {
+      const label = agentOpts.label || '';
+      if (label === 'p1-correctness') {
+        return {
+          findings: [{
+            pass: 'P1', severity: 'HIGH', category: '逻辑正确', file: 'src/app.py:10',
+            title: 'suspected wrong return', description: 'mock', evidence: 'line 10', impact: 'tests fail',
+          }],
+        };
+      }
+      if (label.startsWith('verify-finding-')) return { refuted: true, reason: 'the return value is correct for the documented contract' };
+      if (label === 'p2-quality' || label.startsWith('p3-')) return { findings: [] };
+      return {};
+    },
+  });
+  assert(run.ok, `code-review threw: ${run.error?.message}`);
+  assert(run.result.pass === true, 'refuted finding should no longer block the run');
+  assert(run.result.blockingIssues.length === 0, 'refuted finding still listed as blocking');
+  assert(run.result.pass1.findings[0].verdict === 'REFUTED', 'finding was not marked REFUTED');
 });
 
 test('hdl alias delegates to the dag workflow with original args', async () => {

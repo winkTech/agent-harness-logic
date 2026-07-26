@@ -2,20 +2,19 @@
 /**
  * engine/scripts/hooks/requirements-gate-guard.cjs — 需求澄清门禁 (P0)
  *
- * 强制规则: 创建新模块代码文件前，必须先完成 requirements-gate 六维澄清。
- * 未完成 → exit 2 硬阻断。
+ * 建议规则: 创建新模块代码文件前，先完成 requirements-gate 六维澄清。
+ * 未完成 → 打印提示，**不阻断**。
  *
  * 机制:
  *   PreToolUse(Write) on new .sv/.v/.py files — 检查门禁状态
- *     - 文件已存在 (修改已有代码) → 放行
- *     - 门禁状态 "completed" → 放行
- *     - 门禁状态 "pending" 或不存在 → exit 2 阻断
+ *     - 文件已存在 (修改已有代码) → 静默放行
+ *     - 门禁状态 "completed" → 静默放行
+ *     - 门禁状态 "pending" 或不存在 → stderr 提示缺失维度后放行
  *
  * 状态文件: ~/.claude/var/gates/requirements-gate.json
  *
  * 退出码:
- *   0 — 放行
- *   2 — 硬拦截
+ *   0 — 始终放行 (本 hook 不再有阻断路径)
  *
  * 集成: 注册在 settings.json PreToolUse(Write)
  *
@@ -141,6 +140,15 @@ function getPendingDimensions(state) {
   });
 }
 
+function hookSuccessOutput(advisory, eventName = 'PreToolUse') {
+  return {
+    hookSpecificOutput: {
+      hookEventName: eventName || 'PreToolUse',
+      additionalContext: JSON.stringify(advisory),
+    },
+  };
+}
+
 // ── 门禁检查核心逻辑 ─────────────────────────────────────────────────────
 
 function checkGate(filePath) {
@@ -163,40 +171,37 @@ function checkGate(filePath) {
     return false;
   }
 
-  // ── 门禁未完成 → 硬阻断 ──────────────────────────────────────────
+  // ── 门禁未完成 → 提示, 不阻断 ────────────────────────────────────
+  //
+  // 这道门禁**不再硬阻断**。原因: 它唯一的放行条件是模型自己往
+  // var/gates/requirements-gate.json 写一个 status:"completed" 的 JSON,
+  // 既无 schema 校验、无有效期、也无写保护 —— 阻断只会训练模型伪造门禁
+  // 记录, 并对临时脚本、工具文件等非项目代码大量误报。
+  // 需求澄清的价值在于提示思考, 不在于拦住写操作。真正该硬拦的是
+  // 有客观证据的节点 (见 hdl-coding-dag-workflow.js 的 Phase 4.5:
+  // 校验 check_results/<mod>.json 真实存在且 status===PASS)。
 
   const pending = getPendingDimensions(state);
-  const pendingList = pending.map(d => `  ❌ ${d.label}`).join('\n');
+  const findings = pending.length > 0
+    ? pending.map(d => ({ severity: 'warning', code: d.key, message: d.label }))
+    : [{
+      severity: 'warning',
+      code: 'gate-status',
+      message: 'Requirements dimensions exist, but the gate is not completed for this file scope.',
+    }];
 
-  const boxWidth = 66;
-  const line = '═'.repeat(boxWidth);
-
-  console.error(`
-╔${line}╗
-║  🔒 需求澄清门禁 — REQUIREMENTS GATE                          ║
-╠${line}╣
-║                                                                ║
-║  创建新代码文件前，必须先完成六维需求澄清。                      ║
-║  根据 rules/03-gates.md 的需求澄清门禁:                          ║
-║    「认知边界不清晰 → 代码可靠性不可能高」                      ║
-║                                                                ║
-║  ${state && state.task ? `当前任务: ${state.task}`.padEnd(boxWidth - 4) + '║' : '暂无活跃任务记录'.padEnd(boxWidth - 4) + '║'}
-║                                                                ║
-║  未完成的维度:                                                  ║
-${pendingList.split('\n').map(l => `║  ${l}`.padEnd(boxWidth + 1) + '║').join('\n')}
-║                                                                ║
-║  操作:                                                          ║
-║  1. 与用户完成六维澄清对话                                      ║
-║  2. 确认所有维度后，将结果写入                                   ║
-║     var/gates/requirements-gate.json (status: "completed")       ║
-║  3. 重新执行 Write/Edit                                         ║
-║                                                                ║
-║  详细: rules/03-gates.md                                        ║
-║  证据: memory/learnings/requirements-gate-wifi-evidence.md       ║
-╚${line}╝
-`);
-
-  return true; // 需要阻断
+  return {
+    schemaVersion: 1,
+    kind: 'harness-advisory',
+    source: 'requirements-gate',
+    status: 'warning',
+    blocking: false,
+    target: filePath,
+    gateStatus: state?.status || 'missing',
+    summary: 'Before creating this code file, review the requirements dimensions from rules/03-gates.md.',
+    findings,
+    guidance: 'When evidence is sufficient, record confirmed assumptions and continue without asking redundant questions.',
+  };
 }
 
 // ── 独立运行入口 ──────────────────────────────────────────────────────────
@@ -221,9 +226,8 @@ async function main() {
   // 仅在 PreToolUse(Write) 时触发
   if (toolName !== 'write' && toolName !== 'edit') process.exit(0);
 
-  if (checkGate(filePath)) {
-    process.exit(2);
-  }
+  const advisory = checkGate(filePath);
+  if (advisory) process.stdout.write(JSON.stringify(hookSuccessOutput(advisory, eventName)));
   process.exit(0);
 }
 
@@ -235,9 +239,7 @@ module.exports = function requirementsGateGuard(toolUse, context) {
   const input = toolUse.input || {};
   const filePath = input.filePath || input.file_path;
   if (!filePath) return;
-  if (checkGate(filePath)) {
-    process.exit(2);
-  }
+  return checkGate(filePath); // 只提示, 不阻断
 };
 
 // 直接运行时调用 main
