@@ -17,14 +17,34 @@ vec_dir = fullfile(fileparts(mfilename('fullpath')), 'vectors');
 if ~exist(vec_dir, 'dir'), mkdir(vec_dir); end
 fprintf('  输出目录: %s\n', vec_dir);
 
-num_tests = 5;
+% 向量数须让 G-B-03 的比对样点数过 2048 下限 (治理规范 §2.6):
+% 每组 K=324 bit, 5 组只有 1620, 达不到判据。10 组 = 3240。
+num_tests = 10;
 SNR_db = 3.0;  % 高 SNR 确保正确译码
 max_retry = 20;
 
+% RTL 侧定点参数 (须与 incubator/intake/ldpc_codec/rtl/ldpc_defines.vh 一致):
+%   P_Q_DATA_W=10, P_Q_FRAC=4, P_ALPHA_FIXED=12/16=0.75, P_MAX_ITER=20
+% internal_bits 必须显式给 10, 不能用 ldpc_decoder_ms_fixed 的默认值。
+% 该函数默认 internal_bits = total_bits + 2 = 12 -> 饱和到 ±2047/-2048;
+% 而设计规格 knowledge/primary/domains/comm/ldpc/stage3_fixed_point_report.md §6
+% 明确写 Q(10,4) 的"饱和策略 = 对称饱和到 [-512, 511]", 即 internal = 10,
+% 与 RTL 的 P_Q_DATA_W=10 一致。用默认值会让 golden 的数据通路比 RTL 宽 2 位,
+% bit-true 永远对不上, 且症状是"大信号处偶发不符", 极难定位。
+RTL_MAX_ITER = 20;
+q_config = struct('total_bits', 10, 'frac_bits', 4, 'internal_bits', 10);
+
 for t = 1:num_tests
-    % 浮点译码必须成功才可作为期望值; 失败则重抽, 耗尽重试次数即报错退出。
-    % 原实现用 continue 直接跳过, 会静默少导出一组向量而不报错 ——
-    % TB 随后加载到空文件, 属"缺证据却看似正常"的假绿路径。
+    % 期望值必须同时满足两件事, 缺一不可:
+    %   (1) 浮点译码器能恢复 info —— 说明这组向量本身可译, 不是信道太差;
+    %   (2) **定点** golden (ldpc_decoder_ms_fixed, 即 manifest 指定的 bit-true
+    %       对标基准) 在 RTL 的 Q(10,4)/20 迭代下也能恢复 info。
+    % 只验 (1) 会埋一个坑: 某组向量浮点可译、定点在 20 迭代内不收敛时,
+    % info 就成了正确 RTL 也达不到的期望值 —— 表现为"实现没错但测试过不了",
+    % 而排查方向会被引到 RTL 上。这里让生成阶段就把这种向量筛掉。
+    %
+    % 失败则重抽, 耗尽重试次数即报错退出。原实现用 continue 直接跳过,
+    % 会静默少导出一组向量而不报错 —— TB 随后加载到空文件, 属假绿路径。
     ok = false;
     for attempt = 1:max_retry
         % 随机信息位
@@ -47,17 +67,29 @@ for t = 1:num_tests
         LLR_q = round(llr_float * 16);
         LLR_q = max(min(LLR_q, 511), -512);  % 10-bit signed saturate
 
-        % 浮点译码验证
+        % (1) 浮点译码验证
         dec_float = ldpc_decoder_ms_pure(llr_float, H, 50, 0.75);
-        if isequal(dec_float, info)
-            ok = true;
-            break;
+        if ~isequal(dec_float, info)
+            fprintf('  Test %d: 浮点译码未收敛 (第 %d 次), 重抽\n', t, attempt);
+            continue;
         end
-        fprintf('  Test %d: 浮点译码未收敛 (第 %d 次), 重抽\n', t, attempt);
+
+        % (2) 定点 golden 在 RTL 参数下的可达性验证
+        dec_fixed = ldpc_decoder_ms_fixed(llr_float, H, RTL_MAX_ITER, 0.75, q_config);
+        if ~isequal(dec_fixed(:), info(:))
+            nerr = sum(dec_fixed(:) ~= info(:));
+            fprintf('  Test %d: 定点 golden 在 %d 迭代内未收敛 (%d bit 错, 第 %d 次), 重抽\n', ...
+                t, RTL_MAX_ITER, nerr, attempt);
+            continue;
+        end
+
+        ok = true;
+        break;
     end
     if ~ok
-        error('gen_rtl_test_vectors:floatDecodeFailed', ...
-              'Test %d 在 %d 次重试后仍无法产生可用向量 —— 拒绝导出不完整向量集', t, max_retry);
+        error('gen_rtl_test_vectors:decodeFailed', ...
+              'Test %d 在 %d 次重试后仍无法产生浮点与定点双双可译的向量 —— 拒绝导出不完整向量集', ...
+              t, max_retry);
     end
 
     % 写入文件

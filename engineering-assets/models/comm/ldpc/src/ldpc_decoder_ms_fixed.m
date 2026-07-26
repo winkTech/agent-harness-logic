@@ -1,4 +1,4 @@
-function [dec_bits, num_iter] = ldpc_decoder_ms_fixed(llr_float, H, max_iter, scale_factor, q_config)
+function [dec_bits, num_iter, trace] = ldpc_decoder_ms_fixed(llr_float, H, max_iter, scale_factor, q_config)
 % <LDPC> 定点 Min-Sum 译码器 (硬件参考模型)
 %
 % 模拟真实 FPGA 定点实现:
@@ -49,6 +49,23 @@ function [dec_bits, num_iter] = ldpc_decoder_ms_fixed(llr_float, H, max_iter, sc
     LLR_total = double(llr_q);        % [N×1]
     L_r_old   = zeros(M, N);          % 旧 CN→VN 消息 [M×N]
 
+    %% 可选逐边轨迹 (nargout>2 时才采集)
+    % 纯观测: 只读取上面已算出的量, 不参与任何运算, 因此打开与否
+    % dec_bits/num_iter 逐位不变。用途是让 RTL cosim 能按 (iter,row,edge)
+    % 定位第一处发散点, 而不是只拿到一个最终的 324 位对错。
+    want_trace = (nargout > 2);
+    trace = struct();
+    if want_trace
+        nnz_total = nnz(H);
+        cap = nnz_total * max_iter;
+        tr_iter = zeros(cap, 1); tr_row = zeros(cap, 1); tr_j = zeros(cap, 1);
+        tr_col  = zeros(cap, 1); tr_lq  = zeros(cap, 1); tr_lr = zeros(cap, 1);
+        tr_llr  = zeros(cap, 1);
+        tr_n = 0;
+        trace.llr_init = LLR_total(:);
+        trace.iter_llr = [];
+    end
+
     %% 主迭代循环
     for iter = 1:max_iter
         for row = 1:M
@@ -94,7 +111,18 @@ function [dec_bits, num_iter] = ldpc_decoder_ms_fixed(llr_float, H, max_iter, sc
                 new_val = L_q(j) + L_r;
                 new_val = max(min(new_val, MAX_INT), MIN_INT);
                 LLR_total(col) = new_val;
+
+                if want_trace
+                    tr_n = tr_n + 1;
+                    tr_iter(tr_n) = iter;   tr_row(tr_n) = row;  tr_j(tr_n) = j;
+                    tr_col(tr_n)  = col;    tr_lq(tr_n)  = L_q(j);
+                    tr_lr(tr_n)   = L_r;    tr_llr(tr_n) = new_val;
+                end
             end
+        end
+
+        if want_trace
+            trace.iter_llr(:, end+1) = LLR_total(:);
         end
 
         %% 硬判决 + 早停
@@ -102,6 +130,9 @@ function [dec_bits, num_iter] = ldpc_decoder_ms_fixed(llr_float, H, max_iter, sc
         if mod(H * hard(:), 2) == 0
             dec_bits = hard(1:K);
             num_iter = iter;
+            if want_trace
+                trace = pack_trace(trace, tr_n, tr_iter, tr_row, tr_j, tr_col, tr_lq, tr_lr, tr_llr);
+            end
             return;
         end
     end
@@ -109,4 +140,15 @@ function [dec_bits, num_iter] = ldpc_decoder_ms_fixed(llr_float, H, max_iter, sc
     hard = double(LLR_total < 0);
     dec_bits = hard(1:K);
     num_iter = max_iter;
+    if want_trace
+        trace = pack_trace(trace, tr_n, tr_iter, tr_row, tr_j, tr_col, tr_lq, tr_lr, tr_llr);
+    end
+end
+
+function trace = pack_trace(trace, n, it, rw, jj, cl, lq, lr, llr)
+% 把预分配数组裁到实际长度并装进 trace 结构体。
+    trace.n_edges = n;
+    trace.iter = it(1:n);  trace.row = rw(1:n);  trace.j   = jj(1:n);
+    trace.col  = cl(1:n);  trace.lq  = lq(1:n);  trace.lr  = lr(1:n);
+    trace.llr  = llr(1:n);
 end
