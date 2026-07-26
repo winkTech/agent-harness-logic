@@ -4,6 +4,11 @@
 clear; clc; close all;
 config;
 
+% 固定随机种子: 本脚本导出的向量是 RTL 的验收证据, 必须可复现。
+% 治理规范 G-C-05 要求"同 seed 双跑 bit-identical"; 无种子则每次导出的
+% 期望值都不同, 任何比对结果都无法复查。
+rng(20260726, 'twister');
+
 fprintf('=== OFDM 同步仿真 ===\n');
 fprintf('CFO=%.2f DFT, SNR=%d dB, tau=%d samples\n\n', ...
     cfg.epsilon, cfg.snr_db, cfg.tau);
@@ -42,7 +47,8 @@ else
 end
 
 %% 5. CFO 补偿
-r_corrected = cfo_correct(r, epsilon_coarse, cfg);
+% cfo_correct 的第三形参是 N (见 cfo_correct.m 签名), 不是整个 cfg
+r_corrected = cfo_correct(r, epsilon_coarse, cfg.N);
 
 %% 6. 精定时
 n_fine = fine_timing(r_corrected, n_peak, t_long, cfg);
@@ -92,4 +98,11 @@ if cfg.plot_en
         cfg.epsilon, cfg.snr_db));
 end
 
-fprintf('\n仿真完成\n");
+%% 8. 导出 RTL 对标向量 (治理规范 V-1: 权威位置 models/comm/synch/vectors/)
+%  原先本脚本从不调用 generate_vectors, 且第 95 行的 fprintf 开单引号闭双引号
+%  导致整个文件解析失败 —— 这是 synch 向量目录一直不存在、G-B-03 无从谈起的
+%  直接原因。
+generate_vectors(r, r_corrected, struct('n_peak', n_peak, 'n_fine', n_fine, ...
+                                        'epsilon', epsilon_coarse), cfg);
+
+fprintf('\n仿真完成\n');

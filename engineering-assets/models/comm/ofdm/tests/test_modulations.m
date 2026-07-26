@@ -4,7 +4,7 @@ function pass = test_modulations()
     pass_all = true;
 
     for i = 1:length(mod_types)
-        cfg = config();
+        config;   % config.m 是脚本不是函数, 原写法 cfg=config() 直接报错
         cfg.mod_type = mod_types{i};
         cfg.plot_en = false;
         cfg.save_vectors = false;

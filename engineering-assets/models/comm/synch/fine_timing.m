@@ -10,14 +10,26 @@ function [n_opt, R_peak] = fine_timing(r, n_coarse, t_long, cfg)
 %   R_peak   - 峰值互相关值
 
     N = cfg.N;
-    search_window = 64;
+    if isfield(cfg, 'short_len'), short_len = cfg.short_len; else, short_len = 160; end
+    if isfield(cfg, 'N_gi2'),     n_gi2     = cfg.N_gi2;     else, n_gi2     = 32;  end
 
-    % 长前导码起始 = 短前导码 160 样点 + GI2 32 样点
-    n_start = max(1, n_coarse + 160 - 16);
-    n_end = min(length(r) - N + 1, n_start + search_window);
+    % 搜索窗必须覆盖 T1 的真实位置。
+    %
+    % 原式 n_start = n_coarse + 160 - 16, n_end = n_start + 64, 隐含假设
+    % n_coarse 就是**包起点**。但 packet_detect 返回的是判决平顶的**中点**
+    % (它自己的注释写着"取平顶中点作为粗定时位置"), 两者相差约半个短前导码。
+    % 实测: n_coarse=120 -> 搜索 [264,328], 而 T1 真实起点 tau+192=242
+    % 根本不在窗内, 于是返回窗内次优点 307, 误差恰好 65 样点。
+    %
+    % 这里不去猜 n_coarse 的语义, 改为给出一个必然包含 T1 的下界与上界:
+    % T1 一定在粗定时点之后, 且不会超过 (短前导码 + GI2 + 一个长符号)。
+    % 互相关对 T1 是尖峰, 窗放宽不会引入误判, 只多花些运算。
+    n_start = max(1, n_coarse);
+    n_end   = min(length(r) - N + 1, n_coarse + short_len + n_gi2 + N);
 
-    R_max = 0;
-    n_opt = n_coarse + 160;
+    R_max  = 0;
+    n_opt  = n_coarse + short_len + n_gi2;   % 兜底值 = 名义位置
+    R_peak = 0;
 
     for n = n_start:n_end
         R = 0;

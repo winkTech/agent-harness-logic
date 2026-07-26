@@ -1,6 +1,6 @@
 function pass = test_boundary()
 %% 边界测试: 全零输入、单频输入
-    cfg = config();
+    config;   % config.m 是脚本不是函数, 原写法 cfg=config() 直接报错
     cfg.plot_en = false;
     cfg.save_vectors = false;
     N = cfg.N;
