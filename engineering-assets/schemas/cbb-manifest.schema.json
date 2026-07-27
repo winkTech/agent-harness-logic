@@ -119,6 +119,39 @@
         "period_ns": { "type": "number", "minimum": 0.1 }
       }
     },
+    "clocks": {
+      "type": "array",
+      "minItems": 2,
+      "description": "多时钟域资产（如 CDC 原语）的全部时钟。单数 clock 字段仍必填并指主域（约定：数据消费侧/dst 域），本数组补全其余域。单时钟资产不得使用本字段。",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["name", "domain"],
+        "properties": {
+          "name": { "type": "string" },
+          "domain": { "type": "string", "description": "域角色标注, 如 src/dst" },
+          "period_ns": { "type": "number", "minimum": 0.1 },
+          "relationship": { "type": "string", "enum": ["asynchronous", "synchronous", "mesochronous"] }
+        }
+      }
+    },
+    "resets": {
+      "type": "array",
+      "minItems": 2,
+      "description": "多时钟域资产的全部复位, 与 clocks 配套。单数 reset 字段仍必填并指主域。",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["name", "domain", "polarity", "type"],
+        "properties": {
+          "name": { "type": "string" },
+          "domain": { "type": "string" },
+          "polarity": { "type": "string", "enum": ["active_high", "active_low"] },
+          "type": { "type": "string", "enum": ["sync", "async"] },
+          "async_release_synchronized": { "type": "boolean" }
+        }
+      }
+    },
     "reset": {
       "type": "object",
       "additionalProperties": false,
