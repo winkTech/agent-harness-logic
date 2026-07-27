@@ -1,6 +1,6 @@
 ---
 name: presentation
-description: 图表与 Office 文档生成 — 架构图(Mermaid/Draw.io) + HTML 幻灯片 + PPT(x) + Excel(xlsx)。含视觉 QA 循环。触发词：画图/架构图/幻灯片/PPT/演示文稿/Excel表格/数据报告
+description: 图表与 Office 文档生成 — 架构图(Mermaid/Draw.io)、HTML 幻灯片、PPT(x)、Excel(xlsx)，含视觉 QA 循环。
 version: 2.0.0
 model: sonnet
 invoked_by: both
@@ -9,6 +9,18 @@ tools: [Read, Write, Edit, Bash, Glob, Grep]
 ---
 
 # Presentation — 图表与文档生成
+
+> **随附脚本与运行时资源**（2026-07-27 补齐，此前文档引用但文件不存在）：
+>
+> | 文件 | 作用 | 外部依赖 |
+> |:-----|:-----|:---------|
+> | `scripts/office/soffice.py` | LibreOffice headless 包装：跨平台定位 + 独立 profile 隔离，避免与 GUI 实例抢占而挂起 | LibreOffice（缺失时 exit 2 并提示 `SOFFICE_BIN`） |
+> | `scripts/recalc.py` | xlsx 公式重算 + 错误值/可疑公式扫描（`#REF!`/`#DIV/0!`/整列引用…） | openpyxl；LibreOffice 可选（缺失则只扫描并**明确声明未重算**） |
+> | `scripts/repair_png.py` | 校验 draw.io PNG 的可编辑元数据是否还在；`--trim` 裁边、`--max-side` 缩放，**均保留元数据** | Pillow |
+> | `scripts/encode_drawio_url.py` | draw.io XML ↔ 分享 URL 编解码（含 `roundtrip` 自校验） | 无 |
+> | `scripts/render.sh` | HTML 幻灯片 → PDF → 逐页 PNG（QA 循环用），Chrome/Edge → wkhtmltopdf → LibreOffice 依次降级 | 三者任一 + poppler/ImageMagick |
+> | `assets/runtime.js` | 幻灯片运行时：键盘/触摸/滚轮翻页、进度条、hash 深链、overview、跨窗口同步 | 无 |
+> | `assets/animations/fx-runtime.js` | 入场动画：`data-fx` 声明式、`data-fx-step` 分步、尊重 `prefers-reduced-motion` | 无 |
 
 按输出类型选择模式：
 
@@ -164,7 +176,7 @@ loop:
   1. 生成幻灯片
   2. 转图片: 
      ```bash
-     python scripts/office/soffice.py --headless --convert-to pdf output.pptx
+     python skills/presentation/scripts/office/soffice.py --headless --convert-to pdf output.pptx
      pdftoppm -jpeg -r 150 output.pdf slide
      ```
   3. 子代理视觉检查（即使只有 2-3 页也要用子代理——你盯着代码会看到你想看的，不是实际存在的）
@@ -237,6 +249,42 @@ python skills/presentation/scripts/recalc.py output.xlsx
 2. **使用前检查环境依赖** — 没有工具链就提前说明
 3. **QA 不可跳过** — PPT 和 Excel 必须有验证步骤
 4. **第一次渲染几乎一定有问题** — 预设找 bug 的心态
+
+## 参考文件
+
+`skills/presentation/references/` 下按需读取：
+
+| 主题 | 文件 |
+|:-----|:-----|
+| Draw.io 核心语法与图元 | `drawio-core.md` |
+| 绘图规则（配色/布局/连线约定） | `draw-rule.md` |
+| 图表类型选型（架构图/时序图/状态图/流程图） | `diagram-types.md` |
+| 样式预设 | `style-presets.md` |
+| 从既有素材提取样式 | `style-extraction.md` |
+| 渲染问题排查 | `troubleshooting.md` |
+
+脚本与运行时资源：
+
+| 用途 | 文件 |
+|:-----|:-----|
+| LibreOffice headless 包装 | `scripts/office/soffice.py` |
+| xlsx 重算与错误扫描 | `scripts/recalc.py` |
+| draw.io PNG 体检/裁剪/缩放 | `scripts/repair_png.py` |
+| draw.io URL 编解码 | `scripts/encode_drawio_url.py` |
+| HTML 幻灯片渲染为 PDF/PNG | `scripts/render.sh` |
+| 幻灯片翻页运行时 | `assets/runtime.js` |
+| 入场动画运行时 | `assets/animations/fx-runtime.js` |
+
+HTML 幻灯片（`references/html-presentation/`）：
+
+| 主题 | 文件 |
+|:-----|:-----|
+| 撰写指南（总入口） | `references/html-presentation/authoring-guide.md` |
+| 版式布局 | `references/html-presentation/layouts.md` |
+| 主题与配色 | `references/html-presentation/themes.md` |
+| 动画与过渡 | `references/html-presentation/animations.md` |
+| 演讲者模式 | `references/html-presentation/presenter-mode.md` |
+| 完整成套示例 | `references/html-presentation/full-decks.md` |
 
 ## 关联 Skill
 

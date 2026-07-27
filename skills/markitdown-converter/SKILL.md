@@ -18,12 +18,19 @@ provenance_sha: 16e3fa3301dfb5c6
 
 Convert files (PDF, DOCX, XLSX, PPTX, HTML, CSV, images, audio) to Markdown using Microsoft's MarkItDown library. 支持扫描版 PDF 的 OCR 识别。
 
+> **包装脚本位置**: `skills/markitdown-converter/scripts/markitdown-convert.py`
+> （2026-07-27 补齐；此前文档引用的 `.claude/tools/cli/` 路径下并无此文件）。
+>
+> 相对上游 `markitdown` CLI 的增量：扫描版 PDF 自动检测 + 多 OCR 引擎自动降级
+> （rapidocr → easyocr → paddleocr）+ 统一 JSON 输出 + 明确退出码契约。
+> 基础依赖 `pip install "markitdown[all]"`；OCR 另需 `pip install pymupdf rapidocr-onnxruntime`。
+
 ## Usage
 
 ```javascript
 Skill({ skill: 'markitdown-converter' });
 // Then call the converter via Bash:
-// bash: python .claude/tools/cli/markitdown-convert.py <input_file> [output_file]
+// bash: python skills/markitdown-converter/scripts/markitdown-convert.py <input_file> [output_file]
 ```
 
 ## Supported File Types
@@ -50,32 +57,32 @@ pip install pymupdf rapidocr-onnxruntime
 
 ## CLI Wrapper
 
-The CLI wrapper is at `.claude/tools/cli/markitdown-convert.py`.
+The CLI wrapper is at `skills/markitdown-converter/scripts/markitdown-convert.py`.
 
 ### 基本用法
 
 ```bash
 # 转换文件到 stdout
-python .claude/tools/cli/markitdown-convert.py /path/to/file.pdf
+python skills/markitdown-converter/scripts/markitdown-convert.py /path/to/file.pdf
 
 # 转换并保存到输出文件
-python .claude/tools/cli/markitdown-convert.py /path/to/file.pdf /path/to/output.md
+python skills/markitdown-converter/scripts/markitdown-convert.py /path/to/file.pdf /path/to/output.md
 
 # 指定文件扩展名提示
-python .claude/tools/cli/markitdown-convert.py /path/to/file --ext .pdf
+python skills/markitdown-converter/scripts/markitdown-convert.py /path/to/file --ext .pdf
 ```
 
 ### 扫描版 PDF OCR 用法
 
 ```bash
 # 使用 rapidocr 引擎（推荐，轻量快速）
-python .claude/tools/cli/markitdown-convert.py scanned.pdf output.md --ocr-engine rapidocr
+python skills/markitdown-converter/scripts/markitdown-convert.py scanned.pdf output.md --ocr-engine rapidocr
 
 # 自动选择引擎（按 rapidocr → easyocr → paddleocr 顺序尝试）
-python .claude/tools/cli/markitdown-convert.py scanned.pdf output.md --ocr-engine auto
+python skills/markitdown-converter/scripts/markitdown-convert.py scanned.pdf output.md --ocr-engine auto
 
 # 指定语言
-python .claude/tools/cli/markitdown-convert.py scanned.pdf output.md --lang ch_sim,en
+python skills/markitdown-converter/scripts/markitdown-convert.py scanned.pdf output.md --lang ch_sim,en
 ```
 
 ### 批量转换（含 OCR）
@@ -85,7 +92,7 @@ python -c "
 import sys, os, glob, json, importlib.util
 sys.stdout.reconfigure(encoding='utf-8')
 
-spec = importlib.util.spec_from_file_location('md', '.claude/tools/cli/markitdown-convert.py')
+spec = importlib.util.spec_from_file_location('md', 'skills/markitdown-converter/scripts/markitdown-convert.py')
 mod = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(mod)
 
@@ -170,7 +177,7 @@ const tmpPath = `.claude/context/tmp/telegram-upload-${userId}-${Date.now()}.${e
 
 // 2. Run markitdown converter (with OCR fallback)
 const result = JSON.parse(
-  execSync(`python .claude/tools/cli/markitdown-convert.py "${tmpPath}" --ocr-engine easyocr`).toString()
+  execSync(`python skills/markitdown-converter/scripts/markitdown-convert.py "${tmpPath}" --ocr-engine easyocr`).toString()
 );
 
 // 3. Store as agent memory
@@ -183,7 +190,7 @@ if (result.success) {
 
 ```javascript
 // Check if markitdown is installed
-const { status } = spawnSync('python', ['.claude/tools/cli/markitdown-convert.py', '--help']);
+const { status } = spawnSync('python', ['skills/markitdown-converter/scripts/markitdown-convert.py', '--help']);
 if (status === 3) {
   // Not installed — guide user
   sendMessage(chatId, 'File conversion requires: pip install markitdown[all]');
