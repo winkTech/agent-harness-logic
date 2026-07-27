@@ -70,32 +70,5 @@
       "PowerShell(Remove-Item -Recurse -Force /:*)",
       "PowerShell(Remove-Item -Recurse -Force ~:*)"
     ]
-  },
-  "hooks": {
-    "PostToolUse": [
-      {
-        "matcher": "Bash",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "node C:/Users/Lihan/.claude/engine/scripts/hooks/verification-gate.cjs"
-          },
-          {
-            "type": "command",
-            "command": "node C:/Users/Lihan/.claude/engine/scripts/hooks/toolchain-health-gate.cjs",
-            "timeout": 3
-          }
-        ]
-      },
-      {
-        "matcher": "PowerShell",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "node C:/Users/Lihan/.claude/engine/scripts/hooks/verification-gate.cjs"
-          }
-        ]
-      }
-    ]
   }
 }

@@ -40,11 +40,17 @@ session-aliases.json
 Thumbs.db
 .last-cleanup
 
-# 用户本地配置（含 API token，不应入库）
+# 用户本地配置（含 API token / 本机绝对路径，不应入库）
 config.json
 settings.json
 
-# settings.local.json 未列入 — 它含 hooks/权限/MCP 等共享配置，需版本控制
+# 2026-07-27 起：**所有 hook 统一放 settings.json**（见 README「Hook 事件」一节）。
+# 该文件被忽略，因为 hook 命令里含 C:/Users/<name>/... 本机绝对路径
+# （历史教训：改用 $HOME 会导致 hook 静默不触发，见 memory/reference/hooks-fix-2026-06-24.md）。
+# 代价：hook 配置不入版本库 —— 换机/新克隆需要重新生成 settings.json。
+#
+# settings.local.json 未列入，仍需版本控制：现在只承载 permissions / enabledPlugins / env，
+# 不再放 hook。
 
 # 环境变量（含密钥）
 .env
@@ -95,6 +101,16 @@ xsim.dir/
 xsim.jou
 *.jou
 *.wdb
+# xvlog/xelab 的 protobuf 日志：会落在**启动时的 CWD**（含仓库根），
+# 2026-07-27 提交前检查在根目录抓到 xelab.pb / xvlog.pb 两个残留
+*.pb
+xvlog.log
+xelab.log
+xsim.log
+webtalk*.jou
+webtalk*.log
+.Xil/
+vivado*.str
 
 # ModelSim / Questa
 transcript
