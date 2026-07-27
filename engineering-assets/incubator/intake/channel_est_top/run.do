@@ -9,7 +9,16 @@
 # 因此本脚本预期在 TB 的 fail-closed 处终止。这是正确行为 —— 在向量到位前
 # 本包不得产出任何可作为门禁证据的 PASS。
 
-set ROOT  {C:/Users/Lihan/.claude/engineering-assets}
+# ROOT 自定位（脱敏：不硬编码本机路径）
+# 优先 EA_ROOT 环境变量；否则从本脚本位置向上找到 engineering-assets 目录。
+if {[info exists ::env(EA_ROOT)]} {
+  set ROOT $::env(EA_ROOT)
+} else {
+  set ROOT [file dirname [file normalize [info script]]]
+  while {[file tail $ROOT] ne "engineering-assets" && $ROOT ne [file dirname $ROOT]} {
+    set ROOT [file dirname $ROOT]
+  }
+}
 set PKG   "$ROOT/incubator/intake/channel_est_top"
 set BUILD "$ROOT/var/build/channel_est_top"
 set VEC   "$ROOT/models/comm/channel_est/vectors/"

@@ -5,7 +5,16 @@
 # `transcript file` 重定向, 二者都挡不住这个启动残桩; 从 build 目录启动才能
 # 让残桩落在已 gitignore 的构建区, 而不是污染资产包。
 # (命令以 vsim 开头, 被 verification-gate 识别为功能验证)
-set ROOT  {C:/Users/Lihan/.claude/engineering-assets}
+# ROOT 自定位（脱敏：不硬编码本机路径）
+# 优先 EA_ROOT 环境变量；否则从本脚本位置向上找到 engineering-assets 目录。
+if {[info exists ::env(EA_ROOT)]} {
+  set ROOT $::env(EA_ROOT)
+} else {
+  set ROOT [file dirname [file normalize [info script]]]
+  while {[file tail $ROOT] ne "engineering-assets" && $ROOT ne [file dirname $ROOT]} {
+    set ROOT [file dirname $ROOT]
+  }
+}
 set PKG   "$ROOT/cbb/rrc_polyphase_fir"
 set BUILD "$ROOT/var/build/rrc_pilot"
 # 库级约定（治理规范 §5.5）：向量权威位置 = models/<domain>/<algo>/vectors/，

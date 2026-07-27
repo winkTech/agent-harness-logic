@@ -20,7 +20,7 @@ Bugs often manifest deep in the call stack (git init in wrong directory, file cr
 ### 1. Observe the Symptom
 
 ```
-Error: git init failed in /Users/jesse/project/packages/core
+Error: git init failed in [HOME_DIR]/project/packages/core
 ```
 
 ### 2. Find Immediate Cause

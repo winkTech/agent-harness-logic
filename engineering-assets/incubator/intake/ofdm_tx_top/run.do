@@ -5,7 +5,16 @@
 # 库级约定（治理规范 §5.5）: 向量权威位置 = models/<domain>/<algo>/vectors/,
 # 由本脚本经 +VEC_DIR 注入; TB 内不得硬编码绝对路径或指向包外的相对路径。
 
-set ROOT  {C:/Users/Lihan/.claude/engineering-assets}
+# ROOT 自定位（脱敏：不硬编码本机路径）
+# 优先 EA_ROOT 环境变量；否则从本脚本位置向上找到 engineering-assets 目录。
+if {[info exists ::env(EA_ROOT)]} {
+  set ROOT $::env(EA_ROOT)
+} else {
+  set ROOT [file dirname [file normalize [info script]]]
+  while {[file tail $ROOT] ne "engineering-assets" && $ROOT ne [file dirname $ROOT]} {
+    set ROOT [file dirname $ROOT]
+  }
+}
 set PKG   "$ROOT/incubator/intake/ofdm_tx_top"
 set BUILD "$ROOT/var/build/ofdm_tx_top"
 set VEC   "$ROOT/models/comm/ofdm/vectors/"

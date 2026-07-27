@@ -13,10 +13,19 @@ set SIM_TIME "10 us"
 # 经 +VEC_DIR 注入; TB 内不得硬编码或用指向包外的相对路径。
 # 注意: models/comm/ldpc/vectors/ 当前为空（向量从未由 MATLAB 导出），
 # 解码器 TB 预期在此 fail-closed —— 向量到位前不得产出可作证据的 PASS。
-set PKG {C:/Users/Lihan/.claude/engineering-assets/incubator/intake/ldpc_codec}
-set VEC {C:/Users/Lihan/.claude/engineering-assets/models/comm/ldpc/vectors/}
-set BUILD {C:/Users/Lihan/.claude/engineering-assets/var/build/ldpc_codec}
-
+# ROOT 自定位（脱敏：不硬编码本机路径）
+# 优先 EA_ROOT 环境变量；否则从本脚本位置向上找到 engineering-assets 目录。
+if {[info exists ::env(EA_ROOT)]} {
+  set ROOT $::env(EA_ROOT)
+} else {
+  set ROOT [file dirname [file normalize [info script]]]
+  while {[file tail $ROOT] ne "engineering-assets" && $ROOT ne [file dirname $ROOT]} {
+    set ROOT [file dirname $ROOT]
+  }
+}
+set PKG  "$ROOT/incubator/intake/ldpc_codec"
+set VEC  "$ROOT/models/comm/ldpc/vectors/"
+set BUILD "$ROOT/var/build/ldpc_codec"
 # 在独立 build 目录内构建, 避免 work/ transcript *.vcd 污染资产包
 file mkdir $BUILD
 cd $BUILD

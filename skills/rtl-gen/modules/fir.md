@@ -1,6 +1,6 @@
 # FIR Compiler — 基于 PG149 v7.2
 
-**参考手册**: `D:\Project_Files\templates\fir\pg149-fir-compiler-en-us-7.2.pdf`（已转 `pg149-fir.md`）
+**参考手册**: `[TEMPLATES_DIR]\fir\pg149-fir-compiler-en-us-7.2.pdf`（已转 `pg149-fir.md`）
 
 ---
 
@@ -229,8 +229,8 @@ w, h = np.freqz(coeff)
 
 | 资源 | 路径 |
 |:----|:------|
-| PG149 FIR Compiler 原始 PDF | `D:\Project_Files\templates\fir\pg149-fir-compiler-en-us-7.2.pdf` |
-| PG149 转换 Markdown | `D:\Project_Files\templates\fir\pg149-fir.md` |
+| PG149 FIR Compiler 原始 PDF | `[TEMPLATES_DIR]\fir\pg149-fir-compiler-en-us-7.2.pdf` |
+| PG149 转换 Markdown | `[TEMPLATES_DIR]\fir\pg149-fir.md` |
 | 生产级 RTL 规范 | `../references/rtl-production-standards.md` |
 | HDL 编码规范 | `../../hdl-coding/SKILL.md` |
 | 算法硬件参考 | `../../hdl-coding/references/algorithm-hardware.md` |

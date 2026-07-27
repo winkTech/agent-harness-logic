@@ -633,7 +633,13 @@ def generate_tv10(output_dir):
 # ══════════════════════════════════════════════════════════════════════
 
 def main():
-    output_dir = sys.argv[1] if len(sys.argv) > 1 else 'D:/Project_Files/works/conv_viterbi_golden/tv'
+    # 输出目录优先级: 命令行参数 > CONV_TV_DIR 环境变量 > 脚本同级的 tv/
+    # (脱敏: 原先硬编码本机绝对路径, 换机即失效且泄露目录结构)
+    output_dir = (
+        sys.argv[1] if len(sys.argv) > 1
+        else os.environ.get('CONV_TV_DIR')
+        or os.path.join(os.path.dirname(os.path.abspath(__file__)), 'tv')
+    )
     os.makedirs(output_dir, exist_ok=True)
 
     print('+-------------------------------------------------------------+')

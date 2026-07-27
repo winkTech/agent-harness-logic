@@ -21,6 +21,13 @@ metadata:
 | 本地文档库 | `D:\Papers\`, `D:\docs\`, `D:\data\` | `[PAPERS_DIR]`, `[DOCS_DIR]`, `[DATA_DIR]` |
 | 机器特定路径 | `J:\basic_verilog\`, `E:\fpga_dsp_example\` | `[PROJECT_DIR]`（仅限自有代码；外部资料原文保留） |
 | API Token / 密钥 | `your_bot_token_here`（占位符 OK）, 真实 token | `[TOKEN]` 或直接使用 `your_xxx_here` |
+| **工具具体版本号** | `Vivado 2023.1`, `ModelSim 10.6c`, `MATLAB R2022a` | 写**怎么查**（`eda-detect.cjs --json` / `--version`），不写值 |
+| **工具安装路径** | `C:\Xilinx\Vivado\<ver>\bin`, `C:\Program Files\MATLAB\<ver>` | `[EDA_ROOT]` / `[MATLAB_ROOT]`，或让脚本从 PATH 解析 |
+
+> 工具版本和安装路径是**双重问题**：既是机器特有信息，又会随升级立刻过期。
+> 文档里固化一个版本快照，等于埋了一颗到期就误导人的雷。需要版本时一律现查。
+> 例外：**问题记录**（错误复盘、bug 归因）里为了还原现场可以写具体版本，
+> 但要注明观测日期，且不要作为规范性结论被别处引用。
 
 ## 占位符约定
 
@@ -34,8 +41,13 @@ metadata:
 
 ## 不修改的范畴
 
+- **第三方 vendored 代码**：`engineering-assets/reference-assets/vendor/*`（basic_verilog / picorv32 /
+  verilog-pcie / async_fifo / r22sdf / axis_udp 等上游 OSS）。其中的作者邮箱、`/home/<name>/`
+  构建路径、Quartus 报告里的机器路径**属于上游原文与署名**，改动会破坏溯源与许可归属。
+  2026-07-27 扫描：385 条 email、12 条 nix 路径全部落在此范围内，判定为**期望内**。
 - **子模块**：`knowledge/primary/domains/fpga/examples/basic_verilog-master/` 等独立仓库
 - **第三方 marketplace 代码**：`plugins/marketplaces/*`
+- **本规则文件自身**：本文列举的模式示例必须保留原样，否则规则不可读
 - **知识库原文引用**：`knowledge/archive/sources/*` 中的书籍原文（含有出版社联系方式等，属于原文内容）
 - **已占位符化的模板**：`config.json` 中的 `"primaryApiKey": "any"` 等
 

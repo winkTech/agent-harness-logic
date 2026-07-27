@@ -9,7 +9,7 @@ metadata:
 
 ## 现象
 
-在 `D:\Project_Files\ofdm\wifi_example\` WiFi PHY 项目中，agent 产生了大量文件变体和仿真垃圾：
+在 `[PROJECT_DIR]\` WiFi PHY 项目中，agent 产生了大量文件变体和仿真垃圾：
 
 | 类别 | 数量 | 示例 |
 |:-----|:----:|:-----|

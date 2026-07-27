@@ -3,7 +3,7 @@ name: wifi-phy-agent-run-experience
 description: WiFi PHY 多 Agent 工作树、路径、门禁与仿真运行问题的提炼经验
 date: 2026-07-17
 status: completed
-project: D:/Project_Files/ofdm/wifi_platform_codex
+project: [PROJECT_DIR]
 metadata:
   type: project
   tags: [wifi-phy, multi-agent, worktree, simulation, verification, memory-governance]

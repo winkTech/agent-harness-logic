@@ -7,12 +7,12 @@
   "tolerance": 0,
   "timestamp": "2026-06-14T03:29:07Z",
   "files": [
-    {"role": "script", "path": "C:/Users/Lihan/.claude/knowledge/primary/domains/comm/convolutional-coding/golden_model/check_conv_decoder.py"},
-    {"role": "rtl", "path": "D:/Project_Files/works/conv_viterbi_golden/01_src/viterbi_decoder_top.sv"},
-    {"role": "tb", "path": "D:/Project_Files/works/conv_viterbi_golden/02_tb/tb_conv_viterbi.sv"},
-    {"role": "golden", "path": "D:/Project_Files/works/conv_viterbi_golden/tv/"},
-    {"role": "log", "path": "D:/Project_Files/works/conv_viterbi_golden/transcript"},
-    {"role": "log", "path": "C:/Users/Lihan/.claude/knowledge/primary/domains/comm/convolutional-coding/evidence_report.json"}
+    {"role": "script", "path": "[CLAUDE_HOME]/knowledge/primary/domains/comm/convolutional-coding/golden_model/check_conv_decoder.py"},
+    {"role": "rtl", "path": "[PROJECT_DIR]/01_src/viterbi_decoder_top.sv"},
+    {"role": "tb", "path": "[PROJECT_DIR]/02_tb/tb_conv_viterbi.sv"},
+    {"role": "golden", "path": "[PROJECT_DIR]/tv/"},
+    {"role": "log", "path": "[PROJECT_DIR]/transcript"},
+    {"role": "log", "path": "[CLAUDE_HOME]/knowledge/primary/domains/comm/convolutional-coding/evidence_report.json"}
   ],
   "duration_us": 1176444,
   "toolchain": {

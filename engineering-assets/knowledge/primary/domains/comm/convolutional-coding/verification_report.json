@@ -16,11 +16,11 @@
         },
         {
           "role": "golden",
-          "path": "D:/Project_Files/works/conv_viterbi_golden/tv\\*_data_in.hex"
+          "path": "[PROJECT_DIR]/tv\\*_data_in.hex"
         },
         {
           "role": "golden",
-          "path": "D:/Project_Files/works/conv_viterbi_golden/tv\\*_coded_out.hex"
+          "path": "[PROJECT_DIR]/tv\\*_coded_out.hex"
         }
       ],
       "duration_us": 15997,
@@ -43,11 +43,11 @@
         },
         {
           "role": "golden",
-          "path": "D:/Project_Files/works/conv_viterbi_golden/tv\\*_coded_out.hex"
+          "path": "[PROJECT_DIR]/tv\\*_coded_out.hex"
         },
         {
           "role": "golden",
-          "path": "D:/Project_Files/works/conv_viterbi_golden/tv\\*_data_in.hex"
+          "path": "[PROJECT_DIR]/tv\\*_data_in.hex"
         }
       ],
       "duration_us": 273506,
@@ -325,11 +325,11 @@
         },
         {
           "role": "golden",
-          "path": "D:/Project_Files/works/conv_viterbi_golden/tv\\*_coded_mother.hex"
+          "path": "[PROJECT_DIR]/tv\\*_coded_mother.hex"
         },
         {
           "role": "golden",
-          "path": "D:/Project_Files/works/conv_viterbi_golden/tv\\*_coded_punc_1_2.hex"
+          "path": "[PROJECT_DIR]/tv\\*_coded_punc_1_2.hex"
         }
       ],
       "duration_us": 0,
@@ -352,11 +352,11 @@
         },
         {
           "role": "golden",
-          "path": "D:/Project_Files/works/conv_viterbi_golden/tv\\*_coded_mother.hex"
+          "path": "[PROJECT_DIR]/tv\\*_coded_mother.hex"
         },
         {
           "role": "golden",
-          "path": "D:/Project_Files/works/conv_viterbi_golden/tv\\*_coded_punc_2_3.hex"
+          "path": "[PROJECT_DIR]/tv\\*_coded_punc_2_3.hex"
         }
       ],
       "duration_us": 0,
@@ -379,11 +379,11 @@
         },
         {
           "role": "golden",
-          "path": "D:/Project_Files/works/conv_viterbi_golden/tv\\*_coded_mother.hex"
+          "path": "[PROJECT_DIR]/tv\\*_coded_mother.hex"
         },
         {
           "role": "golden",
-          "path": "D:/Project_Files/works/conv_viterbi_golden/tv\\*_coded_punc_3_4.hex"
+          "path": "[PROJECT_DIR]/tv\\*_coded_punc_3_4.hex"
         }
       ],
       "duration_us": 0,
@@ -406,11 +406,11 @@
         },
         {
           "role": "golden",
-          "path": "D:/Project_Files/works/conv_viterbi_golden/tv\\*_coded_mother.hex"
+          "path": "[PROJECT_DIR]/tv\\*_coded_mother.hex"
         },
         {
           "role": "golden",
-          "path": "D:/Project_Files/works/conv_viterbi_golden/tv\\*_coded_punc_5_6.hex"
+          "path": "[PROJECT_DIR]/tv\\*_coded_punc_5_6.hex"
         }
       ],
       "duration_us": 0,
@@ -433,11 +433,11 @@
         },
         {
           "role": "golden",
-          "path": "D:/Project_Files/works/conv_viterbi_golden/tv\\*_coded_mother.hex"
+          "path": "[PROJECT_DIR]/tv\\*_coded_mother.hex"
         },
         {
           "role": "golden",
-          "path": "D:/Project_Files/works/conv_viterbi_golden/tv\\*_coded_punc_7_8.hex"
+          "path": "[PROJECT_DIR]/tv\\*_coded_punc_7_8.hex"
         }
       ],
       "duration_us": 0,
