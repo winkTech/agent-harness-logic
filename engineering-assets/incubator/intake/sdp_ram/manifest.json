@@ -4,27 +4,65 @@
   "name": "sdp_ram",
   "version": "0.1.0",
   "owner": "lihan",
+  "kind": "primitive",
   "maturity": {
-    "level": "intake"
+    "level": "qualification",
+    "evidence_ref": "engineering-assets/var/gates/pg/sdp_ram/"
   },
   "requirement_ref": "engineering-assets/docs/comm模块族认证差距清单.md",
   "doc_refs": [
     "engineering-assets/docs/governance/CBB-治理与生产级准入规范-V1.0.md"
   ],
   "fidelity": {
-    "status": "pending"
+    "status": "na"
   },
   "top": "sdp_ram",
   "ports": [
-    { "name": "i_clk", "direction": "input", "width": 1 },
-    { "name": "i_rst", "direction": "input", "width": 1 },
-    { "name": "i_wr_en", "direction": "input", "width": 1 },
-    { "name": "i_wr_addr", "direction": "input", "width": 9 },
-    { "name": "i_wr_data", "direction": "input", "width": 32 },
-    { "name": "i_rd_en", "direction": "input", "width": 1 },
-    { "name": "i_rd_addr", "direction": "input", "width": 9 },
-    { "name": "o_rd_data", "direction": "output", "width": 32 },
-    { "name": "o_rd_valid", "direction": "output", "width": 1 }
+    {
+      "name": "i_clk",
+      "direction": "input",
+      "width": 1
+    },
+    {
+      "name": "i_rst",
+      "direction": "input",
+      "width": 1
+    },
+    {
+      "name": "i_wr_en",
+      "direction": "input",
+      "width": 1
+    },
+    {
+      "name": "i_wr_addr",
+      "direction": "input",
+      "width": 9
+    },
+    {
+      "name": "i_wr_data",
+      "direction": "input",
+      "width": 32
+    },
+    {
+      "name": "i_rd_en",
+      "direction": "input",
+      "width": 1
+    },
+    {
+      "name": "i_rd_addr",
+      "direction": "input",
+      "width": 9
+    },
+    {
+      "name": "o_rd_data",
+      "direction": "output",
+      "width": 32
+    },
+    {
+      "name": "o_rd_valid",
+      "direction": "output",
+      "width": 1
+    }
   ],
   "clock": {
     "name": "i_clk"

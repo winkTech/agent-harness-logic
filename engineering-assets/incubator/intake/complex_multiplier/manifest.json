@@ -4,28 +4,70 @@
   "name": "complex_multiplier",
   "version": "0.1.0",
   "owner": "lihan",
+  "kind": "primitive",
   "maturity": {
-    "level": "intake"
+    "level": "qualification",
+    "evidence_ref": "engineering-assets/var/gates/pg/complex_multiplier/"
   },
   "requirement_ref": "engineering-assets/docs/comm模块族认证差距清单.md",
   "doc_refs": [
     "engineering-assets/docs/governance/CBB-治理与生产级准入规范-V1.0.md"
   ],
   "fidelity": {
-    "status": "pending"
+    "status": "na"
   },
   "top": "complex_multiplier",
   "ports": [
-    { "name": "i_clk", "direction": "input", "width": 1 },
-    { "name": "i_rst", "direction": "input", "width": 1 },
-    { "name": "i_valid", "direction": "input", "width": 1 },
-    { "name": "i_a_re", "direction": "input", "width": 16 },
-    { "name": "i_a_im", "direction": "input", "width": 16 },
-    { "name": "i_b_re", "direction": "input", "width": 16 },
-    { "name": "i_b_im", "direction": "input", "width": 16 },
-    { "name": "o_valid", "direction": "output", "width": 1 },
-    { "name": "o_re", "direction": "output", "width": 33 },
-    { "name": "o_im", "direction": "output", "width": 33 }
+    {
+      "name": "i_clk",
+      "direction": "input",
+      "width": 1
+    },
+    {
+      "name": "i_rst",
+      "direction": "input",
+      "width": 1
+    },
+    {
+      "name": "i_valid",
+      "direction": "input",
+      "width": 1
+    },
+    {
+      "name": "i_a_re",
+      "direction": "input",
+      "width": 16
+    },
+    {
+      "name": "i_a_im",
+      "direction": "input",
+      "width": 16
+    },
+    {
+      "name": "i_b_re",
+      "direction": "input",
+      "width": 16
+    },
+    {
+      "name": "i_b_im",
+      "direction": "input",
+      "width": 16
+    },
+    {
+      "name": "o_valid",
+      "direction": "output",
+      "width": 1
+    },
+    {
+      "name": "o_re",
+      "direction": "output",
+      "width": 33
+    },
+    {
+      "name": "o_im",
+      "direction": "output",
+      "width": 33
+    }
   ],
   "clock": {
     "name": "i_clk"

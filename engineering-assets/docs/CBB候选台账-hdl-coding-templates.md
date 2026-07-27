@@ -47,7 +47,12 @@ sm4_round 涉及密码算法正确性,须先建 golden 再入库。
 
 ## 遗留
 
-- 6 个原语包统一卡 G-B-02:"结构原语是否需要 MATLAB golden(或以自检 TB
-  作正确性锚)"待 owner 裁决——影响它们能否晋级 qualification。
+- ~~6 个原语包统一卡 G-B-02~~ **已裁决(owner,2026-07-27)**:golden model
+  锚的是**算法**,不是所有模块。结构原语 `kind=primitive` 的正确性锚 =
+  自检 TB(G-B-02),certified 级 G-B-03 = 自检 TB 实跑证据落盘
+  (`tb-selfcheck.json`)。裁决已入治理规范 §2.6 修订记录、schema 与
+  gate-runner;6 包全部达 **QUALIFICATION**。
+- 原语 certified 待办:TB 运行脚本导出 `tb-selfcheck.json` 证据 +
+  Vivado 综合门(G-C-01/02)+ 签字。
 - ldpc llr_buffer/msg_buffer 换用 sdp_ram 属后续独立任务(避免扰动 ldpc
   转正路径)。

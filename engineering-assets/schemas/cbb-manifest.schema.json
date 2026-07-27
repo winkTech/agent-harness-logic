@@ -20,6 +20,15 @@
         "if": { "properties": { "maturity": { "properties": { "level": { "const": "reference" } }, "required": ["level"] } }, "required": ["maturity"] },
         "then": { "required": ["provenance", "banner"] },
         "else": {
+          "if": { "properties": { "kind": { "const": "primitive" } }, "required": ["kind"] },
+          "then": {
+            "comment": "结构原语 (owner 裁决 2026-07-27): golden model 锚的是算法, 不是所有模块。RAM/skid buffer/延迟线/CDC/LFSR 这类结构原语的正确性锚 = 自检 TB (G-B-02/03 按类分锚), 任何成熟度级别都不要求 golden_model_ref/fidelity 对标字段。",
+            "required": [
+              "version", "requirement_ref", "doc_refs",
+              "ports", "clock", "reset", "sources"
+            ]
+          },
+          "else": {
           "if": { "properties": { "maturity": { "properties": { "level": { "const": "intake" } }, "required": ["level"] } }, "required": ["maturity"] },
           "then": {
             "comment": "intake 准入 = schema-valid + 编译干净 + 锚链起点（规范 §3.1 L152-153）。golden 绑定(G-B-02)与资源包络(G-C-02 constraints.target)是晋级 qualification/certified 的门, 不是 intake 的形状要求 —— 否则无算法 golden 的结构原语(skid buffer/RAM 等)永远进不了 intake。",
@@ -33,6 +42,7 @@
               "version", "requirement_ref", "doc_refs", "golden_model_ref",
               "fidelity", "ports", "clock", "reset", "constraints", "sources"
             ]
+          }
           }
         }
       }
@@ -71,7 +81,7 @@
       "additionalProperties": false,
       "required": ["status"],
       "properties": {
-        "status": { "type": "string", "enum": ["bit_true", "tolerance", "pending"] },
+        "status": { "type": "string", "enum": ["bit_true", "tolerance", "pending", "na"], "description": "na 仅限 kind=primitive: 结构原语无 golden 对标概念, 正确性由自检 TB 承担" },
         "bit_accurate_against": { "type": "string" },
         "tolerance": {
           "type": "object",
@@ -237,8 +247,8 @@
 
     "kind": {
       "type": "string",
-      "enum": ["rtl", "golden-model", "vendor", "knowledge"],
-      "description": "资产域（规范 §1 三个锚 + vendored）。缺省视为 rtl，保持既有 CBB 包向后兼容。"
+      "enum": ["rtl", "primitive", "golden-model", "vendor", "knowledge"],
+      "description": "资产域（规范 §1 三个锚 + vendored）。缺省视为 rtl，保持既有 CBB 包向后兼容。primitive = 结构原语 (RAM/skid buffer/延迟线/CDC/LFSR 等)：正确性锚 = 自检 TB，不要求 golden model（owner 裁决 2026-07-27：golden 锚的是算法，不是所有模块）。"
     },
     "implements_for": {
       "type": "array", "items": { "type": "string" },

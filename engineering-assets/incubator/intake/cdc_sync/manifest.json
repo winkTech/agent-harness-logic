@@ -4,8 +4,10 @@
   "name": "cdc_sync",
   "version": "0.1.0",
   "owner": "lihan",
+  "kind": "primitive",
   "maturity": {
-    "level": "intake"
+    "level": "qualification",
+    "evidence_ref": "engineering-assets/var/gates/pg/cdc_sync/"
   },
   "requirement_ref": "engineering-assets/docs/comm模块族认证差距清单.md",
   "doc_refs": [
@@ -13,26 +15,70 @@
     "engineering-assets/docs/CBB候选台账-hdl-coding-templates.md"
   ],
   "fidelity": {
-    "status": "pending"
+    "status": "na"
   },
   "top": "cdc_sync",
   "ports": [
-    { "name": "i_clk_src", "direction": "input", "width": 1 },
-    { "name": "i_rst_src", "direction": "input", "width": 1 },
-    { "name": "i_valid_src", "direction": "input", "width": 1 },
-    { "name": "i_data_src", "direction": "input", "width": 8 },
-    { "name": "o_ready_src", "direction": "output", "width": 1 },
-    { "name": "i_clk_dst", "direction": "input", "width": 1 },
-    { "name": "i_rst_dst", "direction": "input", "width": 1 },
-    { "name": "o_valid_dst", "direction": "output", "width": 1 },
-    { "name": "o_data_dst", "direction": "output", "width": 8 }
+    {
+      "name": "i_clk_src",
+      "direction": "input",
+      "width": 1
+    },
+    {
+      "name": "i_rst_src",
+      "direction": "input",
+      "width": 1
+    },
+    {
+      "name": "i_valid_src",
+      "direction": "input",
+      "width": 1
+    },
+    {
+      "name": "i_data_src",
+      "direction": "input",
+      "width": 8
+    },
+    {
+      "name": "o_ready_src",
+      "direction": "output",
+      "width": 1
+    },
+    {
+      "name": "i_clk_dst",
+      "direction": "input",
+      "width": 1
+    },
+    {
+      "name": "i_rst_dst",
+      "direction": "input",
+      "width": 1
+    },
+    {
+      "name": "o_valid_dst",
+      "direction": "output",
+      "width": 1
+    },
+    {
+      "name": "o_data_dst",
+      "direction": "output",
+      "width": 8
+    }
   ],
   "clock": {
     "name": "i_clk_dst"
   },
   "clocks": [
-    { "name": "i_clk_src", "domain": "src", "relationship": "asynchronous" },
-    { "name": "i_clk_dst", "domain": "dst", "relationship": "asynchronous" }
+    {
+      "name": "i_clk_src",
+      "domain": "src",
+      "relationship": "asynchronous"
+    },
+    {
+      "name": "i_clk_dst",
+      "domain": "dst",
+      "relationship": "asynchronous"
+    }
   ],
   "reset": {
     "name": "i_rst_dst",
@@ -40,8 +86,18 @@
     "type": "sync"
   },
   "resets": [
-    { "name": "i_rst_src", "domain": "src", "polarity": "active_high", "type": "sync" },
-    { "name": "i_rst_dst", "domain": "dst", "polarity": "active_high", "type": "sync" }
+    {
+      "name": "i_rst_src",
+      "domain": "src",
+      "polarity": "active_high",
+      "type": "sync"
+    },
+    {
+      "name": "i_rst_dst",
+      "domain": "dst",
+      "polarity": "active_high",
+      "type": "sync"
+    }
   ],
   "sources": [
     {

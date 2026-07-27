@@ -89,6 +89,21 @@
 | G-B-05 | 算法方向一致（源 `08-constraints §3`） | hybrid | 从该资产 **Phase-2 定点记录派生有限判决轴清单**（吸收 checkability：判决类型 / 时域-频域 / 舍入-饱和模式 / 迭代收敛方案），逐轴 `match=yes/no` 记入 correctness-review。任一轴=no ⇒ FAIL 回退 incubator。**bit-true 与容差两条路径都不得绕过本项** | `correctness-review.json`（逐轴） + Phase-2 定点记录 | MUST | qualification |
 | G-B-06 | RTL 覆盖率 | — | **从 certified 证据链移除**（吸收 solo-realism：仓内无 RTL 覆盖引擎，`coverage-runner.cjs` 是面向 hook JS 的 V8 行覆盖，非 RTL）。拿到商业仿真器或 `iverilog+vpi toggle` 后再启用；分母须机器定义：整体=`rtl/` 下全部可综合模块（TB 排除），核心逻辑=`manifest.generality.core_modules[]` 显式列表 | 纯文字备注，**不进 `gate_results`** | 规模化后 | — |
 
+> **修订（2026-07-27，owner 裁决）——正确性锚按资产类分锚**：
+> golden model 锚的是**算法**，不是所有模块。`manifest.kind = "primitive"`
+> 的结构原语（RAM/skid buffer/延迟线/CDC 同步器/LFSR 等无独立算法语义、
+> 行为可由接口契约完备定义的构件）**豁免 G-B-02 的 golden 绑定与
+> G-B-03 的 golden 对标**，改为：
+> - G-B-02（qualification）：正确性锚 = 包内**自检 TB**（内建参考模型 +
+>   反假绿约定 V-1..V-6：X/Z 计失配、比较数 0 即 fatal、失配打印证据）；
+> - G-B-03（certified）：自检 TB **实跑 PASS 证据落盘**
+>   （`var/gates/pg/<uid>/tb-selfcheck.json`：pass/compares/tool）；
+> - `fidelity.status = "na"`（原语无 golden 对标概念）；
+> - G-B-05（算法方向一致）对原语记 na——无 Phase-2 定点记录可派生判决轴。
+> 判据：模块若含**算法选择空间**（滤波/译码/估计/变换/定点量化语义），
+> 必须走算法路径建 golden；仅结构复用（存储/握手/延迟/跨域/序列发生）
+> 走 primitive 路径。拿不准时默认算法路径（fail-closed）。
+
 ### 2.7 维度 C — 稳定性
 
 > **无 EDA license ⇒ 该维封顶 qualification**（吸收 solo-realism，写进门禁而非开放问题）。certified-C 只要求对**一个代表性器件+速度等级**的综合级 util 与时序估计（本用户 Vivado 可跑）；完整 P&R STA / 多角 / CDC 工具报告 = 规模化后。CBB 作为跨器件库件默认无"唯一目标器件"，单器件资产的多器件收敛证据默认 na。

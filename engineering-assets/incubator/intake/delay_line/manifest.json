@@ -4,8 +4,10 @@
   "name": "delay_line",
   "version": "0.1.0",
   "owner": "lihan",
+  "kind": "primitive",
   "maturity": {
-    "level": "intake"
+    "level": "qualification",
+    "evidence_ref": "engineering-assets/var/gates/pg/delay_line/"
   },
   "requirement_ref": "engineering-assets/docs/comm模块族认证差距清单.md",
   "doc_refs": [
@@ -13,16 +15,40 @@
     "engineering-assets/docs/CBB候选台账-hdl-coding-templates.md"
   ],
   "fidelity": {
-    "status": "pending"
+    "status": "na"
   },
   "top": "delay_line",
   "ports": [
-    { "name": "i_clk", "direction": "input", "width": 1 },
-    { "name": "i_rst", "direction": "input", "width": 1 },
-    { "name": "i_valid", "direction": "input", "width": 1 },
-    { "name": "i_data", "direction": "input", "width": 32 },
-    { "name": "o_valid", "direction": "output", "width": 1 },
-    { "name": "o_data", "direction": "output", "width": 32 }
+    {
+      "name": "i_clk",
+      "direction": "input",
+      "width": 1
+    },
+    {
+      "name": "i_rst",
+      "direction": "input",
+      "width": 1
+    },
+    {
+      "name": "i_valid",
+      "direction": "input",
+      "width": 1
+    },
+    {
+      "name": "i_data",
+      "direction": "input",
+      "width": 32
+    },
+    {
+      "name": "o_valid",
+      "direction": "output",
+      "width": 1
+    },
+    {
+      "name": "o_data",
+      "direction": "output",
+      "width": 32
+    }
   ],
   "clock": {
     "name": "i_clk"
