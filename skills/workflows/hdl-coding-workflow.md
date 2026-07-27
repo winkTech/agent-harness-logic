@@ -1,10 +1,10 @@
 ---
 name: hdl-coding-workflow
-description: RTL 开发全流程 — 系统方案→微架构→定点量化→TB向量生成→逐模块RTL+脚本化对比→确定性证据门禁→顶层全链仿真→回归→双维审查→报告
-version: 3.6.0
+description: RTL 开发全流程 — 系统方案→微架构→定点量化→TB向量生成→逐模块RTL+脚本化对比→确定性证据门禁→顶层全链仿真→回归→Vivado综合体检→双维审查→报告
+version: 3.7.0
 executable: workflows/hdl-coding-dag-workflow.js
 agents: [algorithm-engineer, logic-engineer, ce-correctness-reviewer, ce-api-contract-reviewer, ce-architecture-strategist, ce-performance-oracle]
-phases: 11
+phases: 12
 triggers:
   - new algorithm module
   - new RTL module
@@ -13,7 +13,7 @@ triggers:
   - code review prep
 ---
 
-# HDL Coding Workflow (v3.6)
+# HDL Coding Workflow (v3.7)
 
 > **本文档是方法论说明；可执行的单一真源是 `workflows/hdl-coding-dag-workflow.js`**，
 > 通过 `Workflow({name: 'hdl-coding-dag-workflow', args: {...}})` 调用
@@ -50,6 +50,7 @@ triggers:
 | **4.5** 证据门禁 | hdl-evidence-gate.cjs (确定性) + ce-correctness-reviewer (高安全模块对抗) | 脚本校验全部模块 JSON 证据；高安全模块追加对抗 agent 读 RTL+golden 找差异 | 全部 PASS → **CP: evidence-review** |
 | **5** 顶层集成+全链仿真 | logic-engineer (集成/修复) + ce-api-contract-reviewer / ce-architecture-strategist / ce-performance-oracle (三路只读分析) | 4 路发散 (接口/数据通路/Golden/时序) → 合成 → 定向修复 | 全链各中间级与 golden 一致 |
 | **6** 回归覆盖率 | logic-engineer | make regress 全量回归 + covergroup 100% | regress 全绿 |
+| **6b** Vivado 综合体检 | logic-engineer（走 `vivado-flow` 技能） | `vivado_flow.tcl -from rtlcheck -to synth`：RTL DRC + 综合后 methodology/CDC/资源/时序 → `04_prj/rpt/flow_summary.json` | `ok=true` 且 WNS≥0 且无推断失败；Vivado 不可用则如实 skipped 并标注未验证 |
 | **7** 代码审查 | ce-correctness-reviewer ∥ ce-api-contract-reviewer | 正确性维度 + 接口契约维度双审查 | 审查通过 |
 | **8** 报告+Verifier | 调度层 | 汇总报告 + 归档 + make clean；末端 verifier 交叉核对全链证据 | verifier pass=true |
 
@@ -86,6 +87,8 @@ triggers:
 | 证据门禁脚本 | `engine/scripts/hdl-evidence-gate.cjs` | Phase 1b/4/4.5 确定性证据判定 |
 | HDL 编码规范 | `skills/hdl-coding/SKILL.md` | 命名规则、时序安全、lint 门禁 |
 | 算法→Verilog 参考 | `skills/hdl-coding/references/alg-flow-verilog.md` | 代码模板、NMSE 判定、排查表 |
+| Vivado 工具流 | `skills/hdl-coding/references/vivado-tool-flow.md` | Phase 6b 的命令、报告与证据纪律 |
+| Vivado 执行入口 | `skills/vivado-flow/SKILL.md` / `skills/vivado-flow/scripts/vivado_flow.tcl` | Phase 6b 实际执行的 TCL（全流程 + 断点续跑） |
 | 各 Phase 详细说明 | `skills/workflows/hdl-coding/` | phase0-8 文档（P1 文档覆盖 P1a/P1b） |
 | P1a/P1b 门禁清单 | `engineering-assets/knowledge/primary/architecture-patterns/gate-checklist-p1a.md` / `gate-checklist-p1b.md` | design-review 检查点核对表 |
 | 证据 JSON 契约 | `schemas/check-result.schema.json` | check_<module>.py 输出格式 |

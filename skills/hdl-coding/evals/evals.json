@@ -1,7 +1,7 @@
 {
   "skill": "hdl-coding",
-  "version": "3.6.0",
-  "description": "HDL coding skill evals — 断言覆盖 5 条红线（ri_ 输入寄存 / ro_ 输出驱动 / 同步复位 / 三段式 FSM + default / 无锁存器结构）",
+  "version": "3.8.0",
+  "description": "HDL coding skill evals — 断言覆盖 5 条红线（ri_ 输入寄存 / ro_ 输出驱动 / 同步复位 / 三段式 FSM + default / 无锁存器结构）+ §10 Vivado 综合可预测性（BRAM 推断与复位豁免）",
   "evals": [
     {
       "name": "verilog-module-basic",
@@ -126,6 +126,34 @@
           "type": "content_match",
           "pattern": "\\bro_\\w+",
           "description": "红线 2：输出由 ro_ 驱动"
+        }
+      ]
+    },
+    {
+      "name": "bram-inference",
+      "description": "存储器模块 — 验证 §10 Vivado 综合可预测性（BRAM 推断不被复位阻断）",
+      "prompt": "编写一个 1024×8 位的单端口同步 RAM 模块，目标器件 Xilinx Artix-7，要求综合后映射到 Block RAM",
+      "expected_outputs": {
+        "infers_block_ram": true,
+        "read_addr_registered": true,
+        "no_reset_on_read_data_reg": true,
+        "documents_reset_exemption": true
+      },
+      "assertions": [
+        {
+          "type": "content_match",
+          "pattern": "always(_ff)?\\s*@\\s*\\(\\s*posedge\\s+i_clk\\s*\\)",
+          "description": "同步读写（异步读会掉成分布式 RAM）"
+        },
+        {
+          "type": "content_match",
+          "pattern": "复位豁免|ram_style|RAM_STYLE",
+          "description": "§10.2/§5.1：读数据寄存器不加复位须有豁免注释，或显式用 RAM_STYLE 属性声明意图"
+        },
+        {
+          "type": "content_not_match",
+          "pattern": "if\\s*\\(\\s*i_rst\\s*\\)[^;]*ro_rdata",
+          "description": "§10.2：BRAM 输出寄存器带复位会导致输出寄存器吸收失败（Fmax 崩）"
         }
       ]
     }

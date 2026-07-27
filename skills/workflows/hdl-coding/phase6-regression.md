@@ -57,7 +57,7 @@ make regress
 `make regress` 全绿（或真实编译/仿真日志），covergroup 全部触发。
 
 **关联 Skill**: `hdl-coding`（仿真流程）
-**数据输入**: `.claude/state/hdl-coding/layer-status.json`
+**数据输入**: `02_sim/check_results/*.json`（Phase 4.5 证据门禁产物）
 
 **可执行检查点**:
 ```bash

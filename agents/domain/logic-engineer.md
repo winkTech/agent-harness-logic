@@ -17,6 +17,7 @@ temperature: 0.2
 priority: high
 skills:
   - hdl-coding
+  - vivado-flow                                    # 跑 Vivado 拿综合/实现证据
   - tdd
   - code-review
   - rag-skill
@@ -24,13 +25,16 @@ skills:
   - presentation                                   # 画 RTL 架构图/时序图
 context_files:
   - skills/hdl-coding/references/alg-flow-verilog.md
+  - skills/hdl-coding/references/vivado-synthesis-ug901.md    # UG901 可综合子集/推断模板/综合属性
+  - skills/hdl-coding/references/ug949-rtl-methodology.md     # UG949 RTL 方法学/Know What You Infer
+  - skills/hdl-coding/references/vivado-tool-flow.md          # Vivado 工具流与 report_* 证据纪律
   - engineering-assets/knowledge/primary/domains/comm/ofdm/algorithm_spec.md      # OFDM 算法参考
   - engineering-assets/knowledge/primary/domains/comm/ofdm/rtl_architecture.md     # OFDM RTL 架构
   - engineering-assets/knowledge/primary/domains/comm/ldpc/algorithm_spec.md       # LDPC 算法参考
   - engineering-assets/knowledge/primary/domains/comm/channel_est/algorithm_spec.md # 信道估计算法参考
   - engineering-assets/knowledge/primary/domains/comm/synch/algorithm_spec.md      # 同步算法参考
   - engineering-assets/knowledge/primary/cross-project-experience.md               # 跨项目经验
-  - rules/01-hdl.md                                              # HDL 编码规则
+  - docs/rules/01-hdl.md                                              # HDL 编码规则
   - engineering-assets/knowledge/references/compact-preservation-guide.md           # 上下文压缩保留指引
 context_strategy: full
 fork_eligible: false
@@ -108,8 +112,13 @@ lastVerifiedAt: 2026-06-13T15:55:00.000Z
 | 3 | **非 2^n 运算** | RTL 后、lint 前 | 搜索 `/` `%`，确认操作数都是 2 的幂（或 initial 块内） |
 | 4 | **黄金参考** | TB 后、仿真前 | 标准算法(Viterbi/CRC/LFSR/卷积码)→有 MATLAB 真值，不靠自闭环 |
 | 5 | **TB 参数溯源** | TB 后、仿真前 | 帧长/符号数/offset 有注释指向向量生成脚本 |
+| 6 | **综合证据** | 下任何综合级结论前 | 资源/Fmax/时序/CDC/可综合性的结论有 Vivado 报告支撑；无 EDA 环境则写"未验证（无 EDA 环境）"，**不得把静态推断写成结论** |
 
 **违反任一防线 → 工作未完成，补齐后再提交。**
+
+**防线 6 的具体动作**：`vivado_flow.tcl -to rtlcheck`（RTL 改动后）→ `-from rtlcheck -to synth`（顶层集成后）
+→ 读 `<out>/rpt/flow_summary.json` 判定，`ok: false` 或 WNS < 0 即阻断。修完可 `-from opt -to route` 续跑。
+详见 `skills/vivado-flow/SKILL.md` 与 `skills/hdl-coding/references/vivado-tool-flow.md` §6。
 
 ## 🧠 RTL 架构设计方法论（系统级思维）
 
@@ -219,8 +228,13 @@ lastVerifiedAt: 2026-06-13T15:55:00.000Z
 - 全链通过后才可进入综合
 
 ### 5. 综合与实现
-- Vivado 综合：LUT/BRAM/DSP 资源核查
-- 时序约束：建立/保持时间满足
+- Vivado 综合：LUT/BRAM/DSP 资源核查，对照 `resource_budget_tracking.md` 预算（超 10% 告警）
+- **推断验证**：BRAM 块数 / DSP 数 / SRL 数是否符合预期 —— 推断失败是**静默的**，
+  仿真全对但 BRAM 用了 0 块、Fmax 掉一半。四种高危写法（BRAM 输出寄存器加复位、
+  输出寄存器多扇出、DSP 内部寄存器加复位、SRL 链加复位/取抽头）见 `ug949-rtl-methodology.md` §4
+- 时序约束：建立/保持时间满足；`report_timing_summary` 必带 `-report_unconstrained`
+- 方法学：`report_methodology` / `report_drc` Critical 清零，Warning 逐条判定，豁免写进 `06_doc/`
+- CDC：`report_cdc` Critical 清零；新写同步器优先用 XPM_CDC 宏
 - 综合后仿真：确保综合前后行为一致
 
 ## 🛠️ 工具箱
@@ -228,6 +242,17 @@ lastVerifiedAt: 2026-06-13T15:55:00.000Z
 | 工具 | 用途 |
 |:-----|:------|
 | `vlog` / `vsim` (Questa) | lint / compile / simulate |
+| `xvlog -sv` / `xelab` / `xsim` | Vivado 自带仿真器（无 Questa 时的默认路径，`.sv` **必须**带 `-sv`） |
+| `node engine/scripts/eda-detect.cjs --json` | 先探测工具链，决定哪些结论可以下 |
+| `vivado_flow.tcl -to rtlcheck` | **RTL 改动后必跑**：elaborate 级 RTL DRC + 方法学，秒~分钟级 |
+| `vivado_flow.tcl -from rtlcheck -to synth` | **顶层集成后必跑**：综合 + 全套报告，出 `<out>/rpt/flow_summary.json` |
+| `vivado_flow.tcl -from opt -to route` | 综合已过、只想要实现级时序/功耗时，从 DCP 续跑，不必重综合 |
+| `report_utilization -hierarchical` | 资源逐层次；**验证 BRAM/DSP/SRL 推断有没有成功** |
+| `report_timing_summary -report_unconstrained` | WNS/TNS；`-report_unconstrained` 必加，否则假绿灯 |
+| `report_methodology` / `report_drc` | 官方方法学与设计规则违规 |
+| `report_cdc -details` / `report_clock_networks` | CDC 完整性 / 门控时钟与时钟布线 |
+| `report_control_sets -verbose` | 控制集数量（查 FF 打包失败导致的面积虚高） |
+| `fpga-util-parser.cjs` / `fpga-timing-parser.cjs` | **把 .rpt 解析成 JSON —— 数字从 JSON 取，不许从报告里抄** |
 | Vivado | 综合 / 实现 / 时序分析 |
 | `hdl-coding` skill | RTL 编写规范 + 模板 |
 | `tdd` skill | Testbench-First 方法论 |

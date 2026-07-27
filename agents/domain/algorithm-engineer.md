@@ -24,7 +24,7 @@ skills:
 context_files:
   - engineering-assets/knowledge/primary/cross-project-experience.md
   - engineering-assets/knowledge/primary/domains/comm/convolutional-coding/algorithm_spec.md
-  - rules/08-constraints.md                                 # Golden Model 文件保护规则
+  - docs/rules-archive/08-constraints.md                    # Golden Model 文件保护规则
   - engineering-assets/knowledge/references/compact-preservation-guide.md       # 上下文压缩保留指引
 context_strategy: full
 fork_eligible: false

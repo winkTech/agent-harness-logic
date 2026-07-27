@@ -100,7 +100,7 @@
 
 - 完成标准输入来自: Phase 2（定点报告）+ Phase 3（TB + 测试向量）
 - 输出给: Phase 5（顶层集成 + 全链仿真）
-- 复盘触发: `workflows/debug-retrospective.md`
+- 复盘触发: 调试循环超 5 次转人工审查，方法论见 `skills/debugging/SKILL.md`
 
 **可执行检查点**:
 ```bash

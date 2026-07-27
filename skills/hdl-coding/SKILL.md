@@ -1,7 +1,7 @@
 ---
 name: hdl-coding
-description: HDL 编码规范 — 所有 FPGA/ASIC 相关的 Verilog/SystemVerilog 任务：编写 RTL 模块、Testbench、模块例化、流水线设计、CDC、状态机、代码审查、讲解 FPGA 架构原理、画 RTL 框图和架构图。用户说"写 Verilog/写 RTL/写模块/审查代码/讲FPGA/画架构"时触发。技能强制 ri_/ro_ 命名、时序安全、三段式FSM、锁存器预防——违反红线的代码无法通过本项目审查门禁。注意：纯 Python/MATLAB、安装工具、搜算法原理、写脚本等非 HDL 任务不要触发。
-version: 3.6.0
+description: HDL 编码规范 — FPGA/ASIC 的 Verilog/SystemVerilog 工作：RTL 模块、Testbench、模块例化、流水线、CDC、状态机、代码审查，以及 FPGA 架构原理讲解、RTL 框图和 Vivado 综合/工具流（综合属性、推断规则、report_methodology/RTL DRC/report_cdc、XDC、xsim）。强制 ri_/ro_ 命名、输入输出寄存、三段式 FSM 和无锁存器——违反红线的代码过不了本仓库的审查门禁。纯 Python/MATLAB、工具安装、算法调研不适用。
+version: 3.8.0
 ---
 
 # HDL 编码规范
@@ -10,12 +10,13 @@ version: 3.6.0
 **必须使用**: RTL 编写、Testbench、模块例化、时序约束。
 **可跳过**: 纯文档/注释、已完成的代码审查（但 lint 仍需）。
 **前置加载**: 编写 RTL 前先读 `references/RTL_DESIGN_RULE.md` 的 §代码对齐规范；涉及星座映射、查找表、比特-符号编码的模块，再加读 §LUT/映射门禁。
+涉及**存储器 / DSP 乘加 / 移位链延时 / CDC / 综合属性**，或需要给出**资源、Fmax、时序、可综合性**结论时，加读 `references/ug949-rtl-methodology.md` 与 `references/vivado-tool-flow.md`（见 §10）。
 
 ---
 
 ## 必读红线（5 条 — 违反任何一条 = FAIL）
 
-> 与 `rules/01-hdl.md` 的红线一一对应，两处必须保持同步。**为什么严格？** 组合直出的信号会把毛刺传播到下一级；未寄存的输入在布局布线后时序收敛困难；锁存器不会被 lint 报错，却导致上板功能随机失败。这些都是实际项目中烧过板的教训。
+> 与 `docs/rules/01-hdl.md` 的红线一一对应，两处必须保持同步。**为什么严格？** 组合直出的信号会把毛刺传播到下一级；未寄存的输入在布局布线后时序收敛困难；锁存器不会被 lint 报错，却导致上板功能随机失败。这些都是实际项目中烧过板的教训。
 
 1. **[MUST]** 输入信号必须寄存为 `ri_`，禁止直通 → 否则 FAIL
 2. **[MUST]** 输出必须由 `ro_` 驱动，禁止组合直出 → 否则 FAIL
@@ -71,6 +72,7 @@ version: 3.6.0
 - **[MUST]** 仿真：模块级功能仿真通过后再提交
 - **[MUST]** 仿真报错按顺序排查：先检查端口位宽匹配，再查时序，最后查逻辑
 - **[SHOULD]** RTL 输出必须与 Golden Model bit-true 对齐，不允许用容差掩盖算法偏离
+- **[MUST]** 综合级结论（资源够不够 / 时序收不收敛 / 推断成没成功 / CDC 干不干净）**必须有 Vivado 报告支撑**，见 §10。无 EDA 环境时写"未验证"，不得把静态推断写成结论
 
 ---
 
@@ -111,6 +113,66 @@ version: 3.6.0
 
 ---
 
+## §10 Vivado 综合可预测性（对齐 UG901 / UG949）
+
+**为什么单独立一节**：红线管的是功能正确与可维护性，管不到"综合器到底把你的代码变成了什么"。
+FPGA 上最贵的事故不是仿真错，是**推断静默失败**——RTL 仿真全对，综合完 BRAM 用了 0 块、
+DSP 没吸收流水寄存器、Fmax 掉一半，而工具**不报任何错**。
+
+### 10.1 三条硬要求
+
+0. **[MUST] 查文档先锚版本。** 先用 `node engine/scripts/eda-detect.cjs --json` 查出本机
+   实际版本，再把 docs.amd.com 切到同一版——它默认显示最新发行版，而本机通常落后若干版。
+   照新版抄来的 TCL 选项、综合属性、器件型号，在旧版上会报 `invalid option`、被静默忽略
+   或找不到 part。UG 地图与细则见 `references/vivado-doc-map.md`。
+1. **[MUST] 不跑工具不下综合结论。** 没有 `report_utilization` 不许说"资源够用"；没有
+   `report_timing_summary` 不许说"时序能收敛"；没有 `report_cdc` 不许说"CDC 没问题"。
+2. **[MUST] RTL 改动后跑一次 RTL DRC**（秒级）：
+   ```bash
+   vivado -mode batch -nojournal -nolog \
+     -source skills/vivado-flow/scripts/vivado_flow.tcl \
+     -tclargs -top <top> -part <part> -src 01_src/00_hdl -out 04_prj -to rtlcheck
+   ```
+   → 读 `04_prj/rpt/flow_summary.json`，`ok: false` **阻断**。
+3. **[MUST] 顶层集成后跑到综合**：同一脚本 `-from rtlcheck -to synth`（加 `-xdc 03_xdc`）
+   → 仍读 `flow_summary.json`；`synth` 段的 methodology/CDC critical > 0 或 `wns < 0` **阻断**。
+   修完后可 `-from opt -to route` 从检查点续跑，不必重综合。
+
+> 执行入口统一在 **`vivado-flow`** 技能（`skills/vivado-flow/SKILL.md`），本技能只负责
+> 「怎么写」的规则；「怎么跑、拿什么证据」看那边。
+
+### 10.2 推断静默失败的高危写法（记住这四条就够挡住大多数事故）
+
+| 写法 | 后果 | 出处 |
+|:-----|:-----|:-----|
+| 给 BRAM 读数据/输出寄存器加复位 | 输出寄存器吸收失败 → Fmax 崩 | UG949 Know What You Infer |
+| BRAM 输出寄存器多扇出 | 同上 | 同上 |
+| 给 DSP 内部流水寄存器加复位 | MREG/PREG 吸收失败 → DSP 跑不满频率 | 同上 |
+| 给移位链/延时线加复位或取中间抽头 | SRL 掉成 FF 链，面积膨胀数十倍 | 同上 |
+
+→ 这是红线 3 的**唯一豁免场景**，豁免要写注释 + 报告验证，细则见
+`references/vivado-synthesis-ug901.md` §5.1。
+
+### 10.3 还必须知道的四件事
+
+- **门控时钟是禁止写法**：用 BUFGCE 的时钟使能，不写 `always @(posedge (clk & en))`
+- **控制集**：数据通路寄存器少加复位，否则 FF 打包失败 → 面积虚高（`report_control_sets` 查）
+- **优先用 XPM_CDC 宏**而不是手写同步器：`report_cdc` 能识别、内置 `ASYNC_REG`
+- **`report_timing_summary` 必带 `-report_unconstrained`**：未约束路径是最常见的假绿灯
+
+### 10.4 属性使用纪律
+
+综合属性（`RAM_STYLE` / `USE_DSP` / `MAX_FANOUT` / `DONT_TOUCH` / `ASYNC_REG` …）是对综合器的
+**强制指令**：
+
+- **[MUST]** 每个属性旁写一行注释说明为什么加 —— 无注释的属性没人敢删，会长期锁死过时决策
+- **[MUST]** 加完属性必须用报告验证它生效 —— 名字/取值写错时 Vivado 只 warning 甚至静默忽略
+- **[SHOULD]** 优先改代码结构，属性是最后手段
+
+完整属性表见 `references/vivado-synthesis-ug901.md` §4。
+
+---
+
 ## 参考文件
 `skills/hdl-coding/references/` 下按需读取：
 
@@ -125,6 +187,10 @@ version: 3.6.0
 | TB 记分板 + AXI-Stream VIP | `tb-scoreboard.md`（配套 `axi_stream_if.sv`、`axi-stream-vip.sv`） |
 | 功能覆盖率模板 | `coverage-templates.md` |
 | 时序约束（时钟/IO/例外） | `timing-constraints.md` |
+| **Vivado 语言级：可综合子集 / 推断模板 / 综合属性（UG901）** | `vivado-synthesis-ug901.md` |
+| **Vivado 方法学：层次/控制集/复位/Know What You Infer/Fmax/功耗/CDC（UG949）** | `ug949-rtl-methodology.md` |
+| **Vivado 工具流：RTL DRC / report_* / 非工程模式 TCL / xsim** | `vivado-tool-flow.md` |
+| **Vivado 文档导航：哪本 UG 管哪件事 + 查文档前的版本锚定** | `vivado-doc-map.md` |
 | 资源与时序优化 | `fpga-optimization.md` |
 | FPGA 开发流程与最佳实践 | `fpga-development.md` / `design-best-practices.md` |
 | 除法器/LUT 技巧 | `division-lut.md` |
@@ -141,6 +207,10 @@ version: 3.6.0
 |:-----|:-----|:---------|
 | `comm/`（9 个：AXIS 主/从/流水寄存、CDC、复数乘、LFSR、延迟链、双口 RAM） | **符合本规范**（ri_/ro_/r_ 命名、元数据头） | 可直接例化或改造 |
 | `alu/`（3 个）、`internet/`（8 个：CRC/哈希/LRU/CAM/帧同步/Crossbar/SM4） | **外部资料改编**，命名未按 ri_/ro_ 规范 | 仅参考算法结构；复用前必须按 §1/§2 重写接口与命名 |
+
+> Vivado 执行脚本不在本技能内 —— 见 `vivado-flow` 技能的
+> `skills/vivado-flow/scripts/vivado_flow.tcl`（本技能原先的 `templates/tcl/` 两个脚本是它的子集，
+> 2026-07-27 已删除以避免两套入口漂移）。
 
 ## 关联 Skill
 - [code-review](../code-review/SKILL.md) — 代码审查

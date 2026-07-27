@@ -102,8 +102,8 @@ source .claude/checkpoints/hdl-checkpoints.sh && check_escalation
 审查通过的 RTL + 完整仿真日志 + 覆盖率报告 + **升级决策记录**。
 
 **关联 Skill**: `code-review`（质量审查模式）、`hdl-coding`（时序安全/命名规范核查）
-**数据输入**: `.claude/state/hdl-coding/layer-status.json`
-**数据输出**: `.claude/state/hdl-coding/review-decision.json`
+**数据输入**: `02_sim/check_results/*.json` + `04_prj/rpt/flow_summary.json`（Phase 6b Vivado 体检）
+**数据输出**: 审查结论写入 Phase 8 汇总报告
 
 **可执行检查点**:
 ```bash

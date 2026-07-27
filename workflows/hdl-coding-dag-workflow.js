@@ -1,8 +1,25 @@
 /**
- * hdl-coding-dag-workflow — HDL RTL 开发 DAG 工作流 v3.6.0
+ * hdl-coding-dag-workflow — HDL RTL 开发 DAG 工作流 v3.7.0
  *
  * 本文件是该工作流的**单一真源** (workflows/ 目录, 供 Workflow({name}) 解析)。
  * skills/workflows/hdl-coding-workflow.md 是它的方法论文档, 以本文件为准。
+ * 注意: .claude/workflows/ 下有一份镜像副本, 改本文件后须同步。
+ *
+ * v3.7 — Xilinx 官方方法学接入 (UG901/UG949):
+ *   新增 Phase 6b (p6b_vivado_check), 与 P6 回归/P7 审查并行, 汇入 P8。
+ *   仿真只证明功能对, 证明不了综合器把代码变成了什么 —— 推断静默失败
+ *   (BRAM 输出寄存器没吸收 / DSP 没流水 / SRL 掉成 FF 链) 不报错, 只掉性能。
+ *
+ * v3.7.1 — Vivado 入口收敛 (2026-07-27):
+ *   原先 Phase 6b 调 skills/hdl-coding/templates/tcl/ 下两个脚本
+ *   (vivado_rtl_check.tcl + vivado_synth_report.tcl)。二者是 vivado-flow 技能里
+ *   vivado_flow.tcl 的 rtlcheck / synth 两阶段的子集, 留两套必然漂移, 已删除。
+ *   现在统一走 skills/vivado-flow/scripts/vivado_flow.tcl:
+ *     一条命令跑 rtlcheck → synth, 逐阶段存 DCP 可断点续跑,
+ *     证据汇总为 <out>/rpt/flow_summary.json (嵌套结构, 按阶段分段)。
+ *   阻断条件: 脚本 ok=false, 或 critical+errors > 0, 或 WNS < 0, 或有推断失败项。
+ *   Vivado 不可用 → 如实 skipped, 不阻断, 但 P8 报告与 Verifier 必须标注
+ *   "综合级结论未验证"。
  *
  * v3.6 — 审计修复 (2026-07-26, 用户批准的三批升级):
  *   1. 证据门禁不再依赖从未存在的 globalThis.workflowFs 桥 —— 判定移入
@@ -28,7 +45,8 @@
  *     modules: ['scrambler', 'equalizer'],
  *     securityModules: ['equalizer'],           // 可选，覆盖自动分类
  *     standardModules: ['fir_fixed'],           // 可选，强制标准模式
- *     projectRoot: 'd:/project/ofdm/prj',       // 可选
+ *     projectRoot: '[PROJECT_DIR]',       // 可选
+ *     part: 'xc7a100tcsg324-2',                 // 可选，Phase 6b 目标器件 (不传则自动查找)
  *     lite: false,                              // 可选 Lite 模式
  *     confirmed: true,                          // 确认 preflight 检查点
  *     checkpoints: {                            // 逐检查点确认 (配合 resumeFromRunId)
@@ -183,7 +201,7 @@ async function _dagExecute(nodes, opts) {
 
 export const meta = {
   name: 'hdl-coding-dag-workflow',
-  description: 'HDL RTL 开发 DAG 工作流 v3.6 — P1a(系统方案)+P1b(微架构)双阶段设计, hdl-evidence-gate.cjs 确定性证据门禁, 可恢复检查点, 专业 agent 分工 (Verifier终验)',
+  description: 'HDL RTL 开发 DAG 工作流 v3.7 — P1a(系统方案)+P1b(微架构)双阶段设计, hdl-evidence-gate.cjs 确定性证据门禁, P6b Vivado 综合体检 (UG901/UG949 方法学证据), 可恢复检查点, 专业 agent 分工 (Verifier终验)',
   phases: [
     { title: 'Phase 0 基础设施' },
     { title: 'Phase 1a 系统方案设计' },
@@ -194,6 +212,7 @@ export const meta = {
     { title: 'Phase 4.5 证据门禁' },
     { title: 'Phase 5 顶层集成+全链仿真' },
     { title: 'Phase 6 回归覆盖率' },
+    { title: 'Phase 6b Vivado 综合体检' },
     { title: 'Phase 7 代码审查' },
     { title: 'Phase 8 报告+Verifier' },
   ],
@@ -207,11 +226,13 @@ export const meta = {
       '06_doc/architecture.yaml',
       '02_sim/check_results/*.json',
       'Phase 4.5 evidence gate',
+      '04_prj/rpt/flow_summary.json (Phase 6b, Vivado 可用时; 由 vivado-flow 技能产出)',
     ],
     completionCriteria: [
       'preflight user checkpoint is confirmed',
       'design-review and evidence-review checkpoints confirmed (or confirmAllCheckpoints)',
       'hdl-evidence-gate.cjs returns ok=true for all modules',
+      'Phase 6b: Vivado 可用时 critical+errors=0 且 WNS>=0; 不可用时报告显式标注未验证',
       'verifier returns valid JSON with pass=true',
     ],
     modeContracts: {
@@ -224,6 +245,9 @@ export const meta = {
         requiredEvidence: ['architecture.yaml', 'check_results/*.json', 'verifier JSON'],
       },
     },
+    toolDegradation: {
+      p6b_vivado_check: 'Vivado 不可用时如实返回 skipped, 不阻断流程; 但报告与 Verifier 必须标注综合级结论未验证',
+    },
   },
 };
 
@@ -233,6 +257,7 @@ const modules = args?.modules || [];
 const moduleOrder = args?.moduleOrder || modules;  // Cascade dependency order (input→output)
 const liteMode = args?.lite === true;
 const projectRoot = args?.projectRoot || '.';  // v3.5.1: process.cwd() 不可用
+const fpgaPart = args?.part || args?.device || '';  // v3.7: Phase 6b Vivado 体检的目标器件
 
 // ── 模块分类（自动 / 手动覆盖）─────────────────────────────────────────────
 
@@ -623,7 +648,19 @@ TB: 02_sim/${mod}/tb_${mod}.sv (唯一 TB, 直接覆盖)
 1. 按 architecture.yaml 微架构编码 (流水线/FSM/位宽一致)
 2. make lint 通过
 3. make compile 通过
-4. 输出 RTL 源码到目标文件`,
+4. 输出 RTL 源码到目标文件
+
+[Vivado 可综合性 — UG949 Know What You Infer]
+推断失败是**静默的**: 仿真全对, 综合完 BRAM 用了 0 块 / DSP 没吸收流水 / SRL 掉成 FF 链,
+工具不报任何错。编码时避开这四种写法 (细则 skills/hdl-coding/references/ug949-rtl-methodology.md §4):
+  - 给 BRAM 读数据/输出寄存器加复位 → 输出寄存器吸收失败, Fmax 崩
+  - BRAM 输出寄存器多扇出 → 同上 (每个消费者复制一份自己的输出寄存器)
+  - 给 DSP 内部流水寄存器加复位 → MREG/PREG 吸收失败
+  - 给移位链/延时线加复位或取中间抽头 → SRL 掉成 FF 链, 面积膨胀数十倍
+这是红线 3 (同步复位 i_rst) 的**唯一豁免**: 数据通路上这几类寄存器不加复位, 无效数据由
+valid 通道屏蔽 (valid 通道必须有 i_rst), 且必须在该寄存器上方写 "// [复位豁免] ... 见
+vivado-synthesis-ug901.md §5.1"。不写注释的"顺手不加复位" = 违反红线, 审查 FAIL。
+另: 禁止门控时钟 (always @(posedge (clk & en))), 改用 BUFGCE 的时钟使能。`,
           { agentType: 'logic-engineer', label: `rtl-code-${mod}`, phase: 'Phase 4 RTL编码' }
         );
         return { mod, stage1: 'done' };
@@ -1205,6 +1242,139 @@ nodes.p6_regression = {
   },
 };
 
+// ── Phase 6b: Vivado 综合体检 (UG901/UG949 方法学证据) ─────────────────────
+// 仿真只证明功能对，证明不了"综合器把代码变成了什么"。推断静默失败 (BRAM 输出寄存器
+// 没吸收 / DSP 没流水 / SRL 掉成 FF 链) 不会报错, 只会让 Fmax 掉一半、面积翻几倍。
+// 本节点跑真工具拿报告; 无 Vivado 环境时如实降级为 skipped, 不允许把静态推断写成结论。
+
+nodes.p6b_vivado_check = {
+  deps: ['p5_top_integration'],
+  run: async () => {
+    const VIVADO_SCHEMA = {
+      type: 'object',
+      properties: {
+        tool_available: { type: 'boolean' },
+        flow_ran: { type: 'boolean' },
+        ok: { type: 'boolean' },
+        stages_run: { type: 'array', items: { type: 'string' } },
+        critical: { type: 'number' },
+        errors: { type: 'number' },
+        wns_ns: { type: ['number', 'null'] },
+        whs_ns: { type: ['number', 'null'] },
+        resources: { type: 'object' },
+        blocking_items: { type: 'array', items: { type: 'string' } },
+        waived_items: { type: 'array', items: { type: 'string' } },
+        skipped_reports: { type: 'array', items: { type: 'string' } },
+        summary_json: { type: 'string' },
+        skip_reason: { type: 'string' },
+      },
+      required: ['tool_available', 'flow_ran', 'blocking_items'],
+    };
+
+    const partHint = fpgaPart
+      ? `目标器件: ${fpgaPart}`
+      : `目标器件: 未由 args.part 指定 — 先从 03_xdc/*.xdc、04_prj/ 工程或 06_doc/ 中找器件型号; 仍找不到就只跑到 rtlcheck 阶段 (它也需要 -part, 可用同系列任一型号做方法学检查并在 skip_reason 里注明)。`;
+
+    const res = await agent(`执行 HDL 工作流 Phase 6b: Vivado 综合体检 (证据收集, 不做判定改写)
+
+项目根: ${projectRoot}
+模块: ${modules.join(', ') || '项目默认'}
+${partHint}
+
+执行入口: vivado-flow 技能 (skills/vivado-flow/SKILL.md)
+规范依据: skills/hdl-coding/references/ug949-rtl-methodology.md (§4 Know What You Infer)
+
+━━━ 步骤 ━━━
+1. 探测工具链:
+   node engine/scripts/eda-detect.cjs --json
+   (脚本在 harness 根目录, 相对路径找不到时用 ~/.claude/ 前缀重试一次)
+   vivado 不可用 → tool_available=false, skip_reason 写明, 其余字段置 0/空, **直接结束**。
+   [MUST] 禁止在无 Vivado 时凭读代码给出资源/时序/推断结论。
+
+2. 跑 rtlcheck → synth (**一条命令覆盖两个阶段, 脚本自动分趟处理 elaborate 与综合**):
+   vivado -mode batch -nojournal -nolog \\
+     -source ~/.claude/skills/vivado-flow/scripts/vivado_flow.tcl \\
+     -tclargs -top top -part <part> -src 01_src/00_hdl -xdc 03_xdc \\
+              -out 04_prj -from rtlcheck -to synth
+   读 04_prj/rpt/flow_summary.json
+
+3. 推断核查 (UG949 §4) — 对照 06_doc/resource_budget_tracking.md, 用 synth 段的资源数:
+   - 设计里有存储器但 synth.bram=0 且 synth.uram=0 → BRAM 推断失败, 列进 blocking_items
+   - 设计里有乘加但 synth.dsp=0 → DSP 推断失败, 列进 blocking_items
+   - 有延时线/移位链但 synth.srl=0 且 synth.ff 远超预算 → SRL 掉成 FF 链, 列进 blocking_items
+   - 关键路径起点是 BRAM 组合输出 → 输出寄存器未吸收, 列进 blocking_items
+
+4. 用解析器复核数字 (禁止从 .rpt 里用眼睛抄):
+   node engine/scripts/fpga-util-parser.cjs   04_prj/rpt/synth_utilization.rpt --json
+   node engine/scripts/fpga-timing-parser.cjs 04_prj/rpt/synth_timing.rpt      --json
+   (报告文件名以 flow_summary.json 的 report_dir 下实际存在的为准)
+
+━━━ 结构化返回 (字段全部取自 flow_summary.json 原值, 禁止改写或估算) ━━━
+- ok / stages_run          ← 顶层同名字段
+- wns_ns / whs_ns          ← synth.wns / synth.whs (没跑到 synth 则为 null)
+- resources                ← synth 段的 {lut, ff, bram, uram, dsp, srl, control_sets}
+- critical / errors        ← rtlcheck 与 synth 两段 critical / error 之和
+- blocking_items           ← 顶层 blocking[] + 步骤 3 发现的推断失败项
+- waived_items             ← 各阶段 waived[] (如未绑引脚的 NSTD-1/UCIO-1, 如实带回但不算阻断)
+- skipped_reports          ← 顶层同名字段 (本机 Vivado 版本不支持而跳过的报告, 不算失败)
+- summary_json             ← flow_summary.json 完整文本
+你不做通过/不通过的最终裁决, 只如实搬运证据。`,
+      { agentType: 'logic-engineer', label: 'p6b-vivado-check', phase: 'Phase 6b Vivado 综合体检', schema: VIVADO_SCHEMA }
+    );
+
+    if (!res || res.tool_available !== true) {
+      const why = res?.skip_reason || 'Vivado 不可用';
+      log(`⏭️ [Phase 6b] 跳过 Vivado 综合体检 — ${why}`);
+      log('   ⚠️ 本次运行**没有**综合级证据: 资源/Fmax/时序/推断成功与否均为未验证。');
+      return { skipped: true, reason: why, toolAvailable: false };
+    }
+
+    const crit = Number(res.critical || 0);
+    const errs = Number(res.errors || 0);
+    const wns = (res.wns_ns === null || res.wns_ns === undefined) ? null : Number(res.wns_ns);
+    const blockers = Array.isArray(res.blocking_items) ? res.blocking_items : [];
+    const waived = Array.isArray(res.waived_items) ? res.waived_items : [];
+    const stages = Array.isArray(res.stages_run) ? res.stages_run : [];
+
+    log(`[Phase 6b] vivado_flow 阶段: ${stages.join(' → ') || '(未报告)'}  脚本判定 ok=${res.ok}`);
+    log(`  违规: error=${errs}, critical=${crit}`);
+    log(`  时序: WNS=${wns === null ? '(未跑到综合/无约束)' : wns + 'ns'}, WHS=${res.whs_ns ?? '-'}`);
+    if (res.resources) log(`  资源: ${JSON.stringify(res.resources)}`);
+    for (const w of waived.slice(0, 10)) log(`  ⚠️ 豁免(不阻断): ${w}`);
+    for (const s of (res.skipped_reports || []).slice(0, 10)) log(`  ℹ️ 跳过的报告: ${s}`);
+    for (const b of blockers.slice(0, 20)) log(`  ❌ ${b}`);
+
+    const timingFail = wns !== null && wns < 0;
+    // 脚本自身的门禁判定 (ok) 与本节点的独立复核取"或"—— 任一判失败即阻断
+    const scriptFail = res.ok === false;
+    if (scriptFail || crit + errs > 0 || timingFail || blockers.length > 0) {
+      throw new Error(
+        `❌ [Phase 6b Vivado 体检] 未通过: script_ok=${res.ok}, error=${errs}, critical=${crit}` +
+        (timingFail ? `, WNS=${wns}ns (< 0)` : '') +
+        (blockers.length ? `\n   阻断项:\n   - ${blockers.slice(0, 20).join('\n   - ')}` : '') +
+        `\n   完整证据: 04_prj/rpt/flow_summary.json` +
+        `\n   处理指引: methodology/DRC 违规家族对照见 ug949-rtl-methodology.md §8.1;` +
+        ` 推断失败见 §4; 复位豁免细则见 vivado-synthesis-ug901.md §5.1。` +
+        `\n   修完后可从检查点续跑, 不必重综合: vivado_flow.tcl -from opt -to route`
+      );
+    }
+
+    log('✅ [Phase 6b] Vivado 综合体检通过 (无 Critical/Error, 时序满足)');
+    return {
+      pass: true,
+      toolAvailable: true,
+      stagesRun: stages,
+      critical: crit,
+      errors: errs,
+      wns_ns: wns,
+      whs_ns: res.whs_ns ?? null,
+      resources: res.resources || {},
+      waived,
+      summaryJson: String(res.summary_json || '').slice(0, 2000),
+    };
+  },
+};
+
 // ── Phase 7: 代码审查 (双专业审查员并行: 正确性 + 接口契约) ─────────────────
 
 nodes.p7_review = {
@@ -1228,6 +1398,13 @@ nodes.p7_review = {
    - 模块命名是否与 architecture.yaml 一致?
 7. [工具链] 如有 EDA 工具链约束 (如 ModelSim 10.6c 禁令),
    检查 RTL 是否违规
+8. [Vivado 可综合性] 依据 skills/hdl-coding/references/ug949-rtl-methodology.md:
+   - 门控时钟 always @(posedge (clk & en)) → 违规, 必须改 BUFGCE 时钟使能
+   - 未加复位的寄存器: 是否属于 §5.1 豁免场景 (BRAM 输出/DSP 流水/SRL 链)?
+     属于 → 必须有 "// [复位豁免] ..." 注释; 不属于 → 违反红线 3
+   - 综合属性 (RAM_STYLE/USE_DSP/MAX_FANOUT/DONT_TOUCH/ASYNC_REG 等):
+     每个是否有注释说明为什么加? 无注释 → 标记为待清理
+   - CDC 同步链是否带 ASYNC_REG (或改用 XPM_CDC 宏)?
 
 输出: 审查报告 PASS/FAIL + 修改建议`, { agentType: 'ce-correctness-reviewer', label: 'p7-review-correctness', phase: 'Phase 7 代码审查' }),
 
@@ -1252,14 +1429,18 @@ nodes.p7_review = {
 // ── Phase 8: 报告输出 ──────────────────────────────────────────────────────
 
 nodes.p8_report = {
-  deps: ['p6_regression', 'p7_review'],
+  deps: ['p6_regression', 'p6b_vivado_check', 'p7_review'],
   run: async (ctx) => {
     const regression = ctx.p6_regression?.data || '';
     const review = ctx.p7_review?.data || '';
+    const vivado = ctx.p6b_vivado_check?.data || {};
     const result = await agent(`生成 HDL 工作流 Phase 8: 总结报告 + 清理
 
 回归结果: ${String(regression).slice(0, 300)}
 审查结果: ${String(review).slice(0, 300)}
+Vivado 综合体检: ${JSON.stringify(vivado).slice(0, 600)}
+  → 报告须包含"综合级证据"一节: 资源实测 vs 预算、WNS、methodology/CDC 违规数。
+  → 若 skipped=true, 必须在报告里写明"无 EDA 环境, 综合级结论未验证", 不得省略。
 
 输出:
 1. 汇总实现报告 (含全链验证矩阵)
@@ -1302,6 +1483,7 @@ nodes.verifier = {
       '## Phase 4.5 证据门禁',   JSON.stringify(gateResult).slice(0, 500) || 'N/A',
       '## Phase 5 全链仿真',     ctx.p5_top_integration?.data || 'N/A',
       '## Phase 6 回归',         ctx.p6_regression?.data || 'N/A',
+      '## Phase 6b Vivado 体检', JSON.stringify(ctx.p6b_vivado_check?.data || {}).slice(0, 600) || 'N/A',
       '## Phase 7 审查',         ctx.p7_review?.data || 'N/A',
       '## Phase 8 报告',         report,
     ].join('\n\n');
@@ -1317,6 +1499,10 @@ nodes.verifier = {
    - compared_points > 0?
 4. Phase 5 全链仿真各中间级与 MATLAB golden model 一致?
 5. Phase 6 回归是否通过 (要求真实编译/仿真)
+5b. **Phase 6b Vivado 综合体检**:
+   - toolAvailable=true → critical+errors 必须为 0, WNS 必须 >= 0 (或无时序约束时注明)
+   - skipped=true → 报告中**必须**显式写明"无 EDA 环境, 综合级结论未验证";
+     若报告里出现了未标注的资源/Fmax/时序断言 → pass=false (把静态推断当结论是本仓库禁止项)
 6. Phase 7 审查是否通过
 7. **对照 architecture.yaml 模块列表**: 有没有模块遗漏验证?
 8. 是否适用于模块: ${modules.join(', ') || '项目默认'}
@@ -1340,13 +1526,13 @@ ${summary.slice(0, 3000)}
 
 if (liteMode) {
   nodes.p4_rtl.deps = ['p3_tb'];
-  nodes.p8_report.deps = ['p7_review'];
+  nodes.p8_report.deps = ['p6b_vivado_check', 'p7_review'];
 
   nodes.p2_fixedpt.run = async () => '[SKIPPED] Lite 模式 — 定点量化跳过';
   nodes.p6_regression.run = async () => '[SKIPPED] Lite 模式 — 覆盖率回归跳过';
 
-  log('   依赖链: P0→P1a→P1b→CP(design)→P3→P4→P45→CP(evidence)→P5→P7→P8→Verifier');
-  log('   (跳过节点: P2 定点量化, P6 覆盖率回归; 检查点保留)');
+  log('   依赖链: P0→P1a→P1b→CP(design)→P3→P4→P45→CP(evidence)→P5→P6b/P7并行→P8→Verifier');
+  log('   (跳过节点: P2 定点量化, P6 覆盖率回归; P6b Vivado 体检保留 — 成本低且是唯一的综合级证据)');
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -1382,8 +1568,11 @@ const preflightSummary = [
   '',
   'DAG 依赖链:',
   liteMode
-    ? '  P0→P1a→P1b→CP(design)→P3→P4→P45→CP(evidence)→P5→P7→P8→Verifier (跳过 P2,P6)'
-    : '  P0→P1a→P1b→CP(design)→P2/P3并行→P4→P45→CP(evidence)→P5→P6/P7并行→P8→Verifier',
+    ? '  P0→P1a→P1b→CP(design)→P3→P4→P45→CP(evidence)→P5→P6b/P7并行→P8→Verifier (跳过 P2,P6)'
+    : '  P0→P1a→P1b→CP(design)→P2/P3并行→P4→P45→CP(evidence)→P5→P6/P6b/P7并行→P8→Verifier',
+  '',
+  `Vivado 综合体检 (P6b): 目标器件=${fpgaPart || '(未指定 — 传 args.part 可省去自动查找)'}`,
+  '  Vivado 不可用时该节点如实降级为 skipped, 综合级结论一律标注"未验证"',
   '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━',
 ].join('\n');
 
