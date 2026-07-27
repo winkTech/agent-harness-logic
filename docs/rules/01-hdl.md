@@ -54,3 +54,16 @@ skip: "not HDL"
 | TB 模板 | `skills/hdl-coding/references/tb-templates.md` |
 | RTL 审查清单 | `skills/hdl-coding/references/rtl-code-review.md` |
 | 代码对齐 & LUT 门禁 | `skills/hdl-coding/references/RTL_DESIGN_RULE.md` |
+| Vivado 可综合子集 / 综合属性 (UG901) | `skills/hdl-coding/references/vivado-synthesis-ug901.md` |
+| Vivado RTL 方法学 / Know What You Infer (UG949) | `skills/hdl-coding/references/ug949-rtl-methodology.md` |
+| Vivado 工具流 (RTL DRC / report_* / xsim) | `skills/hdl-coding/references/vivado-tool-flow.md` |
+
+---
+
+## Vivado 综合结论的证据要求
+
+- **[MUST]** 资源 / Fmax / 时序 / 可综合性 / CDC 的结论必须有 Vivado 报告支撑，无 EDA 环境时写"未验证"
+- **[MUST]** 红线 3（同步复位）的**唯一豁免**：BRAM 输出寄存器、DSP 内部流水寄存器、SRL 移位链中间级
+  —— 加复位会阻断硬件宏推断。豁免须写注释 + 用 `report_utilization` 验证，细则见 `vivado-synthesis-ug901.md` §5.1
+- **[MUST]** 禁止门控时钟（`always @(posedge (clk & en))`），改用 BUFGCE 的时钟使能
+- 一键检查：`skills/vivado-flow/scripts/vivado_flow.tcl` —— `-to rtlcheck`（RTL 级）/ `-to synth`（综合级），判定读 `<out>/rpt/flow_summary.json`

@@ -27,7 +27,7 @@ D4 算法路径    D5 微架构      D6 风险未知
 
 只有仍会实质改变实现或验收结果的未知项才询问用户；证据充分时直接记录假设并继续。
 
-退出条件：将结果写入 `var/gates/requirements-gate.json`，`status` 为 `completed` 且作用域覆盖目标文件。新代码文件由 `requirements-gate-guard.cjs` 检查。
+退出条件：将结果写入 `var/gates/requirements-gate.json`，`status` 为 `completed` 且作用域覆盖目标文件。新代码文件由 `requirements-gate-guard.cjs` **提示**（advisory，不阻断——见本文末「门禁的执行力」）。
 
 ## 门禁二：验证质量
 
@@ -44,7 +44,20 @@ S4 复位异常    S5 吞吐极限
 
 测试和 Golden Model 是验收证据，不是需要迎合的固定答案。不得仅为制造通过而削弱、删除或跳过测试，修改 Golden Model，硬编码固定样例，或绕过检查。测试本身疑似错误时，先记录失败证据、预期契约和影响范围；只有当前任务明确包含测试修正时才修改。
 
-退出条件：将结果写入 `var/gates/verification-quality.json`，`status` 为 `completed` 且作用域覆盖目标文件。新测试文件由 `verification-quality-guard.cjs` 检查。
+退出条件：将结果写入 `var/gates/verification-quality.json`，`status` 为 `completed` 且作用域覆盖目标文件。新测试文件由 `verification-quality-guard.cjs` **提示**（advisory，不阻断）。
+
+## 门禁的执行力
+
+这两道门禁是 **advisory**：未完成时输出提示，但不会 `exit 2` 阻断写入。
+
+这是刻意的。放行的唯一条件是模型自己往状态 JSON 里写 `status: "completed"`，而那份
+JSON 无 schema 校验、无有效期、无写保护。在这种结构下硬阻断不会带来更强的约束，
+只会训练模型伪造门禁记录，对临时脚本还会大量误报。
+
+所以**不要把"门禁没拦住"当成放行的理由**——它的约束力来自这份规则本身，不来自退出码。
+真正有牙齿的硬门禁建立在可独立复核的产物上，例见
+`workflows/hdl-coding-dag-workflow.js` 的 Phase 4.5（校验 `check_results/<mod>.json`
+真实存在且 `status === PASS`）。
 
 ## 门禁异常
 
