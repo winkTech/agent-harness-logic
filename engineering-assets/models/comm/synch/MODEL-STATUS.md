@@ -12,7 +12,7 @@
 
 ## 1. 为什么要有这份记录
 
-治理规范 `rules/03-gates.md`: "测试和 Golden Model 是验收证据, 不是需要迎合的固定答案。
+治理规范 `docs/rules/03-gates.md`: "测试和 Golden Model 是验收证据, 不是需要迎合的固定答案。
 测试本身疑似错误时, 先记录失败证据、预期契约和影响范围。"
 
 本轮为给 `incubator/intake/sync_top` 补 G-B-03 对标向量而运行本模型, 发现模型自身

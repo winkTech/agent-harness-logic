@@ -32,7 +32,22 @@ const { HARNESS_ROOT } = require('./lib/harness-root.cjs');
 
 // ── 配置 ────────────────────────────────────────────────────────────────────
 
-const RULES_DIR = path.join(HARNESS_ROOT, 'rules');
+/**
+ * 规则目录。
+ *
+ * 规则文件放在 `docs/rules/` 而不是 `.claude/rules/`: 后者会被 Claude Code
+ * 当作常驻全局指令**全文注入**每个会话, 与本加载机按需注入的 capsule 形成
+ * 双重加权 —— 同一份规则既常驻又被摘要, 既浪费 token 又让"capsule 足够时
+ * 不读全文"的加载纪律失效。移出后 capsule 成为唯一路由信号, 全文只在
+ * 确有需要时按路径 Read。
+ *
+ * 保留旧路径回退, 以便未迁移的副本仍能工作。
+ */
+const RULES_DIR = (() => {
+  const preferred = path.join(HARNESS_ROOT, 'docs', 'rules');
+  if (fs.existsSync(preferred)) return preferred;
+  return path.join(HARNESS_ROOT, 'rules');
+})();
 const STATE_FILE = path.join(HARNESS_ROOT, 'var', 'index', 'runtime-state.json');
 const DEFAULT_CAPSULE_MAX_CHARS = 1800;
 
@@ -532,7 +547,7 @@ function runAsHook() {
   // evaluate() 有两种输出形态:
   //   capsule 模式 — result.capsule (紧凑摘要) + result.ruleRefs
   //   full 模式    — result.ruleContents (规则全文)
-  // 默认走 capsule, 符合 rules/00-core.md 的"capsule 足够时不读取全文"。
+  // 默认走 capsule, 符合 docs/rules/00-core.md 的"capsule 足够时不读取全文"。
   const refFiles = Array.isArray(result.ruleRefs)
     ? result.ruleRefs.map(r => r.file)
     : Object.keys(result.ruleContents || {});

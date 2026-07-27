@@ -310,6 +310,6 @@ endmodule
 
 ## 参考资源
 
-- [基于FPGA与RISC-V的嵌入式系统设计.pdf](../../../source/datasheets/fpga-design/)
+- [基于FPGA与RISC-V的嵌入式系统设计.pdf](../../../archive/sources/fpga/)
 - [RISC-V 官方网站](https://riscv.org/)
 - [Vivado IP Catalog](https://www.xilinx.com/products/ip-integrators.html)

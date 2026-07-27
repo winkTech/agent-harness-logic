@@ -457,6 +457,6 @@ endmodule
 
 ## 参考资源
 
-- [Verilog HDL算法与电路设计 通信和计算机网络典型案例.pdf](../../../source/datasheets/verilog-sv/)
+- [Verilog HDL算法与电路设计 通信和计算机网络典型案例.pdf](../../../archive/sources/fpga/)
 - [IEEE 802.3 标准](https://standards.ieee.org/)
 - [FPGA 算法实现指南](https://www.xilinx.com/support/documentation/)

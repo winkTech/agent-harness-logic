@@ -1,6 +1,6 @@
 export const meta = {
   name: 'code-review-workflow',
-  description: '两轮代码审查 — Pass 1 正确性(阻塞) → Pass 2 代码质量(建议)',
+  description: '两轮代码审查的多 Agent 编排版 — Pass 1 正确性(阻塞) → Pass 2 代码质量(建议)。单轮审查用 code-review 技能。',
   phases: [
     { title: 'Pass 1 正确性审查' },
     { title: 'Pass 2 代码质量审查' },

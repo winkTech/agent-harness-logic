@@ -58,4 +58,4 @@ comm/
 
 ## 框架文档
 
-已融入 `workflows/hdl-coding-workflow.md` v3（Phase 1: 算法分析/架构设计, Phase 2: 定点量化/资源评估）
+已融入 `skills/workflows/hdl-coding-workflow.md` v3（Phase 1: 算法分析/架构设计, Phase 2: 定点量化/资源评估）

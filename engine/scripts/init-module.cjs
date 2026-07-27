@@ -46,12 +46,12 @@ function rtlTemplate(moduleName, dataWidth) {
   input  logic                    i_out_ready
 );
 
-  // 输入寄存 ri_ — rules/01-hdl.md 红线 1: 禁止输入直通
+  // 输入寄存 ri_ — docs/rules/01-hdl.md 红线 1: 禁止输入直通
   logic                    ri_in_valid;
   logic [P_DATA_WIDTH-1:0] ri_in_data;
   logic                    ri_out_ready;
 
-  // 输出寄存 ro_ — rules/01-hdl.md 红线 2: 输出由寄存器驱动, 禁止组合直出
+  // 输出寄存 ro_ — docs/rules/01-hdl.md 红线 2: 输出由寄存器驱动, 禁止组合直出
   logic                    ro_in_ready;
   logic                    ro_out_valid;
   logic [P_DATA_WIDTH-1:0] ro_out_data;

@@ -275,7 +275,7 @@ localparam [3:0]
 
 ## 参考资源
 
-- [玩转FPGA.pdf](../../../source/datasheets/fpga-design/)
-- [AMD FPGA设计优化宝典.pdf](../../../source/datasheets/fpga-design/)
-- [FPGA设计——基于团队的最佳实践.pdf](../../../source/datasheets/fpga-design/)
-- [FPGA代码规范.pdf](../../../source/datasheets/coding-standards/)
+- [玩转FPGA.pdf](../../../archive/sources/fpga/)
+- [AMD FPGA设计优化宝典.pdf](../../../archive/sources/fpga/)
+- [FPGA设计——基于团队的最佳实践.pdf](../../../archive/sources/fpga/)
+- [FPGA代码规范.pdf](../../../archive/sources/fpga/)

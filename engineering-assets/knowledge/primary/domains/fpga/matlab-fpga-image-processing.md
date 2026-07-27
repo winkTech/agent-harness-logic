@@ -319,6 +319,6 @@ endmodule
 
 ## 参考资源
 
-- [基于matlab与fpga的图像处理教程.pdf](../../../source/datasheets/communications/)
+- [基于matlab与fpga的图像处理教程.pdf](../../../archive/sources/fpga/)
 - [Xilinx 视频处理指南](https://www.xilinx.com/support/documentation/)
 - [MATLAB 图像处理工具箱](https://www.mathworks.com/products/image.html)

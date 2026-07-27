@@ -198,7 +198,7 @@ function checkGate(filePath) {
     blocking: false,
     target: filePath,
     gateStatus: state?.status || 'missing',
-    summary: 'Before creating this code file, review the requirements dimensions from rules/03-gates.md.',
+    summary: 'Before creating this code file, review the requirements dimensions from docs/rules/03-gates.md.',
     findings,
     guidance: 'When evidence is sufficient, record confirmed assumptions and continue without asking redundant questions.',
   };

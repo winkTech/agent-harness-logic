@@ -2,7 +2,7 @@
 /**
  * engine/scripts/hooks/hdl-gate.cjs — HDL 编码规则硬门禁 (P0)
  *
- * 强制执行 rules/01-hdl.md 和 skills/hdl-coding/SKILL.md 中的关键规则:
+ * 强制执行 docs/rules/01-hdl.md 和 skills/hdl-coding/SKILL.md 中的关键规则:
  *
  *   1. Testbench-First: 新建 RTL 模块前必须有对应的 Testbench
  *   2. No initial in RTL: 综合代码禁止使用 initial 语句
@@ -84,7 +84,7 @@ function isTbFileName(fileName) {
 }
 
 // 标准总线协议信号豁免 ri_/ro_ 前缀
-// 依据 rules/01-hdl.md §命名例外 / SKILL.md §2: AXI/Wishbone/JTAG 保持协议原名。
+// 依据 docs/rules/01-hdl.md §命名例外 / SKILL.md §2: AXI/Wishbone/JTAG 保持协议原名。
 const BUS_SIGNAL_RE = /^[sm]_axi(s)?_|_axi(s)?_|^wb_|_wb_|^(tck|tms|tdi|tdo|trst)$/i;
 const CLK_RST_RE = /^(i_)?(clk|rst|clock|reset)/i;
 function isBusSignal(name) { return BUS_SIGNAL_RE.test(String(name || '')); }
@@ -187,7 +187,7 @@ function isNewModuleFile(fp) {
   } catch { return true; }
 }
 
-// 端口命名判据 —— 依据 rules/01-hdl.md §命名规范:
+// 端口命名判据 —— 依据 docs/rules/01-hdl.md §命名规范:
 //   i_/o_  = 模块端口 (输入/输出)
 //   ri_/ro_ = 模块**内部**对输入/输出做寄存的信号, 不是端口名
 // 早期版本在此要求端口本身以 ri_/ro_ 开头, 与上述规范相反, 导致合规模块被 exit 2 拦死。
@@ -293,6 +293,34 @@ function block(title, messages, command) {
   console.error('');
 }
 
+// ── 写入类工具矩阵 ───────────────────────────────────────────────────────────
+// settings.json 把本门禁注册在 Write 上, 但红线是对"文件最终内容"的约束, 与用
+// 哪个工具写无关。只认 Write 等于给 Edit 开了后门。
+const HDL_WRITE_TOOLS = new Set(['write', 'edit', 'multiedit']);
+
+/** 还原「本次操作完成后」的文件全文。Write 直接给, Edit/MultiEdit 需叠加替换。 */
+function postEditContent(payload, filePath) {
+  const input = payload?.tool_input || payload?.tool?.input || payload?.input || payload?.arguments || {};
+  const direct = input.content || payload?.content || '';
+  if (direct) return String(direct);
+
+  const edits = Array.isArray(input.edits) ? input.edits
+    : (input.old_string !== undefined
+      ? [{ old_string: input.old_string, new_string: input.new_string, replace_all: input.replace_all }]
+      : []);
+  if (edits.length === 0) return '';
+
+  let text;
+  try { text = fs.readFileSync(filePath, 'utf8'); } catch { return ''; }
+  for (const e of edits) {
+    const oldS = String(e?.old_string ?? '');
+    if (!oldS) continue;
+    const newS = String(e?.new_string ?? '');
+    text = e?.replace_all ? text.split(oldS).join(newS) : text.replace(oldS, newS);
+  }
+  return text;
+}
+
 // ── 主逻辑 ───────────────────────────────────────────────────────────────────
 
 async function main() {
@@ -317,15 +345,17 @@ async function main() {
 
   // ── PreToolUse(Write): 全方位拦截 ──────────────────────────────────────────
   // 综合/命名规则仅对 01_src/00_hdl/ 生效，VIP/TB 目录豁免
-  if ((!eventName || eventName === 'PreToolUse') && toolName === 'write' && filePath) {
+  if ((!eventName || eventName === 'PreToolUse') && HDL_WRITE_TOOLS.has(toolName) && filePath) {
     const isHdl = /\.(sv|v)$/i.test(filePath);
     if (!isHdl) process.exit(0);
 
     // 路径分类
     const isSrcPath = isSourcePath(filePath);
 
-    // 从 payload 提取待写入的内容（PreToolUse 时文件尚未写入磁盘）
-    const content = payload?.tool_input?.content || payload?.tool?.input?.content || payload?.input?.content || payload?.arguments?.content || '';
+    // 取「这次操作之后文件将是什么内容」。
+    // Write 给全文；Edit/MultiEdit 只给片段，需读磁盘再套用替换 —— 否则本门禁
+    // 只能拦住新建文件，往已有 .sv 里插 latch / 组合直出反而畅通无阻。
+    const content = postEditContent(payload, fp);
     if (!content) process.exit(0);
 
     const fileName = path.basename(fp);
@@ -368,7 +398,7 @@ async function main() {
 
   // ── PostToolUse(Write): 自动修复 + 后检查（非阻断，仅警告）───────────────
   // PreToolUse 已做硬拦截，此处仅自动修复命名 + 输出分析报告
-  if ((!eventName || eventName === 'PostToolUse') && toolName === 'write' && filePath) {
+  if ((!eventName || eventName === 'PostToolUse') && HDL_WRITE_TOOLS.has(toolName) && filePath) {
     const isHdl = /\.(sv|v)$/i.test(filePath);
     if (!isHdl) process.exit(0);
 

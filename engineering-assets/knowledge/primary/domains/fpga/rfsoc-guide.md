@@ -276,6 +276,6 @@ create_clock -period 0.153 -name dac_clk [get_pins rfdac_0/clk]
 
 ## 参考资源
 
-- [RFSoC_SDR_book.pdf](../../../source/datasheets/communications/)
-- [在FPGA上部署5G NR无线通信.pdf](../../../source/datasheets/communications/)
+- [RFSoC_SDR_book.pdf](../../../archive/sources/fpga/)
+- [在FPGA上部署5G NR无线通信.pdf](../../../archive/sources/fpga/)
 - [Xilinx RFSoC 用户指南](https://www.xilinx.com/support/documentation/)

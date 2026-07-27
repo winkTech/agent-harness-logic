@@ -4,7 +4,7 @@
 
 Use a small runtime profile to reduce repeated setup and triage work during TDD loops.
 
-Path: `.claude/context/runtime/tdd-memory-profile.json`
+Path: `var/tdd/tdd-memory-profile.json`
 
 ## Allowed Data
 

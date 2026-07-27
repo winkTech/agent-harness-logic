@@ -276,6 +276,6 @@ end
 
 ## 参考资源
 
-- [FPGA 代码规范](../../../source/datasheets/hdl-coding/)
+- [FPGA 代码规范](../../../archive/sources/fpga/)
 - [Verilog 最佳实践](https://www.xilinx.com/support/documentation/)
-- [项目示例](../../snippets/)
+- [CBB 实例](../../../../cbb/)

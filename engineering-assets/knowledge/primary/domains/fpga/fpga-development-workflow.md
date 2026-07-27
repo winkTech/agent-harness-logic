@@ -327,6 +327,6 @@ git tag -l
 
 ## 参考资源
 
-- [Vivado+Tcl零基础入门与案例实战.pdf](../../../source/datasheets/vivado/)
-- [Vivado从此开始（进阶篇）.pdf](../../../source/datasheets/vivado/)
+- [Vivado+Tcl零基础入门与案例实战.pdf](../../../archive/sources/fpga/)
+- [Vivado从此开始（进阶篇）.pdf](../../../archive/sources/fpga/)
 - [Xilinx Vivado 用户指南](https://www.xilinx.com/support/documentation/)

@@ -2,24 +2,31 @@
 /**
  * engine/scripts/hooks/verification-quality-guard.cjs — 验证质量门禁 (P0)
  *
- * 强制规则: 创建新 Testbench/测试文件前，必须先完成:
+ * 规则: 创建新 Testbench/测试文件前，应先完成:
  *   1. 项目环境画像 (A.1)
  *   2. 最少场景集 (A.2)
- * 未完成 → exit 2 硬阻断。
+ *
+ * ⚠️ 这是 **advisory 门禁，不阻断**（2026-07 刻意降级，见 §降级理由）。
  *
  * 机制:
- *   PreToolUse(Write) on new tb_* or test_* files — check gate status
+ *   PreToolUse(Write|Edit|MultiEdit) on new tb_* or test_* files — check gate status
  *     - 文件已存在 (修改已有 TB) → 放行
  *     - 门禁状态 "completed" → 放行
- *     - 门禁状态 "pending" 或不存在 → exit 2 阻断
+ *     - 门禁状态 "pending" 或不存在 → 输出 advisory (additionalContext)，仍放行
+ *
+ * 降级理由: 放行的唯一条件是模型自己往状态 JSON 里写 status:"completed"，
+ * 而那份 JSON 无 schema 校验、无有效期、无写保护。硬阻断在这种结构下不会带来
+ * 更强的约束，只会训练模型伪造门禁记录；对临时脚本还会大量误报。
+ * 真正的硬门禁应该建立在**可独立复核的产物**上，例见
+ * workflows/hdl-coding-dag-workflow.js 的 Phase 4.5（校验 check_results/<mod>.json
+ * 真实存在且 status===PASS）。
  *
  * 状态文件: ~/.claude/var/gates/verification-quality.json
  *
  * 退出码:
- *   0 — 放行
- *   2 — 硬拦截
+ *   0 — 始终（advisory 不阻断）
  *
- * 集成: 注册在 settings.json PreToolUse(Write)
+ * 集成: 注册在 settings.json PreToolUse(Edit|Write|MultiEdit)
  *
  * ⚠️ 支持两种调用方式:
  *   1. 独立 hook: node verification-quality-guard.cjs (读 stdin)
@@ -247,7 +254,7 @@ function checkGate(filePath) {
     blocking: false,
     target: filePath,
     gateStatus: state?.status || 'missing',
-    summary: 'Before creating this test, review the environment profile and applicable scenarios from rules/03-gates.md.',
+    summary: 'Before creating this test, review the environment profile and applicable scenarios from docs/rules/03-gates.md.',
     findings,
     guidance: 'Mark genuinely inapplicable items as na with a reason; do not weaken executable checks to manufacture a pass.',
   };

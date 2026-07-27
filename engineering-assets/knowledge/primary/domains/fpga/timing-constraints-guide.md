@@ -223,6 +223,6 @@ report_timing -nworst 10 -delay_type min_max
 
 ## 参考资源
 
-- [FPGA时序约束与分析.pdf](../../../source/datasheets/coding-standards/)
-- [Vivado从此开始（进阶篇）.pdf](../../../source/datasheets/vivado/)
+- [FPGA时序约束与分析.pdf](../../../archive/sources/fpga/)
+- [Vivado从此开始（进阶篇）.pdf](../../../archive/sources/fpga/)
 - [Xilinx 时序约束指南](https://www.xilinx.com/support/documentation/)

@@ -198,4 +198,4 @@ localparam [1:0]
 
 - [Verilog 标准 (IEEE 1364)](https://ieeexplore.ieee.org/document/8299595)
 - [Vivado 设计指南](https://www.xilinx.com/support/documentation/)
-- [项目示例](../../snippets/)
+- [CBB 实例](../../../../cbb/)

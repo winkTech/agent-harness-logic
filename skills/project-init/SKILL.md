@@ -42,7 +42,7 @@ description: FPGA 项目/模块初始化 — 建目录结构、EDA检测、Git �
 [1] 确认模块名 + 位宽 + 接口
 [2] 执行: bash engine/scripts/init-module.sh <名称>
 [3] 同步更新仿真文件列表 + 文档
-[4] 遵循 HDL 五条红线 (rules/01-hdl.md) + 四检查点 (rules/00-core.md)
+[4] 遵循 HDL 五条红线 (docs/rules/01-hdl.md) + 四检查点 (docs/rules/00-core.md)
 ```
 
 ---
@@ -56,5 +56,5 @@ description: FPGA 项目/模块初始化 — 建目录结构、EDA检测、Git �
 | 项目初始化脚本 | `engine/scripts/init-project.sh` |
 | 模块初始化脚本 | `engine/scripts/init-module.sh` |
 | 项目目录规范 | `engineering-assets/knowledge/primary/cross-project-experience.md` |
-| HDL 红线 | `rules/01-hdl.md` |
-| 四检查点 | `rules/00-core.md` |
+| HDL 红线 | `docs/rules/01-hdl.md` |
+| 四检查点 | `docs/rules/00-core.md` |

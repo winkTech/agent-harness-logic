@@ -273,6 +273,6 @@ endmodule
 
 ## 参考资源
 
-- [MIMO-OFDM技术原理.pdf](../../../source/datasheets/communications/)
-- [5G通信系统中LDPC编译码器的设计与实现.pdf](../../../source/datasheets/communications/)
-- [无线通信的MATLAB和FPGA实现.pdf](../../../source/datasheets/communications/)
+- [MIMO-OFDM技术原理.pdf](../../../archive/sources/fpga/)
+- [5G通信系统中LDPC编译码器的设计与实现.pdf](../../../archive/sources/fpga/)
+- [无线通信的MATLAB和FPGA实现.pdf](../../../archive/sources/fpga/)

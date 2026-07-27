@@ -22,9 +22,38 @@ function toolInputFrom(payload) {
   return payload?.tool_input || payload?.tool?.input || payload?.input || payload?.arguments || {};
 }
 
+/**
+ * 取"这次操作之后文件将是什么内容"。
+ *
+ * Write 直接给全文；Edit/MultiEdit 只给片段，必须先读磁盘再把替换应用上去，
+ * 否则本 oracle 对 Edit 一律拿到空串而 skip —— 那意味着**新建 RTL 过不了红线，
+ * 但往已有 RTL 里插一个 latch 或组合直出却畅通无阻**，与"违反红线的代码过不了
+ * 审查门禁"的承诺直接冲突。红线检查是全文语义分析（要看 always 块结构、端口
+ * 驱动关系），只拿片段判不了，所以必须重建全文。
+ */
 function contentFrom(payload) {
   const input = toolInputFrom(payload);
-  return String(input.content || payload?.content || '');
+  const direct = String(input.content || payload?.content || '');
+  if (direct) return direct;
+
+  const edits = Array.isArray(input.edits) ? input.edits
+    : (input.old_string !== undefined ? [{ old_string: input.old_string, new_string: input.new_string, replace_all: input.replace_all }] : []);
+  if (edits.length === 0) return '';
+
+  const fp = payloadFilePath(payload, payloadCwd(payload));
+  let text;
+  try {
+    text = require('node:fs').readFileSync(fp, 'utf8');
+  } catch {
+    return ''; // 读不到磁盘就没法重建, 保持 skip 而不是误判
+  }
+  for (const e of edits) {
+    const oldS = String(e?.old_string ?? '');
+    const newS = String(e?.new_string ?? '');
+    if (!oldS) continue;
+    text = e?.replace_all ? text.split(oldS).join(newS) : text.replace(oldS, newS);
+  }
+  return text;
 }
 
 function stripComments(text) {
@@ -172,7 +201,7 @@ function analyzeRtl(content, filePath = '') {
   while ((directMatch = directAssign.exec(code))) {
     add('error', 'ro-output-register', `Output ${directMatch[1]} is driven by continuous assign; ro_ outputs must be registered.`);
   }
-  // rules/01-hdl.md 红线 2 在正确命名下的等价检查:
+  // docs/rules/01-hdl.md 红线 2 在正确命名下的等价检查:
   // 端口叫 o_, 内部寄存叫 ro_, 所以"输出由寄存器驱动"表现为
   //   assign o_x = ro_x;   或   o_x 直接在时序块里赋值。
   // 早期版本只匹配 `output ... ro_`, 那是建立在"端口须叫 ro_"这个**错误
@@ -263,8 +292,10 @@ function hookSuccessOutput(advisory, eventName = 'PreToolUse') {
   };
 }
 
+const RTL_WRITE_TOOLS = new Set(['Write', 'Edit', 'MultiEdit']);
+
 function run(payload) {
-  if (toolNameFrom(payload) !== 'Write') return { ok: true, skipped: true };
+  if (!RTL_WRITE_TOOLS.has(toolNameFrom(payload))) return { ok: true, skipped: true };
   if ((eventNameFrom(payload) || '') && eventNameFrom(payload) !== 'PreToolUse') return { ok: true, skipped: true };
   const cwd = payloadCwd(payload);
   const filePath = payloadFilePath(payload, cwd);

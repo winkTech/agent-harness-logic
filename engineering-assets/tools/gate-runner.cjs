@@ -180,7 +180,7 @@ function runGates(pkgDir, manifest, repoRoot) {
     add({ id: 'G-A-02', name: '命名规范', level: 'intake', must: true, status: v.length ? 'fail' : 'pass', severity: 'high', detail: v.length ? v : '命名合规 (AXI 豁免已计)' });
   })();
 
-  // G-A-01 复位红线 (源 rules/01-hdl §红线3)
+  // G-A-01 复位红线 (源 docs/rules/01-hdl §红线3)
   (() => {
     const v = [];
     if (manifest.reset.polarity === 'active_low') v.push('复位为 active_low → 违红线3(须高有效)');

@@ -246,6 +246,6 @@ endmodule
 
 ## 参考资源
 
-- [FPGA设计——基于团队的最佳实践.pdf](../../../source/datasheets/fpga-design/)
+- [FPGA设计——基于团队的最佳实践.pdf](../../../archive/sources/fpga/)
 - [Git 官方文档](https://git-scm.com/doc)
 - [代码审查最佳实践](https://google.github.io/eng-practices/review/)

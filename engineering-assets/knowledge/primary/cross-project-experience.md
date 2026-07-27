@@ -25,8 +25,8 @@ bash path/to/init-project.sh <项目名>
 bash path/to/init-module.sh <模块名>
 ```
 
-> 脚本位置: `.claude/scripts/init-project.sh` 和 `init-module.sh`
-> 详见: [[../scripts/init-project.sh]], [[../scripts/init-module.sh]]
+> 脚本位置: `engine/scripts/init-project.sh` 和 `engine/scripts/init-module.sh`（Node 版: `harness-init.cjs` / `init-module.cjs`）
+> 详见: `engine/scripts/init-project.sh`, `engine/scripts/init-module.sh`
 
 ---
 
@@ -136,7 +136,7 @@ prj/
 - [ ] 执行 `init-project.sh <name>` 建目录结构
 - [ ] 初始化 Git: `git init && git add -A && git commit -m "init"`
 - [ ] 编辑 README.md: 项目简述、开发环境版本
-- [ ] 配置 `.claude/settings.json`: hooks 和 MCP
+- [ ] 配置 `settings.json`: hooks 和 MCP
 
 ### 每加一个新模块
 - [ ] 执行 `init-module.sh <module_name>`
@@ -177,7 +177,7 @@ prj/
 - <模块>: <功能简述>
 ```
 
-完成项目经验后归档到 [[cross-project-experience]]，提取 Lessons 到 `learnings/LESSONS.md`。
+完成项目经验后归档到 [[cross-project-experience]]，提取 Lessons 到 `memory/learnings/`。
 
 ---
 

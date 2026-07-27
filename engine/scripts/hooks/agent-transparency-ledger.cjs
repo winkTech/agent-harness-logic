@@ -362,10 +362,12 @@ function requiredSkills(taskType, signals) {
 }
 
 function requiredRules(signals) {
-  const rules = ['rules/00-core.md', 'rules/03-gates.md'];
-  if (signals.includes('rtl')) rules.push('rules/01-hdl.md');
-  if (signals.includes('python')) rules.push('rules/02-python.md');
-  if (signals.includes('git')) rules.push('rules/04-git.md');
+  // 规则文件住在 docs/rules/ 而不是 .claude/rules/: 后者会被平台当作常驻全局
+  // 指令全文注入每个会话, 与 rule-loader 的按需 capsule 双重加权。
+  const rules = ['docs/rules/00-core.md', 'docs/rules/03-gates.md'];
+  if (signals.includes('rtl')) rules.push('docs/rules/01-hdl.md');
+  if (signals.includes('python')) rules.push('docs/rules/02-python.md');
+  if (signals.includes('git')) rules.push('docs/rules/04-git.md');
   return unique(rules);
 }
 

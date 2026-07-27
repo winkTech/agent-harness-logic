@@ -148,7 +148,7 @@ SCENE_CARDS.md L1-L24   → 场景总览（选场景号）
 - 使用 MCP pdf 工具
 
 ### Excel
-→ 参见 `references/excel-reading.md`
+→ 读取方法参见 `references/excel_reading.md`，分析方法参见 `references/excel_analysis.md`
 - 使用 Python pandas 或 markitdown-converter
 
 ---
@@ -173,4 +173,6 @@ SCENE_CARDS.md L1-L24   → 场景总览（选场景号）
 | 文档 | 内容 |
 |:----|:-----|
 | `references/pdf_reading.md` | PDF 读取流程 |
-| `references/excel-reading.md` | Excel 处理指南 |
+| `references/excel_reading.md` | Excel 读取方法（pandas 读表/选列/大文件分批） |
+| `references/excel_analysis.md` | Excel 分析方法（过滤/分组聚合/统计） |
+| `scripts/convert_pdf_to_images.py` | PDF 转图片（扫描版 OCR / 图表提取） |

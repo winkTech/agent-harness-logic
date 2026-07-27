@@ -665,7 +665,7 @@ Rate 7/8:  参见 3GPP TS 36.212 §5.1.4.2
 | IEEE 802.11-2016 §19.3.11.6 | WiFi 卷积码定义 |
 | Viterbi, "A personal history of the Viterbi algorithm" | 算法原始文献 |
 | Xilinx PG026 (Viterbi Decoder v9.0) | FPGA 实现参考 |
-| 本工程 Golden Model | `golden_model/viterbi_golden.py` |
+| 本工程 Golden Model | 同目录 `check_conv_decoder.py`（自检/对比）+ `tv_gen.py`（测试向量生成） |
 
 ---
 

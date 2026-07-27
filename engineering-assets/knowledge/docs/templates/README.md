@@ -6,6 +6,29 @@ description: "Central catalog of standardized templates for creating agents, ski
 
 # Templates Directory
 
+> ⚠️ **本目录混装两类模板，路径解释方式不同（2026-07-27 PI 审查标注）**
+>
+> **① 本仓库在用的工程模板** —— 路径按本仓库解析，可直接引用：
+>
+> | 模板 | 使用方 |
+> |:-----|:-------|
+> | `algorithm_spec_template.md` | HDL 工作流 Phase 1a |
+> | `fixed_point_report_template.md` / `resource_estimate_template.md` | Phase 2 |
+> | `report_template.md` | Phase 8 |
+> | `rtl_module_template.v` / `tb_template.sv` | RTL / TB 脚手架 |
+> | `golden_model_template/` | MATLAB Golden Model 骨架 |
+> | `makefile-templates/`（`Makefile.sim` / `Makefile.vivado`） | Phase 0 基础设施 |
+> | `uvm/` | UVM 验证平台骨架 |
+> | `prd-template.md` / `adr-template.md` / `plan-template.md` | 文档撰写 |
+>
+> **② 上游多 Agent 编排框架的导入模板** —— 下文关于 agent / skill / workflow / spec
+> 脚手架的说明中出现的 `.claude/agents/…`、`.claude/context/…`、`.claude/templates/…`
+> 等路径**属于上游布局，在本仓库不存在**，不要按它们去找文件或落盘。
+> 本仓库的真实注册表是：agent → `agents/`（见 `docs/agents-archive/README.md`），
+> skill → `skills/<name>/SKILL.md`，workflow → `workflows/*.js`。
+>
+> 同源的 17 份 agent 角色定义已归档至 `docs/agents-archive/`。
+
 Standardized templates for creating new agents, skills, and workflows in the multi-agent orchestration framework.
 
 ## Template Types

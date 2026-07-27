@@ -132,4 +132,4 @@ wire rst_n_clean = rst_sync[1];
 ## 参考资源
 
 - [Xilinx 复位指南](https://www.xilinx.com/support/documentation/)
-- [在FPGA开发中尽量避免全局复位的使用.pdf](../../../source/datasheets/hdl-coding/)
+- [在FPGA开发中尽量避免全局复位的使用](../../archive/sources/fpga/在FPGA开发中尽量避免全局复位的使用-source.md)

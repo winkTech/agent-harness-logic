@@ -40,7 +40,7 @@ knowledge/
 │   ├── golden-model-standards.md
 │   └── matlab-mcp-guide.md
 ├── archive/sources/fpga/ # 39 本书籍全文提取（~200K 行，按需搜索）
-├── source/datasheets/    # 原始 PDF（35 个）
+├── archive/sources/fpga/ # 原始资料转写稿（37 份 *-source.md，PDF 本体不入库）
 ├── python-basics/        # 鸢尾花书蒸馏: Python 编程
 ├── math-foundation/      # 鸢尾花书蒸馏: 微积分/优化
 ├── linear-algebra/       # 鸢尾花书蒸馏: 线性代数
@@ -64,7 +64,7 @@ knowledge/
 
 **LDPC** — `ldpc/algorithm_spec`, `encoding_spec`, `stage3_fixed_point_report`, `stage4_resource_estimation`, `stage7_fpga_implementation_report`, `uvm_tb/`
 
-**5G NR** — `5g-nr/overview.md`, `nr-frame-structure`, `nr-ldpc`, `polar-code`, `pdsch`, `pusch`, `pdcch`, `nr-prach`, `mimo-detection`, `fr2-beam-management`, `nru`, `ntn`, `nr-test-mode`
+**5G NR** — `primary/domains/comm/5g-nr/overview.md`, `nr-frame-structure`, `nr-ldpc`, `polar-code`, `pdsch`, `pusch`, `pdcch`, `nr-prach`, `mimo-detection`, `fr2-beam-management`, `nru`, `ntn`, `nr-test-mode`
 
 **ORAN** — `5g-nr/oran-interface`, `oran-ric`, `oran-smo`, `lowphy-architecture`, `dfe-architecture`, `bfp-compression`
 
@@ -100,7 +100,7 @@ knowledge/
 
 ## Cross-Domain (4)
 
-`cross-project-experience.md`, `knowledge-graph.md`, `pitfalls/avoid-global-reset.md`, `data_structure.md` (根目录)
+`cross-project-experience.md`, `knowledge-graph.md`, `primary/pitfalls/avoid-global-reset.md`, `data_structure.md` (根目录)
 
 > 工程脚本见 `engine/scripts/init-project.sh`, `engine/scripts/init-module.sh` (不在 knowledge/ 内)
 
@@ -112,7 +112,7 @@ knowledge/
 |:-----|:---------|
 | `primary/domains/fpga/sources-index.md` | 38 source docs index (name, size, notes) |
 | `archive/sources/fpga/` | Full extracted text (~200K lines) |
-| `source/datasheets/` | Original PDFs (35+) |
+| `archive/sources/fpga/` | Transcribed source notes (37 × `*-source.md`; PDFs not in repo) |
 
 ---
 

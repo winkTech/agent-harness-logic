@@ -13,7 +13,7 @@ metadata:
 
 ## 基本规则
 
-- 按 `git-expert/references/git-rule.md` 管理版本
+- 按 `skills/git-expert/references/git-rule.md` 管理版本
 - 提交前必须 lint 检查：
   - Verilog → `vlog -lint`
   - Python → `ruff check`
@@ -27,5 +27,5 @@ metadata:
 |------|----------|
 | HDL | hdl-coding/SKILL.md |
 | MATLAB | `engineering-assets/knowledge/references/matlab-rule.md` |
-| Python | `modern-python/references/python-rule.md` |
-| 绘图 | `diagram-generator/references/draw-rule.md` |
+| Python | `skills/modern-python/references/python-rule.md` |
+| 绘图 | `skills/presentation/references/draw-rule.md` |

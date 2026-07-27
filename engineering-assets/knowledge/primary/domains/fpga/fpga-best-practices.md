@@ -287,6 +287,6 @@ end
 
 ## 参考资源
 
-- [FPGA设计——基于团队的最佳实践.pdf](../../../source/datasheets/fpga-design/)
-- [玩转FPGA.pdf](../../../source/datasheets/fpga-design/)
-- [代码应该这样写.pdf](../../../source/datasheets/verilog-sv/)
+- [FPGA设计——基于团队的最佳实践.pdf](../../../archive/sources/fpga/)
+- [玩转FPGA.pdf](../../../archive/sources/fpga/)
+- [代码应该这样写.pdf](../../../archive/sources/fpga/)

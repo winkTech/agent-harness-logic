@@ -14,8 +14,8 @@ metadata:
 ## 记忆位置
 
 - **全局记忆**: `~/.claude/memory/`
-- **索引**: `~/.claude/memory/MEMORY.md`
-- **规则**: `~/.claude/memory/MEMORY_RULES.md`
+- **索引**: `memory/MEMORY.md`
+- **规则**: `memory/MEMORY_RULES.md`
 
 ---
 

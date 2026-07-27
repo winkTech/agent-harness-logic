@@ -308,5 +308,5 @@ assign o_ready  = w_ready & ~i_busy;  // 组合逻辑输出
 
 ## 参考资源
 
-- [FPGA代码规范(deepseek使用).pdf](../../../source/datasheets/coding-standards/)
-- [AMD FPGA设计优化宝典.pdf](../../../source/datasheets/fpga-design/)
+- [FPGA代码规范(deepseek使用).pdf](../../../archive/sources/fpga/)
+- [AMD FPGA设计优化宝典.pdf](../../../archive/sources/fpga/)

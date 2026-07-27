@@ -125,7 +125,7 @@ tags: [index, navigation, scene]
 
 **标签**: `high-speed-io` + `jesd204b` + `pcie` + `aurora` + `selectmap`
 
-**跨链**: → `fpga/rfsoc-guide.md`, 场景 02 (调试)
+**跨链**: → `primary/domains/fpga/rfsoc-guide.md`, 场景 02 (调试)
 
 ---
 
@@ -218,7 +218,7 @@ ORAN 学习路径:
 
 **标签**: `uvm` + `spec` + `testbench`
 
-**跨链**: → `fpga/uvm-verification-guide.md`, 场景 01
+**跨链**: → `primary/domains/fpga/uvm-verification-guide.md`, 场景 01
 
 ---
 
@@ -241,7 +241,7 @@ ORAN 学习路径:
 
 **标签**: `timing` + `vivado`
 
-**跨链**: → `fpga/vivado-guide.md`, 场景 02 (调试)
+**跨链**: → `primary/domains/fpga/vivado-guide.md`, 场景 02 (调试)
 
 ---
 
@@ -271,7 +271,7 @@ UC 框架:
 
 **标签**: `tcl` + `vivado`
 
-**跨链**: → `fpga/vivado-guide.md`, 场景 06 (UVM compile)
+**跨链**: → `primary/domains/fpga/vivado-guide.md`, 场景 06 (UVM compile)
 
 ---
 

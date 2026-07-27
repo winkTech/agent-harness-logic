@@ -147,7 +147,7 @@ CPU 侧:                    FPGA 侧:
 
 ### 3.4 参考实现 (verilog-pcie-master)
 
-[verilog-pcie-master](examples/verilog-pcie-master/) 提供了完整 DMA 子系统:
+[verilog-pcie（alexforencich）](https://github.com/alexforencich/verilog-pcie) 提供了完整 DMA 子系统:
 
 ### 3.5 DMA 引擎 RTL 核心
 
@@ -433,7 +433,7 @@ pcie_msi #(
 
 ## 五、Cocotb 测试
 
-[verilog-pcie-master](examples/verilog-pcie-master/) 包含 30+ cocotb 测试，使用:
+[verilog-pcie（alexforencich）](https://github.com/alexforencich/verilog-pcie) 包含 30+ cocotb 测试，使用:
 
 ```python
 # pip install cocotbext-pcie cocotbext-axi

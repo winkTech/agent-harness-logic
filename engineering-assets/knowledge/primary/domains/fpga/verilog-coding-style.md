@@ -250,6 +250,6 @@ end
 
 ## 参考资源
 
-- [代码应该这样写.pdf](../../../source/datasheets/verilog-sv/)
-- [SystemVerilog_用好packed array.pdf](../../../source/datasheets/verilog-sv/)
-- [AMD FPGA设计优化宝典.pdf](../../../source/datasheets/fpga-design/)
+- [代码应该这样写.pdf](../../../archive/sources/fpga/)
+- [SystemVerilog_用好packed array.pdf](../../../archive/sources/fpga/)
+- [AMD FPGA设计优化宝典.pdf](../../../archive/sources/fpga/)

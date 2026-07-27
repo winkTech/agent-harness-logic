@@ -38,7 +38,7 @@ knowledge/
 ├── probability-statistics/  # 鸢尾花书蒸馏: 概率论 (3 卡片)
 ├── data-viz/                # 鸢尾花书蒸馏: 可视化 (1 卡片)
 ├── archive/sources/         # 书籍全文提取 (39 篇, 按需搜索)
-└── source/datasheets/       # 原始 PDF (35 个, 仅供提取引用)
+└── archive/sources/fpga/    # 原始资料转写稿 (37 份 *-source.md, 仅供提取引用)
 ```
 
 ---
@@ -65,11 +65,11 @@ related: [<相关文档名>, ...]       # 可选：相关文档链接
 
 | type | 适用场景 | 示例 |
 |:-----|:---------|:-----|
-| `algo` | 算法规格/定点/实现报告 | `ofdm/algorithm_spec.md` |
+| `algo` | 算法规格/定点/实现报告 | `primary/domains/comm/ofdm/algorithm_spec.md` |
 | `design-guide` | 设计指南/最佳实践 | `fpga-design-guide.md` |
 | `reference` | 引用/概述文档 | INDEX.md, references/\* |
 | `tutorial` | 教程/入门指南 | `vivado-guide.md` |
-| `template` | 文档模板 | `docs/templates/prd.md` |
+| `template` | 文档模板 | `docs/templates/prd-template.md` |
 | `book-note` | 书籍蒸馏卡片 | 鸢尾花书系列 |
 
 ### 2.3 自动检查

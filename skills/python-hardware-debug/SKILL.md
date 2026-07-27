@@ -113,6 +113,7 @@ print(f"EVM: {evm:.2f}%")
 | `ber_test.py` | `ber_test()` | 发送 + 接收比特 | BER 曲线 |
 | `config_gen.py` | `gen_reg_config()` | 寄存器定义 JSON | 配置脚本 |
 | **`matlab_cosim.py`** 🆕 | `run_cosim()` | 算法名 + MATLAB 脚本 | 对比报告 (EVM/频谱/波形) |
+| `oran_analysis.py` | eCPRI/ORAN 帧解析 | PCAP 或原始二进制 | C-plane/U-plane 头 + BFP 解压数据 |
 
 ---
 

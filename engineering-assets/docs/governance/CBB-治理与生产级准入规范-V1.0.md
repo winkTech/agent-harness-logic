@@ -1,7 +1,7 @@
 # FPGA CBB 库治理与生产级准入规范 V1.0
 
 > 基线蓝本。合并 production-grade-gate / doc-standards / code-standards / library-management 四支柱草案，并**已吸收** checkability / solo-realism / consistency 三视角红队修正。
-> 权威依据：`skills/hdl-coding/SKILL.md`、`skills/hdl-coding/references/rtl-code-review.md`、`RTL_DESIGN_RULE.md`、`comment-standards.md`、`engine/schemas/hdl-project-spec.schema.json`、`engine/schemas/fpga-constraints.schema.json`、`engine/schemas/artifact-manifest.schema.json`、`rules/03-gates.md`、`docs/rules-archive/08-constraints.md`。冲突一律以这些既有资产为准。
+> 权威依据：`skills/hdl-coding/SKILL.md`、`skills/hdl-coding/references/rtl-code-review.md`、`RTL_DESIGN_RULE.md`、`comment-standards.md`、`engine/schemas/hdl-project-spec.schema.json`、`engine/schemas/fpga-constraints.schema.json`、`engine/schemas/artifact-manifest.schema.json`、`docs/rules/03-gates.md`、`docs/rules-archive/08-constraints.md`。冲突一律以这些既有资产为准。
 
 ---
 
@@ -17,7 +17,7 @@
 
 **"进 `cbb/` 即生产级"的承诺含义**：一个资产一旦进入 `cbb/` 正式目录，即对所有下游复用者承诺它同时满足生产级四条——(1) 符合 hdl-coding 约束、(2) 真实实现需求且有 golden 对标与场景覆盖、(3) 稳定性达标、(4) 通用性达标。未达四条的资产只能停在 `reference-assets/` 或 `incubator/`，不得进 `cbb/`。这条承诺由**可机器/客观检查**的准入门（第 2 节）背书：certified = A/B/C 三维全部 MUST 项为绿 + 一名具名真人 owner 签字（D 维降为徽章，理由见 §2.6）。
 
-**本规范的裁决哲学**（吸收 solo-realism）：1–3 人团队里"独立评审"名存实亡——唯一真正与作者独立的客观性来自机器检查。因此**机器门是准入的实际裁决者**；ce-\* AI 面板只出"建议 + 证据定位"的结构化 finding，**绝不授予放行权**；人类签字语义 = "已跑全部机器门并复核其输出并担责"，不含任何"签字人≠实现者"的第二真人要求。门禁宁可少而硬，不多而虚（对齐 `CLAUDE.md` 与 `rules/03-gates.md`）。
+**本规范的裁决哲学**（吸收 solo-realism）：1–3 人团队里"独立评审"名存实亡——唯一真正与作者独立的客观性来自机器检查。因此**机器门是准入的实际裁决者**；ce-\* AI 面板只出"建议 + 证据定位"的结构化 finding，**绝不授予放行权**；人类签字语义 = "已跑全部机器门并复核其输出并担责"，不含任何"签字人≠实现者"的第二真人要求。门禁宁可少而硬，不多而虚（对齐 `CLAUDE.md` 与 `docs/rules/03-gates.md`）。
 
 ---
 
@@ -247,7 +247,7 @@ MVP **去掉 `documents_hash` staleness 硬门**（单人=唯一读者，收益�
 
 ## 5. 代码规范 + 资产包骨架
 
-> 本节只定义"超出 `rules/01-hdl.md` 五条红线之外、进 `cbb/` 才强制"的**增量**，以及标准目录布局。五条红线 / `ri_·ro_` 命名 / 三段式 FSM / 无锁存器 / 同步复位高有效以 `SKILL.md` + `rules/01-hdl.md` 为**唯一真相源**，本节**引用不复制**（避免双重加权与漂移）。
+> 本节只定义"超出 `docs/rules/01-hdl.md` 五条红线之外、进 `cbb/` 才强制"的**增量**，以及标准目录布局。五条红线 / `ri_·ro_` 命名 / 三段式 FSM / 无锁存器 / 同步复位高有效以 `SKILL.md` + `docs/rules/01-hdl.md` 为**唯一真相源**，本节**引用不复制**（避免双重加权与漂移）。
 
 ### 5.1 CBB 资产包标准骨架
 
@@ -479,7 +479,7 @@ MVP **去掉 `documents_hash` staleness 硬门**（单人=唯一读者，收益�
 
 ### 7.1 MVP 硬门最小集（全部 iverilog+node+现有 Vivado 可跑，单人一签）
 
-这一集 = 本用户环境下的**实际 certified 门槛**（吸收 solo-realism：与 `rules/03-gates.md`/`CLAUDE.md`"门禁宁可少而硬、只问会实质改变结果的未知项"对齐）。它把原四支柱的 intake+qualification 合并为一次 incubator 准入 + 一次认证：
+这一集 = 本用户环境下的**实际 certified 门槛**（吸收 solo-realism：与 `docs/rules/03-gates.md`/`CLAUDE.md`"门禁宁可少而硬、只问会实质改变结果的未知项"对齐）。它把原四支柱的 intake+qualification 合并为一次 incubator 准入 + 一次认证：
 
 | # | MVP 硬门 | 门 ID |
 |:--|:--|:--|

@@ -13,9 +13,9 @@
 ## 与模板原件的关系
 
 **合并取代两件**(裁决:定长延迟与背压是正交职责,分别由本模块与 axis_skid_buffer 承担):
-- `templates/comm/pipe_delay.sv`:`o_ready` 组合穿通 `i_ready`(违反红线 2,与
+- `skills/hdl-coding/templates/comm/pipe_delay.sv`:`o_ready` 组合穿通 `i_ready`(违反红线 2,与
   axis_pipeline_reg 同类)、全局停顿结构、stage0 valid 清除条件错、复位清数据链阻 SRL
-- `templates/comm/delay_sync.v`:端口无 i_/o_ 前缀、无 valid 语义
+- `skills/hdl-coding/templates/comm/delay_sync.v`:端口无 i_/o_ 前缀、无 valid 语义
 
 缺陷逐条记录在 RTL 模块头。
 
