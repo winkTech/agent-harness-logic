@@ -1,0 +1,51 @@
+{
+  "schema_version": "1.0",
+  "asset_uid": "crc32",
+  "name": "crc32",
+  "version": "0.1.0",
+  "owner": "lihan",
+  "kind": "primitive",
+  "maturity": {
+    "level": "qualification",
+    "evidence_ref": "engineering-assets/var/gates/pg/crc32/"
+  },
+  "requirement_ref": "engineering-assets/docs/CBB候选台账-hdl-coding-templates.md",
+  "doc_refs": [
+    "engineering-assets/docs/governance/CBB-治理与生产级准入规范-V1.0.md"
+  ],
+  "fidelity": {
+    "status": "na"
+  },
+  "top": "crc32",
+  "ports": [
+    { "name": "i_clk", "direction": "input", "width": 1 },
+    { "name": "i_rst", "direction": "input", "width": 1 },
+    { "name": "i_valid", "direction": "input", "width": 1 },
+    { "name": "i_data", "direction": "input", "width": 8 },
+    { "name": "i_last", "direction": "input", "width": 1 },
+    { "name": "o_valid", "direction": "output", "width": 1 },
+    { "name": "o_crc", "direction": "output", "width": 32 }
+  ],
+  "clock": {
+    "name": "i_clk"
+  },
+  "reset": {
+    "name": "i_rst",
+    "polarity": "active_high",
+    "type": "sync"
+  },
+  "sources": [
+    {
+      "path": "rtl/crc32.sv",
+      "role": "rtl",
+      "sha256": "5082e26d0d7732348105174c36b0d77644b02e2ae9d42a09a62e1089ceda8768"
+    },
+    {
+      "path": "tb/tb_crc32.sv",
+      "role": "tb",
+      "sha256": "d2432e8729bb75e3c927b257a79e11af1f64b67a7e5b8240dafa650f5da1100e"
+    }
+  ],
+  "waivers": [],
+  "superseded_by": null
+}

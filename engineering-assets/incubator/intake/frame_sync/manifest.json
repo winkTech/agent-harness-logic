@@ -1,0 +1,52 @@
+{
+  "schema_version": "1.0",
+  "asset_uid": "frame_sync",
+  "name": "frame_sync",
+  "version": "0.1.0",
+  "owner": "lihan",
+  "kind": "primitive",
+  "maturity": {
+    "level": "qualification",
+    "evidence_ref": "engineering-assets/var/gates/pg/frame_sync/"
+  },
+  "requirement_ref": "engineering-assets/docs/CBB候选台账-hdl-coding-templates.md",
+  "doc_refs": [
+    "engineering-assets/docs/governance/CBB-治理与生产级准入规范-V1.0.md"
+  ],
+  "fidelity": {
+    "status": "na"
+  },
+  "top": "frame_sync",
+  "ports": [
+    { "name": "i_clk", "direction": "input", "width": 1 },
+    { "name": "i_rst", "direction": "input", "width": 1 },
+    { "name": "i_valid", "direction": "input", "width": 1 },
+    { "name": "i_data", "direction": "input", "width": 8 },
+    { "name": "o_valid", "direction": "output", "width": 1 },
+    { "name": "o_data", "direction": "output", "width": 8 },
+    { "name": "o_sof", "direction": "output", "width": 1 },
+    { "name": "o_eof", "direction": "output", "width": 1 }
+  ],
+  "clock": {
+    "name": "i_clk"
+  },
+  "reset": {
+    "name": "i_rst",
+    "polarity": "active_high",
+    "type": "sync"
+  },
+  "sources": [
+    {
+      "path": "rtl/frame_sync.sv",
+      "role": "rtl",
+      "sha256": "233c3a91742bb1a4695225ff6f78e0fd614f5561fb08610087af26f3cb53939f"
+    },
+    {
+      "path": "tb/tb_frame_sync.sv",
+      "role": "tb",
+      "sha256": "b406c0f5318c9d96997712e97311e3315db35e681073ebbaee5945ab6768e9c1"
+    }
+  ],
+  "waivers": [],
+  "superseded_by": null
+}

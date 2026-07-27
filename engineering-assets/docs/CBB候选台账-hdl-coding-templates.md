@@ -1,6 +1,8 @@
-# CBB 候选台账 — skills/hdl-coding 散落 RTL 归集处置
+# CBB 候选台账 — 散落 RTL 归集处置
 
-> 覆盖 `skills/hdl-coding/` 下全部 22 个散落 RTL 文件(20 模板 + 2 验证参考)。
+> 覆盖 `skills/hdl-coding/` 下全部 22 个散落 RTL 文件(20 模板 + 2 验证参考),
+> 以及批次 3 纳入的 `knowledge/primary/domains/fpga/ddr_axi4_controller.sv`
+> (全仓扫描发现的最后一个游离治理外的可综合 RTL)。
 > 处置原则:通用件复制改造入 `incubator/intake`(源模板只读保留作历史对照,
 > 已加溯源警示头);验证支撑件原地保留;其余入台账待裁决。
 > 批次 1(2026-07-26)与批次 2(2026-07-27)共完成 7 件模板 → 6 个受治理
@@ -18,6 +20,9 @@
 | comm/pipe_delay.sv | `intake/delay_line`(合并) | o_ready 组合穿通;全局停顿;复位清数据链阻 SRL | 双例化 9082 拍 0 失配,复位无残留 |
 | comm/delay_sync.v | `intake/delay_line`(合并) | 无前缀命名;无 valid 语义 | 同上 |
 | comm/cdc_sync.sv | `intake/cdc_sync` | o_valid_dst 组合直出混复位;src 不锁数据;无 ready(静默丢数);无 ASYNC_REG/_cdc | 双向异频 700 字 0 丢 0 重;电平 20 转变有序 |
+| internet/crc32.v | `intake/crc32` | **语义错配**:声称以太网校验实为非反射 MSB-first 无取反;无帧界/完成指示 | 36 帧 0 失配含 IEEE 检验值 0xCBF43926 硬锚 |
+| internet/frame_sync.v | `intake/frame_sync` | 前导计数死寄存器(抗噪为零);不透传数据;非三段式 | 24 帧 350 字节 0 失配;短前导拒/假前导重锁 |
+| knowledge/fpga/ddr_axi4_controller.sv | `intake/ddr_axi4_controller` | 写通路无数据流接口;awlen/wlast 拍数矛盾;异步复位;全组合直出;超时静默;write_nread 语义反 | 198 拍读回 0 失配;AXI 稳定性/超时/SLVERR 全过 |
 
 裁决记录:
 - 定长延迟与背压为正交职责,分别由 `delay_line` 与 `axis_skid_buffer` 承担,
@@ -40,10 +45,10 @@
 纯组合无时钟,入库须按红线 1/2 加流水包壳,属架构决策(教学参考价值 vs
 通用复用价值待 owner 定夺)。
 
-**internet/(8 件)** — cam_cell / crc.sv / crc32 / crossbar_cell / frame_sync /
-hash_table / lru_counter / sm4_round:外部资料改编的协议专用件,命名全不合规,
-通用性逐个裁决。crc32/frame_sync 通用价值较高,建议下批优先;
-sm4_round 涉及密码算法正确性,须先建 golden 再入库。
+**internet/(6 件)** — cam_cell / crc.sv / crossbar_cell / hash_table /
+lru_counter / sm4_round:外部资料改编的协议专用件,命名全不合规,
+通用性逐个裁决(crc32/frame_sync 已于批次 3 入库)。
+sm4_round 涉及密码算法正确性,按分锚裁决须走 golden 路径先建模型。
 
 ## 遗留
 
