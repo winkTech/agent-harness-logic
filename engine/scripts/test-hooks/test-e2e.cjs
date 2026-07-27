@@ -81,7 +81,7 @@ test('Verification Gate 全周期 (write → block → verify → clear → allo
 
   // Step 2: 非安全命令应被拦截 (exit 2)
   const blockResult = spawnSync('node', [gatePath], {
-    input: JSON.stringify({ hook_event_name: 'PreToolUse', tool_name: 'Bash', tool_input: { command: 'echo test' } }),
+    input: JSON.stringify({ hook_event_name: 'PreToolUse', tool_name: 'Bash', tool_input: { command: 'node build.cjs' } }),
     encoding: 'utf8', timeout: 5000, windowsHide: true, env,
   });
   if (blockResult.status !== 2) {
@@ -98,7 +98,7 @@ test('Verification Gate 全周期 (write → block → verify → clear → allo
   }
 
   const stillBlocked = spawnSync('node', [gatePath], {
-    input: JSON.stringify({ hook_event_name: 'PreToolUse', tool_name: 'Bash', tool_input: { command: 'echo test' } }),
+    input: JSON.stringify({ hook_event_name: 'PreToolUse', tool_name: 'Bash', tool_input: { command: 'node build.cjs' } }),
     encoding: 'utf8', timeout: 5000, windowsHide: true, env,
   });
   if (stillBlocked.status !== 2) {
@@ -121,7 +121,7 @@ test('Verification Gate 全周期 (write → block → verify → clear → allo
 
   // Step 5: 验证后非安全命令应放行
   const allowResult = spawnSync('node', [gatePath], {
-    input: JSON.stringify({ hook_event_name: 'PreToolUse', tool_name: 'Bash', tool_input: { command: 'echo test' } }),
+    input: JSON.stringify({ hook_event_name: 'PreToolUse', tool_name: 'Bash', tool_input: { command: 'node build.cjs' } }),
     encoding: 'utf8', timeout: 5000, windowsHide: true, env,
   });
   if (allowResult.status !== 0) {

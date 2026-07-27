@@ -137,7 +137,7 @@ async function runWorkflow(name, args = {}, opts = {}) {
       return { p0: [], p1: [], p2: [], verificationSteps: ['rerun scan'], summary: 'clean' };
     }
     if (label === 'rag-search') {
-      return { answer: 'Use the cited rule.', citations: ['rules/00-core.md:1'] };
+      return { answer: 'Use the cited rule.', citations: ['docs/rules/00-core.md:1'] };
     }
     return {};
   };

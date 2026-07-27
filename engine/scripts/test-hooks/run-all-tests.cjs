@@ -297,7 +297,7 @@ define('VerificationGate', '功能验证清除标记', () => {
     hook_event_name: 'PreToolUse',
     tool_name: 'Bash',
     cwd: tmpRoot,
-    tool_input: { command: 'echo still-pending' },
+    tool_input: { command: 'node build.cjs' },
   }), { cwd: tmpRoot, env });
   if (stillBlocked.status !== 2) return { pass: false, detail: `pre verification cleared state early, exit=${stillBlocked.status}` };
 
@@ -314,7 +314,7 @@ define('VerificationGate', '功能验证清除标记', () => {
     hook_event_name: 'PreToolUse',
     tool_name: 'Bash',
     cwd: tmpRoot,
-    tool_input: { command: 'echo cleared' },
+    tool_input: { command: 'node build.cjs' },
   }), { cwd: tmpRoot, env });
   return { pass: afterVerify.status === 0, detail: `final exit=${afterVerify.status}` };
 });
@@ -490,7 +490,7 @@ define('VerificationGate', '待验证状态按项目隔离', () => {
     hook_event_name: 'PreToolUse',
     tool_name: 'Bash',
     cwd: projectB,
-    tool_input: { command: 'echo unrelated' },
+    tool_input: { command: 'node build.cjs' },
   }), { cwd: projectB, env });
   if (unsafeB.status !== 0) return { pass: false, detail: `other project blocked: exit=${unsafeB.status}` };
 
@@ -498,7 +498,7 @@ define('VerificationGate', '待验证状态按项目隔离', () => {
     hook_event_name: 'PreToolUse',
     tool_name: 'Bash',
     cwd: projectA,
-    tool_input: { command: 'echo same-project' },
+    tool_input: { command: 'node build.cjs' },
   });
   const unsafeA = runNode(p, unsafeAStdin, { cwd: projectA, env });
   if (unsafeA.status !== 2) return { pass: false, detail: `same project not blocked: exit=${unsafeA.status}` };
@@ -1107,7 +1107,7 @@ define('HookRegistry', 'relocates installed Windows hook paths into an arbitrary
     hooks: {
       PreToolUse: [{
         matcher: 'Bash',
-        hooks: [{ type: 'command', command: 'node C:/Users/Lihan/.claude/engine/scripts/hooks/sample.cjs' }],
+        hooks: [{ type: 'command', command: 'node [CLAUDE_HOME]/engine/scripts/hooks/sample.cjs' }],
       }],
     },
   }), 'utf8');
@@ -1521,7 +1521,7 @@ define('VerificationGate', '不含 status 的真实 PostToolUse 载荷可清除�
     hook_event_name: 'PreToolUse',
     tool_name: 'Bash',
     cwd: tmpRoot,
-    tool_input: { command: 'echo after-verify' },
+    tool_input: { command: 'node build.cjs' },
   }), { cwd: tmpRoot, env });
   if (cleared.status !== 0) return { pass: false, detail: `real PASS payload did not clear pending, exit=${cleared.status} stderr=${cleared.stderr.slice(0, 200)}` };
 
@@ -1544,7 +1544,7 @@ define('VerificationGate', '不含 status 的真实 PostToolUse 载荷可清除�
     hook_event_name: 'PreToolUse',
     tool_name: 'Bash',
     cwd: tmpRoot,
-    tool_input: { command: 'echo should-block' },
+    tool_input: { command: 'node build.cjs' },
   }), { cwd: tmpRoot, env });
   return {
     pass: stillBlocked.status === 2,
@@ -2230,6 +2230,48 @@ define('WorkflowContracts', 'workflow-contracts.cjs 全部通过', () => {
     encoding: 'utf8', timeout: 30000, windowsHide: true,
   });
   return { pass: r.status === 0, detail: `exit=${r.status}` };
+});
+
+// ── 门禁注册表契约 (2026-07-27 审计: fix-in-place-guard 三重失效, 文档说有代码不跑) ──
+
+define('GateRegistryContract', 'gate-registry-contract.cjs 全部通过', () => {
+  const p = path.join(HOME, 'engine/scripts/test-hooks/gate-registry-contract.cjs');
+  if (!fs.existsSync(p)) return { pass: false, detail: 'gate-registry-contract.cjs 不存在' };
+  const r = spawnSync('node', [p], {
+    encoding: 'utf8', timeout: 30000, windowsHide: true,
+  });
+  return { pass: r.status === 0, detail: r.status === 0 ? 'registry/impl/docs 一致' : (r.stdout || '').slice(-400) };
+});
+
+// ── vivado-flow 参数契约 (2026-07-27 审计: 文档里 [MUST] 的命令 100% exit 2) ──
+
+define('VivadoFlowArgs', '文档中出现的每条 vivado_flow 调用都能通过参数校验', () => {
+  const tcl = path.join(HOME, 'skills/vivado-flow/scripts/vivado_flow.tcl');
+  if (!fs.existsSync(tcl)) return { pass: true, skipped: true, detail: 'vivado-flow 未安装' };
+  const probe = spawnSync('tclsh', ['-encoding', 'utf-8'], { encoding: 'utf8', timeout: 5000, windowsHide: true });
+  if (probe.error) return { pass: true, skipped: true, detail: 'tclsh 不可用' };
+
+  // 这些调用形态散落在 hdl-coding / docs/rules / agents 的文档里, 被标为 [MUST]。
+  // 阶段区间为空 = 参数组合本身非法, 用户照文档敲一定失败。
+  const invocations = [
+    ['-to', 'rtlcheck'],
+    ['-to', 'synth'],
+    ['-to', 'bitstream'],
+    ['-from', 'rtlcheck', '-to', 'rtlcheck'],
+    ['-from', 'opt', '-to', 'route'],
+    ['-mode', 'ooc', '-to', 'synth'],
+  ];
+  const bad = [];
+  for (const extra of invocations) {
+    const r = spawnSync('tclsh', [tcl, '-top', 't', '-part', 'xc7a100t', '-src', '.', '-out',
+      path.join(os.tmpdir(), 'vfargs'), ...extra], { encoding: 'utf8', timeout: 20000, windowsHide: true });
+    const out = `${r.stdout || ''}${r.stderr || ''}`;
+    if (/阶段区间为空/.test(out)) bad.push(extra.join(' '));
+  }
+  return {
+    pass: bad.length === 0,
+    detail: bad.length === 0 ? `${invocations.length} 条调用均通过阶段校验` : `阶段区间为空: ${bad.join(' | ')}`,
+  };
 });
 
 // ── 工作流文档一致性 (2026-07-26 审计: md 与 js 曾漂移到互相矛盾) ──────────
@@ -3070,6 +3112,53 @@ define('ProjectDirectoryGuard', 'uncontracted HDL projects are not forced into t
   return { pass: result.status === 0, detail: `exit=${result.status} stderr=${result.stderr.slice(0, 200)}` };
 });
 
+// ── 受保护文件写入 (2026-07-27: golden model "可改但需逐个批准" 的策略实现) ──────
+
+const FPG = 'engine/scripts/hooks/file-protection-guard.cjs';
+const fpgCall = (file) => JSON.stringify({ tool_name: 'Write', tool_input: { file_path: file } });
+const fpgEnv = (approval, reason) => ({
+  CLAUDE_NO_DIAGNOSTIC_WRITES: '1',
+  CLAUDE_PROTECTED_WRITE_APPROVAL: approval || '',
+  CLAUDE_PROTECTED_WRITE_REASON: reason || '',
+});
+
+define('FileProtectionGuard', 'golden model 目录内部的文件也受保护', () => {
+  const p = path.join(HOME, FPG);
+  // 历史缺口: '**/*golden_model*' 只匹配文件名, 目录内部文件曾可绕过
+  const inside = [
+    path.join(HOME, 'engineering-assets/knowledge/primary/domains/comm/conv/golden_model/fixed_point_report.md'),
+    path.join(HOME, 'engineering-assets/knowledge/docs/templates/golden_model_template/config.m'),
+  ];
+  for (const f of inside) {
+    const r = runNode(p, fpgCall(f), { env: fpgEnv() });
+    if (r.status !== 2) return { pass: false, detail: `未拦截目录内部文件: ${f} exit=${r.status}` };
+  }
+  const normal = runNode(p, fpgCall(path.join(HOME, 'docs/rules/00-core.md')), { env: fpgEnv() });
+  return normal.status === 0
+    ? { pass: true, detail: '目录内部文件已拦截, 普通文件正常放行' }
+    : { pass: false, detail: `普通文件被误拦, exit=${normal.status}` };
+});
+
+define('FileProtectionGuard', '受保护写入只接受逐文件批准且必须带理由', () => {
+  const p = path.join(HOME, FPG);
+  const target = 'engineering-assets/knowledge/primary/domains/matlab/README.md';
+  const abs = path.join(HOME, target);
+  const cases = [
+    ['无批准', fpgEnv(), 2],
+    ['缺理由', fpgEnv(abs), 2],
+    ['通配符批准', fpgEnv('engineering-assets/**', 'x'), 2],
+    ['裸文件名批准', fpgEnv('README.md', 'x'), 2],
+    ['批准了别的文件', fpgEnv('engineering-assets/knowledge/primary/domains/python/README.md', 'x'), 2],
+    ['绝对路径+理由', fpgEnv(abs, '修死链'), 0],
+    ['仓库相对路径+理由', fpgEnv(target, '修死链'), 0],
+  ];
+  for (const [name, env, want] of cases) {
+    const r = runNode(p, fpgCall(abs), { env });
+    if (r.status !== want) return { pass: false, detail: `${name}: exit=${r.status} 期望 ${want}` };
+  }
+  return { pass: true, detail: `${cases.length} 种批准场景全部符合预期` };
+});
+
 define('ProjectDirectoryContract', 'harness-init emits canonical module/TB directories', () => {
   const lib = require(path.join(HOME, 'engine/scripts/lib/project-directory-contract.cjs'));
   const p = path.join(HOME, 'engine/scripts/harness-init.cjs');
@@ -3139,7 +3228,7 @@ define('AgentTransparencyLedger', 'writes task contract skill plan rule trace an
   const trace = fs.readFileSync(path.join(outDir, 'rule-trace.md'), 'utf8');
   const events = fs.readFileSync(path.join(outDir, 'events.ndjson'), 'utf8');
   const pass = plan.requiredSkills.includes('hdl-coding')
-    && plan.loadedRules.includes('rules/01-hdl.md')
+    && plan.loadedRules.includes('docs/rules/01-hdl.md')
     && contract.taskType === 'rtl_project'
     && toolContract.tool === 'Write'
     && toolContract.match?.status === 'user-instruction-captured'

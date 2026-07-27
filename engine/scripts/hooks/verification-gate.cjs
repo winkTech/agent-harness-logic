@@ -45,6 +45,7 @@ const {
   pendingForPayload,
   readVerificationState,
   resetVerificationState,
+  sessionIdFromPayload,
   writeVerificationState,
 } = require('../lib/verification-state.cjs');
 const { payloadCwd, payloadFilePath } = require('../lib/project-scope.cjs');
@@ -172,6 +173,9 @@ const SAFE_PATTERNS = [
   /^id\b/,
   /^printenv\b/,
   /^env\b/,
+  // 只允许不含输出重定向的 echo；commandSegments 已先按 | & ; 切段。
+  // `echo ... > file` / `echo ... >> file` 仍由本门禁硬拦。
+  /^echo\b[^>]*$/,
   /^cat\b/,
   /^head\b/,
   /^tail\b/,
@@ -218,8 +222,7 @@ const SAFE_PATTERNS = [
   /^(?:wc|sort|uniq|diff|tree|du|stat|file|basename|dirname|realpath)\b/,
   /^sed\s+-n\b/,
   /^awk\b/,
-  // 刻意不放行 echo: 它对 HDL/Python 工作不是必需命令, 而 `echo ... > x.sv`
-  // 是绕过 Write 工具门禁的写文件向量。保持被拦。
+  // echo 仅由上面的无 `>` 模式放行；带重定向的写文件向量保持被拦。
   // git 暂存与只读查询 — 刻意不含 commit/push/reset，那些仍须先通过验证
   ...['add', 'rev-parse', 'ls-files', 'check-ignore', 'stash\\s+list']
     .map((sub) => new RegExp(`^git\\s+${GIT_GLOBAL_OPTS}${sub}\\b`)),
@@ -249,7 +252,10 @@ function markEdited(payload, toolName) {
 }
 
 function markVerified(payload, command) {
-  markVerifiedForCwd(payloadCwd(payload), { command });
+  markVerifiedForCwd(payloadCwd(payload), {
+    command,
+    sessionId: sessionIdFromPayload(payload),
+  });
 }
 
 function normalizeStatus(status) {
@@ -585,7 +591,7 @@ async function main() {
       console.error('║  ⚠️  LINT PASSED — 仍需功能验证                           ║');
       console.error('╠══════════════════════════════════════════════════════════════╣');
       console.error('║  语法检查通过，但验证门禁仍为「待验证」状态。                ║');
-      console.error('║  根据 rules/00-core.md: "验证 = 功能验证，不只是语法检查"     ║');
+      console.error('║  根据 docs/rules/00-core.md: "验证 = 功能验证，不只是语法检查"     ║');
       console.error('║                                                              ║');
       console.error('║  请继续运行功能验证命令 (如 pytest / vsim / E2E stdin 调用):  ║');
       console.error('║  - Hook 脚本 → echo \'{"hook_event":...}\' | node hook.cjs   ║');
@@ -609,8 +615,7 @@ async function main() {
     console.error('╠══════════════════════════════════════════════════════════════╣');
     console.error('║                                                              ║');
     console.error('║  已编辑文件但尚未通过功能验证。                               ║');
-    console.error('║  根据 rules/00-core.md 验证闭环铁律:                          ║');
-    console.error('║    「改代码后必须跑对应的验证，不验证不提交」                 ║');
+    console.error('║  验证要求见 docs/rules/00-core.md。                           ║');
     console.error('║                                                              ║');
     console.error('║  ❌ 仅跑语法检查不算验证。                                     ║');
     console.error('║  ✅ 请运行功能验证 (pytest / vsim / iverilog / check_*.py)    ║');

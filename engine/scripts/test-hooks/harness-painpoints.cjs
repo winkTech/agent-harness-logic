@@ -19,6 +19,10 @@ const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 const { spawnSync } = require('node:child_process');
+const {
+  collectHookEntries,
+  validateHookScripts,
+} = require('../lib/hook-registry.cjs');
 
 const HOME = HARNESS_ROOT;
 
@@ -108,15 +112,22 @@ test('rule loader scopes gates to new assets while preserving HDL/Python file ru
 test('persistent prompts share a scoped evidence-driven contract with a Claude delta', () => {
   const agents = fs.readFileSync(path.join(HOME, 'AGENTS.md'), 'utf8').replace(/\r\n/g, '\n');
   const claude = fs.readFileSync(path.join(HOME, 'CLAUDE.md'), 'utf8').replace(/\r\n/g, '\n');
-  const core = fs.readFileSync(path.join(HOME, 'rules/00-core.md'), 'utf8');
-  const gates = fs.readFileSync(path.join(HOME, 'rules/03-gates.md'), 'utf8');
+  const core = fs.readFileSync(path.join(HOME, 'docs/rules/00-core.md'), 'utf8');
+  const gates = fs.readFileSync(path.join(HOME, 'docs/rules/03-gates.md'), 'utf8');
 
   const normalizedAgents = agents.replace(/^# Codex 项目指导/m, '# 共享项目指导').trim();
   const claudeCommon = claude.split('\n## Claude 模型校准\n')[0]
     .replace(/^# Claude Code 项目指导/m, '# 共享项目指导')
     .trim();
+  const stopSection = (agents.split('\n## 停止规则\n')[1] || '').split('\n## ')[0];
+  const stopBullets = stopSection.match(/^- /gm) || [];
 
   assert(normalizedAgents === claudeCommon, 'Codex and Claude common guidance drifted');
+  assert(!agents.includes('## 目标与完成标准'), 'duplicated completion guidance was not removed');
+  assert(!agents.includes('## 协作与工具沟通'), 'duplicated collaboration guidance was not removed');
+  assert(agents.includes('透明度账本'), 'repository-specific transparency ledger guidance was lost');
+  assert(stopBullets.length === 1, `stop rules must contain exactly one bullet, found ${stopBullets.length}`);
+  assert(stopSection.includes('同一方法连续失败两次后改变方法'), 'two-failure method-change stop rule missing');
   assert(agents.includes('明确请求“提交、推送、发布、发送”即授权'), 'explicit external action authorization missing');
   assert(agents.includes('无需重复确认'), 'prompt may ask twice for already explicit authorization');
   assert(agents.includes('先读取或验证再作结论'), 'evidence-before-claims guidance missing');
@@ -126,6 +137,35 @@ test('persistent prompts share a scoped evidence-driven contract with a Claude d
   assert(claude.includes('默认直接完成简单、单文件或强顺序任务'), 'Claude subagent overuse guard missing');
   assert(core.includes('不重复授权、沟通、验证和停止规则'), '00-core still duplicates the persistent contract');
   assert(gates.includes('不得仅为制造通过而削弱、删除或跳过测试'), 'test-integrity rule missing');
+});
+
+test('PostToolUse observers share one local-runner batch while cross-link stays standalone', () => {
+  const settingsFile = path.join(HOME, 'settings.json');
+  const entries = collectHookEntries({ files: [settingsFile] })
+    .filter(entry => entry.point === 'PostToolUse' && entry.matcher === '*');
+  const batches = entries.filter(entry => entry.command.includes('local-runner.cjs --batch'));
+  const observers = [
+    '../../hooks/learning/signal-collector.cjs',
+    '../../hooks/learning/skill-tracker-hook.cjs',
+    '../../hooks/learning/cost-tracker-hook.cjs',
+    'agent-transparency-ledger.cjs',
+  ];
+
+  assert(batches.length === 1, `expected one PostToolUse observer batch, found ${batches.length}`);
+  for (const observer of observers) {
+    assert(batches[0].command.includes(observer), `observer missing from batch: ${observer}`);
+  }
+  assert(batches[0].command.includes('drift_stuck'), 'signal collector batch argument was lost');
+  const standaloneObservers = entries.filter(entry =>
+    !entry.command.includes('--batch') && observers.some(observer => entry.command.includes(path.basename(observer)))
+  );
+  assert(standaloneObservers.length === 0, `observer still registered standalone: ${standaloneObservers[0]?.command}`);
+  assert(entries.some(entry => entry.command.includes('cross-link-memory.cjs') && !entry.command.includes('--batch')),
+    'cross-link-memory must remain a standalone PostToolUse hook');
+
+  const missing = validateHookScripts({ files: [settingsFile] }).missing
+    .filter(record => record.command === batches[0].command);
+  assert(missing.length === 0, `observer batch has missing scripts: ${missing.map(item => item.source).join(', ')}`);
 });
 
 // 契约变更 (刻意): 这两道门禁已从 exit 2 硬阻断降级为结构化 Hook advisory。
@@ -198,7 +238,7 @@ test('verification gate does not treat make clean as functional verification', (
       edited: true,
       verified: false,
       editCount: 1,
-      lastEditTime: '2026-01-01T00:00:00.000Z',
+      lastEditTime: new Date().toISOString(),
     }, null, 2));
 
     const payload = JSON.stringify({
@@ -223,7 +263,7 @@ test('verification gate only clears after successful PostToolUse evidence', () =
       edited: true,
       verified: false,
       editCount: 1,
-      lastEditTime: '2026-01-01T00:00:00.000Z',
+      lastEditTime: new Date().toISOString(),
     }, null, 2));
 
     const pre = runNode(gate, JSON.stringify({
@@ -255,6 +295,105 @@ test('verification gate only clears after successful PostToolUse evidence', () =
     state = readJson(stateFile, {});
     assert(state.edited === false && state.verified === true, 'passing PostToolUse evidence did not clear pending state');
   }));
+});
+
+test('verification gate allows read-only echo chains but blocks echo redirection', () => {
+  const gate = path.join(HOME, 'engine/scripts/hooks/verification-gate.cjs');
+  const tmpRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'verify-echo-'));
+  const env = {
+    CLAUDE_VERIFY_GATE_STATE_FILE: path.join(tmpRoot, 'verify-gate.json'),
+    CLAUDE_VERIFICATION_LEDGER_FILE: path.join(tmpRoot, 'verification-ledger.json'),
+  };
+  const sessionId = 'echo-safety-session';
+
+  runNode(gate, JSON.stringify({
+    hook_event_name: 'PostToolUse',
+    tool_name: 'Write',
+    cwd: tmpRoot,
+    session_id: sessionId,
+    tool_input: { file_path: path.join(tmpRoot, 'dut.sv') },
+  }), env);
+
+  const readOnly = runNode(gate, JSON.stringify({
+    hook_event_name: 'PreToolUse',
+    tool_name: 'Bash',
+    cwd: tmpRoot,
+    session_id: sessionId,
+    tool_input: { command: 'git log -1 && echo inspection-complete && ls' },
+  }), env);
+  assert(readOnly.status === 0, `read-only echo chain was blocked, exit=${readOnly.status}`);
+
+  const redirected = runNode(gate, JSON.stringify({
+    hook_event_name: 'PreToolUse',
+    tool_name: 'Bash',
+    cwd: tmpRoot,
+    session_id: sessionId,
+    tool_input: { command: 'echo payload > generated.sv' },
+  }), env);
+  assert(redirected.status === 2, `echo redirection escaped the gate, exit=${redirected.status}`);
+});
+
+test('verification pending is session-scoped and expires by TTL', () => {
+  const gate = path.join(HOME, 'engine/scripts/hooks/verification-gate.cjs');
+  const tmpRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'verify-session-'));
+  const stateFile = path.join(tmpRoot, 'verify-gate.json');
+  const env = {
+    CLAUDE_VERIFY_GATE_STATE_FILE: stateFile,
+    CLAUDE_VERIFICATION_LEDGER_FILE: path.join(tmpRoot, 'verification-ledger.json'),
+    CLAUDE_VERIFY_GATE_TTL_MS: '60000',
+  };
+
+  runNode(gate, JSON.stringify({
+    hook_event_name: 'PostToolUse',
+    tool_name: 'Write',
+    cwd: tmpRoot,
+    session_id: 'session-a',
+    tool_input: { file_path: path.join(tmpRoot, 'dut.sv') },
+  }), env);
+
+  const otherSession = runNode(gate, JSON.stringify({
+    hook_event_name: 'PreToolUse',
+    tool_name: 'Bash',
+    cwd: tmpRoot,
+    session_id: 'session-b',
+    tool_input: { command: 'node build.cjs' },
+  }), env);
+  assert(otherSession.status === 0, `session-b inherited session-a pending state, exit=${otherSession.status}`);
+
+  const sameSession = runNode(gate, JSON.stringify({
+    hook_event_name: 'PreToolUse',
+    tool_name: 'Bash',
+    cwd: tmpRoot,
+    session_id: 'session-a',
+    tool_input: { command: 'node build.cjs' },
+  }), env);
+  assert(sameSession.status === 2, `unexpired pending state did not block its owner session, exit=${sameSession.status}`);
+
+  const state = readJson(stateFile, {});
+  const entry = Object.values(state.pending || {})[0];
+  assert(entry, 'pending entry was not recorded');
+  entry.lastEditTime = '2000-01-01T00:00:00.000Z';
+  entry.expiresAt = '2000-01-01T00:01:00.000Z';
+  fs.writeFileSync(stateFile, JSON.stringify(state, null, 2), 'utf8');
+
+  const expired = runNode(gate, JSON.stringify({
+    hook_event_name: 'PreToolUse',
+    tool_name: 'Bash',
+    cwd: tmpRoot,
+    session_id: 'session-a',
+    tool_input: { command: 'node build.cjs' },
+  }), env);
+  assert(expired.status === 0, `expired pending state still blocked its owner session, exit=${expired.status}`);
+});
+
+test('verification gate cites the rule file without copying stale rule text', () => {
+  const gate = fs.readFileSync(
+    path.join(HOME, 'engine/scripts/hooks/verification-gate.cjs'),
+    'utf8'
+  );
+  assert(gate.includes('docs/rules/00-core.md'), 'verification gate no longer cites docs/rules/00-core.md');
+  assert(!gate.includes('rules/00-core.md 验证闭环铁律'), 'verification gate still labels stale text as an iron rule');
+  assert(!gate.includes('改代码后必须跑对应的验证，不验证不提交'), 'verification gate still copies removed rule text');
 });
 
 test('context compression preserves constitution and dynamic rules', () => {
