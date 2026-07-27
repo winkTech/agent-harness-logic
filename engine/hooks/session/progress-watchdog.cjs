@@ -122,15 +122,63 @@ function bypassRequest(opts = {}) {
 }
 
 function resultFromPayload(payload) {
-  const result = payload?.tool_response || payload?.tool_result || payload?.response || {};
+  // 真实 Claude Code PostToolUse 载荷的 tool_response 没有 status/exit_code:
+  // Bash 是 {stdout, stderr, interrupted, ...}, 有的工具直接给字符串或
+  // content block 数组。旧实现把"缺退出码"当 Number(undefined)=NaN → null,
+  // 再在上游用 `exitCode !== 0` 判失败 —— 于是每一次成功验证都被记为
+  // 失败, 8 轮后误冻结整个会话 (2026-07-27 实测事故)。
+  const raw = payload?.tool_response ?? payload?.tool_result ?? payload?.response ?? {};
+  let result = raw;
+  if (typeof raw === 'string') result = { stdout: raw };
+  else if (Array.isArray(raw)) {
+    result = { stdout: raw.map((b) => (typeof b === 'string' ? b : String(b?.text || ''))).join('\n') };
+  } else if (!raw || typeof raw !== 'object') result = {};
+
   const rawStatus = result.status ?? result.exit_code ?? result.exitCode;
   const parsedStatus = typeof rawStatus === 'number' ? rawStatus : Number(rawStatus);
+  const hasStatus = rawStatus !== undefined && rawStatus !== null && rawStatus !== ''
+    && Number.isFinite(parsedStatus);
+  const stdout = typeof result.stdout === 'string' ? result.stdout
+    : (typeof result.output === 'string' ? result.output : '');
   return {
-    exitCode: Number.isFinite(parsedStatus) ? parsedStatus : null,
-    stdout: String(result.stdout || ''),
+    exitCode: hasStatus ? parsedStatus : null,
+    stdout,
     stderr: String(result.stderr || ''),
     error: String(result.error || ''),
+    interrupted: result.interrupted === true,
   };
+}
+
+// 与 verification-gate 同口径: 成功必须有正面 PASS 证据, 失败必须有明确
+// 失败证据 (PostToolUseFailure / 中断 / 非零退出码 / FAIL / FATAL)。
+// 两者都没有 → 记 activity (结论不明, 既不奖励也不扣修复预算)。
+const OUTPUT_PASS_MARKERS = [
+  /\bRESULT:\s*PASS\b/i,
+  /\b(?:ALL\s+)?(?:TESTS?|CHECKS?)\s+PASSED\b/i,
+  /\bPASS(?:ED)?\b/,
+  /\b\d+\s+passed\b/i,
+  /\b0\s+(?:failed|failures|errors|mismatches)\b/i,
+  /全部通过/,
+  /\bbit-true\b/i,
+];
+const OUTPUT_FAIL_MARKERS = [
+  /\bFATAL\b/i,
+  /\[FAIL\]/i,
+  /\bRESULT:\s*FAIL\b/i,
+  /\bFAIL\b(?!\w)/,
+  /\b[1-9]\d*\s+(?:failed|failures|errors|mismatches)\b/i,
+  /\bASSERTION\s+FAILED\b/i,
+  /\bAssertion error\b/i,
+];
+
+function verificationOutcome(hookEvent, result) {
+  const combined = `${result.stdout}\n${result.stderr}\n${result.error}`;
+  if (hookEvent === 'PostToolUseFailure') return { verdict: 'failed', why: 'PostToolUseFailure event' };
+  if (result.interrupted) return { verdict: 'failed', why: 'command interrupted' };
+  if (result.exitCode !== null && result.exitCode !== 0) return { verdict: 'failed', why: `exit=${result.exitCode}` };
+  if (OUTPUT_FAIL_MARKERS.some((re) => re.test(combined))) return { verdict: 'failed', why: 'failure marker in output' };
+  if (OUTPUT_PASS_MARKERS.some((re) => re.test(combined))) return { verdict: 'passed', why: 'explicit PASS evidence' };
+  return { verdict: 'inconclusive', why: 'no explicit PASS or FAIL evidence' };
 }
 
 function cwdFor(payload) {
@@ -151,18 +199,23 @@ function classifyEvent(payload) {
     return { kind: 'activity', evidence: `${name} tool use without verification outcome` };
   }
 
-  if (name === 'Bash') {
+  if (name === 'Bash' || name === 'PowerShell') {
     if (READ_ONLY_COMMAND.test(command)) {
       return { kind: 'activity', evidence: `read-only shell exploration: ${command.slice(0, 160)}` };
     }
     if (VERIFICATION_COMMAND.test(command) || FPGA_VERIFICATION_COMMAND.test(command)) {
       if (hookEvent === 'PostToolUse' || hookEvent === 'PostToolUseFailure') {
         const result = resultFromPayload(payload);
-        const failed = hookEvent === 'PostToolUseFailure' || result.exitCode !== 0;
-        const status = failed ? 'failed' : 'passed';
+        const outcome = verificationOutcome(hookEvent, result);
+        if (outcome.verdict === 'inconclusive') {
+          // 真实载荷缺退出码且输出无结论 → 不能臆断成败, 也绝不能记失败
+          // (那正是误冻结事故的根因); 按 activity 处理。
+          return { kind: 'activity', evidence: `verification outcome inconclusive (${outcome.why}): ${command.slice(0, 160)}` };
+        }
+        const status = outcome.verdict;
         return {
-          kind: failed ? 'no_progress' : 'progress',
-          evidence: `verification outcome ${status}: exit=${result.exitCode ?? 'unknown'} command=${command.slice(0, 160)}`,
+          kind: status === 'failed' ? 'no_progress' : 'progress',
+          evidence: `verification outcome ${status} (${outcome.why}): command=${command.slice(0, 160)}`,
           verification: {
             status,
             exitCode: result.exitCode,
@@ -321,19 +374,38 @@ function updateProgress(payload, opts = {}) {
     };
   }
   if (session.status === 'frozen') {
+    // 冻结 = 升级要求, 不是全域断电。仍然放行:
+    //   - 只读检查 (Read/Grep/... 与只读 shell 命令) —— 对齐事实需要看得见证据;
+    //   - 通知/提问类工具 —— 升级本身依赖它们把卡点递到人面前;
+    //   - 本看门狗与 verification-gate 的审计 reset —— 唯一的正规解冻路径。
+    // 2026-07-27 事故: 旧实现无差别拦截一切 (连 AskUserQuestion/Read 都拒),
+    // 与验证门禁互锁成死锁, 会话只能靠人工删状态救回。
+    const frozenTool = toolName(payload);
+    const frozenCommand = commandText(payload);
+    const frozenEvent = eventName(payload);
+    const NOTIFY_TOOLS = new Set(['AskUserQuestion', 'PushNotification', 'SendMessage', 'TodoWrite', 'ToolSearch']);
+    const isAuditReset = /(?:progress-watchdog\.cjs|verification-gate\.cjs)\s+(?:--)?reset\b/.test(frozenCommand);
+    const isReadOnly = READ_ONLY_TOOLS.has(frozenTool)
+      || ((frozenTool === 'Bash' || frozenTool === 'PowerShell') && READ_ONLY_COMMAND.test(frozenCommand));
+    const allowed = isAuditReset || isReadOnly || NOTIFY_TOOLS.has(frozenTool) || frozenEvent === 'Stop';
     session.lastEventAt = now;
     appendHistory(session, {
       at: now,
-      event: eventName(payload) || 'unknown',
-      tool: toolName(payload) || 'unknown',
-      kind: 'blocked_frozen',
-      evidence: `repair loop frozen: ${session.freezeReason || 'repair_budget_exhausted'}`,
+      event: frozenEvent || 'unknown',
+      tool: frozenTool || 'unknown',
+      kind: allowed ? 'frozen_allowed' : 'blocked_frozen',
+      evidence: allowed
+        ? `frozen but allowed (${isAuditReset ? 'audited reset' : isReadOnly ? 'read-only' : frozenEvent === 'Stop' ? 'stop checkpoint' : 'notification'})`
+        : `repair loop frozen: ${session.freezeReason || 'repair_budget_exhausted'}`,
       objectiveHash,
     });
     writeJson(stateFile, state);
     return {
-      status: 'frozen_escalation_required',
-      classification: { kind: 'blocked_frozen', evidence: session.freezeReason || 'repair_budget_exhausted' },
+      status: allowed ? 'frozen_notice' : 'frozen_escalation_required',
+      classification: {
+        kind: allowed ? 'frozen_allowed' : 'blocked_frozen',
+        evidence: session.freezeReason || 'repair_budget_exhausted',
+      },
       sessionKey: key,
       stateFile,
       archiveFile: session.archiveFile || null,
@@ -413,22 +485,39 @@ function readStdin() {
 }
 
 function main() {
-  if (process.argv.includes('reset')) {
+  // 审计 reset: 同时接受 `reset` 与 `--reset` (旧版只认 `reset`, 而提示文案
+  // 与 verification-gate 的肌肉记忆都是 `--reset`, 导致解冻指令悄悄落进
+  // 普通载荷分支)。审计要求保留: 必须携带可审计原因 (env 或 --reason),
+  // 旧状态先归档再清空, reset 记录含原因与操作者。
+  if (process.argv.includes('reset') || process.argv.includes('--reset')) {
     const stateFile = process.env.PROGRESS_WATCHDOG_STATE_FILE || DEFAULT_STATE_FILE;
-    const bypass = bypassRequest();
-    if (!bypass.valid) {
-      console.error(JSON.stringify({ source: 'progress-watchdog', type: 'blocked', reason: 'reset requires PROGRESS_WATCHDOG_DISABLED=1 and an auditable PROGRESS_WATCHDOG_BYPASS_REASON' }));
+    const archiveDir = process.env.PROGRESS_WATCHDOG_ARCHIVE_DIR || DEFAULT_ARCHIVE_DIR;
+    const reasonIdx = process.argv.indexOf('--reason');
+    const reason = String(
+      (reasonIdx >= 0 && process.argv[reasonIdx + 1])
+      || process.env.PROGRESS_WATCHDOG_BYPASS_REASON
+      || ''
+    ).trim();
+    if (reason.length < MIN_BYPASS_REASON_LENGTH) {
+      console.error(JSON.stringify({
+        source: 'progress-watchdog',
+        type: 'blocked',
+        reason: `reset requires an auditable reason (>=${MIN_BYPASS_REASON_LENGTH} chars) via --reason "<why>" or PROGRESS_WATCHDOG_BYPASS_REASON`,
+      }));
       process.exit(2);
     }
+    const actor = String(process.env.PROGRESS_WATCHDOG_BYPASS_ACTOR || os.userInfo().username || 'operator').trim();
+    const now = new Date().toISOString();
+    const prior = readJson(stateFile, null);
+    let archivedTo = null;
+    if (prior) {
+      archivedTo = path.join(archiveDir, `reset-${now.replace(/[:.]/g, '-')}.json`);
+      writeJson(archivedTo, { archivedAt: now, action: 'reset', reason, actor, priorState: prior });
+    }
     const state = defaultState();
-    state.bypassAudit = [{
-      at: new Date().toISOString(),
-      actor: bypass.actor,
-      reason: bypass.reason,
-      action: 'reset',
-    }];
+    state.bypassAudit = [{ at: now, actor, reason, action: 'reset', archivedPriorStateTo: archivedTo }];
     writeJson(stateFile, state);
-    console.error(JSON.stringify({ source: 'progress-watchdog', type: 'reset', stateFile, reason: bypass.reason, actor: bypass.actor }));
+    console.error(JSON.stringify({ source: 'progress-watchdog', type: 'reset', stateFile, reason, actor, archivedPriorStateTo: archivedTo }));
     return;
   }
 
@@ -482,20 +571,37 @@ function main() {
       constraint: '记录事实与下一步；不要仅因启发式进度判断阻断模型探索。',
     }));
   }
-  if (result.status === 'frozen_escalation_required') {
+  if (result.status === 'frozen_notice') {
+    // 冻结中但该动作被放行 (只读/通知/审计 reset/Stop) — 仅提示, 不阻塞。
     console.error(JSON.stringify({
       source: 'progress-watchdog',
-      type: 'blocked',
+      type: 'warning',
+      severity: 'medium',
+      state: 'frozen',
+      reason: result.session.freezeReason || 'repair_budget_exhausted',
+      note: 'frozen: read-only/notification/audited-reset actions remain allowed',
+      archiveFile: result.archiveFile,
+    }));
+    return;
+  }
+  if (result.status === 'frozen_escalation_required') {
+    // Stop 钩子只告警不阻塞 (阻塞 Stop 会把"停下来对齐"本身变成死循环,
+    // 2026-07-27 实测事故); observe 模式下冻结态也只告警。
+    const blocking = result.mode === 'enforce' && eventName(payload) !== 'Stop';
+    console.error(JSON.stringify({
+      source: 'progress-watchdog',
+      type: blocking ? 'blocked' : 'warning',
       severity: 'high',
       state: 'frozen',
       escalationRequired: true,
+      blocking,
       reason: result.session.freezeReason || 'repair_budget_exhausted',
       archiveFile: result.archiveFile,
       noProgressTurns: result.session.noProgressTurns,
       thresholds: result.thresholds,
-      constraint: '停止继续消耗上下文；先输出事实/卡点/下一步并与用户对齐。',
+      constraint: '停止继续消耗上下文；先输出事实/卡点/下一步并与用户对齐。解冻: progress-watchdog.cjs --reset --reason "<why>"',
     }));
-    process.exit(2);
+    if (blocking) process.exit(2);
   }
 }
 

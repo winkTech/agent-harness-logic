@@ -1235,7 +1235,10 @@ define('HookRegistry', 'repair stop-loss is registered in effective settings wit
   const pass = hasEntry('PreToolUse', '*', 'progress-watchdog.cjs')
     && hasEntry('PostToolUse', 'Bash', 'progress-watchdog.cjs')
     && hasEntry('Stop', '*', 'progress-watchdog.cjs')
-    && watchdogEntries.every((entry) => entry.command.includes('--enforce'))
+    // 2026-07-27: --enforce 已从注册处移除 —— CLI 旗标会覆盖
+    // PROGRESS_WATCHDOG_MODE=observe (settings.local.json), 曾把 8 次
+    // 误判的"无进展"直接升级成全工具冻结。模式只由 env 决定。
+    && watchdogEntries.every((entry) => !entry.command.includes('--enforce'))
     && hasEntry('PreToolUse', 'Edit|Write|MultiEdit', 'repair-content-gate.cjs')
     && localRepairEntries.length === 0
     && validation.missing.length === 0;
@@ -1437,6 +1440,116 @@ define('ProgressWatchdog', '只有成功的 PostToolUse 验证结果会重置修
     && session.lastVerification?.status === 'passed'
     && session.lastVerification?.exitCode === 0;
   return { pass, detail: `noProgressTurns=${session.noProgressTurns} lastVerification=${JSON.stringify(session.lastVerification)}` };
+});
+
+define('ProgressWatchdog', '不含 status 的真实 PostToolUse 载荷按输出证据判定', () => {
+  // 真实 Claude Code 载荷: tool_response 只有 stdout/stderr/interrupted,
+  // 没有 status/exit_code。旧实现把缺退出码判为失败, 8 次通过的 vsim
+  // 也能把会话冻死 (2026-07-27 事故回归锚)。
+  const p = path.join(HOME, 'engine/hooks/session/progress-watchdog.cjs');
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'progress-watchdog-realpayload-'));
+  const env = {
+    PROGRESS_WATCHDOG_STATE_FILE: path.join(tmp, 'state.json'),
+    PROGRESS_WATCHDOG_ARCHIVE_DIR: path.join(tmp, 'archive'),
+    PROGRESS_WATCHDOG_MAX_NO_PROGRESS_TURNS: '2',
+    PROGRESS_WATCHDOG_MODE: 'enforce',
+  };
+  const mk = (stdout) => JSON.stringify({
+    hook_event_name: 'PostToolUse',
+    tool_name: 'Bash',
+    cwd: tmp,
+    session_id: 'real-payload-session',
+    tool_input: { command: 'vsim -c -do run_sim.do' },
+    tool_response: { stdout, stderr: '', interrupted: false },
+  });
+  const readSession = () => Object.values(
+    JSON.parse(fs.readFileSync(env.PROGRESS_WATCHDOG_STATE_FILE, 'utf8')).sessions
+  )[0];
+
+  // 明确 PASS → progress (预算清零), exitCode 记为 null 而非失败
+  const ok = runNode(p, mk('# [PASS] tb_x: 100 compares, 0 mismatch\n# Errors: 0, Warnings: 0'), { cwd: tmp, env });
+  let session = readSession();
+  if (ok.status !== 0 || session.noProgressTurns !== 0
+    || session.lastVerification?.status !== 'passed'
+    || session.lastVerification?.exitCode !== null) {
+    return { pass: false, detail: `pass-case: exit=${ok.status} turns=${session.noProgressTurns} verification=${JSON.stringify(session.lastVerification)}` };
+  }
+
+  // 明确 FAIL/FATAL → no_progress (消耗预算)
+  const bad = runNode(p, mk('# FAIL: bit 3 got 1 expected 0\n# ** Fatal: Assertion error.'), { cwd: tmp, env });
+  session = readSession();
+  if (bad.status !== 0 || session.noProgressTurns !== 1
+    || session.lastVerification?.status !== 'failed') {
+    return { pass: false, detail: `fail-case: exit=${bad.status} turns=${session.noProgressTurns} verification=${JSON.stringify(session.lastVerification)}` };
+  }
+
+  // 无结论输出 (只编译没跑) → activity, 不判成败、不再扣预算
+  const inconclusive = runNode(p, mk('# -- Compiling module tb_x\n# Top level modules: tb_x'), { cwd: tmp, env });
+  session = readSession();
+  const pass = inconclusive.status === 0
+    && session.noProgressTurns === 1
+    && session.history.at(-1).kind === 'activity';
+  return { pass, detail: `inconclusive: exit=${inconclusive.status} turns=${session.noProgressTurns} lastKind=${session.history.at(-1).kind}` };
+});
+
+define('VerificationGate', '不含 status 的真实 PostToolUse 载荷可清除待验证标记', () => {
+  const p = path.join(HOME, 'engine/scripts/hooks/verification-gate.cjs');
+  const tmpRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'verify-realpayload-'));
+  const env = {
+    CLAUDE_VERIFY_GATE_STATE_FILE: path.join(tmpRoot, 'verify-gate.json'),
+    CLAUDE_VERIFICATION_LEDGER_FILE: path.join(tmpRoot, 'verification-ledger.json'),
+  };
+  runNode(p, JSON.stringify({
+    hook_event_name: 'PostToolUse',
+    tool_name: 'Write',
+    tool: { name: 'Write' },
+    cwd: tmpRoot,
+    tool_input: { file_path: path.join(tmpRoot, 'dut.sv') },
+  }), { cwd: tmpRoot, env });
+
+  // 真实载荷: 无 status/exit_code, 只有 stdout/stderr/interrupted。
+  // 有明确 PASS 证据 → 必须接受并清除 pending (旧实现判 'missing exit status')
+  const post = runNode(p, JSON.stringify({
+    hook_event_name: 'PostToolUse',
+    tool_name: 'Bash',
+    cwd: tmpRoot,
+    tool_input: { command: 'vsim -c -do run_sim.do' },
+    tool_response: { stdout: '# [PASS] tb_dut: 200 compares, 0 mismatch', stderr: '', interrupted: false },
+  }), { cwd: tmpRoot, env });
+  if (post.status !== 0) return { pass: false, detail: `post exit=${post.status}` };
+  const cleared = runNode(p, JSON.stringify({
+    hook_event_name: 'PreToolUse',
+    tool_name: 'Bash',
+    cwd: tmpRoot,
+    tool_input: { command: 'echo after-verify' },
+  }), { cwd: tmpRoot, env });
+  if (cleared.status !== 0) return { pass: false, detail: `real PASS payload did not clear pending, exit=${cleared.status} stderr=${cleared.stderr.slice(0, 200)}` };
+
+  // 反向: interrupted=true 的真实载荷不得清标记
+  runNode(p, JSON.stringify({
+    hook_event_name: 'PostToolUse',
+    tool_name: 'Write',
+    tool: { name: 'Write' },
+    cwd: tmpRoot,
+    tool_input: { file_path: path.join(tmpRoot, 'dut2.sv') },
+  }), { cwd: tmpRoot, env });
+  runNode(p, JSON.stringify({
+    hook_event_name: 'PostToolUse',
+    tool_name: 'Bash',
+    cwd: tmpRoot,
+    tool_input: { command: 'vsim -c -do run_sim.do' },
+    tool_response: { stdout: '# [PASS] partial', stderr: '', interrupted: true },
+  }), { cwd: tmpRoot, env });
+  const stillBlocked = runNode(p, JSON.stringify({
+    hook_event_name: 'PreToolUse',
+    tool_name: 'Bash',
+    cwd: tmpRoot,
+    tool_input: { command: 'echo should-block' },
+  }), { cwd: tmpRoot, env });
+  return {
+    pass: stillBlocked.status === 2,
+    detail: `interrupted payload cleared pending: exit=${stillBlocked.status}`,
+  };
 });
 
 define('ProgressWatchdog', '只读探索不会累计无进展或触发阻断', () => {

@@ -262,13 +262,26 @@ function normalizeStatus(status) {
 }
 
 function bashResultFromPayload(payload) {
-  const result = payload?.tool_response || payload?.tool_result || payload?.response || {};
+  // 真实 Claude Code PostToolUse 载荷的 tool_response 没有 status/exit_code
+  // (Bash 形如 {stdout, stderr, interrupted}), 也可能是纯字符串或 content
+  // block 数组。旧实现只认对象 + status 字段, 于是真实会话里每次通过的
+  // 验证都被判 'missing exit status', pending 永不清除 (2026-07-27 实测:
+  // 与 progress-watchdog 冻结互锁成全工具死锁)。
+  const raw = payload?.tool_response ?? payload?.tool_result ?? payload?.response ?? {};
+  let result = raw;
+  if (typeof raw === 'string') result = { stdout: raw };
+  else if (Array.isArray(raw)) {
+    result = { stdout: raw.map((b) => (typeof b === 'string' ? b : String(b?.text || ''))).join('\n') };
+  } else if (!raw || typeof raw !== 'object') result = {};
+  const stdout = typeof result.stdout === 'string' ? result.stdout
+    : (typeof result.output === 'string' ? result.output : '');
   return {
     status: normalizeStatus(result.status ?? result.exit_code ?? result.exitCode),
     signal: result.signal || null,
     error: result.error || '',
-    stdout: result.stdout || '',
+    stdout,
     stderr: result.stderr || '',
+    interrupted: result.interrupted === true,
   };
 }
 
@@ -305,12 +318,13 @@ function verificationVerdict(command, result) {
   const combined = `${stdout}\n${stderr}\n${error}`;
   const status = normalizeStatus(result?.status);
 
-  if (status !== 0) {
-    return {
-      ok: false,
-      reason: status === null ? 'missing exit status' : `exit=${status}`,
-    };
+  // 真实载荷没有退出码 (status=null) —— 不能因此判失败: PostToolUse 事件
+  // 本身说明命令跑完了 (硬失败走 PostToolUseFailure), 成败交给下面的
+  // 正面 PASS / 失败标记判据。只有明确的非零退出码才在这里判失败。
+  if (status !== null && status !== 0) {
+    return { ok: false, reason: `exit=${status}` };
   }
+  if (result?.interrupted) return { ok: false, reason: 'command interrupted' };
   if (result?.signal) return { ok: false, reason: `signal=${result.signal}` };
   if (error.trim()) return { ok: false, reason: 'tool error present' };
   if (/\bRESULT:\s*FAIL\b/i.test(combined)) return { ok: false, reason: 'RESULT: FAIL in output' };
@@ -463,8 +477,8 @@ async function main() {
   // 逃生开关: CLAUDE_GATES_DISABLED=true 跳过所有门禁
   if (process.env.CLAUDE_GATES_DISABLED === 'true') process.exit(0);
 
-  // --reset: 清除待验证标记
-  if (process.argv.includes('--reset')) {
+  // --reset / reset: 清除待验证标记 (两种写法都接受, 与 progress-watchdog 对齐)
+  if (process.argv.includes('--reset') || process.argv.includes('reset')) {
     resetVerificationState();
     console.error('[VerificationGate] ✅ 验证状态已重置');
     process.exit(0);
@@ -503,13 +517,16 @@ async function main() {
     process.exit(0);
   }
 
-  if (eventName === 'PostToolUse' && isShellTool && command) {
+  if ((eventName === 'PostToolUse' || eventName === 'PostToolUseFailure') && isShellTool && command) {
     const state = readState();
     const pending = pendingForPayload(state, payload);
     if (pending.length === 0 || !matchesAny(command, TEST_PATTERNS)) process.exit(0);
 
     const result = bashResultFromPayload(payload);
-    const verdict = verificationVerdict(command, result);
+    // PostToolUseFailure = 工具层已判定执行失败, 无条件按验证失败记录
+    const verdict = eventName === 'PostToolUseFailure'
+      ? { ok: false, reason: 'PostToolUseFailure event' }
+      : verificationVerdict(command, result);
     recordVerificationEvidence(payload, command, result, verdict);
     if (verdict.ok) {
       markVerified(payload, command);
