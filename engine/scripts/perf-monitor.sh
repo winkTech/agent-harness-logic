@@ -27,15 +27,15 @@ MEMORY_COUNT=$(find "${HOME}/.claude/memory/" -name "*.md" 2>/dev/null | wc -l)
 echo "🧠 记忆文件: ${MEMORY_COUNT} 个"
 
 # 6. 知识库文档数
-KNOWLEDGE_COUNT=$(find "${HOME}/.claude/knowledge/primary" -name "*.md" 2>/dev/null | wc -l)
+KNOWLEDGE_COUNT=$(find "${HOME}/.claude/engineering-assets/knowledge/primary" -name "*.md" 2>/dev/null | wc -l)
 echo "📖 知识文档: ${KNOWLEDGE_COUNT} 个"
 
 # 7. 源文档数
-SOURCE_COUNT=$(find "${HOME}/.claude/knowledge/primary" -name "*-source.md" 2>/dev/null | wc -l)
+SOURCE_COUNT=$(find "${HOME}/.claude/engineering-assets/knowledge/primary" -name "*-source.md" 2>/dev/null | wc -l)
 echo "📄 源文档提取: ${SOURCE_COUNT} 个"
 
 # 8. 原始 PDF 数
-PDF_COUNT=$(find "${HOME}/.claude/knowledge/source" -name "*.pdf" 2>/dev/null | wc -l)
+PDF_COUNT=$(find "${HOME}/.claude/engineering-assets/reference-assets/datasheets" -name "*.pdf" 2>/dev/null | wc -l)
 echo "📑 原始 PDF: ${PDF_COUNT} 个"
 
 # 9. Git 提交数

@@ -1,6 +1,6 @@
 # FIFO Generator — 基于 PG057 v13.2
 
-**参考手册**: `D:\Project_Files\templates\fifo\pg057-fifo-generator.pdf`（已转 `pg057-fifo.md`）
+**参考手册**: `[TEMPLATES_DIR]\fifo\pg057-fifo-generator.pdf`（已转 `pg057-fifo.md`）
 
 ---
 
@@ -217,8 +217,8 @@ iverilog -g2012 -t null -s fifo_<depth>_<width> fifo_<depth>_<width>.sv
 
 | 资源 | 路径 |
 |:----|:------|
-| PG057 FIFO Generator 原始 PDF | `D:\Project_Files\templates\fifo\pg057-fifo-generator.pdf` |
-| PG057 转换 Markdown | `D:\Project_Files\templates\fifo\pg057-fifo.md` |
+| PG057 FIFO Generator 原始 PDF | `[TEMPLATES_DIR]\fifo\pg057-fifo-generator.pdf` |
+| PG057 转换 Markdown | `[TEMPLATES_DIR]\fifo\pg057-fifo.md` |
 | 生产级 RTL 规范 | `../references/rtl-production-standards.md` |
 | HDL 编码规范 | `../../hdl-coding/SKILL.md` |
 | 存储器和 FIFO 参考 | `../../hdl-coding/references/memory-templates.md` |

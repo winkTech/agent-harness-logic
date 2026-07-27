@@ -2,24 +2,31 @@
 /**
  * engine/scripts/hooks/verification-quality-guard.cjs — 验证质量门禁 (P0)
  *
- * 强制规则: 创建新 Testbench/测试文件前，必须先完成:
+ * 规则: 创建新 Testbench/测试文件前，应先完成:
  *   1. 项目环境画像 (A.1)
  *   2. 最少场景集 (A.2)
- * 未完成 → exit 2 硬阻断。
+ *
+ * ⚠️ 这是 **advisory 门禁，不阻断**（2026-07 刻意降级，见 §降级理由）。
  *
  * 机制:
- *   PreToolUse(Write) on new tb_* or test_* files — check gate status
+ *   PreToolUse(Write|Edit|MultiEdit) on new tb_* or test_* files — check gate status
  *     - 文件已存在 (修改已有 TB) → 放行
  *     - 门禁状态 "completed" → 放行
- *     - 门禁状态 "pending" 或不存在 → exit 2 阻断
+ *     - 门禁状态 "pending" 或不存在 → 输出 advisory (additionalContext)，仍放行
+ *
+ * 降级理由: 放行的唯一条件是模型自己往状态 JSON 里写 status:"completed"，
+ * 而那份 JSON 无 schema 校验、无有效期、无写保护。硬阻断在这种结构下不会带来
+ * 更强的约束，只会训练模型伪造门禁记录；对临时脚本还会大量误报。
+ * 真正的硬门禁应该建立在**可独立复核的产物**上，例见
+ * workflows/hdl-coding-dag-workflow.js 的 Phase 4.5（校验 check_results/<mod>.json
+ * 真实存在且 status===PASS）。
  *
  * 状态文件: ~/.claude/var/gates/verification-quality.json
  *
  * 退出码:
- *   0 — 放行
- *   2 — 硬拦截
+ *   0 — 始终（advisory 不阻断）
  *
- * 集成: 注册在 settings.json PreToolUse(Write)
+ * 集成: 注册在 settings.json PreToolUse(Edit|Write|MultiEdit)
  *
  * ⚠️ 支持两种调用方式:
  *   1. 独立 hook: node verification-quality-guard.cjs (读 stdin)
@@ -29,12 +36,11 @@
 'use strict';
 
 const fs = require('fs');
-const os = require('os');
 const path = require('path');
 const { findProjectRoot, stateHasScopeForFile } = require('../lib/project-scope.cjs');
+const { HARNESS_ROOT } = require('../lib/harness-root.cjs');
 
-const HOMEDIR = os.homedir();
-const HOME_GATES_DIR = path.join(HOMEDIR, '.claude', 'var', 'gates');
+const HOME_GATES_DIR = path.join(HARNESS_ROOT, 'var', 'gates');
 const HOME_STATE_FILE = path.join(HOME_GATES_DIR, 'verification-quality.json');
 
 // ── 哪些文件触发验证质量门禁 ────────────────────────────────────────────
@@ -158,6 +164,15 @@ function getMissingScenarios(state) {
   });
 }
 
+function hookSuccessOutput(advisory, eventName = 'PreToolUse') {
+  return {
+    hookSpecificOutput: {
+      hookEventName: eventName || 'PreToolUse',
+      additionalContext: JSON.stringify(advisory),
+    },
+  };
+}
+
 // ── 门禁检查核心逻辑 ─────────────────────────────────────────────────────
 
 function checkGate(filePath) {
@@ -204,32 +219,45 @@ function checkGate(filePath) {
     sections += `║\n`;
   }
 
-  console.error(`
-╔${line}╗
-║  🧪 验证质量门禁 — VERIFICATION QUALITY GATE                     ║
-╠${line}╣
-║                                                                ║
-║  创建新 Testbench 前，必须先完成或标记不适用:                    ║
-║    A.1 项目环境画像 (8 项)                                       ║
-║    A.2 最少场景集 (5 类)                                         ║
-║  根据 rules/03-gates.md 的验证质量门禁:                          ║
-║    「单元验证失真 → 集成爆炸 → agent 无法独立调试 → 人工救火」 ║
-║                                                                ║
-║  ${state && state.module ? `目标模块: ${state.module}`.padEnd(boxWidth - 4) + '║' : '暂无活跃模块记录'.padEnd(boxWidth - 4) + '║'}
-║                                                                ║
-${sections}║  操作:                                                          ║
-║  1. 完成项目环境画像 (A.1: 时钟/复位/接口/数据/帧/背压/吞吐/邻居) ║
-║  2. 定义最少场景集 (A.2: S1~S5 每类至少 1 个用例)                ║
-║  3. 将结果写入                                                   ║
-║     var/gates/verification-quality.json (status: "completed")     ║
-║  4. 重新执行 Write                                               ║
-║                                                                ║
-║  详细: rules/03-gates.md                                        ║
-║  证据: memory/learnings/verification-quality-wifi-evidence.md    ║
-╚${line}╝
-`);
+  // ── 门禁未完成 → 提示, 不阻断 ────────────────────────────────────
+  // 与 requirements-gate-guard 同理: 放行条件是模型自己写一份
+  // var/gates/verification-quality.json, 阻断只会诱导伪造记录。
+  // 验证质量的真实证据是 check_results/<mod>.json (Phase 4.5 校验)。
+  const findings = [
+    ...missingProfile.map(d => ({
+      severity: 'warning',
+      category: 'environment-profile',
+      code: d.key,
+      message: d.label,
+    })),
+    ...missingScenarios.map(d => ({
+      severity: 'warning',
+      category: 'verification-scenario',
+      code: d.key,
+      message: d.label,
+    })),
+  ];
+  if (findings.length === 0) {
+    findings.push({
+      severity: 'warning',
+      category: 'gate-status',
+      code: 'gate-status',
+      message: 'Verification profile exists, but the gate is not completed for this file scope.',
+    });
+  }
 
-  return true; // 需要阻断
+  return {
+    schemaVersion: 1,
+    kind: 'harness-advisory',
+    source: 'verification-quality',
+    status: 'warning',
+    blocking: false,
+    target: filePath,
+    gateStatus: state?.status || 'missing',
+    summary: 'Before creating this test, review the environment profile and applicable scenarios from docs/rules/03-gates.md.',
+    findings,
+    guidance: 'Mark genuinely inapplicable items as na with a reason; do not weaken executable checks to manufacture a pass.',
+  };
 }
 
 // ── 独立运行入口 ──────────────────────────────────────────────────────────
@@ -246,9 +274,11 @@ async function main() {
 
   const toolName = (payload?.tool?.name || payload?.tool_name || payload?.name || '').toLowerCase();
   const filePath = (payload?.tool_input?.file_path || payload?.tool?.input?.file_path || payload?.input?.file_path || payload?.arguments?.file_path || '').trim();
+  const eventName = payload?.hook_event_name || 'PreToolUse';
 
   if (toolName !== 'write') process.exit(0);
-  if (checkGate(filePath)) process.exit(2);
+  const advisory = checkGate(filePath);
+  if (advisory) process.stdout.write(JSON.stringify(hookSuccessOutput(advisory, eventName)));
   process.exit(0);
 }
 
@@ -260,7 +290,7 @@ module.exports = function verificationQualityGuard(toolUse, context) {
   const input = toolUse.input || {};
   const filePath = input.filePath || input.file_path;
   if (!filePath) return;
-  if (checkGate(filePath)) process.exit(2);
+  return checkGate(filePath); // 只提示, 不阻断
 };
 
 if (require.main === module) {

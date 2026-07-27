@@ -48,7 +48,7 @@
 
 报告完成，文档归档，经验已记录。
 
-**参考**: `docs/templates/` 各阶段模板
+**参考**: `skills/workflows/hdl-coding-workflow.md`（Phase 列表与检查点体系）, `engineering-assets/knowledge/docs/templates/report_template.md`
 
 **可执行检查点**:
 ```bash

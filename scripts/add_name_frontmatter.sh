@@ -124,17 +124,17 @@ process_dir() {
 }
 
 # All knowledge base directories
-process_dir "knowledge/primary"
-process_dir "knowledge/docs"
-process_dir "knowledge/archive"
-process_dir "knowledge/references"
-process_dir "knowledge/source"
-process_dir "knowledge/methodology"
-process_dir "knowledge/math-foundation"
-process_dir "knowledge/linear-algebra"
-process_dir "knowledge/probability-statistics"
-process_dir "knowledge/python-basics"
-process_dir "knowledge/data-viz"
+process_dir "engineering-assets/knowledge/primary"
+process_dir "engineering-assets/knowledge/docs"
+process_dir "engineering-assets/knowledge/archive"
+process_dir "engineering-assets/knowledge/references"
+process_dir "engineering-assets/reference-assets/datasheets"
+process_dir "engineering-assets/knowledge/methodology"
+process_dir "engineering-assets/knowledge/math-foundation"
+process_dir "engineering-assets/knowledge/linear-algebra"
+process_dir "engineering-assets/knowledge/probability-statistics"
+process_dir "engineering-assets/knowledge/python-basics"
+process_dir "engineering-assets/knowledge/data-viz"
 
 echo ""
 echo "========================================================"
@@ -163,7 +163,7 @@ if ! $DRY_RUN; then
             still_missing=$((still_missing + 1))
         fi
     ALL_KNOWLEDGE_DIRS=""
-    for d in knowledge/primary knowledge/docs knowledge/archive knowledge/references knowledge/source knowledge/methodology knowledge/math-foundation knowledge/linear-algebra knowledge/probability-statistics knowledge/python-basics knowledge/data-viz; do
+    for d in engineering-assets/knowledge/primary engineering-assets/knowledge/docs engineering-assets/knowledge/archive engineering-assets/knowledge/references engineering-assets/reference-assets/datasheets engineering-assets/knowledge/methodology engineering-assets/knowledge/math-foundation engineering-assets/knowledge/linear-algebra engineering-assets/knowledge/probability-statistics engineering-assets/knowledge/python-basics engineering-assets/knowledge/data-viz; do
         ALL_KNOWLEDGE_DIRS="$ALL_KNOWLEDGE_DIRS $BASE/$d"
     done
     done < <(find $ALL_KNOWLEDGE_DIRS -name '*.md' -type f -print0 2>/dev/null)

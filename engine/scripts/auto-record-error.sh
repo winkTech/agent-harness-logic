@@ -27,9 +27,12 @@ fi
 ERROR_TYPE=""
 ERROR_DESC=""
 if [ -n "$STDIN_DATA" ]; then
-  # 尝试从 JSON 提取 tool name 和 error
-  ERROR_TYPE=$(echo "$STDIN_DATA" | grep -o '"name":"[^"]*"' | head -1 | sed 's/"name":"//;s/"//' | tr -d '\n' || true)
-  ERROR_DESC=$(echo "$STDIN_DATA" | grep -o '"error":[^,}]*' | head -1 | sed 's/"error"://;s/"//' | cut -c1-200 || true)
+  # 提取工具名。平台字段是 "tool_name"; 早期版本只匹配 '"name":"',
+  # 它匹配不到 '"tool_name":"'(name 前面是下划线而非引号), 于是所有记录
+  # 都退化成 hook_failure 空壳。这里按优先级依次尝试三种形态。
+  ERROR_TYPE=$(echo "$STDIN_DATA" | grep -o '"tool_name"[[:space:]]*:[[:space:]]*"[^"]*"' | head -1 | sed 's/.*"\([^"]*\)"$/\1/' || true)
+  [ -z "$ERROR_TYPE" ] && ERROR_TYPE=$(echo "$STDIN_DATA" | grep -o '"name"[[:space:]]*:[[:space:]]*"[^"]*"' | head -1 | sed 's/.*"\([^"]*\)"$/\1/' || true)
+  ERROR_DESC=$(echo "$STDIN_DATA" | grep -o '"\(error\|stderr\|message\)"[[:space:]]*:[[:space:]]*"[^"]*"' | head -1 | sed 's/.*:[[:space:]]*"//;s/"$//' | cut -c1-200 || true)
   [ -z "$ERROR_TYPE" ] && ERROR_TYPE="hook_failure"
 else
   ERROR_TYPE="${1:-hook_failure}"

@@ -99,6 +99,10 @@ pnpm test -- --grep "test-name"
 | 🧠 记忆加速层 | `references/memory-acceleration.md` | 跨会话测试场景追踪 |
 | 🏗️ Agent-Studio 扩展 | `references/agent-studio-extensions.md` | Hook 测试 / 记忆 TDD |
 | 🧪 测试运行器选择 | `references/test-runner-selection.md` | node:test vs Vitest vs pytest |
+| 🗂️ 本地 TDD 工作流 | `references/tdd-workflow-local.md` | 本仓库落地的具体步骤 |
+| 🧷 记忆画像 | `references/tdd-memory-profile.md` | 记忆层字段与写入时机 |
+| 📚 方法论溯源 | `references/research-requirements.md` | Canon TDD + arXiv 证据与硬约束 |
+| 📋 变更实施模板 | `templates/implementation-template.md` | 场景清单 + 逐轮 RED/GREEN 证据表 |
 
 ---
 

@@ -4,7 +4,7 @@ tier: foundation
 runtime: on-demand
 trigger: mention
 argument-hint: "(optional) focus for the next session — used to trim next_3_steps + Suggested Skills"
-description: "Session wrap-up ritual: update the active plan / next-state file + write a session log + capture memory. Skipping = the next session loses context. Trigger: end / wrap up / handoff / hand over / save progress / call it for today / session end / 结束 / 收工 / 交接 / 保存进度 / 今天到这 / session结束. Skip: commit code (/commit) / start a new session (/start)."
+description: "Session wrap-up ritual: update the active plan / next-state file, write a session log, and capture memory. Use when ending or handing over a work session — skipping it means the next session loses context. Not for committing code (/commit) or starting a session (/start)."
 metadata:
   source: xihe
   version: "8.0.0"
@@ -37,7 +37,7 @@ echo "=LOG=" && git log --oneline -5 && \
 echo "=STATUS=" && git status --short --branch && \
 echo "=DIFF_STAT=" && git diff --stat "$(git rev-parse origin/main 2>/dev/null || echo HEAD~1)"..HEAD
 ```
-\+ Read `~/.claude/var/active-task.yaml` (任务协议, YAML 格式) — the single source of current state (plan, next steps, blocked on, cognitive state).
+\+ Read `var/active-task.yaml` (任务协议, YAML 格式) — the single source of current state (plan, next steps, blocked on, cognitive state).
 
 ### Step 2: Analyze (pure reasoning, 0 IO)
 
@@ -104,3 +104,5 @@ If memory-track.sh is not available, skip Step 4.
 ## References (read on demand)
 
 - `var/work/TEMPLATE.md` — session log template (Step 3b)
+- `references/session-log-template.md` — annotated session-log template with field-by-field guidance
+- `references/handoff-internals.md` — next-state file format, memory-capture rules, and the token-cost rationale behind the three principles

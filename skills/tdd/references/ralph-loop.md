@@ -4,7 +4,7 @@ For repository-scale TDD where sessions may be interrupted, wire ralph-loop (Mod
 
 ### TDD State Schema
 
-Maintain a TDD-specific state file at `.claude/context/runtime/tdd-state.json`:
+Maintain a TDD-specific state file at `var/tdd/tdd-state.json`:
 
 ```json
 {
@@ -42,7 +42,7 @@ At the start of each iteration, read the TDD state file:
 ```javascript
 // Step 0 — before building/refreshing backlog
 const state = JSON.parse(
-  fs.readFileSync('.claude/context/runtime/tdd-state.json', 'utf-8') || '{}'
+  fs.readFileSync('var/tdd/tdd-state.json', 'utf-8') || '{}'
 );
 const completedIds = (state.completedScenarios || []).map(s => s.id);
 const remaining = (state.scenarios || []).filter(s => !completedIds.includes(s.id));

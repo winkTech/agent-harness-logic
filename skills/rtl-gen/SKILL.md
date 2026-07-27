@@ -78,4 +78,4 @@ version: 1.0.0
 | FIFO 生成器 | `modules/fifo.md` |
 | FIR 生成器 | `modules/fir.md` |
 | BRAM 生成器 | `modules/bram.md` |
-| HDL 编码规范 | `../../hdl-coding/SKILL.md` |
+| HDL 编码规范 | `../hdl-coding/SKILL.md` |

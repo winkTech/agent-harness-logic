@@ -11,18 +11,20 @@
  *   node engine/scripts/context-resume.cjs --check   — 仅检查是否有可恢复的状态
  *
  * 整合:
- *   与 engine/hooks/session/pre-compact.cjs 配对使用。
+ *   与 engine/scripts/pre-compact.cjs 配对使用。
  *   pre-compact save → /compact → context-resume → 继续工作
  */
 
 'use strict';
+
+const { HARNESS_ROOT } = require('./lib/harness-root.cjs');
 
 const p = require('node:path');
 const f = require('node:fs');
 const os = require('node:os');
 const scope = require('./lib/project-scope.cjs');
 
-const HOME = p.join(os.homedir(), '.claude');
+const HOME = HARNESS_ROOT;
 const STATE_FILE = p.join(HOME, 'var', 'index', 'pre-compact-state.json');
 const HOME_ROOT = HOME;
 

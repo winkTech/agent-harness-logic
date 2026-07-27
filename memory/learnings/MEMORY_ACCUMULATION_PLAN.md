@@ -1,5 +1,7 @@
 ---
 name: memory-accumulation-plan
+status: superseded
+superseded_by: 2026-07-17-wifi-phy-agent-run-experience
 description: 记忆积累策略与目标 — 3 个月从 6 到 50+ 个记忆
 metadata:
   type: learning

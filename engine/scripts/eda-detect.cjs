@@ -54,9 +54,14 @@ function resolveWin32Cmd(cmd) {
   try {
     const r = spawnSync('where', [cmd], { encoding: 'utf8', timeout: 3000, windowsHide: true });
     if (r.status === 0 && r.stdout) {
-      const found = r.stdout.trim().split(/\r?\n/)[0];
-      // 已有 Windows 可执行扩展名 → 直接用
-      if (/\.(exe|com|bat|cmd)$/i.test(found)) return cmd;
+      // 取**第一条带可执行扩展名的**路径, 不能取 [0]。
+      // Vivado 的 bin 目录里同名放了两份: 无扩展名的 Unix 脚本 `xvlog` 和 Windows
+      // 用的 `xvlog.bat`, 而 `where xvlog` 两条都返回、无扩展名那条排在前面。
+      // 旧代码取 [0] 判定失败, 再 return 裸命令名, 结果 spawnSync 直接 ENOENT ——
+      // 整条版本探测在 Windows 上从未执行过, 每次都退到扫安装目录猜版本。
+      const lines = r.stdout.trim().split(/\r?\n/).map(s => s.trim()).filter(Boolean);
+      const exe = lines.find(p => /\.(exe|com|bat|cmd)$/i.test(p));
+      if (exe) return exe;
     }
   } catch { /* fall through */ }
 
@@ -112,6 +117,19 @@ function findVivadoInstallDirs() {
       }
     } catch { /* next drive */ }
   }
+  // 降序排列, 新版本在前。
+  // readdirSync 按目录名返回, 多版本并存时旧版目录名排在新版前面, 而调用方一律取
+  // dirs[0] —— 于是本函数报的是最旧的那一版, 与 PATH 实际解析到的版本可能差好几年。
+  // Agent 据此写 TCL 会用上旧版没有的命令与器件。
+  results.sort((a, b) => {
+    const pa = a.version.split('.').map(Number);
+    const pb = b.version.split('.').map(Number);
+    for (let i = 0; i < Math.max(pa.length, pb.length); i++) {
+      const d = (pb[i] || 0) - (pa[i] || 0);
+      if (d !== 0) return d;
+    }
+    return 0;
+  });
   return results;
 }
 
@@ -139,7 +157,9 @@ const TOOLS = [
     label: 'Vivado (xvlog)',
     cmd: 'xvlog',
     args: ['-version'],
-    versionRegex: /xvlog\s+v([\d.]+)/i,
+    // `xvlog -version` 打印的横幅是 "Vivado Simulator v<版本>", 里面没有 "xvlog"
+    // 这个词 —— 旧正则永远匹配不上, 每次都退到 detectFallback 去扫安装目录。
+    versionRegex: /(?:xvlog|Vivado Simulator)\s+v?([\d.]+)/i,
     lintCmd: (file) => ['-sv', '-lint', file],
     lintLabel: 'xvlog -sv -lint',
     detectFallback: () => {
@@ -153,7 +173,7 @@ const TOOLS = [
     label: 'Vivado Simulator (xelab)',
     cmd: 'xelab',
     args: ['-version'],
-    versionRegex: /xelab\s+([\d.]+)/i,
+    versionRegex: /(?:xelab|Vivado Simulator)\s+v?([\d.]+)/i,
     detectFallback: () => {
       const dirs = findVivadoInstallDirs();
       if (dirs.length > 0) return { version: dirs[0].version, source: 'dir' };
@@ -212,7 +232,7 @@ const TOOLS = [
     label: 'Vivado Simulator (xsim)',
     cmd: 'xsim',
     args: ['--version'],
-    versionRegex: /xsim\s+([\d.]+)/i,
+    versionRegex: /(?:xsim|Vivado Simulator)\s+v?([\d.]+)/i,
     detectFallback: () => {
       const dirs = findVivadoInstallDirs();
       if (dirs.length > 0) return { version: dirs[0].version, source: 'dir' };
@@ -268,10 +288,14 @@ function detect(opts = {}) {
     const effectiveCmd = resolveWin32Cmd(tool.cmd);
 
     try {
-      const r = spawnSync(effectiveCmd, tool.args, {
+      // Node 出于安全不允许不带 shell 直接执行 .bat/.cmd, 必须走 cmd.exe。
+      // 路径可能含空格 (如 C:\Program Files\...), shell 模式下要加引号。
+      const needsShell = process.platform === 'win32' && /\.(bat|cmd)$/i.test(effectiveCmd);
+      const r = spawnSync(needsShell ? `"${effectiveCmd}"` : effectiveCmd, tool.args, {
         encoding: 'utf8',
         timeout: 10000,
         windowsHide: true,
+        shell: needsShell,
       });
 
       let version = null;

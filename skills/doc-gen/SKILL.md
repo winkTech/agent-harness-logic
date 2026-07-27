@@ -1,6 +1,6 @@
 ---
 name: doc-gen
-description: 文档生成 — 三阶段协作流程：背景收集 → 逐段撰写 → 读者验证。支持设计文档、API 文档、架构文档、用户手册、README。触发词：写文档/生成文档/写设计文档/写 README/写用户手册/技术文档/规格文档
+description: 文档生成 — 三阶段协作流程：背景收集 → 逐段撰写 → 读者验证。用于写设计文档、API 文档、架构文档、用户手册和 README。
 version: 2.0.0
 model: sonnet
 invoked_by: both

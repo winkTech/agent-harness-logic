@@ -6,7 +6,12 @@
     "SPAWN_PROMPT_BUDGET_LOG": "on",
     "SPAWN_ASSEMBLY_CACHE": "on",
     "SPAWN_ASSEMBLY_CACHE_TTL_MS": "300000",
-    "AGENT_TYPED_MEMORY_INJECTION": "on"
+    "AGENT_TYPED_MEMORY_INJECTION": "on",
+    "CLAUDE_RULE_CAPSULE_MAX_CHARS": "900",
+    "CLAUDE_RULE_SIGNAL_DISABLED": "1",
+    "PROGRESS_WATCHDOG_MODE": "observe",
+    "CLAUDE_TOOL_ACTION_CONTRACT_MODE": "high-risk",
+    "CLAUDE_CONTEXT_MONITOR_AUTO_CHECKPOINT": "0"
   },
   "enabledPlugins": {
     "andrej-karpathy-skills@karpathy-skills": true,
@@ -19,7 +24,10 @@
     "ask": [
       "Bash(git push:*)",
       "Bash(gh pr merge:*)",
-      "Bash(git commit:*)"
+      "Bash(git commit:*)",
+      "PowerShell(git push:*)",
+      "PowerShell(gh pr merge:*)",
+      "PowerShell(git commit:*)"
     ],
     "allow": [
       "Bash",
@@ -45,67 +53,22 @@
       "Bash(git push origin :*)",
       "Bash(git tag -d:*)",
       "Bash(gh repo delete:*)",
-      "Bash(git commit --amend:*)"
+      "Bash(git commit --amend:*)",
+      "PowerShell(git push origin main)",
+      "PowerShell(git push origin master)",
+      "PowerShell(git push --force:*)",
+      "PowerShell(git push -f:*)",
+      "PowerShell(git reset --hard:*)",
+      "PowerShell(git clean -f*:*)",
+      "PowerShell(git branch -D:*)",
+      "PowerShell(git checkout -- *:*)",
+      "PowerShell(git push --delete:*)",
+      "PowerShell(git push origin :*)",
+      "PowerShell(git tag -d:*)",
+      "PowerShell(gh repo delete:*)",
+      "PowerShell(git commit --amend:*)",
+      "PowerShell(Remove-Item -Recurse -Force /:*)",
+      "PowerShell(Remove-Item -Recurse -Force ~:*)"
     ]
-  },
-  "hooks": {
-    "PreToolUse": [
-      {
-        "matcher": "*",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "node C:/Users/Lihan/.claude/engine/hooks/session/progress-watchdog.cjs",
-            "timeout": 3000
-          }
-        ]
-      },
-      {
-        "matcher": "Edit|Write|MultiEdit",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "node C:/Users/Lihan/.claude/engine/scripts/hooks/repair-content-gate.cjs",
-            "timeout": 3000
-          }
-        ]
-      }
-    ],
-    "PostToolUse": [
-      {
-        "matcher": "Bash",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "node C:/Users/Lihan/.claude/engine/scripts/hooks/toolchain-health-gate.cjs",
-            "timeout": 3000
-          }
-        ]
-      }
-    ],
-    "Stop": [
-      {
-        "matcher": "*",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "node C:/Users/Lihan/.claude/engine/hooks/session/progress-watchdog.cjs",
-            "timeout": 3000
-          }
-        ]
-      }
-    ]
-  },
-  "mcpServers": {
-    "matlab": {
-      "command": "D:\\Program Files\\MATLAB-MCP\\matlab-mcp-server.exe",
-      "args": [
-        "--matlab-root", "D:\\MATLAB\\R2025a",
-        "--initialize-matlab-on-startup", "false",
-        "--matlab-display-mode", "nodesktop",
-        "--disable-telemetry", "true",
-        "--log-folder", "D:\\MATLAB\\MCP-logs"
-      ]
-    }
   }
 }

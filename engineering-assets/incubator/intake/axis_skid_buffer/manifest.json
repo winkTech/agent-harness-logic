@@ -1,0 +1,102 @@
+{
+  "schema_version": "1.0",
+  "asset_uid": "axis_skid_buffer",
+  "name": "axis_skid_buffer",
+  "version": "0.1.0",
+  "owner": "lihan",
+  "kind": "primitive",
+  "maturity": {
+    "level": "qualification",
+    "evidence_ref": "engineering-assets/var/gates/pg/axis_skid_buffer/"
+  },
+  "requirement_ref": "engineering-assets/docs/comm模块族认证差距清单.md",
+  "doc_refs": [
+    "engineering-assets/docs/governance/CBB-治理与生产级准入规范-V1.0.md"
+  ],
+  "fidelity": {
+    "status": "na"
+  },
+  "top": "axis_skid_buffer",
+  "ports": [
+    {
+      "name": "i_clk",
+      "direction": "input",
+      "width": 1
+    },
+    {
+      "name": "i_rst",
+      "direction": "input",
+      "width": 1
+    },
+    {
+      "name": "s_axis_tvalid",
+      "direction": "input",
+      "width": 1,
+      "bus": "axi-stream"
+    },
+    {
+      "name": "s_axis_tready",
+      "direction": "output",
+      "width": 1,
+      "bus": "axi-stream"
+    },
+    {
+      "name": "s_axis_tdata",
+      "direction": "input",
+      "width": 32,
+      "bus": "axi-stream"
+    },
+    {
+      "name": "s_axis_tlast",
+      "direction": "input",
+      "width": 1,
+      "bus": "axi-stream"
+    },
+    {
+      "name": "m_axis_tvalid",
+      "direction": "output",
+      "width": 1,
+      "bus": "axi-stream"
+    },
+    {
+      "name": "m_axis_tready",
+      "direction": "input",
+      "width": 1,
+      "bus": "axi-stream"
+    },
+    {
+      "name": "m_axis_tdata",
+      "direction": "output",
+      "width": 32,
+      "bus": "axi-stream"
+    },
+    {
+      "name": "m_axis_tlast",
+      "direction": "output",
+      "width": 1,
+      "bus": "axi-stream"
+    }
+  ],
+  "clock": {
+    "name": "i_clk"
+  },
+  "reset": {
+    "name": "i_rst",
+    "polarity": "active_high",
+    "type": "sync"
+  },
+  "sources": [
+    {
+      "path": "rtl/axis_skid_buffer.sv",
+      "role": "rtl",
+      "sha256": "4e76d7e45ef49ada37eeebc82cc50f964bd022713bbbaea8353437b906a51fda"
+    },
+    {
+      "path": "tb/tb_axis_skid_buffer.sv",
+      "role": "tb",
+      "sha256": "f210be759ad9da62defa61341d4a25b7a9bc6d886817ebd2d2ef5fe22c30e9c5"
+    }
+  ],
+  "waivers": [],
+  "superseded_by": null
+}

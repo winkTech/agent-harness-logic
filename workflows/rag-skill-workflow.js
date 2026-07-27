@@ -9,7 +9,7 @@
 
 export const meta = {
   name: 'rag-skill-workflow',
-  description: '知识库深度检索 — 调用 RAG 技能进行多轮知识检索',
+  description: '知识库深度检索的多 Agent 编排版 — 多路并行检索后综合。单次问答用 rag-skill 技能。',
   phases: [{ title: '检索', detail: '多路并行知识检索' }],
   contract: {
     version: 1,

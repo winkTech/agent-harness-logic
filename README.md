@@ -16,20 +16,15 @@
 ~/.claude/
 │
 ├── CLAUDE.md              ← 核心指令（session 注入）
-├── rules/                 ← L1 边界：约束规则（渐进式披露）
-│   ├── 00-core.md         ←     四条铁律 + Lint First + 验证闭环
-│   ├── 01-hdl.md          ←     HDL 编码规范
+├── docs/rules/            ← L1 边界：约束规则（渐进式披露，由 rule-loader 按需注入）
+│   ├── 00-core.md         ←     核心路由 + 常驻指引
+│   ├── 01-hdl.md          ←     HDL 编码规范（五条红线 + Vivado 证据要求）
 │   ├── 02-python.md       ←     Python 开发规范
-│   ├── 03-debugging.md    ←     调试方法论
-│   ├── 04-security.md     ←     安全准则（禁止/需确认操作）
-│   ├── 05-workflow-trigger.md  ← 关键词→工作流映射
-│   ├── 06-cognition.md    ← L4: 7 种推理模式定义
-│   ├── 07-system.md       ←     系统操作约束（D 盘安装等）
-│   ├── 08-constraints.md  ←     硬约束（保护 golden model 等）
-│   ├── 09-search-tools.md ← L2: 检索工具选择矩阵
-│   ├── 10-drawing.md      ←     绘图规则
-│   ├── 11-git.md          ←     Git 操作规则
-│   └── 12-tdd.md          ←     TDD 测试驱动开发规则
+│   ├── 03-gates.md        ←     需求门禁 + 验证质量门禁
+│   ├── 04-git.md          ←     Git 操作规则
+│   └── README.md          ←     为什么规则不放在 .claude/rules/（避免全文常驻注入）
+├── docs/rules-archive/    ← 已归档规则（11 份：调试/安全/认知/系统/约束/检索/绘图/TDD…）
+│                                不再加载，仅供追溯
 │
 ├── engine/                ← 核心引擎
 │   ├── sqlite/            ←     持久层（FTS5 全文检索 + 记忆/事件/技能/成本）
@@ -44,13 +39,15 @@
 │   │   └── memory/
 │   │       └── memory-sqlite-sync.cjs ← 记忆文件 ↔ SQLite 同步
 │   ├── scripts/
-│   │   ├── hooks/          ←     本地 hook 脚本（lint/diff/挫败检测/文件保护）
-│   │   │   ├── python-gate.cjs        ←     Python 专用门禁 (TDD + 安全)
-│   │   │   ├── matlab-gate.cjs        ←     MATLAB 专用门禁 (golden 保护)
-│   │   │   ├── coverage-gate.cjs      ←     覆盖率退化门禁
-│   │   │   └── fpr-calibration-hook.cjs  ← 自动假阳性校准
+│   │   ├── hooks/          ←     本地 hook 脚本（23 个，local-runner.cjs 批量调度）
+│   │   │   ├── bash-safety-guard.cjs      ←     Bash 危险命令 / 绕过写入拦截
+│   │   │   ├── hdl-gate.cjs               ←     HDL 红线门禁
+│   │   │   ├── verification-gate.cjs      ←     验证闭环门禁
+│   │   │   ├── requirements-gate-guard.cjs ←    需求门禁守卫
+│   │   │   ├── tool-action-contract-gate.cjs ←  工具动作合同门禁
+│   │   │   └── agent-transparency-ledger.cjs ←  透明度账本写入
 │   │   ├── test-hooks/
-│   │   │   ├── run-all-tests.cjs     ←     115 条 Hook 测试套件
+│   │   │   ├── run-all-tests.cjs     ←     307 条 Hook 测试套件（harness-ci.cjs 的主体）
 │   │   │   └── test-e2e.cjs          ←     E2E 恢复测试 (6 项)
 │   │   ├── lib/
 │   │   │   ├── lint-utils.cjs         ←     lint 工具共享库
@@ -62,7 +59,10 @@
 │   │   ├── memory-retrieve.sh         ← L2: 统一检索入口
 │   │   ├── runtime-state.cjs          ← L3: 运行时状态管理器
 │   │   ├── agent-context-budget.cjs   ← 上下文预算 + 智能压缩
-│   │   ├── agent-context-watchdog.cjs ← Agent 上下文监测
+│   │   ├── harness-ci.cjs             ← fail-closed CI 总门禁（静态/注册表/回归/覆盖率）
+│   │   ├── eda-detect.cjs             ← EDA 工具链探测（Vivado/Questa/Verilator…）
+│   │   ├── fpga-util-parser.cjs       ← Vivado 资源报告 → JSON
+│   │   ├── fpga-timing-parser.cjs     ← Vivado 时序报告 → JSON
 │   │   ├── coverage-runner.cjs        ← V8 代码覆盖率检测
 │   │   ├── dashboard-html.cjs         ← 静态 HTML 仪表盘生成器
 │   │   ├── delivery-tracker.cjs       ← 交付率追踪
@@ -78,11 +78,10 @@
 │   ├── references/        ←     跨项目参考链接
 │   └── archive/           ←     已归档历史
 │
-├── knowledge/             ← L2 记忆：领域知识库（3414 文件）
+├── engineering-assets/knowledge/             ← L2 记忆：领域知识库（3414 文件）
 │   ├── primary/domains/   ←     核心领域（fpga / comm / matlab / python）
-│   ├── docs/              ←     技术文档与模板
-│   ├── source/            ←     原始资料 PDF（本地引用，不入 git）
-│   └── archive/           ←     归档笔记
+│   ├── docs/              ←     技术文档与模板（含上游导入的模板包）
+│   └── archive/sources/   ←     原始资料转写稿（*-source.md，取代已废弃的 source/datasheets/）
 │
 ├── skills/                ← L5 技能
 │   ├── hdl-coding/ / tdd/ / debugging/ / code-review/ 等核心技能
@@ -105,13 +104,27 @@
 ## L1 边界层：Hook 门禁系统
 
 > CLAUDE.md 写承诺，hooks 写执行。承诺可以被合理化，执行不可以。
+>
+> ⚠️ 但**加粗的才是硬拦截**（`exit 2`）。标「提醒」的走 advisory：输出建议、仍然放行。
+> 区别很要紧——把 advisory 当硬拦截会误以为"没被拦就是合规"。哪些是哪些由
+> `engine/scripts/test-hooks/gate-registry-contract.cjs` 持续校验，防止本表再次漂移。
 
 ### 9 种 Hook 事件 · 42 条注册 Hook
+
+> **Hook 配置的唯一位置：`settings.json`**（2026-07-27 起）。
+> 新增/修改 hook 一律写进 `settings.json` 的 `hooks` 段，**不要**再往 `settings.local.json` 里放
+> —— 两处都注册会导致同一个 hook 每次触发跑两遍（迁移前 `verification-gate` 在
+> PostToolUse+Bash 上就是这种状态）。
+>
+> `settings.local.json` 现在只承载 `permissions` / `enabledPlugins` / `env`。
+>
+> ⚠️ `settings.json` 在 `.gitignore` 里（hook 命令含本机绝对路径），因此 **hook 配置不入版本库**：
+> 换机或新克隆需要重新生成。改 hook 后请自测一次触发，不要只看 JSON 语法。
 
 | 事件 | 时机 | 本地钩子 | ECC 插件钩子 |
 |:-----|:-----|:---------|:-------------|
 | `SessionStart` | 新 session 开局 | memory-track, resolve-plugin-path | session-start-bootstrap |
-| `PreToolUse` | 工具调用前 | 挫败检测, pre-commit-lint, diff-size-gate, file-protection-guard, **resource-budget-gate**, **python-gate**, **matlab-gate**, **coverage-gate** | run-with-flags(6 个场景) |
+| `PreToolUse` | 工具调用前 | **bash-safety-guard**, **verification-gate**, **file-protection-guard**, **project-directory-guard**, **fix-in-place-guard**, **hdl-gate**, **rtl-semantic-oracle**, pre-commit-lint, diff-size-gate(提醒), resource-budget-gate(提醒), requirements-gate-guard(提醒), verification-quality-guard(提醒), tool-action-contract-gate, progress-watchdog, repair-content-gate | run-with-flags(6 个场景) |
 | `PostToolUse` | 工具调用后 | memory-sqlite-sync, skill-tracker | 观测/指标/监控/质量门 |
 | `PostToolUseFailure` | 工具失败 | signal-collector(tool_fail) | MCP 健康检查 |
 | `Stop` | 响应结束 | lint-auto-gate, cost-tracker | 格式化/检查/Session 持久化 |
@@ -150,7 +163,7 @@
 SQLite FTS5 (BM25 排序) → Grep/Glob → git log → rag-skill/code-search → 完整 Read
 ```
 
-详见 `rules/09-search-tools.md`。
+详见 `docs/rules-archive/09-search-tools.md`。
 
 ---
 
@@ -177,13 +190,13 @@ SQLite FTS5 (BM25 排序) → Grep/Glob → git log → rag-skill/code-search �
 | 证据驱动 | 性能优化、方案选型 | 基准→修改→测量→结论 |
 | 闭环 | 默认模式 | 定目标→追过程→拿结果 |
 
-**挫败检测**: `frustration-detector` hook 监听中英 20+ 模式，≥3 次失败自动建议切换模式。详见 `rules/06-cognition.md`。
+**挫败检测**: `frustration-detector` hook 监听中英 20+ 模式，≥3 次失败自动建议切换模式。推理模式定义见已归档的 `docs/rules-archive/06-cognition.md`。
 
 ---
 
 ## L5 技能层
 
-13 核心技能（slash 命令）+ 17 Agent 角色 + 6 工作流。完整列表见 `knowledge/references/skills-catalog.md`。
+13 核心技能（slash 命令）+ 17 Agent 角色 + 6 工作流。完整列表见 `engineering-assets/knowledge/references/skills-catalog.md`。
 
 **DAG 工作流**（`hdl-coding-dag-workflow.js`）：10 阶段 HDL 开发流程 v3.4，Phase 2(定点)+Phase 3(TB) 并行、Phase 6(回归)+Phase 7(审查) 并行，含证据门禁 + Verifier 终验节点。
 
@@ -353,15 +366,15 @@ node engine/scripts/quality-regression-dashboard.cjs report  # 自动 10% 退化
 
 | 你要做的事 | 入口 |
 |-----------|------|
-| 核心规则 | `rules/00-core.md` |
-| 安全规则 | `rules/04-security.md` |
-| 认知层 | `rules/06-cognition.md` |
-| 检索工具选择 | `rules/09-search-tools.md` |
-| 绘图规则 | `rules/10-drawing.md` |
-| Git 操作规则 | `rules/11-git.md` |
-| TDD 测试驱动 | `rules/12-tdd.md` |
-| 查技能列表 | `knowledge/references/skills-catalog.md` |
-| 查完整索引 | `knowledge/references/reference-index.md` |
+| 核心规则 | `docs/rules/00-core.md` |
+| Git 操作规则 | `docs/rules/04-git.md` |
+| 安全规则 | `docs/rules-archive/04-security.md` |
+| 认知层 | `docs/rules-archive/06-cognition.md` |
+| 检索工具选择 | `docs/rules-archive/09-search-tools.md` |
+| 绘图规则 | `docs/rules-archive/10-drawing.md` |
+| TDD 测试驱动 | `docs/rules-archive/12-tdd.md` |
+| 查技能列表 | `engineering-assets/knowledge/references/skills-catalog.md` |
+| 查完整索引 | `engineering-assets/knowledge/references/reference-index.md` |
 | SQLite 文档 | `engine/sqlite/README.md` |
 | 系统诊断 | `node engine/diagnostics.cjs` |
 | 记忆健康 | `node engine/scripts/memory-health-check.cjs` |

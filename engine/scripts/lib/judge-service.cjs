@@ -9,11 +9,13 @@
 
 'use strict';
 
+const { HARNESS_ROOT } = require('./harness-root.cjs');
+
 const fs = require('node:fs');
 const path = require('node:path');
 const os = require('node:os');
 
-const HOME = path.join(os.homedir(), '.claude');
+const HOME = HARNESS_ROOT;
 const ELO_FILE = path.join(HOME, 'var', 'judge-elo.json');
 
 // ═════════════════════════════════════════════════════════════════════════════

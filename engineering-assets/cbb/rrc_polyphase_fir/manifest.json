@@ -1,0 +1,174 @@
+{
+  "schema_version": "1.0",
+  "asset_uid": "rrc_polyphase_fir",
+  "name": "rrc_polyphase_fir",
+  "version": "0.4.0",
+  "owner": "lihan",
+  "maturity": {
+    "level": "certified",
+    "evidence_ref": "engineering-assets/var/gates/pg/rrc_polyphase_fir/"
+  },
+  "requirement_ref": "engineering-assets/knowledge/primary/domains/comm/rrc/algorithm_spec.md",
+  "doc_refs": [
+    "engineering-assets/knowledge/primary/domains/comm/rrc/fixed_point_report.md",
+    "engineering-assets/knowledge/primary/domains/comm/rrc/report_rrc_fpga_implementation.md"
+  ],
+  "golden_model_ref": "model_comm_rrc",
+  "fidelity": {
+    "status": "bit_true",
+    "bit_accurate_against": "model_comm_rrc@1.0.0"
+  },
+  "alignment": {
+    "compare_mode": "scoreboard",
+    "pipeline_delay_min": 16,
+    "pipeline_delay_max": 16
+  },
+  "ports": [
+    {
+      "name": "i_clk",
+      "direction": "input",
+      "width": 1
+    },
+    {
+      "name": "i_rst",
+      "direction": "input",
+      "width": 1
+    },
+    {
+      "name": "s_axis_tvalid",
+      "direction": "input",
+      "width": 1,
+      "bus": "axi-stream"
+    },
+    {
+      "name": "s_axis_tready",
+      "direction": "output",
+      "width": 1,
+      "bus": "axi-stream"
+    },
+    {
+      "name": "s_axis_tdata",
+      "direction": "input",
+      "width": 32,
+      "bus": "axi-stream"
+    },
+    {
+      "name": "m_axis_tvalid",
+      "direction": "output",
+      "width": 1,
+      "bus": "axi-stream"
+    },
+    {
+      "name": "m_axis_tready",
+      "direction": "input",
+      "width": 1,
+      "bus": "axi-stream"
+    },
+    {
+      "name": "m_axis_tdata",
+      "direction": "output",
+      "width": 32,
+      "bus": "axi-stream"
+    }
+  ],
+  "top": "rrc_polyphase_fir",
+  "device": {
+    "part": "xc7k325tffg900-2",
+    "family": "kintex7",
+    "note": "与设计报告 §5.1 声明的 XC7K325T 一致"
+  },
+  "clock": {
+    "name": "i_clk",
+    "period_ns": 4
+  },
+  "reset": {
+    "name": "i_rst",
+    "polarity": "active_high",
+    "type": "sync"
+  },
+  "constraints": {
+    "target": {
+      "fmax": "250MHz",
+      "fmax_mhz": 250,
+      "lut": 2800,
+      "ff": 1380,
+      "bram": 1,
+      "dsp": 24,
+      "latency": 7,
+      "note_lut_ff_bram": "取自设计报告 §5.1 资源评估 (LUT 2800 / FF 1380 / BRAM 0.5 向上取整为 1)",
+      "note_dsp": "原声明 9、设计报告写 5, 二者均与本 RTL 架构不符: 9 漏计 I/Q 复数双路, 5 假设了对称折叠而 RTL 未实现。按实际架构重新声明 = 9 抽头/相 x 2(I,Q) = 18 个乘法器, 另 6 个被综合器用作加法树后加器, 合计 24。若要压回 5 需实现对称折叠, 属架构重做, 不在本次范围。",
+      "note_latency": "原为 4; 为在 250MHz 收敛, 累加级拆为寄存加法树(+2 级)、round_clip 拆为两级(+1 级), 共 7 拍。依据: requirements-gate 2026-07-25。"
+    }
+  },
+  "sources": [
+    {
+      "path": "rtl/rrc_polyphase_fir.sv",
+      "role": "rtl",
+      "sha256": "9632a42a8e8734e57bd9f961ebb4ec74e4165ad1b1d3b3ac75951307cce5abd2"
+    },
+    {
+      "path": "tb/tb_rrc_polyphase_fir.sv",
+      "role": "tb",
+      "sha256": "93c7763b272274e047a1db55a4fa8e28dd012b8a967824d10a6a446833225068"
+    },
+    {
+      "path": "constraints/rrc_polyphase_fir.xdc",
+      "role": "constraint",
+      "sha256": "1ca5afbc925b87924f7474becefbfe7ce239a4420eabaa889c105c8eb407ff92",
+      "note": "由 manifest.clock/constraints.target 机器化而来; I/O 预算为显式假设, 集成时须以板级实数复核"
+    }
+  ],
+  "generality": {
+    "param_space": [
+      {
+        "name": "DATA_W",
+        "values": [
+          16
+        ],
+        "support": true
+      },
+      {
+        "name": "COEFF_W",
+        "values": [
+          16
+        ],
+        "support": true
+      },
+      {
+        "name": "ACC_W",
+        "values": [
+          38
+        ],
+        "support": true
+      },
+      {
+        "name": "SPS",
+        "values": [
+          4
+        ],
+        "support": true
+      },
+      {
+        "name": "TAPS_PP",
+        "values": [
+          9
+        ],
+        "support": true
+      }
+    ],
+    "note": "参数表与 rtl/rrc_polyphase_fir.sv 的实际 parameter 一致。原先列的 SPAN 在 RTL 中不存在(span=8 体现为 TAPS_PP=9), 且漏列 COEFF_W/ACC_W —— 已按源码更正。仅默认值经过验证, 改参数须重跑全部证据。"
+  },
+  "waivers": [],
+  "superseded_by": null,
+  "signoff": {
+    "by": "lihan",
+    "at": "2026-07-25",
+    "scope": [
+      "证据已复核: timing-summary.rpt / utilization.rpt / alignment-report.json / reset-sim.json / cdc-report.json / stability/*.json",
+      "已接受限制: DSP 零裕量(24/24)",
+      "已接受限制: 综合级 hold 未收敛(-0.163ns), 上板前须以实现后时序为准",
+      "已接受限制: 仅默认参数经验证",
+      "已接受限制: cdc_tool=na — 单时钟域, 仅结构扫描, 未经具名 CDC 工具"
+    ]
+  }
+}

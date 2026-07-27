@@ -10,13 +10,13 @@ export CLAUDE_ROOT="${HOME}/.claude"
 export MEMORY_DIR="${CLAUDE_ROOT}/memory"
 
 # 知识库目录
-export KB_DIR="${CLAUDE_ROOT}/knowledge/primary"
+export KB_DIR="${CLAUDE_ROOT}/engineering-assets/knowledge/primary"
 
 # 脚本目录 (v4.0: engine/scripts/)
 export SCRIPTS_DIR="${CLAUDE_ROOT}/engine/scripts"
 
-# 参考文档目录 (v4.0: knowledge/references/)
-export REFERENCES_DIR="${CLAUDE_ROOT}/knowledge/references"
+# 参考文档目录 (v4.0: engineering-assets/knowledge/references/)
+export REFERENCES_DIR="${CLAUDE_ROOT}/engineering-assets/knowledge/references"
 
 # 插件目录 (v4.0: var/plugins/)
 export PLUGINS_DIR="${CLAUDE_ROOT}/var/plugins"

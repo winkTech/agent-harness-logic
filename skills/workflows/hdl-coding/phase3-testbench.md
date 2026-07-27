@@ -113,7 +113,7 @@ assert property (@(posedge clk) fifo_full |-> !fifo_wr);
 - 标准算法模块已生成黄金参考，未使用自闭环验证
 
 **关联 Skill**: `hdl-coding`（Testbench 结构模板、SVA 编写参考）
-**数据输入**: `.claude/state/hdl-coding/project-spec.json`（Phase 1 输出，含端口列表和比对策略）
+**数据输入**: `06_doc/architecture.yaml` + `06_doc/interface_contract.md`（Phase 1b 输出，含端口列表和握手协议）
 
 **可执行检查点**:
 ```bash

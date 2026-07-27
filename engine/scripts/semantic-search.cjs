@@ -15,19 +15,21 @@
  * 索引位置: var/index/semantic-index.json
  */
 
+const { HARNESS_ROOT } = require('./lib/harness-root.cjs');
+
 const p = require('node:path');
 const f = require('node:fs');
 const os = require('node:os');
 const { shouldIndexSemanticFile } = require('./lib/memory-file-policy.cjs');
 
-const HOME = p.join(os.homedir(), '.claude');
+const HOME = HARNESS_ROOT;
 const INDEX_DIR = p.join(HOME, 'var', 'index');
 const INDEX_FILE = p.join(INDEX_DIR, 'semantic-index.json');
 const MEMORY_DIR = p.join(HOME, 'memory');
 const KNOWLEDGE_DIRS = [
-  p.join(HOME, 'knowledge', 'primary'),
-  p.join(HOME, 'knowledge', 'docs'),
-  p.join(HOME, 'knowledge', 'references'),
+  p.join(HOME, 'engineering-assets', 'knowledge','primary'),
+  p.join(HOME, 'engineering-assets', 'knowledge','docs'),
+  p.join(HOME, 'engineering-assets', 'knowledge','references'),
 ];
 
 // ── Tokenizer: English words + Chinese char trigrams ─────────────────────

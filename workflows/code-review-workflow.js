@@ -1,22 +1,24 @@
 export const meta = {
   name: 'code-review-workflow',
-  description: '两轮代码审查 — Pass 1 正确性(阻塞) → Pass 2 代码质量(建议)',
+  description: '两轮代码审查的多 Agent 编排版 — Pass 1 正确性(阻塞) → Pass 2 代码质量(建议)。单轮审查用 code-review 技能。',
   phases: [
     { title: 'Pass 1 正确性审查' },
     { title: 'Pass 2 代码质量审查' },
     { title: 'Pass 3 HDL 专项审查' },
+    { title: '对抗验证' },
     { title: '报告合成' },
   ],
   contract: {
-    version: 1,
+    version: 2,
     strict: true,
     inputs: ['files', 'lang', 'intent/requirements optional but must not be invented'],
-    checkpoints: ['preflight-files-present', 'blocking-findings-gate', 'report-synthesis'],
-    evidence: ['exact file:line for each finding', 'localized evidence snippet', 'severity and impact'],
+    checkpoints: ['preflight-files-present', 'adversarial-verify', 'blocking-findings-gate', 'report-synthesis'],
+    evidence: ['exact file:line for each finding', 'localized evidence snippet', 'severity and impact', 'per-finding adversarial verdict (CONFIRMED/REFUTED/UNVERIFIED)'],
     completionCriteria: [
       'every requested file is included in the review scope',
-      'CRITICAL/HIGH Pass 1 findings make the workflow fail',
-      'CRITICAL/HIGH HDL Pass 3 findings make the workflow fail',
+      'every CRITICAL/HIGH finding gets an adversarial verify pass (capped, unverified stays blocking)',
+      'confirmed CRITICAL/HIGH Pass 1 findings make the workflow fail',
+      'confirmed CRITICAL/HIGH HDL Pass 3 findings make the workflow fail',
       'summary reports blocking findings explicitly',
     ],
   },
@@ -430,6 +432,75 @@ ${hdlFiles.map(f => '- ' + f).join('\n')}
   log('\n📊 Pass 3 汇总: ' + p3Findings.length + ' 条 HDL 专项审查发现');
 }
 
+// ── 对抗验证: 逐条复核阻塞级发现 (CRITICAL/HIGH) ──────────────────────────
+// 审查 agent 的发现直接进报告会把误报当真。每条候选阻塞发现派一个独立
+// 怀疑者尝试反驳; 被证伪的降级为 REFUTED (保留在报告中但不再阻塞)。
+// 验证失败/无返回时保守处理: 发现保留阻塞地位 (宁可误拦不可漏放)。
+
+phase('对抗验证');
+
+const VERIFY_CAP = 12; // 防失控: 超出上限的发现不验证, 直接保留阻塞地位
+
+const candidateBlocking = [
+  ...p1Findings.filter(f => f.pass === 'P1' && (f.severity === 'CRITICAL' || f.severity === 'HIGH')),
+  ...p3Findings.filter(f => f.severity === 'CRITICAL' || f.severity === 'HIGH'),
+];
+
+let refutedCount = 0;
+if (candidateBlocking.length > 0) {
+  log(`\n🔍 对抗验证: ${candidateBlocking.length} 条 CRITICAL/HIGH 候选发现逐条复核 (上限 ${VERIFY_CAP})`);
+  const toVerify = candidateBlocking.slice(0, VERIFY_CAP);
+  const verdicts = await Promise.all(toVerify.map((f, i) =>
+    agent(`你是**对抗验证者**。下面是一条代码审查发现, 你的任务是尝试**反驳**它。
+
+发现:
+- 位置: ${f.file}
+- 严重度: ${f.severity} / 类别: ${f.category || 'N/A'}
+- 标题: ${f.title}
+- 描述: ${String(f.description || '').slice(0, 500)}
+- 证据: ${String(f.evidence || '').slice(0, 300)}
+
+要求:
+1. 打开 ${String(f.file).split(':')[0]} 独立阅读相关代码, 不要采信发现的描述
+2. 构造具体反例或指出发现引用的代码语义被误读, 才能判 refuted=true
+3. 拿不准时 refuted=false (发现保留) —— 不确定不等于证伪
+4. 你是只读验证者, 不修改任何文件`,
+      {
+        label: `verify-finding-${i}`,
+        phase: '对抗验证',
+        agentType: /\.(sv|v|vhdl?)(:|$)/i.test(String(f.file)) ? 'ce-correctness-reviewer' : undefined,
+        schema: {
+          type: 'object',
+          properties: {
+            refuted: { type: 'boolean' },
+            reason: { type: 'string' },
+          },
+          required: ['refuted', 'reason'],
+        },
+      }).catch(() => null)
+  ));
+
+  toVerify.forEach((f, i) => {
+    const v = verdicts[i];
+    if (v && v.refuted === true) {
+      f.verdict = 'REFUTED';
+      f.verdictReason = String(v.reason || '').slice(0, 300);
+      refutedCount += 1;
+      log(`   🚫 证伪: [${f.severity}] ${f.file} — ${f.title} (${f.verdictReason.slice(0, 80)})`);
+    } else {
+      f.verdict = v ? 'CONFIRMED' : 'UNVERIFIED';
+      if (f.verdict === 'CONFIRMED') log(`   ✅ 确认: [${f.severity}] ${f.file} — ${f.title}`);
+      else log(`   ⚠️ 未验证 (验证 agent 无返回, 保守保留): [${f.severity}] ${f.file} — ${f.title}`);
+    }
+  });
+  if (candidateBlocking.length > VERIFY_CAP) {
+    log(`   ⚠️ ${candidateBlocking.length - VERIFY_CAP} 条超出验证上限, 未验证直接保留阻塞地位`);
+  }
+  log(`   对抗验证结果: ${refutedCount} 条被证伪并降级, ${candidateBlocking.length - refutedCount} 条保留`);
+} else {
+  log('\n🔍 对抗验证: 无 CRITICAL/HIGH 候选发现, 跳过');
+}
+
 // ── 报告合成 ──────────────────────────────────────────────────────────────
 
 phase('报告合成');
@@ -452,11 +523,16 @@ Object.entries(bySeverity).forEach(([sev, count]) => {
   log(`     ${sev}: ${count}`);
 });
 
+// 被对抗验证证伪的发现不再计入阻塞 (保留在 findings 里供人工复查)
+const confirmedP1Blocking = blockingIssues.filter(f => f.verdict !== 'REFUTED');
 const p3BlockingIssues = p3Findings.filter(f =>
-  f.severity === 'CRITICAL' || f.severity === 'HIGH'
+  (f.severity === 'CRITICAL' || f.severity === 'HIGH') && f.verdict !== 'REFUTED'
 );
-const workflowPassed = pass1Passed && p3BlockingIssues.length === 0;
-const allBlockingIssues = [...blockingIssues, ...p3BlockingIssues];
+const workflowPassed = confirmedP1Blocking.length === 0 && p3BlockingIssues.length === 0;
+const allBlockingIssues = [...confirmedP1Blocking, ...p3BlockingIssues];
+if (refutedCount > 0) {
+  log(`\n   对抗验证后阻塞问题: ${allBlockingIssues.length} 条 (${refutedCount} 条已证伪降级)`);
+}
 
 return {
   pass: workflowPassed,

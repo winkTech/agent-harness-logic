@@ -16,10 +16,15 @@
 
 'use strict';
 
+const { HARNESS_ROOT } = require('./lib/harness-root.cjs');
+
 const fs = require('node:fs');
 const path = require('node:path');
 const os = require('node:os');
-const HARNESS = path.join(os.homedir(), '.claude');
+const crypto = require('node:crypto');
+const HARNESS = HARNESS_ROOT;
+const CACHE_FILE = path.join(HARNESS, 'var', 'index', 'memory-retrieve-cache.json');
+const DEFAULT_CACHE_TTL_MS = 10 * 60 * 1000;
 
 // ── 层1: 用户消息触发模式 ──────────────────────────────────────────────────
 const TRIGGER_PATTERNS = [
@@ -90,6 +95,52 @@ function extractFilePath(stdinRaw) {
   return null;
 }
 
+function cacheTtlMs() {
+  const value = Number.parseInt(process.env.CLAUDE_MEMORY_HINT_TTL_MS || DEFAULT_CACHE_TTL_MS, 10);
+  return Number.isFinite(value) && value >= 0 ? value : DEFAULT_CACHE_TTL_MS;
+}
+
+function readCache() {
+  try {
+    if (!fs.existsSync(CACHE_FILE)) return {};
+    return JSON.parse(fs.readFileSync(CACHE_FILE, 'utf8'));
+  } catch {
+    return {};
+  }
+}
+
+function writeCache(cache) {
+  try {
+    fs.mkdirSync(path.dirname(CACHE_FILE), { recursive: true });
+    const entries = Object.entries(cache)
+      .sort((a, b) => String(b[1]?.at || '').localeCompare(String(a[1]?.at || '')))
+      .slice(0, 100);
+    fs.writeFileSync(CACHE_FILE, JSON.stringify(Object.fromEntries(entries), null, 2), 'utf8');
+  } catch {
+    // Cache failures should never affect tool use.
+  }
+}
+
+function cacheKey(trigger, query) {
+  return crypto.createHash('sha1').update(`${trigger}\n${query}`).digest('hex');
+}
+
+function recentlyInjected(key) {
+  if (process.env.CLAUDE_MEMORY_HINT_CACHE_DISABLED === '1') return false;
+  const ttl = cacheTtlMs();
+  if (ttl === 0) return false;
+  const cache = readCache();
+  const at = Date.parse(cache[key]?.at || '');
+  return Number.isFinite(at) && Date.now() - at < ttl;
+}
+
+function markInjected(key, detail = {}) {
+  if (process.env.CLAUDE_MEMORY_HINT_CACHE_DISABLED === '1') return;
+  const cache = readCache();
+  cache[key] = { at: new Date().toISOString(), ...detail };
+  writeCache(cache);
+}
+
 function doMemoryQuery(query, label) {
   try {
     const { openDb } = require('../sqlite/index.cjs');
@@ -112,8 +163,19 @@ function doMemoryQuery(query, label) {
 }
 
 function main() {
-  const msg = process.env.CLAUDE_USER_MESSAGE || '';
-  const toolName = (process.env.CLAUDE_TOOL_NAME || '').toLowerCase();
+  // 输入走 stdin 的 hook payload。平台从不设置 CLAUDE_USER_MESSAGE /
+  // CLAUDE_TOOL_NAME —— 早期版本只读环境变量, 因此本 hook 触发率恒为 0。
+  // 环境变量保留为回退, 兼容手工调用。
+  let stdinRaw = '';
+  try { stdinRaw = fs.readFileSync(0, 'utf8'); } catch { /* 无 stdin */ }
+  let payload = {};
+  try { payload = stdinRaw.trim().startsWith('{') ? JSON.parse(stdinRaw) : {}; } catch { payload = {}; }
+
+  const msg = payload.prompt || payload.user_prompt || process.env.CLAUDE_USER_MESSAGE || '';
+  const toolName = String(
+    payload.tool_name || payload.tool?.name || process.env.CLAUDE_TOOL_NAME || '',
+  ).toLowerCase();
+  const eventName = payload.hook_event_name || '';
 
   // ── 层1: 用户消息触发 ──
   const userTriggered = shouldUserRetrieve(msg);
@@ -121,8 +183,6 @@ function main() {
   // ── 层2: 任务上下文触发 (Write 代码文件) ──
   let contextQuery = null;
   if (toolName === 'write' || toolName === 'edit') {
-    let stdinRaw = '';
-    try { stdinRaw = fs.readFileSync(0, 'utf8'); } catch { /* 无 stdin */ }
     const filePath = extractFilePath(stdinRaw);
     if (filePath && isCodeFile(filePath)) {
       contextQuery = buildContextQuery(filePath);
@@ -131,6 +191,11 @@ function main() {
 
   // 无触发 → 0 token
   if (!userTriggered && !contextQuery) return;
+
+  const triggerKind = contextQuery && userTriggered ? 'context+user' : contextQuery ? 'task-context' : 'user-query';
+  const queryText = [userTriggered ? msg : '', contextQuery || ''].filter(Boolean).join('\n').slice(0, 500);
+  const key = cacheKey(triggerKind, queryText);
+  if (recentlyInjected(key)) return;
 
   try {
     const allMemMatches = [];
@@ -158,6 +223,7 @@ function main() {
     }
 
     if (allMemMatches.length === 0) return;
+    markInjected(key, { trigger: triggerKind, query: queryText.slice(0, 120), count: allMemMatches.length });
 
     // wiki-link 解析
     const outputParts = [{
@@ -181,12 +247,29 @@ function main() {
       }
     } catch { /* 静默 */ }
 
-    console.log(JSON.stringify({
-      source: 'memory-retrieve-hook',
-      type: 'memory-hint',
-      trigger: contextQuery ? 'task-context' : 'user-query',
-      query: contextQuery ? contextQuery.slice(0, 80) : msg.slice(0, 80),
-      parts: outputParts,
+    // 只有 hookSpecificOutput.additionalContext 才会进入模型上下文;
+    // 裸 JSON 的 console.log 仅进日志, 等于没注入。
+    // 摘要压到单行 —— 记忆条目正文可能是整篇 markdown, 原样注入会淹没上下文。
+    const brief = (s) => String(s || '')
+      .replace(/^#+\s.*$/gm, '')
+      .replace(/\s+/g, ' ')
+      .trim()
+      .slice(0, 180);
+
+    const lines = ['[memory] 与当前任务相关的既往记忆:'];
+    for (const m of allMemMatches.slice(0, 5)) {
+      lines.push(`- (${m.namespace}) ${m.name}: ${brief(m.summary)}`);
+    }
+    for (const part of outputParts) {
+      if (part.type !== 'wiki-links') continue;
+      for (const l of part.linkedMemories) lines.push(`- (link) ${l.name}: ${brief(l.summary)}`);
+    }
+
+    process.stdout.write(JSON.stringify({
+      hookSpecificOutput: {
+        hookEventName: eventName || 'UserPromptSubmit',
+        additionalContext: lines.join('\n'),
+      },
     }));
   } catch {
     // 静默失败

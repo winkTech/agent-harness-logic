@@ -1,20 +1,43 @@
 /**
- * hdl-coding-dag-workflow — HDL RTL 开发 DAG 工作流 v3.4.0
+ * hdl-coding-dag-workflow — HDL RTL 开发 DAG 工作流 v3.7.0
  *
- * 本文件是从 skills/workflows/hdl-coding-dag-workflow.js 链接到 workflows/ 的副本，
- * 供 Workflow({name: 'hdl-coding-dag-workflow'}) 解析。
+ * 本文件是该工作流的**单一真源** (workflows/ 目录, 供 Workflow({name}) 解析)。
+ * skills/workflows/hdl-coding-workflow.md 是它的方法论文档, 以本文件为准。
+ * 注意: .claude/workflows/ 下有一份镜像副本, 改本文件后须同步。
  *
- * 核心改进 v3.4 — 证据驱动验证:
- *   D+B: Phase 4 prompt 精简 + 强制脚本化对比 + JSON 证据制品
- *   A降维: Phase 4.5 证据门禁 — fs 读 JSON (0 token)，高安全模块追加对抗 agent
- *   C升级: Verifier 独立交叉检查 evidence JSON + architecture.yaml
- *   模块自动分类: 标准/高安全模式自适应路由
+ * v3.7 — Xilinx 官方方法学接入 (UG901/UG949):
+ *   新增 Phase 6b (p6b_vivado_check), 与 P6 回归/P7 审查并行, 汇入 P8。
+ *   仿真只证明功能对, 证明不了综合器把代码变成了什么 —— 推断静默失败
+ *   (BRAM 输出寄存器没吸收 / DSP 没流水 / SRL 掉成 FF 链) 不报错, 只掉性能。
  *
- * 与 skills/workflows/hdl-coding-workflow.md 的 10 阶段对应。
+ * v3.7.1 — Vivado 入口收敛 (2026-07-27):
+ *   原先 Phase 6b 调 skills/hdl-coding/templates/tcl/ 下两个脚本
+ *   (vivado_rtl_check.tcl + vivado_synth_report.tcl)。二者是 vivado-flow 技能里
+ *   vivado_flow.tcl 的 rtlcheck / synth 两阶段的子集, 留两套必然漂移, 已删除。
+ *   现在统一走 skills/vivado-flow/scripts/vivado_flow.tcl:
+ *     一条命令跑 rtlcheck → synth, 逐阶段存 DCP 可断点续跑,
+ *     证据汇总为 <out>/rpt/flow_summary.json (嵌套结构, 按阶段分段)。
+ *   阻断条件: 脚本 ok=false, 或 critical+errors > 0, 或 WNS < 0, 或有推断失败项。
+ *   Vivado 不可用 → 如实 skipped, 不阻断, 但 P8 报告与 Verifier 必须标注
+ *   "综合级结论未验证"。
+ *
+ * v3.6 — 审计修复 (2026-07-26, 用户批准的三批升级):
+ *   1. 证据门禁不再依赖从未存在的 globalThis.workflowFs 桥 —— 判定移入
+ *      确定性脚本 engine/scripts/hdl-evidence-gate.cjs, 工作流派证据 agent
+ *      执行它并按 schema 原样带回结果 (对齐 security-review-workflow 先例)。
+ *   2. _dagExecute 修复节点失败死循环: parallel() 的 thunk 抛错只会解析为
+ *      null 而不会 reject, 旧实现失败节点永不进 completed → 无限重跑。
+ *   3. 可恢复 checkpoint 体系: preflight / design-review / evidence-review
+ *      三个用户确认点 + verifier 自动终验。未确认 → 抛
+ *      [WorkflowCheckpoint:<name>], 用户审查后带 args.checkpoints.<name>
+ *      .confirmed=true 与 resumeFromRunId 重跑, 已完成的 agent 调用走缓存。
+ *   4. 专业 agent 接线: 算法侧 algorithm-engineer, RTL/仿真侧 logic-engineer,
+ *      审查/对抗侧 ce-correctness-reviewer / ce-api-contract-reviewer /
+ *      ce-architecture-strategist / ce-performance-oracle。
  *
  * [MUST 硬约束] RTL 验证流程:
  *   Phase 4: 逐模块 RTL + 脚本化对比 — 生成 check_<module>.py + JSON 证据
- *   Phase 4.5: 证据门禁 — 独立读取 JSON 证据文件，不信任 Phase 4 自述
+ *   Phase 4.5: 证据门禁 — hdl-evidence-gate.cjs 确定性读取 JSON 证据文件，不信任 Phase 4 自述
  *   Phase 5: 全链仿真 — 通过 Phase 4.5 后才可进入
  *
  * 调用:
@@ -22,78 +45,163 @@
  *     modules: ['scrambler', 'equalizer'],
  *     securityModules: ['equalizer'],           // 可选，覆盖自动分类
  *     standardModules: ['fir_fixed'],           // 可选，强制标准模式
- *     projectRoot: 'd:/project/ofdm/prj',       // 可选
- *     lite: false,                               // 可选 Lite 模式
+ *     projectRoot: '[PROJECT_DIR]',       // 可选
+ *     part: 'xc7a100tcsg324-2',                 // 可选，Phase 6b 目标器件 (不传则自动查找)
+ *     lite: false,                              // 可选 Lite 模式
+ *     confirmed: true,                          // 确认 preflight 检查点
+ *     checkpoints: {                            // 逐检查点确认 (配合 resumeFromRunId)
+ *       'design-review': {confirmed: true},
+ *       'evidence-review': {confirmed: true},
+ *     },
+ *     confirmAllCheckpoints: true,              // 无人值守模式: 显式跳过全部用户检查点
  *   }})
  */
 
-// v3.5.1 fix: 移除 require() (Workflow 引擎不支持 CommonJS)
-// fs/path → 内联实现, dag-engine → 内联 DAG 拓扑执行器
 const { join: pathJoin } = { join: (...p) => p.join('/').replace(/\/+/g, '/') };
 
-// Evidence reads must be performed by a real filesystem/tool bridge.
-// Falling back to agent narration recreates the hallucination failure mode this
-// workflow is meant to prevent, so missing bridge support fails closed.
-function _workflowFs() {
-  const bridge = globalThis.workflowFs || globalThis.WorkflowFS || globalThis.fsBridge;
-  if (!bridge) {
-    throw new Error('Workflow filesystem bridge is unavailable; evidence checks cannot rely on agent self-report.');
+function _parseStrictJsonObject(raw) {
+  let text = String(raw || '').trim();
+  const fenced = text.match(/^```(?:json)?\s*([\s\S]*?)\s*```$/i);
+  if (fenced) text = fenced[1].trim();
+  try {
+    const parsed = JSON.parse(text);
+    return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed : null;
+  } catch {
+    return null;
   }
-  return bridge;
-}
-async function _fileExists(p) {
-  const fsBridge = _workflowFs();
-  if (typeof fsBridge.exists !== 'function') throw new Error('Workflow filesystem bridge missing exists(path).');
-  return Boolean(await fsBridge.exists(p));
-}
-async function _readFileText(p) {
-  const fsBridge = _workflowFs();
-  if (typeof fsBridge.readText !== 'function') throw new Error('Workflow filesystem bridge missing readText(path).');
-  return String(await fsBridge.readText(p));
-}
-async function _listJsonFiles(d) {
-  const fsBridge = _workflowFs();
-  if (typeof fsBridge.listJson !== 'function') throw new Error('Workflow filesystem bridge missing listJson(dir).');
-  return await fsBridge.listJson(d);
 }
 
+// ── 检查点 ──────────────────────────────────────────────────────────────────
+// 每个检查点独立确认。历史上 args.confirmed=true 一票确认所有检查点, 这让
+// "Phase 间暂停呈报" 形同虚设 —— 现在 confirmed 只覆盖 preflight;
+// 后续检查点须逐个 args.checkpoints.<name>.confirmed=true (配合 resumeFromRunId
+// 重跑, 已完成节点走前缀缓存), 或显式 confirmAllCheckpoints=true 走无人值守。
+
 function _checkpointConfirmed(name) {
-  return args?.confirmed === true ||
-    args?.userConfirmed === true ||
-    args?.acknowledged === true ||
-    args?.checkpoints?.[name]?.confirmed === true;
+  if (args?.checkpoints?.[name]?.confirmed === true) return true;
+  if (args?.confirmAllCheckpoints === true) return true;
+  if (name === 'preflight') {
+    return args?.confirmed === true || args?.userConfirmed === true || args?.acknowledged === true;
+  }
+  return false;
 }
 
 function _requireUserCheckpoint(name, detail) {
   if (_checkpointConfirmed(name)) return;
-  throw new Error(`[WorkflowCheckpoint:${name}] user confirmation required before continuing. ${detail || ''}`);
+  throw new Error(
+    `[WorkflowCheckpoint:${name}] user confirmation required before continuing. ${detail || ''}\n` +
+    `确认方式: 用户审查后, 以 args.checkpoints['${name}'].confirmed=true + resumeFromRunId 重跑 ` +
+    `(已完成阶段自动走缓存); 无人值守场景用 args.confirmAllCheckpoints=true。`
+  );
 }
 
-// DAG 拓扑执行器 (替代 dag-engine.cjs)
+// ── 证据门禁 (确定性脚本 + 证据 agent) ──────────────────────────────────────
+// 判定逻辑全部在 engine/scripts/hdl-evidence-gate.cjs 里 (纯 Node, 读磁盘,
+// 输出 JSON + RESULT: PASS/FAIL)。证据 agent 只负责执行命令并把输出按 schema
+// 原样带回 —— 它不做任何判断。残余风险 (agent 理论上可伪造 schema 匹配的返回)
+// 已在需求门禁 D6 记录; agent 的 bash 调用会进透明度账本, 且 Phase 4.5 与
+// Phase 4 是相互独立的上下文, 末端 verifier 再做交叉核对。
+
+const EVIDENCE_GATE_SCRIPT = args?.evidenceGateScript || 'engine/scripts/hdl-evidence-gate.cjs';
+
+const EVIDENCE_SCHEMA = {
+  type: 'object',
+  properties: {
+    executed: { type: 'boolean' },
+    ok: { type: 'boolean' },
+    failures: { type: 'array', items: { type: 'string' } },
+    gateJson: { type: 'string' },
+  },
+  required: ['executed', 'ok', 'failures'],
+};
+
+async function _evidenceGate(flags, label, phaseName) {
+  const cmd = `node ${EVIDENCE_GATE_SCRIPT} --project-root "${projectRoot}" ${flags}`;
+  const res = await agent(
+    `你是**证据搬运者**。你的唯一任务是执行下面的确定性证据门禁命令, 并把它的输出原样带回。
+
+命令:
+  ${cmd}
+
+说明:
+- 脚本位于 Claude harness 根目录 (通常 ~/.claude)。相对路径找不到时改用
+  ~/.claude/${EVIDENCE_GATE_SCRIPT} 的绝对路径重试一次。
+- 命令会输出一个 JSON 对象和末行 RESULT: PASS 或 RESULT: FAIL。
+
+结构化返回 (禁止改写脚本输出的任何数值):
+- executed: 命令是否真的执行了 (无法执行 → false, 并把错误信息放进 failures)
+- ok: 脚本 JSON 里的 ok 字段原值
+- failures: 脚本 JSON 里的 failures 数组原值 (无法执行时放错误信息)
+- gateJson: 脚本输出的完整 JSON 文本
+
+你不做判定, 不解释, 不补救。脚本说 FAIL 就如实带回 FAIL。`,
+    { label, phase: phaseName, schema: EVIDENCE_SCHEMA }
+  );
+  if (!res || res.executed !== true) {
+    throw new Error(`[证据门禁] 门禁命令未能执行 (${label}): ${(res?.failures || ['agent 无返回']).join('; ')}`);
+  }
+  return res;
+}
+
+// ── DAG 拓扑执行器 ──────────────────────────────────────────────────────────
+// 失败安全版。旧实现的教训: parallel() 的 thunk 抛错会被解析为 null 而不会
+// reject, 失败节点永不进 completed → ready 里反复出现 → 无限重跑。
+// 现在 run() 的成功/失败都在 thunk 内部捕获为记录, 节点必定标记完成,
+// 层结束后按 fail-fast 抛出; 检查点错误保留原始消息 (含续跑指引)。
 async function _dagExecute(nodes, opts) {
   const results = {};
   const completed = new Set();
   const nodeList = Object.entries(nodes);
   const logFn = opts?.log || log;
+  let layerIndex = 0;
+
   while (completed.size < nodeList.length) {
     const ready = nodeList.filter(([name, node]) => !completed.has(name) && (node.deps || []).every(d => completed.has(d)));
-    if (ready.length === 0) throw new Error('DAG deadlock: completed=' + [...completed].join(','));
-    opts?.onProgress?.(completed.size + 1, nodeList.length, ready.map(r=>r[0]));
-    // 并行执行同层节点；任一节点失败即停止，避免在坏证据上级联。
-    await parallel(ready.map(([name, node]) => () => (async () => {
-      results[name] = { status: 'ok', data: await node.run(results) };
-      completed.add(name);
-    })()));
+    if (ready.length === 0) {
+      throw new Error(`[DAG] 依赖阻塞 (循环依赖或前置失败): 未完成=${nodeList.map(([n]) => n).filter(n => !completed.has(n)).join(', ')}`);
+    }
+    layerIndex += 1;
+    opts?.onProgress?.(layerIndex, nodeList.length, ready.map(r => r[0]));
+
+    const settled = await parallel(ready.map(([name, node]) => () =>
+      node.run(results).then(
+        (data) => ({ name, status: 'ok', data }),
+        (err) => ({ name, status: 'fail', error: String(err?.message || err) })
+      )
+    ));
+
+    for (const record of settled.filter(Boolean)) {
+      results[record.name] = record;
+      completed.add(record.name);
+    }
+    // parallel 层面被终止的 thunk 返回 null — 对应节点标记失败, 绝不留在 ready 里空转
+    for (const [name] of ready) {
+      if (!completed.has(name)) {
+        results[name] = { name, status: 'fail', error: 'agent terminated without result (skipped or killed)' };
+        completed.add(name);
+      }
+    }
+
+    const failures = ready.map(([name]) => results[name]).filter(r => r.status === 'fail');
+    if (failures.length > 0) {
+      for (const f of failures) logFn(`  ❌ ${f.name}: ${String(f.error).slice(0, 200)}`);
+      const checkpointFailure = failures.find(f => String(f.error).includes('[WorkflowCheckpoint:'));
+      if (checkpointFailure && failures.length === 1) {
+        throw new Error(checkpointFailure.error); // 保留检查点原始消息与续跑指引
+      }
+      throw new Error(`[DAG] 节点失败: ${failures.map(f => f.name).join(', ')} — ${String(failures[0].error).slice(0, 400)}`);
+    }
   }
+
   const nodeCount = nodeList.length;
-  const maxDepth = (n, d=0) => { const nd = nodes[n]; return nd && nd.deps ? Math.max(...nd.deps.map(dep => maxDepth(dep, d+1)), d) : d; };
+  const maxDepth = (n, d = 0) => { const nd = nodes[n]; return nd && nd.deps && nd.deps.length ? Math.max(...nd.deps.map(dep => maxDepth(dep, d + 1)), d) : d; };
   const layerCount = Math.max(...nodeList.map(([n]) => maxDepth(n))) + 1;
   return { results, nodeCount, layerCount };
 }
 
 export const meta = {
   name: 'hdl-coding-dag-workflow',
-  description: 'HDL RTL 开发 DAG 工作流 v3.5 — P1a(系统方案)+P1b(微架构)双阶段设计, 证据驱动验证, 逐模块脚本化对比 → 证据门禁 → 全链仿真 (Verifier终验)',
+  description: 'HDL RTL 开发 DAG 工作流 v3.7 — P1a(系统方案)+P1b(微架构)双阶段设计, hdl-evidence-gate.cjs 确定性证据门禁, P6b Vivado 综合体检 (UG901/UG949 方法学证据), 可恢复检查点, 专业 agent 分工 (Verifier终验)',
   phases: [
     { title: 'Phase 0 基础设施' },
     { title: 'Phase 1a 系统方案设计' },
@@ -104,23 +212,27 @@ export const meta = {
     { title: 'Phase 4.5 证据门禁' },
     { title: 'Phase 5 顶层集成+全链仿真' },
     { title: 'Phase 6 回归覆盖率' },
+    { title: 'Phase 6b Vivado 综合体检' },
     { title: 'Phase 7 代码审查' },
     { title: 'Phase 8 报告+Verifier' },
   ],
   contract: {
-    version: 1,
+    version: 2,
     strict: true,
-    inputs: ['modules', 'projectRoot', 'confirmed/checkpoints.preflight.confirmed'],
-    checkpoints: ['preflight', 'phase-gates', 'evidence-gate', 'verifier'],
+    inputs: ['modules', 'projectRoot', 'confirmed/checkpoints.<name>.confirmed', 'confirmAllCheckpoints (无人值守)'],
+    checkpoints: ['preflight', 'design-review', 'evidence-review', 'verifier'],
     evidence: [
-      'workflowFs.exists/readText/listJson',
+      'engine/scripts/hdl-evidence-gate.cjs (确定性判定 + RESULT: PASS/FAIL)',
       '06_doc/architecture.yaml',
       '02_sim/check_results/*.json',
       'Phase 4.5 evidence gate',
+      '04_prj/rpt/flow_summary.json (Phase 6b, Vivado 可用时; 由 vivado-flow 技能产出)',
     ],
     completionCriteria: [
       'preflight user checkpoint is confirmed',
-      'all required evidence files exist and pass structural checks',
+      'design-review and evidence-review checkpoints confirmed (or confirmAllCheckpoints)',
+      'hdl-evidence-gate.cjs returns ok=true for all modules',
+      'Phase 6b: Vivado 可用时 critical+errors=0 且 WNS>=0; 不可用时报告显式标注未验证',
       'verifier returns valid JSON with pass=true',
     ],
     modeContracts: {
@@ -133,6 +245,9 @@ export const meta = {
         requiredEvidence: ['architecture.yaml', 'check_results/*.json', 'verifier JSON'],
       },
     },
+    toolDegradation: {
+      p6b_vivado_check: 'Vivado 不可用时如实返回 skipped, 不阻断流程; 但报告与 Verifier 必须标注综合级结论未验证',
+    },
   },
 };
 
@@ -142,6 +257,7 @@ const modules = args?.modules || [];
 const moduleOrder = args?.moduleOrder || modules;  // Cascade dependency order (input→output)
 const liteMode = args?.lite === true;
 const projectRoot = args?.projectRoot || '.';  // v3.5.1: process.cwd() 不可用
+const fpgaPart = args?.part || args?.device || '';  // v3.7: Phase 6b Vivado 体检的目标器件
 
 // ── 模块分类（自动 / 手动覆盖）─────────────────────────────────────────────
 
@@ -177,7 +293,7 @@ nodes.p0_infra = {
   run: async () => {
     const result = await agent(`执行 HDL 工作流 Phase 0: 基础设施 + 建目录
 
-[MUST] 按跨项目标准建目录 (knowledge/primary/cross-project-experience.md):
+[MUST] 按跨项目标准建目录 (engineering-assets/knowledge/primary/cross-project-experience.md):
 <project_root>/
 ├── 01_src/00_hdl/      # RTL 源码 (每个模块独立子目录)
 ├── 01_src/01_ip/        # IP 核
@@ -268,7 +384,7 @@ nodes.p1a_sys_design = {
 ━━━ 检查点 (P1a 门禁) ━━━
 产出 06_doc/ 下 6 份文档后暂停。
 
-调度层将使用 knowledge/primary/architecture-patterns/gate-checklist-p1a.md 检查:
+调度层将使用 engineering-assets/knowledge/primary/architecture-patterns/gate-checklist-p1a.md 检查:
   [MUST] A1 系统上下文: 链路位置+信号特性+系统约束+性能指标
   [MUST] A2 数学推导: 完整链+每步公式+近似误差
   [MUST] A3 多方案对比: ≥2 候选+4 维对比表+否选理由
@@ -357,21 +473,13 @@ ${sysHint}
 模块: ${modules.join(', ') || '项目默认'}`, { agentType: 'logic-engineer', label: 'p1b-logic-arch', phase: 'Phase 1b 微架构设计' }),
     ]);
 
-    // ── 校验 architecture.yaml 完整性 ─────────────────────────
-    const archPath = pathJoin(projectRoot, '06_doc', 'architecture.yaml');
-    log(`🔍 校验 architecture.yaml: ${archPath}`);
-    if (!await _fileExists(archPath)) {
-      throw new Error(`❌ architecture.yaml 不存在于 ${archPath}\n   P1b 未产出微架构文件, 请确保写入 06_doc/architecture.yaml`);
+    // ── 校验 architecture.yaml 完整性 (确定性脚本判定) ─────────
+    log(`🔍 校验 architecture.yaml (hdl-evidence-gate --arch)`);
+    const archGate = await _evidenceGate('--arch', 'p1b-arch-evidence', 'Phase 1b 微架构设计');
+    if (archGate.ok !== true) {
+      throw new Error(`❌ architecture.yaml 校验失败:\n   ${archGate.failures.join('\n   ')}\n   P1b 未产出微架构文件, 请确保写入 06_doc/architecture.yaml`);
     }
-    const archContent = await _readFileText(archPath);
-    const requiredFields = ['modules', 'pipeline_stages', 'fsm_states', 'bit_width', 'latency'];
-    const missing = requiredFields.filter(f => !archContent.includes(f));
-    if (missing.length > 0) {
-      log(`⚠️ architecture.yaml 缺少以下字段: ${missing.join(', ')}`);
-      log('  继续执行但建议审查后补充完整。');
-    } else {
-      log('✅ architecture.yaml 包含所有必填字段');
-    }
+    log('✅ architecture.yaml 存在 (字段完整性告警见门禁输出)');
 
     // ── 压缩保留块: Phase 1 架构 ──────────────────────────
     log('');
@@ -404,10 +512,24 @@ ${String(logicArch).slice(0, 1500)}`;
   },
 };
 
+// ── 检查点: design-review (P1a/P1b 设计审查, 用户确认后才开工定点/TB/RTL) ──
+
+nodes.cp_design_review = {
+  deps: ['p1b_micro_arch'],
+  run: async () => {
+    _requireUserCheckpoint(
+      'design-review',
+      '请审查 06_doc/ 下的系统方案 (A1-A6) 与微架构产出 (architecture.yaml / pipeline_diagram.md / B1-B6), 按 gate-checklist-p1a.md 与 gate-checklist-p1b.md 核对。'
+    );
+    log('✅ [检查点] design-review 已确认 — 进入定点量化/TB 阶段');
+    return 'design-review confirmed';
+  },
+};
+
 // ── Phase 2: 定点量化 ───────────────────────────────────────────────────────
 
 nodes.p2_fixedpt = {
-  deps: ['p1b_micro_arch'],
+  deps: ['cp_design_review'],
   run: async (ctx) => {
     const arch = ctx.p1b_micro_arch?.data || '';
     const result = await agent(`执行 HDL 工作流 Phase 2: 定点量化
@@ -420,7 +542,7 @@ nodes.p2_fixedpt = {
 3. DSP/LUT/BRAM 预算表
 
 模块: ${modules.join(', ') || '项目默认'}
-输出: fixed_point_report + resource_estimate`, { label: 'p2-fixed-point' });
+输出: fixed_point_report + resource_estimate`, { agentType: 'algorithm-engineer', label: 'p2-fixed-point', phase: 'Phase 2 定点量化' });
     return result;
   },
 };
@@ -428,7 +550,7 @@ nodes.p2_fixedpt = {
 // ── Phase 3: TB + MATLAB 向量生成 ──────────────────────────────────────────
 
 nodes.p3_tb = {
-  deps: ['p1b_micro_arch'],
+  deps: ['cp_design_review'],
   run: async (ctx) => {
     const arch = ctx.p1b_micro_arch?.data || '';
     const [tbResult, vecResult] = await parallel([
@@ -453,7 +575,7 @@ d) [SHOULD] TB 自检通过: compile + 自动 PASS/FAIL 结论
    - 读 RTL 仿真输出 02_sim/<module>_out.txt
    - 逐点数值对比 → 输出 JSON 到 02_sim/check_results/<module>.json
 
-输出: TB 编译通过, 自检逻辑完整, 对比脚本骨架就绪`, { label: 'p3-tb', phase: 'Phase 3 TB+向量生成' }),
+输出: TB 编译通过, 自检逻辑完整, 对比脚本骨架就绪`, { agentType: 'logic-engineer', label: 'p3-tb', phase: 'Phase 3 TB+向量生成' }),
 
       // ── 子任务 2: 算法工程师 — 向量生成 ──────────────────────────
       () => agent(`执行 HDL 工作流 Phase 3 (向量): 生成测试向量 (算法工程师)
@@ -482,7 +604,7 @@ d) [SHOULD] TB 自检通过: compile + 自动 PASS/FAIL 结论
    - 禁止自闭环验证 (编码→译码对比)
    - 向量存入 02_sim/tv/ 目录
 
-输出: 02_sim/tv/<module>_tv.txt, 覆盖所有 corner case`, { label: 'p3-vectors', phase: 'Phase 3 TB+向量生成' }),
+输出: 02_sim/tv/<module>_tv.txt, 覆盖所有 corner case`, { agentType: 'algorithm-engineer', label: 'p3-vectors', phase: 'Phase 3 TB+向量生成' }),
     ]);
 
     return `[TB]\n${tbResult}\n\n[VECTORS]\n${vecResult}`;
@@ -526,8 +648,20 @@ TB: 02_sim/${mod}/tb_${mod}.sv (唯一 TB, 直接覆盖)
 1. 按 architecture.yaml 微架构编码 (流水线/FSM/位宽一致)
 2. make lint 通过
 3. make compile 通过
-4. 输出 RTL 源码到目标文件`,
-          { label: `rtl-code-${mod}`, phase: 'Phase 4 RTL编码' }
+4. 输出 RTL 源码到目标文件
+
+[Vivado 可综合性 — UG949 Know What You Infer]
+推断失败是**静默的**: 仿真全对, 综合完 BRAM 用了 0 块 / DSP 没吸收流水 / SRL 掉成 FF 链,
+工具不报任何错。编码时避开这四种写法 (细则 skills/hdl-coding/references/ug949-rtl-methodology.md §4):
+  - 给 BRAM 读数据/输出寄存器加复位 → 输出寄存器吸收失败, Fmax 崩
+  - BRAM 输出寄存器多扇出 → 同上 (每个消费者复制一份自己的输出寄存器)
+  - 给 DSP 内部流水寄存器加复位 → MREG/PREG 吸收失败
+  - 给移位链/延时线加复位或取中间抽头 → SRL 掉成 FF 链, 面积膨胀数十倍
+这是红线 3 (同步复位 i_rst) 的**唯一豁免**: 数据通路上这几类寄存器不加复位, 无效数据由
+valid 通道屏蔽 (valid 通道必须有 i_rst), 且必须在该寄存器上方写 "// [复位豁免] ... 见
+vivado-synthesis-ug901.md §5.1"。不写注释的"顺手不加复位" = 违反红线, 审查 FAIL。
+另: 禁止门控时钟 (always @(posedge (clk & en))), 改用 BUFGCE 的时钟使能。`,
+          { agentType: 'logic-engineer', label: `rtl-code-${mod}`, phase: 'Phase 4 RTL编码' }
         );
         return { mod, stage1: 'done' };
       },
@@ -549,44 +683,47 @@ TB: 02_sim/${mod}/tb_${mod}.sv (唯一 TB, 直接覆盖)
           log(`  🔗 ${mod}: 上游 ${upstreamModules.length} 个模块中 ${upstreamFailedNames.length} 个未通过 — 输入信号可能异常`);
         }
 
+        // 仿真 agent 的结构化返回契约: gate_* 字段必须原样复制自
+        // hdl-evidence-gate.cjs 的输出, agent 不做判定。
+        const SIM_SCHEMA = {
+          type: 'object',
+          properties: {
+            gate_executed: { type: 'boolean' },
+            gate_ok: { type: 'boolean' },
+            compared_points: { type: 'number' },
+            log_tail: { type: 'string' },
+          },
+          required: ['gate_executed', 'gate_ok', 'log_tail'],
+        };
+        const gateCmd = `node ${EVIDENCE_GATE_SCRIPT} --project-root "${prjRoot}" --modules ${mod}`;
+
         while (!pass && attempts < MAX_ATTEMPTS && !needUserReview) {
           attempts++;
 
           // Run simulation & compare with golden
-          const simOut = String(await agent(
+          const simRes = await agent(
             `运行仿真并对比 Golden 向量: ${mod}
 
 1. 运行仿真 (make sim 或 vsim 命令)
 2. 自动对比 golden 向量: 02_sim/tv/${mod}_tv.txt
 3. 输出 JSON 证据到 02_sim/check_results/${mod}.json
    {"module":"${mod}","status":"PASS|FAIL","compared_points":N}
-4. 如果 PASS → 输出第一行 "PASS"
-5. 如果 FAIL → 输出仿真错误日志 (前 100 行)`,
-            { label: `sim-run-${mod}-try${attempts}`, phase: 'Phase 4 仿真调试' }
-          ) || '');
+4. [MUST] 最后执行确定性证据门禁 (脚本在 harness 根目录, 找不到用 ~/.claude/ 前缀):
+   ${gateCmd}
+5. 结构化返回: gate_executed=门禁命令是否执行; gate_ok/compared_points=门禁 JSON 原值
+   (禁止改写); log_tail=仿真日志尾部 (FAIL 时含错误日志前 100 行)`,
+            { agentType: 'logic-engineer', label: `sim-run-${mod}-try${attempts}`, phase: 'Phase 4 仿真调试', schema: SIM_SCHEMA }
+          );
 
-          // Check JSON evidence
-          const jsonPath = pathJoin(prjRoot, '02_sim', 'check_results', `${mod}.json`);
-          if (await _fileExists(jsonPath)) {
-            try {
-              const ev = JSON.parse(await _readFileText(jsonPath));
-              if (ev.status === 'PASS' && (ev.compared_points || 0) > 0) {
-                pass = true;
-                log(`  ✅ ${mod}: 仿真通过 (第${attempts}次, ${ev.compared_points}点)`);
-                // Cleanup
-                await agent(`清理仿真产物: ${mod}\nrm -f wlft* transcript *.wlf vsim.wlf 2>/dev/null; true`,
-                  { label: `clean-${mod}-try${attempts}`, phase: 'Phase 4 仿真调试' });
-                break;
-              }
-            } catch {}
-          }
-          if (simOut.includes('PASS')) {
+          if (simRes?.gate_executed === true && simRes?.gate_ok === true && (simRes?.compared_points || 0) > 0) {
             pass = true;
-            log(`  ✅ ${mod}: 仿真通过 (第${attempts}次)`);
+            log(`  ✅ ${mod}: 仿真通过 (第${attempts}次, ${simRes.compared_points}点)`);
+            // Cleanup
+            await agent(`清理仿真产物: ${mod}\nrm -f wlft* transcript *.wlf vsim.wlf 2>/dev/null; true`,
+              { agentType: 'logic-engineer', label: `clean-${mod}-try${attempts}`, phase: 'Phase 4 仿真调试' });
             break;
           }
-
-          lastError = simOut.slice(0, 2000);
+          lastError = String(simRes?.log_tail || '').slice(0, 2000);
 
           if (attempts >= MAX_ATTEMPTS) {
             log(`  ⚠️ ${mod}: 达到最大尝试次数 ${MAX_ATTEMPTS}`);
@@ -620,41 +757,31 @@ ${lastError.slice(0, 1500)}
 4. 确认 make lint 通过
 5. 输出 JSON:
 {"root_cause":"...","fix":"...","file":"01_src/00_hdl/${mod}/${mod}.sv","line":N}`,
-            { label: `debug-${mod}-try${attempts}`, phase: 'Phase 4 仿真调试' }
+            { agentType: 'logic-engineer', label: `debug-${mod}-try${attempts}`, phase: 'Phase 4 仿真调试' }
           ) || '');
 
           // Re-run simulation after fix
-          const recheck = String(await agent(
+          const recheckRes = await agent(
             `重新运行仿真验证修复: ${mod}
 
 1. make compile (确认修复后编译通过)
 2. 运行仿真, 对比 golden 向量
 3. 输出 JSON 证据到 02_sim/check_results/${mod}.json
-4. 如果 PASS → 输出第一行 "PASS"
-5. 如果仍 FAIL → 输出错误日志前 100 行`,
-            { label: `sim-recheck-${mod}-try${attempts}`, phase: 'Phase 4 仿真调试' }
-          ) || '');
+4. [MUST] 最后执行确定性证据门禁:
+   ${gateCmd}
+5. 结构化返回: gate_executed / gate_ok / compared_points 为门禁 JSON 原值 (禁止改写);
+   log_tail=仿真日志尾部 (仍 FAIL 时含错误日志前 100 行)`,
+            { agentType: 'logic-engineer', label: `sim-recheck-${mod}-try${attempts}`, phase: 'Phase 4 仿真调试', schema: SIM_SCHEMA }
+          );
 
-          // Check again
-          if (await _fileExists(jsonPath)) {
-            try {
-              const ev = JSON.parse(await _readFileText(jsonPath));
-              if (ev.status === 'PASS' && (ev.compared_points || 0) > 0) {
-                pass = true;
-                log(`  ✅ ${mod}: 修复后通过 (第${attempts}次, ${ev.compared_points}点)`);
-                break;
-              }
-            } catch {}
-          }
-          if (recheck.includes('PASS')) {
+          if (recheckRes?.gate_executed === true && recheckRes?.gate_ok === true && (recheckRes?.compared_points || 0) > 0) {
             pass = true;
-            log(`  ✅ ${mod}: 修复后通过 (第${attempts}次)`);
+            log(`  ✅ ${mod}: 修复后通过 (第${attempts}次, ${recheckRes.compared_points}点)`);
             break;
           }
-
           // ── 仍 FAIL → Verifier (独立视角) ────────────────────────────
           if (!pass && attempts < MAX_ATTEMPTS) {
-            const errInfo = (String(recheck || lastError) || '').slice(0, 1000);
+            const errInfo = String(recheckRes?.log_tail || lastError || '').slice(0, 1000);
 
             const verdict = String(await agent(
               `你是 **独立 Verifier**。审查以下 RTL 修复是否正确。
@@ -679,31 +806,33 @@ ${String(debugOut).slice(0, 800)}
 [独立判断 — 不受 Debugger 影响]
 1. 独立阅读 RTL 源码
 2. Debugger 的分析是否正确? 修复是否正确?
-3. 如果不对 → 直接修改 RTL 给出正确方案
-4. 输出 JSON:
+3. 输出 JSON:
 {"agree":true|false,"verdict":"correct|wrong","reason":"...","alternative_fix":"..."}
 
-重要: 如果 agree=false, 你必须在 alternative_fix 中说明正确的修复方向, 并直接编辑 RTL 文件。`,
-              { label: `verify-${mod}-try${attempts}`, phase: 'Phase 4 仿真调试' }
+重要: 你是只读审查者, 不修改任何文件。如果 agree=false, 必须在 alternative_fix
+中给出具体到信号/行号的正确修复方向 (由逻辑工程师在下一轮实施)。`,
+              { agentType: 'ce-correctness-reviewer', label: `verify-${mod}-try${attempts}`, phase: 'Phase 4 仿真调试' }
             ) || '');
 
             const vn = verdict.toLowerCase();
             if (vn.includes('"agree":true') || vn.includes('"verdict":"correct"')) {
               // Debugger + Verifier 一致 → 再跑一次最终确认
-              const finalCheck = String(await agent(
+              const finalRes = await agent(
                 `Debugger 与 Verifier 均同意修复方案。最终验证: ${mod}
 
 1. make compile && make sim
 2. 对比 golden 向量
 3. 输出 JSON 证据到 02_sim/check_results/${mod}.json
-4. 输出第一行 "PASS" 或 "FAIL"
-5. 清理: rm -f wlft* transcript *.wlf vsim.wlf`,
-                { label: `sim-final-${mod}-try${attempts}`, phase: 'Phase 4 仿真调试' }
-              ) || '');
+4. [MUST] 最后执行确定性证据门禁:
+   ${gateCmd}
+5. 清理: rm -f wlft* transcript *.wlf vsim.wlf
+6. 结构化返回: gate_executed / gate_ok / compared_points 为门禁 JSON 原值 (禁止改写)`,
+                { agentType: 'logic-engineer', label: `sim-final-${mod}-try${attempts}`, phase: 'Phase 4 仿真调试', schema: SIM_SCHEMA }
+              );
 
-              if (finalCheck.includes('PASS')) {
+              if (finalRes?.gate_executed === true && finalRes?.gate_ok === true && (finalRes?.compared_points || 0) > 0) {
                 pass = true;
-                log(`  ✅ ${mod}: 双验证后通过 (第${attempts}次)`);
+                log(`  ✅ ${mod}: 双验证后通过 (第${attempts}次, ${finalRes.compared_points}点)`);
               }
             } else {
               log(`  ⚠️ ${mod}: Debugger 与 Verifier 分歧 (第${attempts}次), 标记需审查`);
@@ -746,10 +875,11 @@ ${String(debugOut).slice(0, 800)}
 4. 最终清理: rm -f wlft* transcript *.wlf vsim.wlf
 5. 输出 JSON:
 {"module":"${mod}","pass":true|false,"evidence_ok":true|false,"checks":["..."],"issues":["..."]}`,
-          { label: `final-verify-${mod}`, phase: 'Phase 4 终验' }
+          { agentType: 'ce-correctness-reviewer', label: `final-verify-${mod}`, phase: 'Phase 4 终验' }
         ) || '');
 
-        const fPass = finalV.includes('"pass":true') || finalV.includes('PASS');
+        const finalVerdict = _parseStrictJsonObject(finalV);
+        const fPass = finalVerdict?.pass === true && finalVerdict?.evidence_ok === true;
         cascadeResults[mod] = { ...(cascadeResults[mod] || {}), stage3Pass: fPass };
         return { mod, pass: fPass };
       },
@@ -768,81 +898,33 @@ nodes.p45_evidence_gate = {
   run: async (ctx) => {
     phase('Phase 4.5 证据门禁');
 
-    const checkDir = pathJoin(projectRoot, '02_sim', 'check_results');
+    // ── Step 1: 确定性证据门禁 (hdl-evidence-gate.cjs 读磁盘判定) ──────────
 
-    // ── Step 1: File Check (纯 fs, 0 agent token) ──────────────
+    log('🔍 [证据门禁] 运行 hdl-evidence-gate.cjs 校验 evidence JSON...');
 
-    log('🔍 [证据门禁] 独立读取 evidence JSON 文件...');
+    let allResults = [];
+    if (modules.length === 0) {
+      log('⚠️ [证据门禁] 模块列表为空 — 无模块级证据可查, 仅在初始化空项目时可接受。');
+    } else {
+      const gateRes = await _evidenceGate(`--modules ${modules.join(',')}`, 'p45-evidence', 'Phase 4.5 证据门禁');
+      const gateReport = _parseStrictJsonObject(gateRes.gateJson) || {};
+      allResults = Array.isArray(gateReport.modules) ? gateReport.modules : [];
 
-    if (!await _fileExists(checkDir)) {
-      throw new Error(`❌ [证据门禁] 目录不存在: ${checkDir}\n   Phase 4 未产出验证证据, 请确保 Phase 4 生成了检查脚本并运行。`);
-    }
-
-    const files = (await _listJsonFiles(checkDir)).filter(f => f.endsWith('.json'));
-    const allResults = [];
-    let allPass = true;
-
-    for (const mod of modules) {
-      const jsonFile = `${mod}.json`;
-      const jsonPath = pathJoin(checkDir, jsonFile);
-
-      if (!await _fileExists(jsonPath)) {
-        allPass = false;
-        allResults.push({ module: mod, pass: false, reason: `JSON 证据文件不存在: ${jsonPath}` });
-        continue;
+      for (const r of allResults) {
+        if (r.pass) {
+          log(`  ✅ ${r.module}: PASS (${r.compared_points} points, max_err=${r.max_error_lsb ?? 0}LSB)`);
+        } else {
+          log(`  ❌ ${r.module}: FAIL — ${r.reason}`);
+        }
       }
 
-      let data;
-      try {
-        data = JSON.parse(await _readFileText(jsonPath));
-      } catch (e) {
-        allPass = false;
-        allResults.push({ module: mod, pass: false, reason: `JSON 解析失败: ${e.message}` });
-        continue;
+      if (gateRes.ok !== true) {
+        throw new Error(
+          `❌ [证据门禁] hdl-evidence-gate FAIL:\n${
+            gateRes.failures.map(f => `   - ${f}`).join('\n')
+          }\nPhase 4 验证未通过, 无法进入 Phase 5 集成。请修复后重试。`
+        );
       }
-
-      if (!data.status || data.status !== 'PASS') {
-        allPass = false;
-        allResults.push({
-          module: mod,
-          pass: false,
-          reason: `status=${data.status || 'MISSING'}, first_fail_at=${data.first_fail_at ?? 'N/A'}`,
-        });
-        continue;
-      }
-
-      if (!data.compared_points || data.compared_points === 0) {
-        allPass = false;
-        allResults.push({
-          module: mod,
-          pass: false,
-          reason: `compared_points=${data.compared_points} — 脚本可能未实际运行`,
-        });
-        continue;
-      }
-
-      allResults.push({
-        module: mod,
-        pass: true,
-        points: data.compared_points,
-        max_error: data.max_error_lsb ?? 0,
-      });
-    }
-
-    for (const r of allResults) {
-      if (r.pass) {
-        log(`  ✅ ${r.module}: PASS (${r.points} points, max_err=${r.max_error}LSB)`);
-      } else {
-        log(`  ❌ ${r.module}: FAIL — ${r.reason}`);
-      }
-    }
-
-    if (!allPass) {
-      throw new Error(
-        `❌ [证据门禁] 文件检查 FAIL:\n${
-          allResults.filter(r => !r.pass).map(r => `   - ${r.module}: ${r.reason}`).join('\n')
-        }\nPhase 4 验证未通过, 无法进入 Phase 5 集成。请修复后重试。`
-      );
     }
 
     log('✅ [证据门禁] 文件检查全部通过。所有模块已验证并与 MATLAB golden 一致。');
@@ -873,7 +955,7 @@ nodes.p45_evidence_gate = {
   {"module":"<name>","pass":false,"issue":"具体差异描述","rtl_file":"<路径>","golden_file":"<路径>"}
 ]
 
-如果全部 pass → 只输出空数组 []。`, { label: 'p45-adversarial', phase: 'Phase 4.5 证据门禁' });
+如果全部 pass → 只输出空数组 []。`, { agentType: 'ce-correctness-reviewer', label: 'p45-adversarial', phase: 'Phase 4.5 证据门禁' });
 
       try {
         const issues = typeof advResult === 'string' ? JSON.parse(advResult) : advResult;
@@ -911,16 +993,31 @@ nodes.p45_evidence_gate = {
   },
 };
 
+// ── 检查点: evidence-review (证据门禁结果呈报, 用户确认后才搭顶层) ──────────
+
+nodes.cp_evidence_review = {
+  deps: ['p45_evidence_gate'],
+  run: async (ctx) => {
+    const gate = ctx.p45_evidence_gate?.data || {};
+    log(`[检查点] 证据门禁结果: ${JSON.stringify(gate).slice(0, 400)}`);
+    _requireUserCheckpoint(
+      'evidence-review',
+      '请审查 Phase 4.5 证据门禁报告 (各模块 compared_points / max_error_lsb / 对抗验证结论), 确认后进入顶层集成。'
+    );
+    log('✅ [检查点] evidence-review 已确认 — 进入顶层集成');
+    return 'evidence-review confirmed';
+  },
+};
+
 // ═════════════════════════════════════════════════════════════════════════════
 // Phase 5: 顶层集成 + 全链仿真 [MUST] — 多 Agent 发散聚合
 // ═════════════════════════════════════════════════════════════════════════════
 
 nodes.p5_top_integration = {
-  deps: ['p45_evidence_gate'],
+  deps: ['cp_evidence_review'],
   run: async (ctx) => {
     const gateResult = ctx.p45_evidence_gate?.data || {};
     const isTrusted = gateResult.pass === true;
-    const prjRoot = projectRoot;
     const modList = modules;
 
     log(`[Phase 5] 多 Agent 发散聚合: 接口/数据通路/Golden/时序 → 合成`);
@@ -931,12 +1028,12 @@ nodes.p5_top_integration = {
     log('  Step 1: 并行分析 (接口/数据通路/Golden/时序)...');
 
     const [interfaceR, dataPathR, goldenR, timingR] = await parallel([
-      // Agent 1: 接口检查
+      // Agent 1: 接口检查 (只读审查 — 顶层缺失由 Agent 3 负责创建, 这里如实报 fail)
       () => agent(
         `[顶层接口检查] 检查所有子模块的接口连接正确性。
 
 模块列表: ${modList.join(', ')}
-顶层文件: 01_src/00_hdl/top/top.sv (如果不存在, 先创建)
+顶层文件: 01_src/00_hdl/top/top.sv (如果不存在 → 输出 status=fail 说明缺失, 不要创建)
 
 检查项:
 1. 每个子模块的端口连接是否完整 (无悬空/漏连)
@@ -947,7 +1044,7 @@ nodes.p5_top_integration = {
 
 输出 JSON 数组:
 [{"interface":"<模块A→模块B>","status":"pass|fail|warn","detail":"..."}]`,
-        { label: 'p5-interface', phase: 'Phase 5 顶层集成' }
+        { agentType: 'ce-api-contract-reviewer', label: 'p5-interface', phase: 'Phase 5 顶层集成' }
       ),
 
       // Agent 2: 数据通路追踪
@@ -968,7 +1065,7 @@ nodes.p5_top_integration = {
 
 输出 JSON:
 [{"stage":"input→${modList[0] || 'mod1'}","status":"pass|warn","width":N,"format":"...","notes":"..."}]`,
-        { label: 'p5-datapath', phase: 'Phase 5 顶层集成' }
+        { agentType: 'ce-architecture-strategist', label: 'p5-datapath', phase: 'Phase 5 顶层集成' }
       ),
 
       // Agent 3: Golden Model 比对
@@ -1003,7 +1100,7 @@ Golden Model 参考: 07_mat/ 或 08_py/
 {"overall":"pass|fail","first_deviation":{"stage":"...","signal":"...","time":N,"expected":"...","got":"..."},"compared_points":N,"max_error_lsb":N,"algo_consistent":true|false}
 
 如果没有 EDA 工具环境, 至少检查 architecture.yaml 中的 pipeline 定义与顶层连接的一致性。`,
-        { label: 'p5-golden', phase: 'Phase 5 顶层集成' }
+        { agentType: 'logic-engineer', label: 'p5-golden', phase: 'Phase 5 顶层集成' }
       ),
 
       // Agent 4: 资源/时序预估
@@ -1022,7 +1119,7 @@ Golden Model 参考: 07_mat/ 或 08_py/
 4. 流水线完整性: 各级延迟是否匹配?
 5. 输出 JSON:
 {"resource":{"lut_est":N,"dsp_est":N,"bram_est":N},"timing":{"critical_path":"...","fmax_est":"...MHz"},"cdc_issues":["..."],"pipeline_issues":["..."]}`,
-        { label: 'p5-timing', phase: 'Phase 5 顶层集成' }
+        { agentType: 'ce-performance-oracle', label: 'p5-timing', phase: 'Phase 5 顶层集成' }
       ),
     ]);
 
@@ -1082,7 +1179,7 @@ ${synthesis.slice(0, 1500)}
 3. 修改后 make compile 验证
 4. 输出 JSON:
 {"fixed":true|false,"modules_changed":["..."],"changes":["..."],"compile_pass":true|false}`,
-        { label: 'p5-fix', phase: 'Phase 5 顶层集成' }
+        { agentType: 'logic-engineer', label: 'p5-fix', phase: 'Phase 5 顶层集成' }
       ) || '');
 
       // 修复验证
@@ -1096,11 +1193,13 @@ ${fixOut.slice(0, 1000)}
 2. 运行全链仿真 (make sim_top)
 3. 对比 Golden Model
 4. 检查之前发现的问题是否解决
-5. 输出: "PASS" 或 "FAIL" + 原因`,
-        { label: 'p5-verify-fix', phase: 'Phase 5 顶层集成' }
+5. 输出 JSON: {"pass":true|false,"evidence_ok":true|false,"reason":"..."}`,
+        { agentType: 'logic-engineer', label: 'p5-verify-fix', phase: 'Phase 5 顶层集成' }
       ) || '');
 
-      log(`  修复验证: ${verifyFix.includes('PASS') ? '✅ 通过' : '⚠️ 可能需要再次迭代'}`);
+      const verifyFixVerdict = _parseStrictJsonObject(verifyFix);
+      const verifyFixPass = verifyFixVerdict?.pass === true && verifyFixVerdict?.evidence_ok === true;
+      log(`  修复验证: ${verifyFixPass ? '✅ 通过' : '⚠️ 可能需要再次迭代'}`);
     } else {
       log('  ✅ 顶层分析通过, 无需修复');
     }
@@ -1138,18 +1237,152 @@ nodes.p6_regression = {
        至少完成 lint + 语法检查。禁止仅文字描述。
        使用 eda-detect 检测可用工具链。
 
-输出: regress 全绿 (或真实编译/仿真日志)`, { label: 'p6-regression' });
+输出: regress 全绿 (或真实编译/仿真日志)`, { agentType: 'logic-engineer', label: 'p6-regression', phase: 'Phase 6 回归覆盖率' });
     return result;
   },
 };
 
-// ── Phase 7: 代码审查 ──────────────────────────────────────────────────────
+// ── Phase 6b: Vivado 综合体检 (UG901/UG949 方法学证据) ─────────────────────
+// 仿真只证明功能对，证明不了"综合器把代码变成了什么"。推断静默失败 (BRAM 输出寄存器
+// 没吸收 / DSP 没流水 / SRL 掉成 FF 链) 不会报错, 只会让 Fmax 掉一半、面积翻几倍。
+// 本节点跑真工具拿报告; 无 Vivado 环境时如实降级为 skipped, 不允许把静态推断写成结论。
+
+nodes.p6b_vivado_check = {
+  deps: ['p5_top_integration'],
+  run: async () => {
+    const VIVADO_SCHEMA = {
+      type: 'object',
+      properties: {
+        tool_available: { type: 'boolean' },
+        flow_ran: { type: 'boolean' },
+        ok: { type: 'boolean' },
+        stages_run: { type: 'array', items: { type: 'string' } },
+        critical: { type: 'number' },
+        errors: { type: 'number' },
+        wns_ns: { type: ['number', 'null'] },
+        whs_ns: { type: ['number', 'null'] },
+        resources: { type: 'object' },
+        blocking_items: { type: 'array', items: { type: 'string' } },
+        waived_items: { type: 'array', items: { type: 'string' } },
+        skipped_reports: { type: 'array', items: { type: 'string' } },
+        summary_json: { type: 'string' },
+        skip_reason: { type: 'string' },
+      },
+      required: ['tool_available', 'flow_ran', 'blocking_items'],
+    };
+
+    const partHint = fpgaPart
+      ? `目标器件: ${fpgaPart}`
+      : `目标器件: 未由 args.part 指定 — 先从 03_xdc/*.xdc、04_prj/ 工程或 06_doc/ 中找器件型号; 仍找不到就只跑到 rtlcheck 阶段 (它也需要 -part, 可用同系列任一型号做方法学检查并在 skip_reason 里注明)。`;
+
+    const res = await agent(`执行 HDL 工作流 Phase 6b: Vivado 综合体检 (证据收集, 不做判定改写)
+
+项目根: ${projectRoot}
+模块: ${modules.join(', ') || '项目默认'}
+${partHint}
+
+执行入口: vivado-flow 技能 (skills/vivado-flow/SKILL.md)
+规范依据: skills/hdl-coding/references/ug949-rtl-methodology.md (§4 Know What You Infer)
+
+━━━ 步骤 ━━━
+1. 探测工具链:
+   node engine/scripts/eda-detect.cjs --json
+   (脚本在 harness 根目录, 相对路径找不到时用 ~/.claude/ 前缀重试一次)
+   vivado 不可用 → tool_available=false, skip_reason 写明, 其余字段置 0/空, **直接结束**。
+   [MUST] 禁止在无 Vivado 时凭读代码给出资源/时序/推断结论。
+
+2. 跑 rtlcheck → synth (**一条命令覆盖两个阶段, 脚本自动分趟处理 elaborate 与综合**):
+   vivado -mode batch -nojournal -nolog \\
+     -source ~/.claude/skills/vivado-flow/scripts/vivado_flow.tcl \\
+     -tclargs -top top -part <part> -src 01_src/00_hdl -xdc 03_xdc \\
+              -out 04_prj -from rtlcheck -to synth
+   读 04_prj/rpt/flow_summary.json
+
+3. 推断核查 (UG949 §4) — 对照 06_doc/resource_budget_tracking.md, 用 synth 段的资源数:
+   - 设计里有存储器但 synth.bram=0 且 synth.uram=0 → BRAM 推断失败, 列进 blocking_items
+   - 设计里有乘加但 synth.dsp=0 → DSP 推断失败, 列进 blocking_items
+   - 有延时线/移位链但 synth.srl=0 且 synth.ff 远超预算 → SRL 掉成 FF 链, 列进 blocking_items
+   - 关键路径起点是 BRAM 组合输出 → 输出寄存器未吸收, 列进 blocking_items
+
+4. 用解析器复核数字 (禁止从 .rpt 里用眼睛抄):
+   node engine/scripts/fpga-util-parser.cjs   04_prj/rpt/synth_utilization.rpt --json
+   node engine/scripts/fpga-timing-parser.cjs 04_prj/rpt/synth_timing.rpt      --json
+   (报告文件名以 flow_summary.json 的 report_dir 下实际存在的为准)
+
+━━━ 结构化返回 (字段全部取自 flow_summary.json 原值, 禁止改写或估算) ━━━
+- ok / stages_run          ← 顶层同名字段
+- wns_ns / whs_ns          ← synth.wns / synth.whs (没跑到 synth 则为 null)
+- resources                ← synth 段的 {lut, ff, bram, uram, dsp, srl, control_sets}
+- critical / errors        ← rtlcheck 与 synth 两段 critical / error 之和
+- blocking_items           ← 顶层 blocking[] + 步骤 3 发现的推断失败项
+- waived_items             ← 各阶段 waived[] (如未绑引脚的 NSTD-1/UCIO-1, 如实带回但不算阻断)
+- skipped_reports          ← 顶层同名字段 (本机 Vivado 版本不支持而跳过的报告, 不算失败)
+- summary_json             ← flow_summary.json 完整文本
+你不做通过/不通过的最终裁决, 只如实搬运证据。`,
+      { agentType: 'logic-engineer', label: 'p6b-vivado-check', phase: 'Phase 6b Vivado 综合体检', schema: VIVADO_SCHEMA }
+    );
+
+    if (!res || res.tool_available !== true) {
+      const why = res?.skip_reason || 'Vivado 不可用';
+      log(`⏭️ [Phase 6b] 跳过 Vivado 综合体检 — ${why}`);
+      log('   ⚠️ 本次运行**没有**综合级证据: 资源/Fmax/时序/推断成功与否均为未验证。');
+      return { skipped: true, reason: why, toolAvailable: false };
+    }
+
+    const crit = Number(res.critical || 0);
+    const errs = Number(res.errors || 0);
+    const wns = (res.wns_ns === null || res.wns_ns === undefined) ? null : Number(res.wns_ns);
+    const blockers = Array.isArray(res.blocking_items) ? res.blocking_items : [];
+    const waived = Array.isArray(res.waived_items) ? res.waived_items : [];
+    const stages = Array.isArray(res.stages_run) ? res.stages_run : [];
+
+    log(`[Phase 6b] vivado_flow 阶段: ${stages.join(' → ') || '(未报告)'}  脚本判定 ok=${res.ok}`);
+    log(`  违规: error=${errs}, critical=${crit}`);
+    log(`  时序: WNS=${wns === null ? '(未跑到综合/无约束)' : wns + 'ns'}, WHS=${res.whs_ns ?? '-'}`);
+    if (res.resources) log(`  资源: ${JSON.stringify(res.resources)}`);
+    for (const w of waived.slice(0, 10)) log(`  ⚠️ 豁免(不阻断): ${w}`);
+    for (const s of (res.skipped_reports || []).slice(0, 10)) log(`  ℹ️ 跳过的报告: ${s}`);
+    for (const b of blockers.slice(0, 20)) log(`  ❌ ${b}`);
+
+    const timingFail = wns !== null && wns < 0;
+    // 脚本自身的门禁判定 (ok) 与本节点的独立复核取"或"—— 任一判失败即阻断
+    const scriptFail = res.ok === false;
+    if (scriptFail || crit + errs > 0 || timingFail || blockers.length > 0) {
+      throw new Error(
+        `❌ [Phase 6b Vivado 体检] 未通过: script_ok=${res.ok}, error=${errs}, critical=${crit}` +
+        (timingFail ? `, WNS=${wns}ns (< 0)` : '') +
+        (blockers.length ? `\n   阻断项:\n   - ${blockers.slice(0, 20).join('\n   - ')}` : '') +
+        `\n   完整证据: 04_prj/rpt/flow_summary.json` +
+        `\n   处理指引: methodology/DRC 违规家族对照见 ug949-rtl-methodology.md §8.1;` +
+        ` 推断失败见 §4; 复位豁免细则见 vivado-synthesis-ug901.md §5.1。` +
+        `\n   修完后可从检查点续跑, 不必重综合: vivado_flow.tcl -from opt -to route`
+      );
+    }
+
+    log('✅ [Phase 6b] Vivado 综合体检通过 (无 Critical/Error, 时序满足)');
+    return {
+      pass: true,
+      toolAvailable: true,
+      stagesRun: stages,
+      critical: crit,
+      errors: errs,
+      wns_ns: wns,
+      whs_ns: res.whs_ns ?? null,
+      resources: res.resources || {},
+      waived,
+      summaryJson: String(res.summary_json || '').slice(0, 2000),
+    };
+  },
+};
+
+// ── Phase 7: 代码审查 (双专业审查员并行: 正确性 + 接口契约) ─────────────────
 
 nodes.p7_review = {
   deps: ['p5_top_integration'],
   run: async (ctx) => {
     const top = ctx.p5_top_integration?.data || '';
-    const result = await agent(`执行 HDL 工作流 Phase 7: 代码审查
+    const [correctness, contract] = await parallel([
+      () => agent(`执行 HDL 工作流 Phase 7: 代码审查 (正确性维度)
 
 顶层集成: ${String(top).slice(0, 400)}
 
@@ -1158,30 +1391,56 @@ nodes.p7_review = {
 2. 命名规范 (ri_/ro_/i_/o_)
 3. 状态机 (三段式 + default)
 4. Lint 门禁 (make lint pass)
-5. 位宽匹配
+5. 位宽匹配 / latch 推断 / 组合环路
 6. 模型一致性检查:
    - 关键信号命名是否与 MATLAB golden model 对应变量一致?
    - 位宽/定点格式是否与 Phase 2 报告一致?
    - 模块命名是否与 architecture.yaml 一致?
 7. [工具链] 如有 EDA 工具链约束 (如 ModelSim 10.6c 禁令),
    检查 RTL 是否违规
+8. [Vivado 可综合性] 依据 skills/hdl-coding/references/ug949-rtl-methodology.md:
+   - 门控时钟 always @(posedge (clk & en)) → 违规, 必须改 BUFGCE 时钟使能
+   - 未加复位的寄存器: 是否属于 §5.1 豁免场景 (BRAM 输出/DSP 流水/SRL 链)?
+     属于 → 必须有 "// [复位豁免] ..." 注释; 不属于 → 违反红线 3
+   - 综合属性 (RAM_STYLE/USE_DSP/MAX_FANOUT/DONT_TOUCH/ASYNC_REG 等):
+     每个是否有注释说明为什么加? 无注释 → 标记为待清理
+   - CDC 同步链是否带 ASYNC_REG (或改用 XPM_CDC 宏)?
 
-输出: 审查报告 PASS/FAIL + 修改建议`, { label: 'p7-code-review' });
-    return result;
+输出: 审查报告 PASS/FAIL + 修改建议`, { agentType: 'ce-correctness-reviewer', label: 'p7-review-correctness', phase: 'Phase 7 代码审查' }),
+
+      () => agent(`执行 HDL 工作流 Phase 7: 代码审查 (接口契约维度)
+
+顶层集成: ${String(top).slice(0, 400)}
+
+审查维度:
+1. valid-ready 握手时序 (valid 不得依赖 ready)
+2. 端口位宽与 architecture.yaml / interface_contract.md 一致
+3. AXI-Stream 合规 (tvalid/tready/tlast/tkeep)
+4. CDC 边界完整性 (跨时钟信号清单 vs clock_domain.md)
+5. 例化悬空端口
+
+输出: 审查报告 PASS/FAIL + 修改建议`, { agentType: 'ce-api-contract-reviewer', label: 'p7-review-contract', phase: 'Phase 7 代码审查' }),
+    ]);
+
+    return `[正确性审查]\n${String(correctness || 'N/A').slice(0, 1200)}\n\n[接口契约审查]\n${String(contract || 'N/A').slice(0, 1200)}`;
   },
 };
 
 // ── Phase 8: 报告输出 ──────────────────────────────────────────────────────
 
 nodes.p8_report = {
-  deps: ['p6_regression', 'p7_review'],
+  deps: ['p6_regression', 'p6b_vivado_check', 'p7_review'],
   run: async (ctx) => {
     const regression = ctx.p6_regression?.data || '';
     const review = ctx.p7_review?.data || '';
+    const vivado = ctx.p6b_vivado_check?.data || {};
     const result = await agent(`生成 HDL 工作流 Phase 8: 总结报告 + 清理
 
 回归结果: ${String(regression).slice(0, 300)}
 审查结果: ${String(review).slice(0, 300)}
+Vivado 综合体检: ${JSON.stringify(vivado).slice(0, 600)}
+  → 报告须包含"综合级证据"一节: 资源实测 vs 预算、WNS、methodology/CDC 违规数。
+  → 若 skipped=true, 必须在报告里写明"无 EDA 环境, 综合级结论未验证", 不得省略。
 
 输出:
 1. 汇总实现报告 (含全链验证矩阵)
@@ -1224,6 +1483,7 @@ nodes.verifier = {
       '## Phase 4.5 证据门禁',   JSON.stringify(gateResult).slice(0, 500) || 'N/A',
       '## Phase 5 全链仿真',     ctx.p5_top_integration?.data || 'N/A',
       '## Phase 6 回归',         ctx.p6_regression?.data || 'N/A',
+      '## Phase 6b Vivado 体检', JSON.stringify(ctx.p6b_vivado_check?.data || {}).slice(0, 600) || 'N/A',
       '## Phase 7 审查',         ctx.p7_review?.data || 'N/A',
       '## Phase 8 报告',         report,
     ].join('\n\n');
@@ -1239,6 +1499,10 @@ nodes.verifier = {
    - compared_points > 0?
 4. Phase 5 全链仿真各中间级与 MATLAB golden model 一致?
 5. Phase 6 回归是否通过 (要求真实编译/仿真)
+5b. **Phase 6b Vivado 综合体检**:
+   - toolAvailable=true → critical+errors 必须为 0, WNS 必须 >= 0 (或无时序约束时注明)
+   - skipped=true → 报告中**必须**显式写明"无 EDA 环境, 综合级结论未验证";
+     若报告里出现了未标注的资源/Fmax/时序断言 → pass=false (把静态推断当结论是本仓库禁止项)
 6. Phase 7 审查是否通过
 7. **对照 architecture.yaml 模块列表**: 有没有模块遗漏验证?
 8. 是否适用于模块: ${modules.join(', ') || '项目默认'}
@@ -1262,13 +1526,13 @@ ${summary.slice(0, 3000)}
 
 if (liteMode) {
   nodes.p4_rtl.deps = ['p3_tb'];
-  nodes.p8_report.deps = ['p7_review'];
+  nodes.p8_report.deps = ['p6b_vivado_check', 'p7_review'];
 
   nodes.p2_fixedpt.run = async () => '[SKIPPED] Lite 模式 — 定点量化跳过';
   nodes.p6_regression.run = async () => '[SKIPPED] Lite 模式 — 覆盖率回归跳过';
 
-  log('   依赖链: P0→P1a→P1b→P3→P4→P45→P5→P7→P8→Verifier');
-  log('   (跳过节点: P2 定点量化, P6 覆盖率回归)');
+  log('   依赖链: P0→P1a→P1b→CP(design)→P3→P4→P45→CP(evidence)→P5→P6b/P7并行→P8→Verifier');
+  log('   (跳过节点: P2 定点量化, P6 覆盖率回归; P6b Vivado 体检保留 — 成本低且是唯一的综合级证据)');
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -1292,18 +1556,23 @@ const preflightSummary = [
   '  4. 项目目录结构是否符合预期 (01_src/02_sim/...)?',
   '  5. 如果任一答案是否 → 请先澄清，不要直接开始。',
   '',
-  '📋 门禁检查点流程:',
-  '  Phase 1a: gate-checklist-p1a.md (18 MUST 项)',
-  '  Phase 1b: gate-checklist-p1b.md (30 MUST + 5 红线项)',
-  '  Phase 4.5: evidence JSON 门禁 (所有模块 PASS + compared_points > 0)',
-  '  以上每个门禁通过后才进入下一阶段',
-  '  调度层将暂停并呈报审查 → 用户确认后继续',
-  '  未确认不跨 Phase',
+  '📋 检查点体系 (每个未确认时工作流暂停, 带确认参数 + resumeFromRunId 续跑):',
+  '  preflight       — 本清单 (args.confirmed=true)',
+  '  design-review   — P1a/P1b 设计产出审查, 按 gate-checklist-p1a/p1b.md 核对',
+  '                    (args.checkpoints["design-review"].confirmed=true)',
+  '  evidence-review — Phase 4.5 证据门禁报告审查',
+  '                    (args.checkpoints["evidence-review"].confirmed=true)',
+  '  verifier        — 末端自动终验 (pass=true 才算完成, 无需用户确认)',
+  '  无人值守: args.confirmAllCheckpoints=true 显式跳过全部用户检查点',
+  '  Phase 4.5 判定由确定性脚本 engine/scripts/hdl-evidence-gate.cjs 完成',
   '',
   'DAG 依赖链:',
   liteMode
-    ? '  P0→P1a→P1b→P3→P4→P45→P5→P7→P8→Verifier (跳过 P2,P6)'
-    : '  P0→P1a→P1b→P2/P3并行→P4→P45→P5→P6/P7并行→P8→Verifier',
+    ? '  P0→P1a→P1b→CP(design)→P3→P4→P45→CP(evidence)→P5→P6b/P7并行→P8→Verifier (跳过 P2,P6)'
+    : '  P0→P1a→P1b→CP(design)→P2/P3并行→P4→P45→CP(evidence)→P5→P6/P6b/P7并行→P8→Verifier',
+  '',
+  `Vivado 综合体检 (P6b): 目标器件=${fpgaPart || '(未指定 — 传 args.part 可省去自动查找)'}`,
+  '  Vivado 不可用时该节点如实降级为 skipped, 综合级结论一律标注"未验证"',
   '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━',
 ].join('\n');
 

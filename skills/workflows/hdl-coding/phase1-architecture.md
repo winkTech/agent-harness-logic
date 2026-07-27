@@ -8,7 +8,7 @@
 - 数学推导、关键公式、信号流图
 - 参数空间、数据率、时钟频率、延迟约束
 - 区分"必须满足"和"可以权衡"两类约束
-- 输出: `algorithm_spec.md`（参考 `docs/templates/algorithm_spec_template.md`）
+- 输出: `06_doc/algorithm_spec.md`（模板见 `engineering-assets/knowledge/docs/templates/algorithm_spec_template.md`）
 
 ## 1.2 RTL 顶层架构框图
 
@@ -63,8 +63,8 @@
 
 algorithm_spec + 架构框图 + 所有模块方案完成 + golden_model 运行通过。
 
-**参考**: `skills/hdl-coding/references/alg-flow-verilog.md`（代码模板）, `docs/templates/algorithm_spec_template.md`
-**输出**: `.claude/state/hdl-coding/project-spec.json`
+**参考**: `skills/hdl-coding/references/alg-flow-verilog.md`（代码模板）, `engineering-assets/knowledge/docs/templates/algorithm_spec_template.md`
+**输出**: `06_doc/architecture.yaml`（微架构刚性契约）+ `06_doc/interface_contract.md`
 
 **可执行检查点**:
 ```bash

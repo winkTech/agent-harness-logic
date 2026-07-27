@@ -16,9 +16,10 @@
 'use strict';
 
 const fs = require('node:fs');
-const path = require('node:path');
 const os = require('node:os');
+const path = require('node:path');
 const { spawnSync } = require('node:child_process');
+const { HARNESS_ROOT, resolveHarnessRoot } = require('./lib/harness-root.cjs');
 
 const COVERAGE_THRESHOLD = 60;
 
@@ -27,15 +28,17 @@ const COVERAGE_THRESHOLD = 60;
 function resolveRoot() {
   const ciFlag = process.argv.indexOf('--ci');
   if (ciFlag !== -1 && process.argv[ciFlag + 1]) {
-    return path.resolve(process.argv[ciFlag + 1]);
+    return resolveHarnessRoot({ root: process.argv[ciFlag + 1] });
   }
-  return path.join(os.homedir(), '.claude');
+  return HARNESS_ROOT;
 }
 
 const ROOT = resolveRoot();
 const RUNNER = path.join(ROOT, 'engine/scripts/test-hooks/run-all-tests.cjs');
-const SUMMARY_DIR = path.join(ROOT, 'var', 'coverage');
-const SUMMARY_FILE = path.join(SUMMARY_DIR, 'coverage-summary.json');
+const SUMMARY_FILE = process.env.CLAUDE_COVERAGE_SUMMARY_FILE
+  ? path.resolve(process.env.CLAUDE_COVERAGE_SUMMARY_FILE)
+  : path.join(ROOT, 'var', 'coverage', 'coverage-summary.json');
+const SUMMARY_DIR = path.dirname(SUMMARY_FILE);
 
 function ensureDir(d) {
   if (!fs.existsSync(d)) fs.mkdirSync(d, { recursive: true });
@@ -58,20 +61,61 @@ function byteOffsetToLine(lines, offset) {
   return lines.length - 1;
 }
 
+function coveredLinesForRanges(sourceLines, ranges) {
+  const lineStarts = [];
+  let offset = 0;
+  for (const line of sourceLines) {
+    lineStarts.push(offset);
+    offset += Buffer.byteLength(line, 'utf8') + 1;
+  }
+
+  const positive = ranges.filter((range) => range.count > 0 && range.endOffset > range.startOffset);
+  const zero = ranges.filter((range) => range.count === 0 && range.endOffset > range.startOffset);
+  const covered = new Set();
+
+  for (const range of positive) {
+    const nestedZero = zero
+      .filter((candidate) => candidate.startOffset >= range.startOffset
+        && candidate.endOffset <= range.endOffset)
+      .sort((a, b) => a.startOffset - b.startOffset || a.endOffset - b.endOffset);
+    const endOffset = Math.max(range.startOffset, range.endOffset - 1);
+    const firstLine = byteOffsetToLine(sourceLines, range.startOffset);
+    const lastLine = byteOffsetToLine(sourceLines, endOffset);
+
+    for (let line = firstLine; line <= lastLine; line++) {
+      const lineStart = lineStarts[line];
+      const lineEnd = line + 1 < lineStarts.length ? lineStarts[line + 1] : offset;
+      const start = Math.max(lineStart, range.startOffset);
+      const end = Math.min(lineEnd, range.endOffset);
+      if (end <= start) continue;
+
+      let cursor = start;
+      for (const blocked of nestedZero) {
+        if (blocked.endOffset <= cursor || blocked.startOffset >= end) continue;
+        if (blocked.startOffset > cursor) break;
+        cursor = Math.max(cursor, blocked.endOffset);
+        if (cursor >= end) break;
+      }
+      if (cursor < end) covered.add(line);
+    }
+  }
+
+  return covered;
+}
+
 /**
  * 解析 V8 覆盖率 JSON，计算行覆盖率。
  * @param {string} coverageDir NODE_V8_COVERAGE 输出目录
  * @returns {{ totalLines: number, coveredLines: number, percent: number, files: number }}
  */
-function parseV8Coverage(coverageDir) {
+function parseV8Coverage(coverageDir, options = {}) {
+  const root = path.resolve(options.root || ROOT);
   if (!fs.existsSync(coverageDir)) {
     return { totalLines: 0, coveredLines: 0, percent: 0, files: 0 };
   }
 
   const coverageFiles = fs.readdirSync(coverageDir).filter(f => f.endsWith('.json'));
-  let totalLines = 0;
-  let coveredLines = 0;
-  const seenFiles = new Set();
+  const byScript = new Map();
 
   for (const file of coverageFiles) {
     const filePath = path.join(coverageDir, file);
@@ -86,8 +130,7 @@ function parseV8Coverage(coverageDir) {
     const entries = data?.result || (Array.isArray(data) ? data : []);
     for (const entry of entries) {
       const rawUrl = entry.url || '';
-      // 只统计项目中的脚本 (file:// 协议且包含 /engine/)
-      if (!rawUrl.startsWith('file://') || !rawUrl.includes('/engine/')) continue;
+      if (!rawUrl.startsWith('file://')) continue;
 
       // 从 file:// URL 提取本地路径
       // file:///C:/Users/... → C:/Users/...  (Windows)
@@ -100,37 +143,39 @@ function parseV8Coverage(coverageDir) {
       // URL decode
       try { scriptPath = decodeURIComponent(scriptPath); } catch {}
 
+      scriptPath = path.resolve(scriptPath);
+      const relative = path.relative(root, scriptPath);
+      if (!relative || relative.startsWith('..') || path.isAbsolute(relative)) continue;
+      if (relative !== 'engine' && !relative.startsWith(`engine${path.sep}`)) continue;
       if (!fs.existsSync(scriptPath)) continue;
-      if (seenFiles.has(scriptPath)) continue;
-      seenFiles.add(scriptPath);
-
-      let sourceLines;
-      try {
-        sourceLines = fs.readFileSync(scriptPath, 'utf8').split('\n');
-      } catch {
-        continue;
-      }
-
-      totalLines += sourceLines.length;
-
-      const coveredLineSet = new Set();
-      for (const fn of (entry.functions || [])) {
-        for (const range of (fn.ranges || [])) {
-          if (range.count > 0) {
-            const startLine = byteOffsetToLine(sourceLines, range.startOffset);
-            const endLine = byteOffsetToLine(sourceLines, range.endOffset);
-            for (let i = startLine; i <= endLine; i++) {
-              coveredLineSet.add(i);
-            }
-          }
+      let scriptCoverage = byScript.get(scriptPath);
+      if (!scriptCoverage) {
+        try {
+          scriptCoverage = {
+            sourceLines: fs.readFileSync(scriptPath, 'utf8').split('\n'),
+            coveredLines: new Set(),
+          };
+          byScript.set(scriptPath, scriptCoverage);
+        } catch {
+          continue;
         }
       }
-      coveredLines += coveredLineSet.size;
+
+      const ranges = (entry.functions || []).flatMap((fn) => fn.ranges || []);
+      for (const line of coveredLinesForRanges(scriptCoverage.sourceLines, ranges)) {
+        scriptCoverage.coveredLines.add(line);
+      }
     }
   }
 
+  let totalLines = 0;
+  let coveredLines = 0;
+  for (const scriptCoverage of byScript.values()) {
+    totalLines += scriptCoverage.sourceLines.length;
+    coveredLines += scriptCoverage.coveredLines.size;
+  }
   const percent = totalLines > 0 ? Math.round((coveredLines / totalLines) * 100) : 0;
-  return { totalLines, coveredLines, percent, files: seenFiles.size };
+  return { totalLines, coveredLines, percent, files: byScript.size };
 }
 
 // ── 报告 ──────────────────────────────────────────────────────────────────────
@@ -158,7 +203,7 @@ function main() {
     const last = loadLastSummary();
     if (!last) {
       console.error('[coverage-runner] ⚠️ 无上次覆盖率数据。先运行 node coverage-runner.cjs');
-      process.exit(0);
+      process.exit(2);
     }
     const threshold = last.threshold || COVERAGE_THRESHOLD;
     if (last.percent >= threshold) {
@@ -183,7 +228,7 @@ function main() {
 
   console.log(`[coverage-runner] 🔍 运行测试 (NODE_V8_COVERAGE=${tmpCoverage})...`);
 
-  const result = spawnSync(process.execPath, ['--no-warnings', RUNNER], {
+  const result = spawnSync(process.execPath, ['--no-warnings', RUNNER, '--no-persist'], {
     encoding: 'utf8',
     timeout: 120000,
     windowsHide: true,
@@ -232,11 +277,13 @@ function main() {
     console.error(`[coverage-runner] ⚠️ 测试运行 exit=${result.status}`);
   }
 
-  if (!summary.passed) {
+  if (result.status !== 0 || result.error || result.signal || !summary.passed) {
     process.exit(2);
   }
 
   process.exit(0);
 }
 
-main();
+if (require.main === module) main();
+
+module.exports = { byteOffsetToLine, coveredLinesForRanges, parseV8Coverage };

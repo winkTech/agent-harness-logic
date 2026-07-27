@@ -21,6 +21,7 @@
 
 const fs = require('node:fs');
 const path = require('node:path');
+const { HARNESS_ROOT } = require('./lib/harness-root.cjs');
 
 // ── Budget Tiers (char limits for the assembled prompt) ──────────────────
 const TIERS = {
@@ -113,8 +114,8 @@ function resolveAgentCompress() {
 
   // Search paths for agent-compress.js
   const searchPaths = [
-    path.join(require('node:os').homedir(), '.claude', 'var', 'plugins', 'marketplaces', 'ecc', 'scripts', 'lib', 'agent-compress.js'),
-    path.join(require('node:os').homedir(), '.claude', 'var', 'plugins', 'marketplaces', 'everything-claude-code', 'scripts', 'lib', 'agent-compress.js'),
+    path.join(HARNESS_ROOT, 'var', 'plugins', 'marketplaces', 'ecc', 'scripts', 'lib', 'agent-compress.js'),
+    path.join(HARNESS_ROOT, 'var', 'plugins', 'marketplaces', 'everything-claude-code', 'scripts', 'lib', 'agent-compress.js'),
   ];
 
   for (const p of searchPaths) {
@@ -300,7 +301,7 @@ function buildCompressedAgentCatalog(agentType) {
   const tier = getTier(agentType);
   const config = TIERS[tier];
 
-  const agentsRoot = path.join(require('node:os').homedir(), '.claude', 'skills', 'agents');
+  const agentsRoot = path.join(HARNESS_ROOT, 'skills', 'agents');
   if (!fs.existsSync(agentsRoot)) return '';
 
   try {
@@ -441,7 +442,7 @@ function replaceSkillsSection(text) {
   if (skillsEnd === -1) return text;
 
   return text.slice(0, skillsStart) +
-    '## AVAILABLE_SKILLS (Compact)\nSee `knowledge/references/skills-catalog.md` for full list.\n' +
+    '## AVAILABLE_SKILLS (Compact)\nSee `engineering-assets/knowledge/references/skills-catalog.md` for full list.\n' +
     text.slice(skillsEnd);
 }
 

@@ -1,14 +1,16 @@
 #!/usr/bin/env node
 'use strict';
 
+const { HARNESS_ROOT } = require('./lib/harness-root.cjs');
+
 const fs = require('node:fs');
 const path = require('node:path');
 const os = require('node:os');
 const { spawnSync } = require('node:child_process');
 
-const HOME = path.join(os.homedir(), '.claude');
+const HOME = HARNESS_ROOT;
 const MEMORY_DIR = path.join(HOME, 'memory');
-const KNOWLEDGE_DIR = path.join(HOME, 'knowledge');
+const KNOWLEDGE_DIR = path.join(HOME, 'engineering-assets', 'knowledge');
 const STATE_DIR = path.join(HOME, 'var', 'maintenance');
 const STATE_FILE = path.join(STATE_DIR, 'memory-knowledge-maintenance.json');
 

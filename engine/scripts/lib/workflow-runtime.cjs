@@ -1,11 +1,13 @@
 'use strict';
 
+const { HARNESS_ROOT } = require('./harness-root.cjs');
+
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 const vm = require('node:vm');
 
-const HOME = path.join(os.homedir(), '.claude');
+const HOME = HARNESS_ROOT;
 const DEFAULT_WORKFLOW_DIR = path.join(HOME, 'workflows');
 
 const STRICT_WORKFLOWS = new Set([

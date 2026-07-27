@@ -1,6 +1,6 @@
 # Block Memory Generator — 基于 PG058 v8.4
 
-**参考手册**: `D:\Project_Files\templates\bram\pg058-blk-mem-gen.pdf`（已转 `pg058-bram.md`）
+**参考手册**: `[TEMPLATES_DIR]\bram\pg058-blk-mem-gen.pdf`（已转 `pg058-bram.md`）
 
 ---
 
@@ -240,8 +240,8 @@ iverilog -g2012 -t null -s bram_<type>_<depth>_<width> bram_<type>_<depth>_<widt
 
 | 资源 | 路径 |
 |:----|:------|
-| PG058 Block Memory Generator 原始 PDF | `D:\Project_Files\templates\bram\pg058-blk-mem-gen.pdf` |
-| PG058 转换 Markdown | `D:\Project_Files\templates\bram\pg058-bram.md` |
+| PG058 Block Memory Generator 原始 PDF | `[TEMPLATES_DIR]\bram\pg058-blk-mem-gen.pdf` |
+| PG058 转换 Markdown | `[TEMPLATES_DIR]\bram\pg058-bram.md` |
 | 生产级 RTL 规范 | `../references/rtl-production-standards.md` |
 | HDL 编码规范 | `../../hdl-coding/SKILL.md` |
 | 存储器参考 | `../../hdl-coding/references/memory-templates.md` |

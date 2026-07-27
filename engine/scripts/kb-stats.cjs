@@ -2,7 +2,7 @@
 /**
  * engine/scripts/kb-stats.cjs — 知识库自动统计脚本
  *
- * 统计 knowledge/ 各子目录的文档数，输出 JSON 供 INDEX.md 引用。
+ * 统计 engineering-assets/knowledge/ 各子目录的文档数，输出 JSON 供 INDEX.md 引用。
  * 替代手工维护的 Stats 表。
  *
  * 用法:
@@ -13,14 +13,16 @@
 
 'use strict';
 
+const { HARNESS_ROOT } = require('./lib/harness-root.cjs');
+
 const fs = require('node:fs');
 const path = require('node:path');
 const os = require('node:os');
 const { shouldIndexSemanticFile } = require('./lib/memory-file-policy.cjs');
 const { healthCheck } = require('./resolve-wiki-links.cjs');
 
-const HOME_DIR = path.join(os.homedir(), '.claude');
-const KB_DIR = path.join(HOME_DIR, 'knowledge');
+const HOME_DIR = HARNESS_ROOT;
+const KB_DIR = path.join(HOME_DIR, 'engineering-assets', 'knowledge');
 const MEMORY_DIR = path.join(HOME_DIR, 'memory');
 const SEMANTIC_META = path.join(HOME_DIR, 'var', 'index', 'semantic-index-meta.json');
 
@@ -128,6 +130,7 @@ function main() {
   const args = process.argv.slice(2);
   const json = args.includes('--json');
   const check = args.includes('--check');
+  const quiet = args.includes('--quiet');
 
   // primary/ 文档
   const primary = count(path.join(KB_DIR, 'primary'));
@@ -146,7 +149,8 @@ function main() {
   const refs = count(path.join(KB_DIR, 'references'));
   const templates = count(path.join(KB_DIR, 'docs', 'templates'));
   const sources = count(path.join(KB_DIR, 'archive', 'sources'));
-  const pdfs = count(path.join(KB_DIR, 'source'), f => f.endsWith('.pdf'));
+  // PDF 原始资料已迁至 reference-assets/datasheets/（规范 §3.1 reference 级）
+  const pdfs = count(path.join(HOME_DIR, 'engineering-assets', 'reference-assets', 'datasheets'), f => f.endsWith('.pdf'));
   const fm = scanFrontmatter();
   const wiki = healthCheck();
   const semanticFiles = semanticEligibleFiles();
@@ -241,10 +245,12 @@ function main() {
     }
 
     if (issues.length > 0) {
+      if (quiet) process.exit(0);
       console.log('⚠️ 知识库索引需要更新:');
       for (const i of issues) console.log(`  - ${i}`);
       process.exit(1);
     } else {
+      if (quiet) process.exit(0);
       console.log('✅ 知识库索引最新');
       process.exit(0);
     }

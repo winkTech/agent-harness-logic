@@ -30,14 +30,15 @@
 
 const fs = require('fs');
 const path = require('path');
-const os = require('os');
+const { HARNESS_ROOT } = require('./lib/harness-root.cjs');
 
 // ── 配置 ────────────────────────────────────────────────────────────────────
 
-const HOMEDIR = os.homedir();
-const HARNESS = path.join(HOMEDIR, '.claude');
+const HARNESS = HARNESS_ROOT;
 const STATE_FILE = path.join(HARNESS, 'var', 'index', 'runtime-state.json');
 const COMPACT_LOG = path.join(HARNESS, 'var', 'sessions', 'compaction-log.txt');
+
+if (process.env.CLAUDE_BENCH === '1') process.exit(0);
 
 // 阈值配置（上下文占比估算）
 const THRESHOLDS = {
@@ -173,24 +174,16 @@ function estimateContextRatio() {
   // 综合: 取最大值（最悲观的估计）
   const envRatio = Math.max(fileRatio, callRatio, compactRatio);
 
-  // ── 降级检测 ──────────────────────────────────
-  // 如果 env 指标全为零（环境变量/会话文件不可用），使用降级计数器
+  // ── 指标不可用 → 沉默 ────────────────────────────────────────────────
+  // 三项真实指标全为 0 说明数据源不存在 (var/sessions/*.jsonl 为空、
+  // state.toolCalls 无写入方), 而不是"上下文很空"。
+  //
+  // 早期版本在这里退化到一个**全局单调累加**的调用计数器: 它从不按会话
+  // 复位, 实测已累加到 6000+ (阈值 20), 于是每次 Edit/Write 都稳定输出
+  // "上下文使用率 100%" 的假警报。编造的数字比没有数字更有害 —— 它会让
+  // 真的告警失去意义。故改为: 拿不到证据就不说话。
   if (envRatio === 0 && toolCalls === 0 && transcriptKB === 0) {
-    const fb = getFallbackRatio();
-    return {
-      ratio: fb.ratio,
-      details: {
-        transcriptKB: 0,
-        toolCalls: 0,
-        compactAgo: 0,
-        fileRatio: 0,
-        callRatio: 0,
-        compactRatio: 0,
-        fallbackActive: true,
-        fallbackCount: fb.count,
-        fallbackThresholds: `YELLOW@${FALLBACK_YELLOW_AFTER} RED@${FALLBACK_RED_AFTER}`,
-      },
-    };
+    return { ratio: 0, unavailable: true, details: { reason: 'no-metric-source' } };
   }
 
   return {
@@ -229,7 +222,20 @@ function statusBar(ratio, width = 20) {
 
 // ── 导入 ───────────────────────────────────────────────────────────────────
 
-const preCompact = require('./pre-compact.cjs');
+function preCompact() {
+  return require('./pre-compact.cjs');
+}
+
+function maybeCheckpoint(level) {
+  if (process.env.CLAUDE_CONTEXT_MONITOR_AUTO_CHECKPOINT !== '1') return false;
+  try {
+    if (level === 'RED') preCompact().signalCompact();
+    else preCompact().saveCheckpoint();
+    return true;
+  } catch {
+    return false;
+  }
+}
 
 // ── 主入口 ───────────────────────────────────────────────────────────────────
 
@@ -237,8 +243,13 @@ const preCompact = require('./pre-compact.cjs');
  * 评估当前上下文状态。
  * @returns {object|null} GREEN → null (不注入), YELLOW/RED → 报警对象
  */
-function evaluate() {
-  const { ratio, details } = estimateContextRatio();
+function evaluate(opts = {}) {
+  const measurement = opts.measurement || estimateContextRatio();
+  const { ratio, details } = measurement;
+
+  // 指标源不存在 → 不报警。见 estimateContextRatio 的说明。
+  if (measurement.unavailable) return null;
+
   const level = getHealthLevel(ratio);
 
   // GREEN: 无需输出
@@ -246,24 +257,23 @@ function evaluate() {
 
   const bar = statusBar(ratio);
   const toolCalls = details.toolCalls;
+  const checkpointed = maybeCheckpoint(level);
 
   let flag, message, suggestion;
   if (level === 'RED') {
     flag = '❌';
     message = `上下文使用率 ${Math.round(ratio * 100)}%，超过 60% 红线！`;
 
-    // RED: 强制压缩信号 + 保存检查点
-    try { preCompact.signalCompact(); } catch { /* ignore */ }
-
-    suggestion = '立即自动压缩。已保存检查点。';
+    suggestion = checkpointed
+      ? '已按显式配置保存压缩检查点。'
+      : '这是启发式估算；由模型根据当前任务相关性决定是否压缩。';
   } else {
     flag = '⚠️';
     message = `上下文使用率 ${Math.round(ratio * 100)}%，超过 50% 警戒线。`;
 
-    // YELLOW: 自动保存检查点（模拟压缩事件）
-    try { preCompact.saveCheckpoint(); } catch { /* ignore */ }
-
-    suggestion = '已自动保存压缩检查点。后续输出请精简：摘要而非全文、引用而非重复、结论在前细节在后。';
+    suggestion = checkpointed
+      ? '已按显式配置保存检查点。'
+      : '这是启发式估算；可继续使用仍与任务相关的上下文，必要时再压缩。';
   }
 
   // Emit signal: 上下文压力事件
@@ -287,16 +297,9 @@ function evaluate() {
     flag,
     message,
     suggestion,
-    // 注入到 Claude 上下文的指令
-    instruction: level === 'RED'
-      ? '【自动压缩】上下文超过 60% 红线。检查点已保存。请立即：'
-        + '(1) 当前轮输出控制在 500 token 以内'
-        + '(2) 用摘要代替全文，用引用代替重复'
-        + '(3) 不要在回答中重复用户的问题或完整历史'
-      : '【自动压缩】上下文超过 50%。检查点已保存。请：'
-        + '(1) 回答只给结论和关键数据，去掉过渡句'
-        + '(2) 引用文件行号代替贴大段代码'
-        + '(3) 不要在输出中重复已确认的上下文',
+    mode: checkpointed ? 'auto-checkpoint' : 'advisory',
+    checkpointed,
+    instruction: '【上下文提示】该比例来自代理指标，仅供参考。保留仍与当前任务直接相关的上下文；仅在收益明确时压缩。',
   };
 }
 
@@ -350,5 +353,6 @@ module.exports = {
   estimateContextRatio,
   getHealthLevel,
   evaluate,
+  maybeCheckpoint,
   THRESHOLDS,
 };

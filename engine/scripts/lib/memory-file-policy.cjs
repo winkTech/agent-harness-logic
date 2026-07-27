@@ -59,7 +59,7 @@ function shouldIndexMemoryFile(filePath, opts = {}) {
 
 function shouldIndexKnowledgeFile(filePath, opts = {}) {
   if (!isMarkdown(filePath)) return false;
-  const kbDir = opts.knowledgeDir || (opts.home ? path.join(opts.home, 'knowledge') : null);
+  const kbDir = opts.knowledgeDir || (opts.home ? path.join(opts.home, 'engineering-assets', 'knowledge') : null);
   const rel = kbDir ? relativeSlash(kbDir, filePath) : slashPath(filePath);
   if (hasIgnoredSegment(rel)) return false;
   if (hasSegment(rel, 'examples')) return false;
@@ -72,7 +72,7 @@ function shouldIndexKnowledgeFile(filePath, opts = {}) {
 function shouldIndexSemanticFile(filePath, opts = {}) {
   const home = opts.home;
   const memoryDir = opts.memoryDir || (home ? path.join(home, 'memory') : null);
-  const knowledgeDir = opts.knowledgeDir || (home ? path.join(home, 'knowledge') : null);
+  const knowledgeDir = opts.knowledgeDir || (home ? path.join(home, 'engineering-assets', 'knowledge') : null);
   const abs = path.resolve(filePath);
 
   if (memoryDir) {

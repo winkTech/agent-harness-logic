@@ -309,19 +309,19 @@ GIT_TRACE_PERFORMANCE=1 git status
 | 主题 | 文件 | 说明 |
 |------|------|------|
 | Git约束规则 | `references/git-rule.md` | 提交流程、分支管理、lint规则、hookify规则 |
-| 大文件拦截hook | `references/hooks/hookify.prevent-large-files.local.md` | 拦截暂存区>50MB大文件 |
-| main分支拦截hook | `references/hooks/hookify.prevent-main-commit.local.md` | 禁止在main分支直接提交 |
-| 仿真产物警告hook | `references/hooks/hookify.prevent-sim-artifacts.local.md` | 警告提交仿真产物 |
+| 大文件/大 diff 提醒 | `engine/scripts/hooks/diff-size-gate.js` | PreToolUse **建议**拆分超大改动（exit 1 = 提醒，不阻断；大规模重构是合法操作，刻意不硬拦） |
+| 提交前 lint | `engine/scripts/hooks/pre-commit-lint.js` | 提交前强制 lint |
+| 仿真产物/危险命令拦截 | `engine/scripts/hooks/bash-safety-guard.cjs` | 拦截危险命令与绕过写入 |
 
 ## Memory Protocol (MANDATORY)
 
 **Before starting:**
-Read `.claude/context/memory/learnings.md`
+Read `memory/learnings/`
 
 **After completing:**
 
-- New pattern -> `.claude/context/memory/learnings.md`
-- Issue found -> `.claude/context/memory/issues.md`
-- Decision made -> `.claude/context/memory/decisions.md`
+- New pattern -> `memory/learnings/`
+- Issue found -> `memory/errors/`
+- Decision made -> `memory/projects/`
 
 > ASSUME INTERRUPTION: If it's not in memory, it didn't happen.

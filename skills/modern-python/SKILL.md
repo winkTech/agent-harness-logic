@@ -472,4 +472,4 @@ my-project/
 
 **During setup**: Write configuration incrementally, verifying each tool works before moving to the next. Run `ruff check`, `ruff format --check`, and `uv run pytest` at each step.
 
-**After completion**: Record the toolchain versions and any migration issues to `.claude/context/memory/learnings.md` for future reference.
+**After completion**: Record the toolchain versions and any migration issues to `memory/learnings/` for future reference.

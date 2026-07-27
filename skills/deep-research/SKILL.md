@@ -105,14 +105,14 @@ Deep Research Skill — Multi-step autonomous research methodology for structure
 ## Memory Protocol (MANDATORY)
 
 **Before starting:**
-Read `.claude/context/memory/learnings.md`
+Read `memory/learnings/`
 
 Check for: prior reports on same topic (avoid duplicates), unreliable sources in issues.md, relevant ADRs in decisions.md.
 
 **After completing:**
 
-- New research pattern -> `.claude/context/memory/learnings.md`
-- Unreliable source identified -> `.claude/context/memory/issues.md`
-- Methodology decision -> `.claude/context/memory/decisions.md`
+- New research pattern -> `memory/learnings/`
+- Unreliable source identified -> `memory/errors/`
+- Methodology decision -> `memory/projects/`
 
 > ASSUME INTERRUPTION: Save evidence log and partial findings before Phase 3.

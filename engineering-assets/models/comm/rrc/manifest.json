@@ -1,0 +1,57 @@
+{
+  "schema_version": "1.0",
+  "asset_uid": "model_comm_rrc",
+  "name": "rrc_pulse_shaping_golden",
+  "kind": "golden-model",
+  "version": "1.0.0",
+  "owner": "lihan",
+  "maturity": {
+    "level": "qualification"
+  },
+  "requirement_ref": "engineering-assets/knowledge/primary/domains/comm/rrc/algorithm_spec.md",
+  "implements_for": [
+    "rrc_polyphase_fir"
+  ],
+  "models": [
+    {
+      "role": "reference",
+      "trait": "普遍性",
+      "path": "rrc_pulse_shaping.m",
+      "note": "浮点 RRC 脉冲成形参考; 可跨项目当基准 (alpha/sps/span 可配)"
+    },
+    {
+      "role": "fixed_point",
+      "trait": "设计特性",
+      "path": "rrc_coeff.hex",
+      "note": "Q1.15 定点系数 + 定点行为; 承载本设计的量化/饱和特性, 作 RTL bit-true 对标基准"
+    }
+  ],
+  "vectors": {
+    "config": "16qam / alpha=0.5 / sps=4 / span=8 / 512 symbols -> 2048 samples",
+    "provenance": "expected_tx.hex 于 2026-07-25 由 tools/regen-vectors.cjs 按 golden 代码语义(rrc_pulse_shaping.m 定点路径, rrc_coeff.hex Q1.15)忠实复算再生; 原始导出损坏(2048 行全为 00008001 负裁剪轨), 证据保留于 vectors/expected_tx.broken-orig.hex。golden .m 代码未改动。建议后续用 MATLAB 原生重跑 run_rrc_sim.m 复核再生向量。"
+  },
+  "sources": [
+    {
+      "path": "rrc_pulse_shaping.m",
+      "role": "reference",
+      "sha256": "8cb69aabded19d7f4f95bedef372bbdb7352ea53d6b9bb5734a3c06040289b3b"
+    },
+    {
+      "path": "rrc_coeff_gen.m",
+      "role": "reference",
+      "sha256": "7a7c5fa594f6bc755889247be197d2a2ef64795e1ede23196f80cc8076e2cd6d"
+    },
+    {
+      "path": "rrc_coeff.hex",
+      "role": "fixed_point",
+      "sha256": "3cdd47daa6c41f9c66947b51c05316b19714d7348c87ffb5f472ee46575e6cc0"
+    },
+    {
+      "path": "config.m",
+      "role": "config",
+      "sha256": "aeafbe114d05e8c4ad4c5a2d2fe970207ff1a314ffb2b5a1d1ef43d85075f45b"
+    }
+  ],
+  "waivers": [],
+  "superseded_by": null
+}

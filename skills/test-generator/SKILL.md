@@ -274,12 +274,12 @@ node .claude/skills/test-generator/scripts/main.cjs src/components/UserProfile.t
 ## Memory Protocol (MANDATORY)
 
 **Before starting:**
-Read `.claude/context/memory/learnings.md`
+Read `memory/learnings/`
 
 **After completing:**
 
-- New pattern -> `.claude/context/memory/learnings.md`
-- Issue found -> `.claude/context/memory/issues.md`
-- Decision made -> `.claude/context/memory/decisions.md`
+- New pattern -> `memory/learnings/`
+- Issue found -> `memory/errors/`
+- Decision made -> `memory/projects/`
 
 > ASSUME INTERRUPTION: If it's not in memory, it didn't happen.

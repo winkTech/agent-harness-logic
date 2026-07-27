@@ -119,11 +119,11 @@ function buildPrompt() {
     'Hard RTL task:',
     '- Implement a one-entry AXI-stream skid buffer named skid_buffer.',
     '- Parameter: P_DATA_W, default 8.',
-    '- Ports exactly include i_clk, i_rst, ri_s_valid, ri_s_data, ro_s_ready, ro_m_valid, ro_m_data, ri_m_ready.',
-    '- All outputs must be ro_ ports and driven from sequential logic.',
+    '- Ports exactly include i_clk, i_rst, i_s_valid, i_s_data, o_s_ready, o_m_valid, o_m_data, i_m_ready.',
+    '- All outputs must be o_ ports and driven from sequential logic.',
     '- Use synchronous active-high i_rst.',
     '- Use r_full and r_data storage for the skid entry.',
-    '- In full handoff (r_full && ri_m_ready && ri_s_valid), drive ro_m_data from stored r_data and only capture ri_s_data into r_data for the next beat.',
+    '- In full handoff (r_full && i_m_ready && i_s_valid), drive o_m_data from stored r_data and only capture i_s_data into r_data for the next beat.',
     '- No initial, #delay, wait, force, disable, or testbench code in the RTL.',
     '- Do not modify tests or write any path other than the RTL target.',
     '- The verification command must be exactly: node rtl_hidden_contract.cjs',
@@ -153,12 +153,12 @@ function cannedResponse() {
     ') (',
     '  input  logic                  i_clk,',
     '  input  logic                  i_rst,',
-    '  input  logic                  ri_s_valid,',
-    '  input  logic [P_DATA_W-1:0]   ri_s_data,',
-    '  output logic                  ro_s_ready,',
-    '  output logic                  ro_m_valid,',
-    '  output logic [P_DATA_W-1:0]   ro_m_data,',
-    '  input  logic                  ri_m_ready',
+    '  input  logic                  i_s_valid,',
+    '  input  logic [P_DATA_W-1:0]   i_s_data,',
+    '  output logic                  o_s_ready,',
+    '  output logic                  o_m_valid,',
+    '  output logic [P_DATA_W-1:0]   o_m_data,',
+    '  input  logic                  i_m_ready',
     ');',
     '',
     '  logic                r_full;',
@@ -168,26 +168,26 @@ function cannedResponse() {
     '    if (i_rst) begin',
     "      r_full     <= 1'b0;",
     "      r_data     <= '0;",
-    "      ro_s_ready <= 1'b1;",
-    "      ro_m_valid <= 1'b0;",
-    "      ro_m_data  <= '0;",
+    "      o_s_ready <= 1'b1;",
+    "      o_m_valid <= 1'b0;",
+    "      o_m_data  <= '0;",
     '    end else begin',
-    '      ro_s_ready <= (!r_full) || ri_m_ready;',
+    '      o_s_ready <= (!r_full) || i_m_ready;',
     '',
-    '      if (ri_m_ready || !ro_m_valid) begin',
+    '      if (i_m_ready || !o_m_valid) begin',
     '        if (r_full) begin',
     "          r_full     <= 1'b0;",
-    "          ro_m_valid <= 1'b1;",
-    '          ro_m_data  <= r_data;',
+    "          o_m_valid <= 1'b1;",
+    '          o_m_data  <= r_data;',
     '        end else begin',
-    '          ro_m_valid <= ri_s_valid;',
-    '          ro_m_data  <= ri_s_data;',
+    '          o_m_valid <= i_s_valid;',
+    '          o_m_data  <= i_s_data;',
     '        end',
     '      end',
     '',
-    '      if (ri_s_valid && !ro_s_ready) begin',
+    '      if (i_s_valid && !o_s_ready) begin',
     "        r_full <= 1'b1;",
-    '        r_data <= ri_s_data;',
+    '        r_data <= i_s_data;',
     '      end',
     '    end',
     '  end',
@@ -280,7 +280,7 @@ function requirePattern(label, pattern) {
 
 requirePattern('module skid_buffer missing', /\bmodule\s+skid_buffer\b/);
 requirePattern('P_DATA_W parameter missing', /\bparameter\b[\s\S]{0,80}\bP_DATA_W\b/);
-for (const port of ['i_clk', 'i_rst', 'ri_s_valid', 'ri_s_data', 'ro_s_ready', 'ro_m_valid', 'ro_m_data', 'ri_m_ready']) {
+for (const port of ['i_clk', 'i_rst', 'i_s_valid', 'i_s_data', 'o_s_ready', 'o_m_valid', 'o_m_data', 'i_m_ready']) {
   requirePattern('port missing: ' + port, new RegExp('\\b' + port + '\\b'));
 }
 requirePattern('sequential always block missing', /always_(?:ff|comb)?\s*@\s*\(\s*posedge\s+i_clk\s*\)|always\s*@\s*\(\s*posedge\s+i_clk\s*\)/);
@@ -291,14 +291,14 @@ requirePattern('r_data storage missing', /\br_data\b/);
 for (const forbidden of [/\binitial\b/, /#\d+/, /\bwait\b/, /\bforce\b/, /\bdisable\b/]) {
   if (forbidden.test(rtlNoComments)) failures.push('forbidden construct: ' + forbidden);
 }
-for (const badAssign of [/assign\s+ro_m_valid\s*=\s*ri_s_valid/, /assign\s+ro_m_data\s*=\s*ri_s_data/]) {
+for (const badAssign of [/assign\s+o_m_valid\s*=\s*i_s_valid/, /assign\s+o_m_data\s*=\s*i_s_data/]) {
   if (badAssign.test(rtlNoComments)) failures.push('combinational straight-through output: ' + badAssign);
 }
-if (!/ro_m_valid\s*<=/.test(rtl) || !/ro_m_data\s*<=/.test(rtl) || !/ro_s_ready\s*<=/.test(rtl)) {
-  failures.push('ro_ outputs must be assigned in sequential logic');
+if (!/o_m_valid\s*<=/.test(rtl) || !/o_m_data\s*<=/.test(rtl) || !/o_s_ready\s*<=/.test(rtl)) {
+  failures.push('o_ outputs must be assigned in sequential logic');
 }
-if (/if\s*\(\s*ri_m_ready\s*\)\s*begin[\s\S]{0,240}if\s*\(\s*ri_s_valid\s*\)\s*begin[\s\S]{0,240}ro_m_data\s*<=\s*ri_s_data/.test(rtlNoComments)) {
-  failures.push('full handoff must output stored r_data, not overwrite ro_m_data with ri_s_data');
+if (/if\s*\(\s*i_m_ready\s*\)\s*begin[\s\S]{0,240}if\s*\(\s*i_s_valid\s*\)\s*begin[\s\S]{0,240}o_m_data\s*<=\s*i_s_data/.test(rtlNoComments)) {
+  failures.push('full handoff must output stored r_data, not overwrite o_m_data with i_s_data');
 }
 
 if (failures.length) {

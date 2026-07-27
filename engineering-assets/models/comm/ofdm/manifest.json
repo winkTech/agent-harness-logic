@@ -1,0 +1,149 @@
+{
+  "schema_version": "1.0",
+  "asset_uid": "model_comm_ofdm",
+  "name": "ofdm_tx_golden",
+  "kind": "golden-model",
+  "version": "1.0.0",
+  "owner": "lihan",
+  "maturity": {
+    "level": "intake"
+  },
+  "requirement_ref": "engineering-assets/knowledge/primary/domains/comm/ofdm/algorithm_spec.md",
+  "implements_for": [
+    "ofdm_tx_top"
+  ],
+  "models": [
+    {
+      "role": "reference",
+      "trait": "普遍性",
+      "path": "src/tx_chain.m",
+      "note": "浮点 OFDM 发射链参考 (mapper→subcarrier_map→IFFT→CP); 802.11a 64点/CP16, 调制类型可配 (BPSK/QPSK/16QAM/64QAM); 配套 src/rx_chain.m + src/mod_demapper.m 提供环回验证"
+    },
+    {
+      "role": "reference",
+      "trait": "普遍性",
+      "path": "src/ifft_chain.m",
+      "note": "浮点 IFFT + add_cp 参考; 与 src/subcarrier_map.m / src/add_cp.m / src/mod_mapper.m 共同构成 tx_chain 的分解模块"
+    },
+    {
+      "role": "fixed_point",
+      "trait": "设计特性",
+      "path": "src/generate_vectors.m",
+      "note": "定点向量导出: 频域输入按 int16 hex (标称 Q2.14, 实际乘 32767=Q1.15 尺度, 与注释不一致——如实记录未修改), 时域期望按 Q3.13 打包 {Q[15:0],I[15:0]} uint32 hex; 量化参数取自 config.m cfg.quant (Q2.14 频域 / Q3.13 时域)"
+    }
+  ],
+  "vectors": {
+    "config": "QPSK / FFT 64 / CP 16 / vector_config.txt 声明 N_SYM=10 但实际导出仅 1 符号 (freq 64 样点, expected_tx 80 样点)",
+    "provenance": "自 knowledge/primary/domains/comm/ofdm/vectors/ 原样迁入 (2026-07-25), 未修改。健康度抽查: expected_tx.bin 80 行 64 唯一值, tx_i/tx_q 80 行 63-64 唯一值, 无常量轨/全同值损坏; freq_i/freq_q 唯一值 5/3 属 QPSK 星座离散取值的正常表现。注意: RTL TB (tb_tx_top.sv) 的 VEC_DIR 指向 ../golden_model/vectors/, 与源库 vectors/ 实际位置不符, cosim 前需对齐路径。"
+  },
+  "sources": [
+    {
+      "path": "config.m",
+      "role": "config",
+      "sha256": "e8871b2049ee897075a4089a3e68d4afdee8168336756ef386217d917b76e147",
+      "note": "802.11a 参数 + 定点量化位宽配置 (IFFT in Q2.14 / out Q3.13); RTL 定点契约的单一来源"
+    },
+    {
+      "path": "run_ofdm_sim.m",
+      "role": "reference",
+      "sha256": "9f0a5bc0e4b3381a0a67e969579223b5876db54fbcb8afdd06e023f4960a1311"
+    },
+    {
+      "path": "run_all_tests.m",
+      "role": "reference",
+      "sha256": "e246622b22c8515ce8c65ef6c8e7985784133722ee889c3c20b695840a2a9b7e"
+    },
+    {
+      "path": "src/tx_chain.m",
+      "role": "reference",
+      "sha256": "ce698b1dc3022feace39bc673b3cd585065ebe41edcae2ba78b0683e9f7fcf96"
+    },
+    {
+      "path": "src/rx_chain.m",
+      "role": "reference",
+      "sha256": "52852e7b63d25692ee6c940b4f11cd57c669c8999c25467a2e499ce77abe586e"
+    },
+    {
+      "path": "src/mod_mapper.m",
+      "role": "reference",
+      "sha256": "22a470fedf21439ea399ca851a47872ccc2bcf50ad78d6dffe38fa9509a26947"
+    },
+    {
+      "path": "src/mod_demapper.m",
+      "role": "reference",
+      "sha256": "5facd063dbe659df60ff5506214ec79f220807b85aa3d1983708d69f69b78e8c"
+    },
+    {
+      "path": "src/subcarrier_map.m",
+      "role": "reference",
+      "sha256": "1645106b70fe0f197bd55a1a4d05ed1e97ffca8eff6b59d52137cf68f51dcc2e"
+    },
+    {
+      "path": "src/ifft_chain.m",
+      "role": "reference",
+      "sha256": "7c0efef6016af2dcc7c7385f9cfd786c66612d8cdfebd6bdf9ca6a8199344c70"
+    },
+    {
+      "path": "src/add_cp.m",
+      "role": "reference",
+      "sha256": "08a9e8b223625d7bf5b2b0bdf5c9e1275779f67cd795e284004d92adbb7a7782"
+    },
+    {
+      "path": "src/generate_vectors.m",
+      "role": "fixed_point",
+      "sha256": "9813c05eeadb97d3b89e9f71377ed9dd1fcd91831bbf297c4e416ef2eb6109df"
+    },
+    {
+      "path": "tests/test_modulations.m",
+      "role": "test",
+      "sha256": "3581dc02f8d38100909fab47ecca1b37b823ec71584619f549f04f950b975dbb"
+    },
+    {
+      "path": "tests/test_ber.m",
+      "role": "test",
+      "sha256": "5f5d49536d7c9eaa75ea58b805a8a6db38487eb17ee839955cc2b937a52bef3a"
+    },
+    {
+      "path": "tests/test_boundary.m",
+      "role": "test",
+      "sha256": "632bdfb5ced7c5ec26313abeebf0195657de0c9195330500b2486d0de0bee58b"
+    },
+    {
+      "path": "vectors/freq_i.bin",
+      "role": "vector",
+      "sha256": "07ae90b893db111ad411c56b37cee79d9e59e1d9d229e6b7b2a69a1f69ffe911"
+    },
+    {
+      "path": "vectors/freq_q.bin",
+      "role": "vector",
+      "sha256": "40181f2ccbf79a83f07852fb62927d774204312fc98168896554a3c30a58e36a"
+    },
+    {
+      "path": "vectors/expected_tx.bin",
+      "role": "vector",
+      "sha256": "e99964471f05cdaa2494dfd229e2bbb81eb9c5696dd978fdb9ba5095355960ff"
+    },
+    {
+      "path": "vectors/tx_i.bin",
+      "role": "vector",
+      "sha256": "62e21b1e188f716ecd32df2edbc6e8dd5113dadfda31044451793532c006b22b"
+    },
+    {
+      "path": "vectors/tx_q.bin",
+      "role": "vector",
+      "sha256": "6d12beac17ee12cf7c8a168506a77394501924475cc439c2ad600c23d5f59867"
+    },
+    {
+      "path": "vectors/time-domain-iq.txt",
+      "role": "vector",
+      "sha256": "2e39582bd884ccbd28adfc70110c08c90b3cbfffb38eec4bb49b3960ee5e1185"
+    },
+    {
+      "path": "vectors/vector_config.txt",
+      "role": "config",
+      "sha256": "d9e3311a20dec784e3327819b4c1297ad05b5dc58771c4d07fdfa6feb29bfe96"
+    }
+  ],
+  "waivers": [],
+  "superseded_by": null
+}

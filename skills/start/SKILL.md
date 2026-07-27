@@ -3,7 +3,7 @@ name: start
 tier: foundation
 runtime: always
 trigger: mention
-description: "Session initialization ritual: read the project's next-steps file + git status in parallel to restore the previous context, output a Briefing with the current task + suggested next step. The first command of every new session to prevent context loss. Trigger: start / 开始 / 恢复进度 / 继续上次的 / 新session / 从哪里继续. Skip: save progress (/handoff) / commit (/commit)."
+description: "Session initialization ritual: read the project's next-steps file and git status in parallel to restore prior context, then output a Briefing with the current task and suggested next step. Use when starting or resuming a work session — not for saving progress (/handoff) or committing (/commit)."
 metadata:
   source: xihe
   version: "3.1.0"
@@ -20,7 +20,7 @@ metadata:
 - Without a hint, derive the focus from the active plan in the project's next-steps file
 
 > **Project files referenced below** (harness v4.0 paths):
-> - **next-steps file** — `~/.claude/var/active-task.yaml` (任务协议), YAML 格式
+> - **next-steps file** — `var/active-task.yaml` (任务协议), YAML 格式
 > - **session notes** — `~/.claude/var/work/*.md` (工作记忆)
 > - **error journal** — `~/.claude/memory/errors/`
 

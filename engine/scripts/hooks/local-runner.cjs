@@ -37,6 +37,65 @@ function resolveScript(name) {
   return path.join(HOOKS_DIR, name);
 }
 
+function parsePayload(stdinData) {
+  if (!stdinData || !String(stdinData).trim().startsWith('{')) return {};
+  try {
+    return JSON.parse(stdinData);
+  } catch {
+    return {};
+  }
+}
+
+function toolNameFrom(payload) {
+  if (typeof payload?.tool === 'string') return payload.tool;
+  return payload?.tool?.name || payload?.tool_name || payload?.name || '';
+}
+
+function toolInputFrom(payload) {
+  return payload?.tool_input || payload?.tool?.input || payload?.input || payload?.arguments || {};
+}
+
+function commandFrom(payload) {
+  const input = toolInputFrom(payload);
+  return String(input.command || payload?.command || '').trim();
+}
+
+function filePathFrom(payload) {
+  const input = toolInputFrom(payload);
+  return String(input.file_path || payload?.file_path || '').trim();
+}
+
+function isReadOnlyShellCommand(command) {
+  return /^(?:git\s+(?:status|diff|show|log|branch|rev-parse|ls-files)|pwd|ls|dir|rg|grep|findstr|Get-Content|Select-String)\b/i.test(command);
+}
+
+function shouldSkipScript(scriptName, payload) {
+  const base = path.basename(resolveScript(scriptName)).toLowerCase();
+  const tool = toolNameFrom(payload);
+  const command = commandFrom(payload);
+  const filePath = filePathFrom(payload);
+
+  if (['hdl-gate.cjs', 'requirements-gate-guard.cjs', 'verification-quality-guard.cjs'].includes(base)) {
+    return !['Write', 'Edit', 'MultiEdit'].includes(tool) || !/\.(sv|v|py)$/i.test(filePath);
+  }
+
+  if (base === 'pre-commit-lint.js') {
+    return !/\bgit\s+commit\b/i.test(command);
+  }
+
+  if (base === 'diff-size-gate.js') {
+    return Boolean(command) && isReadOnlyShellCommand(command);
+  }
+
+  if (base === 'resource-budget-gate.js') {
+    return Boolean(command)
+      && isReadOnlyShellCommand(command)
+      && !/\b(vivado|xsim|vsim|pytest|npm\s+(?:test|run)|python|node)\b/i.test(command);
+  }
+
+  return false;
+}
+
 function runSingle(scriptName, extraArgs, stdinData) {
   const scriptPath = resolveScript(scriptName);
   if (!fs.existsSync(scriptPath)) {
@@ -100,7 +159,9 @@ function main() {
     }
 
     let highestStatus = 0;
+    const payload = parsePayload(stdinData);
     for (const script of scripts) {
+      if (shouldSkipScript(script, payload)) continue;
       const { status } = runSingle(script, extraArgs, stdinData);
       if (status > highestStatus) highestStatus = status;
       if (status === 2) break; // 硬拦截信号，停止后续检查

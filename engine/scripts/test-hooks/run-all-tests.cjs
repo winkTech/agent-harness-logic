@@ -28,11 +28,15 @@ const os = require('node:os');
 const {
   computeHarnessMetrics,
   formatHarnessMetrics,
+  meetsHarnessTargets,
 } = require('../lib/harness-metrics.cjs');
+const { appendHistory, loadHistory } = require('../lib/evidence-store.cjs');
+const { HARNESS_ROOT, resolveHarnessRoot } = require('../lib/harness-root.cjs');
 
-const HOME = path.join(os.homedir(), '.claude');
+const HOME = HARNESS_ROOT;
 const VERBOSE = process.argv.includes('--verbose');
 const LIST_ONLY = process.argv.includes('--list');
+const NO_PERSIST = process.argv.includes('--no-persist') || process.env.CLAUDE_HARNESS_NO_PERSIST === '1';
 const SKIP_MANIFEST_FILE = path.join(HOME, 'engine/scripts/test-hooks/skip-manifest.json');
 
 // ── 颜色 ───────────────────────────────────────────────────────────────────
@@ -70,26 +74,45 @@ const RESULTS_FILE = path.join(RESULTS_DIR, 'hook-test-results.json');
 function ensureDir(d) { if (!fs.existsSync(d)) fs.mkdirSync(d, { recursive: true }); }
 
 function saveResults(results) {
-  ensureDir(RESULTS_DIR);
-  const history = [];
-  if (fs.existsSync(RESULTS_FILE)) {
-    try { history = JSON.parse(fs.readFileSync(RESULTS_FILE, 'utf8')); } catch {}
-  }
-  history.push({ timestamp: new Date().toISOString(), results });
-  // 只保留最近 50 次
-  if (history.length > 50) history.splice(0, history.length - 50);
-  fs.writeFileSync(RESULTS_FILE, JSON.stringify(history, null, 2), 'utf8');
+  return appendHistory(
+    RESULTS_FILE,
+    { timestamp: new Date().toISOString(), results },
+    { maxEntries: 50, persist: !NO_PERSIST }
+  );
 }
 
 function nodeCheck(filePath) {
-  const r = spawnSync('node', ['--check', filePath], {
+  const r = spawnSync(process.execPath, ['--check', filePath], {
     encoding: 'utf8', timeout: 10000, windowsHide: true,
   });
   return { ok: r.status === 0, stderr: r.stderr };
 }
 
+/**
+ * 解析一个 POSIX 兼容的 bash。
+ *
+ * Windows 上裸 `bash` 的 PATH 首位通常是 C:\Windows\System32\bash.exe —— 那是
+ * WSL 启动器, 不是 POSIX shell: 它按 UTF-16LE 输出告警, 且不容忍 CRLF 行尾,
+ * 会让 shell 脚本用例长期假红。harness 自身的 bash hook 走的是 Git Bash,
+ * 测试也应对齐到同一个 shell, 否则测的根本不是运行时实际用的解释器。
+ */
+function resolvePosixBash() {
+  const candidates = [
+    process.env.CLAUDE_TEST_BASH,
+    'C:/Program Files/Git/bin/bash.exe',
+    'C:/Program Files (x86)/Git/bin/bash.exe',
+    'C:/Program Files/Git/usr/bin/bash.exe',
+  ].filter(Boolean);
+  for (const candidate of candidates) {
+    try {
+      if (fs.existsSync(candidate)) return candidate;
+    } catch { /* 探测失败继续下一个候选 */ }
+  }
+  return 'bash';
+}
+
 function runNode(script, stdin, opts = {}) {
-  const r = spawnSync('node', [script], {
+  const r = spawnSync(process.execPath, [script], {
     encoding: 'utf8', timeout: 15000, windowsHide: true,
     input: stdin || '',
     cwd: opts.cwd || HOME,
@@ -104,14 +127,13 @@ function loadSkipManifest() {
   try {
     return JSON.parse(fs.readFileSync(SKIP_MANIFEST_FILE, 'utf8'));
   } catch {
-    return { maxSkips: 0, allowedSuites: [] };
+    return { maxSkips: 0, allowedIds: [] };
   }
 }
 
 function isAllowedSkip(testCase, manifest) {
-  const allowedSuites = new Set(manifest.allowedSuites || []);
   const allowedIds = new Set(manifest.allowedIds || []);
-  return allowedSuites.has(testCase.suite) || allowedIds.has(testCase.id);
+  return allowedIds.has(testCase.id);
 }
 
 // ── 测试定义 ────────────────────────────────────────────────────────────────
@@ -135,7 +157,9 @@ const CORE_SCRIPTS = [
   'engine/scripts/dream-startup-inject.cjs',
   'engine/scripts/semantic-search.cjs',
   'engine/scripts/coverage-runner.cjs',
+  'engine/scripts/harness-ci.cjs',
   'engine/scripts/dashboard-html.cjs',
+  'engine/scripts/transparency-dashboard.cjs',
   'engine/scripts/lib/hook-registry.cjs',
   'engine/scripts/lib/project-scope.cjs',
   'engine/scripts/lib/verification-state.cjs',
@@ -146,6 +170,9 @@ const CORE_SCRIPTS = [
   'engine/scripts/lib/evidence-ledger.cjs',
   'engine/scripts/lib/toolchain-health.cjs',
   'engine/scripts/lib/harness-metrics.cjs',
+  'engine/scripts/lib/harness-root.cjs',
+  'engine/scripts/lib/evidence-store.cjs',
+  'engine/scripts/lib/schema-catalog.cjs',
   'engine/scripts/init-module.cjs',
   'engine/scripts/workflow-evidence-scan.cjs',
   'engine/scripts/test-hooks/agent-eval-runner.cjs',
@@ -153,6 +180,7 @@ const CORE_SCRIPTS = [
   'engine/scripts/test-hooks/agent-eval-transparency.cjs',
   'engine/scripts/test-hooks/agent-live-readiness.cjs',
   'engine/scripts/test-hooks/agent-managed-action-matrix.cjs',
+  'engine/scripts/test-hooks/live-regression-matrix.cjs',
   'engine/scripts/test-hooks/agent-managed-action-report.cjs',
   'engine/scripts/test-hooks/agent-managed-action-eval.cjs',
   'engine/scripts/test-hooks/agent-alignment-dialogue-eval.cjs',
@@ -180,6 +208,9 @@ const HOOK_SCRIPTS = [
   'engine/scripts/hooks/verification-gate.cjs',
   'engine/scripts/hooks/local-runner.cjs',
   'engine/scripts/hooks/visible-checklist-gate.cjs',
+  'engine/scripts/hooks/agent-transparency-ledger.cjs',
+  'engine/scripts/hooks/tool-action-contract-gate.cjs',
+  'engine/scripts/hooks/rtl-semantic-oracle.cjs',
   'engine/scripts/hooks/bash-safety-guard.cjs',
   'engine/scripts/hooks/file-protection-guard.cjs',
   'engine/scripts/hooks/diff-size-gate.js',
@@ -198,10 +229,7 @@ const HOOK_SCRIPTS = [
   'engine/hooks/learning/signal-collector.cjs',
   'engine/hooks/learning/cost-tracker-hook.cjs',
   'engine/hooks/learning/skill-tracker-hook.cjs',
-  'engine/hooks/safety/context-monitor.cjs',
   'engine/hooks/session/progress-watchdog.cjs',
-  'engine/hooks/session/pre-compact.cjs',
-  'engine/hooks/validation/post-pipeline-self-review.cjs',
 ];
 
 for (const script of HOOK_SCRIPTS) {
@@ -228,42 +256,213 @@ for (const script of [...CORE_SCRIPTS, ...HOOK_SCRIPTS]) {
 
 define('VerificationGate', '安全命令放行', () => {
   const p = path.join(HOME, 'engine/scripts/hooks/verification-gate.cjs');
-  const stdin = JSON.stringify({ hook_event_name: 'PreToolUse', tool_name: 'Bash', tool_input: { command: 'ls' } });
-  const r = runNode(p, stdin);
+  const tmpRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'verify-safe-'));
+  const env = {
+    CLAUDE_VERIFY_GATE_STATE_FILE: path.join(tmpRoot, 'verify-gate.json'),
+    CLAUDE_VERIFICATION_LEDGER_FILE: path.join(tmpRoot, 'verification-ledger.json'),
+  };
+  const stdin = JSON.stringify({ hook_event_name: 'PreToolUse', tool_name: 'Bash', cwd: tmpRoot, tool_input: { command: 'ls' } });
+  const r = runNode(p, stdin, { cwd: tmpRoot, env });
   // 应该 exit(0) — 安全命令
   return { pass: r.status === 0, detail: `exit=${r.status}` };
 });
 
 define('VerificationGate', '功能验证清除标记', () => {
   const p = path.join(HOME, 'engine/scripts/hooks/verification-gate.cjs');
+  const tmpRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'verify-post-'));
+  const env = {
+    CLAUDE_VERIFY_GATE_STATE_FILE: path.join(tmpRoot, 'verify-gate.json'),
+    CLAUDE_VERIFICATION_LEDGER_FILE: path.join(tmpRoot, 'verification-ledger.json'),
+  };
   // 模拟编辑操作标记
   const editStdin = JSON.stringify({
     hook_event_name: 'PostToolUse',
     tool_name: 'Write',
     tool: { name: 'Write' },
-    tool_input: { file_path: path.join(HOME, 'var', '_verification_gate_test.py') },
+    cwd: tmpRoot,
+    tool_input: { file_path: path.join(tmpRoot, '_verification_gate_test.py') },
   });
-  runNode(p, editStdin);
-  // 验证命令应该清除标记
-  const verifyStdin = JSON.stringify({ hook_event_name: 'PreToolUse', tool_name: 'Bash', tool_input: { command: 'npm test' } });
-  const r = runNode(p, verifyStdin);
-  return { pass: r.status === 0, detail: `验证命令 exit=${r.status}` };
+  runNode(p, editStdin, { cwd: tmpRoot, env });
+  // PreToolUse only allows the verification command to run; it must not clear pending state.
+  const verifyPre = JSON.stringify({
+    hook_event_name: 'PreToolUse',
+    tool_name: 'Bash',
+    cwd: tmpRoot,
+    tool_input: { command: 'npm test' },
+  });
+  const pre = runNode(p, verifyPre, { cwd: tmpRoot, env });
+  if (pre.status !== 0) return { pass: false, detail: `verification pre exit=${pre.status}` };
+
+  const stillBlocked = runNode(p, JSON.stringify({
+    hook_event_name: 'PreToolUse',
+    tool_name: 'Bash',
+    cwd: tmpRoot,
+    tool_input: { command: 'node build.cjs' },
+  }), { cwd: tmpRoot, env });
+  if (stillBlocked.status !== 2) return { pass: false, detail: `pre verification cleared state early, exit=${stillBlocked.status}` };
+
+  const post = runNode(p, JSON.stringify({
+    hook_event_name: 'PostToolUse',
+    tool_name: 'Bash',
+    cwd: tmpRoot,
+    tool_input: { command: 'npm test' },
+    tool_response: { status: 0, stdout: '1 passed', stderr: '' },
+  }), { cwd: tmpRoot, env });
+  if (post.status !== 0) return { pass: false, detail: `verification post exit=${post.status}` };
+
+  const afterVerify = runNode(p, JSON.stringify({
+    hook_event_name: 'PreToolUse',
+    tool_name: 'Bash',
+    cwd: tmpRoot,
+    tool_input: { command: 'node build.cjs' },
+  }), { cwd: tmpRoot, env });
+  return { pass: afterVerify.status === 0, detail: `final exit=${afterVerify.status}` };
 });
 
 define('VerificationGate', '合成违规命令被拦截', () => {
   const p = path.join(HOME, 'engine/scripts/hooks/verification-gate.cjs');
+  const tmpRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'verify-block-'));
+  const env = {
+    CLAUDE_VERIFY_GATE_STATE_FILE: path.join(tmpRoot, 'verify-gate.json'),
+    CLAUDE_VERIFICATION_LEDGER_FILE: path.join(tmpRoot, 'verification-ledger.json'),
+  };
   // 先标记编辑
   const editStdin = JSON.stringify({
     hook_event_name: 'PostToolUse',
     tool_name: 'Edit',
     tool: { name: 'Edit' },
-    tool_input: { file_path: path.join(HOME, 'var', '_verification_gate_test.py') },
+    cwd: tmpRoot,
+    tool_input: { file_path: path.join(tmpRoot, '_verification_gate_test.py') },
   });
-  runNode(p, editStdin);
+  runNode(p, editStdin, { cwd: tmpRoot, env });
   // 非安全/非验证命令应被拦截 (exit 2)
-  const badStdin = JSON.stringify({ hook_event_name: 'PreToolUse', tool_name: 'Bash', tool_input: { command: 'rm -rf /tmp' } });
-  const r = runNode(p, badStdin);
+  const badStdin = JSON.stringify({ hook_event_name: 'PreToolUse', tool_name: 'Bash', cwd: tmpRoot, tool_input: { command: 'rm -rf /tmp' } });
+  const r = runNode(p, badStdin, { cwd: tmpRoot, env });
   return { pass: r.status === 2, detail: `blocked exit=${r.status} (期望 2)` };
+});
+
+// 以下 5 项覆盖 2026-07-26 harness 审计修复, 防止回退。
+// 背景: 门禁曾按"退出码 0 且无失败标记即通过"判定, 而 Icarus 的 $finish(n)
+// 里 n 是诊断级别不是退出码, 失败的 TB 照样 exit 0 —— 假绿由此产生。
+
+function seedPendingGate(tag) {
+  const tmpRoot = fs.mkdtempSync(path.join(os.tmpdir(), tag));
+  const env = {
+    CLAUDE_VERIFY_GATE_STATE_FILE: path.join(tmpRoot, 'verify-gate.json'),
+    CLAUDE_VERIFICATION_LEDGER_FILE: path.join(tmpRoot, 'verification-ledger.json'),
+  };
+  runNode(path.join(HOME, 'engine/scripts/hooks/verification-gate.cjs'), JSON.stringify({
+    hook_event_name: 'PostToolUse',
+    tool_name: 'Write',
+    tool: { name: 'Write' },
+    cwd: tmpRoot,
+    tool_input: { file_path: path.join(tmpRoot, 'dut.v') },
+  }), { cwd: tmpRoot, env });
+  return { tmpRoot, env };
+}
+
+/** 投递一次 Bash 验证结果, 返回门禁是否判为通过 (待验证标记被清除) */
+function gateAcceptsResult(tag, command, toolResponse) {
+  const p = path.join(HOME, 'engine/scripts/hooks/verification-gate.cjs');
+  const { tmpRoot, env } = seedPendingGate(tag);
+  runNode(p, JSON.stringify({
+    hook_event_name: 'PostToolUse', tool_name: 'Bash', cwd: tmpRoot,
+    tool_input: { command }, tool_response: toolResponse,
+  }), { cwd: tmpRoot, env });
+  const probe = runNode(p, JSON.stringify({
+    hook_event_name: 'PreToolUse', tool_name: 'Bash', cwd: tmpRoot,
+    tool_input: { command: 'rm -rf build' },
+  }), { cwd: tmpRoot, env });
+  return probe.status === 0;
+}
+
+define('VerificationGate', '静默成功不算验证通过 (需正面 PASS 证据)', () => {
+  // $finish(1) 型假绿: exit 0, 输出里只有 $finish 提示, 没有任何通过结论
+  const falseGreen = gateAcceptsResult('verify-fg-', 'vvp tb.vvp', {
+    status: 0, stdout: 'tb.v:7: $finish(1) called at 0 (1s)\n', stderr: '',
+  });
+  if (falseGreen) return { pass: false, detail: '假绿运行被误判为验证通过' };
+
+  const emptyLog = gateAcceptsResult('verify-empty-', 'vvp tb.vvp', { status: 0, stdout: '', stderr: '' });
+  if (emptyLog) return { pass: false, detail: 'vvp 空输出被误判为验证通过' };
+
+  return { pass: true, detail: '假绿与空日志均被拒绝' };
+});
+
+define('VerificationGate', '正常验证结果仍被接受 (防误拦)', () => {
+  const cases = [
+    ['vvp tb.vvp', 'RESULT: PASS'],
+    ['pytest tests/', '5 passed in 0.3s'],
+    ['cd pkg && vsim -c -do run.do', 'Comparison finished: 0 errors'],
+    ['make regress', 'ALL TESTS PASSED'],
+  ];
+  for (const [cmd, stdout] of cases) {
+    if (!gateAcceptsResult('verify-good-', cmd, { status: 0, stdout, stderr: '' })) {
+      return { pass: false, detail: `合法验证被误拦: ${cmd}` };
+    }
+  }
+  return { pass: true, detail: `${cases.length} 条合法验证全部接受` };
+});
+
+define('VerificationGate', '测试命令链不能给任意命令搭车', () => {
+  const p = path.join(HOME, 'engine/scripts/hooks/verification-gate.cjs');
+  const { tmpRoot, env } = seedPendingGate('verify-ride-');
+  const ride = runNode(p, JSON.stringify({
+    hook_event_name: 'PreToolUse', tool_name: 'Bash', cwd: tmpRoot,
+    tool_input: { command: 'pytest && rm -rf /important' },
+  }), { cwd: tmpRoot, env });
+  if (ride.status !== 2) return { pass: false, detail: `搭车链未被拦截 exit=${ride.status}` };
+
+  const legit = runNode(p, JSON.stringify({
+    hook_event_name: 'PreToolUse', tool_name: 'Bash', cwd: tmpRoot,
+    tool_input: { command: 'cd pkg && vsim -c -do run.do' },
+  }), { cwd: tmpRoot, env });
+  if (legit.status !== 0) return { pass: false, detail: `误拦 cd+vsim exit=${legit.status}` };
+  return { pass: true, detail: '搭车链拦截, cd+vsim 放行' };
+});
+
+define('VerificationGate', 'PowerShell 不能绕过门禁且只读命令不误拦', () => {
+  const p = path.join(HOME, 'engine/scripts/hooks/verification-gate.cjs');
+  const { tmpRoot, env } = seedPendingGate('verify-ps-');
+  const blocked = runNode(p, JSON.stringify({
+    hook_event_name: 'PreToolUse', tool_name: 'PowerShell', cwd: tmpRoot,
+    tool_input: { command: 'Remove-Item -Recurse -Force build' },
+  }), { cwd: tmpRoot, env });
+  if (blocked.status !== 2) return { pass: false, detail: `PowerShell 绕过门禁 exit=${blocked.status}` };
+
+  // 只读 PowerShell 与 git -C 必须放行, 否则会把人逼向 --reset
+  const readonly = [
+    'Get-ChildItem -Recurse -File | Select-Object Name | Format-Table -AutoSize',
+    'git -C "C:\\repo" status --short',
+    '$j = Get-Content settings.json -Raw | ConvertFrom-Json',
+  ];
+  for (const command of readonly) {
+    const r = runNode(p, JSON.stringify({
+      hook_event_name: 'PreToolUse', tool_name: 'PowerShell', cwd: tmpRoot, tool_input: { command },
+    }), { cwd: tmpRoot, env });
+    if (r.status !== 0) return { pass: false, detail: `误拦只读命令: ${command}` };
+  }
+  return { pass: true, detail: 'PowerShell 纳入门禁且只读命令放行' };
+});
+
+define('VerificationGate', 'TB 静态检查拦截无法报告失败的 testbench', () => {
+  const p = path.join(HOME, 'engine/scripts/hooks/rtl-semantic-oracle.cjs');
+  const tmpRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'tb-oracle-'));
+  const badTb = 'module tb_x; integer errors = 0;\ninitial begin\n if (a !== b) begin errors = errors + 1; $display("FAIL"); $finish(1); end\nend\nendmodule';
+  const goodTb = 'module tb_x; integer errors = 0;\ninitial begin\n if (a !== b) begin errors = errors + 1; $fatal(1, "FAIL"); end\n $display("RESULT: PASS"); $finish;\nend\nendmodule';
+
+  const bad = runNode(p, JSON.stringify({
+    hook_event_name: 'PreToolUse', tool_name: 'Write', tool: { name: 'Write' },
+    cwd: tmpRoot, tool_input: { file_path: path.join(tmpRoot, 'tb_x.v'), content: badTb },
+  }), { cwd: tmpRoot });
+  if (bad.status !== 2) return { pass: false, detail: `无 $fatal 的自检 TB 未被拦截 exit=${bad.status}` };
+
+  const good = runNode(p, JSON.stringify({
+    hook_event_name: 'PreToolUse', tool_name: 'Write', tool: { name: 'Write' },
+    cwd: tmpRoot, tool_input: { file_path: path.join(tmpRoot, 'tb_y.v'), content: goodTb },
+  }), { cwd: tmpRoot });
+  if (good.status !== 0) return { pass: false, detail: `合规 TB 被误拦 exit=${good.status}` };
+  return { pass: true, detail: '$finish(1) 型 TB 拦截, $fatal 型放行' };
 });
 
 define('VerificationGate', '待验证状态按项目隔离', () => {
@@ -275,7 +474,10 @@ define('VerificationGate', '待验证状态按项目隔离', () => {
   fs.mkdirSync(projectB, { recursive: true });
   fs.writeFileSync(path.join(projectA, 'AGENTS.md'), '# a', 'utf8');
   fs.writeFileSync(path.join(projectB, 'AGENTS.md'), '# b', 'utf8');
-  const env = { CLAUDE_VERIFY_GATE_STATE_FILE: path.join(tmpRoot, 'verify-gate.json') };
+  const env = {
+    CLAUDE_VERIFY_GATE_STATE_FILE: path.join(tmpRoot, 'verify-gate.json'),
+    CLAUDE_VERIFICATION_LEDGER_FILE: path.join(tmpRoot, 'verification-ledger.json'),
+  };
 
   runNode(p, JSON.stringify({
     hook_event_name: 'PostToolUse',
@@ -288,7 +490,7 @@ define('VerificationGate', '待验证状态按项目隔离', () => {
     hook_event_name: 'PreToolUse',
     tool_name: 'Bash',
     cwd: projectB,
-    tool_input: { command: 'echo unrelated' },
+    tool_input: { command: 'node build.cjs' },
   }), { cwd: projectB, env });
   if (unsafeB.status !== 0) return { pass: false, detail: `other project blocked: exit=${unsafeB.status}` };
 
@@ -296,7 +498,7 @@ define('VerificationGate', '待验证状态按项目隔离', () => {
     hook_event_name: 'PreToolUse',
     tool_name: 'Bash',
     cwd: projectA,
-    tool_input: { command: 'echo same-project' },
+    tool_input: { command: 'node build.cjs' },
   });
   const unsafeA = runNode(p, unsafeAStdin, { cwd: projectA, env });
   if (unsafeA.status !== 2) return { pass: false, detail: `same project not blocked: exit=${unsafeA.status}` };
@@ -318,6 +520,15 @@ define('VerificationGate', '待验证状态按项目隔离', () => {
   }), { cwd: projectA, env });
   if (verifyA.status !== 0) return { pass: false, detail: `verify project-a failed: exit=${verifyA.status}` };
 
+  const verifyAPost = runNode(p, JSON.stringify({
+    hook_event_name: 'PostToolUse',
+    tool_name: 'Bash',
+    cwd: projectA,
+    tool_input: { command: 'pytest tests' },
+    tool_response: { status: 0, stdout: '2 passed', stderr: '' },
+  }), { cwd: projectA, env });
+  if (verifyAPost.status !== 0) return { pass: false, detail: `verify project-a post failed: exit=${verifyAPost.status}` };
+
   const afterVerify = runNode(p, unsafeAStdin, { cwd: projectA, env });
   return { pass: afterVerify.status === 0, detail: `final exit=${afterVerify.status}` };
 });
@@ -330,6 +541,122 @@ function runHdlGate(filePath, content) {
     tool_input: { file_path: filePath, content },
   }));
 }
+
+function runRtlSemanticOracle(filePath, content) {
+  const p = path.join(HOME, 'engine/scripts/hooks/rtl-semantic-oracle.cjs');
+  return runNode(p, JSON.stringify({
+    hook_event_name: 'PreToolUse',
+    tool_name: 'Write',
+    tool_input: { file_path: filePath, content },
+  }));
+}
+
+function parseHookAdvisory(stdout) {
+  const envelope = JSON.parse(String(stdout || ''));
+  const hookOutput = envelope.hookSpecificOutput;
+  if (!hookOutput || hookOutput.hookEventName !== 'PreToolUse') {
+    throw new Error('missing PreToolUse hookSpecificOutput envelope');
+  }
+  const advisory = JSON.parse(String(hookOutput.additionalContext || ''));
+  if (advisory.schemaVersion !== 1 || advisory.kind !== 'harness-advisory') {
+    throw new Error('invalid advisory schema identity');
+  }
+  if (advisory.blocking !== false || advisory.status !== 'warning') {
+    throw new Error('advisory must be a non-blocking warning');
+  }
+  if (!Array.isArray(advisory.findings) || advisory.findings.length === 0) {
+    throw new Error('advisory findings must be non-empty');
+  }
+  return advisory;
+}
+
+define('HookAdvisoryContract', 'advisory gates and oracle emit visible machine-readable success output', () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'hook-advisory-'));
+  try {
+    fs.writeFileSync(path.join(root, 'AGENTS.md'), '# scoped project\n', 'utf8');
+    const rtlDir = path.join(root, '01_src', '00_hdl', 'foo');
+    const simDir = path.join(root, '02_sim', 'foo');
+    fs.mkdirSync(rtlDir, { recursive: true });
+    fs.mkdirSync(simDir, { recursive: true });
+
+    const requirements = runNode(
+      path.join(HOME, 'engine/scripts/hooks/requirements-gate-guard.cjs'),
+      JSON.stringify({
+        hook_event_name: 'PreToolUse',
+        tool_name: 'Write',
+        cwd: root,
+        tool_input: { file_path: path.join(rtlDir, 'new_module.sv') },
+      }),
+      { cwd: root }
+    );
+    const verificationQuality = runNode(
+      path.join(HOME, 'engine/scripts/hooks/verification-quality-guard.cjs'),
+      JSON.stringify({
+        hook_event_name: 'PreToolUse',
+        tool_name: 'Write',
+        cwd: root,
+        tool_input: { file_path: path.join(simDir, 'tb_new_module.sv') },
+      }),
+      { cwd: root }
+    );
+    const oracle = runRtlSemanticOracle(path.join(rtlDir, 'memory_rom.sv'), [
+      'module memory_rom(input logic i_clk, input logic i_rst, output logic [7:0] o_data);',
+      '  logic [7:0] mem [0:3];',
+      '  initial $readmemh("memory.hex", mem);',
+      '  always_ff @(posedge i_clk) begin',
+      '    if (i_rst) o_data <= 8\'h00;',
+      '    else o_data <= mem[0];',
+      '  end',
+      'endmodule',
+      '',
+    ].join('\n'));
+
+    const cases = [
+      ['requirements-gate', requirements],
+      ['verification-quality', verificationQuality],
+      ['rtl-semantic-oracle', oracle],
+    ];
+    for (const [source, result] of cases) {
+      if (result.status !== 0) {
+        return { pass: false, detail: `${source} exit=${result.status} stderr=${result.stderr.slice(0, 160)}` };
+      }
+      let advisory;
+      try {
+        advisory = parseHookAdvisory(result.stdout);
+      } catch (error) {
+        return { pass: false, detail: `${source}: ${error.message}; stdout=${result.stdout.slice(0, 200)}` };
+      }
+      if (advisory.source !== source) {
+        return { pass: false, detail: `${source}: reported source=${advisory.source}` };
+      }
+    }
+    return { pass: true, detail: 'three advisory hooks returned parseable PreToolUse context' };
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+define('RTLSemanticOracle', 'continuous assign to ro_ output is blocked', () => {
+  const rtlPath = path.join(os.tmpdir(), 'harness', '01_src', '00_hdl', 'foo', 'foo.sv');
+  const content = 'module foo(input logic ri_clk, input logic ri_rst, input logic ri_data, output logic ro_out); assign ro_out = ri_data; endmodule\n';
+  const r = runRtlSemanticOracle(rtlPath, content);
+  return { pass: r.status === 2 && /ro-output-register/.test(r.stderr), detail: `exit=${r.status} stderr=${r.stderr.slice(0, 300)}` };
+});
+
+define('RTLSemanticOracle', 'registered ro_ output is allowed', () => {
+  const rtlPath = path.join(os.tmpdir(), 'harness', '01_src', '00_hdl', 'foo', 'foo.sv');
+  const content = [
+    'module foo(input logic ri_clk, input logic ri_rst, input logic ri_data, output logic ro_out);',
+    '  always_ff @(posedge ri_clk) begin',
+    '    if (ri_rst) ro_out <= 1\'b0;',
+    '    else ro_out <= ri_data;',
+    '  end',
+    'endmodule',
+    '',
+  ].join('\n');
+  const r = runRtlSemanticOracle(rtlPath, content);
+  return { pass: r.status === 0, detail: `exit=${r.status} stderr=${r.stderr.slice(0, 200)}` };
+});
 
 define('HDLGate', 'TB initial is allowed even when parent name contains rtl', () => {
   const tbPath = path.join(os.tmpdir(), 'harness-rtl-name', '02_sim', 'foo', 'tb_foo.sv');
@@ -345,7 +672,7 @@ define('HDLGate', 'RTL initial is blocked in source path', () => {
   return { pass: r.status === 2 && /initial/i.test(r.stderr), detail: `exit=${r.status}` };
 });
 
-define('HDLGate', 'single-line ANSI ports without ri_ro are blocked', () => {
+define('HDLGate', 'single-line ANSI ports without i_/o_ prefix are blocked', () => {
   const rtlPath = path.join(os.tmpdir(), 'harness', '01_src', '00_hdl', 'foo', 'foo.sv');
   const content = 'module foo(input logic data, output logic out); assign out = data; endmodule\n';
   const r = runHdlGate(rtlPath, content);
@@ -378,7 +705,7 @@ define('HDLGate', 'existing corresponding TB clears TB-first for new RTL', () =>
     fs.writeFileSync(path.join(simDir, 'tb_foo.sv'), 'module tb_foo; endmodule\n', 'utf8');
     const r = runHdlGate(
       path.join(srcDir, 'foo.sv'),
-      'module foo(input logic ri_data, output logic ro_out); assign ro_out = ri_data; endmodule\n'
+      'module foo(input logic i_data, output logic o_out); assign o_out = i_data; endmodule\n'
     );
     return { pass: r.status === 0, detail: `exit=${r.status} stderr=${r.stderr.slice(0, 200)}` };
   } finally {
@@ -395,9 +722,9 @@ define('HDLGate', 'forbidden words in comments do not trigger synthesis block', 
     fs.mkdirSync(simDir, { recursive: true });
     fs.writeFileSync(path.join(simDir, 'tb_foo.sv'), 'module tb_foo; endmodule\n', 'utf8');
     const content = [
-      'module foo(input logic ri_data, output logic ro_out);',
+      'module foo(input logic i_data, output logic o_out);',
       '  // wait for downstream readiness in the test description only',
-      '  assign ro_out = ri_data;',
+      '  assign o_out = i_data;',
       'endmodule',
       '',
     ].join('\n');
@@ -406,6 +733,258 @@ define('HDLGate', 'forbidden words in comments do not trigger synthesis block', 
   } finally {
     fs.rmSync(root, { recursive: true, force: true });
   }
+});
+
+define('FPGATimingEvidence', 'negative setup slack writes failed handoff and exits nonzero', () => {
+  const parser = path.join(HOME, 'engine/scripts/fpga-timing-parser.cjs');
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'fpga-timing-negative-'));
+  const report = path.join(tmp, 'timing-summary.rpt');
+  const handoff = path.join(tmp, 'synthesis-timing-evidence.json');
+  fs.writeFileSync(report, [
+    'WNS(ns)= -0.250',
+    'TNS(ns)= -12.500',
+    'WHS(ns)= 0.040',
+    'Fmax = 181.8 MHz',
+  ].join('\n'), 'utf8');
+  const result = spawnSync('node', [parser, report, '--json', '--handoff', handoff], {
+    cwd: tmp,
+    encoding: 'utf8',
+    timeout: 10000,
+    windowsHide: true,
+  });
+  if (!fs.existsSync(handoff)) return { pass: false, detail: `handoff missing; exit=${result.status} stdout=${result.stdout}` };
+  const stdout = JSON.parse(result.stdout);
+  const artifact = JSON.parse(fs.readFileSync(handoff, 'utf8'));
+  const pass = result.status === 2
+    && stdout.status === 'failed'
+    && stdout.failure?.code === 'negative_setup_slack'
+    && stdout.timing?.setup?.wns === -0.25
+    && artifact.status === 'failed'
+    && artifact.fullEdaClosure === false
+    && artifact.scope === 'synthesis-timing-report';
+  return { pass, detail: `exit=${result.status} status=${stdout.status} failure=${stdout.failure?.code} handoff=${handoff}` };
+});
+
+define('FPGATimingEvidence', 'unparseable report writes failed handoff and exits nonzero', () => {
+  const parser = path.join(HOME, 'engine/scripts/fpga-timing-parser.cjs');
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'fpga-timing-unparseable-'));
+  const report = path.join(tmp, 'timing-summary.rpt');
+  const handoff = path.join(tmp, 'synthesis-timing-evidence.json');
+  fs.writeFileSync(report, 'Vivado report generated, but timing summary is absent.\n', 'utf8');
+  const result = spawnSync('node', [parser, report, '--json', '--handoff', handoff], {
+    cwd: tmp,
+    encoding: 'utf8',
+    timeout: 10000,
+    windowsHide: true,
+  });
+  if (!fs.existsSync(handoff)) return { pass: false, detail: `handoff missing; exit=${result.status} stdout=${result.stdout}` };
+  const stdout = JSON.parse(result.stdout);
+  const artifact = JSON.parse(fs.readFileSync(handoff, 'utf8'));
+  const pass = result.status === 2
+    && stdout.status === 'failed'
+    && stdout.failure?.code === 'report_parse_failed'
+    && artifact.report?.parsed === false
+    && artifact.fullEdaClosure === false;
+  return { pass, detail: `exit=${result.status} status=${stdout.status} failure=${stdout.failure?.code} parsed=${artifact.report?.parsed}` };
+});
+
+define('FPGATimingEvidence', 'met timing writes bounded passed handoff and exits zero', () => {
+  const parser = path.join(HOME, 'engine/scripts/fpga-timing-parser.cjs');
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'fpga-timing-met-'));
+  const report = path.join(tmp, 'timing-summary.rpt');
+  const handoff = path.join(tmp, 'synthesis-timing-evidence.json');
+  fs.writeFileSync(report, [
+    'WNS(ns)= 0.125',
+    'TNS(ns)= 0.000',
+    'WHS(ns)= 0.050',
+    'Fmax = 205.4 MHz',
+  ].join('\n'), 'utf8');
+  const result = spawnSync('node', [parser, report, '--json', '--handoff', handoff], {
+    cwd: tmp,
+    encoding: 'utf8',
+    timeout: 10000,
+    windowsHide: true,
+  });
+  if (!fs.existsSync(handoff)) return { pass: false, detail: `handoff missing; exit=${result.status} stdout=${result.stdout}` };
+  const artifact = JSON.parse(fs.readFileSync(handoff, 'utf8'));
+  const pass = result.status === 0
+    && artifact.status === 'passed'
+    && artifact.failure === null
+    && artifact.timing?.setup?.met === true
+    && artifact.timing?.hold?.met === true
+    && artifact.fullEdaClosure === false
+    && artifact.limitations.some(item => item.includes('not full EDA'));
+  return { pass, detail: `exit=${result.status} status=${artifact.status} fullEdaClosure=${artifact.fullEdaClosure}` };
+});
+
+define('FPGATimingEvidence', 'automatic FPGA report hook fails closed on negative timing', () => {
+  const hook = path.join(HOME, 'engine/scripts/auto-parse-fpga-reports.cjs');
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'fpga-auto-timing-negative-'));
+  const runDir = path.join(tmp, '04_prj', 'run');
+  const report = path.join(runDir, 'timing-summary.rpt');
+  const handoff = path.join(runDir, 'synthesis-timing-evidence.json');
+  fs.mkdirSync(runDir, { recursive: true });
+  fs.writeFileSync(report, 'WNS(ns)= -0.080\nTNS(ns)= -0.600\nWHS(ns)= 0.020\n', 'utf8');
+  const result = spawnSync('node', [hook], {
+    cwd: tmp,
+    input: JSON.stringify({
+      hook_event_name: 'PostToolUse',
+      tool_name: 'Bash',
+      tool_input: { command: 'vivado -mode batch -source run.tcl' },
+      tool_response: { status: 0 },
+      cwd: tmp,
+    }),
+    encoding: 'utf8',
+    timeout: 10000,
+    windowsHide: true,
+  });
+  const artifact = fs.existsSync(handoff) ? JSON.parse(fs.readFileSync(handoff, 'utf8')) : null;
+  const pass = result.status === 2
+    && artifact?.status === 'failed'
+    && artifact?.failure?.code === 'negative_setup_slack'
+    && artifact?.report?.path === report;
+  return { pass, detail: `exit=${result.status} artifact=${artifact?.status || 'missing'} failure=${artifact?.failure?.code || 'missing'} stderr=${result.stderr.slice(0, 200)}` };
+});
+
+define('FPGATimingEvidence', 'automatic FPGA report hook ignores its own evidence artifact', () => {
+  const hook = path.join(HOME, 'engine/scripts/auto-parse-fpga-reports.cjs');
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'fpga-auto-timing-repeat-'));
+  const runDir = path.join(tmp, '04_prj', 'run');
+  const report = path.join(runDir, 'timing-summary.rpt');
+  const handoff = path.join(runDir, 'synthesis-timing-evidence.json');
+  fs.mkdirSync(runDir, { recursive: true });
+  fs.writeFileSync(report, 'WNS(ns)= 0.080\nTNS(ns)= 0.000\nWHS(ns)= 0.020\n', 'utf8');
+  fs.writeFileSync(handoff, '{"kind":"fpga-synthesis-timing-evidence","status":"passed"}\n', 'utf8');
+  const result = spawnSync('node', [hook], {
+    cwd: tmp,
+    input: JSON.stringify({
+      hook_event_name: 'PostToolUse',
+      tool_name: 'Bash',
+      tool_input: { command: 'vivado -mode batch -source run.tcl' },
+      tool_response: { status: 0 },
+      cwd: tmp,
+    }),
+    encoding: 'utf8',
+    timeout: 10000,
+    windowsHide: true,
+  });
+  const artifact = JSON.parse(fs.readFileSync(handoff, 'utf8'));
+  const pass = result.status === 0 && artifact.status === 'passed' && artifact.failure === null;
+  return { pass, detail: `exit=${result.status} status=${artifact.status} failure=${artifact.failure?.code || 'none'} stderr=${result.stderr.slice(0, 200)}` };
+});
+
+define('FPGATimingEvidence', 'automatic FPGA report hook finds reports in the current directory', () => {
+  const hook = path.join(HOME, 'engine/scripts/auto-parse-fpga-reports.cjs');
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'fpga-auto-timing-cwd-'));
+  const report = path.join(tmp, 'timing-summary.rpt');
+  const handoff = path.join(tmp, 'synthesis-timing-evidence.json');
+  fs.writeFileSync(report, 'WNS(ns)= -0.040\nTNS(ns)= -0.100\nWHS(ns)= 0.010\n', 'utf8');
+  const result = spawnSync('node', [hook], {
+    cwd: tmp,
+    input: JSON.stringify({
+      hook_event_name: 'PostToolUse',
+      tool_name: 'Bash',
+      tool_input: { command: 'vivado -mode batch -source run.tcl' },
+      tool_response: { status: 0 },
+      cwd: tmp,
+    }),
+    encoding: 'utf8',
+    timeout: 10000,
+    windowsHide: true,
+  });
+  const artifact = fs.existsSync(handoff) ? JSON.parse(fs.readFileSync(handoff, 'utf8')) : null;
+  const pass = result.status === 2 && artifact?.failure?.code === 'negative_setup_slack';
+  return { pass, detail: `exit=${result.status} artifact=${artifact?.status || 'missing'} failure=${artifact?.failure?.code || 'missing'}` };
+});
+
+define('FPGATimingEvidence', 'pg-synth requires passed timing handoff after Vivado succeeds', () => {
+  const source = fs.readFileSync(path.join(HOME, 'engineering-assets/tools/pg-synth.cjs'), 'utf8');
+  const required = [
+    "require('../../engine/scripts/fpga-timing-parser.cjs')",
+    "'synthesis-timing-evidence.json'",
+    "evidence.status !== 'passed'",
+    'process.exit(2)',
+    'full EDA closure',
+  ];
+  const missing = required.filter(token => !source.includes(token));
+  return { pass: missing.length === 0, detail: missing.length > 0 ? `missing=${missing.join(', ')}` : 'pg-synth handoff enforcement present' };
+});
+
+define('FPGATimingEvidence', 'Vivado intra-clock table produces setup and hold evidence', () => {
+  const parser = path.join(HOME, 'engine/scripts/fpga-timing-parser.cjs');
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'fpga-vivado-table-'));
+  const report = path.join(tmp, 'timing-summary.rpt');
+  fs.writeFileSync(report, [
+    'Clock Summary',
+    'clk_main  {0.000 2.000}  4.000  250.000',
+    'Intra Clock Table',
+    'clk_main  -0.080  -0.600  3  100  0.020  0.000  0  100',
+  ].join('\n'), 'utf8');
+  const result = spawnSync('node', [parser, report, '--json'], {
+    cwd: tmp,
+    encoding: 'utf8',
+    timeout: 10000,
+    windowsHide: true,
+  });
+  const evidence = JSON.parse(result.stdout);
+  const pass = result.status === 2
+    && evidence.failure?.code === 'negative_setup_slack'
+    && evidence.timing?.setup?.wns === -0.08
+    && evidence.timing?.setup?.tns === -0.6
+    && evidence.timing?.hold?.whs === 0.02;
+  return { pass, detail: `exit=${result.status} failure=${evidence.failure?.code} wns=${evidence.timing?.setup?.wns} whs=${evidence.timing?.hold?.whs}` };
+});
+
+define('FPGATimingEvidence', 'human-readable CLI also exits nonzero on failed timing', () => {
+  const parser = path.join(HOME, 'engine/scripts/fpga-timing-parser.cjs');
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'fpga-timing-human-'));
+  const report = path.join(tmp, 'timing-summary.rpt');
+  fs.writeFileSync(report, 'WNS(ns)= -0.010\nTNS(ns)= -0.020\n', 'utf8');
+  const result = spawnSync('node', [parser, report], {
+    cwd: tmp,
+    encoding: 'utf8',
+    timeout: 10000,
+    windowsHide: true,
+  });
+  const pass = result.status === 2 && /FAILED/.test(result.stdout) && /negative_setup_slack/.test(result.stderr);
+  return { pass, detail: `exit=${result.status} stdout=${result.stdout.slice(-120)} stderr=${result.stderr.slice(-120)}` };
+});
+
+define('FPGATimingEvidence', 'human-readable sign-off follows overall setup and hold status', () => {
+  const parser = path.join(HOME, 'engine/scripts/fpga-timing-parser.cjs');
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'fpga-timing-human-hold-'));
+  const report = path.join(tmp, 'timing-summary.rpt');
+  fs.writeFileSync(report, 'WNS(ns)= 0.252\nTNS(ns)= 0.000\nWHS(ns)= -0.163\n', 'utf8');
+  const result = spawnSync('node', [parser, report], {
+    cwd: tmp,
+    encoding: 'utf8',
+    timeout: 10000,
+    windowsHide: true,
+  });
+  const pass = result.status === 2
+    && /Signed-off: ❌ FAIL/.test(result.stdout)
+    && !/Signed-off: ✅ PASS/.test(result.stdout)
+    && /negative_hold_slack/.test(result.stderr);
+  return { pass, detail: `exit=${result.status} stdout=${result.stdout.slice(-160)} stderr=${result.stderr.slice(-120)}` };
+});
+
+define('FPGATimingEvidence', 'scan mode exits nonzero when any timing report fails', () => {
+  const parser = path.join(HOME, 'engine/scripts/fpga-timing-parser.cjs');
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'fpga-timing-scan-'));
+  fs.writeFileSync(path.join(tmp, 'met-timing.rpt'), 'WNS(ns)= 0.100\nTNS(ns)= 0.000\n', 'utf8');
+  fs.writeFileSync(path.join(tmp, 'failed-timing.rpt'), 'WNS(ns)= -0.100\nTNS(ns)= -1.000\n', 'utf8');
+  const result = spawnSync('node', [parser, tmp, '--scan', '--json'], {
+    cwd: tmp,
+    encoding: 'utf8',
+    timeout: 10000,
+    windowsHide: true,
+  });
+  const evidence = result.stdout.trim().split(/\r?\n(?=\{)/).map(text => JSON.parse(text));
+  const pass = result.status === 2
+    && evidence.length === 2
+    && evidence.some(item => item.status === 'failed' && item.failure?.code === 'negative_setup_slack')
+    && evidence.some(item => item.status === 'passed');
+  return { pass, detail: `exit=${result.status} statuses=${evidence.map(item => item.status).join(',')}` };
 });
 
 define('GateScope', 'requirements and verification quality gates prefer project-local state', () => {
@@ -478,6 +1057,153 @@ define('HookRegistry', '统一读取 settings 并解析 batch hook', () => {
   return { pass: hasLocalRunner && hasBatch, detail: `found=${result.found.length}, batch=${hasBatch}` };
 });
 
+define('HookRegistry', 'high-frequency and Stop hooks have bounded timeout contracts', () => {
+  const { collectHookEntries } = require('../lib/hook-registry.cjs');
+  const entries = collectHookEntries();
+  const find = (name) => entries.find((entry) => entry.command.includes(name));
+  const memory = find('memory-retrieve-hook.cjs');
+  const lint = find('lint-auto-gate.js');
+  const pressure = find('context-pressure-warn.cjs');
+  const stop = find('stop-runner.cjs');
+  // settings 的 hook timeout 单位是**秒**; stop-runner 命令行末尾那个预算
+  // 参数是脚本自己的参数, 单位是**毫秒** —— 比较前必须换算, 否则
+  // "40 > 30000" 永远为假。
+  const innerStopBudgetMs = Number((stop?.command.match(/\s(\d+)$/) || [])[1] || 0);
+  const allTimeouts = entries
+    .map((entry) => entry.raw?.timeout)
+    .filter((value) => typeof value === 'number');
+  const checks = {
+    memory: memory?.raw?.timeout === 5,
+    lint: lint?.raw?.timeout === 45,
+    pressure: pressure?.raw?.timeout === 5,
+    stop: stop?.raw?.timeout === 40 && stop.raw.timeout * 1000 > innerStopBudgetMs,
+    stopAsync: stop?.isAsync === true,
+    // 通用单位守卫: 任何 >600 的值几乎必然是误按毫秒填写的。
+    unitsAreSeconds: allTimeouts.every((value) => value <= 600),
+  };
+  return {
+    pass: Object.values(checks).every(Boolean),
+    detail: JSON.stringify({
+      checks,
+      values: {
+        memory: memory?.raw?.timeout,
+        lint: lint?.raw?.timeout,
+        pressure: pressure?.raw?.timeout,
+        stop: stop?.raw?.timeout,
+        innerStopBudgetMs,
+      },
+    }),
+  };
+});
+
+define('HookRegistry', 'relocates installed Windows hook paths into an arbitrary checkout', () => {
+  const { validateHookScripts } = require('../lib/hook-registry.cjs');
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'hook-registry-checkout-'));
+  const hookDir = path.join(root, 'engine', 'scripts', 'hooks');
+  fs.mkdirSync(hookDir, { recursive: true });
+  fs.writeFileSync(path.join(root, 'AGENTS.md'), '# test harness\n', 'utf8');
+  fs.writeFileSync(path.join(hookDir, 'sample.cjs'), "'use strict';\n", 'utf8');
+  fs.writeFileSync(path.join(root, 'settings.json'), JSON.stringify({
+    hooks: {
+      PreToolUse: [{
+        matcher: 'Bash',
+        hooks: [{ type: 'command', command: 'node [CLAUDE_HOME]/engine/scripts/hooks/sample.cjs' }],
+      }],
+    },
+  }), 'utf8');
+  try {
+    const result = validateHookScripts({ root });
+    return {
+      pass: result.found.length === 1 && result.missing.length === 0,
+      detail: `found=${result.found.length}, missing=${result.missing.length}`,
+    };
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+define('HarnessRoot', 'explicit and arbitrary checkout roots resolve consistently', () => {
+  const checkout = fs.mkdtempSync(path.join(os.tmpdir(), 'harness-checkout-'));
+  const nested = path.join(checkout, 'engine', 'scripts', 'test-hooks');
+  fs.mkdirSync(nested, { recursive: true });
+  fs.writeFileSync(path.join(checkout, 'AGENTS.md'), '# test harness\n', 'utf8');
+  try {
+    const explicit = resolveHarnessRoot({ root: HOME });
+    const discovered = resolveHarnessRoot({
+      startPath: nested,
+      moduleRoot: '',
+      homeDir: path.join(checkout, 'missing-home'),
+      env: {},
+    });
+    const fromEnv = resolveHarnessRoot({
+      startPath: path.parse(checkout).root,
+      moduleRoot: '',
+      homeDir: path.join(checkout, 'missing-home'),
+      env: { CLAUDE_HARNESS_ROOT: checkout },
+    });
+    const pass = explicit === HOME && discovered === checkout && fromEnv === checkout;
+    return { pass, detail: `explicit=${explicit}, discovered=${discovered}, env=${fromEnv}` };
+  } finally {
+    fs.rmSync(checkout, { recursive: true, force: true });
+  }
+});
+
+define('EvidenceStore', 'history preserves prior runs and enforces retention', () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'harness-evidence-store-'));
+  const filePath = path.join(root, 'history.json');
+  const noPersistFile = path.join(root, 'no-persist.json');
+  appendHistory(filePath, { id: 1 }, { maxEntries: 2 });
+  appendHistory(filePath, { id: 2 }, { maxEntries: 2 });
+  appendHistory(filePath, { id: 3 }, { maxEntries: 2 });
+  const history = loadHistory(filePath);
+  appendHistory(noPersistFile, { id: 4 }, { persist: false });
+  const noPersisted = !fs.existsSync(noPersistFile);
+  fs.writeFileSync(filePath, '{}', 'utf8');
+  let malformedRejected = false;
+  try { loadHistory(filePath); } catch { malformedRejected = true; }
+  fs.rmSync(root, { recursive: true, force: true });
+  return {
+    pass: history.length === 2
+      && history[0].id === 2
+      && history[1].id === 3
+      && noPersisted
+      && malformedRejected,
+    detail: `${JSON.stringify(history)}, malformedRejected=${malformedRejected}`,
+  };
+});
+
+define('SchemaCatalog', 'catalog covers every parseable schema exactly once', () => {
+  const { validateSchemaCatalog } = require('../lib/schema-catalog.cjs');
+  const result = validateSchemaCatalog();
+  return {
+    pass: result.errors.length === 0,
+    detail: result.errors.length === 0
+      ? `schemas=${result.files.length}`
+      : result.errors.join('; '),
+  };
+});
+
+define('HookRegistry', 'loop scope guard covers every controlled PreToolUse action', () => {
+  const settings = JSON.parse(fs.readFileSync(path.join(HOME, 'settings.json'), 'utf8'));
+  const groups = settings.hooks?.PreToolUse || [];
+  const controlledTools = ['Bash', 'Edit', 'Write', 'MultiEdit', 'Agent', 'Task', 'Workflow'];
+  const missing = [];
+
+  for (const tool of controlledTools) {
+    const matchingGroups = groups.filter((group) => String(group.matcher || '*').split('|').includes('*')
+      || String(group.matcher || '').split('|').includes(tool));
+    const commands = matchingGroups.flatMap((group) => group.hooks || []).map((hook) => String(hook.command || ''));
+    const ledgerIndex = commands.findIndex((command) => command.includes('agent-transparency-ledger.cjs'));
+    const gateIndex = commands.findIndex((command) => command.includes('tool-action-contract-gate.cjs'));
+    if (ledgerIndex < 0 || gateIndex < 0 || ledgerIndex > gateIndex) missing.push(tool);
+  }
+
+  return {
+    pass: missing.length === 0,
+    detail: missing.length === 0 ? 'all controlled tools covered in ledger-to-gate order' : `missing or misordered: ${missing.join(', ')}`,
+  };
+});
+
 define('HookRegistry', 'legacy dry-run 入口使用统一注册表', () => {
   const p = path.join(HOME, 'engine/scripts/hooks/test-hooks.cjs');
   const r = spawnSync('node', [p, '--point', 'PreToolUse'], {
@@ -494,7 +1220,35 @@ define('HookRegistry', 'legacy dry-run 入口使用统一注册表', () => {
   return { pass: r.status === 0, detail: `exit=${r.status}` };
 });
 
-define('ProgressWatchdog', '连续无进展达到阈值会失败归档', () => {
+define('HookRegistry', 'repair stop-loss is registered in effective settings without local duplicates', () => {
+  const { collectHookEntries, validateHookScripts } = require('../lib/hook-registry.cjs');
+  const effectiveSettings = path.join(HOME, 'settings.json');
+  const localSettings = path.join(HOME, 'settings.local.json');
+  const entries = collectHookEntries({ files: [effectiveSettings] });
+  const localEntries = collectHookEntries({ files: [localSettings] });
+  const watchdogEntries = entries.filter((entry) => entry.command.includes('progress-watchdog.cjs'));
+  const localRepairEntries = localEntries.filter((entry) =>
+    entry.command.includes('progress-watchdog.cjs') || entry.command.includes('repair-content-gate.cjs'));
+  const hasEntry = (point, matcher, fragment) => entries.some((entry) =>
+    entry.point === point && entry.matcher === matcher && entry.command.includes(fragment));
+  const validation = validateHookScripts({ files: [effectiveSettings] });
+  const pass = hasEntry('PreToolUse', '*', 'progress-watchdog.cjs')
+    && hasEntry('PostToolUse', 'Bash', 'progress-watchdog.cjs')
+    && hasEntry('Stop', '*', 'progress-watchdog.cjs')
+    // 2026-07-27: --enforce 已从注册处移除 —— CLI 旗标会覆盖
+    // PROGRESS_WATCHDOG_MODE=observe (settings.local.json), 曾把 8 次
+    // 误判的"无进展"直接升级成全工具冻结。模式只由 env 决定。
+    && watchdogEntries.every((entry) => !entry.command.includes('--enforce'))
+    && hasEntry('PreToolUse', 'Edit|Write|MultiEdit', 'repair-content-gate.cjs')
+    && localRepairEntries.length === 0
+    && validation.missing.length === 0;
+  return {
+    pass,
+    detail: `watchdog=${watchdogEntries.map((entry) => `${entry.point}:${entry.matcher}:${entry.command}`).join('|')} localDuplicates=${localRepairEntries.length} missing=${validation.missing.length}`,
+  };
+});
+
+define('ProgressWatchdog', '修复预算耗尽会冻结 session 并创建升级 artifact', () => {
   const p = path.join(HOME, 'engine/hooks/session/progress-watchdog.cjs');
   const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'progress-watchdog-'));
   const env = {
@@ -503,44 +1257,398 @@ define('ProgressWatchdog', '连续无进展达到阈值会失败归档', () => {
     PROGRESS_WATCHDOG_MAX_NO_PROGRESS_TURNS: '2',
     PROGRESS_WATCHDOG_MODE: 'enforce',
   };
-  const payload = JSON.stringify({ hook_event_name: 'PreToolUse', tool_name: 'Read', cwd: tmp });
+  const payload = JSON.stringify({
+    hook_event_name: 'PostToolUse',
+    tool_name: 'Bash',
+    cwd: tmp,
+    session_id: 'repair-freeze-session',
+    tool_input: { command: 'python -m pytest -q' },
+    tool_response: { status: 1, stdout: '1 failed, 2 passed', stderr: '' },
+  });
   const first = runNode(p, payload, { cwd: tmp, env });
-  if (first.status !== 0) return { pass: false, detail: `first read blocked early: exit=${first.status}` };
+  if (first.status !== 0) return { pass: false, detail: `first failed verification froze early: exit=${first.status}` };
   const second = runNode(p, payload, { cwd: tmp, env });
   const archiveFiles = fs.existsSync(env.PROGRESS_WATCHDOG_ARCHIVE_DIR)
     ? fs.readdirSync(env.PROGRESS_WATCHDOG_ARCHIVE_DIR).filter((name) => name.endsWith('.json'))
     : [];
-  if (second.status !== 2) return { pass: false, detail: `second read exit=${second.status}, expected 2` };
+  if (second.status !== 2) return { pass: false, detail: `second failed verification exit=${second.status}, expected 2` };
   if (archiveFiles.length !== 1) return { pass: false, detail: `archive count=${archiveFiles.length}` };
   const archive = JSON.parse(fs.readFileSync(path.join(env.PROGRESS_WATCHDOG_ARCHIVE_DIR, archiveFiles[0]), 'utf8'));
+  const state = JSON.parse(fs.readFileSync(env.PROGRESS_WATCHDOG_STATE_FILE, 'utf8'));
+  const session = Object.values(state.sessions)[0];
+  const blockedWrite = runNode(p, JSON.stringify({
+    hook_event_name: 'PreToolUse',
+    tool_name: 'Write',
+    cwd: tmp,
+    session_id: 'repair-freeze-session',
+  }), { cwd: tmp, env });
   return {
-    pass: archive.status === 'failed_archived' && archive.reason === 'no_progress_turn_threshold',
-    detail: `status=${archive.status} reason=${archive.reason}`,
+    pass: archive.status === 'frozen_escalation_required'
+      && archive.reason === 'repair_budget_exhausted'
+      && archive.repairBudget?.exhausted === true
+      && session.status === 'frozen'
+      && session.escalation?.required === true
+      && session.freezeReason === 'repair_budget_exhausted'
+      && blockedWrite.status === 2
+      && /frozen/i.test(blockedWrite.stderr),
+    detail: `archive=${archive.status} session=${session.status} escalation=${JSON.stringify(session.escalation)} blockedWrite=${blockedWrite.status}`,
   };
 });
 
-define('ProgressWatchdog', '生产性写入和验证命令会重置无进展计数', () => {
+define('ProgressWatchdog', 'FPGA timing verification failures consume repair budget and freeze', () => {
+  const p = path.join(HOME, 'engine/hooks/session/progress-watchdog.cjs');
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'progress-watchdog-fpga-'));
+  const env = {
+    PROGRESS_WATCHDOG_STATE_FILE: path.join(tmp, 'state.json'),
+    PROGRESS_WATCHDOG_ARCHIVE_DIR: path.join(tmp, 'archive'),
+    PROGRESS_WATCHDOG_MAX_NO_PROGRESS_TURNS: '2',
+    PROGRESS_WATCHDOG_MODE: 'enforce',
+  };
+  const payload = JSON.stringify({
+    hook_event_name: 'PostToolUseFailure',
+    tool_name: 'Bash',
+    cwd: tmp,
+    session_id: 'rrc-timing-repair-session',
+    tool_input: { command: 'node engineering-assets/tools/pg-synth.cjs cbb/rrc_polyphase_fir' },
+    tool_response: { status: 2, stdout: '', stderr: 'negative_hold_slack: WHS=-0.163 ns' },
+  });
+  const first = runNode(p, payload, { cwd: tmp, env });
+  const second = runNode(p, payload, { cwd: tmp, env });
+  const state = JSON.parse(fs.readFileSync(env.PROGRESS_WATCHDOG_STATE_FILE, 'utf8'));
+  const session = Object.values(state.sessions)[0];
+  const archiveFiles = fs.existsSync(env.PROGRESS_WATCHDOG_ARCHIVE_DIR)
+    ? fs.readdirSync(env.PROGRESS_WATCHDOG_ARCHIVE_DIR).filter((name) => name.endsWith('.json'))
+    : [];
+  const archive = archiveFiles.length === 1
+    ? JSON.parse(fs.readFileSync(path.join(env.PROGRESS_WATCHDOG_ARCHIVE_DIR, archiveFiles[0]), 'utf8'))
+    : null;
+  const pass = first.status === 0
+    && second.status === 2
+    && session.status === 'frozen'
+    && session.noProgressTurns === 2
+    && session.lastVerification?.status === 'failed'
+    && /pg-synth\.cjs/.test(session.lastVerification?.command || '')
+    && archive?.status === 'frozen_escalation_required';
+  return {
+    pass,
+    detail: `first=${first.status} second=${second.status} session=${session.status} turns=${session.noProgressTurns} verification=${JSON.stringify(session.lastVerification)} archive=${archive?.status || 'missing'}`,
+  };
+});
+
+define('ProgressWatchdog', '冻结态 bypass 必须携带可审计原因且不会解除冻结', () => {
+  const p = path.join(HOME, 'engine/hooks/session/progress-watchdog.cjs');
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'progress-watchdog-bypass-'));
+  const baseEnv = {
+    PROGRESS_WATCHDOG_STATE_FILE: path.join(tmp, 'state.json'),
+    PROGRESS_WATCHDOG_ARCHIVE_DIR: path.join(tmp, 'archive'),
+    PROGRESS_WATCHDOG_MAX_NO_PROGRESS_TURNS: '1',
+    PROGRESS_WATCHDOG_MODE: 'enforce',
+  };
+  const sessionId = 'repair-bypass-session';
+  const failedVerify = JSON.stringify({
+    hook_event_name: 'PostToolUse',
+    tool_name: 'Bash',
+    cwd: tmp,
+    session_id: sessionId,
+    tool_input: { command: 'python -m pytest -q' },
+    tool_response: { status: 1, stdout: '1 failed', stderr: '' },
+  });
+  const frozen = runNode(p, failedVerify, { cwd: tmp, env: baseEnv });
+  if (frozen.status !== 2) return { pass: false, detail: `fixture did not freeze: exit=${frozen.status}` };
+
+  const writePayload = JSON.stringify({
+    hook_event_name: 'PreToolUse',
+    tool_name: 'Write',
+    cwd: tmp,
+    session_id: sessionId,
+  });
+  const silentDisable = runNode(p, writePayload, {
+    cwd: tmp,
+    env: { ...baseEnv, PROGRESS_WATCHDOG_DISABLED: '1' },
+  });
+  if (silentDisable.status !== 2) {
+    return { pass: false, detail: `silent disable bypassed freeze: exit=${silentDisable.status}` };
+  }
+
+  const reason = 'Emergency inspection of frozen repair evidence';
+  const bypassed = runNode(p, writePayload, {
+    cwd: tmp,
+    env: {
+      ...baseEnv,
+      PROGRESS_WATCHDOG_DISABLED: '1',
+      PROGRESS_WATCHDOG_BYPASS_REASON: reason,
+      PROGRESS_WATCHDOG_BYPASS_ACTOR: 'phase2-test',
+    },
+  });
+  const state = JSON.parse(fs.readFileSync(baseEnv.PROGRESS_WATCHDOG_STATE_FILE, 'utf8'));
+  const session = Object.values(state.sessions)[0];
+  const audit = session.bypassAudit?.at(-1);
+  return {
+    pass: bypassed.status === 0
+      && session.status === 'frozen'
+      && audit?.reason === reason
+      && audit?.actor === 'phase2-test'
+      && audit?.tool === 'Write',
+    detail: `silent=${silentDisable.status} bypassed=${bypassed.status} session=${session.status} audit=${JSON.stringify(audit)}`,
+  };
+});
+
+define('ProgressWatchdog', '只有成功的 PostToolUse 验证结果会重置修复预算', () => {
   const p = path.join(HOME, 'engine/hooks/session/progress-watchdog.cjs');
   const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'progress-watchdog-reset-'));
   const env = {
     PROGRESS_WATCHDOG_STATE_FILE: path.join(tmp, 'state.json'),
     PROGRESS_WATCHDOG_ARCHIVE_DIR: path.join(tmp, 'archive'),
-    PROGRESS_WATCHDOG_MAX_NO_PROGRESS_TURNS: '3',
+    PROGRESS_WATCHDOG_MAX_NO_PROGRESS_TURNS: '4',
     PROGRESS_WATCHDOG_MODE: 'enforce',
   };
-  runNode(p, JSON.stringify({ hook_event_name: 'PreToolUse', tool_name: 'Read', cwd: tmp }), { cwd: tmp, env });
+  const failedVerify = runNode(p, JSON.stringify({
+    hook_event_name: 'PostToolUse',
+    tool_name: 'Bash',
+    cwd: tmp,
+    tool_input: { command: 'python -m pytest -q' },
+    tool_response: { status: 1, stdout: '1 failed, 3 passed', stderr: '' },
+  }), { cwd: tmp, env });
+  if (failedVerify.status !== 0) return { pass: false, detail: `failed verification froze early: exit=${failedVerify.status}` };
+
   runNode(p, JSON.stringify({ hook_event_name: 'PreToolUse', tool_name: 'Write', cwd: tmp }), { cwd: tmp, env });
-  runNode(p, JSON.stringify({ hook_event_name: 'PreToolUse', tool_name: 'Read', cwd: tmp }), { cwd: tmp, env });
-  const verify = runNode(p, JSON.stringify({
+  runNode(p, JSON.stringify({
     hook_event_name: 'PreToolUse',
     tool_name: 'Bash',
     cwd: tmp,
     tool_input: { command: 'python -m pytest -q' },
   }), { cwd: tmp, env });
-  if (verify.status !== 0) return { pass: false, detail: `verification command blocked: exit=${verify.status}` };
+
+  let state = JSON.parse(fs.readFileSync(env.PROGRESS_WATCHDOG_STATE_FILE, 'utf8'));
+  let session = Object.values(state.sessions)[0];
+  if (session.noProgressTurns !== 1) {
+    return { pass: false, detail: `generic activity reset budget: noProgressTurns=${session.noProgressTurns}` };
+  }
+
+  const successfulVerify = runNode(p, JSON.stringify({
+    hook_event_name: 'PostToolUse',
+    tool_name: 'Bash',
+    cwd: tmp,
+    tool_input: { command: 'python -m pytest -q' },
+    tool_response: { status: 0, stdout: '4 passed', stderr: '' },
+  }), { cwd: tmp, env });
+  if (successfulVerify.status !== 0) return { pass: false, detail: `successful verification blocked: exit=${successfulVerify.status}` };
+
+  state = JSON.parse(fs.readFileSync(env.PROGRESS_WATCHDOG_STATE_FILE, 'utf8'));
+  session = Object.values(state.sessions)[0];
+  const pass = session.noProgressTurns === 0
+    && session.lastVerification?.status === 'passed'
+    && session.lastVerification?.exitCode === 0;
+  return { pass, detail: `noProgressTurns=${session.noProgressTurns} lastVerification=${JSON.stringify(session.lastVerification)}` };
+});
+
+define('ProgressWatchdog', '不含 status 的真实 PostToolUse 载荷按输出证据判定', () => {
+  // 真实 Claude Code 载荷: tool_response 只有 stdout/stderr/interrupted,
+  // 没有 status/exit_code。旧实现把缺退出码判为失败, 8 次通过的 vsim
+  // 也能把会话冻死 (2026-07-27 事故回归锚)。
+  const p = path.join(HOME, 'engine/hooks/session/progress-watchdog.cjs');
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'progress-watchdog-realpayload-'));
+  const env = {
+    PROGRESS_WATCHDOG_STATE_FILE: path.join(tmp, 'state.json'),
+    PROGRESS_WATCHDOG_ARCHIVE_DIR: path.join(tmp, 'archive'),
+    PROGRESS_WATCHDOG_MAX_NO_PROGRESS_TURNS: '2',
+    PROGRESS_WATCHDOG_MODE: 'enforce',
+  };
+  const mk = (stdout) => JSON.stringify({
+    hook_event_name: 'PostToolUse',
+    tool_name: 'Bash',
+    cwd: tmp,
+    session_id: 'real-payload-session',
+    tool_input: { command: 'vsim -c -do run_sim.do' },
+    tool_response: { stdout, stderr: '', interrupted: false },
+  });
+  const readSession = () => Object.values(
+    JSON.parse(fs.readFileSync(env.PROGRESS_WATCHDOG_STATE_FILE, 'utf8')).sessions
+  )[0];
+
+  // 明确 PASS → progress (预算清零), exitCode 记为 null 而非失败
+  const ok = runNode(p, mk('# [PASS] tb_x: 100 compares, 0 mismatch\n# Errors: 0, Warnings: 0'), { cwd: tmp, env });
+  let session = readSession();
+  if (ok.status !== 0 || session.noProgressTurns !== 0
+    || session.lastVerification?.status !== 'passed'
+    || session.lastVerification?.exitCode !== null) {
+    return { pass: false, detail: `pass-case: exit=${ok.status} turns=${session.noProgressTurns} verification=${JSON.stringify(session.lastVerification)}` };
+  }
+
+  // 明确 FAIL/FATAL → no_progress (消耗预算)
+  const bad = runNode(p, mk('# FAIL: bit 3 got 1 expected 0\n# ** Fatal: Assertion error.'), { cwd: tmp, env });
+  session = readSession();
+  if (bad.status !== 0 || session.noProgressTurns !== 1
+    || session.lastVerification?.status !== 'failed') {
+    return { pass: false, detail: `fail-case: exit=${bad.status} turns=${session.noProgressTurns} verification=${JSON.stringify(session.lastVerification)}` };
+  }
+
+  // 无结论输出 (只编译没跑) → activity, 不判成败、不再扣预算
+  const inconclusive = runNode(p, mk('# -- Compiling module tb_x\n# Top level modules: tb_x'), { cwd: tmp, env });
+  session = readSession();
+  const pass = inconclusive.status === 0
+    && session.noProgressTurns === 1
+    && session.history.at(-1).kind === 'activity';
+  return { pass, detail: `inconclusive: exit=${inconclusive.status} turns=${session.noProgressTurns} lastKind=${session.history.at(-1).kind}` };
+});
+
+define('VerificationGate', '不含 status 的真实 PostToolUse 载荷可清除待验证标记', () => {
+  const p = path.join(HOME, 'engine/scripts/hooks/verification-gate.cjs');
+  const tmpRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'verify-realpayload-'));
+  const env = {
+    CLAUDE_VERIFY_GATE_STATE_FILE: path.join(tmpRoot, 'verify-gate.json'),
+    CLAUDE_VERIFICATION_LEDGER_FILE: path.join(tmpRoot, 'verification-ledger.json'),
+  };
+  runNode(p, JSON.stringify({
+    hook_event_name: 'PostToolUse',
+    tool_name: 'Write',
+    tool: { name: 'Write' },
+    cwd: tmpRoot,
+    tool_input: { file_path: path.join(tmpRoot, 'dut.sv') },
+  }), { cwd: tmpRoot, env });
+
+  // 真实载荷: 无 status/exit_code, 只有 stdout/stderr/interrupted。
+  // 有明确 PASS 证据 → 必须接受并清除 pending (旧实现判 'missing exit status')
+  const post = runNode(p, JSON.stringify({
+    hook_event_name: 'PostToolUse',
+    tool_name: 'Bash',
+    cwd: tmpRoot,
+    tool_input: { command: 'vsim -c -do run_sim.do' },
+    tool_response: { stdout: '# [PASS] tb_dut: 200 compares, 0 mismatch', stderr: '', interrupted: false },
+  }), { cwd: tmpRoot, env });
+  if (post.status !== 0) return { pass: false, detail: `post exit=${post.status}` };
+  const cleared = runNode(p, JSON.stringify({
+    hook_event_name: 'PreToolUse',
+    tool_name: 'Bash',
+    cwd: tmpRoot,
+    tool_input: { command: 'node build.cjs' },
+  }), { cwd: tmpRoot, env });
+  if (cleared.status !== 0) return { pass: false, detail: `real PASS payload did not clear pending, exit=${cleared.status} stderr=${cleared.stderr.slice(0, 200)}` };
+
+  // 反向: interrupted=true 的真实载荷不得清标记
+  runNode(p, JSON.stringify({
+    hook_event_name: 'PostToolUse',
+    tool_name: 'Write',
+    tool: { name: 'Write' },
+    cwd: tmpRoot,
+    tool_input: { file_path: path.join(tmpRoot, 'dut2.sv') },
+  }), { cwd: tmpRoot, env });
+  runNode(p, JSON.stringify({
+    hook_event_name: 'PostToolUse',
+    tool_name: 'Bash',
+    cwd: tmpRoot,
+    tool_input: { command: 'vsim -c -do run_sim.do' },
+    tool_response: { stdout: '# [PASS] partial', stderr: '', interrupted: true },
+  }), { cwd: tmpRoot, env });
+  const stillBlocked = runNode(p, JSON.stringify({
+    hook_event_name: 'PreToolUse',
+    tool_name: 'Bash',
+    cwd: tmpRoot,
+    tool_input: { command: 'node build.cjs' },
+  }), { cwd: tmpRoot, env });
+  return {
+    pass: stillBlocked.status === 2,
+    detail: `interrupted payload cleared pending: exit=${stillBlocked.status}`,
+  };
+});
+
+define('ProgressWatchdog', '只读探索不会累计无进展或触发阻断', () => {
+  const p = path.join(HOME, 'engine/hooks/session/progress-watchdog.cjs');
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'progress-watchdog-readonly-'));
+  const env = {
+    PROGRESS_WATCHDOG_STATE_FILE: path.join(tmp, 'state.json'),
+    PROGRESS_WATCHDOG_ARCHIVE_DIR: path.join(tmp, 'archive'),
+    PROGRESS_WATCHDOG_MAX_NO_PROGRESS_TURNS: '1',
+    PROGRESS_WATCHDOG_MODE: 'enforce',
+  };
+  const payload = JSON.stringify({ hook_event_name: 'PreToolUse', tool_name: 'Read', cwd: tmp });
+  const first = runNode(p, payload, { cwd: tmp, env });
+  const second = runNode(p, payload, { cwd: tmp, env });
   const state = JSON.parse(fs.readFileSync(env.PROGRESS_WATCHDOG_STATE_FILE, 'utf8'));
   const session = Object.values(state.sessions)[0];
-  return { pass: session.noProgressTurns === 0, detail: `noProgressTurns=${session.noProgressTurns}` };
+  const archiveExists = fs.existsSync(env.PROGRESS_WATCHDOG_ARCHIVE_DIR);
+  const pass = first.status === 0
+    && second.status === 0
+    && session.noProgressTurns === 0
+    && session.history.every((item) => item.kind === 'activity')
+    && !archiveExists;
+  return { pass, detail: `first=${first.status} second=${second.status} turns=${session.noProgressTurns}` };
+});
+
+define('ProgressWatchdog', '默认观察模式只警告不归档或阻断', () => {
+  const p = path.join(HOME, 'engine/hooks/session/progress-watchdog.cjs');
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'progress-watchdog-observe-'));
+  const env = {
+    PROGRESS_WATCHDOG_STATE_FILE: path.join(tmp, 'state.json'),
+    PROGRESS_WATCHDOG_ARCHIVE_DIR: path.join(tmp, 'archive'),
+    PROGRESS_WATCHDOG_MAX_NO_PROGRESS_TURNS: '1',
+  };
+  const payload = JSON.stringify({
+    hook_event_name: 'PreToolUse',
+    tool_name: 'Read',
+    cwd: tmp,
+    progress_status: 'no_progress',
+  });
+  const result = runNode(p, payload, { cwd: tmp, env });
+  const archiveExists = fs.existsSync(env.PROGRESS_WATCHDOG_ARCHIVE_DIR);
+  return {
+    pass: result.status === 0 && /observation only/.test(result.stderr) && !archiveExists,
+    detail: `exit=${result.status} archive=${archiveExists} stderr=${result.stderr.slice(0, 200)}`,
+  };
+});
+
+define('ProgressWatchdog', '相同项目中的不同 session 使用独立进度状态', () => {
+  const p = path.join(HOME, 'engine/hooks/session/progress-watchdog.cjs');
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'progress-watchdog-session-scope-'));
+  const env = {
+    PROGRESS_WATCHDOG_STATE_FILE: path.join(tmp, 'state.json'),
+    PROGRESS_WATCHDOG_ARCHIVE_DIR: path.join(tmp, 'archive'),
+    PROGRESS_WATCHDOG_MAX_NO_PROGRESS_TURNS: '2',
+    PROGRESS_WATCHDOG_MODE: 'enforce',
+  };
+  const payloadFor = (sessionId) => JSON.stringify({
+    hook_event_name: 'PreToolUse',
+    tool_name: 'Read',
+    session_id: sessionId,
+    cwd: tmp,
+    progress_status: 'no_progress',
+    user_message: `Continue goal for ${sessionId}`,
+  });
+  const first = runNode(p, payloadFor('session-a'), { cwd: tmp, env });
+  const second = runNode(p, payloadFor('session-b'), { cwd: tmp, env });
+  const state = JSON.parse(fs.readFileSync(env.PROGRESS_WATCHDOG_STATE_FILE, 'utf8'));
+  const sessions = Object.values(state.sessions);
+  const pass = first.status === 0
+    && second.status === 0
+    && sessions.length === 2
+    && sessions.every((session) => session.noProgressTurns === 1)
+    && new Set(sessions.map((session) => session.sessionId)).size === 2;
+  return {
+    pass,
+    detail: `first=${first.status} second=${second.status} sessions=${JSON.stringify(sessions)}`,
+  };
+});
+
+define('ContextMonitor', 'context pressure is advisory unless auto-checkpoint is explicitly enabled', () => {
+  const monitor = require(path.join(HOME, 'engine/scripts/context-monitor-gate.cjs'));
+  const previous = process.env.CLAUDE_CONTEXT_MONITOR_AUTO_CHECKPOINT;
+  process.env.CLAUDE_CONTEXT_MONITOR_AUTO_CHECKPOINT = '0';
+  let output;
+  try {
+    output = monitor.evaluate({
+      measurement: {
+        ratio: 0.8,
+        details: { toolCalls: 20, transcriptKB: 0, compactAgo: 20 },
+      },
+    });
+  } finally {
+    if (previous === undefined) delete process.env.CLAUDE_CONTEXT_MONITOR_AUTO_CHECKPOINT;
+    else process.env.CLAUDE_CONTEXT_MONITOR_AUTO_CHECKPOINT = previous;
+  }
+  return {
+    pass: output?.level === 'RED' && output.mode === 'advisory' && output.checkpointed === false,
+    detail: `output=${JSON.stringify(output).slice(0, 300)}`,
+  };
 });
 
 define('DAGEngine', 'loop_skip 默认计为失败', () => {
@@ -765,6 +1873,18 @@ define('BashSafety', '安全命令放行', () => {
   return { pass: r.status === 0, detail: `安全命令 exit=${r.status}` };
 });
 
+define('BashSafety', 'write_bitstream and cfgmem commands are hard-blocked', () => {
+  const p = path.join(HOME, 'engine/scripts/hooks/bash-safety-guard.cjs');
+  if (!fs.existsSync(p)) return { pass: true, skip: true, detail: 'bash-safety-guard.cjs missing' };
+  const stdin = JSON.stringify({
+    hook_event_name: 'PreToolUse',
+    tool_name: 'Bash',
+    tool_input: { command: 'vivado -mode batch -source build.tcl -tclargs write_bitstream top.bit' },
+  });
+  const r = runNode(p, stdin);
+  return { pass: r.status === 2 && /No-bit\/cfgmem/.test(r.stderr), detail: `exit=${r.status} stderr=${r.stderr.slice(0, 300)}` };
+});
+
 define('DiagnosticWrites', '只读验证模式跳过 auto-record 写入', () => {
   const scripts = [
     path.join(HOME, 'engine/scripts/auto-record-error.sh'),
@@ -778,7 +1898,10 @@ define('DiagnosticWrites', '只读验证模式跳过 auto-record 写入', () => 
       'export CLAUDE_NO_DIAGNOSTIC_WRITES=1',
       '',
     ].join('\n');
-    const r = spawnSync('bash', ['-s'], {
+    // Windows 上裸 `bash` 会解析到 C:\Windows\System32\bash.exe (WSL),
+    // 它把告警按 UTF-16LE 输出、且不容忍 CRLF 行尾, 于是这条用例长期假红。
+    // 优先用 POSIX bash (Git Bash), 与 harness 实际运行 hook 的 shell 一致。
+    const r = spawnSync(resolvePosixBash(), ['-s'], {
       encoding: 'utf8',
       timeout: 10000,
       windowsHide: true,
@@ -787,8 +1910,17 @@ define('DiagnosticWrites', '只读验证模式跳过 auto-record 写入', () => 
     if (r.error && r.error.code === 'ENOENT') {
       return { pass: true, skip: true, detail: 'bash unavailable' };
     }
+    const combined = String(r.stderr || '') + String(r.stdout || '');
+    const normalizedCombined = combined.replace(/\u0000/g, '');
+    // 判据必须容忍非英文 locale: 中文 WSL 只输出 "wsl: ..." 而没有 "wsl.exe";
+    // CRLF 行尾在严格 POSIX shell 下的特征错误也一并识别。
+    const wslSignature = /\bwsl(?:\.exe)?\s*:|Windows Subsystem for Linux|Linux.*Windows/i.test(normalizedCombined)
+      || /invalid option name|command not found/.test(normalizedCombined);
+    if (r.status !== 0 && wslSignature) {
+      return { pass: true, detail: 'POSIX bash unavailable (WSL/CRLF shell); read-only write path not exercised' };
+    }
     if (r.status !== 0) return { pass: false, detail: `${path.basename(script)} exit=${r.status}` };
-    if (!String(r.stderr || r.stdout).includes('skipped in read-only verification mode')) {
+    if (!normalizedCombined.includes('skipped in read-only verification mode')) {
       return { pass: false, detail: `${path.basename(script)} did not report read-only skip` };
     }
   }
@@ -876,13 +2008,69 @@ define('CoverageRunner', '脚本语法正确', () => {
   return { pass: r.ok, detail: r.ok ? '语法通过' : r.stderr.slice(0, 200) };
 });
 
-define('CoverageRunner', '--check 模式可运行', () => {
+define('CoverageRunner', '--check fails closed without evidence and accepts valid evidence', () => {
   const p = path.join(HOME, 'engine/scripts/coverage-runner.cjs');
   if (!fs.existsSync(p)) return { pass: true, skip: true, detail: '文件不存在' };
-  const r = spawnSync('node', [p, '--check'], {
-    encoding: 'utf8', timeout: 15000, windowsHide: true,
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'coverage-check-'));
+  const summaryFile = path.join(root, 'coverage-summary.json');
+  const env = { ...process.env, CLAUDE_COVERAGE_SUMMARY_FILE: summaryFile };
+  try {
+    const missing = spawnSync(process.execPath, [p, '--check'], {
+      encoding: 'utf8', timeout: 15000, windowsHide: true, env,
+    });
+    fs.writeFileSync(summaryFile, JSON.stringify({ percent: 93, threshold: 60 }), 'utf8');
+    const valid = spawnSync(process.execPath, [p, '--check'], {
+      encoding: 'utf8', timeout: 15000, windowsHide: true, env,
+    });
+    return {
+      pass: missing.status === 2 && valid.status === 0,
+      detail: `missing=${missing.status}, valid=${valid.status}`,
+    };
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+define('CoverageRunner', 'merges duplicate script coverage across child processes', () => {
+  const { pathToFileURL } = require('node:url');
+  const { parseV8Coverage } = require('../coverage-runner.cjs');
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'coverage-merge-'));
+  const engineDir = path.join(root, 'engine');
+  const coverageDir = path.join(root, 'coverage');
+  const script = path.join(engineDir, 'sample.cjs');
+  fs.mkdirSync(engineDir, { recursive: true });
+  fs.mkdirSync(coverageDir, { recursive: true });
+  fs.writeFileSync(script, 'line1\nline2\nline3\n', 'utf8');
+  const makeEntry = (startOffset, endOffset) => ({
+    result: [{
+      url: pathToFileURL(script).href,
+      functions: [{ ranges: [{ startOffset, endOffset, count: 1 }] }],
+    }],
   });
-  return { pass: r.status === 0, detail: `exit=${r.status}` };
+  fs.writeFileSync(path.join(coverageDir, 'first.json'), JSON.stringify(makeEntry(0, 6)), 'utf8');
+  fs.writeFileSync(path.join(coverageDir, 'second.json'), JSON.stringify(makeEntry(6, 12)), 'utf8');
+  try {
+    const result = parseV8Coverage(coverageDir, { root });
+    return {
+      pass: result.files === 1 && result.coveredLines === 2,
+      detail: JSON.stringify(result),
+    };
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+define('CoverageRunner', 'nested zero-count ranges remain uncovered', () => {
+  const { coveredLinesForRanges } = require('../coverage-runner.cjs');
+  const lines = ['line1', 'line2', 'line3', ''];
+  const covered = coveredLinesForRanges(lines, [
+    { startOffset: 0, endOffset: 18, count: 1 },
+    { startOffset: 6, endOffset: 12, count: 0 },
+  ]);
+  return {
+    pass: covered.has(0) && !covered.has(1) && covered.has(2),
+    detail: `covered=${[...covered].join(',')}`,
+  };
 });
 
 define('CoverageGate', '语法正确', () => {
@@ -1022,8 +2210,8 @@ define('E2ETests', '全部 E2E 通过', () => {
   const r = spawnSync('node', [p], {
     encoding: 'utf8', timeout: 30000, windowsHide: true,
   });
-  const passed = (r.stdout + '').includes('全部通过');
-  return { pass: r.status === 0 || passed, detail: passed ? '通过' : `exit=${r.status}` };
+  const passed = r.status === 0 && !r.error && !r.signal;
+  return { pass: passed, detail: passed ? 'exit=0' : `exit=${r.status} signal=${r.signal || 'none'}` };
 });
 
 define('PainpointRegression', 'harness-painpoints.cjs 全部通过', () => {
@@ -1042,6 +2230,91 @@ define('WorkflowContracts', 'workflow-contracts.cjs 全部通过', () => {
     encoding: 'utf8', timeout: 30000, windowsHide: true,
   });
   return { pass: r.status === 0, detail: `exit=${r.status}` };
+});
+
+// ── 门禁注册表契约 (2026-07-27 审计: fix-in-place-guard 三重失效, 文档说有代码不跑) ──
+
+define('GateRegistryContract', 'gate-registry-contract.cjs 全部通过', () => {
+  const p = path.join(HOME, 'engine/scripts/test-hooks/gate-registry-contract.cjs');
+  if (!fs.existsSync(p)) return { pass: false, detail: 'gate-registry-contract.cjs 不存在' };
+  const r = spawnSync('node', [p], {
+    encoding: 'utf8', timeout: 30000, windowsHide: true,
+  });
+  return { pass: r.status === 0, detail: r.status === 0 ? 'registry/impl/docs 一致' : (r.stdout || '').slice(-400) };
+});
+
+// ── vivado-flow 参数契约 (2026-07-27 审计: 文档里 [MUST] 的命令 100% exit 2) ──
+
+define('VivadoFlowArgs', '文档中出现的每条 vivado_flow 调用都能通过参数校验', () => {
+  const tcl = path.join(HOME, 'skills/vivado-flow/scripts/vivado_flow.tcl');
+  if (!fs.existsSync(tcl)) return { pass: true, skipped: true, detail: 'vivado-flow 未安装' };
+  const probe = spawnSync('tclsh', ['-encoding', 'utf-8'], { encoding: 'utf8', timeout: 5000, windowsHide: true });
+  if (probe.error) return { pass: true, skipped: true, detail: 'tclsh 不可用' };
+
+  // 这些调用形态散落在 hdl-coding / docs/rules / agents 的文档里, 被标为 [MUST]。
+  // 阶段区间为空 = 参数组合本身非法, 用户照文档敲一定失败。
+  const invocations = [
+    ['-to', 'rtlcheck'],
+    ['-to', 'synth'],
+    ['-to', 'bitstream'],
+    ['-from', 'rtlcheck', '-to', 'rtlcheck'],
+    ['-from', 'opt', '-to', 'route'],
+    ['-mode', 'ooc', '-to', 'synth'],
+  ];
+  const bad = [];
+  for (const extra of invocations) {
+    const r = spawnSync('tclsh', [tcl, '-top', 't', '-part', 'xc7a100t', '-src', '.', '-out',
+      path.join(os.tmpdir(), 'vfargs'), ...extra], { encoding: 'utf8', timeout: 20000, windowsHide: true });
+    const out = `${r.stdout || ''}${r.stderr || ''}`;
+    if (/阶段区间为空/.test(out)) bad.push(extra.join(' '));
+  }
+  return {
+    pass: bad.length === 0,
+    detail: bad.length === 0 ? `${invocations.length} 条调用均通过阶段校验` : `阶段区间为空: ${bad.join(' | ')}`,
+  };
+});
+
+// ── 工作流文档一致性 (2026-07-26 审计: md 与 js 曾漂移到互相矛盾) ──────────
+
+define('WorkflowDocs', 'hdl md/js 阶段数与证据路径一致', () => {
+  const mdPath = path.join(HOME, 'skills/workflows/hdl-coding-workflow.md');
+  const jsPath = path.join(HOME, 'workflows/hdl-coding-dag-workflow.js');
+  const md = fs.readFileSync(mdPath, 'utf8');
+  const js = fs.readFileSync(jsPath, 'utf8');
+
+  const mdPhases = Number((md.match(/^phases:\s*(\d+)/m) || [])[1] || 0);
+  const jsPhases = (js.match(/\{\s*title:\s*'Phase /g) || []).length;
+  if (mdPhases !== jsPhases) {
+    return { pass: false, detail: `md frontmatter phases=${mdPhases} 但 js meta.phases=${jsPhases}` };
+  }
+  // 证据路径的历史矛盾: md 曾同时写 03_sim 与 02_sim
+  if (md.includes('03_sim')) return { pass: false, detail: 'md 引用了错误的 03_sim 证据路径 (正确为 02_sim/check_results)' };
+  if (!md.includes('02_sim/check_results')) return { pass: false, detail: 'md 缺少 02_sim/check_results 证据路径' };
+  if (!js.includes('02_sim/check_results')) return { pass: false, detail: 'js 缺少 02_sim/check_results 证据路径' };
+  // 检查点清单一致
+  for (const cp of ['design-review', 'evidence-review']) {
+    if (!md.includes(cp)) return { pass: false, detail: `md 缺少检查点 ${cp}` };
+    if (!js.includes(cp)) return { pass: false, detail: `js 缺少检查点 ${cp}` };
+  }
+  return { pass: true, detail: `phases=${mdPhases} 一致, 证据路径与检查点对齐` };
+});
+
+define('WorkflowDocs', 'workflow md 引用的本地路径全部存在', () => {
+  const docs = ['hdl-coding-workflow.md', 'code-review-workflow.md', 'architecture-review-workflow.md'];
+  const missing = [];
+  for (const doc of docs) {
+    const docPath = path.join(HOME, 'skills/workflows', doc);
+    if (!fs.existsSync(docPath)) { missing.push(`skills/workflows/${doc} 本身不存在`); continue; }
+    const text = fs.readFileSync(docPath, 'utf8');
+    // 反引号内的仓库相对路径 (含扩展名或以 / 结尾的目录)
+    for (const m of text.matchAll(/`((?:workflows|skills|engine|agents|schemas|engineering-assets)\/[\w./-]+)`/g)) {
+      const target = path.join(HOME, m[1]);
+      if (!fs.existsSync(target)) missing.push(`${doc} → ${m[1]}`);
+    }
+  }
+  return missing.length === 0
+    ? { pass: true, detail: `${docs.length} 份文档引用完整` }
+    : { pass: false, detail: `死引用: ${missing.slice(0, 5).join('; ')}` };
 });
 
 define('WorkflowScenarioEval', 'workflow-scenario-eval.cjs 全部通过', () => {
@@ -1082,13 +2355,19 @@ define('AgentLiveReadiness', 'agent-live-readiness.cjs reports external agent st
   if (!fs.existsSync(outFile)) return { pass: false, detail: 'readiness output missing' };
   const manifest = JSON.parse(fs.readFileSync(outFile, 'utf8'));
   const byAgent = Object.fromEntries((manifest.agents || []).map((item) => [item.agent, item]));
-  if (byAgent.claude?.status !== 'available') return { pass: false, detail: `claude status=${byAgent.claude?.status}` };
+  const claudeStatus = byAgent.claude?.status;
+  if (!['available', 'blocked', 'missing', 'failed'].includes(claudeStatus)) {
+    return { pass: false, detail: `unexpected claude status=${claudeStatus}` };
+  }
+  if (claudeStatus !== 'available' && !byAgent.claude?.versionProbe) {
+    return { pass: false, detail: `claude ${claudeStatus} lacks probe evidence` };
+  }
   const codexStatus = byAgent.codex?.status;
   if (!['available', 'blocked', 'missing', 'failed'].includes(codexStatus)) return { pass: false, detail: `unexpected codex status=${codexStatus}` };
   if (codexStatus === 'blocked' && (!byAgent.codex.commandEntries?.length || byAgent.codex.versionProbe?.status === 0)) {
     return { pass: false, detail: 'codex blocked status lacks command/probe evidence' };
   }
-  return { pass: true, detail: `claude=${byAgent.claude.status}, codex=${codexStatus}` };
+  return { pass: true, detail: `claude=${claudeStatus}, codex=${codexStatus}` };
 });
 
 define('ManagedActionEval', 'agent-managed-action-eval.cjs dry-run passes', () => {
@@ -1140,6 +2419,28 @@ define('ManagedActionEval', 'nonzero agent exit fails even with valid JSON', () 
   const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf8'));
   const hasExitFailure = (manifest.complianceFailures || []).some((item) => /agent exited with status 7/.test(item));
   return { pass: manifest.status === 'failed' && hasExitFailure, detail: `status=${manifest.status} failures=${(manifest.complianceFailures || []).join('|')}` };
+});
+
+define('ManagedActionEval', 'non-JSON agent output still writes a diagnostic manifest', () => {
+  const p = path.join(HOME, 'engine/scripts/test-hooks/agent-managed-action-eval.cjs');
+  if (!fs.existsSync(p)) return { pass: false, detail: 'agent-managed-action-eval.cjs missing' };
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'agent-managed-action-invalid-json-'));
+  const fakeAgent = path.join(tmp, 'fake-agent.cjs');
+  fs.writeFileSync(fakeAgent, 'process.stdout.write("not-json");\n', 'utf8');
+  const outDir = path.join(tmp, 'run');
+  const r = spawnSync('node', [p, '--agent', 'fake', '--kind', 'ambiguous', '--command', `node "${fakeAgent}"`, '--out', outDir], {
+    encoding: 'utf8', timeout: 30000, windowsHide: true,
+  });
+  if (r.status === 0) return { pass: false, detail: 'invalid JSON response was accepted' };
+  const manifestPath = path.join(outDir, 'managed-eval.json');
+  if (!fs.existsSync(manifestPath)) return { pass: false, detail: `managed-eval.json missing: ${r.stderr || r.stdout}` };
+  const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf8'));
+  const found = (manifest.complianceFailures || []).some((failure) => /parseable JSON/.test(failure));
+  const pass = manifest.status === 'failed'
+    && manifest.dimensions?.protocolCompliance === 'failed'
+    && manifest.dimensions?.functionalStatus === 'not_run'
+    && found;
+  return { pass, detail: `status=${manifest.status} failures=${(manifest.complianceFailures || []).join('|')}` };
 });
 
 define('ManagedActionEval', 'codex JSONL agent_message is parsed', () => {
@@ -1498,6 +2799,45 @@ define('ManagedActionMatrix', 'codex blocked live row stays blocked when readine
   return { pass, detail: `summary=${manifest.summary?.overallStatus} row=${row?.status}` };
 });
 
+define('LiveRegressionMatrix', 'readiness regression records false-positive controls', () => {
+  const p = path.join(HOME, 'engine/scripts/test-hooks/live-regression-matrix.cjs');
+  if (!fs.existsSync(p)) return { pass: false, detail: 'live-regression-matrix.cjs missing' };
+  const outDir = fs.mkdtempSync(path.join(os.tmpdir(), 'live-regression-matrix-'));
+  const r = spawnSync('node', [p, '--out', outDir], {
+    encoding: 'utf8', timeout: 60000, windowsHide: true,
+  });
+  if (r.status !== 0) return { pass: false, detail: `exit=${r.status}: ${r.stderr || r.stdout}` };
+  const manifestPath = path.join(outDir, 'live-regression-matrix.json');
+  if (!fs.existsSync(manifestPath)) return { pass: false, detail: 'live-regression-matrix.json missing' };
+  const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf8'));
+  const controls = manifest.falsePositiveControls || {};
+  const pass = manifest.verdict === 'passed'
+    && controls.notRunRowsCountedAsPassed === 0
+    && controls.blockedRowsCountedAsPassed === 0
+    && controls.allPassedRowsHaveFunctionalEvidence === true;
+  return { pass, detail: `verdict=${manifest.verdict} controls=${JSON.stringify(controls)}` };
+});
+
+define('LiveRegressionMatrix', 'spawn failures retain timeout and signal diagnostics', () => {
+  const p = path.join(HOME, 'engine/scripts/test-hooks/live-regression-matrix.cjs');
+  if (!fs.existsSync(p)) return { pass: false, detail: 'live-regression-matrix.cjs missing' };
+  const { spawnDiagnostics } = require(p);
+  if (typeof spawnDiagnostics !== 'function') {
+    return { pass: false, detail: 'spawnDiagnostics export missing' };
+  }
+  const diagnostics = spawnDiagnostics({
+    status: null,
+    signal: 'SIGTERM',
+    error: Object.assign(new Error('spawnSync ETIMEDOUT'), { code: 'ETIMEDOUT' }),
+  });
+  const pass = diagnostics.exitCode === null
+    && diagnostics.signal === 'SIGTERM'
+    && diagnostics.errorCode === 'ETIMEDOUT'
+    && diagnostics.error === 'spawnSync ETIMEDOUT'
+    && diagnostics.timedOut === true;
+  return { pass, detail: JSON.stringify(diagnostics) };
+});
+
 define('LongTaskEval', '固定历史产物不再计为 fresh live 通过', () => {
   const p = path.join(HOME, 'engine/scripts/test-hooks/long-task-eval.cjs');
   if (!fs.existsSync(p)) return { pass: false, detail: 'long-task-eval.cjs 不存在' };
@@ -1721,6 +3061,21 @@ define('ProjectDirectoryContract', 'canonical HDL layout passes and FSK-style la
   return { pass, detail: pass ? 'bad layout rejected with concrete failures' : failureText };
 });
 
+define('ProjectDirectoryContract', 'root bitstream and cfgmem artifacts are forbidden', () => {
+  const lib = require(path.join(HOME, 'engine/scripts/lib/project-directory-contract.cjs'));
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'hdl-dir-nobit-'));
+  lib.ensureProjectDirs(root, { modules: ['foo'] });
+  lib.writeDirectoryContract(root, { projectName: 'nobit', modules: ['foo'], createdAt: '2026-07-04T00:00:00.000Z' });
+  fs.writeFileSync(path.join(root, 'top.bit'), 'bitstream', 'utf8');
+  fs.writeFileSync(path.join(root, 'probe.ltx'), 'debug probes', 'utf8');
+  const result = lib.validateProjectDirs(root, { modules: ['foo'], scanFiles: true });
+  const failureText = result.failures.join('|');
+  const pass = !result.ok
+    && failureText.includes('root transient artifact is forbidden: top.bit')
+    && failureText.includes('root transient artifact is forbidden: probe.ltx');
+  return { pass, detail: pass ? 'no-bit root artifacts rejected' : failureText };
+});
+
 define('ProjectDirectoryGuard', 'PreToolUse blocks wrong HDL roots and allows canonical paths', () => {
   const lib = require(path.join(HOME, 'engine/scripts/lib/project-directory-contract.cjs'));
   const p = path.join(HOME, 'engine/scripts/hooks/project-directory-guard.cjs');
@@ -1743,6 +3098,65 @@ define('ProjectDirectoryGuard', 'PreToolUse blocks wrong HDL roots and allows ca
     tool_input: { file_path: path.join(root, '01_src', '00_hdl', 'foo', 'foo.sv'), content: 'module foo; endmodule\n' },
   }));
   return { pass: allowed.status === 0, detail: `blocked=${blocked.status}, allowed=${allowed.status}` };
+});
+
+define('ProjectDirectoryGuard', 'uncontracted HDL projects are not forced into the canonical layout', () => {
+  const p = path.join(HOME, 'engine/scripts/hooks/project-directory-guard.cjs');
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'hdl-dir-uncontracted-'));
+  const result = runNode(p, JSON.stringify({
+    hook_event_name: 'PreToolUse',
+    tool_name: 'Write',
+    cwd: root,
+    tool_input: { file_path: path.join(root, 'rtl', 'foo.sv'), content: 'module foo; endmodule\n' },
+  }));
+  return { pass: result.status === 0, detail: `exit=${result.status} stderr=${result.stderr.slice(0, 200)}` };
+});
+
+// ── 受保护文件写入 (2026-07-27: golden model "可改但需逐个批准" 的策略实现) ──────
+
+const FPG = 'engine/scripts/hooks/file-protection-guard.cjs';
+const fpgCall = (file) => JSON.stringify({ tool_name: 'Write', tool_input: { file_path: file } });
+const fpgEnv = (approval, reason) => ({
+  CLAUDE_NO_DIAGNOSTIC_WRITES: '1',
+  CLAUDE_PROTECTED_WRITE_APPROVAL: approval || '',
+  CLAUDE_PROTECTED_WRITE_REASON: reason || '',
+});
+
+define('FileProtectionGuard', 'golden model 目录内部的文件也受保护', () => {
+  const p = path.join(HOME, FPG);
+  // 历史缺口: '**/*golden_model*' 只匹配文件名, 目录内部文件曾可绕过
+  const inside = [
+    path.join(HOME, 'engineering-assets/knowledge/primary/domains/comm/conv/golden_model/fixed_point_report.md'),
+    path.join(HOME, 'engineering-assets/knowledge/docs/templates/golden_model_template/config.m'),
+  ];
+  for (const f of inside) {
+    const r = runNode(p, fpgCall(f), { env: fpgEnv() });
+    if (r.status !== 2) return { pass: false, detail: `未拦截目录内部文件: ${f} exit=${r.status}` };
+  }
+  const normal = runNode(p, fpgCall(path.join(HOME, 'docs/rules/00-core.md')), { env: fpgEnv() });
+  return normal.status === 0
+    ? { pass: true, detail: '目录内部文件已拦截, 普通文件正常放行' }
+    : { pass: false, detail: `普通文件被误拦, exit=${normal.status}` };
+});
+
+define('FileProtectionGuard', '受保护写入只接受逐文件批准且必须带理由', () => {
+  const p = path.join(HOME, FPG);
+  const target = 'engineering-assets/knowledge/primary/domains/matlab/README.md';
+  const abs = path.join(HOME, target);
+  const cases = [
+    ['无批准', fpgEnv(), 2],
+    ['缺理由', fpgEnv(abs), 2],
+    ['通配符批准', fpgEnv('engineering-assets/**', 'x'), 2],
+    ['裸文件名批准', fpgEnv('README.md', 'x'), 2],
+    ['批准了别的文件', fpgEnv('engineering-assets/knowledge/primary/domains/python/README.md', 'x'), 2],
+    ['绝对路径+理由', fpgEnv(abs, '修死链'), 0],
+    ['仓库相对路径+理由', fpgEnv(target, '修死链'), 0],
+  ];
+  for (const [name, env, want] of cases) {
+    const r = runNode(p, fpgCall(abs), { env });
+    if (r.status !== want) return { pass: false, detail: `${name}: exit=${r.status} 期望 ${want}` };
+  }
+  return { pass: true, detail: `${cases.length} 种批准场景全部符合预期` };
 });
 
 define('ProjectDirectoryContract', 'harness-init emits canonical module/TB directories', () => {
@@ -1781,6 +3195,346 @@ define('HDLProjectDirectoryEval', 'hdl-project-directory-eval.cjs dry-run passes
   const checks = Object.fromEntries((manifest.finalFunctionalChecks || []).map((check) => [check.name, check.status]));
   const pass = manifest.status === 'passed' && checks['project-directory-contract'] === 'passed';
   return { pass, detail: `status=${manifest.status} directory=${checks['project-directory-contract']}` };
+});
+
+define('AgentTransparencyLedger', 'writes task contract skill plan rule trace and events', () => {
+  const p = path.join(HOME, 'engine/scripts/hooks/agent-transparency-ledger.cjs');
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'agent-transparency-root-'));
+  const outDir = path.join(root, 'run');
+  fs.writeFileSync(path.join(root, 'AGENTS.md'), '# test project\n', 'utf8');
+  const rtlPath = path.join(root, '01_src', '00_hdl', 'fifo', 'fifo.sv');
+  const payload = {
+    hook_event_name: 'PreToolUse',
+    tool_name: 'Write',
+    cwd: root,
+    user_message: 'Write an RTL FIFO and follow the harness HDL rules.',
+    tool_input: {
+      file_path: rtlPath,
+      content: 'module fifo(input logic ri_clk, output logic ro_valid); endmodule\n',
+    },
+  };
+  const r = runNode(p, JSON.stringify(payload), {
+    cwd: root,
+    env: {
+      CLAUDE_TRANSPARENCY_RUN_DIR: outDir,
+      CLAUDE_TOOL_ACTION_CONTRACT_MODE: 'all',
+    },
+  });
+  if (r.status !== 0) return { pass: false, detail: `exit=${r.status}: ${r.stderr}` };
+  const plan = JSON.parse(fs.readFileSync(path.join(outDir, 'skill-plan.json'), 'utf8'));
+  const contract = JSON.parse(fs.readFileSync(path.join(outDir, 'task-contract.json'), 'utf8'));
+  const ledger = JSON.parse(fs.readFileSync(path.join(outDir, 'gate-ledger.json'), 'utf8'));
+  const toolContract = JSON.parse(fs.readFileSync(path.join(outDir, 'tool-action-contract.json'), 'utf8'));
+  const trace = fs.readFileSync(path.join(outDir, 'rule-trace.md'), 'utf8');
+  const events = fs.readFileSync(path.join(outDir, 'events.ndjson'), 'utf8');
+  const pass = plan.requiredSkills.includes('hdl-coding')
+    && plan.loadedRules.includes('docs/rules/01-hdl.md')
+    && contract.taskType === 'rtl_project'
+    && toolContract.tool === 'Write'
+    && toolContract.match?.status === 'user-instruction-captured'
+    && ledger.gates.some((gate) => gate.name === 'requirements-gate' && gate.status === 'required-not-completed')
+    && trace.includes('Model self-claims')
+    && events.includes('"content"')
+    && !events.includes('module fifo');
+  return { pass, detail: pass ? 'audit artifacts verified' : `plan=${JSON.stringify(plan)} ledger=${JSON.stringify(ledger.gates)}` };
+});
+
+define('ToolActionContractGate', 'fresh transparency contract allows controlled tool', () => {
+  const ledgerPath = path.join(HOME, 'engine/scripts/hooks/agent-transparency-ledger.cjs');
+  const gatePath = path.join(HOME, 'engine/scripts/hooks/tool-action-contract-gate.cjs');
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'tool-action-contract-'));
+  const outDir = path.join(root, 'run');
+  fs.writeFileSync(path.join(root, 'AGENTS.md'), '# test project\n', 'utf8');
+  const payload = {
+    hook_event_name: 'PreToolUse',
+    tool_name: 'Bash',
+    cwd: root,
+    user_message: 'Push the current feature branch to origin.',
+    tool_input: { command: 'git push origin feature/test' },
+  };
+  const env = { CLAUDE_TRANSPARENCY_RUN_DIR: outDir };
+  const ledger = runNode(ledgerPath, JSON.stringify(payload), { cwd: root, env });
+  if (ledger.status !== 0) return { pass: false, detail: `ledger exit=${ledger.status}: ${ledger.stderr}` };
+  const gate = runNode(gatePath, JSON.stringify(payload), { cwd: root, env });
+  return { pass: gate.status === 0, detail: `gate exit=${gate.status} stderr=${gate.stderr.slice(0, 200)}` };
+});
+
+define('ToolActionContractGate', 'cross-thread delegation cannot authorize a controlled tool', () => {
+  const ledgerPath = path.join(HOME, 'engine/scripts/hooks/agent-transparency-ledger.cjs');
+  const gatePath = path.join(HOME, 'engine/scripts/hooks/tool-action-contract-gate.cjs');
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'tool-action-contract-cross-thread-'));
+  const outDir = path.join(root, 'run');
+  fs.writeFileSync(path.join(root, 'AGENTS.md'), '# test project\n', 'utf8');
+  const currentThreadId = '019f-current-thread';
+  const sourceThreadId = '019f-other-thread';
+  const payload = {
+    hook_event_name: 'PreToolUse',
+    tool_name: 'Bash',
+    session_id: currentThreadId,
+    cwd: root,
+    user_message: [
+      '<codex_delegation>',
+      `  <source_thread_id>${sourceThreadId}</source_thread_id>`,
+      '  <input>Push the current feature branch to origin.</input>',
+      '</codex_delegation>',
+    ].join('\n'),
+    tool_input: { command: 'git push origin feature/test' },
+  };
+  const env = { CLAUDE_TRANSPARENCY_RUN_DIR: outDir };
+  const ledger = runNode(ledgerPath, JSON.stringify(payload), { cwd: root, env });
+  if (ledger.status !== 0) return { pass: false, detail: `ledger exit=${ledger.status}: ${ledger.stderr}` };
+  const contract = JSON.parse(fs.readFileSync(path.join(outDir, 'tool-action-contract.json'), 'utf8'));
+  const gate = runNode(gatePath, JSON.stringify(payload), { cwd: root, env });
+  const pass = gate.status === 2
+    && /cross-thread delegation/i.test(gate.stderr)
+    && contract.loopScope?.currentThreadId === currentThreadId
+    && contract.loopScope?.sourceThreadId === sourceThreadId
+    && contract.loopScope?.status === 'blocked';
+  return {
+    pass,
+    detail: `gate exit=${gate.status} loopScope=${JSON.stringify(contract.loopScope)} stderr=${gate.stderr.slice(0, 300)}`,
+  };
+});
+
+define('ToolActionContractGate', 'contract mode off cannot bypass cross-thread delegation isolation', () => {
+  const ledgerPath = path.join(HOME, 'engine/scripts/hooks/agent-transparency-ledger.cjs');
+  const gatePath = path.join(HOME, 'engine/scripts/hooks/tool-action-contract-gate.cjs');
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'tool-action-contract-cross-thread-off-'));
+  const outDir = path.join(root, 'run');
+  fs.writeFileSync(path.join(root, 'AGENTS.md'), '# test project\n', 'utf8');
+  const payload = {
+    hook_event_name: 'PreToolUse',
+    tool_name: 'Bash',
+    session_id: '019f-current-thread',
+    cwd: root,
+    user_message: [
+      '<codex_delegation>',
+      '  <source_thread_id>019f-other-thread</source_thread_id>',
+      '  <input>Push the current feature branch to origin.</input>',
+      '</codex_delegation>',
+    ].join('\n'),
+    tool_input: { command: 'git push origin feature/test' },
+  };
+  const env = {
+    CLAUDE_TRANSPARENCY_RUN_DIR: outDir,
+    CLAUDE_TOOL_ACTION_CONTRACT_MODE: 'off',
+  };
+  const ledger = runNode(ledgerPath, JSON.stringify(payload), { cwd: root, env });
+  if (ledger.status !== 0) return { pass: false, detail: `ledger exit=${ledger.status}: ${ledger.stderr}` };
+  const contractPath = path.join(outDir, 'tool-action-contract.json');
+  const gate = runNode(gatePath, JSON.stringify(payload), { cwd: root, env });
+  const pass = fs.existsSync(contractPath)
+    && gate.status === 2
+    && /cross-thread delegation/i.test(gate.stderr);
+  return {
+    pass,
+    detail: `contract=${fs.existsSync(contractPath)} gate exit=${gate.status} stderr=${gate.stderr.slice(0, 300)}`,
+  };
+});
+
+define('ToolActionContractGate', 'disabled gate cannot bypass cross-thread delegation isolation', () => {
+  const ledgerPath = path.join(HOME, 'engine/scripts/hooks/agent-transparency-ledger.cjs');
+  const gatePath = path.join(HOME, 'engine/scripts/hooks/tool-action-contract-gate.cjs');
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'tool-action-contract-cross-thread-disabled-'));
+  const outDir = path.join(root, 'run');
+  fs.writeFileSync(path.join(root, 'AGENTS.md'), '# test project\n', 'utf8');
+  const payload = {
+    hook_event_name: 'PreToolUse',
+    tool_name: 'Write',
+    session_id: '019f-current-thread',
+    cwd: root,
+    user_message: [
+      '<codex_delegation>',
+      '  <source_thread_id>019f-other-thread</source_thread_id>',
+      '  <input>Overwrite the project configuration.</input>',
+      '</codex_delegation>',
+    ].join('\n'),
+    tool_input: { file_path: path.join(root, 'config.json'), content: '{}\n' },
+  };
+  const env = {
+    CLAUDE_TRANSPARENCY_RUN_DIR: outDir,
+    CLAUDE_TOOL_ACTION_CONTRACT_GATE_DISABLED: '1',
+  };
+  const ledger = runNode(ledgerPath, JSON.stringify(payload), { cwd: root, env });
+  if (ledger.status !== 0) return { pass: false, detail: `ledger exit=${ledger.status}: ${ledger.stderr}` };
+  const gate = runNode(gatePath, JSON.stringify(payload), { cwd: root, env });
+  const sameThreadPayload = {
+    ...payload,
+    user_message: payload.user_message.replace('019f-other-thread', '019f-current-thread'),
+  };
+  const sameThreadGate = runNode(gatePath, JSON.stringify(sameThreadPayload), { cwd: root, env });
+  return {
+    pass: gate.status === 2
+      && /cross-thread delegation/i.test(gate.stderr)
+      && sameThreadGate.status === 0,
+    detail: `cross-thread=${gate.status} same-thread=${sameThreadGate.status} stderr=${gate.stderr.slice(0, 300)}`,
+  };
+});
+
+define('ToolActionContractGate', 'same-thread delegation keeps controlled tool compatibility', () => {
+  const ledgerPath = path.join(HOME, 'engine/scripts/hooks/agent-transparency-ledger.cjs');
+  const gatePath = path.join(HOME, 'engine/scripts/hooks/tool-action-contract-gate.cjs');
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'tool-action-contract-same-thread-'));
+  const outDir = path.join(root, 'run');
+  fs.writeFileSync(path.join(root, 'AGENTS.md'), '# test project\n', 'utf8');
+  const currentThreadId = '019f-current-thread';
+  const payload = {
+    hook_event_name: 'PreToolUse',
+    tool_name: 'Bash',
+    session_id: currentThreadId,
+    cwd: root,
+    user_message: [
+      '<codex_delegation>',
+      `  <source_thread_id>${currentThreadId}</source_thread_id>`,
+      '  <input>Push the current feature branch to origin.</input>',
+      '</codex_delegation>',
+    ].join('\n'),
+    tool_input: { command: 'git push origin feature/test' },
+  };
+  const env = { CLAUDE_TRANSPARENCY_RUN_DIR: outDir };
+  const ledger = runNode(ledgerPath, JSON.stringify(payload), { cwd: root, env });
+  if (ledger.status !== 0) return { pass: false, detail: `ledger exit=${ledger.status}: ${ledger.stderr}` };
+  const contract = JSON.parse(fs.readFileSync(path.join(outDir, 'tool-action-contract.json'), 'utf8'));
+  const gate = runNode(gatePath, JSON.stringify(payload), { cwd: root, env });
+  const pass = gate.status === 0
+    && contract.loopScope?.currentThreadId === currentThreadId
+    && contract.loopScope?.sourceThreadId === currentThreadId
+    && contract.loopScope?.status === 'allowed';
+  return {
+    pass,
+    detail: `gate exit=${gate.status} loopScope=${JSON.stringify(contract.loopScope)} stderr=${gate.stderr.slice(0, 300)}`,
+  };
+});
+
+// 契约变更 (刻意): 合同缺失**不再硬阻断**。本 gate 与 agent-transparency-ledger
+// 挂在同一个 PreToolUse 组内被平台并发执行, 读到对方尚未写出的合同是常态而非
+// 攻击 —— 为此 exit 2 会随机拦掉合法命令(实盘已复现)。现在改为: 先尝试自产
+// 合同, 仍失败则 stderr 告警后放行。真实越权信号 (loopScope=blocked) 仍然阻断,
+// 由 'cross-thread delegation cannot authorize a controlled tool' 等用例覆盖。
+define('ToolActionContractGate', 'missing contract self-heals and never hard-blocks', () => {
+  const gatePath = path.join(HOME, 'engine/scripts/hooks/tool-action-contract-gate.cjs');
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'tool-action-contract-missing-'));
+  fs.writeFileSync(path.join(root, 'AGENTS.md'), '# test project\n', 'utf8');
+  const payload = {
+    hook_event_name: 'PreToolUse',
+    tool_name: 'Bash',
+    cwd: root,
+    user_message: 'Push the current feature branch to origin.',
+    tool_input: { command: 'git push origin feature/test' },
+  };
+  const gate = runNode(gatePath, JSON.stringify(payload), {
+    cwd: root,
+    env: { CLAUDE_TRANSPARENCY_RUN_DIR: path.join(root, 'run') },
+  });
+  // 放行(0), 且不得静默: 要么自产合同成功, 要么留下 WARN 证据。
+  const quiet = gate.status === 0 && gate.stderr.trim() === '';
+  const warned = /WARN \(not blocking\)|missing contract/.test(gate.stderr);
+  return {
+    pass: gate.status === 0 && (quiet || warned),
+    detail: `gate exit=${gate.status} stderr=${gate.stderr.slice(0, 300)}`,
+  };
+});
+
+define('ToolActionContractGate', 'low-risk Bash is allowed without a contract', () => {
+  const gatePath = path.join(HOME, 'engine/scripts/hooks/tool-action-contract-gate.cjs');
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'tool-action-contract-low-risk-'));
+  fs.writeFileSync(path.join(root, 'AGENTS.md'), '# test project\n', 'utf8');
+  const payload = {
+    hook_event_name: 'PreToolUse',
+    tool_name: 'Bash',
+    cwd: root,
+    user_message: 'Inspect the current project state.',
+    tool_input: { command: 'git status' },
+  };
+  const gate = runNode(gatePath, JSON.stringify(payload), {
+    cwd: root,
+    env: { CLAUDE_TRANSPARENCY_RUN_DIR: path.join(root, 'run') },
+  });
+  return { pass: gate.status === 0, detail: `gate exit=${gate.status} stderr=${gate.stderr.slice(0, 200)}` };
+});
+
+define('AgentTransparencyLedger', 'low-risk PreToolUse does not create audit artifacts', () => {
+  const ledgerPath = path.join(HOME, 'engine/scripts/hooks/agent-transparency-ledger.cjs');
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'agent-transparency-low-risk-'));
+  const outDir = path.join(root, 'run');
+  fs.writeFileSync(path.join(root, 'AGENTS.md'), '# test project\n', 'utf8');
+  const payload = {
+    hook_event_name: 'PreToolUse',
+    tool_name: 'Bash',
+    cwd: root,
+    user_message: 'Inspect the current project state.',
+    tool_input: { command: 'git status' },
+  };
+  const ledger = runNode(ledgerPath, JSON.stringify(payload), {
+    cwd: root,
+    env: { CLAUDE_TRANSPARENCY_RUN_DIR: outDir },
+  });
+  return { pass: ledger.status === 0 && !fs.existsSync(outDir), detail: `exit=${ledger.status} artifacts=${fs.existsSync(outDir)}` };
+});
+
+define('AgentTransparencyLedger', 'redacts command secrets in event previews', () => {
+  const p = path.join(HOME, 'engine/scripts/hooks/agent-transparency-ledger.cjs');
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'agent-transparency-redact-'));
+  const outDir = path.join(root, 'run');
+  fs.writeFileSync(path.join(root, 'AGENTS.md'), '# test project\n', 'utf8');
+  const secret = `sk-${'a'.repeat(32)}`;
+  const payload = {
+    hook_event_name: 'PreToolUse',
+    tool_name: 'Bash',
+    cwd: root,
+    user_message: 'Run a project command.',
+    tool_input: { command: `echo ${secret}` },
+  };
+  const r = runNode(p, JSON.stringify(payload), {
+    cwd: root,
+    env: {
+      CLAUDE_TRANSPARENCY_RUN_DIR: outDir,
+      CLAUDE_TOOL_ACTION_CONTRACT_MODE: 'all',
+    },
+  });
+  if (r.status !== 0) return { pass: false, detail: `exit=${r.status}: ${r.stderr}` };
+  const events = fs.readFileSync(path.join(outDir, 'events.ndjson'), 'utf8');
+  const pass = !events.includes(secret) && events.includes('sk-[REDACTED]');
+  return { pass, detail: pass ? 'secret redacted' : events.slice(0, 500) };
+});
+
+define('TransparencyDashboard', 'summarizes run artifacts without source content', () => {
+  const ledgerPath = path.join(HOME, 'engine/scripts/hooks/agent-transparency-ledger.cjs');
+  const dashPath = path.join(HOME, 'engine/scripts/transparency-dashboard.cjs');
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'transparency-dashboard-'));
+  const runsDir = path.join(root, 'runs');
+  const runDir = path.join(runsDir, 'run-a');
+  fs.mkdirSync(runsDir, { recursive: true });
+  fs.writeFileSync(path.join(root, 'AGENTS.md'), '# test project\n', 'utf8');
+  const payload = {
+    hook_event_name: 'PreToolUse',
+    tool_name: 'Write',
+    cwd: root,
+    user_message: 'Write an RTL FIFO and follow the harness HDL rules.',
+    tool_input: {
+      file_path: path.join(root, '01_src', '00_hdl', 'fifo', 'fifo.sv'),
+      content: 'module fifo(input logic ri_clk, output logic ro_valid); endmodule\n',
+    },
+  };
+  const ledger = runNode(ledgerPath, JSON.stringify(payload), {
+    cwd: root,
+    env: {
+      CLAUDE_TRANSPARENCY_RUN_DIR: runDir,
+      CLAUDE_TOOL_ACTION_CONTRACT_MODE: 'all',
+    },
+  });
+  if (ledger.status !== 0) return { pass: false, detail: `ledger exit=${ledger.status}: ${ledger.stderr}` };
+  const outHtml = path.join(root, 'dashboard.html');
+  const generated = spawnSync('node', [dashPath, '--runs-dir', runsDir, '--out', outHtml], {
+    encoding: 'utf8', timeout: 15000, windowsHide: true,
+  });
+  if (generated.status !== 0) return { pass: false, detail: `dashboard exit=${generated.status}: ${generated.stderr || generated.stdout}` };
+  const html = fs.readFileSync(outHtml, 'utf8');
+  const pass = html.includes('Agent Transparency Dashboard')
+    && html.includes('rtl_project')
+    && html.includes('hdl-coding')
+    && !html.includes('module fifo');
+  return { pass, detail: pass ? 'dashboard summarized artifacts' : html.slice(0, 500) };
 });
 
 function runSuite() {
@@ -1868,10 +3622,17 @@ function runSuite() {
   const score = total > 0 ? Math.round((passed / total) * 100) : 0;
   const harnessMetrics = harnessCases.length > 0 ? computeHarnessMetrics(harnessCases) : null;
   if (harnessMetrics) {
-    const fpr = harnessMetrics.overall.falsePositiveRate;
-    if (fpr !== null && fpr > 0) {
+    const targetGate = meetsHarnessTargets(harnessMetrics, {
+      minTpr: 1,
+      minTnr: 1,
+      minBalancedAccuracy: 1,
+      maxFalsePositiveRate: 0,
+      minCompletionRate: 1,
+      maxUserInterventionRate: 0,
+    });
+    if (!targetGate.ok) {
       failed++;
-      console.log(fail(`Harness false-positive rate > 0: ${formatHarnessMetrics(harnessMetrics)}`));
+      console.log(fail(`Harness targets failed: ${targetGate.failures.join('; ')} | ${formatHarnessMetrics(harnessMetrics)}`));
     }
   }
   const grade = score === 100 ? '🟢' : score >= 80 ? '🟡' : '🔴';

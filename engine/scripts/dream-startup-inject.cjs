@@ -25,9 +25,9 @@
 const fs = require('node:fs');
 const path = require('node:path');
 const { spawnSync } = require('node:child_process');
+const { HARNESS_ROOT } = require('./lib/harness-root.cjs');
 
-const HOMEDIR = require('node:os').homedir();
-const HARNESS = path.join(HOMEDIR, '.claude');
+const HARNESS = HARNESS_ROOT;
 const DREAM_SCRIPT = path.join(HARNESS, 'engine', 'scripts', 'dream-consolidate.cjs');
 const EVENTS_STORE = path.join(HARNESS, 'engine', 'sqlite', 'store-events.cjs');
 const DB_INDEX = path.join(HARNESS, 'engine', 'sqlite', 'index.cjs');

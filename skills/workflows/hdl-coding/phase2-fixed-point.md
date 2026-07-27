@@ -41,7 +41,8 @@
 
 fixed_point_report + resource_estimate 完成，资源预算在约束内。
 
-**参考**: `skills/hdl-coding/references/alg-flow-verilog.md`（Python 定点函数）, `docs/templates/fixed_point_report_template.md`, `docs/templates/resource_estimate_template.md`
+**参考**: `skills/hdl-coding/references/alg-flow-verilog.md`（Python 定点函数）, `engineering-assets/knowledge/docs/templates/fixed_point_report_template.md`, `engineering-assets/knowledge/docs/templates/resource_estimate_template.md`
+**输出**: `06_doc/fixed_point_report.md` + `06_doc/resource_budget_tracking.md`
 **输出**: `fixed_point_report.md`, `resource_estimate.md`
 
 **可执行检查点**:

@@ -62,3 +62,9 @@ npx skills add <skill-name>
 1. 将实施计划分解为独立任务
 2. 每个任务派发一个子 Agent
 3. 每个子 Agent 完成后执行两阶段审查（规范合规 → 代码质量）
+
+## 参考文件
+
+| 文件 | 内容 |
+|:-----|:-----|
+| `references/schemas.md` | skill-creator 使用的 JSON Schema —— 技能 evals 文件的字段定义与取值 |

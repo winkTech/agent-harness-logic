@@ -28,12 +28,28 @@
 
 const fs = require('node:fs');
 const path = require('node:path');
-const HOMEDIR = require('node:os').homedir();
+const { HARNESS_ROOT } = require('./lib/harness-root.cjs');
 
 // ── 配置 ────────────────────────────────────────────────────────────────────
 
-const RULES_DIR = path.join(HOMEDIR, '.claude', 'rules');
-const STATE_FILE = path.join(HOMEDIR, '.claude', 'var', 'index', 'runtime-state.json');
+/**
+ * 规则目录。
+ *
+ * 规则文件放在 `docs/rules/` 而不是 `.claude/rules/`: 后者会被 Claude Code
+ * 当作常驻全局指令**全文注入**每个会话, 与本加载机按需注入的 capsule 形成
+ * 双重加权 —— 同一份规则既常驻又被摘要, 既浪费 token 又让"capsule 足够时
+ * 不读全文"的加载纪律失效。移出后 capsule 成为唯一路由信号, 全文只在
+ * 确有需要时按路径 Read。
+ *
+ * 保留旧路径回退, 以便未迁移的副本仍能工作。
+ */
+const RULES_DIR = (() => {
+  const preferred = path.join(HARNESS_ROOT, 'docs', 'rules');
+  if (fs.existsSync(preferred)) return preferred;
+  return path.join(HARNESS_ROOT, 'rules');
+})();
+const STATE_FILE = path.join(HARNESS_ROOT, 'var', 'index', 'runtime-state.json');
+const DEFAULT_CAPSULE_MAX_CHARS = 1800;
 
 // ── Frontmatter 解析 ─────────────────────────────────────────────────────────
 
@@ -294,6 +310,35 @@ function getRuleSummary() {
   return lines.join('\n');
 }
 
+function ruleCapsuleLine(rule) {
+  const trigger = rule.matchedTerm ? ` via ${rule.matchedTerm}` : '';
+  const desc = rule.description || rule.name || rule.file;
+  return `[${rule.priority}] ${rule.file}: ${desc}${trigger}`;
+}
+
+function buildRuleCapsule(rules, opts = {}) {
+  const maxChars = Number.parseInt(
+    opts.maxChars || process.env.CLAUDE_RULE_CAPSULE_MAX_CHARS || DEFAULT_CAPSULE_MAX_CHARS,
+    10
+  );
+  const lines = [
+    'Harness rule capsule: obey these rule files; hooks enforce hard gates.',
+    ...rules.map(ruleCapsuleLine),
+    'Read full rule files only when implementation details are needed.',
+  ];
+  const text = lines.join('\n');
+  if (Number.isFinite(maxChars) && maxChars > 0 && text.length > maxChars) {
+    return `${text.slice(0, Math.max(0, maxChars - 32)).trimEnd()}\n...(capsule truncated)`;
+  }
+  return text;
+}
+
+function shouldIncludeRuleContents(opts = {}) {
+  return opts.verbose === true ||
+    process.env.CLAUDE_RULE_VERBOSE === '1' ||
+    process.env.CLAUDE_RULE_FULL_CONTEXT === '1';
+}
+
 // ── 主逻辑 — 供 hook 调用 ────────────────────────────────────────────────────
 
 /**
@@ -314,9 +359,16 @@ function getRuleSummary() {
  * @returns {object|null}
  */
 function evaluate(userMessage, opts = {}) {
+  const openFiles = opts.openFiles || [];
+  const toolNames = opts.toolNames || [];
+  const hasContextSignal = Boolean(userMessage) || openFiles.length > 0 || toolNames.length > 0;
+  if (!hasContextSignal && process.env.CLAUDE_RULE_ALWAYS_LOAD !== '1') {
+    return null;
+  }
+
   const matches = matchRules(userMessage, {
-    openFiles: opts.openFiles || [],
-    toolNames: opts.toolNames || [],
+    openFiles,
+    toolNames,
   });
 
   if (matches.length === 0) {
@@ -334,32 +386,45 @@ function evaluate(userMessage, opts = {}) {
     return true;
   });
 
-  // 加载规则内容
+  const verbose = shouldIncludeRuleContents(opts);
   const ruleContents = {};
-  for (const rule of toLoad) {
-    const content = loadRuleContent(rule.file);
-    if (content) {
-      // 去除 frontmatter，只保留正文
-      const { body } = parseFrontmatter(content);
-      ruleContents[rule.file] = body;
+  if (verbose) {
+    for (const rule of toLoad) {
+      const content = loadRuleContent(rule.file);
+      if (content) {
+        // 去除 frontmatter，只保留正文
+        const { body } = parseFrontmatter(content);
+        ruleContents[rule.file] = body;
+      }
     }
   }
 
   // Emit signal: 规则加载事件
-  try {
-    const { emitSync } = require('../hooks/learning/signal-collector.cjs');
-    emitSync('rule_load', {
-      files: toLoad.map(r => r.file),
-      priorities: toLoad.map(r => r.priority),
-      matchCount: matches.length,
-    });
-  } catch (e) { console.error('[rule-loader] 错误:', e.message); }
+  if (process.env.CLAUDE_RULE_SIGNAL_DISABLED !== '1') {
+    try {
+      const { emitSync } = require('../hooks/learning/signal-collector.cjs');
+      emitSync('rule_load', {
+        files: toLoad.map(r => r.file),
+        priorities: toLoad.map(r => r.priority),
+        matchCount: matches.length,
+      });
+    } catch (e) { console.error('[rule-loader] 错误:', e.message); }
+  }
 
   return {
     source: 'rule-loader',
     type: 'rule-inject-suggest',
+    mode: verbose ? 'verbose' : 'capsule',
     matches: toLoad,
-    ruleContents,
+    ruleRefs: toLoad.map(r => ({
+      file: r.file,
+      priority: r.priority,
+      name: r.name,
+      description: r.description,
+      matchedTerm: r.matchedTerm,
+    })),
+    capsule: buildRuleCapsule(toLoad, opts),
+    ...(verbose ? { ruleContents } : {}),
     allMatches: matches.map(m => `${m.file}[${m.priority}]`),
   };
 }
@@ -389,7 +454,7 @@ function main() {
       // 测试匹配: node rule-loader.cjs match "写RTL" --files="top.sv"
       const input = args[1] || process.env.CLAUDE_USER_MESSAGE || '';
       const files = args.find(a => a.startsWith('--files='))?.split('=')[1]?.split(',') || [];
-      const result = evaluate(input, { openFiles: files });
+      const result = evaluate(input, { openFiles: files, verbose: args.includes('--verbose') });
       if (result) {
         console.log(JSON.stringify(result, null, 2));
         if (result.ruleContents) {
@@ -409,18 +474,114 @@ function main() {
       break;
 
     default:
-      // 默认模式：从 CLAUDE_USER_MESSAGE 读取用户消息并输出注入结果
-      const userMsg = process.env.CLAUDE_USER_MESSAGE || '';
-      const evalResult = evaluate(userMsg, {
-        openFiles: (process.env.CLAUDE_OPEN_FILES || '').split(',').filter(Boolean),
-      });
-      if (evalResult) {
-        // 输出 JSON 行，hook 框架将其注入到 Claude 上下文
-        console.log(JSON.stringify(evalResult));
-      }
-      // 无匹配 → 无输出（0 token 开销）
+      // 默认模式：作为 Claude Code hook 运行。
+      // 输入走 stdin 的 hook payload —— 平台从不设置 CLAUDE_USER_MESSAGE /
+      // CLAUDE_OPEN_FILES, 早期版本只读这两个环境变量, 导致本 hook 永远
+      // 拿不到上下文信号, evaluate() 每次直接 return null (触发率 0%)。
+      // 环境变量保留为回退, 以兼容手工调用。
+      runAsHook();
       break;
   }
+}
+
+// ── Hook 运行时 ───────────────────────────────────────────────────────────
+
+function readStdinRaw() {
+  try {
+    if (process.stdin.isTTY) return '';
+    return fs.readFileSync(0, 'utf8').replace(/^﻿/, '');
+  } catch {
+    return '';
+  }
+}
+
+function parsePayload(raw) {
+  if (!raw || !raw.trim()) return {};
+  try { return JSON.parse(raw); } catch { return {}; }
+}
+
+/** 同一 session 内已注入过的规则不重复注入, 避免每轮刷屏与 token 浪费。 */
+function injectionMemoPath(sessionId) {
+  const safe = String(sessionId || 'no-session').replace(/[^A-Za-z0-9_-]/g, '_').slice(0, 80);
+  return path.join(HARNESS_ROOT, 'var', 'rule-loader', `injected-${safe}.json`);
+}
+
+function loadInjected(sessionId) {
+  try {
+    const raw = fs.readFileSync(injectionMemoPath(sessionId), 'utf8');
+    const parsed = JSON.parse(raw);
+    return new Set(Array.isArray(parsed.files) ? parsed.files : []);
+  } catch {
+    return new Set();
+  }
+}
+
+function saveInjected(sessionId, files) {
+  try {
+    const target = injectionMemoPath(sessionId);
+    fs.mkdirSync(path.dirname(target), { recursive: true });
+    const tmp = `${target}.${process.pid}.tmp`;
+    fs.writeFileSync(tmp, JSON.stringify({ files: [...files], updatedAt: new Date().toISOString() }), 'utf8');
+    fs.renameSync(tmp, target);
+  } catch { /* 注入记忆写失败不影响主流程 */ }
+}
+
+function runAsHook() {
+  const payload = parsePayload(readStdinRaw());
+  const eventName = payload.hook_event_name || '';
+  const toolInput = payload.tool_input || payload.tool?.input || {};
+
+  // UserPromptSubmit 是主路径; PreToolUse 时退化为按文件类型匹配。
+  const userMessage = payload.prompt
+    || payload.user_prompt
+    || process.env.CLAUDE_USER_MESSAGE
+    || '';
+  const openFiles = [toolInput.file_path, toolInput.notebook_path]
+    .filter(Boolean)
+    .concat((process.env.CLAUDE_OPEN_FILES || '').split(',').filter(Boolean));
+  const toolNames = [payload.tool_name || payload.tool?.name].filter(Boolean);
+
+  const result = evaluate(userMessage, { openFiles, toolNames });
+  if (!result) return;
+
+  // evaluate() 有两种输出形态:
+  //   capsule 模式 — result.capsule (紧凑摘要) + result.ruleRefs
+  //   full 模式    — result.ruleContents (规则全文)
+  // 默认走 capsule, 符合 docs/rules/00-core.md 的"capsule 足够时不读取全文"。
+  const refFiles = Array.isArray(result.ruleRefs)
+    ? result.ruleRefs.map(r => r.file)
+    : Object.keys(result.ruleContents || {});
+  if (refFiles.length === 0) return;
+
+  const sessionId = payload.session_id || payload.sessionId || '';
+  const already = loadInjected(sessionId);
+  const fresh = refFiles.filter(file => !already.has(file));
+  if (fresh.length === 0) return; // 本 session 已注入过 → 0 token
+
+  let body;
+  if (result.ruleContents && Object.keys(result.ruleContents).length > 0) {
+    body = fresh
+      .filter(file => result.ruleContents[file])
+      .map(file => `### ${file}\n${result.ruleContents[file]}`)
+      .join('\n\n');
+  } else {
+    body = String(result.capsule || '');
+  }
+  if (!body.trim()) return;
+
+  const additionalContext = `[rule-loader] 与当前任务相关的规则:\n\n${body}`;
+
+  // Claude Code 只把 hookSpecificOutput.additionalContext 注入模型上下文;
+  // 裸 console.log 的文本只会进日志, 不进上下文。
+  process.stdout.write(JSON.stringify({
+    hookSpecificOutput: {
+      hookEventName: eventName || 'UserPromptSubmit',
+      additionalContext,
+    },
+  }));
+
+  for (const file of fresh) already.add(file);
+  saveInjected(sessionId, already);
 }
 
 if (require.main === module) {

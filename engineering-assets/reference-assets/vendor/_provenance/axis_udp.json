@@ -1,0 +1,24 @@
+{
+  "schema_version": "1.0",
+  "asset_uid": "axis_udp",
+  "name": "axis_udp",
+  "kind": "vendor",
+  "owner": "Lihan",
+  "maturity": {
+    "level": "reference"
+  },
+  "banner": "未认证 — 第三方上游工程，仅作参考。未过任何 CBB 准入门，不得直接复用进产品设计。",
+  "provenance": {
+    "source": "https://github.com/alknvl/axis_udp",
+    "license": "MIT",
+    "retrieved": "2026-06-11",
+    "retrieved_basis": "目录 mtime 下界；原始归档为 GitHub 分支 ZIP，无 .git，commit SHA 不可复原",
+    "commit": null,
+    "source_basis": "上游仓库描述与本地 README 首段逐字一致（\"simple implementation of UDP/IP stack with 64-bit AXI-Stream interface...\"）"
+  },
+  "content": {
+    "files": 20,
+    "size": "309K"
+  },
+  "notes": "64-bit AXI-Stream UDP/IP 栈。"
+}

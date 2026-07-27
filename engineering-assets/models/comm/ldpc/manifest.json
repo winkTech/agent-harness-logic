@@ -1,0 +1,155 @@
+{
+  "schema_version": "1.0",
+  "asset_uid": "model_comm_ldpc",
+  "name": "ldpc_min_sum_golden",
+  "kind": "golden-model",
+  "version": "1.0.0",
+  "owner": "lihan",
+  "maturity": {
+    "level": "intake"
+  },
+  "requirement_ref": "engineering-assets/knowledge/primary/domains/comm/ldpc/algorithm_spec.md",
+  "implements_for": [
+    "ldpc_codec"
+  ],
+  "models": [
+    {
+      "role": "reference",
+      "trait": "普遍性",
+      "path": "src/ldpc_decoder_bp.m",
+      "note": "浮点 BP (sum-product) 参考译码器; 算法上界基准"
+    },
+    {
+      "role": "reference",
+      "trait": "普遍性",
+      "path": "src/ldpc_decoder_ms.m",
+      "note": "浮点归一化 Min-Sum 译码器 (alpha=0.75); RTL 算法方向的浮点参考; ldpc_decoder_ms_pure.m 为纯 Min-Sum 对照"
+    },
+    {
+      "role": "reference",
+      "trait": "普遍性",
+      "path": "src/ldpc_encode_80211n.m",
+      "note": "802.11n R=1/2 N=648 Z=27 QC-LDPC 双对角回代编码; 与 RTL ldpc_encoder_top 同算法路径"
+    },
+    {
+      "role": "fixed_point",
+      "trait": "设计特性",
+      "path": "src/ldpc_decoder_ms_fixed.m",
+      "note": "Q(10,4) 定点 Min-Sum (alpha=12/16 移位加法); 承载本设计量化/饱和特性, 作 RTL bit-true 对标基准"
+    },
+    {
+      "role": "fixed_point",
+      "trait": "设计特性",
+      "path": "PT_1_2_648.mat",
+      "note": "802.11n R=1/2 Z=27 基础矩阵/置换表数据 (MAT 5.0, 健康)"
+    }
+  ],
+  "vectors": {
+    "config": "802.11n QC-LDPC R=1/2 N=648 K=324 Z=27 / LLR Q(10,4) / max_iter=20 / alpha=0.75",
+    "provenance": "RTL 对标向量 tb_llr_input_*.hex / tb_expected_output_*.hex 由 gen_rtl_test_vectors.m 生成到 rtl/02_sim/, 但源知识库中从未导出入库 (全树无 .hex) — TB 无法独立复跑, 属向量缺失 (与 rrc 的向量损坏不同类)。二进制 .mat (PT_1_2_648.mat, fixed_point_ber_results.mat) 经 2026-07-25 抽查为合法 MATLAB 5.0 格式且字节分布正常, 非常量轨。golden .m 代码未做任何改动。建议后续用 MATLAB 原生跑 gen_rtl_test_vectors.m 补齐向量并入库。"
+  },
+  "sources": [
+    {
+      "path": "config.m",
+      "role": "config",
+      "sha256": "864d7ef8b250c930ba4f43d34746eb7397fd3af32cf09454b439af4a9d16eb2c"
+    },
+    {
+      "path": "PT_1_2_648.mat",
+      "role": "fixed_point",
+      "sha256": "acd7ef43d21aad13d2c8448515e2dbeb675445b0e7ed06409380f62984f32348"
+    },
+    {
+      "path": "src/generate_h_matrix.m",
+      "role": "reference",
+      "sha256": "6c4417043b28d26edbd4451d0d4b203e2b2c3ee4e0e159538a336584fd70492b"
+    },
+    {
+      "path": "src/ldpc_encode.m",
+      "role": "reference",
+      "sha256": "11be916ad151eaeda0299c4f1ad90ae329f0087b0f07a7f76ce8ebb2db5c5523"
+    },
+    {
+      "path": "src/ldpc_encode_80211n.m",
+      "role": "reference",
+      "sha256": "2fce09b7202dbcffd8f6e3d34c0d182bb4bf70eb5ce380e1a0724ce9e6a6654d"
+    },
+    {
+      "path": "src/llr_calc.m",
+      "role": "reference",
+      "sha256": "90e8e50e583c6e9b22f947d8b323b4172f3674c29aa1845c3697b2dd90ae4650"
+    },
+    {
+      "path": "src/ldpc_decoder_bp.m",
+      "role": "reference",
+      "sha256": "5a5ec0e1f9181fc217684265962894d67ec6b77dd20ccb44adc40636be1e16dd"
+    },
+    {
+      "path": "src/ldpc_decoder_ms.m",
+      "role": "reference",
+      "sha256": "55797a73b37ced568f1095bdd3f7a61fa2fe4579e556e45919629649b7ae8ef6"
+    },
+    {
+      "path": "src/ldpc_decoder_ms_pure.m",
+      "role": "reference",
+      "sha256": "f676e4d2161671aedc6090430130ceecb82d1afd7847e369f6ac8c8f4c6b5aa5"
+    },
+    {
+      "path": "src/ldpc_decoder_ms_fixed.m",
+      "role": "fixed_point",
+      "sha256": "4244815cd12b89b8cbf1c853b6dd37b2f74b1f8c0b99dbd3e84e84d156a8d879"
+    },
+    {
+      "path": "src/sim_ldpc_ber.m",
+      "role": "reference",
+      "sha256": "352aa42fbe51fa64decd6a0acfc89690e768a84490cc60c66cfb0c90eed2ccaa"
+    },
+    {
+      "path": "gen_rtl_test_vectors.m",
+      "role": "vector_gen",
+      "sha256": "3d1bc794410d295288162493f3687c96496c5e1ff4cee0e8dcfa7a8785875367"
+    },
+    {
+      "path": "compare_fixed_point_v2.m",
+      "role": "test",
+      "sha256": "8a420096367c08c337cfe217c3519427d90be85886eb7e2660e0b2a9bb795234"
+    },
+    {
+      "path": "run_ldpc_sim.m",
+      "role": "test",
+      "sha256": "0d2695a9a906197bdd6214098b0ae1198a4afa8a2f2bddcadfc17dd268b8e826"
+    },
+    {
+      "path": "run_all_tests.m",
+      "role": "test",
+      "sha256": "7d7cac5c44dc95a154f494cb87fb928896aa3d50b9ca26ab8f610d3c32fd6a00"
+    },
+    {
+      "path": "tests/test_encode_decode.m",
+      "role": "test",
+      "sha256": "f4ce549d17b4502b815ce2b985daa003676bd528266e455be9024e0dc4355413"
+    },
+    {
+      "path": "tests/test_ber_awgn.m",
+      "role": "test",
+      "sha256": "600827649a22106ca782d320d88ed13aca29dc875c8c1aafd5d2ad09e37f7907"
+    },
+    {
+      "path": "tests/test_convergence.m",
+      "role": "test",
+      "sha256": "2fba4db4b659a66e5fedc03cc6a7172090e535bedd8fe36f193d080003a32f78"
+    },
+    {
+      "path": "tests/test_min_sum_vs_bp.m",
+      "role": "test",
+      "sha256": "7edc9c0bb9b740cf9ff1a325b66ea04b1f27d18ec1920219c843ff641539fde9"
+    },
+    {
+      "path": "tests/test_multiple_blocks.m",
+      "role": "test",
+      "sha256": "9c889d2dda3f6dceb2ebd5a31da36722bb6adbc6bd36c3a4839b0f04090d36b0"
+    }
+  ],
+  "waivers": [],
+  "superseded_by": null
+}

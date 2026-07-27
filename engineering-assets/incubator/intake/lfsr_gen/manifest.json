@@ -1,0 +1,70 @@
+{
+  "schema_version": "1.0",
+  "asset_uid": "lfsr_gen",
+  "name": "lfsr_gen",
+  "version": "0.1.0",
+  "owner": "lihan",
+  "kind": "primitive",
+  "maturity": {
+    "level": "qualification",
+    "evidence_ref": "engineering-assets/var/gates/pg/lfsr_gen/"
+  },
+  "requirement_ref": "engineering-assets/docs/comm模块族认证差距清单.md",
+  "doc_refs": [
+    "engineering-assets/docs/governance/CBB-治理与生产级准入规范-V1.0.md",
+    "engineering-assets/docs/CBB候选台账-hdl-coding-templates.md"
+  ],
+  "fidelity": {
+    "status": "na"
+  },
+  "top": "lfsr_gen",
+  "ports": [
+    {
+      "name": "i_clk",
+      "direction": "input",
+      "width": 1
+    },
+    {
+      "name": "i_rst",
+      "direction": "input",
+      "width": 1
+    },
+    {
+      "name": "i_en",
+      "direction": "input",
+      "width": 1
+    },
+    {
+      "name": "o_valid",
+      "direction": "output",
+      "width": 1
+    },
+    {
+      "name": "o_data",
+      "direction": "output",
+      "width": 16
+    }
+  ],
+  "clock": {
+    "name": "i_clk"
+  },
+  "reset": {
+    "name": "i_rst",
+    "polarity": "active_high",
+    "type": "sync"
+  },
+  "sources": [
+    {
+      "path": "rtl/lfsr_gen.sv",
+      "role": "rtl",
+      "sha256": "a0a33ece99c4379af8fdc47561b0c8339f0cf0a778bd071e8a2cca8d93a0176a"
+    },
+    {
+      "path": "tb/tb_lfsr_gen.sv",
+      "role": "tb",
+      "sha256": "9a4ed22bda11a6efdb02fe5fc0420f684dec832da34b8abc48320e03d9ef7696"
+    }
+  ],
+  "waivers": [],
+  "superseded_by": null
+}

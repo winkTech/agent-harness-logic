@@ -2,7 +2,7 @@
 /**
  * engine/scripts/hooks/hdl-gate.cjs — HDL 编码规则硬门禁 (P0)
  *
- * 强制执行 rules/01-hdl.md 和 skills/hdl-coding/SKILL.md 中的关键规则:
+ * 强制执行 docs/rules/01-hdl.md 和 skills/hdl-coding/SKILL.md 中的关键规则:
  *
  *   1. Testbench-First: 新建 RTL 模块前必须有对应的 Testbench
  *   2. No initial in RTL: 综合代码禁止使用 initial 语句
@@ -83,35 +83,24 @@ function isTbFileName(fileName) {
   return /(?:^tb_|_tb\.|testbench|test\.sv)/i.test(fileName || '');
 }
 
-const NAMING_CHECKS = [
-  {
-    check: (line, fname, fpath) => {
-      // 仅 01_src/ 路径强制 ro_ 规则
-      if (!isSourcePath(fpath)) return null;
-      // 检查 output reg 或 output logic 是否以 ro_ 开头
-      const m = line.match(/^\s*(output)\s+(reg|logic|wire)\s+(\[.*?\]\s+)?(\w+)/);
-      if (m && !m[4].startsWith('ro_') && !fname.includes('_tb') && !fname.includes('TB_')) {
-        return `输出信号 "${m[4]}" 应以 ro_ 开头 (line: ${line.trim().slice(0, 40)})`;
-      }
-      return null;
-    },
-  },
-  {
-    check: (line, fname, fpath) => {
-      // 仅 01_src/ 路径强制 ri_ 规则
-      if (!isSourcePath(fpath)) return null;
-      // 检查 input 是否以 ri_ 开头；时钟/复位信号例外
-      const m = line.match(/^\s*(input)\s+(reg|logic|wire)?\s*(\[.*?\]\s+)?(\w+)/);
-      if (m && !m[4].startsWith('ri_')) {
-        const isClkRst = /^(i_)?(clk|rst|clock|reset)/i.test(m[4]);
-        if (!isClkRst) {
-          return `输入信号 "${m[4]}" 应以 ri_ 开头 (line: ${line.trim().slice(0, 40)})`;
-        }
-      }
-      return null;
-    },
-  },
-];
+// 标准总线协议信号豁免 ri_/ro_ 前缀
+// 依据 docs/rules/01-hdl.md §命名例外 / SKILL.md §2: AXI/Wishbone/JTAG 保持协议原名。
+const BUS_SIGNAL_RE = /^[sm]_axi(s)?_|_axi(s)?_|^wb_|_wb_|^(tck|tms|tdi|tdo|trst)$/i;
+const CLK_RST_RE = /^(i_)?(clk|rst|clock|reset)/i;
+function isBusSignal(name) { return BUS_SIGNAL_RE.test(String(name || '')); }
+function isClkRstName(name) { return CLK_RST_RE.test(String(name || '')); }
+// 端口豁免 ri_ (输入): 时钟/复位 + 标准总线协议
+function isExemptInputPort(name) { return isClkRstName(name) || isBusSignal(name); }
+
+// 去除 function/task 体, 避免其形参被误当作模块端口
+function stripFunctionTaskBodies(text) {
+  return String(text || '')
+    .replace(/\bfunction\b[\s\S]*?\bendfunction\b/g, ' ')
+    .replace(/\btask\b[\s\S]*?\bendtask\b/g, ' ');
+}
+
+// [已移除] NAMING_CHECKS —— 定义后从未被调用的死代码, 且沿用了错误的
+// "端口须以 ri_/ro_ 开头" 判据。判据的唯一权威实现是 checkNamingViolations。
 
 // ── 辅助函数 ─────────────────────────────────────────────────────────────────
 
@@ -148,6 +137,16 @@ function projectRoot(p) {
 function findTbForModule(fp) {
   // 从文件路径推断模块名和对应的 TB 路径
   const normalized = fp.replace(/\\/g, '/');
+
+  // engineering-assets CBB 包布局: <asset>/rtl/<file>.sv 的 TB 在 <asset>/tb/ 或同级
+  {
+    const dir = path.dirname(fp);
+    const base = path.basename(fp).replace(/\.(sv|v)$/i, '');
+    for (const c of [
+      path.join(dir, `tb_${base}.sv`), path.join(dir, `${base}_tb.sv`),
+      path.join(dir, '..', 'tb', `tb_${base}.sv`), path.join(dir, '..', 'tb', `${base}_tb.sv`),
+    ]) { if (fs.existsSync(c)) return c; }
+  }
 
   // 匹配 src 目录中的模块路径: .../01_src/00_hdl/<module>/<file>.sv
   const srcMatch = normalized.match(/(?:^|\/)(?:01_src\/00_hdl|src\/hdl|rtl)\/([^/]+)\/([^/]+)\.(sv|v)$/i);
@@ -188,19 +187,24 @@ function isNewModuleFile(fp) {
   } catch { return true; }
 }
 
+// 端口命名判据 —— 依据 docs/rules/01-hdl.md §命名规范:
+//   i_/o_  = 模块端口 (输入/输出)
+//   ri_/ro_ = 模块**内部**对输入/输出做寄存的信号, 不是端口名
+// 早期版本在此要求端口本身以 ri_/ro_ 开头, 与上述规范相反, 导致合规模块被 exit 2 拦死。
 function checkNamingViolations(content, fileName, filePath) {
   if (!isSourcePath(filePath) || isTbFileName(fileName)) return [];
 
   const violations = [];
   for (const port of extractDirectedPorts(content)) {
-    if (port.direction === 'input' && !port.name.startsWith('ri_')) {
-      const isClkRst = /^(i_)?(clk|rst|clock|reset)/i.test(port.name);
-      if (!isClkRst) {
-        violations.push(`杈撳叆淇″彿 "${port.name}" 搴斾互 ri_ 寮€澶?(declaration: ${port.declaration})`);
+    if (isBusSignal(port.name)) continue; // 标准总线保持协议原名
+    if (port.direction === 'input') {
+      if (isClkRstName(port.name)) continue; // 时钟/复位允许 clk/rst/i_clk 等写法
+      if (!port.name.startsWith('i_')) {
+        violations.push(`输入端口 "${port.name}" 应以 i_ 开头 (declaration: ${port.declaration})`);
       }
     }
-    if (port.direction === 'output' && !port.name.startsWith('ro_')) {
-      violations.push(`杈撳嚭淇″彿 "${port.name}" 搴斾互 ro_ 寮€澶?(declaration: ${port.declaration})`);
+    if (port.direction === 'output' && !port.name.startsWith('o_')) {
+      violations.push(`输出端口 "${port.name}" 应以 o_ 开头 (declaration: ${port.declaration})`);
     }
   }
   return violations;
@@ -235,7 +239,7 @@ function namesFromPortTail(tail) {
 }
 
 function extractDirectedPorts(content) {
-  const text = stripComments(content);
+  const text = stripFunctionTaskBodies(stripComments(content));
   const matches = [...text.matchAll(/\b(input|output)\b/g)];
   const ports = [];
 
@@ -257,38 +261,12 @@ function extractDirectedPorts(content) {
  * @param {string} fp 文件路径
  * @returns {number} 修复处数
  */
-function autoFixNaming(fp) {
-  try {
-    let content = fs.readFileSync(fp, 'utf8');
-    const lines = content.split('\n');
-    let fixed = 0;
-    const newLines = lines.map(line => {
-      const trimmed = line.trim();
-      if (trimmed.startsWith('//') || trimmed.startsWith('/*')) return line;
-
-      // 修复 output 缺 ro_
-      let m = line.match(/^(\s*output\s+(reg|logic|wire)?\s*(\[.*?\]\s+)?)([a-z]\w*)/);
-      if (m && !m[4].startsWith('ro_')) {
-        fixed++;
-        return m[1] + 'ro_' + m[4];
-      }
-
-      // 修复 input 缺 ri_
-      m = line.match(/^(\s*input\s+(reg|logic|wire)?\s*(\[.*?\]\s+)?)([a-z]\w*)/);
-      if (m && !m[4].startsWith('ri_')) {
-        fixed++;
-        return m[1] + 'ri_' + m[4];
-      }
-
-      return line;
-    });
-
-    if (fixed > 0) {
-      fs.writeFileSync(fp, newLines.join('\n'), 'utf8');
-    }
-    return fixed;
-  } catch { return 0; }
-}
+// [已移除] autoFixNaming —— 曾在 PostToolUse 静默改写用户源文件, 三重破坏:
+//   1. 把合规端口 i_data / o_data 重命名为 ri_i_data / ro_o_data (判据本身就是错的);
+//   2. 正则只保留匹配段, **丢弃行尾逗号**, 直接产生语法错误;
+//   3. 只改端口声明行, 不更新模块内部对该信号的引用, 模块必然编译失败。
+// Hook 不得在用户不知情的前提下改写源码。命名问题由 PreToolUse 的
+// checkNamingViolations 提示, 交由人/模型显式修改。
 
 function checkSynthesisViolations(content) {
   const violations = [];
@@ -315,6 +293,34 @@ function block(title, messages, command) {
   console.error('');
 }
 
+// ── 写入类工具矩阵 ───────────────────────────────────────────────────────────
+// settings.json 把本门禁注册在 Write 上, 但红线是对"文件最终内容"的约束, 与用
+// 哪个工具写无关。只认 Write 等于给 Edit 开了后门。
+const HDL_WRITE_TOOLS = new Set(['write', 'edit', 'multiedit']);
+
+/** 还原「本次操作完成后」的文件全文。Write 直接给, Edit/MultiEdit 需叠加替换。 */
+function postEditContent(payload, filePath) {
+  const input = payload?.tool_input || payload?.tool?.input || payload?.input || payload?.arguments || {};
+  const direct = input.content || payload?.content || '';
+  if (direct) return String(direct);
+
+  const edits = Array.isArray(input.edits) ? input.edits
+    : (input.old_string !== undefined
+      ? [{ old_string: input.old_string, new_string: input.new_string, replace_all: input.replace_all }]
+      : []);
+  if (edits.length === 0) return '';
+
+  let text;
+  try { text = fs.readFileSync(filePath, 'utf8'); } catch { return ''; }
+  for (const e of edits) {
+    const oldS = String(e?.old_string ?? '');
+    if (!oldS) continue;
+    const newS = String(e?.new_string ?? '');
+    text = e?.replace_all ? text.split(oldS).join(newS) : text.replace(oldS, newS);
+  }
+  return text;
+}
+
 // ── 主逻辑 ───────────────────────────────────────────────────────────────────
 
 async function main() {
@@ -339,15 +345,17 @@ async function main() {
 
   // ── PreToolUse(Write): 全方位拦截 ──────────────────────────────────────────
   // 综合/命名规则仅对 01_src/00_hdl/ 生效，VIP/TB 目录豁免
-  if ((!eventName || eventName === 'PreToolUse') && toolName === 'write' && filePath) {
+  if ((!eventName || eventName === 'PreToolUse') && HDL_WRITE_TOOLS.has(toolName) && filePath) {
     const isHdl = /\.(sv|v)$/i.test(filePath);
     if (!isHdl) process.exit(0);
 
     // 路径分类
     const isSrcPath = isSourcePath(filePath);
 
-    // 从 payload 提取待写入的内容（PreToolUse 时文件尚未写入磁盘）
-    const content = payload?.tool_input?.content || payload?.tool?.input?.content || payload?.input?.content || payload?.arguments?.content || '';
+    // 取「这次操作之后文件将是什么内容」。
+    // Write 给全文；Edit/MultiEdit 只给片段，需读磁盘再套用替换 —— 否则本门禁
+    // 只能拦住新建文件，往已有 .sv 里插 latch / 组合直出反而畅通无阻。
+    const content = postEditContent(payload, fp);
     if (!content) process.exit(0);
 
     const fileName = path.basename(fp);
@@ -390,19 +398,13 @@ async function main() {
 
   // ── PostToolUse(Write): 自动修复 + 后检查（非阻断，仅警告）───────────────
   // PreToolUse 已做硬拦截，此处仅自动修复命名 + 输出分析报告
-  if ((!eventName || eventName === 'PostToolUse') && toolName === 'write' && filePath) {
+  if ((!eventName || eventName === 'PostToolUse') && HDL_WRITE_TOOLS.has(toolName) && filePath) {
     const isHdl = /\.(sv|v)$/i.test(filePath);
     if (!isHdl) process.exit(0);
 
     const isSrcPath = isSourcePath(filePath);
 
-    // 命名自动修复 — 仅 01_src/ 路径
-    if (isSrcPath) {
-      const fixed = autoFixNaming(fp);
-      if (fixed > 0) {
-        console.error(`[HDL-Gate] 自动修复 ${fixed} 处命名违规 (ri_/ro_)`);
-      }
-    }
+    // [已移除] 命名自动修复: Hook 不改写用户源码, 见 autoFixNaming 处的说明。
 
     // 逻辑分析报告 — 仅 01_src/ 路径，不阻断
     if (isSrcPath) {

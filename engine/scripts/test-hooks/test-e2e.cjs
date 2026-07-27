@@ -16,13 +16,15 @@
 
 'use strict';
 
+const { HARNESS_ROOT } = require('../lib/harness-root.cjs');
+
 const fs = require('node:fs');
 const path = require('node:path');
 const os = require('node:os');
 const { spawnSync } = require('node:child_process');
 const { validateHookScripts } = require('../lib/hook-registry.cjs');
 
-const HOME = path.join(os.homedir(), '.claude');
+const HOME = HARNESS_ROOT;
 const VERBOSE = process.argv.includes('--verbose');
 const JSON_OUTPUT = process.argv.includes('--json');
 
@@ -66,34 +68,61 @@ test('Verification Gate 全周期 (write → block → verify → clear → allo
   if (!fs.existsSync(gatePath)) return { ok: false, detail: 'verification-gate.cjs 不存在' };
 
   // Step 1: 模拟编辑操作写状态文件
-  const stateDir = path.join(HOME, 'var');
+  const stateDir = fs.mkdtempSync(path.join(os.tmpdir(), 'verify-e2e-'));
   const stateFile = path.join(stateDir, 'verify-gate.json');
+  const ledgerFile = path.join(stateDir, 'verification-ledger.json');
+  const env = {
+    ...process.env,
+    CLAUDE_VERIFY_GATE_STATE_FILE: stateFile,
+    CLAUDE_VERIFICATION_LEDGER_FILE: ledgerFile,
+  };
   if (!fs.existsSync(stateDir)) fs.mkdirSync(stateDir, { recursive: true });
   fs.writeFileSync(stateFile, JSON.stringify({ edited: true, verified: false, editCount: 1 }), 'utf8');
 
   // Step 2: 非安全命令应被拦截 (exit 2)
   const blockResult = spawnSync('node', [gatePath], {
-    input: JSON.stringify({ hook_event_name: 'PreToolUse', tool_name: 'Bash', tool_input: { command: 'echo test' } }),
-    encoding: 'utf8', timeout: 5000, windowsHide: true,
+    input: JSON.stringify({ hook_event_name: 'PreToolUse', tool_name: 'Bash', tool_input: { command: 'node build.cjs' } }),
+    encoding: 'utf8', timeout: 5000, windowsHide: true, env,
   });
   if (blockResult.status !== 2) {
     return { ok: false, detail: `期望 block exit=2, 实际 exit=${blockResult.status}` };
   }
 
-  // Step 3: 验证命令应清除标记
+  // Step 3: PreToolUse 仅放行验证命令，不清除标记
   const verifyResult = spawnSync('node', [gatePath], {
     input: JSON.stringify({ hook_event_name: 'PreToolUse', tool_name: 'Bash', tool_input: { command: 'npm test' } }),
-    encoding: 'utf8', timeout: 5000, windowsHide: true,
+    encoding: 'utf8', timeout: 5000, windowsHide: true, env,
   });
-  // Should clear gate and allow
   if (verifyResult.status !== 0) {
     return { ok: false, detail: `期望 verify exit=0, 实际 exit=${verifyResult.status}` };
   }
 
-  // Step 4: 验证后非安全命令应放行
+  const stillBlocked = spawnSync('node', [gatePath], {
+    input: JSON.stringify({ hook_event_name: 'PreToolUse', tool_name: 'Bash', tool_input: { command: 'node build.cjs' } }),
+    encoding: 'utf8', timeout: 5000, windowsHide: true, env,
+  });
+  if (stillBlocked.status !== 2) {
+    return { ok: false, detail: `PreToolUse 过早清除了验证状态, exit=${stillBlocked.status}` };
+  }
+
+  // Step 4: PostToolUse 凭真实执行结果和日志证据清除标记
+  const verifyPost = spawnSync('node', [gatePath], {
+    input: JSON.stringify({
+      hook_event_name: 'PostToolUse',
+      tool_name: 'Bash',
+      tool_input: { command: 'npm test' },
+      tool_response: { status: 0, stdout: '1 passed', stderr: '' },
+    }),
+    encoding: 'utf8', timeout: 5000, windowsHide: true, env,
+  });
+  if (verifyPost.status !== 0) {
+    return { ok: false, detail: `期望 verify post exit=0, 实际 exit=${verifyPost.status}` };
+  }
+
+  // Step 5: 验证后非安全命令应放行
   const allowResult = spawnSync('node', [gatePath], {
-    input: JSON.stringify({ hook_event_name: 'PreToolUse', tool_name: 'Bash', tool_input: { command: 'echo test' } }),
-    encoding: 'utf8', timeout: 5000, windowsHide: true,
+    input: JSON.stringify({ hook_event_name: 'PreToolUse', tool_name: 'Bash', tool_input: { command: 'node build.cjs' } }),
+    encoding: 'utf8', timeout: 5000, windowsHide: true, env,
   });
   if (allowResult.status !== 0) {
     return { ok: false, detail: `期望 verify 后 allow exit=0, 实际 exit=${allowResult.status}` };

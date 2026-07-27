@@ -19,12 +19,14 @@
  *   node code-graph-index.cjs status /path/to/proj         # 项目统计
  */
 
+const { HARNESS_ROOT } = require('./lib/harness-root.cjs');
+
 const p = require('node:path');
 const f = require('node:fs');
 const os = require('node:os');
 const crypto = require('node:crypto');
 
-const HOME = p.join(os.homedir(), '.claude');
+const HOME = HARNESS_ROOT;
 const INDEX_DIR = p.join(HOME, 'var', 'index');
 const INDEX_FILE = p.join(INDEX_DIR, 'code-graph.json');
 const LOOKUP_FILE = INDEX_FILE.replace('.json', '-lookup.json');

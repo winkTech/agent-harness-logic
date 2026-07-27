@@ -121,7 +121,7 @@ const candidates = skills.decayCandidates(90);
   3. 执行未应用的迁移 (事务内, 幂等)
 ```
 
-添加新迁移: `migrations/002-add-columns.cjs`
+添加新迁移: `migrations/002-cjk-fts5.cjs`
 
 ```js
 module.exports = {

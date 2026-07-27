@@ -20,12 +20,12 @@
 const { DatabaseSync } = require('node:sqlite');
 const path = require('node:path');
 const fs = require('node:fs');
-const os = require('node:os');
+const { HARNESS_ROOT } = require('../scripts/lib/harness-root.cjs');
 
 // ── 默认路径 ──────────────────────────────────────────────────────────────
 
 /** ~/.claude/.wright/ 下的默认数据库文件名 */
-const DEFAULT_DB_DIR = path.join(os.homedir(), '.claude', '.wright');
+const DEFAULT_DB_DIR = path.join(HARNESS_ROOT, '.wright');
 const DEFAULT_DB_PATH = path.join(DEFAULT_DB_DIR, 'memory.db');
 
 // ── 连接缓存 ──────────────────────────────────────────────────────────────

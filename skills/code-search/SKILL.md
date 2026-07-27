@@ -177,6 +177,13 @@ pnpm search:code "task workflow"              # 语义变体发现
 | 陌生仓库直接深读文件 | 走 7 阶段协议，先搜索后读取 |
 | 语义搜索用单个词查询 | 用自然语言描述功能 |
 
+## 参考文件
+
+| 文件 | 内容 |
+|:-----|:-----|
+| `references/README.md` | ripgrep 总览：设计取舍、与 grep/ack/ag 的差异、安装 |
+| `references/GUIDE.md` | ripgrep 用户指南：正则语法、glob 过滤、类型过滤、常用组合 |
+
 ## 关联 Skill
 
 - [debugging](../debugging/SKILL.md) — 调试验证发现的 Bug

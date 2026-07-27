@@ -12,16 +12,18 @@
 // 直接代理到 dag 工作流
 export const meta = {
   name: 'hdl-coding-workflow',
-  description: 'HDL RTL 开发全流程 (别名 → hdl-coding-dag-workflow)',
+  description: 'HDL RTL 开发全流程的多 Agent 编排版 (别名 → hdl-coding-dag-workflow)。写单个模块用 hdl-coding 技能。',
   phases: [
     { title: 'Phase 0 基础设施' },
-    { title: 'Phase 1 架构设计' },
+    { title: 'Phase 1a 系统方案设计' },
+    { title: 'Phase 1b 微架构设计' },
     { title: 'Phase 2 定点量化' },
     { title: 'Phase 3 TB+向量生成' },
     { title: 'Phase 4 RTL编码+脚本化对比' },
     { title: 'Phase 4.5 证据门禁' },
     { title: 'Phase 5 顶层集成+全链仿真' },
     { title: 'Phase 6 回归覆盖率' },
+    { title: 'Phase 6b Vivado 综合体检' },
     { title: 'Phase 7 代码审查' },
     { title: 'Phase 8 报告+Verifier' },
   ],

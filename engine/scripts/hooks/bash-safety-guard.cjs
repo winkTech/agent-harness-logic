@@ -41,6 +41,17 @@ const DANGEROUS_PATTERNS = [
       // Python shutil copy to matlab/
       /shutil\.copy.*matlab/i,
       /shutil\.copy.*golden/i,
+      // PowerShell 写入 cmdlet —— 本 guard 注册在 "Bash|PowerShell", 但上面这批
+      // 模式全是 POSIX/脚本语言写法。缺了这一段, 在以 PowerShell 为主 shell 的
+      // 机器上, `Set-Content matlab/gm.m` 一类命令直接放行, 等于黄金模型保护
+      // 在 Bash 侧硬、PowerShell 侧空。source-write-bypass 那组虽然含
+      // Set-Content/Out-File, 但要求路径里有 src|rtl|tb|tests 目录段,
+      // matlab/ 与 golden*/ 都不在其中, 覆盖不到。
+      /(?:Set-Content|Add-Content|Out-File|New-Item|Copy-Item|Move-Item)[\s\S]*matlab[\\/][^"'\s]*\.(?:m|py|sh|mat)\b/i,
+      /(?:Set-Content|Add-Content|Out-File|New-Item|Copy-Item|Move-Item)[\s\S]*golden[^"'\s]*[\\/][^"'\s]*\.(?:m|py|sh|mat)\b/i,
+      /(?:Set-Content|Add-Content|Out-File|New-Item|Copy-Item|Move-Item)[\s\S]*fixed_point[^"'\s]*\.(?:m|py|sh|mat)\b/i,
+      // 管道形式: "content" | Out-File matlab/gm.m
+      /\|\s*(?:Out-File|Set-Content|Add-Content)[\s\S]*(?:matlab|golden|fixed_point)/i,
     ],
     message: '绕过黄金模型保护: 脚本子进程写入受保护路径',
   },
@@ -60,6 +71,21 @@ const DANGEROUS_PATTERNS = [
   },
 
   // ===== 2. 数据泄露 =====
+  {
+    category: 'no-bit-cfgmem',
+    severity: 'CRITICAL',
+    patterns: [
+      /\bwrite_bitstream\b/i,
+      /\bwrite_cfgmem\b/i,
+      /\bbootgen\b/i,
+      /\bprogram_flash\b/i,
+      /\bopen_hw(?:_manager)?\b/i,
+      /(?:>|>>|Out-File|Set-Content|Add-Content|New-Item|touch|copy|cp|mv)\b[\s\S]*\.(?:bit|mcs|ltx)\b/i,
+      /(?:>|>>|Out-File|Set-Content|Add-Content|New-Item|touch|copy|cp|mv)\b[\s\S]*\.(?:bin)\b[\s\S]*(?:bitstream|cfgmem|boot|flash)/i,
+    ],
+    message: 'No-bit/cfgmem gate: bitstream, cfgmem, hardware-programming, and debug-probe artifacts are forbidden in agent project work.',
+  },
+
   {
     category: 'data-exfiltration',
     severity: 'CRITICAL',
