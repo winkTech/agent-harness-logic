@@ -23,6 +23,7 @@
 - 门禁信息先从规格、现有代码、测试、Golden Model 和知识库提取；只询问仍会实质改变结果的未知项。
 - RTL、Testbench、FPGA/ASIC 架构或 HDL 审查：加载 `hdl-coding` 与 `docs/rules/01-hdl.md`。
 - Python：加载 `docs/rules/02-python.md`；硬件调试任务使用 `python-hardware-debug`。
+- Harness 记忆、Dream、Hook 遥测、检索、维护或规则晋升：加载 `docs/rules/05-harness.md`。
 - 调试、代码审查、Git：分别加载对应 Skill 与规则；其他任务不加载 HDL 流程。
 
 ## 验证

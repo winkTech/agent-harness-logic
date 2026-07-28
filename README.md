@@ -22,6 +22,7 @@
 │   ├── 02-python.md       ←     Python 开发规范
 │   ├── 03-gates.md        ←     需求门禁 + 验证质量门禁
 │   ├── 04-git.md          ←     Git 操作规则
+│   ├── 05-harness.md      ←     记忆/Dream/Hook/维护/规则晋升边界
 │   └── README.md          ←     为什么规则不放在 .claude/rules/（避免全文常驻注入）
 ├── docs/rules-archive/    ← 已归档规则（11 份：调试/安全/认知/系统/约束/检索/绘图/TDD…）
 │                                不再加载，仅供追溯
@@ -33,13 +34,14 @@
 │   ├── diagnostics.cjs    ←     全系统健康诊断
 │   ├── hooks/
 │   │   ├── learning/
-│   │   │   ├── signal-collector.cjs   ← 运行时信号采集（Dream 输入源）
+│   │   │   ├── postflight-observer.cjs ← 异步纠正/生命周期信号观察器
+│   │   │   ├── signal-collector.cjs   ← 观察器内部信号适配器（非直接 Hook）
 │   │   │   ├── cost-tracker-hook.cjs  ← 每次响应成本估算
 │   │   │   └── skill-tracker-hook.cjs ← 技能触发追踪
 │   │   └── memory/
-│   │       └── memory-sqlite-sync.cjs ← 记忆文件 ↔ SQLite 同步
+│   │       └── memory-sqlite-sync.cjs ← dormant 兼容脚本（当前未注册 Hook）
 │   ├── scripts/
-│   │   ├── hooks/          ←     本地 hook 脚本（23 个，local-runner.cjs 批量调度）
+│   │   ├── hooks/          ←     本地 Hook 入口与纯函数守卫（热路径由单进程 router 调度）
 │   │   │   ├── bash-safety-guard.cjs      ←     Bash 危险命令 / 绕过写入拦截
 │   │   │   ├── hdl-gate.cjs               ←     HDL 红线门禁
 │   │   │   ├── verification-gate.cjs      ←     验证闭环门禁
@@ -47,13 +49,15 @@
 │   │   │   ├── tool-action-contract-gate.cjs ←  工具动作合同门禁
 │   │   │   └── agent-transparency-ledger.cjs ←  透明度账本写入
 │   │   ├── test-hooks/
-│   │   │   ├── run-all-tests.cjs     ←     307 条 Hook 测试套件（harness-ci.cjs 的主体）
+│   │   │   ├── run-all-tests.cjs     ←     Hook 全量测试套件（harness-ci.cjs 的主体）
 │   │   │   └── test-e2e.cjs          ←     E2E 恢复测试 (6 项)
 │   │   ├── lib/
 │   │   │   ├── lint-utils.cjs         ←     lint 工具共享库
 │   │   │   └── judge-service.cjs      ←     ELO 评分 + 多 Judge 投票
 │   │   ├── dream-consolidate.cjs      ← Dream 自学习提炼器
 │   │   ├── memory-health-check.cjs    ← 记忆系统健康检查
+│   │   ├── memory-knowledge-maintenance.cjs ← 只读规划 + 受控维护
+│   │   ├── harness-rule-candidates.cjs ← 候选→验证→批准→规则晋升
 │   │   ├── ecc-root-resolver.cjs      ← ECC 插件根路径共享解析
 │   │   ├── semantic-search.cjs        ← L2: TF-IDF 语义检索
 │   │   ├── memory-retrieve.sh         ← L2: 统一检索入口
@@ -72,8 +76,8 @@
 │   └── schemas/           ← JSON Schema 定义
 │
 ├── memory/                ← L2 记忆：活跃记忆
-│   ├── learnings/         ←     永久经验教训
-│   ├── errors/            ←     错误记录（90 天寿命）
+│   ├── learnings/         ←     已验证经验（默认 180 天复核，不永久常驻）
+│   ├── errors/            ←     候选错误经验（默认 90 天提炼或退役）
 │   ├── projects/          ←     项目级记忆
 │   ├── references/        ←     跨项目参考链接
 │   └── archive/           ←     已归档历史
@@ -109,7 +113,7 @@
 > 区别很要紧——把 advisory 当硬拦截会误以为"没被拦就是合规"。哪些是哪些由
 > `engine/scripts/test-hooks/gate-registry-contract.cjs` 持续校验，防止本表再次漂移。
 
-### 9 种 Hook 事件 · 42 条注册 Hook
+### 当前 Hook 拓扑
 
 > **Hook 配置的唯一位置：`settings.json`**（2026-07-27 起）。
 > 新增/修改 hook 一律写进 `settings.json` 的 `hooks` 段，**不要**再往 `settings.local.json` 里放
@@ -121,17 +125,19 @@
 > ⚠️ `settings.json` 在 `.gitignore` 里（hook 命令含本机绝对路径），因此 **hook 配置不入版本库**：
 > 换机或新克隆需要重新生成。改 hook 后请自测一次触发，不要只看 JSON 语法。
 
-| 事件 | 时机 | 本地钩子 | ECC 插件钩子 |
-|:-----|:-----|:---------|:-------------|
-| `SessionStart` | 新 session 开局 | memory-track, resolve-plugin-path | session-start-bootstrap |
-| `PreToolUse` | 工具调用前 | **bash-safety-guard**, **verification-gate**, **file-protection-guard**, **project-directory-guard**, **fix-in-place-guard**, **hdl-gate**, **rtl-semantic-oracle**, pre-commit-lint, diff-size-gate(提醒), resource-budget-gate(提醒), requirements-gate-guard(提醒), verification-quality-guard(提醒), tool-action-contract-gate, progress-watchdog, repair-content-gate | run-with-flags(6 个场景) |
-| `PostToolUse` | 工具调用后 | memory-sqlite-sync, skill-tracker | 观测/指标/监控/质量门 |
-| `PostToolUseFailure` | 工具失败 | signal-collector(tool_fail) | MCP 健康检查 |
-| `Stop` | 响应结束 | lint-auto-gate, cost-tracker | 格式化/检查/Session 持久化 |
-| `PostMessage` | 用户消息 | memory-track, signal-collector(drift_stuck) | — |
-| `PreCompact` | 压缩前 | — | 状态保存 |
-| `PostStop` | 停止后 | — | 异步清理 |
-| `SessionEnd` | 对话结束 | — | 生命周期标记 |
+下表以 `settings.json` 为唯一事实源；`preflight-router.cjs` 在一个进程内加载匹配门禁，README 不复制易漂移的内部清单。
+
+| 事件 | 时机 | 当前执行路径 |
+|:-----|:-----|:-------------|
+| `UserPromptSubmit` | 每条用户消息 | prompt-context.cjs：同进程合并规则 capsule、只读事实查询；实际注入另记 exposure |
+| `PreToolUse` | 每次工具调用前 | preflight-router.cjs（进程内路由） |
+| `PostToolUse` | 工具成功后 | postflight-router.cjs（同步状态/可信验证结果）+ postflight-observer.cjs（异步遥测/弱归因观察） |
+| `PostToolUseFailure` | 工具失败后 | postflight-router.cjs（同步状态与失败记忆）+ postflight-observer.cjs（异步失败遥测/弱归因观察） |
+| `SessionStart` | startup/resume/clear/compact/fork | session-bootstrap.cjs（单进程恢复/Dream/isolation）+ 到期维护（async，仅 startup） |
+| `PreCompact` | 上下文压缩前 | pre-compact.cjs 保存可恢复状态 |
+| `Stop` | 响应结束 | stop-summary.cjs（同步上下文/进度）+ postflight-observer.cjs（异步透明度/成本/Skill-Evolve） |
+
+活跃入口的事件、工具、载荷契约、阻塞性、副作用、超时、负责人和行为夹具统一声明在 `engine/hooks/manifest.json`；`harness-ci.cjs` 会拒绝未声明入口、事件错接线和缺失依赖。
 
 ### 安全拦截（settings.local.json deny）
 
@@ -144,26 +150,54 @@
 
 ---
 
-## L2 记忆层：SQLite FTS5 + 四工具检索
+## L2 记忆层：分层事实、时效检索与受控晋升
 
 ### SQLite 持久层（`engine/sqlite/`）
 
 零外部依赖（Node ≥22 `node:sqlite`），WAL 模式，FTS5 全文检索：
 
-| Store | 职责 | 当前规模 |
+| Store | 职责 | 证据边界 |
 |:------|:-----|:---------|
-| `store-memory.cjs` | 事实存储（40 条，FTS5 BM25 排序，LIKE 降级） | 7 命名空间 |
-| `store-events.cjs` | 运行时事件（Dream 自学习输入源） | 6 种事件类型 |
-| `store-skills.cjs` | 技能注册表（触发/成功率/自动退役） | 12 技能 |
-| `store-costs.cjs` | 成本记账（每 session token 估算） | 每次 Stop 自动写入 |
+| `store-memory.cjs` | 候选/已验证事实与 FTS5 检索 | 先按 project/path/trigger 硬过滤；默认只返回未过期 verified |
+| `store-memory-attribution.cjs` | exposure/application/outcome 归因链 | 命中不是应用，后续动作不是因果；只有 Verification Gate 可写 outcome |
+| `store-events.cjs` | Dream、Hook 与维护的运行时输入、消费者心跳 | 事件是遥测；watermark 与 heartbeat 只由真实有界执行推进 |
+| `store-skills.cjs` | 技能触发与效果统计 | 统计相关性不能替代行为验证 |
+| `store-costs.cjs` | 每 session 的成本记账 | 仅用于观测，不进入默认记忆召回 |
+
+### 分层与晋升
+
+```
+运行遥测 → 候选经验 → 行为验证 → 显式批准 → 仓库 Harness 规则
+```
+
+- `tool_success`、单次错误和 Hook 回显不属于长期记忆；
+- 错误经验只有同时具备根因、已验证修复、预防动作和触发条件，才进入候选账本；
+- Harness 规则的唯一生命周期是 `candidate -> verified -> approved -> promoted`；
+- Dream 只能产生 candidate；verified 必须来自 Verification Gate 账本中同一行为契约的真实 RED/GREEN，且必须有用户显式 approval 才能进入规则；
+- promoted 文件在加载和执行前复核 candidate id、批准记录与 artifact SHA-256；缺账本、手工复制或被篡改的文件不生效并进入健康告警；
+- 详细 TTL、退役与召回条件见 `memory/MEMORY_RULES.md`，稳定约束见 `docs/rules/05-harness.md`。
 
 ### 统一检索链
 
 ```
-SQLite FTS5 (BM25 排序) → Grep/Glob → git log → rag-skill/code-search → 完整 Read
+稳定 project id → project/path/trigger 硬过滤 → verified/valid_until 门禁 → FTS5 / semantic 排名 → 注入 1–3 条
+                                                                                              ↓
+             exposure → observed follow-up / rule-enforced application → Verification Gate outcome
 ```
 
-详见 `docs/rules-archive/09-search-tools.md`。
+缺少作用域时只允许 `global_harness`，不会回退到跨仓库扫描；candidate/needs-reverify 只能通过显式 review 查询读取，不进入默认上下文。语义索引的 eligible 文件、mtime、meta 或 builtAt 不一致时，查询返回 `stale_index` 和空结果，必须显式重建后再使用。详见 `docs/rules-archive/09-search-tools.md`。
+
+归因链使用完整的 retrieval/session/project/memory/correlation identity。`exposure` 只证明 Agent 看到了摘要；普通后续工具调用只记 weak observed follow-up，`rule-enforced` 才是 strong application；即使验证通过也保持 `causal_claim=unproven`，不得把相关性写成“记忆导致成功”。
+
+### 健康与维护
+
+```powershell
+node engine/scripts/memory-health-check.cjs --json
+node engine/scripts/memory-knowledge-maintenance.cjs --dry-run --json
+node engine/scripts/kb-stats.cjs --check --quiet --json
+```
+
+`memory-health-check` 以 `engine/hooks/manifest.json` 的 consumer registry 为事实源，核对真实路由、最近 heartbeat、失败/陈旧状态、backlog/watermark、verified fact 的 scope/trigger/evidence/validity、exposure/application/outcome 身份链，以及 candidate 状态与 30/90 天审查期限。没有 outcome 不自动判错；孤儿归因链、逾期候选或不完整候选才进入问题列表。`dry-run` 不写 SQLite、候选账本、索引或维护状态；execute 只通过受控的事件保留、权威文件事实对账、候选 staging、索引重建和状态接口执行。文件数量下降不是健康证据。
 
 ---
 
@@ -202,20 +236,19 @@ SQLite FTS5 (BM25 排序) → Grep/Glob → git log → rag-skill/code-search �
 
 ---
 
-## 🔄 自学习飞轮（Dream v2.0）
+## 🔄 受控学习闭环（Dream v2.0）
 
 ```
 信号采集(6+类型) → SQLite events → dream-consolidate v2 → 
-  跨类型模式检测 → learnings 事实写入 → 置信度升级(时间衰减) → 技能退役
-  ↓
-SessionStart: dream-startup-inject → 自动检索 + 上下文注入
+  跨类型模式检测 → candidate → 行为验证 → 显式批准 → promoted rule
 ```
 
 **采集升级 v2.0**: 6 种新信号类型 — `rule_load`, `context_pressure`, `mode_switch`, `memory_cross_ref`, `session_handoff`, `loop_skip`
-**检测升级 v2.0**: 跨类型事件序列、代码错误聚类、时间序列模式
-**调度升级**: 每次 SessionStart 自动检查未处理事件数 ≥10 → 运行 `dream-consolidate --dry-run` → 注入近期 Learnings 到上下文
+**检测边界**: 跨类型序列、错误聚类和时间模式只提供候选线索；Dream 相关性不是根因证据。
+**晋升边界**: Dream 只产生候选 candidate；没有行为测试 PASS 与用户显式批准 approval，不得写入耐久 Harness 规则。
+**消费边界**: 每个事件消费者使用独立 watermark；Dream 与 Skill-Evolve 都必须有有界调度；任何 dry-run 都不得推进消费进度。注册消费者未调度或落后时，健康检查失败且 retention 按所有注册消费者的最小水位保持阻塞，不允许筛掉或强推。
 
-详见 `engine/scripts/dream-consolidate.cjs`（检测引擎）和 `engine/scripts/dream-startup-inject.cjs`（调度注入）。
+详见 `engine/scripts/dream-consolidate.cjs`（检测引擎）、`engine/scripts/harness-rule-candidates.cjs`（晋升账本）和 `docs/rules/05-harness.md`（稳定规则）。
 
 ---
 
@@ -235,7 +268,13 @@ node engine/diagnostics.cjs --quick
 node engine/diagnostics.cjs --hooks
 
 # 记忆系统专项
-node engine/scripts/memory-health-check.cjs
+node engine/scripts/memory-health-check.cjs --json
+
+# 维护计划只读预览；显式执行前先审查 JSON
+node engine/scripts/memory-knowledge-maintenance.cjs --dry-run --json
+
+# 知识与语义索引 freshness（失败时 quiet 仍非零退出）
+node engine/scripts/kb-stats.cjs --check --quiet --json
 
 # Dream 试运行
 node engine/scripts/dream-consolidate.cjs --dry-run
@@ -368,6 +407,8 @@ node engine/scripts/quality-regression-dashboard.cjs report  # 自动 10% 退化
 |-----------|------|
 | 核心规则 | `docs/rules/00-core.md` |
 | Git 操作规则 | `docs/rules/04-git.md` |
+| Harness/记忆规则 | `docs/rules/05-harness.md` |
+| 记忆时效与退役 | `memory/MEMORY_RULES.md` |
 | 安全规则 | `docs/rules-archive/04-security.md` |
 | 认知层 | `docs/rules-archive/06-cognition.md` |
 | 检索工具选择 | `docs/rules-archive/09-search-tools.md` |
@@ -378,6 +419,8 @@ node engine/scripts/quality-regression-dashboard.cjs report  # 自动 10% 退化
 | SQLite 文档 | `engine/sqlite/README.md` |
 | 系统诊断 | `node engine/diagnostics.cjs` |
 | 记忆健康 | `node engine/scripts/memory-health-check.cjs` |
+| 记忆维护预览 | `node engine/scripts/memory-knowledge-maintenance.cjs --dry-run --json` |
+| 规则候选账本 | `node engine/scripts/harness-rule-candidates.cjs list` |
 | 看当前任务 | `/start` 或 `cat var/active-task.yaml` |
 | 起始/收尾 | `/start` 或 `/handoff` |
 | 清理运行时 | `rm -rf var/*`（不影响代码） |
