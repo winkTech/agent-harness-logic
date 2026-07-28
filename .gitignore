@@ -101,9 +101,15 @@ xsim.dir/
 xsim.jou
 *.jou
 *.wdb
-# xvlog/xelab 的 protobuf 日志：会落在**启动时的 CWD**（含仓库根），
-# 2026-07-27 提交前检查在根目录抓到 xelab.pb / xvlog.pb 两个残留
-*.pb
+# xvlog/xelab 的用量统计（protobuf）：无条件写到**启动时的 CWD**，连 -version
+# 探测也会写。2026-07-27 提交前检查在仓库根抓到 xelab.pb / xvlog.pb 即此。
+# 根因已在 eda-detect.cjs / lint-utils.cjs 修掉（子进程 CWD 改指系统临时目录），
+# 这里只做兜底。故意**不用** *.pb —— 那会连正经的 protobuf 序列化文件一起吞掉。
+xvlog.pb
+xelab.pb
+xsim.pb
+xsc.pb
+xvhdl.pb
 xvlog.log
 xelab.log
 xsim.log
