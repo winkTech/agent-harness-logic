@@ -1,10 +1,32 @@
 // ============================================================================
-// xfft_64 — Xilinx FFT IP 核行为模型
+// xfft_64 — Xilinx FFT IP 核行为模型 (验证支撑件, 非可综合 RTL)
 // 功能: 流水线 FFT, 64 点, 输入输出均为 AXI4-Stream
-//       本文件为行为级模型, 用于 UVM 验证框架编译/运行
+//       本文件为行为级模型, 用于验证框架编译/运行
 //
-// 行为: 数据延迟 64+N 个时钟周期后透传 (模拟 FFT 处理延迟)
+// 行为: 数据延迟 PIPE_DELAY 拍后透传 (模拟 FFT 处理延迟, **不做真实 IFFT 运算**)
 // TODO: 正式实现时替换为 Xilinx IP 生成的仿真模型
+//
+// ---------------------------------------------------------------------------
+// 归类与红线适用性说明 (2026-07-28 规范整改)
+//
+//   本文件原位于 rtl/, 现移入 tb/ —— 它不是设计源码, 而是验证支撑件:
+//
+//   1. **不可综合**: 内部用 SystemVerilog 队列 (logic [31:0] delay_data [$])
+//      建延迟线, 综合器无法实现。放在 rtl/ 会让"本包 RTL 集合可综合"这一
+//      前提不成立。移入 tb/ 后 rtl/ 集合才是真正的设计源码集合。
+//
+//   2. **端口名必须逐字匹配 Xilinx FFT IP 契约**: aclk / aresetn /
+//      s_axis_config_* / s_axis_data_* / m_axis_data_* / event_*。
+//      本模块存在的全部意义就是能被真实 IP 原地替换, 改成 i_clk/i_rst 会让
+//      替换时所有连接失配。这也是 docs/rules/01-hdl.md "标准总线保持协议原名"
+//      例外条款的适用情形。
+//
+//   3. **aresetn 的异步低有效语义是 IP 契约的一部分**, 不是本仓库的设计选择,
+//      因此红线 3 的边界落在上层: ofdm_tx_top 用 .aresetn(~i_rst) 做极性转换,
+//      本仓库侧仍是同步高有效 i_rst。
+//
+//   4. 正式替换为 Xilinx 生成的仿真模型后, 本文件应整体删除。
+// ---------------------------------------------------------------------------
 // ============================================================================
 
 `timescale 1ns / 1ps
@@ -51,8 +73,6 @@ module xfft_64 (
     logic         delay_valid  [$];
     logic         delay_last   [$];
 
-    logic         ready_for_input;
-
     assign s_axis_config_tready = 1'b1;
     assign s_axis_data_tready   = (delay_data.size() < 256);  // 背压保护
 
@@ -71,9 +91,6 @@ module xfft_64 (
             delay_data.push_back(s_axis_data_tdata);
             delay_valid.push_back(1'b1);
             delay_last.push_back(s_axis_data_tlast);
-
-            // 每 FFT_LEN 笔输入, 插入帧 sync
-            // (简化: 透传 tlast)
         end
     end
 

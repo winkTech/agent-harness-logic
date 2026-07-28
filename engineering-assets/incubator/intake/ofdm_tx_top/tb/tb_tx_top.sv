@@ -30,7 +30,8 @@ module tb_ofdm_tx_top;
     // ========================================================================
     // Signals
     // ========================================================================
-    reg         clk, rst_n;
+    // 2026-07-28 随 RTL 规范整改同步更新: clk/rst_n -> i_clk/i_rst, 复位改高有效
+    reg         i_clk, i_rst;
     int         driven_symbols = 0;   // 由 drive_stimulus 按向量实际长度写入
     reg  [5:0]  s_axis_tdata;
     reg         s_axis_tvalid, s_axis_tlast;
@@ -47,8 +48,8 @@ module tb_ofdm_tx_top;
         .CP_LEN    (CP_LEN),
         .MOD_TYPE  (1)       // QPSK for test
     ) dut (
-        .clk            (clk),
-        .rst_n          (rst_n),
+        .i_clk          (i_clk),
+        .i_rst          (i_rst),
         .s_axis_tdata   (s_axis_tdata),
         .s_axis_tvalid  (s_axis_tvalid),
         .s_axis_tready  (s_axis_tready),
@@ -57,16 +58,16 @@ module tb_ofdm_tx_top;
         .m_axis_tvalid  (m_axis_tvalid),
         .m_axis_tready  (m_axis_tready),
         .m_axis_tlast   (m_axis_tlast),
-        .cfg_fft_len    (FFT_LEN),
-        .cfg_cp_len     (CP_LEN),
-        .cfg_mod_type   (1)
+        .i_cfg_fft_len  (FFT_LEN),
+        .i_cfg_cp_len   (CP_LEN),
+        .i_cfg_mod_type (1)
     );
 
     // ========================================================================
     // Clock
     // ========================================================================
-    initial clk = 0;
-    always #(CLK_PERIOD/2) clk = ~clk;
+    initial i_clk = 0;
+    always #(CLK_PERIOD/2) i_clk = ~i_clk;
 
     // ========================================================================
     // Test control
@@ -91,13 +92,13 @@ module tb_ofdm_tx_top;
         $display("  FFT: %d, CP: %d, MOD: QPSK", FFT_LEN, CP_LEN);
         $display("===========================================");
 
-        // Reset
-        rst_n = 0;
+        // Reset (同步高有效)
+        i_rst = 1;
         s_axis_tvalid = 0;
         m_axis_tready = 1;
-        repeat(20) @(posedge clk);
-        rst_n = 1;
-        repeat(10) @(posedge clk);
+        repeat(20) @(posedge i_clk);
+        i_rst = 0;
+        repeat(10) @(posedge i_clk);
 
         // Open RTL output file
         rtl_out_fd = $fopen({VEC_DIR, "rtl_output.bin"}, "w");
@@ -140,7 +141,7 @@ module tb_ofdm_tx_top;
             scan_i = $fscanf(fd_i, "%h\n", vec_i);
             scan_q = $fscanf(fd_q, "%h\n", vec_q);
 
-            @(posedge clk);
+            @(posedge i_clk);
             s_axis_tdata  <= 6'b0001_01;  // QPSK bits
             s_axis_tvalid <= 1'b1;
             s_axis_tlast  <= (sample_cnt == N_SYM * FFT_LEN - 1);
@@ -149,7 +150,7 @@ module tb_ofdm_tx_top;
             sample_cnt++;
         end
 
-        @(posedge clk);
+        @(posedge i_clk);
         s_axis_tvalid <= 1'b0;
 
         $fclose(fd_i);
@@ -190,7 +191,7 @@ module tb_ofdm_tx_top;
 
         guard = 0;
         while (capture_cnt < expected_len && guard < expected_len * 100) begin
-            @(posedge clk);
+            @(posedge i_clk);
             guard++;
             if (m_axis_tvalid && m_axis_tready) begin
                 captured_data.push_back(m_axis_tdata);
@@ -323,6 +324,11 @@ module tb_ofdm_tx_top;
         end
         $display("===========================================");
         $display("  RTL output written to: %srtl_output.bin", VEC_DIR);
+
+        // 失败必须以非零退出码结束 —— 否则失败的 run 在上游读起来和通过一样。
+        if (errors != 0)
+            $fatal(1, "tb_ofdm_tx_top FAILED: errors=%0d mismatches=%0d/%0d",
+                   errors, mismatch_cnt, total_samples);
     endtask
 
     // ========================================================================

@@ -21,12 +21,16 @@ module tb_chEst_cosim;
     localparam DATA_W     = 16;
     localparam N_FFT      = 64;
     localparam CLK_PERIOD = 10;        // 100 MHz
-    localparam VEC_DIR    = "../../golden_model/vectors/";
+    // 向量目录由 run.do 经 +VEC_DIR 注入（库级约定，见治理规范 §5.5）。
+    // 权威位置 = models/comm/channel_est/vectors/。
+    // 原值 "../../golden_model/vectors/" 指向不存在的目录，向量从未被真正读到。
+    string VEC_DIR;
 
     // ========================================================================
     // Signals
     // ========================================================================
-    logic         clk, rst_n;
+    // 2026-07-28 随 RTL 规范整改同步更新: clk/rst_n -> i_clk/i_rst (同步高有效)
+    logic         clk, rst;
     logic         s_axis_tvalid, s_axis_tready;
     logic [31:0]  s_axis_tdata;
     logic         m_axis_tvalid, m_axis_tready;
@@ -38,8 +42,8 @@ module tb_chEst_cosim;
     channel_est_top #(
         .DATA_W(DATA_W)
     ) dut (
-        .clk            (clk),
-        .rst_n          (rst_n),
+        .i_clk          (clk),
+        .i_rst          (rst),
         .s_axis_tvalid  (s_axis_tvalid),
         .s_axis_tready  (s_axis_tready),
         .s_axis_tdata   (s_axis_tdata),
@@ -77,20 +81,22 @@ module tb_chEst_cosim;
         $display("  N_FFT: %d, DATA_W: %d", N_FFT, DATA_W);
         $display("================================================");
 
-        // Reset
-        rst_n = 0;
+        // Reset (同步高有效)
+        rst = 1;
         s_axis_tvalid = 0;
         m_axis_tready = 1;
         repeat (20) @(posedge clk);
-        rst_n = 1;
+        rst = 0;
         repeat (10) @(posedge clk);
+
+        // 向量目录注入；缺失即 fail-closed，不得回落默认路径（规范 §5.5 V-2）
+        if (!$value$plusargs("VEC_DIR=%s", VEC_DIR))
+            $fatal(1, "缺 +VEC_DIR — 向量权威位置 models/comm/channel_est/vectors/, 须由 run.do 注入");
 
         // Open RTL output file
         rtl_out_fd = $fopen({VEC_DIR, "rtl_chEst_out.bin"}, "w");
-        if (rtl_out_fd == 0) begin
-            $display("ERROR: Cannot create rtl_chEst_out.bin in %s", VEC_DIR);
-            $finish;
-        end
+        if (rtl_out_fd == 0)
+            $fatal(1, "无法在 %s 创建 rtl_chEst_out.bin", VEC_DIR);
 
         // Run test
         drive_stimulus();
@@ -215,8 +221,15 @@ module tb_chEst_cosim;
             if (diff_q > max_err_q) max_err_q = diff_q;
             if (-diff_q > max_err_q) max_err_q = -diff_q;
 
+            // X/Z 显式计为失配（规范 §5.5 V-5）：$signed(x)-$signed(g) 得 X，
+            // 而 (X > 3) 求值为 X、被 if 当作假 —— 全 X 输出会被静默判为"匹配"。
+            if ((^captured_data[i]) === 1'bx) begin
+                if (mismatch_cnt < 10)
+                    $display("  [X/Z @ SC%0d] rtl=%08x — 输出未定义, 计为失配", i, captured_data[i]);
+                mismatch_cnt++;
+            end
             // ChEst outputs quantized H_est, tolerance ±3 LSB due to interpolation rounding
-            if ((diff_i > 3) || (diff_i < -3) || (diff_q > 3) || (diff_q < -3)) begin
+            else if ((diff_i > 3) || (diff_i < -3) || (diff_q > 3) || (diff_q < -3)) begin
                 if (mismatch_cnt < 10) begin
                     $display("  [MISMATCH @ SC%0d] golden={%04x,%04x} rtl={%04x,%04x} diff={%0d,%0d}",
                         i, golden_q, golden_i, rtl_q, rtl_i, diff_q, diff_i);

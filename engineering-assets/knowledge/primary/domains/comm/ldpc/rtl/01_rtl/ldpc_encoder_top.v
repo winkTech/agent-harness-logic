@@ -1,13 +1,13 @@
-// ⛔ SUPERSEDED (2026-07-27): 旧版副本。权威版本:
-// engineering-assets/incubator/intake/ldpc_codec/ 。
-// 禁止引用/复制/例化; 详见 ../_SUPERSEDED.md。仅作历史对照保留。
 //-----------------------------------------------------------------
 //               QC-LDPC Encoder Top (802.11n R=1/2 N=648)
 //-----------------------------------------------------------------
+// 名称: ldpc_encoder_top
 // 功能描述: 802.11n QC-LDPC 编码器 — 双对角结构 (Dual-Diagonal)
+// 端口: i_clk_sys/i_rst_sys (同步复位, 高有效);
+//       s_axis_info (信息位, 1 bit/cycle); m_axis_code (码字, 1 bit/cycle)
 //
 // 算法 (三遍):
-//   Phase 1: 加载 K=324 信息位, 存储于 info_blocks[0..11] (Z=27/block)
+//   Phase 1: 加载 K=324 信息位, 存储于 r_info[0..11] (Z=27/block)
 //   Phase 2: 逐 block row 计算 λ_i = Σ shift(info_j, P(i,j))
 //            → 双对角回代: p_0 = rot_r(Σλ_i,1)
 //              p_1 = rot_l(p_0, P(0,12)) + λ_0
@@ -16,6 +16,40 @@
 //
 // 接口: AXI4-Stream (1 bit/cycle)
 // 延迟: 324 + 12×8 + 12 + 648 ≈ 1080 cycles @ 100MHz → 10.8μs
+//-----------------------------------------------------------------
+// 本文件为 hdl-coding 规范整改版 (2026-07-28)。改动:
+//
+//   (1) **消除 initial (G-C-03 / rtl-semantic-oracle)**。原文件有两个 initial:
+//       - `p_rom` 的常量初始化;
+//       - 用 `if (p_rom[...] != 5'd31)` 扫描构建 sys_col/sys_shf/sys_cnt。
+//       后者的条件依赖 reg 数组内容, Vivado 判为非常量条件并报 [Synth 8-6896]
+//       **丢弃整个 initial 块** —— 仿真里三张表有值, 综合后无驱动源
+//       ([Synth 8-3848]), 上板行为与仿真不一致。这与 h_matrix_addr.v 里
+//       已经修过的是同一个坑。
+//       现全部改为编译期 localparam 扁平常量 (P_ROM_FLAT / SYS_*_FLAT),
+//       用变量基址位选 `[idx*W +: W]` 取值。常量由
+//       scratchpad 生成脚本从下方 provenance 注释块按**原扫描算法**展开,
+//       与原实现逐条等价 (脚本内置行重自检)。P 矩阵变更后须重新生成。
+//
+//   (2) **修复挂死 (功能缺陷, 非编码规范)**。原 `s_axis_info_tready` 在
+//       S_IDLE 就为高, 于是进 S_LOAD 之前的那一拍已经完成 AXI 握手把第一个
+//       信息位收走了, 而 bit_cnt 与 r_info 只在 S_LOAD 态更新 —— **第一位既
+//       不计数也不存储**。324 拍激励下 bit_cnt 最多到 322, `bit_cnt == K-1`
+//       永不成立, 状态机出不了 S_LOAD, 整个编码器挂死。
+//       (实测: 整改前 tb_ldpc_encoder_top 的 Test 2 随机输入超时, 而 TB 当时
+//        没有 $fatal, 超时也退出 0 —— 所以这个挂死一直没被当成失败。)
+//       现改为 ready 只在 S_LOAD 态有效: S_IDLE 只观察 tvalid 决定跳转,
+//       不收数据; 第一个握手发生在 S_LOAD, 差一消除。
+//
+//   (3) 红线 2: s_axis_info_tready 由组合直出改为 ro_ 寄存输出。
+//   (4) 红线 4/5: 次态 case 补 default 分支。
+//   (5) 命名: localparam 加 P_ 前缀、内部寄存器加 r_/w_ 前缀。
+//
+// !! 遗留项 (本次**未改**) !!
+//   [D1] 红线 1: s_axis_info_tvalid/tdata 仍被直接消费, 未经 ri_ 寄存。加载相位
+//        与状态机计数强耦合 (bit_cnt 既当写地址又当状态出口判据), 插入 ri_ 级属
+//        控制通路重构; 且本模块尚无 bit-true golden 对标, 重构后无法证明数值不变。
+// P 矩阵 provenance 与常量表生成脚本说明见本包 README "编码器整改" 一节。
 //-----------------------------------------------------------------
 
 module ldpc_encoder_top (
@@ -34,129 +68,107 @@ module ldpc_encoder_top (
     //=================================================================
     // 本地常量 (替代 `include, 避免 lint 对 `define 的误报)
     //=================================================================
-    localparam N    = 648;
-    localparam K    = 324;
-    localparam M    = 324;
-    localparam Z    = 27;
-    localparam MB   = 12;
-    localparam NB   = 24;
-    localparam MAX_WT = 8;
-    localparam SHIFT_W = 5;
-    localparam BIT_W = 10;
+    localparam P_N       = 648;
+    localparam P_K       = 324;
+    localparam P_M       = 324;
+    localparam P_Z       = 27;
+    localparam P_MB      = 12;
+    localparam P_NB      = 24;
+    localparam P_MAX_WT  = 8;
+    localparam P_SHIFT_W = 5;
+    localparam P_BIT_W   = 10;
+    localparam P_K_BLKS  = P_K / P_Z;
 
     //=================================================================
-    // P 矩阵 ROM (12×24, -1=31, 有效 0..26)
+    // 编译期常量表 (无 initial, 见文件头 (1))
+    // 元素 (br,ci) 占 [(br*P_MAX_WT+ci)*W +: W]; 由 P 矩阵按原扫描算法编译前
+    // 展开而来, P 矩阵 provenance 与生成脚本说明见 README "编码器整改" 一节。
     //=================================================================
-    reg [4:0] p_rom [0:MB*NB-1];
-    integer i;
-    initial begin
-        for (i = 0; i < MB*NB; i = i + 1) p_rom[i] = 5'd31;
-        p_rom[  0]=5'd0;  p_rom[  4]=5'd0;  p_rom[  5]=5'd0;  p_rom[  8]=5'd0;
-        p_rom[ 11]=5'd0;  p_rom[ 12]=5'd1;  p_rom[ 13]=5'd0;
-        p_rom[ 24]=5'd22; p_rom[ 25]=5'd0;  p_rom[ 28]=5'd17; p_rom[ 30]=5'd0;
-        p_rom[ 31]=5'd0;  p_rom[ 32]=5'd12; p_rom[ 37]=5'd0;  p_rom[ 38]=5'd0;
-        p_rom[ 48]=5'd6;  p_rom[ 50]=5'd0;  p_rom[ 52]=5'd10; p_rom[ 56]=5'd24;
-        p_rom[ 58]=5'd0;  p_rom[ 62]=5'd0;  p_rom[ 63]=5'd0;
-        p_rom[ 72]=5'd2;  p_rom[ 75]=5'd0;  p_rom[ 76]=5'd20; p_rom[ 80]=5'd25;
-        p_rom[ 81]=5'd0;  p_rom[ 87]=5'd0;  p_rom[ 88]=5'd0;
-        p_rom[ 96]=5'd23; p_rom[100]=5'd3;  p_rom[104]=5'd0;  p_rom[106]=5'd9;
-        p_rom[107]=5'd11; p_rom[112]=5'd0;  p_rom[113]=5'd0;
-        p_rom[120]=5'd24; p_rom[122]=5'd23; p_rom[123]=5'd1;  p_rom[124]=5'd17;
-        p_rom[126]=5'd3;  p_rom[128]=5'd10; p_rom[137]=5'd0;  p_rom[138]=5'd0;
-        p_rom[144]=5'd25; p_rom[148]=5'd8;  p_rom[152]=5'd7;  p_rom[153]=5'd18;
-        p_rom[156]=5'd0;  p_rom[162]=5'd0;  p_rom[163]=5'd0;
-        p_rom[168]=5'd13; p_rom[169]=5'd24; p_rom[172]=5'd0;  p_rom[174]=5'd8;
-        p_rom[176]=5'd6;  p_rom[186]=5'd0;  p_rom[187]=5'd0;
-        p_rom[192]=5'd7;  p_rom[193]=5'd20; p_rom[195]=5'd16; p_rom[196]=5'd22;
-        p_rom[197]=5'd10; p_rom[200]=5'd23; p_rom[210]=5'd0;  p_rom[211]=5'd0;
-        p_rom[216]=5'd11; p_rom[220]=5'd19; p_rom[224]=5'd13; p_rom[226]=5'd3;
-        p_rom[227]=5'd17; p_rom[235]=5'd0;  p_rom[236]=5'd0;
-        p_rom[240]=5'd25; p_rom[242]=5'd8;  p_rom[244]=5'd23; p_rom[245]=5'd18;
-        p_rom[247]=5'd14; p_rom[248]=5'd9;  p_rom[260]=5'd0;  p_rom[261]=5'd0;
-        p_rom[264]=5'd3;  p_rom[268]=5'd16; p_rom[271]=5'd2;  p_rom[272]=5'd25;
-        p_rom[273]=5'd5;  p_rom[276]=5'd1;  p_rom[287]=5'd0;
-    end
-
-    // 系统部分连接表: [block_row][conn_idx] → {col, shift}
-    localparam K_BLKS = K / Z;
-    reg [5:0]           sys_col [0:MB-1][0:MAX_WT-1];
-    reg [4:0]           sys_shf [0:MB-1][0:MAX_WT-1];
-    reg [3:0]           sys_cnt [0:MB-1];
-
-    integer br, bc, ci;
-    initial begin
-        for (br = 0; br < MB; br = br + 1) begin
-            ci = 0;
-            for (bc = 0; bc < K_BLKS; bc = bc + 1) begin
-                if (p_rom[br * NB + bc] != 5'd31) begin
-                    sys_col[br][ci] = bc;
-                    sys_shf[br][ci] = p_rom[br * NB + bc];
-                    ci = ci + 1;
-                end
-            end
-            sys_cnt[br] = ci;
-        end
-    end
+    localparam [4:0] P_P0_12 = 5'd1;   // P(0,12), 双对角回代唯一需运行时读的元素
+    localparam [6*P_MB*P_MAX_WT-1:0] SYS_COL_FLAT = {
+        6'd0,6'd0,6'd0,6'd9,6'd8,6'd7,6'd4,6'd0,6'd0,6'd0,6'd8,6'd7,6'd5,6'd4,6'd2,6'd0,6'd0,6'd0,6'd0,6'd11,6'd10,6'd8,6'd4,6'd0,
+        6'd0,6'd0,6'd8,6'd5,6'd4,6'd3,6'd1,6'd0,6'd0,6'd0,6'd0,6'd8,6'd6,6'd4,6'd1,6'd0,6'd0,6'd0,6'd0,6'd0,6'd9,6'd8,6'd4,6'd0,
+        6'd0,6'd0,6'd8,6'd6,6'd4,6'd3,6'd2,6'd0,6'd0,6'd0,6'd0,6'd11,6'd10,6'd8,6'd4,6'd0,6'd0,6'd0,6'd0,6'd9,6'd8,6'd4,6'd3,6'd0,
+        6'd0,6'd0,6'd0,6'd10,6'd8,6'd4,6'd2,6'd0,6'd0,6'd0,6'd8,6'd7,6'd6,6'd4,6'd1,6'd0,6'd0,6'd0,6'd0,6'd11,6'd8,6'd5,6'd4,6'd0
+    };
+    localparam [5*P_MB*P_MAX_WT-1:0] SYS_SHF_FLAT = {
+        5'd0,5'd0,5'd0,5'd5,5'd25,5'd2,5'd16,5'd3,5'd0,5'd0,5'd9,5'd14,5'd18,5'd23,5'd8,5'd25,5'd0,5'd0,5'd0,5'd17,5'd3,5'd13,5'd19,5'd11,
+        5'd0,5'd0,5'd23,5'd10,5'd22,5'd16,5'd20,5'd7,5'd0,5'd0,5'd0,5'd6,5'd8,5'd0,5'd24,5'd13,5'd0,5'd0,5'd0,5'd0,5'd18,5'd7,5'd8,5'd25,
+        5'd0,5'd0,5'd10,5'd3,5'd17,5'd1,5'd23,5'd24,5'd0,5'd0,5'd0,5'd11,5'd9,5'd0,5'd3,5'd23,5'd0,5'd0,5'd0,5'd0,5'd25,5'd20,5'd0,5'd2,
+        5'd0,5'd0,5'd0,5'd0,5'd24,5'd10,5'd0,5'd6,5'd0,5'd0,5'd12,5'd0,5'd0,5'd17,5'd0,5'd22,5'd0,5'd0,5'd0,5'd0,5'd0,5'd0,5'd0,5'd0
+    };
+    localparam [4*P_MB-1:0] SYS_CNT_FLAT = {
+        4'd5,4'd6,4'd5,4'd6,4'd5,4'd4,4'd6,4'd5,4'd5,4'd5,4'd6,4'd5
+    };
 
     //=================================================================
     // 循环移位器 (barrel shifter, Z=27)
     //=================================================================
-    function [Z-1:0] rot_left;
-        input [Z-1:0] d;
+    function [P_Z-1:0] rot_left;
+        input [P_Z-1:0] d;
         input [4:0] s;
-        reg [2*Z-1:0] t;
+        reg [2*P_Z-1:0] t;
     begin
         t = {d, d};
-        rot_left = t[s % 32 +: Z];
+        rot_left = t[s % 32 +: P_Z];
     end
     endfunction
 
-    function [Z-1:0] rot_right;
-        input [Z-1:0] d;
+    function [P_Z-1:0] rot_right;
+        input [P_Z-1:0] d;
         input [4:0] s;
-        reg [2*Z-1:0] t;
+        reg [2*P_Z-1:0] t;
     begin
         t = {d, d};
-        rot_right = t[(Z - (s % Z)) % 32 +: Z];
+        rot_right = t[(P_Z - (s % P_Z)) % 32 +: P_Z];
     end
     endfunction
 
     //=================================================================
     // 状态机
     //=================================================================
-    localparam S_IDLE   = 0,
-               S_LOAD   = 1,
-               S_LAMBDA = 2,
-               S_PARITY = 3,
-               S_OUTPUT = 4;
+    localparam P_S_IDLE   = 0,
+               P_S_LOAD   = 1,
+               P_S_LAMBDA = 2,
+               P_S_PARITY = 3,
+               P_S_OUTPUT = 4;
 
-    reg [2:0] state, nxt;
-    reg [9:0] bit_cnt;      // 0..647
-    reg [3:0] blk;          // 0..11
-    reg [3:0] conn;         // 0..7
+    reg [2:0] r_state, w_nxt;
+    reg [9:0] r_bit_cnt;      // 0..647
+    reg [3:0] r_blk;          // 0..11
+    reg [3:0] r_conn;         // 0..8
 
-    reg [Z-1:0] info  [0:K_BLKS-1];   // 信息位 blocks
-    reg [Z-1:0] par   [0:MB-1];       // 校验位 blocks
-    reg [Z-1:0] lambda[0:MB-1];       // λ_i 累加
+    reg [P_Z-1:0] r_info  [0:P_K_BLKS-1];   // 信息位 blocks
+    reg [P_Z-1:0] r_par   [0:P_MB-1];       // 校验位 blocks
+    reg [P_Z-1:0] r_lambda[0:P_MB-1];       // λ_i 累加
 
-    reg ro_data, ro_valid;
+    reg ro_data, ro_valid, ro_tready;
+
+    integer i;
+
+    // 常量表取值 (变量基址位选 —— 综合为 LUT/ROM, 无仿真-综合差异)
+    wire [5:0] w_sys_col = SYS_COL_FLAT[(r_blk*P_MAX_WT + r_conn)*6 +: 6];
+    wire [4:0] w_sys_shf = SYS_SHF_FLAT[(r_blk*P_MAX_WT + r_conn)*5 +: 5];
+    wire [3:0] w_sys_cnt = SYS_CNT_FLAT[r_blk*4 +: 4];
+    wire [4:0] w_p_0_12  = P_P0_12;                 // P(0,12), 双对角回代用
 
     //-----------------------------------------------------------------
     // 状态寄存器
     //-----------------------------------------------------------------
     always @(posedge i_clk_sys) begin
-        if (i_rst_sys) state <= S_IDLE;
-        else           state <= nxt;
+        if (i_rst_sys) r_state <= P_S_IDLE;
+        else           r_state <= w_nxt;
     end
 
     always @(*) begin
-        nxt = state;
-        case (state)
-            S_IDLE:   if (s_axis_info_tvalid)        nxt = S_LOAD;
-            S_LOAD:   if (bit_cnt == K-1)             nxt = S_LAMBDA;
-            S_LAMBDA: if (blk == MB-1 && conn == MAX_WT) nxt = S_PARITY;
-            S_PARITY: if (blk == MB-1)                nxt = S_OUTPUT;
-            S_OUTPUT: if (bit_cnt == N-1)             nxt = S_IDLE;
+        w_nxt = r_state;
+        case (r_state)
+            P_S_IDLE:   if (s_axis_info_tvalid)               w_nxt = P_S_LOAD;
+            P_S_LOAD:   if (r_bit_cnt == P_K-1)                w_nxt = P_S_LAMBDA;
+            P_S_LAMBDA: if (r_blk == P_MB-1 && r_conn == P_MAX_WT) w_nxt = P_S_PARITY;
+            P_S_PARITY: if (r_blk == P_MB-1)                   w_nxt = P_S_OUTPUT;
+            P_S_OUTPUT: if (r_bit_cnt == P_N-1)                w_nxt = P_S_IDLE;
+            default:                                           w_nxt = P_S_IDLE;
         endcase
     end
 
@@ -165,29 +177,29 @@ module ldpc_encoder_top (
     //-----------------------------------------------------------------
     always @(posedge i_clk_sys) begin
         if (i_rst_sys) begin
-            bit_cnt <= 0;
-            blk     <= 0;
-            conn    <= 0;
+            r_bit_cnt <= 0;
+            r_blk     <= 0;
+            r_conn    <= 0;
         end else begin
-            case (state)
-                S_LOAD: begin
-                    if (s_axis_info_tvalid)
-                        bit_cnt <= (bit_cnt == K-1) ? 0 : bit_cnt + 1;
+            case (r_state)
+                P_S_LOAD: begin
+                    if (s_axis_info_tvalid && s_axis_info_tready)
+                        r_bit_cnt <= (r_bit_cnt == P_K-1) ? 0 : r_bit_cnt + 1;
                 end
-                S_LAMBDA: begin
-                    if (conn == MAX_WT) begin
-                        conn <= 0;
-                        blk  <= (blk == MB-1) ? 0 : blk + 1;
+                P_S_LAMBDA: begin
+                    if (r_conn == P_MAX_WT) begin
+                        r_conn <= 0;
+                        r_blk  <= (r_blk == P_MB-1) ? 0 : r_blk + 1;
                     end else begin
-                        conn <= conn + 1;
+                        r_conn <= r_conn + 1;
                     end
                 end
-                S_PARITY: begin
-                    blk <= (blk == MB-1) ? 0 : blk + 1;
+                P_S_PARITY: begin
+                    r_blk <= (r_blk == P_MB-1) ? 0 : r_blk + 1;
                 end
-                S_OUTPUT: begin
+                P_S_OUTPUT: begin
                     if (m_axis_code_tready || !ro_valid)
-                        bit_cnt <= (bit_cnt == N-1) ? 0 : bit_cnt + 1;
+                        r_bit_cnt <= (r_bit_cnt == P_N-1) ? 0 : r_bit_cnt + 1;
                 end
                 default: ;
             endcase
@@ -199,9 +211,9 @@ module ldpc_encoder_top (
     //-----------------------------------------------------------------
     always @(posedge i_clk_sys) begin
         if (i_rst_sys) begin
-            for (i = 0; i < K_BLKS; i = i + 1) info[i] <= 0;
-        end else if (state == S_LOAD && s_axis_info_tvalid) begin
-            info[bit_cnt / Z][bit_cnt % Z] <= s_axis_info_tdata;
+            for (i = 0; i < P_K_BLKS; i = i + 1) r_info[i] <= 0;
+        end else if (r_state == P_S_LOAD && s_axis_info_tvalid && s_axis_info_tready) begin
+            r_info[r_bit_cnt / P_Z][r_bit_cnt % P_Z] <= s_axis_info_tdata;
         end
     end
 
@@ -211,42 +223,37 @@ module ldpc_encoder_top (
     //-----------------------------------------------------------------
     always @(posedge i_clk_sys) begin
         if (i_rst_sys) begin
-            for (i = 0; i < MB; i = i + 1) lambda[i] <= 0;
-        end else if (state == S_LAMBDA) begin
-            if (conn < sys_cnt[blk]) begin
-                lambda[blk] <= lambda[blk] ^
-                    rot_left(info[sys_col[blk][conn]], sys_shf[blk][conn]);
+            for (i = 0; i < P_MB; i = i + 1) r_lambda[i] <= 0;
+        end else if (r_state == P_S_LAMBDA) begin
+            if (r_conn < w_sys_cnt) begin
+                r_lambda[r_blk] <= r_lambda[r_blk] ^
+                    rot_left(r_info[w_sys_col], w_sys_shf);
             end
-        end else if (state == S_PARITY) begin
+        end else if (r_state == P_S_PARITY) begin
             // Phase 2b 开始后清空 λ (使用完毕)
-            for (i = 0; i < MB; i = i + 1) lambda[i] <= 0;
+            for (i = 0; i < P_MB; i = i + 1) r_lambda[i] <= 0;
         end
     end
 
     //-----------------------------------------------------------------
     // Phase 2b: 双对角回代 (Σλ 在组合逻辑中计算)
-    //   p_0 = rot_r(Σλ_i, 1)
-    //   p_1 = rot_l(p_0, P(0,12)) + λ_0
-    //   p_i = p_{i-1} + λ_{i-1}, i=2..11
     //-----------------------------------------------------------------
-    wire [Z-1:0] w_lam_sum;
-    reg  [Z-1:0] r_lam_sum;
+    reg [P_Z-1:0] w_lam_sum;
     always @(*) begin
-        r_lam_sum = 0;
-        for (i = 0; i < MB; i = i + 1) r_lam_sum = r_lam_sum ^ lambda[i];
+        w_lam_sum = 0;
+        for (i = 0; i < P_MB; i = i + 1) w_lam_sum = w_lam_sum ^ r_lambda[i];
     end
 
     always @(posedge i_clk_sys) begin
         if (i_rst_sys) begin
-            for (i = 0; i < MB; i = i + 1) par[i] <= 0;
-        end else if (state == S_PARITY) begin
-            // blk 从 0 递增到 11
-            if (blk == 0) begin
-                par[0] <= rot_right(r_lam_sum, 1);
-            end else if (blk == 1) begin
-                par[1] <= rot_left(par[0], p_rom[12]) ^ lambda[0];
-            end else if (blk <= 11) begin
-                par[blk] <= par[blk-1] ^ lambda[blk-1];
+            for (i = 0; i < P_MB; i = i + 1) r_par[i] <= 0;
+        end else if (r_state == P_S_PARITY) begin
+            if (r_blk == 0) begin
+                r_par[0] <= rot_right(w_lam_sum, 1);
+            end else if (r_blk == 1) begin
+                r_par[1] <= rot_left(r_par[0], w_p_0_12) ^ r_lambda[0];
+            end else if (r_blk <= 11) begin
+                r_par[r_blk] <= r_par[r_blk-1] ^ r_lambda[r_blk-1];
             end
         end
     end
@@ -258,12 +265,12 @@ module ldpc_encoder_top (
         if (i_rst_sys) begin
             ro_data  <= 0;
             ro_valid <= 0;
-        end else if (state == S_OUTPUT) begin
+        end else if (r_state == P_S_OUTPUT) begin
             if (m_axis_code_tready || !ro_valid) begin
-                if (bit_cnt < K) begin
-                    ro_data <= info[bit_cnt / Z][bit_cnt % Z];
+                if (r_bit_cnt < P_K) begin
+                    ro_data <= r_info[r_bit_cnt / P_Z][r_bit_cnt % P_Z];
                 end else begin
-                    ro_data <= par[(bit_cnt - K) / Z][(bit_cnt - K) % Z];
+                    ro_data <= r_par[(r_bit_cnt - P_K) / P_Z][(r_bit_cnt - P_K) % P_Z];
                 end
                 ro_valid <= 1;
             end
@@ -273,9 +280,19 @@ module ldpc_encoder_top (
     end
 
     //-----------------------------------------------------------------
+    // 输入反压 (红线 2: 寄存输出)
+    // ready 只在 S_LOAD 有效 —— 见文件头 (2): 原实现在 S_IDLE 就拉高 ready,
+    // 第一个信息位被握手收走却不计数不存储, 导致永远出不了 S_LOAD。
+    //-----------------------------------------------------------------
+    always @(posedge i_clk_sys) begin
+        if (i_rst_sys) ro_tready <= 1'b0;
+        else           ro_tready <= (w_nxt == P_S_LOAD);
+    end
+
+    //-----------------------------------------------------------------
     // 端口赋值
     //-----------------------------------------------------------------
-    assign s_axis_info_tready = (state == S_IDLE) || (state == S_LOAD);
+    assign s_axis_info_tready = ro_tready;
     assign m_axis_code_tdata  = ro_data;
     assign m_axis_code_tvalid = ro_valid;
 

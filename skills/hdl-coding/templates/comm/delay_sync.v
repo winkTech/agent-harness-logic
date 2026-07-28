@@ -1,9 +1,15 @@
 `timescale 1ns / 1ps
 // template: delay_sync
-// version: 1.0.0
+// version: 1.1.0
 // domain: comm
 // description: 可配置延迟同步器，支持任意位宽和延迟周期数
 // requires: 无
+//---------------------------------------------------------------------------------------
+// 名称: delay_sync
+// 功能: 把 i_data 打 DELAY 拍后由 o_data 输出，位宽/延迟拍数均可配
+// 端口: i_clk/i_rst (同步高有效); i_data (待延迟数据); o_data (延迟后数据)
+// 主要逻辑: DELAY 深移位寄存器链 ro_delay[0..DELAY-1]，o_data 直接取末级触发器输出
+// 延迟: DELAY 拍 (契约固定，不得额外插入寄存级)
 //---------------------------------------------------------------------------------------
 
 
@@ -13,46 +19,48 @@ module delay_sync
     parameter DELAY = 1
 )
 (
-    input                   clock               ,
-    input                   reset               ,
+    input                   i_clk               ,
+    input                   i_rst               ,   // 同步复位, 高有效
 
-    input [DATA_WIDTH-1:0]  data_in             ,
-    output [DATA_WIDTH-1:0] data_out
+    input [DATA_WIDTH-1:0]  i_data              ,
+    output [DATA_WIDTH-1:0] o_data
 );
 //---------------------------------------------------------------------------------------
 //
-//						Signal	Define	
+//						Signal	Define
 //
 //---------------------------------------------------------------------------------------
-reg [DATA_WIDTH-1:0] ram[DELAY-1:0]             ;
+// ro_delay[0] 即红线 1 要求的输入寄存级 (i_data 不直通到任何组合逻辑),
+// ro_delay[DELAY-1] 即红线 2 要求的输出寄存级 (o_data 由触发器直驱, 无组合逻辑)
+reg [DATA_WIDTH-1:0] ro_delay[DELAY-1:0]        ;
 integer              i                          ;
 //---------------------------------------------------------------------------------------
 //
 //						Delay   Cycle
 //
 //---------------------------------------------------------------------------------------
-always @(posedge clock) begin
-    if (reset) begin
+always @(posedge i_clk) begin
+    if (i_rst) begin
         for (i = 0; i < DELAY; i = i+1) begin
-            ram[i] <= 0;
+            ro_delay[i] <= {DATA_WIDTH{1'b0}};
         end
-    end 
+    end
     else begin
-        ram[0] <= data_in;
+        ro_delay[0] <= i_data;
         for (i = 1; i < DELAY; i= i+1) begin
-            ram[i] <= ram[i-1];
+            ro_delay[i] <= ro_delay[i-1];
         end
     end
 end
 //---------------------------------------------------------------------------------------
 //
-//						Assignment	
+//						Assignment
 //
 //---------------------------------------------------------------------------------------
-assign data_out = ram[DELAY-1];
+assign o_data = ro_delay[DELAY-1];
 //---------------------------------------------------------------------------------------
 //
-//						Finish		Moudle	
+//						Finish		Moudle
 //
 //---------------------------------------------------------------------------------------
 endmodule

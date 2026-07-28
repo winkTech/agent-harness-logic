@@ -21,12 +21,12 @@
   },
   "ports": [
     {
-      "name": "clk",
+      "name": "i_clk",
       "direction": "input",
       "width": 1
     },
     {
-      "name": "rst_n",
+      "name": "i_rst",
       "direction": "input",
       "width": 1
     },
@@ -57,7 +57,7 @@
     {
       "name": "m_axis_tdata",
       "direction": "output",
-      "width": 16,
+      "width": 32,
       "bus": "axi-stream"
     },
     {
@@ -79,30 +79,30 @@
       "bus": "axi-stream"
     },
     {
-      "name": "cfg_fft_len",
+      "name": "i_cfg_fft_len",
       "direction": "input",
       "width": 32
     },
     {
-      "name": "cfg_cp_len",
+      "name": "i_cfg_cp_len",
       "direction": "input",
       "width": 16
     },
     {
-      "name": "cfg_mod_type",
+      "name": "i_cfg_mod_type",
       "direction": "input",
       "width": 4
     }
   ],
   "clock": {
-    "name": "clk",
+    "name": "i_clk",
     "period_ns": 10
   },
   "reset": {
-    "name": "rst_n",
-    "polarity": "active_low",
-    "type": "async",
-    "async_release_synchronized": false
+    "name": "i_rst",
+    "polarity": "active_high",
+    "type": "sync",
+    "async_release_synchronized": true
   },
   "constraints": {
     "target": {
@@ -114,39 +114,40 @@
     {
       "path": "rtl/ofdm_tx_top.sv",
       "role": "rtl",
-      "sha256": "7b091e06e29fe99595179f10e46942acd57c8b4fce462fe46e041aecd5087272"
+      "sha256": "0c4694afae5ebb7176cc0704537b404dad8a533e101592ab4daef71d714698ad"
     },
     {
       "path": "rtl/mod_mapper.sv",
       "role": "rtl",
-      "sha256": "fb30c16b760788f2ca31334b6e34ade6bc544502205ce22c4775272ef8482c0c"
+      "sha256": "9a2caa558fc44015ba83154ebcd5fb5eb8be02ac44419b5e3112de7e2ac6dc57"
     },
     {
       "path": "rtl/mapper.sv",
       "role": "rtl",
-      "sha256": "74749cf4fa7af361f88a9e2ce78b68243166a2fbf4154dbe7ed19ec5e8fb4c4a"
+      "sha256": "302ea7dcd49f8f69f437de3b97e63a78d93c693956d1fcc7a8b9d3e1c367aa4d"
     },
     {
       "path": "rtl/pilot_insert.sv",
       "role": "rtl",
-      "sha256": "7eeda427bce9d5252dd3a973be8850bdcf92502a000e603d3beb3ef464f90bbc"
+      "sha256": "e48fe1718e5fbaadb78123521e428d98f2fcb4b509a5b9dc7e88d07a2faa7034"
     },
     {
-      "path": "rtl/xfft_64.sv",
-      "role": "rtl",
-      "sha256": "6b9f2c7ef90ab0961567aeac19b1a5dd3bc9f54e4c57b7d06262e8c78b4625ec"
+      "path": "tb/xfft_64.sv",
+      "role": "tb",
+      "sha256": "9243aa46c6e1cc67d6f32c942ee6e897aa7276e098fffa393267307868374371"
     },
     {
       "path": "rtl/cp_insert.sv",
       "role": "rtl",
-      "sha256": "7ac22c7a3896b8107af4305ed6ebae3febd857638ff64af36d67328afbecb5f7"
+      "sha256": "d5cd50d313de803ab1dade3195defe70470f6208d5e6c891cdd8a135875777f0"
     },
     {
       "path": "tb/tb_tx_top.sv",
       "role": "tb",
-      "sha256": "061cd84c7d208b5172fae01b9f2b9ac0d0d7cfb54cc34520f729c6ead8b1f43b"
+      "sha256": "bd63b6e8917ff8b926d7b919402aba5d4bb41d12f0bd848d7e066e2c4846a219"
     }
   ],
   "waivers": [],
-  "superseded_by": null
+  "superseded_by": null,
+  "top": "ofdm_tx_top"
 }

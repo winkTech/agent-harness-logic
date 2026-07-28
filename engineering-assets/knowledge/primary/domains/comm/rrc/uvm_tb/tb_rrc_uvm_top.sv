@@ -29,16 +29,19 @@ module tb_rrc_uvm_top;
     reset_if i_reset (.clk(clk));
 
     // ---- DUT ----
+    // 2026-07-28 随 RTL 规范整改同步更新: clk/rst_n/alpha_sel ->
+    // i_clk/i_rst/i_alpha_sel, 复位改**同步高有效** (i_rst=1 为复位)。
+    // 接口侧 reset_if 仍是低有效 rst_n 语义, 故此处取反后再驱动 DUT。
     rrc_top #(.DATA_W(16)) u_dut (
-        .clk            (clk),
-        .rst_n          (rst_n),
+        .i_clk          (clk),
+        .i_rst          (~rst_n),
         .s_axis_tvalid  (i_s_axis.tvalid),
         .s_axis_tready  (i_s_axis.tready),
         .s_axis_tdata   (i_s_axis.tdata),
         .m_axis_tvalid  (i_m_axis.tvalid),
         .m_axis_tready  (i_m_axis.tready),
         .m_axis_tdata   (i_m_axis.tdata),
-        .alpha_sel      (8'h02)   // alpha=0.5
+        .i_alpha_sel    (8'h02)   // alpha=0.5
     );
 
     // ---- 复位 & 输出就绪 ----
@@ -46,7 +49,8 @@ module tb_rrc_uvm_top;
         rst_n = 0;
         i_reset.rst_n = 0;
         force i_m_axis.tready = 1'b1;
-        force u_dut.rst_n = i_reset.rst_n;
+        // 原先 force u_dut.rst_n —— DUT 已无该端口, 且复位现由上方 .i_rst(~rst_n)
+        // 连接驱动, 无需再 force 到模块内部。
 
         repeat(20) @(posedge clk);
         rst_n = 1;
