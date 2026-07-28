@@ -36,7 +36,26 @@ function isMemoryWorkFile(filePath, opts = {}) {
 }
 
 function isAutoWorkRecord(filePath) {
-  return /tool_success_|tool_error_|auto-record/i.test(path.basename(filePath || ''));
+  return /tool_success|tool_error|hook_failure|auto-record/i.test(path.basename(filePath || ''));
+}
+
+function isMemoryTemplateFile(filePath) {
+  return /(?:^|[-_.])(template|placeholder)(?:[-_.]|$)/i.test(path.basename(filePath || ''));
+}
+
+function isInactiveMemoryContent(content) {
+  const frontmatter = String(content || '').match(/^---\r?\n([\s\S]*?)\r?\n---/);
+  if (!frontmatter) return false;
+  return /^\s*status\s*:\s*(?:obsolete|deprecated|superseded|tombstone|template|placeholder)\s*$/im
+    .test(frontmatter[1]) || /^\s*active\s*:\s*false\s*$/im.test(frontmatter[1]);
+}
+
+function isPlaceholderMemoryContent(content) {
+  const body = String(content || '')
+    .replace(/^---\r?\n[\s\S]*?\r?\n---\s*/, '')
+    .replace(/^#+\s+.*$/gm, '')
+    .trim();
+  return /^(?:todo|tbd|placeholder|replace this text|待补充)[\s.!。-]*$/i.test(body);
 }
 
 function shouldMigrateMemoryFile(filePath, opts = {}) {
@@ -50,7 +69,12 @@ function shouldMigrateMemoryFile(filePath, opts = {}) {
 }
 
 function shouldSyncMemoryFile(filePath, opts = {}) {
-  return shouldMigrateMemoryFile(filePath, opts) && !isAutoWorkRecord(filePath);
+  if (!shouldMigrateMemoryFile(filePath, opts)
+      || isAutoWorkRecord(filePath)
+      || isMemoryTemplateFile(filePath)) return false;
+  if (opts.content !== undefined
+      && (isInactiveMemoryContent(opts.content) || isPlaceholderMemoryContent(opts.content))) return false;
+  return true;
 }
 
 function shouldIndexMemoryFile(filePath, opts = {}) {
@@ -97,6 +121,9 @@ module.exports = {
   relativeSlash,
   isMemoryWorkFile,
   isAutoWorkRecord,
+  isMemoryTemplateFile,
+  isInactiveMemoryContent,
+  isPlaceholderMemoryContent,
   shouldMigrateMemoryFile,
   shouldSyncMemoryFile,
   shouldIndexMemoryFile,

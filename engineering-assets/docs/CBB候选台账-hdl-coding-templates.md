@@ -14,6 +14,7 @@
 | 源模板 | 去向 | 原件核心缺陷 | 验证证据(ModelSim 自检 TB) |
 |:--|:--|:--|:--|
 | comm/ram_2port.v | `intake/sdp_ram` | 无前缀命名;initial 初始化阵列(综合器忽略);真双口双时钟同址写竞态;无复位 | 643 读 0 失配,含 18 次 read-old 同址碰撞 |
+| （2026-07-28）`comm/ram_2port.v` / `comm/delay_sync.v` 两件**源模板本身也已就地整改** —— 前者改 `i_clk_a/i_en_a/...` 命名、删掉 `initial`(含对非阵列对象 `doa/dob` 赋初值这一确凿的仿真-综合差异源)、并写明 BRAM 输出寄存器不加复位的红线 3 豁免依据;后者改 `i_clk/i_rst/i_data/o_data`。等价对拍:`delay_sync` 400 拍(含中途复位)与整改前**逐拍逐位一致**;`ram_2port` 500 次随机读写 0 失配。 |||
 | comm/axis_pipeline_reg.sv | `intake/axis_skid_buffer` | o_tready 组合穿通输入(红线 2);无 tlast;全局停顿结构 | 1914 beats 0 失配 + 986 次 stall 稳定性 |
 | comm/cmult.sv | `intake/complex_multiplier` | **功能错**:复乘公式错(re=ac+bd)/操作数错拍/死寄存器/输入直通 | 2357 有效拍 0 失配,延迟 3 |
 | comm/lfsr_gen.sv | `intake/lfsr_gen` | **功能错**:反馈掩码截位丢 x^WIDTH 主抽头;valid/data 错拍;组合直出 | 65546 字 0 失配;实测周期 65535/127 |
@@ -44,6 +45,16 @@
 **alu/(3 件)** — alu_16bit_7func.v / alu_4bit_16func.v / carry_lookahead_4bit.v:
 纯组合无时钟,入库须按红线 1/2 加流水包壳,属架构决策(教学参考价值 vs
 通用复用价值待 owner 定夺)。
+
+> 2026-07-28 更新:这 3 件**已就地完成规范整改**(端口 `i_`/`o_` 前缀、内部
+> `w_` 前缀、具名端口例化、消除 `1'bx` don't-care)。红线 1/2 在无时钟组合原语上
+> 不可实施,已在各文件头写明"由调用方的寄存边界承担"。等价性已用穷举/随机对拍
+> 证明:ALU4 全穷举 8192 组 **0 真实失配**(194 组是有意消除的 `x`),
+> ALU16 40000 组随机 **0 失配**。是否入库仍待 owner 定夺,但"命名全不合规"这条
+> 阻塞理由已不成立。
+> 另标注一处**未修的功能缺陷**:`alu_4bit_16func` 的 `o_sf` 未像 `o_cf`/`o_of`
+> 那样用 `~w_ol` 屏蔽进位链,逻辑操作下不等于结果符号位(对照 16 位版应为
+> `w_g[3]^w_p[3]^((~w_ol)&w_c[4])`)。属功能缺陷非规范问题,已在文件内标注不擅改。
 
 **internet/(6 件)** — cam_cell / crc.sv / crossbar_cell / hash_table /
 lru_counter / sm4_round:外部资料改编的协议专用件,命名全不合规,

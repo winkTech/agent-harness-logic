@@ -41,25 +41,44 @@ function cliMode(args) {
   finish(classification, enforce);
 }
 
-function payloadMode(payload) {
-  if (!payload || payload.__invalid) process.exit(0);
+function evaluatePayload(payload, opts = {}) {
+  const allow = (classification = null) => ({
+    source: 'toolchain-health-gate',
+    decision: 'allow',
+    diagnostics: [],
+    classification,
+  });
+  if (!payload || payload.__invalid) return allow();
   const eventName = String(payload.hook_event_name || '').toLowerCase();
   const toolName = String(payload.tool_name || payload.tool?.name || '').toLowerCase();
-  if (eventName && eventName !== 'posttooluse') process.exit(0);
-  if (toolName && toolName !== 'bash') process.exit(0);
+  if (eventName && eventName !== 'posttooluse' && eventName !== 'posttoolusefailure') return allow();
+  if (toolName && toolName !== 'bash') return allow();
 
   const command = payload?.tool_input?.command || payload?.tool?.input?.command || payload?.input?.command || '';
-  if (!isToolchainCommand(command)) process.exit(0);
+  if (!isToolchainCommand(command)) return allow();
 
   const result = payload?.tool_response || payload?.tool_result || payload?.response || {};
   const status = result.status ?? result.exit_code ?? result.exitCode;
   const stdout = result.stdout || '';
   const stderr = result.stderr || '';
-  if (status === undefined && !stdout && !stderr) process.exit(0);
+  const error = result.error || payload.error || payload.message || '';
+  if (status === undefined && !stdout && !stderr && !error) return allow();
 
-  const enforce = process.env.TOOLCHAIN_HEALTH_GATE_ENFORCE === '1';
-  const classification = classifyToolchainRun({ command, status, stdout, stderr, error: result.error || '' });
-  finish(classification, enforce);
+  const enforce = opts.enforce ?? process.env.TOOLCHAIN_HEALTH_GATE_ENFORCE === '1';
+  const classification = classifyToolchainRun({ command, status, stdout, stderr, error });
+  if (classification.status !== 'toolchain_failure') return allow(classification);
+  return {
+    source: 'toolchain-health-gate',
+    decision: enforce ? 'block' : 'warn',
+    diagnostics: [`toolchain_failure: ${classification.reason || 'toolchain execution failed'}`],
+    classification,
+  };
+}
+
+function payloadMode(payload) {
+  const result = evaluatePayload(payload);
+  if (!result.classification) process.exit(0);
+  finish(result.classification, result.decision === 'block');
 }
 
 function main() {
@@ -72,5 +91,6 @@ if (require.main === module) main();
 
 module.exports = {
   cliMode,
+  evaluatePayload,
   payloadMode,
 };

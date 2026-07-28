@@ -1,0 +1,768 @@
+{
+  "schema_version": "1.0",
+  "manifest_kind": "stage-2-exact-deletion-manifest",
+  "generated_by": "engineering-assets/tools/catalog-gen.cjs + manual dependency recheck",
+  "baseline": {
+    "git_head": "dacefb7f8816c739723eaccc97ca04c99c4120f9",
+    "classification": "engineering-assets/catalog/asset-classification.json",
+    "policy": "all five user-approved deletion conditions must be true"
+  },
+  "dependency_recheck": {
+    "tracked_files": 4100,
+    "manifest_assets": 14,
+    "hdl_files": 1239,
+    "duplicate_hdl_groups": 46,
+    "unregistered_reference_roots": 2,
+    "commands": [
+      "git ls-files",
+      "node engineering-assets/tools/catalog-gen.cjs --root engineering-assets --check",
+      "node engineering-assets/tools/test-catalog-audit.cjs",
+      "node engineering-assets/tools/asset-audit.cjs --root engineering-assets",
+      "node engineering-assets/tools/asset-audit.cjs --root engineering-assets --strict",
+      "node engineering-assets/tools/integration-registry.cjs --root engineering-assets",
+      "node engineering-assets/tools/lineage-check.cjs --root engineering-assets",
+      "node engineering-assets/tools/evidence-snapshot.cjs --root engineering-assets --check",
+      "node engineering-assets/tools/redline-regression.cjs --root engineering-assets --check",
+      "node engineering-assets/tools/maintenance-check.cjs --root engineering-assets --check"
+    ],
+    "results": [
+      {
+        "command": "git ls-files",
+        "exit_code": 0
+      },
+      {
+        "command": "catalog-gen --check",
+        "exit_code": 0
+      },
+      {
+        "command": "test-catalog-audit",
+        "exit_code": 0
+      },
+      {
+        "command": "asset-audit",
+        "exit_code": 0,
+        "red": 0,
+        "yellow": 5
+      },
+      {
+        "command": "asset-audit --strict",
+        "exit_code": 1,
+        "expected": true,
+        "reason": "5 explicit missing OFDM vector findings remain yellow; no vectors were fabricated"
+      },
+      {
+        "command": "integration-registry",
+        "exit_code": 0,
+        "entries": 10
+      },
+      {
+        "command": "lineage-check",
+        "exit_code": 0,
+        "errors": 0
+      },
+      {
+        "command": "evidence-snapshot --check",
+        "exit_code": 0,
+        "snapshots": 2
+      },
+      {
+        "command": "redline-regression --check",
+        "exit_code": 0,
+        "assets": 5
+      },
+      {
+        "command": "maintenance-check --check",
+        "exit_code": 0,
+        "deletion_candidates": 0
+      }
+    ]
+  },
+  "deletion_summary": {
+    "permanent_delete_candidates": 0,
+    "validated_targets": [],
+    "batches": [],
+    "decision": "No candidate satisfies all five deletion conditions; no files are authorized for deletion."
+  },
+  "result": {
+    "deleted_files": [],
+    "rejected_files": "All candidate paths below remain retained; no deletion command was executed.",
+    "regression_after_batches": "not_applicable_zero_batches"
+  },
+  "rejected_candidates": [
+    {
+      "id": "asset:rrc_polyphase_fir",
+      "paths": [
+        "engineering-assets/cbb/rrc_polyphase_fir"
+      ],
+      "category": "promote-to-CBB",
+      "failed_conditions": [
+        "no_repository_references",
+        "not_unique_source_or_verification_evidence",
+        "no_extractable_reusable_subcapability",
+        "no_future_plan_or_owner_value"
+      ],
+      "all_five_conditions_satisfied": false,
+      "explicit_reason": "Certified reusable CBB and current reference sample; preserve."
+    },
+    {
+      "id": "asset:channel_est_top",
+      "paths": [
+        "engineering-assets/incubator/intake/channel_est_top"
+      ],
+      "category": "normalize-and-qualify",
+      "failed_conditions": [
+        "no_repository_references",
+        "not_unique_source_or_verification_evidence",
+        "no_extractable_reusable_subcapability",
+        "no_future_plan_or_owner_value"
+      ],
+      "all_five_conditions_satisfied": false,
+      "explicit_reason": "Reusable intake RTL with paired model, TB/UVM and known qualification debt; retain for normalization."
+    },
+    {
+      "id": "asset:ldpc_codec",
+      "paths": [
+        "engineering-assets/incubator/intake/ldpc_codec"
+      ],
+      "category": "normalize-and-qualify",
+      "failed_conditions": [
+        "no_repository_references",
+        "not_unique_source_or_verification_evidence",
+        "no_extractable_reusable_subcapability",
+        "no_future_plan_or_owner_value"
+      ],
+      "all_five_conditions_satisfied": false,
+      "explicit_reason": "Reusable codec with RTL/TB/UVM and architecture evidence; retain while bit-true and writeback gaps are resolved."
+    },
+    {
+      "id": "asset:ofdm_tx_top",
+      "paths": [
+        "engineering-assets/incubator/intake/ofdm_tx_top"
+      ],
+      "category": "normalize-and-qualify",
+      "failed_conditions": [
+        "no_repository_references",
+        "not_unique_source_or_verification_evidence",
+        "no_extractable_reusable_subcapability",
+        "no_future_plan_or_owner_value"
+      ],
+      "all_five_conditions_satisfied": false,
+      "explicit_reason": "Contains reusable mapper, pilot and CP sub-capabilities despite incomplete FFT and verification paths."
+    },
+    {
+      "id": "asset:sync_top",
+      "paths": [
+        "engineering-assets/incubator/intake/sync_top"
+      ],
+      "category": "normalize-and-qualify",
+      "failed_conditions": [
+        "no_repository_references",
+        "not_unique_source_or_verification_evidence",
+        "no_extractable_reusable_subcapability",
+        "no_future_plan_or_owner_value"
+      ],
+      "all_five_conditions_satisfied": false,
+      "explicit_reason": "Contains reusable detection, timing and CORDIC sub-capabilities with model/TB evidence."
+    },
+    {
+      "id": "model:model_comm_channel_est",
+      "paths": [
+        "engineering-assets/models/comm/channel_est"
+      ],
+      "category": "retain-as-evidence/source",
+      "failed_conditions": [
+        "no_repository_references",
+        "not_unique_source_or_verification_evidence",
+        "no_future_plan_or_owner_value"
+      ],
+      "all_five_conditions_satisfied": false,
+      "explicit_reason": "Golden model is correctness evidence for channel-estimation intake."
+    },
+    {
+      "id": "model:model_comm_ldpc",
+      "paths": [
+        "engineering-assets/models/comm/ldpc"
+      ],
+      "category": "retain-as-evidence/source",
+      "failed_conditions": [
+        "no_repository_references",
+        "not_unique_source_or_verification_evidence",
+        "no_future_plan_or_owner_value"
+      ],
+      "all_five_conditions_satisfied": false,
+      "explicit_reason": "Golden model is correctness evidence for LDPC qualification."
+    },
+    {
+      "id": "model:model_comm_ofdm",
+      "paths": [
+        "engineering-assets/models/comm/ofdm"
+      ],
+      "category": "retain-as-evidence/source",
+      "failed_conditions": [
+        "no_repository_references",
+        "not_unique_source_or_verification_evidence",
+        "no_future_plan_or_owner_value"
+      ],
+      "all_five_conditions_satisfied": false,
+      "explicit_reason": "Golden model and vector boundary are evidence for OFDM intake."
+    },
+    {
+      "id": "model:model_comm_rrc",
+      "paths": [
+        "engineering-assets/models/comm/rrc"
+      ],
+      "category": "retain-as-evidence/source",
+      "failed_conditions": [
+        "no_repository_references",
+        "not_unique_source_or_verification_evidence",
+        "no_future_plan_or_owner_value"
+      ],
+      "all_five_conditions_satisfied": false,
+      "explicit_reason": "Paired golden model is required by certified RRC bit-true evidence."
+    },
+    {
+      "id": "model:model_comm_synch",
+      "paths": [
+        "engineering-assets/models/comm/synch"
+      ],
+      "category": "retain-as-evidence/source",
+      "failed_conditions": [
+        "no_repository_references",
+        "not_unique_source_or_verification_evidence",
+        "no_future_plan_or_owner_value"
+      ],
+      "all_five_conditions_satisfied": false,
+      "explicit_reason": "Golden model is correctness evidence for synchronization intake."
+    },
+    {
+      "id": "knowledge:comm-channel-est",
+      "paths": [
+        "engineering-assets/knowledge/primary/domains/comm/channel_est"
+      ],
+      "category": "retain-as-evidence/source",
+      "failed_conditions": [
+        "no_repository_references",
+        "not_unique_source_or_verification_evidence",
+        "no_extractable_reusable_subcapability"
+      ],
+      "all_five_conditions_satisfied": false,
+      "explicit_reason": "Knowledge reports and requirements anchor the channel-estimation evidence chain."
+    },
+    {
+      "id": "knowledge:comm-ldpc",
+      "paths": [
+        "engineering-assets/knowledge/primary/domains/comm/ldpc"
+      ],
+      "category": "retain-as-evidence/source",
+      "failed_conditions": [
+        "no_repository_references",
+        "not_unique_source_or_verification_evidence",
+        "no_extractable_reusable_subcapability"
+      ],
+      "all_five_conditions_satisfied": false,
+      "explicit_reason": "LDPC requirements, reports and architecture-gap evidence remain authoritative source material."
+    },
+    {
+      "id": "knowledge:comm-ofdm",
+      "paths": [
+        "engineering-assets/knowledge/primary/domains/comm/ofdm"
+      ],
+      "category": "retain-as-evidence/source",
+      "failed_conditions": [
+        "no_repository_references",
+        "not_unique_source_or_verification_evidence",
+        "no_extractable_reusable_subcapability"
+      ],
+      "all_five_conditions_satisfied": false,
+      "explicit_reason": "OFDM requirements, reports and UVM references remain source evidence."
+    },
+    {
+      "id": "knowledge:comm-rrc",
+      "paths": [
+        "engineering-assets/knowledge/primary/domains/comm/rrc"
+      ],
+      "category": "retain-as-evidence/source",
+      "failed_conditions": [
+        "no_repository_references",
+        "not_unique_source_or_verification_evidence",
+        "no_extractable_reusable_subcapability"
+      ],
+      "all_five_conditions_satisfied": false,
+      "explicit_reason": "RRC requirement and implementation reports anchor the certified CBB."
+    },
+    {
+      "id": "knowledge:comm-synch",
+      "paths": [
+        "engineering-assets/knowledge/primary/domains/comm/synch"
+      ],
+      "category": "retain-as-evidence/source",
+      "failed_conditions": [
+        "no_repository_references",
+        "not_unique_source_or_verification_evidence",
+        "no_extractable_reusable_subcapability"
+      ],
+      "all_five_conditions_satisfied": false,
+      "explicit_reason": "Synchronization requirements, reports and simulation evidence remain source material."
+    },
+    {
+      "id": "knowledge:ddr-axi4-controller",
+      "paths": [
+        "engineering-assets/knowledge/primary/domains/fpga/ddr_axi4_controller.sv"
+      ],
+      "category": "normalize-and-qualify",
+      "failed_conditions": [
+        "not_unique_source_or_verification_evidence",
+        "no_extractable_reusable_subcapability",
+        "no_future_plan_or_owner_value"
+      ],
+      "all_five_conditions_satisfied": false,
+      "explicit_reason": "Knowledge RTL is a candidate for later qualification; deletion would discard reusable source."
+    },
+    {
+      "id": "knowledge-template:rtl-module",
+      "paths": [
+        "engineering-assets/knowledge/docs/templates/rtl_module_template.v"
+      ],
+      "category": "retain-as-evidence/source",
+      "failed_conditions": [
+        "not_unique_source_or_verification_evidence",
+        "no_future_plan_or_owner_value"
+      ],
+      "all_five_conditions_satisfied": false,
+      "explicit_reason": "Referenced RTL template retained as governed authoring evidence."
+    },
+    {
+      "id": "knowledge-template:testbench",
+      "paths": [
+        "engineering-assets/knowledge/docs/templates/tb_template.sv"
+      ],
+      "category": "retain-as-evidence/source",
+      "failed_conditions": [
+        "not_unique_source_or_verification_evidence",
+        "no_future_plan_or_owner_value"
+      ],
+      "all_five_conditions_satisfied": false,
+      "explicit_reason": "Referenced testbench template retained as verification evidence."
+    },
+    {
+      "id": "knowledge-template:uvm",
+      "paths": [
+        "engineering-assets/knowledge/docs/templates/uvm"
+      ],
+      "category": "retain-as-evidence/source",
+      "failed_conditions": [
+        "not_unique_source_or_verification_evidence",
+        "no_extractable_reusable_subcapability",
+        "no_future_plan_or_owner_value"
+      ],
+      "all_five_conditions_satisfied": false,
+      "explicit_reason": "UVM templates are referenced by intake verification environments."
+    },
+    {
+      "id": "vendor:async_fifo",
+      "paths": [
+        "engineering-assets/reference-assets/vendor/async_fifo-master",
+        "engineering-assets/reference-assets/vendor/_provenance/async_fifo.json"
+      ],
+      "category": "retain-as-evidence/source",
+      "failed_conditions": [
+        "no_repository_references",
+        "not_unique_source_or_verification_evidence",
+        "no_extractable_reusable_subcapability"
+      ],
+      "all_five_conditions_satisfied": false,
+      "explicit_reason": "Third-party reference with provenance; retain outside certified CBB."
+    },
+    {
+      "id": "vendor:axis-udp",
+      "paths": [
+        "engineering-assets/reference-assets/vendor/axis_udp-main",
+        "engineering-assets/reference-assets/vendor/_provenance/axis_udp.json"
+      ],
+      "category": "retain-as-evidence/source",
+      "failed_conditions": [
+        "no_repository_references",
+        "not_unique_source_or_verification_evidence",
+        "no_extractable_reusable_subcapability"
+      ],
+      "all_five_conditions_satisfied": false,
+      "explicit_reason": "Third-party reference with provenance; retain outside certified CBB."
+    },
+    {
+      "id": "vendor:basic-verilog",
+      "paths": [
+        "engineering-assets/reference-assets/vendor/basic_verilog-master",
+        "engineering-assets/reference-assets/vendor/_provenance/basic_verilog.json"
+      ],
+      "category": "retain-as-evidence/source",
+      "failed_conditions": [
+        "no_repository_references",
+        "not_unique_source_or_verification_evidence",
+        "no_extractable_reusable_subcapability"
+      ],
+      "all_five_conditions_satisfied": false,
+      "explicit_reason": "Third-party reference with provenance; retain outside certified CBB."
+    },
+    {
+      "id": "vendor:picorv32",
+      "paths": [
+        "engineering-assets/reference-assets/vendor/picorv32-main",
+        "engineering-assets/reference-assets/vendor/_provenance/picorv32.json"
+      ],
+      "category": "retain-as-evidence/source",
+      "failed_conditions": [
+        "no_repository_references",
+        "not_unique_source_or_verification_evidence",
+        "no_extractable_reusable_subcapability"
+      ],
+      "all_five_conditions_satisfied": false,
+      "explicit_reason": "Third-party reference with provenance; retain outside certified CBB."
+    },
+    {
+      "id": "vendor:r22sdf",
+      "paths": [
+        "engineering-assets/reference-assets/vendor/r22sdf-master",
+        "engineering-assets/reference-assets/vendor/_provenance/r22sdf.json"
+      ],
+      "category": "retain-as-evidence/source",
+      "failed_conditions": [
+        "no_repository_references",
+        "not_unique_source_or_verification_evidence",
+        "no_extractable_reusable_subcapability",
+        "no_future_plan_or_owner_value"
+      ],
+      "all_five_conditions_satisfied": false,
+      "explicit_reason": "Third-party reference and provenance are retained for evidence and licensing review."
+    },
+    {
+      "id": "vendor:verilog-pcie",
+      "paths": [
+        "engineering-assets/reference-assets/vendor/verilog-pcie-master",
+        "engineering-assets/reference-assets/vendor/_provenance/verilog_pcie.json"
+      ],
+      "category": "retain-as-evidence/source",
+      "failed_conditions": [
+        "no_repository_references",
+        "not_unique_source_or_verification_evidence",
+        "no_extractable_reusable_subcapability"
+      ],
+      "all_five_conditions_satisfied": false,
+      "explicit_reason": "Third-party reference with provenance; retain outside certified CBB."
+    },
+    {
+      "id": "skill-reference:axi-stream-interface",
+      "paths": [
+        "skills/hdl-coding/references/axi_stream_if.sv"
+      ],
+      "category": "retain-as-evidence/source",
+      "failed_conditions": [
+        "no_repository_references",
+        "not_unique_source_or_verification_evidence",
+        "no_extractable_reusable_subcapability"
+      ],
+      "all_five_conditions_satisfied": false,
+      "explicit_reason": "HDL skill reference defines reusable AXI-Stream conventions."
+    },
+    {
+      "id": "skill-reference:axi-stream-vip",
+      "paths": [
+        "skills/hdl-coding/references/axi-stream-vip.sv"
+      ],
+      "category": "retain-as-evidence/source",
+      "failed_conditions": [
+        "no_repository_references",
+        "not_unique_source_or_verification_evidence",
+        "no_future_plan_or_owner_value"
+      ],
+      "all_five_conditions_satisfied": false,
+      "explicit_reason": "HDL skill reference supports reusable verification workflows."
+    },
+    {
+      "id": "skill-template:alu-16bit-7func",
+      "paths": [
+        "skills/hdl-coding/templates/alu/alu_16bit_7func.v"
+      ],
+      "category": "normalize-and-qualify",
+      "failed_conditions": [
+        "no_repository_references",
+        "no_extractable_reusable_subcapability",
+        "no_future_plan_or_owner_value"
+      ],
+      "all_five_conditions_satisfied": false,
+      "explicit_reason": "Skill template is a future extraction candidate, not a deletion target."
+    },
+    {
+      "id": "skill-template:alu-4bit-16func",
+      "paths": [
+        "skills/hdl-coding/templates/alu/alu_4bit_16func.v"
+      ],
+      "category": "normalize-and-qualify",
+      "failed_conditions": [
+        "no_repository_references",
+        "no_extractable_reusable_subcapability",
+        "no_future_plan_or_owner_value"
+      ],
+      "all_five_conditions_satisfied": false,
+      "explicit_reason": "Skill template is a future extraction candidate, not a deletion target."
+    },
+    {
+      "id": "skill-template:carry-lookahead-4bit",
+      "paths": [
+        "skills/hdl-coding/templates/alu/carry_lookahead_4bit.v"
+      ],
+      "category": "normalize-and-qualify",
+      "failed_conditions": [
+        "no_repository_references",
+        "no_extractable_reusable_subcapability",
+        "no_future_plan_or_owner_value"
+      ],
+      "all_five_conditions_satisfied": false,
+      "explicit_reason": "Skill template is a future extraction candidate, not a deletion target."
+    },
+    {
+      "id": "skill-template:axis-master",
+      "paths": [
+        "skills/hdl-coding/templates/comm/axis_master.sv"
+      ],
+      "category": "normalize-and-qualify",
+      "failed_conditions": [
+        "no_extractable_reusable_subcapability",
+        "no_future_plan_or_owner_value"
+      ],
+      "all_five_conditions_satisfied": false,
+      "explicit_reason": "Potential reusable AXI template; needs normalization and qualification."
+    },
+    {
+      "id": "skill-template:axis-pipeline-reg",
+      "paths": [
+        "skills/hdl-coding/templates/comm/axis_pipeline_reg.sv"
+      ],
+      "category": "normalize-and-qualify",
+      "failed_conditions": [
+        "no_extractable_reusable_subcapability",
+        "no_future_plan_or_owner_value"
+      ],
+      "all_five_conditions_satisfied": false,
+      "explicit_reason": "Potential reusable AXI template; needs normalization and qualification."
+    },
+    {
+      "id": "skill-template:axis-slave",
+      "paths": [
+        "skills/hdl-coding/templates/comm/axis_slave.sv"
+      ],
+      "category": "normalize-and-qualify",
+      "failed_conditions": [
+        "no_extractable_reusable_subcapability",
+        "no_future_plan_or_owner_value"
+      ],
+      "all_five_conditions_satisfied": false,
+      "explicit_reason": "Potential reusable AXI template; needs normalization and qualification."
+    },
+    {
+      "id": "skill-template:cdc-sync",
+      "paths": [
+        "skills/hdl-coding/templates/comm/cdc_sync.sv"
+      ],
+      "category": "normalize-and-qualify",
+      "failed_conditions": [
+        "no_extractable_reusable_subcapability",
+        "no_future_plan_or_owner_value"
+      ],
+      "all_five_conditions_satisfied": false,
+      "explicit_reason": "Potential reusable CDC template; needs normalization and qualification."
+    },
+    {
+      "id": "skill-template:complex-multiply",
+      "paths": [
+        "skills/hdl-coding/templates/comm/cmult.sv"
+      ],
+      "category": "normalize-and-qualify",
+      "failed_conditions": [
+        "no_extractable_reusable_subcapability",
+        "no_future_plan_or_owner_value"
+      ],
+      "all_five_conditions_satisfied": false,
+      "explicit_reason": "Potential reusable arithmetic template; needs normalization and qualification."
+    },
+    {
+      "id": "skill-template:delay-sync",
+      "paths": [
+        "skills/hdl-coding/templates/comm/delay_sync.v"
+      ],
+      "category": "normalize-and-qualify",
+      "failed_conditions": [
+        "no_repository_references",
+        "no_extractable_reusable_subcapability",
+        "no_future_plan_or_owner_value"
+      ],
+      "all_five_conditions_satisfied": false,
+      "explicit_reason": "Potential reusable synchronization template; needs normalization and qualification."
+    },
+    {
+      "id": "skill-template:lfsr",
+      "paths": [
+        "skills/hdl-coding/templates/comm/lfsr_gen.sv"
+      ],
+      "category": "normalize-and-qualify",
+      "failed_conditions": [
+        "no_extractable_reusable_subcapability",
+        "no_future_plan_or_owner_value"
+      ],
+      "all_five_conditions_satisfied": false,
+      "explicit_reason": "Potential reusable LFSR template; needs normalization and qualification."
+    },
+    {
+      "id": "skill-template:pipe-delay",
+      "paths": [
+        "skills/hdl-coding/templates/comm/pipe_delay.sv"
+      ],
+      "category": "normalize-and-qualify",
+      "failed_conditions": [
+        "no_extractable_reusable_subcapability",
+        "no_future_plan_or_owner_value"
+      ],
+      "all_five_conditions_satisfied": false,
+      "explicit_reason": "Potential reusable pipeline template; needs normalization and qualification."
+    },
+    {
+      "id": "skill-template:ram-2port",
+      "paths": [
+        "skills/hdl-coding/templates/comm/ram_2port.v"
+      ],
+      "category": "normalize-and-qualify",
+      "failed_conditions": [
+        "no_repository_references",
+        "no_extractable_reusable_subcapability",
+        "no_future_plan_or_owner_value"
+      ],
+      "all_five_conditions_satisfied": false,
+      "explicit_reason": "Potential reusable RAM template; needs normalization and qualification."
+    },
+    {
+      "id": "skill-template:cam-cell",
+      "paths": [
+        "skills/hdl-coding/templates/internet/cam_cell.v"
+      ],
+      "category": "normalize-and-qualify",
+      "failed_conditions": [
+        "no_repository_references",
+        "no_extractable_reusable_subcapability",
+        "no_future_plan_or_owner_value"
+      ],
+      "all_five_conditions_satisfied": false,
+      "explicit_reason": "Potential reusable CAM template; needs normalization and qualification."
+    },
+    {
+      "id": "skill-template:crc-generated",
+      "paths": [
+        "skills/hdl-coding/templates/internet/crc.sv"
+      ],
+      "category": "normalize-and-qualify",
+      "failed_conditions": [
+        "not_unique_source_or_verification_evidence",
+        "no_extractable_reusable_subcapability",
+        "no_future_plan_or_owner_value"
+      ],
+      "all_five_conditions_satisfied": false,
+      "explicit_reason": "Generated CRC template needs contract and verification review before extraction."
+    },
+    {
+      "id": "skill-template:crc32",
+      "paths": [
+        "skills/hdl-coding/templates/internet/crc32.v"
+      ],
+      "category": "normalize-and-qualify",
+      "failed_conditions": [
+        "no_repository_references",
+        "no_extractable_reusable_subcapability",
+        "no_future_plan_or_owner_value"
+      ],
+      "all_five_conditions_satisfied": false,
+      "explicit_reason": "Potential reusable CRC template; needs normalization and qualification."
+    },
+    {
+      "id": "skill-template:crossbar-cell",
+      "paths": [
+        "skills/hdl-coding/templates/internet/crossbar_cell.v"
+      ],
+      "category": "normalize-and-qualify",
+      "failed_conditions": [
+        "no_repository_references",
+        "no_extractable_reusable_subcapability",
+        "no_future_plan_or_owner_value"
+      ],
+      "all_five_conditions_satisfied": false,
+      "explicit_reason": "Potential reusable crossbar template; needs normalization and qualification."
+    },
+    {
+      "id": "skill-template:frame-sync",
+      "paths": [
+        "skills/hdl-coding/templates/internet/frame_sync.v"
+      ],
+      "category": "normalize-and-qualify",
+      "failed_conditions": [
+        "no_repository_references",
+        "no_extractable_reusable_subcapability",
+        "no_future_plan_or_owner_value"
+      ],
+      "all_five_conditions_satisfied": false,
+      "explicit_reason": "Potential reusable frame-sync template; needs normalization and qualification."
+    },
+    {
+      "id": "skill-template:hash-table",
+      "paths": [
+        "skills/hdl-coding/templates/internet/hash_table.v"
+      ],
+      "category": "normalize-and-qualify",
+      "failed_conditions": [
+        "no_repository_references",
+        "no_extractable_reusable_subcapability",
+        "no_future_plan_or_owner_value"
+      ],
+      "all_five_conditions_satisfied": false,
+      "explicit_reason": "Potential reusable hash-table template; needs normalization and qualification."
+    },
+    {
+      "id": "skill-template:lru-counter",
+      "paths": [
+        "skills/hdl-coding/templates/internet/lru_counter.v"
+      ],
+      "category": "normalize-and-qualify",
+      "failed_conditions": [
+        "no_repository_references",
+        "no_extractable_reusable_subcapability",
+        "no_future_plan_or_owner_value"
+      ],
+      "all_five_conditions_satisfied": false,
+      "explicit_reason": "Potential reusable LRU template; needs normalization and qualification."
+    },
+    {
+      "id": "skill-template:sm4-round",
+      "paths": [
+        "skills/hdl-coding/templates/internet/sm4_round.v"
+      ],
+      "category": "normalize-and-qualify",
+      "failed_conditions": [
+        "no_repository_references",
+        "no_extractable_reusable_subcapability",
+        "no_future_plan_or_owner_value"
+      ],
+      "all_five_conditions_satisfied": false,
+      "explicit_reason": "Potential reusable SM4 template; needs normalization and qualification."
+    },
+    {
+      "id": "skill:python-hardware-debug-templates",
+      "paths": [
+        "skills/python-hardware-debug/templates"
+      ],
+      "category": "retain-as-evidence/source",
+      "failed_conditions": [
+        "not_unique_source_or_verification_evidence",
+        "no_extractable_reusable_subcapability",
+        "no_future_plan_or_owner_value"
+      ],
+      "all_five_conditions_satisfied": false,
+      "explicit_reason": "Hardware-debug templates are governed tooling evidence and remain retained."
+    }
+  ]
+}

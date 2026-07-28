@@ -1,0 +1,9 @@
+{
+  "source": "https://github.com/alexforencich/verilog-pcie",
+  "license": "MIT",
+  "retrieved": "2024-04-27",
+  "commit": null,
+  "retrieved_basis": "Vendor archive retained without .git; upstream commit SHA is unavailable. The local implementation is normalized and reimplemented, not claimed as a reproducible commit copy.",
+  "reference_source": "engineering-assets/reference-assets/vendor/verilog-pcie-master/rtl/pulse_merge.v",
+  "license_source": "engineering-assets/reference-assets/vendor/verilog-pcie-master/COPYING"
+}

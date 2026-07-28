@@ -1,298 +1,349 @@
 #!/usr/bin/env node
+'use strict';
+
 /**
- * Semantic Search — L2 记忆层核心工具
+ * Lightweight TF-IDF retrieval for validated memory and knowledge files.
  *
- * 基于 TF-IDF + 中文字符 n-gram 的语义检索。
- * 覆盖参考文档要求的三种场景：
- *   1. 跨词同义召回（"打卡"↔"attendance"） — 用汉字 trigram 桥接
- *   2. 概念查询（"为什么用了两张表"↔"DB schema decision"） — TF-IDF 向量相似度
- *   3. 精确字面量 — 落到 grep，本脚本不做 (grep 更快)
- *
- * 用法:
- *   node semantic-search.cjs index [--rebuild]       # 构建/增量索引
- *   node semantic-search.cjs query "你的问题" [--top 5]  # 查询
- *
- * 索引位置: var/index/semantic-index.json
+ * Retrieval fails closed when the index no longer describes the eligible file
+ * set.  Callers must rebuild explicitly; stale vectors are never presented as
+ * current evidence.
  */
 
+const fs = require('node:fs');
+const path = require('node:path');
 const { HARNESS_ROOT } = require('./lib/harness-root.cjs');
-
-const p = require('node:path');
-const f = require('node:fs');
-const os = require('node:os');
 const { shouldIndexSemanticFile } = require('./lib/memory-file-policy.cjs');
 
-const HOME = HARNESS_ROOT;
-const INDEX_DIR = p.join(HOME, 'var', 'index');
-const INDEX_FILE = p.join(INDEX_DIR, 'semantic-index.json');
-const MEMORY_DIR = p.join(HOME, 'memory');
-const KNOWLEDGE_DIRS = [
-  p.join(HOME, 'engineering-assets', 'knowledge','primary'),
-  p.join(HOME, 'engineering-assets', 'knowledge','docs'),
-  p.join(HOME, 'engineering-assets', 'knowledge','references'),
-];
-
-// ── Tokenizer: English words + Chinese char trigrams ─────────────────────
-function tokenize(text) {
-  if (!text) return [];
-  const t = text.toLowerCase();
-  const tokens = [];
-
-  // English words / numbers / identifiers
-  for (const m of t.matchAll(/[a-z][a-z0-9_]*/g)) {
-    tokens.push(m[0]);
-  }
-
-  // Chinese char trigrams — bridges cross-language gaps
-  const chars = t.replace(/[^一-鿿]/g, '');
-  for (let i = 0; i < chars.length - 2; i++) {
-    tokens.push(chars.slice(i, i + 3));
-  }
-  // bigrams too
-  for (let i = 0; i < chars.length - 1; i++) {
-    tokens.push(chars.slice(i, i + 2));
-  }
-  // unigrams
-  for (const c of chars) tokens.push(c);
-
-  return tokens;
-}
-
-// Stop words (English only — Chinese unigrams are meaningful)
+const DAY_MS = 86_400_000;
+const DEFAULT_MAX_AGE_DAYS = 7;
 const STOP_WORDS = new Set([
-  'the','a','an','is','are','was','were','be','been','being','have','has','had',
-  'do','does','did','will','would','could','should','may','might','can','shall',
-  'this','that','these','those','it','its','they','them','we','you','he','she',
-  'to','of','in','for','on','with','at','by','from','as','into','through',
-  'and','or','but','if','then','else','when','where','why','how','which','who',
-  'not','no','nor','so','very','just','about','all','each','every','both',
-  'more','most','some','any','such','only','own','same','too',
-  '//','#','const','let','var','function','return','export','import','require',
+  'the', 'a', 'an', 'is', 'are', 'was', 'were', 'be', 'been', 'being',
+  'have', 'has', 'had', 'do', 'does', 'did', 'will', 'would', 'could',
+  'should', 'may', 'might', 'can', 'shall', 'this', 'that', 'these', 'those',
+  'it', 'its', 'they', 'them', 'we', 'you', 'he', 'she', 'to', 'of', 'in',
+  'for', 'on', 'with', 'at', 'by', 'from', 'as', 'into', 'through', 'and',
+  'or', 'but', 'if', 'then', 'else', 'when', 'where', 'why', 'how', 'which',
+  'who', 'not', 'no', 'nor', 'so', 'very', 'just', 'about', 'all', 'each',
+  'every', 'both', 'more', 'most', 'some', 'any', 'such', 'only', 'own',
+  'same', 'too', 'const', 'let', 'var', 'function', 'return', 'export',
+  'import', 'require',
 ]);
 
-function filterStop(tokens) {
-  return tokens.filter(t => t.length >= 2 || /[一-鿿]/.test(t));
+function pathsFor(home = HARNESS_ROOT) {
+  const knowledgeDir = path.join(home, 'engineering-assets', 'knowledge');
+  const indexDir = path.join(home, 'var', 'index');
+  return {
+    home,
+    memoryDir: path.join(home, 'memory'),
+    knowledgeDir,
+    roots: [
+      path.join(home, 'memory'),
+      path.join(knowledgeDir, 'primary'),
+      path.join(knowledgeDir, 'docs'),
+      path.join(knowledgeDir, 'references'),
+    ],
+    indexDir,
+    indexFile: path.join(indexDir, 'semantic-index.json'),
+    metaFile: path.join(indexDir, 'semantic-index-meta.json'),
+  };
 }
 
-// ── TF-IDF ────────────────────────────────────────────────────────────────
+function slash(value) {
+  return String(value || '').replace(/\\/g, '/');
+}
+
+function tokenize(text) {
+  if (!text) return [];
+  const lower = String(text).toLowerCase();
+  const tokens = [...lower.matchAll(/[a-z][a-z0-9_]*/g)].map((match) => match[0]);
+  const han = lower.match(/\p{Script=Han}/gu) || [];
+  for (let size = 3; size >= 1; size -= 1) {
+    for (let index = 0; index <= han.length - size; index += 1) {
+      tokens.push(han.slice(index, index + size).join(''));
+    }
+  }
+  return tokens.filter((token) => !STOP_WORDS.has(token));
+}
+
 function buildIndex(fileList) {
-  const docCount = fileList.length;
-  const df = {};   // document frequency
-  const tf = {};   // term frequency per doc: { file: { term: count } }
+  const df = {};
+  const tf = {};
 
   for (const filePath of fileList) {
     let content;
-    try {
-      content = f.readFileSync(filePath, 'utf8');
-    } catch { continue; }
-
-    const tokens = filterStop(tokenize(content));
+    try { content = fs.readFileSync(filePath, 'utf8'); }
+    catch { continue; }
     const termCounts = {};
     const seen = new Set();
-
-    for (const t of tokens) {
-      termCounts[t] = (termCounts[t] || 0) + 1;
-      if (!seen.has(t)) {
-        seen.add(t);
-        df[t] = (df[t] || 0) + 1;
+    for (const token of tokenize(content)) {
+      termCounts[token] = (termCounts[token] || 0) + 1;
+      if (!seen.has(token)) {
+        seen.add(token);
+        df[token] = (df[token] || 0) + 1;
       }
     }
-
-    // Normalize TF: log(1 + count)
-    const normTf = {};
-    for (const [term, count] of Object.entries(termCounts)) {
-      normTf[term] = 1 + Math.log(count);
-    }
-    tf[filePath] = normTf;
+    tf[filePath] = termCounts;
   }
 
-  // Build IDF
-  const idf = {};
-  for (const [term, docFreq] of Object.entries(df)) {
-    idf[term] = Math.log((docCount + 1) / (docFreq + 1)) + 1;
-  }
-
-  // Build TF-IDF vectors
+  const documentCount = fileList.length;
+  const idf = Object.fromEntries(Object.entries(df).map(([term, count]) => [
+    term,
+    Math.log((documentCount + 1) / (count + 1)) + 1,
+  ]));
   const vectors = {};
   for (const [filePath, termCounts] of Object.entries(tf)) {
-    const vec = {};
-    let norm2 = 0;
-    for (const [term, val] of Object.entries(termCounts)) {
-      const w = val * (idf[term] || 1);
-      vec[term] = w;
-      norm2 += w * w;
+    const vector = {};
+    let normSquared = 0;
+    for (const [term, count] of Object.entries(termCounts)) {
+      const weight = (1 + Math.log(count)) * (idf[term] || 1);
+      vector[term] = weight;
+      normSquared += weight * weight;
     }
-    const norm = Math.sqrt(norm2);
-    // Normalize to unit vector
-    for (const term of Object.keys(vec)) {
-      vec[term] /= norm;
+    const norm = Math.sqrt(normSquared);
+    if (norm > 0) {
+      for (const term of Object.keys(vector)) vector[term] /= norm;
+      vectors[filePath] = vector;
     }
-    vectors[filePath] = vec;
   }
-
-  return { vectors, idf, df, docCount };
+  return vectors;
 }
 
-function cosineSimilarity(queryVec, docVec) {
+function walkMarkdown(root, opts, files = []) {
+  if (!fs.existsSync(root)) return files;
+  for (const entry of fs.readdirSync(root, { withFileTypes: true })) {
+    if (entry.name.startsWith('.') || entry.name === '__pycache__') continue;
+    const full = path.join(root, entry.name);
+    if (entry.isDirectory()) walkMarkdown(full, opts, files);
+    else if (entry.isFile() && entry.name.toLowerCase().endsWith('.md')
+      && shouldIndexSemanticFile(full, opts)) files.push(full);
+  }
+  return files;
+}
+
+function eligibleFiles(home = HARNESS_ROOT) {
+  const locations = pathsFor(home);
+  const opts = {
+    home,
+    memoryDir: locations.memoryDir,
+    knowledgeDir: locations.knowledgeDir,
+  };
+  const files = [];
+  for (const root of locations.roots) walkMarkdown(root, opts, files);
+  return [...new Set(files.map((filePath) => path.resolve(filePath)))].sort();
+}
+
+function buildSemanticIndex(opts = {}) {
+  const home = path.resolve(opts.home || HARNESS_ROOT);
+  const locations = pathsFor(home);
+  const files = eligibleFiles(home);
+  const now = opts.now ?? Date.now();
+  const builtAt = new Date(now).toISOString();
+  const vectors = buildIndex(files);
+  const meta = {
+    type: 'tfidf-charngram',
+    version: 3,
+    builtAt,
+    fileCount: files.length,
+    files: files.map((filePath) => ({
+      path: slash(path.relative(home, filePath)),
+      mtime: fs.statSync(filePath).mtimeMs,
+    })),
+  };
+  const index = {
+    vectors,
+    type: meta.type,
+    version: meta.version,
+    builtAt,
+    fileCount: files.length,
+  };
+  fs.mkdirSync(locations.indexDir, { recursive: true });
+  fs.writeFileSync(locations.indexFile, JSON.stringify(index), 'utf8');
+  fs.writeFileSync(locations.metaFile, JSON.stringify(meta), 'utf8');
+  return {
+    ok: true,
+    status: 'indexed',
+    builtAt,
+    fileCount: files.length,
+    vectorCount: Object.keys(vectors).length,
+    indexFile: locations.indexFile,
+  };
+}
+
+function inspectIndexFreshness(opts = {}) {
+  const home = path.resolve(opts.home || HARNESS_ROOT);
+  const locations = pathsFor(home);
+  const now = opts.now ?? Date.now();
+  const maxAgeDays = Number(opts.maxAgeDays ?? DEFAULT_MAX_AGE_DAYS);
+  const current = new Map(eligibleFiles(home).map((filePath) => [
+    slash(path.relative(home, filePath)),
+    fs.statSync(filePath).mtimeMs,
+  ]));
+
+  let meta;
+  try { meta = JSON.parse(fs.readFileSync(locations.metaFile, 'utf8')); }
+  catch { meta = null; }
+  const indexFound = fs.existsSync(locations.indexFile);
+  if (!meta || !Array.isArray(meta.files) || !indexFound) {
+    return {
+      found: false,
+      stale: true,
+      reason: 'index_missing',
+      builtAt: null,
+      ageDays: null,
+      indexed: 0,
+      eligible: current.size,
+      missing: 0,
+      unindexed: current.size,
+      changed: 0,
+    };
+  }
+
+  const recorded = new Map(meta.files.map((item) => [slash(item.path), Number(item.mtime)]));
+  const missing = [...recorded.keys()].filter((item) => !current.has(item)).length;
+  const unindexed = [...current.keys()].filter((item) => !recorded.has(item)).length;
+  const changed = [...current].filter(([item, mtime]) => (
+    recorded.has(item) && Math.abs(mtime - recorded.get(item)) > 1
+  )).length;
+  const builtMs = Date.parse(meta.builtAt || '');
+  const ageDays = Number.isFinite(builtMs) ? (now - builtMs) / DAY_MS : null;
+  const staleByAge = ageDays === null || ageDays >= maxAgeDays;
+  const stale = missing > 0 || unindexed > 0 || changed > 0 || staleByAge;
+  return {
+    found: true,
+    stale,
+    reason: stale ? 'index_drift' : null,
+    builtAt: meta.builtAt || null,
+    ageDays,
+    indexed: recorded.size,
+    eligible: current.size,
+    missing,
+    unindexed,
+    changed,
+  };
+}
+
+function cosineSimilarity(queryVector, documentVector) {
   let dot = 0;
-  for (const [term, qv] of Object.entries(queryVec)) {
-    if (docVec[term]) {
-      dot += qv * docVec[term];
-    }
+  for (const [term, weight] of Object.entries(queryVector)) {
+    if (documentVector[term]) dot += weight * documentVector[term];
   }
   return dot;
 }
 
-// ── Walk files ────────────────────────────────────────────────────────────
-function walkMd(dir, files = []) {
-  try {
-    for (const entry of f.readdirSync(dir, { withFileTypes: true })) {
-      if (entry.isDirectory()) {
-        if (!entry.name.startsWith('.') && entry.name !== '__pycache__') {
-          walkMd(p.join(dir, entry.name), files);
-        }
-      } else if (entry.name.endsWith('.md')) {
-        const full = p.join(dir, entry.name);
-        if (shouldIndexSemanticFile(full, { home: HOME, memoryDir: MEMORY_DIR })) {
-          files.push(full);
-        }
-      }
-    }
-  } catch { /* skip unreadable */ }
-  return files;
-}
-
-// ── Index command ─────────────────────────────────────────────────────────
-function cmdIndex(rebuild) {
-  f.mkdirSync(INDEX_DIR, { recursive: true });
-
-  // Gather all .md files
-  const files = walkMd(MEMORY_DIR);
-  for (const kd of KNOWLEDGE_DIRS) walkMd(kd, files);
-
-  console.error(`Indexing ${files.length} files...`);
-
-  const index = buildIndex(files);
-  index.type = 'tfidf-charngram';
-  index.version = 2;
-  index.builtAt = new Date().toISOString();
-  index.fileCount = files.length;
-
-  // Store meta separately to keep the main index lean
-  const meta = {
-    type: 'tfidf-charngram',
-    version: 2,
-    builtAt: index.builtAt,
-    fileCount: files.length,
-    files: files.map(fp => ({
-      path: fp.replace(HOME + p.sep, ''),
-      mtime: f.statSync(fp).mtimeMs,
-    })),
-  };
-
-  // Only store vectors (lean: no idf/df in the vector map, they're folded in)
-  const vectors = index.vectors;
-
-  // Prune: remove near-zero vectors (empty files)
-  for (const [fp, vec] of Object.entries(vectors)) {
-    if (Object.keys(vec).length === 0) delete vectors[fp];
-  }
-
-  const data = { vectors, type: index.type, version: index.version, builtAt: index.builtAt, fileCount: index.fileCount };
-  f.writeFileSync(INDEX_FILE, JSON.stringify(data));
-  f.writeFileSync(INDEX_FILE.replace('.json', '-meta.json'), JSON.stringify(meta));
-
-  console.error(`Index built: ${Object.keys(vectors).length} docs indexed at ${INDEX_FILE}`);
-}
-
-// ── Query command ─────────────────────────────────────────────────────────
-function cmdQuery(queryStr, topK) {
-  if (!f.existsSync(INDEX_FILE)) {
-    console.error('Index not found. Run "node semantic-search.cjs index" first.');
-    process.exit(1);
-  }
-
-  const index = JSON.parse(f.readFileSync(INDEX_FILE, 'utf8'));
-  const vectors = index.vectors;
-
-  // Tokenize query
-  const qTokens = filterStop(tokenize(queryStr));
-  const qCounts = {};
-  for (const t of qTokens) qCounts[t] = (qCounts[t] || 0) + 1;
-  const maxQf = Math.max(...Object.values(qCounts), 1);
-  const qVec = {};
-  let qNorm2 = 0;
-  for (const [t, c] of Object.entries(qCounts)) {
-    const w = 1 + Math.log(c);
-    qVec[t] = w;
-    qNorm2 += w * w;
-  }
-  const qNorm = Math.sqrt(qNorm2);
-  for (const t of Object.keys(qVec)) qVec[t] /= qNorm;
-
-  // Score all docs
-  const scored = [];
-  for (const [filePath, docVec] of Object.entries(vectors)) {
-    const sim = cosineSimilarity(qVec, docVec);
-    if (sim > 0) {
-      scored.push({ path: filePath, score: sim });
-    }
-  }
-
-  scored.sort((a, b) => b.score - a.score);
-  const top = scored.slice(0, topK);
-
-  // Output JSON for programmatic use
-  const result = top.map(r => ({
-    path: r.path.replace(HOME + p.sep, ''),
-    score: r.score,
-    snippet: extractSnippet(r.path, queryStr),
-  }));
-
-  console.log(JSON.stringify(result, null, 2));
-}
-
 function extractSnippet(filePath, query) {
   try {
-    const content = f.readFileSync(filePath, 'utf8');
-    const lines = content.split('\n');
-    const qLower = query.toLowerCase();
-
-    // Find the line with best keyword match
+    const lines = fs.readFileSync(filePath, 'utf8').split(/\r?\n/);
+    const words = String(query).toLowerCase().split(/\s+/).filter((item) => item.length > 1);
     let bestLine = 0;
-    let bestScore = 0;
-    for (let i = 0; i < lines.length; i++) {
-      const l = lines[i].toLowerCase();
-      let score = 0;
-      for (const word of qLower.split(/\s+/)) {
-        if (word.length > 1 && l.includes(word)) score += word.length;
-      }
+    let bestScore = -1;
+    for (let index = 0; index < lines.length; index += 1) {
+      const lower = lines[index].toLowerCase();
+      const score = words.reduce((total, word) => total + (lower.includes(word) ? word.length : 0), 0);
       if (score > bestScore) {
+        bestLine = index;
         bestScore = score;
-        bestLine = i;
       }
     }
-
-    const start = Math.max(0, bestLine - 1);
-    const end = Math.min(lines.length, bestLine + 3);
-    return lines.slice(start, end).join('\n').slice(0, 400);
+    return lines.slice(Math.max(0, bestLine - 1), bestLine + 3).join('\n').slice(0, 400);
   } catch {
     return '';
   }
 }
 
-// ── Main ──────────────────────────────────────────────────────────────────
-const cmd = process.argv[2];
-switch (cmd) {
-  case 'index':
-    cmdIndex(process.argv.includes('--rebuild'));
-    break;
-  case 'query':
-    cmdQuery(process.argv[3] || '', parseInt(process.argv[5], 10) || 5);
-    break;
-  default:
-    console.error('Usage:');
-    console.error('  node semantic-search.cjs index [--rebuild]');
-    console.error('  node semantic-search.cjs query "your question" [--top N]');
-    process.exit(1);
+function querySemantic(query, opts = {}) {
+  const home = path.resolve(opts.home || HARNESS_ROOT);
+  const freshness = inspectIndexFreshness({
+    home,
+    now: opts.now,
+    maxAgeDays: opts.maxAgeDays,
+  });
+  if (freshness.stale && opts.allowStale !== true) {
+    return { ok: false, status: 'stale_index', freshness, results: [] };
+  }
+
+  const locations = pathsFor(home);
+  let index;
+  try { index = JSON.parse(fs.readFileSync(locations.indexFile, 'utf8')); }
+  catch {
+    return { ok: false, status: 'index_missing', freshness, results: [] };
+  }
+  const counts = {};
+  for (const token of tokenize(query)) counts[token] = (counts[token] || 0) + 1;
+  const queryVector = {};
+  let normSquared = 0;
+  for (const [term, count] of Object.entries(counts)) {
+    const weight = 1 + Math.log(count);
+    queryVector[term] = weight;
+    normSquared += weight * weight;
+  }
+  const norm = Math.sqrt(normSquared);
+  if (norm > 0) {
+    for (const term of Object.keys(queryVector)) queryVector[term] /= norm;
+  }
+
+  const scored = [];
+  for (const [filePath, documentVector] of Object.entries(index.vectors || {})) {
+    const score = cosineSimilarity(queryVector, documentVector);
+    if (score > 0) scored.push({ filePath, score });
+  }
+  scored.sort((left, right) => right.score - left.score);
+  const topK = Math.max(1, Number(opts.topK || 5));
+  const results = scored.slice(0, topK).map(({ filePath, score }) => ({
+    path: slash(path.relative(home, filePath)),
+    score,
+    snippet: extractSnippet(filePath, query),
+  }));
+  return {
+    ok: true,
+    status: freshness.stale ? 'stale_allowed' : 'ok',
+    freshness,
+    results,
+  };
 }
+
+function optionValue(argv, name, fallback = null) {
+  const index = argv.indexOf(name);
+  return index >= 0 && argv[index + 1] !== undefined ? argv[index + 1] : fallback;
+}
+
+function main(argv = process.argv.slice(2)) {
+  const command = argv[0];
+  const home = optionValue(argv, '--home', HARNESS_ROOT);
+  if (command === 'index') {
+    const result = buildSemanticIndex({ home });
+    console.log(JSON.stringify(result, null, 2));
+    return 0;
+  }
+  if (command === 'query') {
+    const result = querySemantic(argv[1] || '', {
+      home,
+      topK: Number(optionValue(argv, '--top', 5)),
+      allowStale: argv.includes('--allow-stale'),
+    });
+    if (!result.ok) {
+      console.log(JSON.stringify(result, null, 2));
+      return 2;
+    }
+    // Preserve the historical array output for existing retrieval hooks.
+    console.log(JSON.stringify(result.results, null, 2));
+    return 0;
+  }
+  console.error('Usage:');
+  console.error('  node semantic-search.cjs index [--rebuild] [--home PATH]');
+  console.error('  node semantic-search.cjs query "question" [--top N] [--home PATH]');
+  return 1;
+}
+
+if (require.main === module) {
+  process.exitCode = main();
+}
+
+module.exports = {
+  tokenize,
+  buildIndex,
+  eligibleFiles,
+  buildSemanticIndex,
+  inspectIndexFreshness,
+  querySemantic,
+  main,
+};

@@ -19,12 +19,12 @@
   },
   "ports": [
     {
-      "name": "clk",
+      "name": "i_clk",
       "direction": "input",
       "width": 1
     },
     {
-      "name": "rst_n",
+      "name": "i_rst",
       "direction": "input",
       "width": 1
     },
@@ -65,25 +65,25 @@
       "bus": "axi-stream"
     },
     {
-      "name": "fft_start",
+      "name": "o_fft_start",
       "direction": "output",
       "width": 1
     },
     {
-      "name": "sync_locked",
+      "name": "o_sync_locked",
       "direction": "output",
       "width": 1
     }
   ],
   "clock": {
-    "name": "clk",
+    "name": "i_clk",
     "period_ns": 10
   },
   "reset": {
-    "name": "rst_n",
-    "polarity": "active_low",
-    "type": "async",
-    "async_release_synchronized": false
+    "name": "i_rst",
+    "polarity": "active_high",
+    "type": "sync",
+    "async_release_synchronized": true
   },
   "constraints": {
     "target": {
@@ -95,64 +95,65 @@
     {
       "path": "rtl/sync_pkg.sv",
       "role": "rtl",
-      "sha256": "4ef46b7535a6f82100893b6c62224290ebfa987af5d6adcdba9d51aa4478d4be"
+      "sha256": "d8228bfc389c9665b2545dc5623ecfb93de9a75d160f1cc12211933d107bf643"
     },
     {
       "path": "rtl/cordic_core.sv",
       "role": "rtl",
-      "sha256": "c63b9cdf5cf68edf0e5d678a02e0c360081d9f40e3255ef7611515d147dc365f"
+      "sha256": "d203afb8fad8701dfd5352b4d9fb4064227d148148dcd1e5440cf07a00d94ab7"
     },
     {
       "path": "rtl/packet_detect.sv",
       "role": "rtl",
-      "sha256": "d61af178a6449cfeac4c8b0549b51501a0bac4c04adec26b3d71f0f360002127"
+      "sha256": "88efbe1c384a472a105fe89d77d7cad3da0c4d60f9ee230d7183a5c0d2a57d56"
     },
     {
       "path": "rtl/fine_timing.sv",
       "role": "rtl",
-      "sha256": "815646b3bd00a760bbf77f29edc425a6e417e2a3bd3b49d82c498a8045827152"
+      "sha256": "66c418d34ced1a783a2002ede4a18b7ccd9048d90d4aff44ff7762e10b963c20"
     },
     {
       "path": "rtl/sync_top.sv",
       "role": "rtl",
-      "sha256": "ae32b7e1fed2df062182281600aa1e5ffe0717ffb405351ce2367aa804e6739f"
+      "sha256": "939e107f7e4d77c0081e7d39c3310b4f411a6f07bcb06c82db92336cc6200207"
     },
     {
       "path": "tb/tb_sync_top.sv",
       "role": "tb",
-      "sha256": "740e2731ce985201e51f821d7330ded002d26bc90d97ae650eafc36b177fea60"
+      "sha256": "adcb565f4efd4d12baea194caecfbeaca2ed6c7308e1ebb29aaa4f8f53cc2729"
     },
     {
       "path": "tb/uvm/sync_uvm_pkg.sv",
       "role": "tb",
-      "sha256": "81ef9f981c9bdb76d3d74be607d5132bba30ff36c837f5273e640ced8e727766"
+      "sha256": "64796bcdf65863d649a45710cb2b26cd4e89792812a3d912654db2f7b9ac92fc"
     },
     {
       "path": "tb/uvm/sync_sequences.sv",
       "role": "tb",
-      "sha256": "070c16835bb8cf875edc6da812b2e029993a5617583127133ed0199c7af95528"
+      "sha256": "1afa2bfd6f77537a77da09f43416653f7b444e1f9084507d82cd90c28252d510"
     },
     {
       "path": "tb/uvm/sync_scoreboard.sv",
       "role": "tb",
-      "sha256": "03334bc3856627970877c0a57e919b7f48dc9f45d02277f3f57fd16e7347450f"
+      "sha256": "b3a84a58e317d28c5bf22a7e894dd18bd9f940d3e3a92db875099343998d8763"
     },
     {
       "path": "tb/uvm/sync_base_test.sv",
       "role": "tb",
-      "sha256": "0d81eb94217017b16675bb486e3605dc977a5698e7fb4162131550d6888445d9"
+      "sha256": "db6f0c778e95afeab0f7e0ac78d3c7a85e610427eb159991238a22211eb223b1"
     },
     {
       "path": "tb/uvm/sync_basic_test.sv",
       "role": "tb",
-      "sha256": "ec7a6546ce4e289f9ab30f0eda7375539631bbed9d244ad84e21ebb2a5cc44e2"
+      "sha256": "6ed65982a9f9f693ca6842f31f9134c1011e71c5fe02c683b9510569b6ae626e"
     },
     {
       "path": "tb/uvm/tb_sync_uvm_top.sv",
       "role": "tb",
-      "sha256": "cd7c368a6d2465ee88aee9ad678275a2a85efdd72c63a5bf642bd69c18042166"
+      "sha256": "4fb45e1cc0226ec7fa99fcfa2eab6f319811358a154acdb0566bfac6ebdd0b3c"
     }
   ],
   "waivers": [],
-  "superseded_by": null
+  "superseded_by": null,
+  "top": "sync_top"
 }

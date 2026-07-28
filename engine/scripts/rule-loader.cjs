@@ -27,6 +27,8 @@
 'use strict';
 
 const fs = require('node:fs');
+const crypto = require('node:crypto');
+const os = require('node:os');
 const path = require('node:path');
 const { HARNESS_ROOT } = require('./lib/harness-root.cjs');
 
@@ -117,6 +119,13 @@ function buildRuleIndex() {
   for (const file of files) {
     const filePath = path.join(RULES_DIR, file);
     try {
+      if (/^90-promoted-hrc-.*\.md$/i.test(file)) {
+        const { validatePromotedRuleArtifact } = require('./harness-rule-candidates.cjs');
+        const validation = validatePromotedRuleArtifact(filePath, {
+          ledgerPath: process.env.CLAUDE_HARNESS_RULE_LEDGER,
+        });
+        if (!validation.valid) continue;
+      }
       const content = fs.readFileSync(filePath, 'utf8');
       const { frontmatter } = parseFrontmatter(content);
 
@@ -250,22 +259,27 @@ function matchTriggerPatterns(input, patterns, openFiles, toolNames, strict) {
       const meaningfulChars = chineseChars.filter(c => !stopChars.has(c));
       if (meaningfulChars.length < 2) continue; // 至少需要 2 个有意义的汉字
 
-      // 计算用户输入中有多少个有意义的汉字命中了触发词中的汉字
       const inputChars = input.split('').filter(c => /[一-鿿]/.test(c) && !stopChars.has(c));
-      const overlapCount = meaningfulChars.filter(c => inputChars.includes(c)).length;
 
-      // 阈值规则:
-      //   - 2 字触发词: 至少命中 1 字，且输入有意义汉字 ≤10（短路保护）
-      //   - 3 字及以上触发词: 至少命中 2 字
-      //   - 命中字数/触发词字数 ≥ 0.5（比例保护，避免长输入靠单个字命中）
-      const ratio = overlapCount / meaningfulChars.length;
-      const shortInputGuard = inputChars.length <= 10;
-
-      if (meaningfulChars.length === 2 && overlapCount >= 1 && shortInputGuard && ratio >= 0.5) {
-        return { type: 'char-seed', term: pattern, matchedChars: meaningfulChars.filter(c => inputChars.includes(c)) };
+      // 模糊匹配仍必须像一个短语：全部有效汉字按顺序出现，整个窗口最多
+      // 允许插入一个有效汉字。旧的集合重合算法会把“重新……功能”误判为
+      // “新功能”，因为它忽略顺序与距离。
+      const positions = [];
+      let cursor = 0;
+      for (const char of meaningfulChars) {
+        const index = inputChars.indexOf(char, cursor);
+        if (index < 0) {
+          positions.length = 0;
+          break;
+        }
+        positions.push(index);
+        cursor = index + 1;
       }
-      if (meaningfulChars.length >= 3 && overlapCount >= 2 && ratio >= 0.5) {
-        return { type: 'char-seed', term: pattern, matchedChars: meaningfulChars.filter(c => inputChars.includes(c)) };
+      if (positions.length === meaningfulChars.length) {
+        const span = positions[positions.length - 1] - positions[0] + 1;
+        if (span <= meaningfulChars.length + 1) {
+          return { type: 'char-seed', term: pattern, matchedChars: [...meaningfulChars] };
+        }
       }
     }
 
@@ -501,12 +515,25 @@ function parsePayload(raw) {
 }
 
 /** 同一 session 内已注入过的规则不重复注入, 避免每轮刷屏与 token 浪费。 */
-function injectionMemoPath(sessionId) {
+function injectionMemoPath(sessionId, opts = {}) {
   const safe = String(sessionId || 'no-session').replace(/[^A-Za-z0-9_-]/g, '_').slice(0, 80);
-  return path.join(HARNESS_ROOT, 'var', 'rule-loader', `injected-${safe}.json`);
+  const namespace = crypto.createHash('sha256').update(HARNESS_ROOT).digest('hex').slice(0, 16);
+  const memoRoot = opts.tempRoot
+    || process.env.CLAUDE_RULE_LOADER_MEMO_DIR
+    || path.join(os.tmpdir(), 'claude-harness-cache', namespace, 'rule-loader');
+  return path.join(memoRoot, `injected-${safe}.json`);
+}
+
+function persistenceDisabled() {
+  return process.env.CLAUDE_HOOK_NO_WRITE === '1'
+    || process.env.CLAUDE_BENCH === '1'
+    || process.env.CLAUDE_HARNESS_NO_PERSIST === '1'
+    || process.env.CLAUDE_HARNESS_VERIFY_READONLY === '1'
+    || process.env.CLAUDE_NO_DIAGNOSTIC_WRITES === '1';
 }
 
 function loadInjected(sessionId) {
+  if (persistenceDisabled()) return new Set();
   try {
     const raw = fs.readFileSync(injectionMemoPath(sessionId), 'utf8');
     const parsed = JSON.parse(raw);
@@ -517,6 +544,7 @@ function loadInjected(sessionId) {
 }
 
 function saveInjected(sessionId, files) {
+  if (persistenceDisabled()) return;
   try {
     const target = injectionMemoPath(sessionId);
     fs.mkdirSync(path.dirname(target), { recursive: true });
@@ -526,8 +554,7 @@ function saveInjected(sessionId, files) {
   } catch { /* 注入记忆写失败不影响主流程 */ }
 }
 
-function runAsHook() {
-  const payload = parsePayload(readStdinRaw());
+function retrieveContext(payload = {}, deps = {}) {
   const eventName = payload.hook_event_name || '';
   const toolInput = payload.tool_input || payload.tool?.input || {};
 
@@ -541,8 +568,9 @@ function runAsHook() {
     .concat((process.env.CLAUDE_OPEN_FILES || '').split(',').filter(Boolean));
   const toolNames = [payload.tool_name || payload.tool?.name].filter(Boolean);
 
-  const result = evaluate(userMessage, { openFiles, toolNames });
-  if (!result) return;
+  const evaluateRules = deps.evaluate || evaluate;
+  const result = evaluateRules(userMessage, { openFiles, toolNames });
+  if (!result) return null;
 
   // evaluate() 有两种输出形态:
   //   capsule 模式 — result.capsule (紧凑摘要) + result.ruleRefs
@@ -551,12 +579,12 @@ function runAsHook() {
   const refFiles = Array.isArray(result.ruleRefs)
     ? result.ruleRefs.map(r => r.file)
     : Object.keys(result.ruleContents || {});
-  if (refFiles.length === 0) return;
+  if (refFiles.length === 0) return null;
 
   const sessionId = payload.session_id || payload.sessionId || '';
-  const already = loadInjected(sessionId);
+  const already = (deps.loadInjected || loadInjected)(sessionId);
   const fresh = refFiles.filter(file => !already.has(file));
-  if (fresh.length === 0) return; // 本 session 已注入过 → 0 token
+  if (fresh.length === 0) return null; // 本 session 已注入过 → 0 token
 
   let body;
   if (result.ruleContents && Object.keys(result.ruleContents).length > 0) {
@@ -567,21 +595,28 @@ function runAsHook() {
   } else {
     body = String(result.capsule || '');
   }
-  if (!body.trim()) return;
+  if (!body.trim()) return null;
 
   const additionalContext = `[rule-loader] 与当前任务相关的规则:\n\n${body}`;
 
   // Claude Code 只把 hookSpecificOutput.additionalContext 注入模型上下文;
   // 裸 console.log 的文本只会进日志, 不进上下文。
-  process.stdout.write(JSON.stringify({
+  const output = {
     hookSpecificOutput: {
       hookEventName: eventName || 'UserPromptSubmit',
       additionalContext,
     },
-  }));
+  };
 
   for (const file of fresh) already.add(file);
-  saveInjected(sessionId, already);
+  (deps.saveInjected || saveInjected)(sessionId, already);
+  return output;
+}
+
+function runAsHook() {
+  const payload = parsePayload(readStdinRaw());
+  const output = retrieveContext(payload);
+  if (output) process.stdout.write(JSON.stringify(output));
 }
 
 if (require.main === module) {
@@ -596,4 +631,7 @@ module.exports = {
   loadRuleContent,
   getRuleSummary,
   parseFrontmatter,
+  injectionMemoPath,
+  persistenceDisabled,
+  retrieveContext,
 };

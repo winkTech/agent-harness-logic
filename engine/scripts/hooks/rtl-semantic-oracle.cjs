@@ -31,7 +31,7 @@ function toolInputFrom(payload) {
  * 审查门禁"的承诺直接冲突。红线检查是全文语义分析（要看 always 块结构、端口
  * 驱动关系），只拿片段判不了，所以必须重建全文。
  */
-function contentFrom(payload) {
+function contentFrom(payload, runtime = {}) {
   const input = toolInputFrom(payload);
   const direct = String(input.content || payload?.content || '');
   if (direct) return direct;
@@ -43,7 +43,8 @@ function contentFrom(payload) {
   const fp = payloadFilePath(payload, payloadCwd(payload));
   let text;
   try {
-    text = require('node:fs').readFileSync(fp, 'utf8');
+    const readFileSync = runtime.readFileSync || fs.readFileSync.bind(fs);
+    text = readFileSync(fp, 'utf8');
   } catch {
     return ''; // 读不到磁盘就没法重建, 保持 skip 而不是误判
   }
@@ -294,6 +295,46 @@ function hookSuccessOutput(advisory, eventName = 'PreToolUse') {
 
 const RTL_WRITE_TOOLS = new Set(['Write', 'Edit', 'MultiEdit']);
 
+function evaluate(payload, runtime = {}) {
+  const source = 'rtl-semantic-oracle';
+  if (process.env.CLAUDE_RTL_SEMANTIC_ORACLE_DISABLED === '1') {
+    return { source, decision: 'allow', diagnostics: [], skipped: true };
+  }
+  if (!RTL_WRITE_TOOLS.has(toolNameFrom(payload))) {
+    return { source, decision: 'allow', diagnostics: [] };
+  }
+  if ((eventNameFrom(payload) || '') && eventNameFrom(payload) !== 'PreToolUse') {
+    return { source, decision: 'allow', diagnostics: [] };
+  }
+  const cwd = runtime.cwd || payloadCwd(payload);
+  const filePath = runtime.filePath || payloadFilePath(payload, cwd);
+  if (!isRtlSource(filePath)) return { source, decision: 'allow', diagnostics: [] };
+  const content = runtime.content !== undefined ? runtime.content : contentFrom(payload, runtime);
+  if (!content) return { source, decision: 'allow', diagnostics: [] };
+  const report = isTestbenchOrSimulation(filePath)
+    ? analyzeTestbench(content, filePath)
+    : analyzeRtl(content, filePath);
+  const errors = report.findings.filter((finding) => finding.severity === 'error');
+  const warnings = report.findings.filter((finding) => finding.severity === 'warning');
+  if (errors.length > 0) {
+    return { source, decision: 'block', diagnostics: errors, advisories: warnings, report };
+  }
+  if (warnings.length > 0) {
+    const advisory = {
+      schemaVersion: 1,
+      kind: 'harness-advisory',
+      source,
+      status: 'warning',
+      blocking: false,
+      target: filePath,
+      summary: `${path.basename(filePath)} has ${warnings.length} non-blocking RTL semantic warning(s).`,
+      findings: warnings,
+    };
+    return { source, decision: 'warn', diagnostics: warnings, advisories: [advisory], report };
+  }
+  return { source, decision: 'allow', diagnostics: [], report };
+}
+
 function run(payload) {
   if (!RTL_WRITE_TOOLS.has(toolNameFrom(payload))) return { ok: true, skipped: true };
   if ((eventNameFrom(payload) || '') && eventNameFrom(payload) !== 'PreToolUse') return { ok: true, skipped: true };
@@ -344,5 +385,7 @@ if (require.main === module) main();
 module.exports = {
   analyzeRtl,
   analyzeTestbench,
+  contentFrom,
+  evaluate,
   run,
 };

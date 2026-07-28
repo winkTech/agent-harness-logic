@@ -1,8 +1,8 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
   "$id": "engineering-assets/schemas/cbb-manifest.schema.json",
-  "title": "CBB Manifest (MVP)",
-  "description": "生产级 CBB 资产 manifest。单一真相源。字段依据《CBB 库治理与生产级准入规范 V1.0》§6。MVP 子集；scale-up 字段（timing_closure/generality 全维/lineage 等）可选。",
+  "title": "CBB Manifest (v1.1)",
+  "description": "生产级 CBB 资产 manifest。单一真相源。v1.1 仅增加可选证据快照与维护元数据，保持 v1.0 向后兼容。",
   "type": "object",
   "additionalProperties": false,
   "comment_levels": "required 按 maturity.level 条件化（规范 §3.1）。reference 级只要求 asset_uid + provenance + owner + 未认证横幅，不得强制 RTL 形状字段（ports/clock/reset/golden_model_ref）——否则 vendored 上游工程与 knowledge 文档资产无法纳入治理。intake 及以上要求完整锚链与 RTL 契约。",
@@ -14,42 +14,46 @@
       "if": { "properties": { "kind": { "const": "golden-model" } }, "required": ["kind"] },
       "then": {
         "comment": "正确性锚自身：它就是 golden，故无 golden_model_ref；是 .m/.hex，故无 ports/clock/reset。",
-        "required": ["version", "requirement_ref", "models", "sources"]
+        "required": ["version", "requirement_ref", "models", "sources", "vectors"]
       },
       "else": {
         "if": { "properties": { "maturity": { "properties": { "level": { "const": "reference" } }, "required": ["level"] } }, "required": ["maturity"] },
         "then": { "required": ["provenance", "banner"] },
         "else": {
-          "if": { "properties": { "kind": { "const": "primitive" } }, "required": ["kind"] },
-          "then": {
-            "comment": "结构原语 (owner 裁决 2026-07-27): golden model 锚的是算法, 不是所有模块。RAM/skid buffer/延迟线/CDC/LFSR 这类结构原语的正确性锚 = 自检 TB (G-B-02/03 按类分锚), 任何成熟度级别都不要求 golden_model_ref/fidelity 对标字段。",
-            "required": [
-              "version", "requirement_ref", "doc_refs",
-              "ports", "clock", "reset", "sources"
-            ]
-          },
-          "else": {
-          "if": { "properties": { "maturity": { "properties": { "level": { "const": "intake" } }, "required": ["level"] } }, "required": ["maturity"] },
-          "then": {
-            "comment": "intake 准入 = schema-valid + 编译干净 + 锚链起点（规范 §3.1 L152-153）。golden 绑定(G-B-02)与资源包络(G-C-02 constraints.target)是晋级 qualification/certified 的门, 不是 intake 的形状要求 —— 否则无算法 golden 的结构原语(skid buffer/RAM 等)永远进不了 intake。",
-            "required": [
-              "version", "requirement_ref", "doc_refs",
-              "ports", "clock", "reset", "sources"
-            ]
-          },
-          "else": {
-            "required": [
-              "version", "requirement_ref", "doc_refs", "golden_model_ref",
-              "fidelity", "ports", "clock", "reset", "constraints", "sources"
-            ]
-          }
-          }
+          "required": [
+            "version", "requirement_ref", "doc_refs", "golden_model_ref",
+            "fidelity", "ports", "clock", "reset", "constraints", "sources", "top"
+          ]
         }
       }
+    },
+    {
+      "if": {
+        "properties": {
+          "maturity": { "properties": { "level": { "const": "certified" } }, "required": ["level"] }
+        },
+        "required": ["maturity"]
+      },
+      "then": {
+        "required": ["device", "signoff"],
+        "properties": {
+          "maturity": { "required": ["evidence_ref"] }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "kind": { "const": "golden-model" },
+          "maturity": { "properties": { "level": { "const": "certified" } }, "required": ["level"] }
+        },
+        "required": ["kind", "maturity"]
+      },
+      "then": { "required": ["signoff"] }
     }
   ],
   "properties": {
-    "schema_version": { "type": "string", "enum": ["1.0"] },
+    "schema_version": { "type": "string", "enum": ["1.0", "1.1"] },
     "asset_uid": { "type": "string", "pattern": "^[a-z0-9_]+$", "description": "唯一引用锚（MVP 允许人读 slug）" },
     "name": { "type": "string", "description": "人读模块名（非引用锚）" },
     "version": { "type": "string", "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$" },
@@ -66,6 +70,21 @@
     "requirement_ref": { "type": "string", "description": "锚链起点：需求条目 id/URI" },
     "doc_refs": { "type": "array", "items": { "type": "string" }, "minItems": 1, "description": "方向锚：设计前期文档/ADR" },
     "golden_model_ref": { "type": "string", "description": "正确性锚：配对 golden 资产 asset_uid" },
+    "params": {
+      "type": "array",
+      "description": "v1.1 可审计参数空间",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["name", "value"],
+        "properties": {
+          "name": { "type": "string", "pattern": "^[A-Za-z][A-Za-z0-9_]*$" },
+          "value": {},
+          "units": { "type": "string" },
+          "rationale": { "type": "string" }
+        }
+      }
+    },
     "alignment": {
       "type": "object",
       "additionalProperties": false,
@@ -81,7 +100,7 @@
       "additionalProperties": false,
       "required": ["status"],
       "properties": {
-        "status": { "type": "string", "enum": ["bit_true", "tolerance", "pending", "na"], "description": "na 仅限 kind=primitive: 结构原语无 golden 对标概念, 正确性由自检 TB 承担" },
+        "status": { "type": "string", "enum": ["bit_true", "tolerance", "pending"] },
         "bit_accurate_against": { "type": "string" },
         "tolerance": {
           "type": "object",
@@ -127,39 +146,6 @@
       "properties": {
         "name": { "type": "string" },
         "period_ns": { "type": "number", "minimum": 0.1 }
-      }
-    },
-    "clocks": {
-      "type": "array",
-      "minItems": 2,
-      "description": "多时钟域资产（如 CDC 原语）的全部时钟。单数 clock 字段仍必填并指主域（约定：数据消费侧/dst 域），本数组补全其余域。单时钟资产不得使用本字段。",
-      "items": {
-        "type": "object",
-        "additionalProperties": false,
-        "required": ["name", "domain"],
-        "properties": {
-          "name": { "type": "string" },
-          "domain": { "type": "string", "description": "域角色标注, 如 src/dst" },
-          "period_ns": { "type": "number", "minimum": 0.1 },
-          "relationship": { "type": "string", "enum": ["asynchronous", "synchronous", "mesochronous"] }
-        }
-      }
-    },
-    "resets": {
-      "type": "array",
-      "minItems": 2,
-      "description": "多时钟域资产的全部复位, 与 clocks 配套。单数 reset 字段仍必填并指主域。",
-      "items": {
-        "type": "object",
-        "additionalProperties": false,
-        "required": ["name", "domain", "polarity", "type"],
-        "properties": {
-          "name": { "type": "string" },
-          "domain": { "type": "string" },
-          "polarity": { "type": "string", "enum": ["active_high", "active_low"] },
-          "type": { "type": "string", "enum": ["sync", "async"] },
-          "async_release_synchronized": { "type": "boolean" }
-        }
       }
     },
     "reset": {
@@ -217,6 +203,32 @@
       }
     },
     "generality": { "type": "object" },
+    "lineage": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "可选版本血缘；CHANGELOG 为版本事实源，parent_uid/base_version 仅在 fork 或替代关系存在时填写。",
+      "properties": {
+        "parent_uid": { "type": "string", "pattern": "^[a-z0-9_]+$" },
+        "base_version": { "type": "string", "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$" },
+        "changelog": { "type": "string" }
+      }
+    },
+    "evidence_snapshot_ref": {
+      "type": "string",
+      "pattern": "^evidence/[a-z0-9_]+/[0-9]+\\.[0-9]+\\.[0-9]+/SNAPSHOT\\.json$",
+      "description": "Optional immutable reference to evidence/<asset_uid>/<version>/SNAPSHOT.json."
+    },
+    "maintenance": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["owner", "review_cadence"],
+      "properties": {
+        "owner": { "type": "string" },
+        "review_cadence": { "type": "string", "enum": ["monthly", "quarterly", "semiannual", "annual", "on-change"] },
+        "next_review": { "type": "string" },
+        "status": { "type": "string", "enum": ["active", "watch", "deprecated"] }
+      }
+    },
     "signoff": {
       "type": "object",
       "additionalProperties": false,
@@ -239,7 +251,8 @@
           "reason": { "type": "string" },
           "approver": { "type": "string" },
           "expires_at": { "type": "string" },
-          "evidence_ref": { "type": "string" }
+          "evidence_ref": { "type": "string" },
+          "ledger_id": { "type": "string", "pattern": "^W-[A-Z0-9_-]+$" }
         }
       }
     },
@@ -247,8 +260,8 @@
 
     "kind": {
       "type": "string",
-      "enum": ["rtl", "primitive", "golden-model", "vendor", "knowledge"],
-      "description": "资产域（规范 §1 三个锚 + vendored）。缺省视为 rtl，保持既有 CBB 包向后兼容。primitive = 结构原语 (RAM/skid buffer/延迟线/CDC/LFSR 等)：正确性锚 = 自检 TB，不要求 golden model（owner 裁决 2026-07-27：golden 锚的是算法，不是所有模块）。"
+      "enum": ["rtl", "golden-model", "vendor", "knowledge"],
+      "description": "资产域（规范 §1 三个锚 + vendored）。缺省视为 rtl，保持既有 CBB 包向后兼容。"
     },
     "implements_for": {
       "type": "array", "items": { "type": "string" },

@@ -1,3 +1,12 @@
+---
+name: development-toolchain-reference
+description: FPGA、仿真、MATLAB、Python、Git 与 AI 辅助工具链使用参考
+metadata:
+  type: reference
+  domain: meta
+tags: [toolchain, fpga, simulation, matlab, python, git]
+---
+
 # 开发工具说明
 
 > 本文档记录项目开发所需的工具链及其使用说明。
@@ -86,4 +95,3 @@
 | 配置路径 | `.claude/`（项目根目录或用户目录） |
 | 全局约束 | `CLAUDE.md` |
 | 更多参考 | 详见 Claude Code 官方文档 |
-

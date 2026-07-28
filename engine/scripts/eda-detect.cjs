@@ -34,7 +34,40 @@
 
 const { spawnSync } = require('node:child_process');
 const fs = require('node:fs');
+const os = require('node:os');
 const path = require('node:path');
+
+// ── 工具产物的落地目录 ──────────────────────────────────────────────────────
+
+/**
+ * xsim 系工具 (xvlog/xelab) 无条件把用量统计 .pb 与 .log 写到**启动时的 CWD**,
+ * 连 `-version` 探测也不例外 (实测 2023.1.1: xvlog -version → xvlog.pb + xvlog.log)。
+ * 不指定 cwd 就会落在调用方的工作目录, 也就是仓库根 ——
+ * 2026-07-27 提交前检查在根目录抓到的 xelab.pb/xvlog.pb 正是这么来的。
+ *
+ * 统一把这类子进程的 CWD 指到系统临时目录, 传给工具的文件路径一律用绝对路径,
+ * 解析语义与原先保持一致。
+ */
+let _scratchDir; // undefined = 未初始化, null = 不可用(退回原行为)
+
+function getToolScratchDir() {
+  if (_scratchDir !== undefined) return _scratchDir;
+  try {
+    const dir = path.join(os.tmpdir(), 'harness-eda-scratch');
+    fs.mkdirSync(dir, { recursive: true });
+    _scratchDir = dir;
+  } catch {
+    _scratchDir = null; // 建不出来不能让检测/lint 因此失败
+  }
+  return _scratchDir;
+}
+
+/** 给 spawnSync 选项补上 scratch cwd（调用方已显式指定 cwd 时不覆盖）。 */
+function withScratchCwd(opts = {}) {
+  if (opts.cwd) return opts;
+  const dir = getToolScratchDir();
+  return dir ? { ...opts, cwd: dir } : opts;
+}
 
 // ── 工具检测定义 ────────────────────────────────────────────────────────────
 
@@ -160,8 +193,11 @@ const TOOLS = [
     // `xvlog -version` 打印的横幅是 "Vivado Simulator v<版本>", 里面没有 "xvlog"
     // 这个词 —— 旧正则永远匹配不上, 每次都退到 detectFallback 去扫安装目录。
     versionRegex: /(?:xvlog|Vivado Simulator)\s+v?([\d.]+)/i,
-    lintCmd: (file) => ['-sv', '-lint', file],
-    lintLabel: 'xvlog -sv -lint',
+    // xvlog **没有** -lint 选项 (2023.1.1 实测: `unrecognised option '--lint'`, exit 1)。
+    // 旧的 ['-sv','-lint',file] 对任何文件都必然失败, 等于把合法 RTL 判成 lint 不通过。
+    // 分析本身就是检查: `xvlog -sv <file>` 合法文件 exit 0, 语法错误 exit 1 并给 VRFC 定位。
+    lintCmd: (file) => ['-sv', file],
+    lintLabel: 'xvlog -sv',
     detectFallback: () => {
       const dirs = findVivadoInstallDirs();
       if (dirs.length > 0) return { version: dirs[0].version, source: 'dir' };
@@ -291,12 +327,12 @@ function detect(opts = {}) {
       // Node 出于安全不允许不带 shell 直接执行 .bat/.cmd, 必须走 cmd.exe。
       // 路径可能含空格 (如 C:\Program Files\...), shell 模式下要加引号。
       const needsShell = process.platform === 'win32' && /\.(bat|cmd)$/i.test(effectiveCmd);
-      const r = spawnSync(needsShell ? `"${effectiveCmd}"` : effectiveCmd, tool.args, {
+      const r = spawnSync(needsShell ? `"${effectiveCmd}"` : effectiveCmd, tool.args, withScratchCwd({
         encoding: 'utf8',
         timeout: 10000,
         windowsHide: true,
         shell: needsShell,
-      });
+      }));
 
       let version = null;
       let versionRaw = '';
@@ -435,4 +471,7 @@ if (require.main === module) {
   main();
 }
 
-module.exports = { detect, pickLintTool, report, TOOLS };
+module.exports = {
+  detect, pickLintTool, report, TOOLS,
+  getToolScratchDir, withScratchCwd, resolveWin32Cmd,
+};

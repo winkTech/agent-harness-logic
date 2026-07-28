@@ -22,8 +22,12 @@ const HOME_STATE_FILES = [
   path.join('var', 'verify-gate.json'),
 ];
 const CODEX_NPX_EXEC_COMMAND = process.platform === 'win32'
-  ? 'cmd.exe /d /s /c "npx -y @openai/codex@0.142.5 exec --ignore-user-config --json --dangerously-bypass-approvals-and-sandbox --skip-git-repo-check --ephemeral --color never"'
-  : 'npx -y @openai/codex@0.142.5 exec --ignore-user-config --json --dangerously-bypass-approvals-and-sandbox --skip-git-repo-check --ephemeral --color never';
+  ? 'npx.cmd -y @openai/codex@0.142.5 exec --ignore-user-config --json --sandbox workspace-write --skip-git-repo-check --ephemeral --color never'
+  : 'npx -y @openai/codex@0.142.5 exec --ignore-user-config --json --sandbox workspace-write --skip-git-repo-check --ephemeral --color never';
+const SAFE_ENV_KEYS = [
+  'PATH', 'Path', 'PATHEXT', 'SystemRoot', 'SYSTEMROOT', 'WINDIR', 'ComSpec', 'COMSPEC',
+  'TEMP', 'TMP', 'LANG', 'LC_ALL', 'TERM', 'NUMBER_OF_PROCESSORS', 'PROCESSOR_ARCHITECTURE',
+];
 
 const CHECKLIST_LABELS = {
   action: '\u884c\u52a8',
@@ -40,6 +44,7 @@ function usage() {
     '  node engine/scripts/test-hooks/rtl-live-task-eval.cjs --dry-run --out <dir>',
     '  node engine/scripts/test-hooks/rtl-live-task-eval.cjs --agent claude --out <dir>',
     '  node engine/scripts/test-hooks/rtl-live-task-eval.cjs --agent codex --out <dir>',
+    '  Live mode additionally requires --allow-network.',
     '',
     'Live mode runs a real external agent in a temporary RTL project, captures JSONL',
     'transcript evidence, then independently verifies workflow and RTL artifacts.',
@@ -70,6 +75,85 @@ function readText(filePath) {
 function writeText(filePath, text) {
   ensureDir(path.dirname(filePath));
   fs.writeFileSync(filePath, text.replace(/\r\n/g, '\n'), 'utf8');
+}
+
+function escapeRegExp(value) {
+  return String(value).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+function redactSensitiveText(value, explicitSecrets = []) {
+  let result = String(value ?? '');
+  for (const secret of [...new Set(explicitSecrets.filter((item) => typeof item === 'string' && item.length >= 4))]
+    .sort((a, b) => b.length - a.length)) {
+    result = result.replace(new RegExp(escapeRegExp(secret), 'g'), '[REDACTED]');
+  }
+  return result
+    .replace(/(authorization\s*:\s*bearer\s+)[^\s'"\\]+/ig, '$1[REDACTED]')
+    .replace(/\b(gh[pousr]_[A-Za-z0-9_]{20,}|sk-[A-Za-z0-9_-]{12,})\b/g, '[REDACTED]')
+    .replace(/\b((?:api[_-]?key|secret|password|passwd|token|private[_-]?key)\s*[:=]\s*)[^\s,'"}]+/ig, '$1[REDACTED]')
+    .replace(/(--(?:api[_-]?key|token|password|secret)(?:=|\s+))[^\s'"\\]+/ig, '$1[REDACTED]');
+}
+
+function redactArgv(argv, explicitSecrets = []) {
+  const result = [];
+  let redactNext = false;
+  for (const raw of argv || []) {
+    const item = String(raw);
+    if (redactNext) {
+      result.push('[REDACTED]');
+      redactNext = false;
+      continue;
+    }
+    if (/^--?(?:api[_-]?key|token|password|secret)$/i.test(item)) {
+      result.push(item);
+      redactNext = true;
+      continue;
+    }
+    result.push(redactSensitiveText(item, explicitSecrets));
+  }
+  return result;
+}
+
+function buildIsolatedEnv(sandboxHome, sourceEnv = process.env) {
+  const resolvedHome = path.resolve(sandboxHome);
+  const env = {};
+  for (const key of SAFE_ENV_KEYS) {
+    if (typeof sourceEnv[key] === 'string' && sourceEnv[key]) env[key] = sourceEnv[key];
+  }
+  const tempDir = path.join(resolvedHome, 'tmp');
+  const configDir = path.join(resolvedHome, '.config');
+  const cacheDir = path.join(resolvedHome, '.cache');
+  for (const dir of [resolvedHome, tempDir, configDir, cacheDir]) ensureDir(dir);
+  Object.assign(env, {
+    HOME: resolvedHome,
+    USERPROFILE: resolvedHome,
+    APPDATA: path.join(resolvedHome, 'AppData', 'Roaming'),
+    LOCALAPPDATA: path.join(resolvedHome, 'AppData', 'Local'),
+    XDG_CONFIG_HOME: configDir,
+    XDG_CACHE_HOME: cacheDir,
+    XDG_DATA_HOME: path.join(resolvedHome, '.local', 'share'),
+    TEMP: tempDir,
+    TMP: tempDir,
+    npm_config_cache: path.join(cacheDir, 'npm'),
+  });
+  if (sourceEnv.CLAUDE_LIVE_EVAL_ANTHROPIC_API_KEY) {
+    env.ANTHROPIC_API_KEY = sourceEnv.CLAUDE_LIVE_EVAL_ANTHROPIC_API_KEY;
+  }
+  if (sourceEnv.CLAUDE_LIVE_EVAL_OAUTH_TOKEN) {
+    env.CLAUDE_CODE_OAUTH_TOKEN = sourceEnv.CLAUDE_LIVE_EVAL_OAUTH_TOKEN;
+  }
+  if (sourceEnv.CODEX_LIVE_EVAL_OPENAI_API_KEY) {
+    env.OPENAI_API_KEY = sourceEnv.CODEX_LIVE_EVAL_OPENAI_API_KEY;
+  }
+  return env;
+}
+
+function withCleanup(operation, cleanup) {
+  try {
+    return operation();
+  } finally {
+    cleanup();
+  }
 }
 
 function normalizePathForCompare(filePath) {
@@ -141,31 +225,36 @@ function parseCommandLine(command) {
   return parts;
 }
 
-function run(cmd, args, cwd, input = '', timeoutMs = 10 * 60 * 1000, env = {}) {
+function run(cmd, args, cwd, input = '', timeoutMs = 10 * 60 * 1000, env = null) {
   const startedAt = new Date().toISOString();
+  const sensitiveValues = env
+    ? Object.entries(env)
+      .filter(([key, value]) => /(?:KEY|TOKEN|SECRET|PASSWORD|PASSWD)/i.test(key) && typeof value === 'string')
+      .map(([, value]) => value)
+    : [];
   const result = spawnSync(cmd, args, {
     cwd,
     input,
     encoding: 'utf8',
     timeout: timeoutMs,
     windowsHide: false,
-    env: { ...process.env, ...env },
+    env: env || process.env,
   });
   const completedAt = new Date().toISOString();
   return {
-    commandArgv: [cmd, ...args],
+    commandArgv: redactArgv([cmd, ...args], sensitiveValues),
     status: result.status,
     signal: result.signal,
-    error: result.error ? result.error.message : null,
-    stdout: result.stdout || '',
-    stderr: result.stderr || '',
+    error: result.error ? redactSensitiveText(result.error.message, sensitiveValues) : null,
+    stdout: redactSensitiveText(result.stdout || '', sensitiveValues),
+    stderr: redactSensitiveText(result.stderr || '', sensitiveValues),
     startedAt,
     completedAt,
     durationMs: Date.parse(completedAt) - Date.parse(startedAt),
   };
 }
 
-function runCommandLine(command, cwd, input = '', timeoutMs = 10 * 60 * 1000, env = {}) {
+function runCommandLine(command, cwd, input = '', timeoutMs = 10 * 60 * 1000, env = null) {
   const parts = parseCommandLine(command);
   if (parts.length === 0) throw new Error('empty command');
   return run(parts[0], parts.slice(1), cwd, input, timeoutMs, env);
@@ -174,7 +263,7 @@ function runCommandLine(command, cwd, input = '', timeoutMs = 10 * 60 * 1000, en
 function defaultCommandFor(agent) {
   if (agent === 'claude') {
     return process.env.CLAUDE_RTL_LIVE_EVAL_COMMAND
-      || 'claude -p --verbose --output-format stream-json --permission-mode bypassPermissions --no-session-persistence --tools default --settings claude-live-settings.json';
+      || `claude -p --verbose --output-format stream-json --permission-mode default --no-session-persistence --allowedTools Read,Write,Edit,Bash(${VERIFY_COMMAND}) --settings claude-live-settings.json`;
   }
   if (agent === 'codex') {
     return process.env.CODEX_RTL_LIVE_EVAL_COMMAND || CODEX_NPX_EXEC_COMMAND;
@@ -188,16 +277,16 @@ function versionCommandFor(agent) {
   return '';
 }
 
-function readinessProbe(agent) {
+function readinessProbe(agent, env, cwd) {
   const command = versionCommandFor(agent);
   if (!command) return { agent, status: 'missing', command, probe: null };
-  const primary = runCommandLine(command, HOME, '', 30000);
+  const primary = runCommandLine(command, cwd, '', 30000, env);
   if (primary.status === 0) return { agent, status: 'available', command, probe: summarizeRun(primary) };
 
   if (agent === 'codex') {
     const fallback = runCommandLine(process.platform === 'win32'
       ? 'cmd.exe /d /s /c "npx -y @openai/codex@0.142.5 --version"'
-      : 'npx -y @openai/codex@0.142.5 --version', HOME, '', 120000);
+      : 'npx -y @openai/codex@0.142.5 --version', cwd, '', 120000, env);
     if (fallback.status === 0) {
       return {
         agent,
@@ -455,11 +544,25 @@ function prepareOutDir(outDir) {
   writeText(path.join(outDir, 'claude-live-settings.json'), claudeLiveSettings(outDir));
 }
 
-function liveAgentEnv(outDir) {
+function liveAgentEnv(outDir, sourceEnv = process.env) {
   return {
+    ...buildIsolatedEnv(path.join(outDir, '.sandbox-home'), sourceEnv),
     CLAUDE_VISIBLE_CHECKLIST_GATE_MODE: 'strict',
     CLAUDE_VERIFY_GATE_STATE_FILE: path.join(outDir, 'var', 'verify-gate.json'),
   };
+}
+
+function validateLiveCommand(command) {
+  const text = String(command || '');
+  const forbidden = [
+    /--dangerously-bypass-approvals-and-sandbox\b/i,
+    /--permission-mode\s+bypassPermissions\b/i,
+    /\b(?:cmd(?:\.exe)?\s+\/c|powershell(?:\.exe)?\s+-(?:command|encodedcommand)|(?:ba|z|k)?sh\s+-c)\b/i,
+  ];
+  const matched = forbidden.find((pattern) => pattern.test(text));
+  return matched
+    ? { ok: false, reason: `forbidden live command pattern: ${matched.source}` }
+    : { ok: true, reason: '' };
 }
 
 function buildPrompt() {
@@ -755,7 +858,7 @@ function transcriptChecks(transcriptText, runDir) {
   };
 }
 
-function runHdlGate(filePath) {
+function runHdlGate(filePath, env = null) {
   return run(process.execPath, [path.join(HOME, 'engine/scripts/hooks/hdl-gate.cjs')], HOME, JSON.stringify({
     hook_event_name: 'PreToolUse',
     tool_name: 'Write',
@@ -763,10 +866,10 @@ function runHdlGate(filePath) {
       file_path: filePath,
       content: fs.existsSync(filePath) ? readText(filePath) : '',
     },
-  }), 30000);
+  }), 30000, env);
 }
 
-function verifyFunctional(runDir, initialVerifyHash) {
+function verifyFunctional(runDir, initialVerifyHash, env = null) {
   const checks = [];
   const rtlPath = path.join(runDir, TARGET_RTL);
   const tbPath = path.join(runDir, TARGET_TB);
@@ -779,7 +882,7 @@ function verifyFunctional(runDir, initialVerifyHash) {
     status: fs.existsSync(verifyPath) && hashFile(verifyPath) === initialVerifyHash ? 'passed' : 'failed',
   });
 
-  const publicCheck = run(process.execPath, [PUBLIC_VERIFY], runDir, '', 30000);
+  const publicCheck = run(process.execPath, [PUBLIC_VERIFY], runDir, '', 30000, env);
   checks.push({
     name: 'public-rtl-contract',
     status: publicCheck.status === 0 ? 'passed' : 'failed',
@@ -787,9 +890,9 @@ function verifyFunctional(runDir, initialVerifyHash) {
     stderrTail: publicCheck.stderr.slice(-1000),
   });
 
-  const rtlGate = runHdlGate(rtlPath);
+  const rtlGate = runHdlGate(rtlPath, env);
   checks.push({ name: 'hdl-gate-rtl', status: rtlGate.status === 0 ? 'passed' : 'failed', stderrTail: rtlGate.stderr.slice(-1000) });
-  const tbGate = runHdlGate(tbPath);
+  const tbGate = runHdlGate(tbPath, env);
   checks.push({ name: 'hdl-gate-tb', status: tbGate.status === 0 ? 'passed' : 'failed', stderrTail: tbGate.stderr.slice(-1000) });
 
   return {
@@ -804,30 +907,25 @@ function applyDryRunArtifacts(outDir) {
   writeText(path.join(outDir, 'dry-run-transcript.jsonl'), syntheticTranscript());
 }
 
-function writeBlockedManifest(outDir, payload) {
-  const completedAt = new Date().toISOString();
-  const result = {
-    schemaVersion: 1,
-    mode: 'rtl-live-task',
-    ...payload,
-    completedAt,
-    durationMs: Date.parse(completedAt) - Date.parse(payload.startedAt),
-    status: 'blocked',
-    dimensions: {
-      readiness: 'blocked',
-      transcriptCompliance: 'not_run',
-      workflowEvidence: 'not_run',
-      stateIsolation: 'not_run',
-      functionalStatus: 'not_run',
-      overallStatus: 'blocked',
-    },
-    transcriptChecks: null,
-    functionalChecks: [],
-  };
-  fs.writeFileSync(path.join(outDir, 'rtl-live-task-eval.json'), JSON.stringify(result, null, 2), 'utf8');
-  console.log(`BLOCKED rtl-live-task ${payload.agent}`);
-  console.log(JSON.stringify(result.dimensions));
-  process.exit(2);
+function redactForManifest(value) {
+  if (typeof value === 'string') return redactSensitiveText(value);
+  if (Array.isArray(value)) return value.map(redactForManifest);
+  if (value && typeof value === 'object') {
+    return Object.fromEntries(Object.entries(value).map(([key, item]) => [key, redactForManifest(item)]));
+  }
+  return value;
+}
+
+function writeIncrementalManifest(outDir, state, stage, patch = {}) {
+  Object.assign(state, redactForManifest(patch));
+  state.manifestRevision = (state.manifestRevision || 0) + 1;
+  state.progress = Array.isArray(state.progress) ? state.progress : [];
+  state.progress.push({ revision: state.manifestRevision, stage, at: new Date().toISOString() });
+  const manifestPath = path.join(outDir, 'rtl-live-task-eval.json');
+  const tempPath = `${manifestPath}.${process.pid}.tmp`;
+  fs.writeFileSync(tempPath, JSON.stringify(state, null, 2), 'utf8');
+  fs.renameSync(tempPath, manifestPath);
+  return state;
 }
 
 function main() {
@@ -838,91 +936,187 @@ function main() {
   }
 
   const dryRun = args.includes('--dry-run');
+  const allowNetwork = args.includes('--allow-network');
   const agent = argValue(args, '--agent', dryRun ? 'fixture' : 'claude');
   const command = argValue(args, '--command', defaultCommandFor(agent));
   const outDir = path.resolve(argValue(args, '--out', path.join(DEFAULT_RUN_ROOT, `${agent}-${new Date().toISOString().replace(/[:.]/g, '-')}`)));
   const startedAt = new Date().toISOString();
   prepareOutDir(outDir);
   const homeStateSnapshot = snapshotHomeState();
-
   const prompt = buildPrompt();
   const promptPath = path.join(outDir, 'rtl-live-prompt.txt');
   writeText(promptPath, prompt);
   const initialVerifyHash = hashFile(path.join(outDir, PUBLIC_VERIFY));
 
+  const networkPolicy = {
+    authorized: dryRun ? false : allowNetwork,
+    mode: dryRun ? 'not_required' : 'explicit_opt_in',
+    enforcement: 'application_gate',
+    osNetworkIsolation: 'unavailable',
+  };
+  const state = {
+    schemaVersion: 2,
+    mode: 'rtl-live-task',
+    agent,
+    requestedCommand: redactSensitiveText(command || ''),
+    commandArgv: null,
+    outDir,
+    promptPath,
+    promptSha256: sha256(prompt),
+    transcriptPath: null,
+    transcriptSha256: null,
+    agentExitCode: null,
+    agentError: null,
+    startedAt,
+    completedAt: null,
+    durationMs: null,
+    status: 'running',
+    networkPolicy,
+    dimensions: {
+      readiness: dryRun ? 'not_required' : 'not_run',
+      transcriptCompliance: 'not_run',
+      workflowEvidence: 'not_run',
+      stateIsolation: 'not_run',
+      functionalStatus: 'not_run',
+      overallStatus: 'running',
+    },
+    transcriptChecks: null,
+    stateIsolation: null,
+    functionalChecks: [],
+    manifestRevision: 0,
+    progress: [],
+  };
+  writeIncrementalManifest(outDir, state, 'prepared');
+  const executionEnv = liveAgentEnv(outDir);
+
+  let exitCode = 0;
   let agentRun = null;
   let transcriptPath = path.join(outDir, `${agent}-rtl-live-transcript.jsonl`);
   let transcriptText = '';
 
-  if (dryRun) {
-    applyDryRunArtifacts(outDir);
-    transcriptPath = path.join(outDir, 'dry-run-transcript.jsonl');
-    transcriptText = readText(transcriptPath);
-  } else {
-    if (!['claude', 'codex'].includes(agent)) throw new Error('--agent must be claude or codex');
-    const readiness = readinessProbe(agent);
-    if (readiness.status !== 'available') {
-      writeBlockedManifest(outDir, {
-        agent,
-        requestedCommand: command,
-        commandArgv: null,
-        outDir,
-        promptPath,
-        promptSha256: sha256(prompt),
-        startedAt,
-        readiness,
-        blockReason: `agent readiness status is ${readiness.status}`,
+  try {
+    if (!dryRun && !allowNetwork) {
+      exitCode = 2;
+      writeIncrementalManifest(outDir, state, 'network-policy', {
+        status: 'blocked',
+        blockReason: 'live evaluation requires explicit --allow-network because OS-level network isolation is unavailable',
+        dimensions: { ...state.dimensions, readiness: 'blocked', overallStatus: 'blocked' },
+      });
+      return;
+    }
+
+    if (dryRun) {
+      applyDryRunArtifacts(outDir);
+      transcriptPath = path.join(outDir, 'dry-run-transcript.jsonl');
+      transcriptText = readText(transcriptPath);
+      writeIncrementalManifest(outDir, state, 'fixture-ready');
+    } else {
+      if (!['claude', 'codex'].includes(agent)) throw new Error('--agent must be claude or codex');
+      const commandPolicy = validateLiveCommand(command);
+      if (!commandPolicy.ok) {
+        exitCode = 2;
+        writeIncrementalManifest(outDir, state, 'command-policy', {
+          status: 'blocked',
+          blockReason: commandPolicy.reason,
+          dimensions: { ...state.dimensions, readiness: 'blocked', overallStatus: 'blocked' },
+        });
+        return;
+      }
+
+      const readiness = readinessProbe(agent, executionEnv, outDir);
+      writeIncrementalManifest(outDir, state, 'readiness', { readiness });
+      if (readiness.status !== 'available') {
+        exitCode = 2;
+        writeIncrementalManifest(outDir, state, 'readiness-blocked', {
+          status: 'blocked',
+          blockReason: `agent readiness status is ${readiness.status}`,
+          dimensions: { ...state.dimensions, readiness: 'blocked', overallStatus: 'blocked' },
+        });
+        return;
+      }
+
+      writeIncrementalManifest(outDir, state, 'agent-started', {
+        dimensions: { ...state.dimensions, readiness: 'passed' },
+      });
+      agentRun = runCommandLine(command, outDir, prompt, 15 * 60 * 1000, executionEnv);
+      transcriptText = `${agentRun.stdout}${agentRun.stderr}`;
+      writeText(transcriptPath, transcriptText);
+      writeIncrementalManifest(outDir, state, 'agent-completed', {
+        commandArgv: agentRun.commandArgv,
+        agentExitCode: agentRun.status,
+        agentError: agentRun.error,
+        transcriptPath,
+        transcriptSha256: hashFile(transcriptPath),
       });
     }
 
-    agentRun = runCommandLine(command, outDir, prompt, 15 * 60 * 1000, liveAgentEnv(outDir));
-    transcriptText = `${agentRun.stdout}${agentRun.stderr}`;
-    writeText(transcriptPath, transcriptText);
+    const transcript = transcriptChecks(transcriptText, outDir);
+    const functional = verifyFunctional(outDir, initialVerifyHash, executionEnv);
+    const agentExitOk = !agentRun || agentRun.status === 0;
+    const status = agentExitOk && transcript.status === 'passed' && functional.status === 'passed' ? 'passed' : 'failed';
+    exitCode = status === 'passed' ? 0 : 1;
+    writeIncrementalManifest(outDir, state, 'evaluated', {
+      status,
+      transcriptPath,
+      transcriptSha256: fs.existsSync(transcriptPath) ? hashFile(transcriptPath) : null,
+      agentExitCode: agentRun ? agentRun.status : null,
+      agentError: agentRun ? agentRun.error : null,
+      dimensions: {
+        readiness: dryRun ? 'not_required' : 'passed',
+        transcriptCompliance: transcript.status,
+        workflowEvidence: transcript.status,
+        stateIsolation: 'pending_cleanup',
+        functionalStatus: functional.status,
+        overallStatus: status,
+      },
+      transcriptChecks: transcript,
+      functionalChecks: functional.checks,
+    });
+  } catch (error) {
+    exitCode = 1;
+    writeIncrementalManifest(outDir, state, 'exception', {
+      status: 'failed',
+      agentError: error?.message || String(error),
+      dimensions: { ...state.dimensions, overallStatus: 'failed' },
+    });
+  } finally {
+    let restoredHomeState = [];
+    let cleanupError = null;
+    try {
+      restoredHomeState = restoreHomeState(homeStateSnapshot);
+    } catch (error) {
+      cleanupError = redactSensitiveText(error?.message || String(error));
+      exitCode = 1;
+    }
+    const hostMutationDetected = restoredHomeState.length > 0;
+    if (hostMutationDetected) exitCode = 1;
+    const isolationStatus = (cleanupError || hostMutationDetected) ? 'failed' : 'passed';
+    const completedAt = new Date().toISOString();
+    const finalStatus = (cleanupError || hostMutationDetected) ? 'failed' : state.status;
+    writeIncrementalManifest(outDir, state, 'cleanup-complete', {
+      completedAt,
+      durationMs: Date.parse(completedAt) - Date.parse(startedAt),
+      status: finalStatus,
+      stateIsolation: { status: isolationStatus, hostMutationDetected, restoredHomeState, cleanupError },
+      dimensions: {
+        ...state.dimensions,
+        stateIsolation: isolationStatus,
+        overallStatus: finalStatus,
+      },
+    });
+    console.log(`${String(finalStatus).toUpperCase()} rtl-live-task ${agent}`);
+    console.log(JSON.stringify(state.dimensions));
+    process.exitCode = exitCode;
   }
-
-  const restoredHomeState = restoreHomeState(homeStateSnapshot);
-  const stateIsolation = {
-    status: restoredHomeState.length === 0 ? 'passed' : 'failed',
-    restoredHomeState,
-  };
-  const transcript = transcriptChecks(transcriptText, outDir);
-  const functional = verifyFunctional(outDir, initialVerifyHash);
-  const completedAt = new Date().toISOString();
-  const agentExitOk = !agentRun || agentRun.status === 0;
-  const status = agentExitOk && transcript.status === 'passed' && stateIsolation.status === 'passed' && functional.status === 'passed' ? 'passed' : 'failed';
-  const result = {
-    schemaVersion: 1,
-    mode: 'rtl-live-task',
-    agent,
-    requestedCommand: command || null,
-    commandArgv: agentRun ? agentRun.commandArgv : null,
-    outDir,
-    promptPath,
-    promptSha256: sha256(prompt),
-    transcriptPath,
-    transcriptSha256: fs.existsSync(transcriptPath) ? hashFile(transcriptPath) : null,
-    agentExitCode: agentRun ? agentRun.status : null,
-    agentError: agentRun ? agentRun.error : null,
-    startedAt,
-    completedAt,
-    durationMs: Date.parse(completedAt) - Date.parse(startedAt),
-    status,
-    dimensions: {
-      readiness: dryRun ? 'not_required' : 'passed',
-      transcriptCompliance: transcript.status,
-      workflowEvidence: transcript.status,
-      stateIsolation: stateIsolation.status,
-      functionalStatus: functional.status,
-      overallStatus: status,
-    },
-    transcriptChecks: transcript,
-    stateIsolation,
-    functionalChecks: functional.checks,
-  };
-  fs.writeFileSync(path.join(outDir, 'rtl-live-task-eval.json'), JSON.stringify(result, null, 2), 'utf8');
-  console.log(`${status.toUpperCase()} rtl-live-task ${agent}`);
-  console.log(JSON.stringify(result.dimensions));
-  if (status !== 'passed') process.exit(1);
 }
 
 if (require.main === module) main();
+
+module.exports = {
+  buildIsolatedEnv,
+  defaultCommandFor,
+  redactSensitiveText,
+  validateLiveCommand,
+  withCleanup,
+  writeIncrementalManifest,
+};

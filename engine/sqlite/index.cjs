@@ -11,7 +11,7 @@
  * 设计原则:
  *   - node:sqlite (DatabaseSync) 内置, 零依赖
  *   - 默认路径 ~/.claude/.wright/memory.db (git 不可见)
- *   - 单例缓存 (path→DatabaseSync), 重复 openDb() 返回同一实例
+ *   - 单例缓存 (path+open mode→DatabaseSync), 同路径同模式复用实例
  *   - 注射式 opts.db 让多个 store 共享同一连接
  *   - WAL 模式 + 外键约束自动启用
  *   - 迁移系统: _migrations 表追踪已应用变更
@@ -26,11 +26,11 @@ const { HARNESS_ROOT } = require('../scripts/lib/harness-root.cjs');
 
 /** ~/.claude/.wright/ 下的默认数据库文件名 */
 const DEFAULT_DB_DIR = path.join(HARNESS_ROOT, '.wright');
-const DEFAULT_DB_PATH = path.join(DEFAULT_DB_DIR, 'memory.db');
+const DEFAULT_DB_PATH = process.env.CLAUDE_SQLITE_PATH || path.join(DEFAULT_DB_DIR, 'memory.db');
 
 // ── 连接缓存 ──────────────────────────────────────────────────────────────
 
-/** Map<resolvedPath, DatabaseSync> — 确保同一路径复用同一实例 */
+/** Map<resolvedPath+mode, DatabaseSync> — 权限/初始化契约不同的连接不得混用 */
 const connectionCache = new Map();
 
 // ── 导出类型 ──────────────────────────────────────────────────────────────
@@ -53,15 +53,18 @@ const connectionCache = new Map();
  * @param {string} [opts.path]         — 数据库路径, 默认 ~/.claude/.wright/memory.db
  * @param {boolean} [opts.readonly]    — true = 只读模式 (backup/检查用, 不建表)
  * @param {boolean} [opts.noInit]      — true = 跳过 WAL/外键/迁移 (给内部迁移脚本用)
+ * @param {number} [opts.busyTimeoutMs] — 锁竞争等待时间，默认 5000ms
  * @returns {WrightDb}
  */
 function openDb(opts = {}) {
   const dbPath = opts.path || DEFAULT_DB_PATH;
   const isMemory = dbPath === ':memory:';
   const resolvedPath = isMemory ? ':memory:' : path.resolve(dbPath);
+  const openMode = opts.readonly ? 'readonly' : opts.noInit ? 'no-init' : 'managed';
+  const cacheKey = `${resolvedPath}\u0000${openMode}`;
 
   // 缓存命中
-  const cached = connectionCache.get(resolvedPath);
+  const cached = connectionCache.get(cacheKey);
   if (cached && !cached._closed) {
     return cached;
   }
@@ -82,9 +85,19 @@ function openDb(opts = {}) {
     throw new Error(`[sqlite] 无法打开数据库 ${resolvedPath}: ${err.message}`);
   }
 
+  const configuredBusyTimeout = Number.parseInt(
+    opts.busyTimeoutMs ?? process.env.CLAUDE_SQLITE_BUSY_TIMEOUT_MS ?? '5000',
+    10,
+  );
+  const busyTimeoutMs = Number.isFinite(configuredBusyTimeout)
+    ? Math.min(60000, Math.max(0, configuredBusyTimeout))
+    : 5000;
+  db.exec(`PRAGMA busy_timeout = ${busyTimeoutMs}`);
+
   // 非只读 / 非 noInit: 启用 WAL + 外键
   if (!opts.readonly && !opts.noInit) {
     db.exec('PRAGMA journal_mode = WAL');
+    db.exec('PRAGMA synchronous = NORMAL');
     db.exec('PRAGMA foreign_keys = ON');
 
     // 运行待迁移 (由 schema.cjs 统一管理)
@@ -103,23 +116,28 @@ function openDb(opts = {}) {
       if (this._closed) return;
       db.close();
       this._closed = true;
-      connectionCache.delete(resolvedPath);
+      connectionCache.delete(cacheKey);
     },
 
     stats() {
       if (this._closed) return { status: 'closed' };
       const size = isMemory ? 0 : (fs.existsSync(resolvedPath) ? fs.statSync(resolvedPath).size : 0);
-      const mem = db.prepare("SELECT SUM('memory') AS mem FROM pragma_page_count").get();
+      const pageRow = db.prepare('PRAGMA page_count').get();
+      const journalRow = db.prepare('PRAGMA journal_mode').get();
+      const pageCount = Number(pageRow?.page_count ?? Object.values(pageRow || {})[0] ?? 0);
+      const journalMode = String(
+        journalRow?.journal_mode ?? Object.values(journalRow || {})[0] ?? '',
+      ).toLowerCase();
       return {
         path: resolvedPath,
         sizeBytes: size,
-        pageCount: mem ? mem.mem : 0,
-        walMode: !isMemory,
+        pageCount: Number.isFinite(pageCount) ? pageCount : 0,
+        walMode: journalMode === 'wal',
       };
     },
   };
 
-  connectionCache.set(resolvedPath, wrightDb);
+  connectionCache.set(cacheKey, wrightDb);
   return wrightDb;
 }
 

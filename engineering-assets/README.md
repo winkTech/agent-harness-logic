@@ -51,7 +51,19 @@ node tools/gate-runner.cjs <asset-package-dir> --repo-root ..
 | 资产 | 达到级别 | 阻塞门 |
 |---|---|---|
 | `cbb/rrc_polyphase_fir` | **certified** | — (18/18 全绿, signoff.by=lihan) |
-| `ldpc_codec` | qualification | `G-B-03`（译码器重写中，见包内 `ARCHITECTURE-GAP.md`）、`G-SIGN-01` |
-| `ofdm_tx_top` / `channel_est_top` / `sync_top` | reference | `G-A-02` 命名红线（且均违反红线 3 复位极性，缺可用验证） |
+| `ldpc_codec` | qualification | `G-SIGN-01`（仅差具名签字，其余 17 门全绿） |
+| `ofdm_tx_top` / `channel_est_top` / `sync_top` | qualification | certified 级证据门：`G-B-03` cosim、`G-C-01/02/04/05` Vivado 报告、`G-GATE-01`、`G-SIGN-01` |
+
+> 2026-07-28：以上四个包完成 hdl-coding 五条红线整改，**红线类门（`G-A-00`
+> 编译 / `G-A-01` 同步复位 / `G-A-02` 命名 / `G-A-04` 尺寸 / `G-C-03` initial /
+> `RL-OUT` 输出寄存）全部转绿**，三个 reference 级包因此升至 qualification。
+> 余下阻塞项全是"缺 Vivado 报告 / 缺 golden 向量 / 缺签字"，不再有代码层违规。
+> 各包的接口与延迟契约变化、以及整改中发现的功能缺陷，见各包 `CHANGELOG.md`。
+
+
+### Foundation CBB admissions (v0.4.0)
+- `cbb/stream_elastic_pipeline`: certified; ModelSim/Golden/Vivado evidence on generic target `xc7a35tcpg236-1`.
+- `cbb/pulse_merge`: certified; ModelSim/Golden/Vivado evidence on generic target `xc7a35tcpg236-1`.
+- G-SIGN-01 owner signoff is recorded; board/field/routed/bitstream validation remains outside this admission.
 
 scale-up 项（ajv 实例校验、CDC 门、catalog 派生+drift、不透明 uid）按规范 §7.2 触发条件再上。

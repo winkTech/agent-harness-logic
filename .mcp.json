@@ -2,7 +2,7 @@
   "mcpServers": {
     "mcp-pdf": {
       "command": "npx",
-      "args": ["-y", "mcp-pdf"]
+      "args": ["-y", "mcp-pdf@1.1.0"]
     },
     "codegraph": {
       "command": "node",

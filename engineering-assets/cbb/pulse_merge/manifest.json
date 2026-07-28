@@ -1,0 +1,225 @@
+{
+  "schema_version": "1.1",
+  "asset_uid": "pulse_merge",
+  "name": "pulse_merge",
+  "kind": "rtl",
+  "version": "0.4.0",
+  "owner": "lihan",
+  "maturity": {
+    "level": "certified",
+    "evidence_ref": "engineering-assets/evidence/pulse_merge/0.4.0/SNAPSHOT.json"
+  },
+  "requirement_ref": "engineering-assets/cbb/pulse_merge/docs/requirements.md",
+  "doc_refs": [
+    "engineering-assets/cbb/pulse_merge/docs/verification.md",
+    "engineering-assets/cbb/pulse_merge/docs/limitations.md",
+    "engineering-assets/cbb/pulse_merge/docs/provenance.json"
+  ],
+  "golden_model_ref": "pulse_merge_golden",
+  "params": [
+    {
+      "name": "INPUT_WIDTH",
+      "value": 4,
+      "units": "bits",
+      "rationale": "Qualification runs 4 and boundary 2."
+    },
+    {
+      "name": "COUNT_WIDTH",
+      "value": 12,
+      "units": "bits",
+      "rationale": "Bounded random qualification width; boundary run uses 4."
+    }
+  ],
+  "alignment": {
+    "compare_mode": "cycle_accurate",
+    "pipeline_delay_min": 0,
+    "pipeline_delay_max": 0
+  },
+  "fidelity": {
+    "status": "bit_true",
+    "bit_accurate_against": "pulse_merge_golden@0.1.0"
+  },
+  "ports": [
+    {
+      "name": "i_clk",
+      "direction": "input",
+      "width": 1
+    },
+    {
+      "name": "i_rst",
+      "direction": "input",
+      "width": 1
+    },
+    {
+      "name": "i_pulse_in",
+      "direction": "input",
+      "width": 4
+    },
+    {
+      "name": "o_count_out",
+      "direction": "output",
+      "width": 12
+    },
+    {
+      "name": "o_pulse_out",
+      "direction": "output",
+      "width": 1
+    }
+  ],
+  "top": "pulse_merge",
+  "clock": {
+    "name": "i_clk",
+    "period_ns": 10
+  },
+  "reset": {
+    "name": "i_rst",
+    "polarity": "active_high",
+    "type": "sync"
+  },
+  "constraints": {
+    "target": {
+      "fmax": "100MHz",
+      "fmax_mhz": 100,
+      "lut": 256,
+      "ff": 256,
+      "bram": 0,
+      "dsp": 0,
+      "latency": 1,
+      "note": "Generic verification target; Vivado 2023.1.1 evidence is recorded in the EDA manifest and 0.4.0 snapshot."
+    }
+  },
+  "sources": [
+    {
+      "path": "rtl/pulse_merge.sv",
+      "role": "rtl",
+      "sha256": "0cdd8c3d53e4167a374d81d7d6fd8280430e9f8499e7097be6c10e911d4097d0"
+    },
+    {
+      "path": "constraints/pulse_merge.xdc",
+      "role": "constraint",
+      "sha256": "c380f1a487b9de145a04972884852c925c0133c108bf929960947c4d437e6103",
+      "note": "100 MHz create_clock constraint; timing closure requires Vivado evidence."
+    },
+    {
+      "path": "tb/tb_pulse_merge.sv",
+      "role": "tb",
+      "sha256": "b34dfb56f52211e3645c32cd65c62ad176252f32f99657b2d9df71145a354a5d"
+    },
+    {
+      "path": "sva/pulse_merge_sva.sv",
+      "role": "reference",
+      "sha256": "1a0c0eaa54fea3903f09f11fbd2116dbace9360749ee97528ab94a6c11d54e6f",
+      "note": "Reusable SVA; deterministic ModelSim runtime and assertion instance passed after reset-boundary correction."
+    },
+    {
+      "path": "docs/requirements.md",
+      "role": "doc",
+      "sha256": "3d0644fd66fdd7a972144e24151419ebb2c4b23a66d0a206f8e23a69ac0fa737"
+    },
+    {
+      "path": "docs/verification.md",
+      "role": "doc",
+      "sha256": "7838568a9e8545aa0e916b3f1c51b1021bea82045deaf6f0d38b3378b48cca2b"
+    },
+    {
+      "path": "docs/limitations.md",
+      "role": "doc",
+      "sha256": "40aa7e9979080e72a99fdc907ef51e345fe9ef9ee60d2f1d7e1c1abf93b39846"
+    },
+    {
+      "path": "docs/LICENSE-MIT.txt",
+      "role": "reference",
+      "sha256": "f172b2192da83326c5290b31881945c75ae1e26c5654aa2071e63cfb1c31369a"
+    },
+    {
+      "path": "docs/provenance.json",
+      "role": "reference",
+      "sha256": "6f9a56792dc995704c7c19ac1addabb2d408e3daf90621348b1e80de461e1401"
+    },
+    {
+      "path": "eda/README.md",
+      "role": "doc",
+      "sha256": "9d0bc9b1017aaa6348cbaa629c5233925faa8dbe8c06c48767683657217c92f0",
+      "note": "Deterministic external certification recipe; execution evidence is separate."
+    },
+    {
+      "path": "eda/modelsim_sva.do",
+      "role": "sim",
+      "sha256": "e0588279152f78fe3ed3f116a96679ce2b1a032627b03de7c183c4ee28f2b4b3",
+      "note": "Deterministic external certification recipe; execution evidence is separate."
+    },
+    {
+      "path": "eda/vivado_cert.tcl",
+      "role": "harness",
+      "sha256": "1ecb8420fd63f76b5818383a9e19f2703c442181af8faf95a1b975ca37fc44e7",
+      "note": "Deterministic external certification recipe; execution evidence is separate."
+    },
+    {
+      "path": "eda/eda-manifest.json",
+      "role": "harness",
+      "sha256": "4499d5b1a51927a02f698cb6a817f0bc9a969a5da2f21ff76166921b64a861db",
+      "note": "Deterministic external certification recipe; execution evidence is separate."
+    },
+    {
+      "path": "eda/structural-cdc-check.json",
+      "role": "doc",
+      "sha256": "7250ffca8e27c4bb2b09b512632bf307237c4f36ca47e8633fc1305afc585b8c",
+      "note": "Deterministic external certification recipe; execution evidence is separate."
+    }
+  ],
+  "generality": {
+    "param_space": [
+      {
+        "name": "INPUT_WIDTH",
+        "values": [
+          2,
+          4
+        ],
+        "support": true
+      },
+      {
+        "name": "COUNT_WIDTH",
+        "values": [
+          4,
+          12
+        ],
+        "support": true
+      }
+    ],
+    "note": "Only bounded traffic and listed parameter values have local evidence; overflow/saturation behavior is not generalized."
+  },
+  "lineage": {
+    "changelog": "CHANGELOG.md"
+  },
+  "maintenance": {
+    "owner": "lihan",
+    "review_cadence": "quarterly",
+    "status": "active"
+  },
+  "waivers": [],
+  "superseded_by": null,
+  "device": {
+    "part": "xc7a35tcpg236-1",
+    "family": "artix7",
+    "note": "Generic verification target only; routed implementation, board and field validation remain outside this admission."
+  },
+  "signoff": {
+    "by": "lihan",
+    "at": "2026-07-27",
+    "scope": [
+      "Reviewed and accepted RTL, reusable SVA, ModelSim 10.6c runtime and 2600-sample Golden alignment evidence (mismatch=0, pipeline offset=0).",
+      "Reviewed and accepted Vivado 2023.1.1 synthesis, utilization, timing, clocks and post-synthesis checkpoint for xc7a35tcpg236-1.",
+      "Accepted explicit limitation: generic-device synthesis is not board/field validation; routed implementation, bitstream and hardware bring-up remain required for deployment.",
+      "Accepted provenance boundary: MIT source license is retained; upstream archive commit SHA remains unavailable."
+    ],
+    "panel_verdicts_ref": "engineering-assets/var/gates/pg/pulse_merge/G-SIGN-01.json"
+  },
+  "evidence_snapshot_ref": "evidence/pulse_merge/0.4.0/SNAPSHOT.json",
+  "provenance": {
+    "source": "https://github.com/alexforencich/verilog-pcie",
+    "license": "MIT",
+    "retrieved": "2024-04-27",
+    "commit": null
+  },
+  "notes": "Certified foundation CBB admission with MIT provenance retained; upstream commit SHA, routed implementation, board and field validation remain outside this admission."
+}

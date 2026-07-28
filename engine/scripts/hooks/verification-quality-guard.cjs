@@ -37,6 +37,9 @@
 
 const fs = require('fs');
 const path = require('path');
+const { evaluateGuardBypass } = require('../lib/gate-bypass.cjs');
+
+const GATE_ID = 'verification-quality-guard.cjs';
 const { findProjectRoot, stateHasScopeForFile } = require('../lib/project-scope.cjs');
 const { HARNESS_ROOT } = require('../lib/harness-root.cjs');
 
@@ -262,15 +265,30 @@ function checkGate(filePath) {
 
 // ── 独立运行入口 ──────────────────────────────────────────────────────────
 
-async function main() {
-  if (process.env.CLAUDE_GATES_DISABLED === 'true') process.exit(0);
+function evaluate(payload, runtime = {}) {
+  if (evaluateGuardBypass({ gateId: GATE_ID, payload, context: runtime.context }).allowed) {
+    return { source: GATE_ID, decision: 'allow', diagnostics: [] };
+  }
+  const eventName = String(payload?.hook_event_name || payload?.event || '').toLowerCase();
+  if (eventName && eventName !== 'pretooluse') return { source: GATE_ID, decision: 'allow', diagnostics: [] };
+  const toolName = String(payload?.tool?.name || payload?.tool_name || payload?.name || '').toLowerCase();
+  if (toolName !== 'write') return { source: GATE_ID, decision: 'allow', diagnostics: [] };
+  const input = payload?.tool_input || payload?.tool?.input || payload?.input || payload?.arguments || {};
+  const filePath = String(runtime.filePath || input.file_path || input.filePath || '').trim();
+  if (!filePath) return { source: GATE_ID, decision: 'allow', diagnostics: [] };
+  const advisory = checkGate(filePath);
+  if (!advisory) return { source: GATE_ID, decision: 'allow', diagnostics: [] };
+  return { source: GATE_ID, decision: 'warn', diagnostics: advisory.findings || [], advisories: [advisory] };
+}
 
+async function main() {
   let raw = '';
   try { raw = fs.readFileSync(0, 'utf8'); } catch { process.exit(0); }
   if (!raw) process.exit(0);
 
   let payload;
   try { payload = JSON.parse(raw); } catch { process.exit(0); }
+  if (evaluateGuardBypass({ gateId: GATE_ID, payload }).allowed) process.exit(0);
 
   const toolName = (payload?.tool?.name || payload?.tool_name || payload?.name || '').toLowerCase();
   const filePath = (payload?.tool_input?.file_path || payload?.tool?.input?.file_path || payload?.input?.file_path || payload?.arguments?.file_path || '').trim();
@@ -285,7 +303,7 @@ async function main() {
 // ── 模块导出（兼容 require 调用） ────────────────────────────────────────
 
 module.exports = function verificationQualityGuard(toolUse, context) {
-  if (process.env.CLAUDE_GATES_DISABLED === 'true') return;
+  if (evaluateGuardBypass({ gateId: GATE_ID, payload: toolUse, context }).allowed) return;
   if (!toolUse || toolUse.name !== 'Write') return;
   const input = toolUse.input || {};
   const filePath = input.filePath || input.file_path;
@@ -296,3 +314,5 @@ module.exports = function verificationQualityGuard(toolUse, context) {
 if (require.main === module) {
   main();
 }
+
+module.exports.evaluate = evaluate;

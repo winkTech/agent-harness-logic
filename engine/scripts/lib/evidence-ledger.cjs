@@ -4,8 +4,8 @@ const fs = require('node:fs');
 const path = require('node:path');
 
 const {
-  atomicWriteJson,
   readJson,
+  updateJsonFileSync,
 } = require('./project-scope.cjs');
 const { sha256 } = require('./repair-contract.cjs');
 const { classifyToolchainRun } = require('./toolchain-health.cjs');
@@ -13,6 +13,29 @@ const { classifyToolchainRun } = require('./toolchain-health.cjs');
 function tail(text, limit = 2000) {
   const value = String(text || '');
   return value.length > limit ? value.slice(value.length - limit) : value;
+}
+
+function canonicalJson(value) {
+  const normalize = (entry) => {
+    if (Array.isArray(entry)) return entry.map(normalize);
+    if (!entry || typeof entry !== 'object') return entry;
+    const out = {};
+    for (const key of Object.keys(entry).sort()) {
+      if (entry[key] !== undefined) out[key] = normalize(entry[key]);
+    }
+    return out;
+  };
+  return JSON.stringify(normalize(value));
+}
+
+function behaviorContractHash(command) {
+  const normalized = String(command || '').trim().replace(/\s+/g, ' ');
+  if (!normalized) throw new TypeError('behavior contract command is required');
+  return sha256(normalized);
+}
+
+function evidenceEntrySha256(entry) {
+  return sha256(canonicalJson(entry));
 }
 
 function commandEvidence(command, runResult, opts = {}) {
@@ -34,6 +57,7 @@ function commandEvidence(command, runResult, opts = {}) {
     schemaVersion: 1,
     type: 'command',
     command,
+    contractHash: opts.contractHash || behaviorContractHash(command),
     exitCode: status,
     signal: runResult?.signal || null,
     error: runResult?.error || null,
@@ -57,14 +81,31 @@ function readEvidenceLedger(filePath) {
   return ledger;
 }
 
-function writeEvidenceLedger(filePath, entry) {
-  const ledger = readEvidenceLedger(filePath);
-  ledger.entries.push({
-    ...entry,
-    recordedAt: entry.recordedAt || new Date().toISOString(),
-  });
-  atomicWriteJson(filePath, ledger);
-  return ledger;
+function writeEvidenceLedger(filePath, entry, opts = {}) {
+  const configuredMax = Number.parseInt(
+    opts.maxEntries ?? process.env.CLAUDE_EVIDENCE_LEDGER_MAX_ENTRIES ?? '500',
+    10,
+  );
+  const maxEntries = Number.isFinite(configuredMax) ? Math.max(10, configuredMax) : 500;
+  return updateJsonFileSync(
+    filePath,
+    () => ({ schemaVersion: 1, entries: [] }),
+    (raw) => {
+      const ledger = raw && typeof raw === 'object' ? raw : { schemaVersion: 1, entries: [] };
+      if (!Array.isArray(ledger.entries)) ledger.entries = [];
+      if (!ledger.schemaVersion) ledger.schemaVersion = 1;
+      ledger.entries.push({
+        ...entry,
+        recordedAt: entry.recordedAt || new Date().toISOString(),
+      });
+      if (ledger.entries.length > maxEntries) {
+        const dropped = ledger.entries.length - maxEntries;
+        ledger.entries = ledger.entries.slice(-maxEntries);
+        ledger.droppedEntries = Number(ledger.droppedEntries || 0) + dropped;
+      }
+      return ledger;
+    },
+  );
 }
 
 function statusFromEvidence(entries, expectedCommands = []) {
@@ -95,8 +136,11 @@ function ensureEvidenceDir(filePath) {
 }
 
 module.exports = {
+  behaviorContractHash,
+  canonicalJson,
   commandEvidence,
   ensureEvidenceDir,
+  evidenceEntrySha256,
   readEvidenceLedger,
   statusFromEvidence,
   writeEvidenceLedger,

@@ -1,12 +1,16 @@
 'use strict';
 
 const fs = require('node:fs');
+const crypto = require('node:crypto');
 const os = require('node:os');
 const path = require('node:path');
 
 const { HARNESS_ROOT } = require('./harness-root.cjs');
 
 const HOME = HARNESS_ROOT;
+const LOCK_SLEEP = new Int32Array(new SharedArrayBuffer(4));
+const DEFAULT_LOCK_TIMEOUT_MS = 5000;
+const DEFAULT_STALE_LOCK_MS = 30000;
 
 const ROOT_MARKERS = [
   '.git',
@@ -98,6 +102,11 @@ function scopeId(projectRoot) {
   return keyPath(projectRoot || HOME);
 }
 
+function memoryProjectId(projectRoot) {
+  const canonicalRoot = scopeId(projectRoot).replace(/\\/g, '/').replace(/\/+$/, '');
+  return `project:${crypto.createHash('sha256').update(canonicalRoot).digest('hex')}`;
+}
+
 function payloadCwd(payload, fallback = process.cwd()) {
   return resolvePath(
     payload?.cwd ||
@@ -131,6 +140,23 @@ function scopeFromPayload(payload, opts = {}) {
   };
 }
 
+function memoryScopeFromPayload(payload, opts = {}) {
+  const scope = scopeFromPayload(payload, opts);
+  const filesystemRoot = path.parse(scope.projectRoot).root;
+  const projectRoot = isSamePath(scope.projectRoot, filesystemRoot)
+    ? scope.cwd
+    : scope.projectRoot;
+  const relativePath = scope.filePath && isInsidePath(scope.filePath, projectRoot)
+    ? path.relative(projectRoot, scope.filePath).replace(/\\/g, '/')
+    : '';
+  return {
+    ...scope,
+    projectRoot,
+    projectId: memoryProjectId(projectRoot),
+    relativePath,
+  };
+}
+
 function stateScopeRoots(state) {
   const roots = [];
   if (!state || typeof state !== 'object') return roots;
@@ -161,8 +187,112 @@ function atomicWriteJson(filePath, value) {
   const dir = path.dirname(filePath);
   if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
   const tmp = `${filePath}.${process.pid}.${Date.now()}.tmp`;
-  fs.writeFileSync(tmp, JSON.stringify(value, null, 2), 'utf8');
-  fs.renameSync(tmp, filePath);
+  try {
+    fs.writeFileSync(tmp, JSON.stringify(value, null, 2), { encoding: 'utf8', mode: 0o600 });
+    fs.renameSync(tmp, filePath);
+  } finally {
+    try {
+      if (fs.existsSync(tmp)) fs.unlinkSync(tmp);
+    } catch { /* best-effort temporary-file cleanup */ }
+  }
+}
+
+function sleepSync(milliseconds) {
+  Atomics.wait(LOCK_SLEEP, 0, 0, Math.max(1, milliseconds));
+}
+
+function lockToken() {
+  return `${process.pid}:${Date.now()}:${Math.random().toString(16).slice(2)}`;
+}
+
+/**
+ * Run a short synchronous state transaction while holding an exclusive lock
+ * next to the state file. The token check prevents an expired owner from
+ * deleting a replacement lock created by another process.
+ */
+function withFileLockSync(filePath, operation, opts = {}) {
+  const dir = path.dirname(filePath);
+  if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+  const lockPath = opts.lockPath || `${filePath}.lock`;
+  const timeoutMs = Number.isFinite(Number(opts.timeoutMs))
+    ? Math.max(0, Number(opts.timeoutMs))
+    : DEFAULT_LOCK_TIMEOUT_MS;
+  const staleMs = Number.isFinite(Number(opts.staleMs))
+    ? Math.max(timeoutMs, Number(opts.staleMs))
+    : DEFAULT_STALE_LOCK_MS;
+  const startedAt = Date.now();
+  const token = lockToken();
+  let fd;
+
+  while (fd === undefined) {
+    try {
+      fd = fs.openSync(lockPath, 'wx', 0o600);
+      fs.writeFileSync(fd, JSON.stringify({ token, pid: process.pid, createdAt: new Date().toISOString() }), 'utf8');
+      fs.fsyncSync(fd);
+    } catch (error) {
+      const lockExists = (() => {
+        try { return fs.existsSync(lockPath); } catch { return false; }
+      })();
+      const contention = error.code === 'EEXIST'
+        || (error.code === 'EPERM' && (process.platform === 'win32' || lockExists));
+      if (!contention) throw error;
+      try {
+        const ageMs = Date.now() - fs.statSync(lockPath).mtimeMs;
+        if (ageMs > staleMs) {
+          fs.unlinkSync(lockPath);
+          continue;
+        }
+      } catch (statError) {
+        if (statError.code === 'ENOENT') continue;
+        throw statError;
+      }
+      if (Date.now() - startedAt >= timeoutMs) {
+        const timeout = new Error(`Timed out waiting for state lock: ${lockPath}`);
+        timeout.code = 'STATE_LOCK_TIMEOUT';
+        throw timeout;
+      }
+      sleepSync(Math.min(25, Math.max(1, timeoutMs - (Date.now() - startedAt))));
+    }
+  }
+
+  try {
+    return operation();
+  } finally {
+    try { fs.closeSync(fd); } catch { /* already closed */ }
+    try {
+      const owner = JSON.parse(fs.readFileSync(lockPath, 'utf8'));
+      if (owner.token === token) fs.unlinkSync(lockPath);
+    } catch { /* never remove a lock we cannot prove we own */ }
+  }
+}
+
+function initialJsonValue(fallback) {
+  if (typeof fallback === 'function') return fallback();
+  if (fallback === undefined) return {};
+  return structuredClone(fallback);
+}
+
+/**
+ * Lock-protected read/modify/write transaction. Corrupt existing JSON fails
+ * closed instead of being replaced with a default value.
+ */
+function updateJsonFileSync(filePath, fallback, mutator, opts = {}) {
+  return withFileLockSync(filePath, () => {
+    const current = fs.existsSync(filePath)
+      ? JSON.parse(fs.readFileSync(filePath, 'utf8'))
+      : initialJsonValue(fallback);
+    const next = mutator(current);
+    if (next === undefined) throw new TypeError('JSON state mutator must return the next value');
+    atomicWriteJson(filePath, next);
+    return next;
+  }, opts);
+}
+
+function replaceJsonFileSync(filePath, value, opts = {}) {
+  return withFileLockSync(filePath, () => {
+    atomicWriteJson(filePath, value);
+    return value;
+  }, opts);
 }
 
 module.exports = {
@@ -175,11 +305,16 @@ module.exports = {
   isInsidePath,
   findProjectRoot,
   scopeId,
+  memoryProjectId,
   payloadCwd,
   payloadFilePath,
   scopeFromPayload,
+  memoryScopeFromPayload,
   stateScopeRoots,
   stateHasScopeForFile,
   readJson,
   atomicWriteJson,
+  withFileLockSync,
+  updateJsonFileSync,
+  replaceJsonFileSync,
 };

@@ -118,15 +118,17 @@ process.stdin.on('end', () => {
   const cwd = (j.workspace && j.workspace.current_dir) || '';
   let branch = wt.branch || '';
   let dirty = false;
-  try {
-    const { execSync } = require('child_process');
-    const opt = { cwd: cwd || undefined, encoding: 'utf8', timeout: 2000, stdio: ['ignore', 'pipe', 'ignore'] };
-    if (!branch) branch = execSync('git --no-optional-locks branch --show-current', opt).trim();
-    if (branch) {
-      try { execSync('git --no-optional-locks diff --quiet', opt); }
-      catch (e) { dirty = true; }
-    }
-  } catch (e) {}
+  if (process.env.CLAUDE_STATUSLINE_GIT === '1') {
+    try {
+      const { execSync } = require('child_process');
+      const opt = { cwd: cwd || undefined, encoding: 'utf8', timeout: 750, stdio: ['ignore', 'pipe', 'ignore'] };
+      if (!branch) branch = execSync('git --no-optional-locks branch --show-current', opt).trim();
+      if (branch) {
+        try { execSync('git --no-optional-locks diff --quiet', opt); }
+        catch (e) { dirty = true; }
+      }
+    } catch (e) {}
+  }
   if (branch) parts.push((dirty ? C_GIT_DIRTY : C_GIT) + '⎇ ' + branch + RST);
 
   process.stdout.write(parts.join(SEP));

@@ -1,3 +1,13 @@
+---
+name: ldpc-rtl-superseded
+description: LDPC 旧 RTL/TB 的已知架构缺陷、禁用边界与权威替代路径
+metadata:
+  type: reference
+  domain: comm
+tags: [ldpc, rtl, deprecated, safety, verification]
+related: [ldpc-codec]
+---
+
 # ⛔ SUPERSEDED — 本目录 RTL/TB 已被取代,禁止引用
 
 > 标记日期: 2026-07-27。

@@ -2,8 +2,10 @@
 # ============================================================================
 # Git pre-commit hook for FPGA/ASIC projects
 # 安装: git config core.hooksPath .githooks
-# 功能: 分支保护 | 大文件检查 | 调试标记 | 仿真垃圾清理 | SV/VHDL/Python 语法检查
+# 功能: 仅检查 Git index：分支保护 | 大文件 | 禁止产物 | Python/Tcl 快速语法
 # ============================================================================
+
+set -o pipefail
 
 # ─── 根目录保护 ────────────────────────────────────────────────────────────
 # 确保在 git 仓库根目录运行，防止 CWD 偏移导致的路径误判
@@ -23,12 +25,26 @@ if [ -n "$BYPASS_PRE_COMMIT" ] || [ -n "$SKIP_PRECOMMIT" ]; then
 fi
 
 # ---- 基础变量 ----
-STAGED=$(git diff --cached --name-only --diff-filter=ACM)
-ALL_STAGED=$(git diff --cached --name-only)
+STAGED_FILES=()
+while IFS= read -r -d '' f; do
+  STAGED_FILES+=("$f")
+done < <(git diff --cached --name-only --diff-filter=ACMR -z)
 HAS_ERROR=0
 HAS_WARN=0
 
 check_cmd() { command -v "$1" &> /dev/null; }
+
+missing_tool() {
+  local tool="$1"
+  local scope="$2"
+  if [ "${HARNESS_PRECOMMIT_REQUIRE_TOOLS:-0}" = "1" ]; then
+    echo "❌ missing tool: $tool (policy=required; scope=$scope)"
+    HAS_ERROR=1
+  else
+    echo "⚠️  missing tool: $tool (policy=advisory; scope=$scope); deferred to explicit verification"
+    HAS_WARN=1
+  fi
+}
 
 # ============================================================================
 # 1. 分支保护：禁止在 main 上直接提交
@@ -41,12 +57,23 @@ fi
 echo "✅ 当前分支: $BRANCH"
 
 # ============================================================================
-# 2. 大文件检查（暂存区 >50MB）
+# 2. 大文件检查（按 Git index blob，而非工作树文件）
 # ============================================================================
-LARGE_FILES=$(git diff --cached --name-only -z | xargs -0 ls -la 2>/dev/null | awk '$5 > 50000000 {print $NF}')
-if [ -n "$LARGE_FILES" ]; then
-  echo "❌ 发现大文件被暂存（>50MB），请添加到 .gitignore："
-  echo "$LARGE_FILES"
+MAX_BYTES="${HARNESS_PRECOMMIT_MAX_BYTES:-50000000}"
+if ! [[ "$MAX_BYTES" =~ ^[0-9]+$ ]]; then
+  echo "❌ HARNESS_PRECOMMIT_MAX_BYTES 必须是非负整数"
+  exit 1
+fi
+LARGE_FILES=()
+for f in "${STAGED_FILES[@]}"; do
+  SIZE=$(git cat-file -s ":$f" 2>/dev/null || printf '0')
+  if [ "$SIZE" -gt "$MAX_BYTES" ]; then
+    LARGE_FILES+=("$f")
+  fi
+done
+if [ "${#LARGE_FILES[@]}" -gt 0 ]; then
+  echo "❌ 发现超过 ${MAX_BYTES} bytes 的暂存 blob："
+  printf '  %s\n' "${LARGE_FILES[@]}"
   exit 1
 fi
 echo "✅ 无大文件"
@@ -54,8 +81,14 @@ echo "✅ 无大文件"
 # ============================================================================
 # 3. 调试代码标记检查
 # ============================================================================
-if echo "$ALL_STAGED" | grep -qE '\.(v|sv|vhd|m|py)$'; then
-  if git diff --cached -U0 | grep -E "^\+.*\/\/(\s*DEBUG|\s*TODO|\s*FIXME)" > /dev/null 2>&1; then
+HAS_DEBUG_SOURCE=0
+for f in "${STAGED_FILES[@]}"; do
+  case "$f" in
+    *.v|*.sv|*.vhd|*.vhdl|*.m|*.py) HAS_DEBUG_SOURCE=1 ;;
+  esac
+done
+if [ "$HAS_DEBUG_SOURCE" -eq 1 ]; then
+  if git diff --cached --no-ext-diff --no-textconv -U0 | grep -E "^\+.*\/\/(\s*DEBUG|\s*TODO|\s*FIXME)" > /dev/null 2>&1; then
     echo "⚠️  警告：暂存区中包含 DEBUG/TODO/FIXME 标记，请确认是预期提交的代码"
     HAS_WARN=1
   fi
@@ -70,7 +103,7 @@ if [ ! -f ".gitignore" ]; then
 fi
 
 # ============================================================================
-# 5. 仿真/综合垃圾文件检查（暂存区 + 工作区 + 未跟踪文件）
+# 5. 暂存区仿真/综合产物检查
 # ============================================================================
 
 # 排除目录（这些路径下的 work/ 等是正常数据）
@@ -82,155 +115,71 @@ fi
 # engineering-assets/var/gates/ 是门禁证据目录（已 gitignore）：G-C-01/02 的判据
 # 就来自其中的 timing-summary.rpt / utilization.rpt，它们是刻意产出的证据而非垃圾，
 # 由 tools/pg-synth.cjs 可重生。误删会让门禁失去判据来源。
-EXCLUDE_DIRS="memory/work/|plugins/cache/|knowledge/|.git/|engineering-assets/.*/vectors/|engineering-assets/.*/vectors-ref/|engineering-assets/reference-assets/|engineering-assets/var/build/|engineering-assets/var/gates/"
-
+# engineering-assets/evidence/ 是证据快照目录（内含的 .dcp/.rpt 已 gitignore）：
+# 与 var/gates/ 同性质 —— SNAPSHOT.json 记录各门判据，同目录下的 Vivado
+# post_synth.dcp 是可由综合重跑再生的中间检查点。此前该目录未列入豁免，
+# 导致本扫描把它当垃圾并阻断**与之无关**的提交。
 # ---- 5a. 暂存区检查：禁止仿真文件被提交 ----
-FORBIDDEN_STAGED_PATTERNS="(^|/)transcript$|vsim\.wlf|\.vcd$|\.wlftmp|vsim\.dump|\.wdb$|xsim\.jou|xsim\.log|xsim\.tcl|xelab\.pb|xvlog\.pb|tr_db\.log|wev\.log|vlog\.log"
-MATCH_STAGED=$(echo "$ALL_STAGED" | grep -E "$FORBIDDEN_STAGED_PATTERNS" | grep -vE "$EXCLUDE_DIRS" | head -10)
-if [ -n "$MATCH_STAGED" ]; then
+FORBIDDEN_STAGED=()
+for f in "${STAGED_FILES[@]}"; do
+  case "$f" in
+    memory/work/*|plugins/cache/*|knowledge/*|engineering-assets/*/vectors/*|engineering-assets/*/vectors-ref/*|engineering-assets/reference-assets/*|engineering-assets/var/build/*|engineering-assets/var/gates/*|engineering-assets/evidence/*) continue ;;
+  esac
+  case "$f" in
+    transcript|*/transcript|vsim.wlf|*/vsim.wlf|*.vcd|*.wlftmp|vsim.dump|*/vsim.dump|*.wdb|xsim.jou|*/xsim.jou|xsim.log|*/xsim.log|xsim.tcl|*/xsim.tcl|xelab.pb|*/xelab.pb|xvlog.pb|*/xvlog.pb|tr_db.log|*/tr_db.log|wev.log|*/wev.log|vlog.log|*/vlog.log)
+      FORBIDDEN_STAGED+=("$f")
+      ;;
+  esac
+done
+if [ "${#FORBIDDEN_STAGED[@]}" -gt 0 ]; then
   echo "❌ 仿真产物不应提交到 git（已在暂存区）："
-  echo "$MATCH_STAGED"
+  printf '  %s\n' "${FORBIDDEN_STAGED[@]:0:10}"
   echo ""
   echo "  修复: git rm --cached <文件>  # 取消暂存"
   exit 1
 fi
 echo "✅ 暂存区无仿真产物"
 
-# ---- 5b. 工作区 + 未跟踪文件扫描：发现垃圾则阻止提交并引导清理 ----
-GARBAGE_PATTERNS="
-  # 波形文件
-  \.vcd$|\.vcd\.gz$|\.vpd$|\.fsdb$
-  # Vivado xsim 日志/缓存
-  \.wdb$|xsim\.dir/|xsim\.jou|xsim\.log|xsim\.tcl|\.pb$
-  # ModelSim / Questa 产物
-  transcript$|\.wlf$|\.wlftmp|\.mpf$|\.ucdb$|\.vstf$
-  # 综合产物
-  \.bit$|\.bin$|\.mcs$|\.ltx$|\.dcp$|\.rpt$|\.ngc$|\.edf$|\.edif$
-  # 虚拟内存 / Dump
-  \.dump$|\.stackdump$|\.core$|\.dmp$
-  # 编译日志
-  tr_db\.log$|wev\.log$|vlog\.log$|xelab\.pb$|xvlog\.pb$
-  # 仿真缓存
-  work/$
-"
-
-# 合并为一行正则 (移除注释和空行)
-GARBAGE_REGEX=$(echo "$GARBAGE_PATTERNS" | grep -v '^\s*#' | grep -v '^\s*$' | tr -d ' \t' | paste -sd '|')
-
-# 扫描: 未跟踪文件（含 gitignore 忽略的）+ 工作区修改
-GARBAGE_FILES=$(
-  {
-    # 未跟踪文件（含被 .gitignore 隐藏的仿真垃圾）
-    git ls-files --others | grep -E "$GARBAGE_REGEX" | grep -vE "$EXCLUDE_DIRS"
-    # 已跟踪但被修改的文件（如旧版遗留的仿真文件）
-    git ls-files --modified | grep -E "$GARBAGE_REGEX" | grep -vE "$EXCLUDE_DIRS"
-  } | sort -u | head -20
-)
-
-if [ -n "$GARBAGE_FILES" ]; then
-  # 过滤掉零字节文件（被 OS 锁定但已清空的僵尸文件）
-  REAL_GARBAGE=""
-  ZOMBIE_FILES=""
-  while read -r f; do
-    if [ -s "$f" ]; then
-      REAL_GARBAGE="$REAL_GARBAGE
-$f"
-    else
-      ZOMBIE_FILES="$ZOMBIE_FILES
-$f"
-    fi
-  done <<< "$GARBAGE_FILES"
-
-  if [ -n "$ZOMBIE_FILES" ]; then
-    echo "⚠️  发现零字节残留文件（可能被僵尸进程锁定，重启后清理）："
-    echo "$ZOMBIE_FILES" | head -10 | while read -r f; do
-      [ -n "$f" ] && echo "    • $f"
-    done
-    echo ""
-  fi
-
-  if [ -n "$REAL_GARBAGE" ]; then
-    echo ""
-    echo "⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ "
-    echo "   发现仿真/综合垃圾文件！提交已阻止"
-    echo "⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ "
-    echo ""
-    echo "$REAL_GARBAGE" | while read -r f; do
-      [ -n "$f" ] && SIZE=$(ls -la "$f" 2>/dev/null | awk '{print $5}' | numfmt --to=iec 2>/dev/null || echo "") && [ -n "$SIZE" ] && printf "  • %s  (%s)\n" "$f" "$SIZE" || printf "  • %s\n" "$f"
-    done
-    echo ""
-    echo "  清理方法:"
-    echo "    git clean -fdn          # 预览将删除的未跟踪文件"
-    echo "    git clean -fd           # 确认删除未跟踪垃圾文件"
-    echo "    rm -rf <文件/目录>     # 手动删除跟踪过的垃圾文件"
-    echo "    git checkout -- <文件>  # 恢复意外修改的跟踪文件"
-    echo ""
-    exit 1
-  fi  # REAL_GARBAGE
-fi  # GARBAGE_FILES
-echo "✅ 工作区无仿真垃圾文件"
+# 工作区 hygiene 由显式验证/CI 负责；快速 pre-commit 不扫描未暂存或未跟踪文件。
 
 # ============================================================================
-# 6. Verilog / SystemVerilog 语法检查
+# 6. 重型 HDL/MATLAB 检查移交显式验证
 # ============================================================================
-# UVM 源无法用裸 vlog -lint 单文件检查（需 -L uvm 与包编译顺序），故豁免。
-# 资产包布局为 tb/uvm/，旧 knowledge 布局为 uvm_tb/，两者都要排除。
-SV_FILES=$(echo "$STAGED" | grep -E '\.(v|sv)$' | grep -v '/examples/' | grep -v '/reference-assets/vendor/' | grep -v '/templates/' | grep -v '/uvm_tb/' | grep -v '/tb/uvm/')
-if [ -n "$SV_FILES" ]; then
-  if check_cmd vlog; then
-    echo "--- [vlog] 检查 Verilog/SV 语法 ---"
-    for f in $SV_FILES; do
-      if [ -f "$f" ]; then
-        OUTPUT=$(timeout 30 vlog -lint "$f" 2>&1)
-        ERRORS=$(echo "$OUTPUT" | grep -cE "^(# )?\*\* Error")
-        WARNINGS=$(echo "$OUTPUT" | grep -cE "^(# )?\*\* Warning")
-        if [ "$ERRORS" -gt 0 ]; then
-          echo "❌ $f — $ERRORS 个错误, $WARNINGS 个警告"
-          echo "$OUTPUT" | grep -E "^\*\* Error" | head -5 | sed 's/^/  /'
-          HAS_ERROR=1
-        else
-          echo "✅ $f — $WARNINGS 个警告"
-        fi
-      fi
-    done
-  else
-    echo "⚠️  未找到 vlog 命令，跳过 SV 检查"
-  fi
+DEFERRED_HEAVY=0
+for f in "${STAGED_FILES[@]}"; do
+  case "$f" in
+    *.v|*.sv|*.vhd|*.vhdl|*.m) DEFERRED_HEAVY=1 ;;
+  esac
+done
+
+# ============================================================================
+# 重工具不在 commit 热路径启动。
+# ============================================================================
+if [ "$DEFERRED_HEAVY" -eq 1 ]; then
+  echo "ℹ️  HDL/MATLAB checks deferred (policy=explicit-verification)"
 fi
 
 # ============================================================================
-# 7. VHDL 语法检查
+# 8. Python 快速语法检查
 # ============================================================================
-VHD_FILES=$(echo "$STAGED" | grep -E '\.(vhd|vhdl)$' | grep -v '/examples/' | grep -v '/reference-assets/vendor/' | grep -v '/templates/')
-if [ -n "$VHD_FILES" ]; then
-  if check_cmd vcom; then
-    echo "--- [vcom] 检查 VHDL 语法 ---"
-    for f in $VHD_FILES; do
-      if [ -f "$f" ]; then
-        OUTPUT=$(timeout 30 vcom -lint "$f" 2>&1)
-        ERRORS=$(echo "$OUTPUT" | grep -cE "^(# )?\*\* Error")
-        WARNINGS=$(echo "$OUTPUT" | grep -cE "^(# )?\*\* Warning")
-        if [ "$ERRORS" -gt 0 ]; then
-          echo "❌ $f — $ERRORS 个错误, $WARNINGS 个警告"
-          echo "$OUTPUT" | grep -E "^\*\* Error" | head -5 | sed 's/^/  /'
-          HAS_ERROR=1
-        else
-          echo "✅ $f — $WARNINGS 个警告"
-        fi
-      fi
-    done
-  else
-    echo "⚠️  未找到 vcom 命令，跳过 VHDL 检查"
-  fi
-fi
-
-# ============================================================================
-# 8. Python 语法和 lint 检查
-# ============================================================================
-PY_FILES=$(echo "$STAGED" | grep -E '\.py$' | grep -v '/examples/' | grep -v '/reference-assets/vendor/' | grep -v '/templates/' | grep -v 'node_modules/' | grep -v '/plugins/cache/' | grep -v '/skills/.*/scripts/' | grep -v '/skills/.*/tools/')
-if [ -n "$PY_FILES" ]; then
+PY_FILES=()
+for f in "${STAGED_FILES[@]}"; do
+  case "$f" in
+    *.py)
+      case "$f" in
+        */examples/*|*/reference-assets/vendor/*|*/templates/*|*node_modules/*|*/plugins/cache/*|*/skills/*/scripts/*|*/skills/*/tools/*) ;;
+        *) PY_FILES+=("$f") ;;
+      esac
+      ;;
+  esac
+done
+if [ "${#PY_FILES[@]}" -gt 0 ]; then
   PYTHON_CMD=""
-  if python -c "" &>/dev/null; then
+  if [ -n "${HARNESS_PRECOMMIT_PYTHON:-}" ]; then
+    if check_cmd "$HARNESS_PRECOMMIT_PYTHON" && "$HARNESS_PRECOMMIT_PYTHON" -c "" &>/dev/null; then
+      PYTHON_CMD="$HARNESS_PRECOMMIT_PYTHON"
+    fi
+  elif python -c "" &>/dev/null; then
     PYTHON_CMD="python"
   elif python3 -c "" &>/dev/null; then
     PYTHON_CMD="python3"
@@ -238,103 +187,83 @@ if [ -n "$PY_FILES" ]; then
 
   if [ -n "$PYTHON_CMD" ]; then
     echo "--- [$PYTHON_CMD] 语法检查 ---"
-    for f in $PY_FILES; do
-      if [ -f "$f" ]; then
-        OUTPUT=$(timeout 15 $PYTHON_CMD -m py_compile "$f" 2>&1)
-        if [ -n "$OUTPUT" ]; then
-          echo "❌ $f 语法错误"
-          echo "$OUTPUT" | sed 's/^/  /'
-          HAS_ERROR=1
-        else
-          echo "✅ $f 语法通过"
-        fi
-      fi
-    done
-  fi
-
-  if check_cmd flake8; then
-    echo "--- [flake8] 代码风格检查 ---"
-    for f in $PY_FILES; do
-      if [ -f "$f" ]; then
-        OUTPUT=$(timeout 30 flake8 --max-line-length=100 "$f" 2>&1)
-        if [ -n "$OUTPUT" ]; then
-          echo "⚠️  $f"
-          echo "$OUTPUT" | head -10 | sed 's/^/  /'
-          HAS_WARN=1
-        else
-          echo "✅ $f flake8 通过"
-        fi
-      fi
-    done
-  fi
-
-  if check_cmd ruff; then
-    echo "--- [ruff] 代码检查 ---"
-    for f in $PY_FILES; do
-      if [ -f "$f" ]; then
-        OUTPUT=$(timeout 30 ruff check "$f" 2>&1)
-        if [ -n "$OUTPUT" ]; then
-          echo "⚠️  $f"
-          echo "$OUTPUT" | head -10 | sed 's/^/  /'
-          HAS_WARN=1
-        else
-          echo "✅ $f ruff 通过"
-        fi
-      fi
-    done
-  fi
-
-  if ! check_cmd flake8 && ! check_cmd ruff; then
-    echo "⚠️  建议安装 linter: pip install flake8 或 pip install ruff"
-  fi
-fi
-
-# ============================================================================
-# 9. MATLAB 代码检查（仅 matlab 安装时启用）
-# ============================================================================
-M_FILES=$(echo "$STAGED" | grep -E '\.m$' | grep -v '/examples/' | grep -v '/reference-assets/vendor/' | grep -v '/templates/')
-if [ -n "$M_FILES" ]; then
-  if check_cmd matlab; then
-    echo "--- [MATLAB] 代码分析 ---"
-    for f in $M_FILES; do
-      if [ -f "$f" ]; then
-        OUTPUT=$(timeout 120 matlab -batch "checkcode('$f'); exit;" 2>&1)
-        if echo "$OUTPUT" | grep -qi "error\|警告\|L \d"; then
-          echo "⚠️  $f 存在代码分析问题："
-          echo "$OUTPUT" | grep -E "L \d|Error|警告" | head -10 | sed 's/^/  /'
-          HAS_WARN=1
-        else
-          echo "✅ $f MATLAB 分析通过"
-        fi
+    for f in "${PY_FILES[@]}"; do
+      OUTPUT=$(git show ":$f" | timeout 15 "$PYTHON_CMD" -c 'import ast,sys; ast.parse(sys.stdin.buffer.read(), filename=sys.argv[1])' "$f" 2>&1)
+      STATUS=$?
+      if [ "$STATUS" -ne 0 ]; then
+        echo "❌ $f 语法错误"
+        echo "$OUTPUT" | sed 's/^/  /'
+        HAS_ERROR=1
+      else
+        echo "✅ $f 语法通过"
       fi
     done
   else
-    echo "⚠️  未找到 matlab 命令，跳过 .m 文件检查"
+    missing_tool "python" "staged .py files"
   fi
+
+  echo "ℹ️  Python style lint deferred (policy=explicit-verification)"
 fi
+
+# ============================================================================
+# 9. MATLAB 由显式验证负责
+# ============================================================================
+# MATLAB analysis is intentionally part of explicit/full verification, never pre-commit.
 
 # ============================================================================
 # 10. Tcl / .do / .xdc / .sdc 语法检查
 # ============================================================================
-TCL_FILES=$(echo "$STAGED" | grep -E '\.(tcl|do|xdc|sdc)$' | grep -v '/examples/' | grep -v '/reference-assets/vendor/' | grep -v '/templates/')
-if [ -n "$TCL_FILES" ]; then
-  if check_cmd tclsh; then
-    echo "--- [tclsh] Tcl 语法检查 ---"
-    for f in $TCL_FILES; do
-      if [ -f "$f" ]; then
-        OUTPUT=$(timeout 15 tclsh -c "source \"$f\"" 2>&1)
-        ERRORS=$(echo "$OUTPUT" | grep -cE "error|Error|ERROR|unknown|invalid")
-        if [ "$ERRORS" -gt 0 ]; then
-          echo "❌ $f — Tcl 语法错误"
+TCL_FILES=()
+for f in "${STAGED_FILES[@]}"; do
+  case "$f" in
+    *.tcl|*.do|*.xdc|*.sdc)
+      case "$f" in
+        */examples/*|*/reference-assets/vendor/*|*/templates/*) ;;
+        *) TCL_FILES+=("$f") ;;
+      esac
+      ;;
+  esac
+done
+if [ "${#TCL_FILES[@]}" -gt 0 ]; then
+  TCLSH_CMD="${HARNESS_PRECOMMIT_TCLSH:-}"
+  if [ -z "$TCLSH_CMD" ] && check_cmd tclsh; then
+    TCLSH_CMD="tclsh"
+  fi
+  if [ -n "$TCLSH_CMD" ]; then
+    TCL_CHECKER=$(mktemp "${TMPDIR:-/tmp}/precommit-tcl-checker.XXXXXX") || exit 1
+    TCL_STAGED=$(mktemp "${TMPDIR:-/tmp}/precommit-tcl-staged.XXXXXX") || exit 1
+    trap 'rm -f "$TCL_CHECKER" "$TCL_STAGED"' EXIT HUP INT TERM
+    cat > "$TCL_CHECKER" <<'TCL_CHECK'
+set target [lindex $argv 0]
+set handle [open $target rb]
+set script [read $handle]
+close $handle
+if {![info complete $script]} {
+  puts stderr "incomplete Tcl command"
+  exit 1
+}
+TCL_CHECK
+    echo "--- [$TCLSH_CMD] Tcl 结构检查 ---"
+    for f in "${TCL_FILES[@]}"; do
+      if git show ":$f" > "$TCL_STAGED"; then
+        OUTPUT=$(timeout 15 "$TCLSH_CMD" "$TCL_CHECKER" "$TCL_STAGED" 2>&1)
+        STATUS=$?
+        if [ "$STATUS" -ne 0 ]; then
+          echo "❌ $f — Tcl 结构不完整"
           echo "$OUTPUT" | head -5 | sed 's/^/  /'
           HAS_ERROR=1
         else
-          echo "✅ $f 语法通过"
+          echo "✅ $f 结构完整"
         fi
+      else
+        echo "❌ 无法读取暂存 Tcl: $f"
+        HAS_ERROR=1
       fi
     done
+    rm -f "$TCL_CHECKER" "$TCL_STAGED"
+    trap - EXIT HUP INT TERM
   else
-    echo "⚠️  未找到 tclsh 命令，跳过 Tcl 检查"
+    missing_tool "tclsh" "staged Tcl files"
   fi
 fi
 

@@ -7,12 +7,18 @@ const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 const crypto = require('node:crypto');
+const {
+  atomicWriteJson,
+  withFileLockSync,
+} = require('../../scripts/lib/project-scope.cjs');
 
 const HOME = HARNESS_ROOT;
 const DEFAULT_STATE_FILE = path.join(HOME, 'var', 'index', 'progress-watchdog-state.json');
 const DEFAULT_ARCHIVE_DIR = path.join(HOME, 'var', 'failures', 'progress-watchdog');
 const DEFAULT_MAX_NO_PROGRESS_TURNS = 8;
 const DEFAULT_MAX_IDLE_MS = 45 * 60 * 1000;
+const DEFAULT_MAX_SESSIONS = 64;
+const DEFAULT_MAX_ARCHIVES = 50;
 const HISTORY_LIMIT = 16;
 const BYPASS_AUDIT_LIMIT = 16;
 const MIN_BYPASS_REASON_LENGTH = 12;
@@ -93,8 +99,7 @@ function readJson(filePath, fallback) {
 }
 
 function writeJson(filePath, value) {
-  ensureDir(path.dirname(filePath));
-  fs.writeFileSync(filePath, JSON.stringify(value, null, 2), 'utf8');
+  atomicWriteJson(filePath, value);
 }
 
 function toolName(payload) {
@@ -263,6 +268,33 @@ function sessionRecord(state, cwd, sessionId = '', objectiveHash = '') {
   return { key, session: state.sessions[key] };
 }
 
+function isReadOnlyAction(payload) {
+  const name = toolName(payload);
+  if (READ_ONLY_TOOLS.has(name)) return true;
+  return (name === 'Bash' || name === 'PowerShell') && READ_ONLY_COMMAND.test(commandText(payload));
+}
+
+function pruneSessions(state, maxSessions = DEFAULT_MAX_SESSIONS) {
+  const entries = Object.entries(state.sessions || {});
+  if (entries.length <= maxSessions) return state;
+  entries.sort((a, b) => {
+    const aFrozen = a[1]?.status === 'frozen' ? 1 : 0;
+    const bFrozen = b[1]?.status === 'frozen' ? 1 : 0;
+    if (aFrozen !== bFrozen) return bFrozen - aFrozen;
+    const aAt = Date.parse(a[1]?.lastEventAt || a[1]?.lastProgressAt || '') || 0;
+    const bAt = Date.parse(b[1]?.lastEventAt || b[1]?.lastProgressAt || '') || 0;
+    return bAt - aAt;
+  });
+  const dropped = entries.length - maxSessions;
+  state.sessions = Object.fromEntries(entries.slice(0, maxSessions));
+  state.droppedSessions = Number(state.droppedSessions || 0) + dropped;
+  return state;
+}
+
+function writeWatchdogState(stateFile, state, maxSessions) {
+  writeJson(stateFile, pruneSessions(state, maxSessions));
+}
+
 function appendHistory(session, event) {
   session.history = [...(session.history || []), event].slice(-HISTORY_LIMIT);
 }
@@ -271,7 +303,23 @@ function appendBypassAudit(session, event) {
   session.bypassAudit = [...(session.bypassAudit || []), event].slice(-BYPASS_AUDIT_LIMIT);
 }
 
-function freezeRepairLoop({ archiveDir, sessionKey, session, trigger, now, thresholds }) {
+function pruneArchiveFiles(archiveDir, maxArchives = DEFAULT_MAX_ARCHIVES) {
+  if (!fs.existsSync(archiveDir)) return;
+  const files = fs.readdirSync(archiveDir, { withFileTypes: true })
+    .filter((entry) => entry.isFile() && entry.name.endsWith('.json'))
+    .map((entry) => {
+      const filePath = path.join(archiveDir, entry.name);
+      let mtimeMs = 0;
+      try { mtimeMs = fs.statSync(filePath).mtimeMs; } catch { /* keep deterministic name fallback */ }
+      return { filePath, name: entry.name, mtimeMs };
+    })
+    .sort((a, b) => a.mtimeMs - b.mtimeMs || a.name.localeCompare(b.name));
+  for (const entry of files.slice(0, Math.max(0, files.length - maxArchives))) {
+    fs.unlinkSync(entry.filePath);
+  }
+}
+
+function freezeRepairLoop({ archiveDir, sessionKey, session, trigger, now, thresholds, maxArchives }) {
   ensureDir(archiveDir);
   const stamp = now.replace(/[:.]/g, '-');
   const archiveFile = path.join(archiveDir, `${stamp}-${sessionKey}.json`);
@@ -306,6 +354,7 @@ function freezeRepairLoop({ archiveDir, sessionKey, session, trigger, now, thres
     ],
   };
   writeJson(archiveFile, record);
+  pruneArchiveFiles(archiveDir, maxArchives);
   session.status = 'frozen';
   session.frozenAt = now;
   session.freezeReason = 'repair_budget_exhausted';
@@ -315,7 +364,7 @@ function freezeRepairLoop({ archiveDir, sessionKey, session, trigger, now, thres
   return { archiveFile, record };
 }
 
-function updateProgress(payload, opts = {}) {
+function updateProgressUnlocked(payload, opts = {}) {
   const now = opts.now || new Date().toISOString();
   const stateFile = opts.stateFile || process.env.PROGRESS_WATCHDOG_STATE_FILE || DEFAULT_STATE_FILE;
   const archiveDir = opts.archiveDir || process.env.PROGRESS_WATCHDOG_ARCHIVE_DIR || DEFAULT_ARCHIVE_DIR;
@@ -327,6 +376,20 @@ function updateProgress(payload, opts = {}) {
     opts.maxIdleMs || process.env.PROGRESS_WATCHDOG_MAX_IDLE_MS || DEFAULT_MAX_IDLE_MS,
     10
   );
+  const configuredMaxSessions = Number.parseInt(
+    opts.maxSessions || process.env.PROGRESS_WATCHDOG_MAX_SESSIONS || DEFAULT_MAX_SESSIONS,
+    10
+  );
+  const maxSessions = Number.isFinite(configuredMaxSessions)
+    ? Math.max(8, configuredMaxSessions)
+    : DEFAULT_MAX_SESSIONS;
+  const configuredMaxArchives = Number.parseInt(
+    opts.maxArchives || process.env.PROGRESS_WATCHDOG_MAX_ARCHIVES || DEFAULT_MAX_ARCHIVES,
+    10
+  );
+  const maxArchives = Number.isFinite(configuredMaxArchives)
+    ? Math.max(5, configuredMaxArchives)
+    : DEFAULT_MAX_ARCHIVES;
   const mode = watchdogMode(opts);
   const state = readJson(stateFile, defaultState());
   if (!state.sessions || typeof state.sessions !== 'object') state.sessions = {};
@@ -360,7 +423,7 @@ function updateProgress(payload, opts = {}) {
     appendBypassAudit(session, audit);
     appendHistory(session, { ...audit, kind: 'bypass', evidence: `audited emergency bypass by ${bypass.actor}` });
     session.lastEventAt = now;
-    writeJson(stateFile, state);
+    writeWatchdogState(stateFile, state, maxSessions);
     return {
       status: 'bypassed',
       classification: { kind: 'bypass', evidence: audit.reason },
@@ -399,7 +462,7 @@ function updateProgress(payload, opts = {}) {
         : `repair loop frozen: ${session.freezeReason || 'repair_budget_exhausted'}`,
       objectiveHash,
     });
-    writeJson(stateFile, state);
+    writeWatchdogState(stateFile, state, maxSessions);
     return {
       status: allowed ? 'frozen_notice' : 'frozen_escalation_required',
       classification: {
@@ -455,6 +518,7 @@ function updateProgress(payload, opts = {}) {
         trigger: reason,
         now,
         thresholds: { maxNoProgressTurns, maxIdleMs },
+        maxArchives,
       });
       status = 'frozen_escalation_required';
     } else {
@@ -462,7 +526,7 @@ function updateProgress(payload, opts = {}) {
     }
   }
 
-  writeJson(stateFile, state);
+  writeWatchdogState(stateFile, state, maxSessions);
   return {
     status,
     classification,
@@ -473,6 +537,18 @@ function updateProgress(payload, opts = {}) {
     mode,
     thresholds: { maxNoProgressTurns, maxIdleMs },
   };
+}
+
+function updateProgress(payload, opts = {}) {
+  const stateFile = opts.stateFile || process.env.PROGRESS_WATCHDOG_STATE_FILE || DEFAULT_STATE_FILE;
+  return withFileLockSync(
+    stateFile,
+    () => updateProgressUnlocked(payload, { ...opts, stateFile }),
+    {
+      timeoutMs: opts.lockTimeoutMs,
+      staleMs: opts.staleLockMs,
+    },
+  );
 }
 
 function readStdin() {
@@ -508,15 +584,22 @@ function main() {
     }
     const actor = String(process.env.PROGRESS_WATCHDOG_BYPASS_ACTOR || os.userInfo().username || 'operator').trim();
     const now = new Date().toISOString();
-    const prior = readJson(stateFile, null);
+    const resetMaxArchives = Math.max(5, Number.parseInt(
+      process.env.PROGRESS_WATCHDOG_MAX_ARCHIVES || DEFAULT_MAX_ARCHIVES,
+      10,
+    ) || DEFAULT_MAX_ARCHIVES);
     let archivedTo = null;
-    if (prior) {
-      archivedTo = path.join(archiveDir, `reset-${now.replace(/[:.]/g, '-')}.json`);
-      writeJson(archivedTo, { archivedAt: now, action: 'reset', reason, actor, priorState: prior });
-    }
-    const state = defaultState();
-    state.bypassAudit = [{ at: now, actor, reason, action: 'reset', archivedPriorStateTo: archivedTo }];
-    writeJson(stateFile, state);
+    withFileLockSync(stateFile, () => {
+      const prior = readJson(stateFile, null);
+      if (prior) {
+        archivedTo = path.join(archiveDir, `reset-${now.replace(/[:.]/g, '-')}.json`);
+        writeJson(archivedTo, { archivedAt: now, action: 'reset', reason, actor, priorState: prior });
+        pruneArchiveFiles(archiveDir, resetMaxArchives);
+      }
+      const state = defaultState();
+      state.bypassAudit = [{ at: now, actor, reason, action: 'reset', archivedPriorStateTo: archivedTo }];
+      writeJson(stateFile, state);
+    });
     console.error(JSON.stringify({ source: 'progress-watchdog', type: 'reset', stateFile, reason, actor, archivedPriorStateTo: archivedTo }));
     return;
   }
@@ -609,6 +692,7 @@ if (require.main === module) main();
 
 module.exports = {
   classifyEvent,
+  isReadOnlyAction,
   objectiveHashFor,
   sessionIdFor,
   updateProgress,

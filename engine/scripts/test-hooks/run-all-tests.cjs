@@ -37,6 +37,10 @@ const HOME = HARNESS_ROOT;
 const VERBOSE = process.argv.includes('--verbose');
 const LIST_ONLY = process.argv.includes('--list');
 const NO_PERSIST = process.argv.includes('--no-persist') || process.env.CLAUDE_HARNESS_NO_PERSIST === '1';
+const SUITE_FILTER = (() => {
+  const arg = process.argv.find(value => value.startsWith('--suite='));
+  return arg ? arg.slice('--suite='.length) : '';
+})();
 const SKIP_MANIFEST_FILE = path.join(HOME, 'engine/scripts/test-hooks/skip-manifest.json');
 
 // ── 颜色 ───────────────────────────────────────────────────────────────────
@@ -194,6 +198,19 @@ const CORE_SCRIPTS = [
   'engine/scripts/test-hooks/agent-transcript-compliance.cjs',
   'engine/scripts/test-hooks/workflow-contracts.cjs',
   'engine/scripts/test-hooks/workflow-scenario-eval.cjs',
+  'engine/scripts/test-hooks/dag-cancellation.cjs',
+  'engine/scripts/test-hooks/gate-bypass-contract.test.cjs',
+  'engine/scripts/test-hooks/git-ci-repro-contract.test.cjs',
+  'engine/scripts/test-hooks/preflight-router-contract.cjs',
+  'engine/scripts/test-hooks/prompt-context-contract.cjs',
+  'engine/scripts/test-hooks/postflight-router-contract.cjs',
+  'engine/scripts/test-hooks/lifecycle-router-contract.cjs',
+  'engine/scripts/test-hooks/observer-consolidation-contract.cjs',
+  'engine/scripts/test-hooks/hook-manifest-contract.cjs',
+  'engine/scripts/test-hooks/read-only-hooks.cjs',
+  'engine/scripts/test-hooks/state-concurrency.cjs',
+  'engine/scripts/test-hooks/statusline-contract.cjs',
+  'engine/scripts/test-hooks/transparency-retention.cjs',
 ];
 
 for (const script of CORE_SCRIPTS) {
@@ -206,6 +223,11 @@ for (const script of CORE_SCRIPTS) {
 
 const HOOK_SCRIPTS = [
   'engine/scripts/hooks/verification-gate.cjs',
+  'engine/scripts/hooks/preflight-router.cjs',
+  'engine/scripts/hooks/prompt-context.cjs',
+  'engine/scripts/hooks/postflight-router.cjs',
+  'engine/scripts/hooks/session-bootstrap.cjs',
+  'engine/scripts/hooks/stop-summary.cjs',
   'engine/scripts/hooks/local-runner.cjs',
   'engine/scripts/hooks/visible-checklist-gate.cjs',
   'engine/scripts/hooks/agent-transparency-ledger.cjs',
@@ -1052,32 +1074,50 @@ define('HookRegistry', '统一读取 settings 并解析 batch hook', () => {
   if (result.missing.length > 0) {
     return { pass: false, detail: result.missing.map(ref => path.basename(ref.script)).join(', ') };
   }
-  const hasLocalRunner = result.found.some(ref => path.basename(ref.script) === 'local-runner.cjs');
-  const hasBatch = result.found.some(ref => ref.kind === 'batch');
-  return { pass: hasLocalRunner && hasBatch, detail: `found=${result.found.length}, batch=${hasBatch}` };
+  const hasPreflightRouter = result.found.some(ref => path.basename(ref.script) === 'preflight-router.cjs'
+    && ref.point === 'PreToolUse');
+  const routerDependencies = result.found.filter(ref => ref.kind === 'router-dependency');
+  return {
+    pass: hasPreflightRouter && routerDependencies.length >= 13,
+    detail: `found=${result.found.length}, routerDependencies=${routerDependencies.length}`,
+  };
 });
 
 define('HookRegistry', 'high-frequency and Stop hooks have bounded timeout contracts', () => {
-  const { collectHookEntries } = require('../lib/hook-registry.cjs');
+  const { collectHookEntries, validateHookManifest } = require('../lib/hook-registry.cjs');
   const entries = collectHookEntries();
   const find = (name) => entries.find((entry) => entry.command.includes(name));
+  const prompt = find('prompt-context.cjs');
+  const preflight = find('preflight-router.cjs');
+  const postflight = entries.filter((entry) => entry.command.includes('postflight-router.cjs'));
+  const stopSummary = entries.find((entry) => entry.point === 'Stop'
+    && entry.command.includes('stop-summary.cjs'));
+  const stopObserver = entries.find((entry) => entry.point === 'Stop'
+    && entry.command.includes('postflight-observer.cjs'));
   const memory = find('memory-retrieve-hook.cjs');
   const lint = find('lint-auto-gate.js');
   const pressure = find('context-pressure-warn.cjs');
-  const stop = find('stop-runner.cjs');
-  // settings 的 hook timeout 单位是**秒**; stop-runner 命令行末尾那个预算
-  // 参数是脚本自己的参数, 单位是**毫秒** —— 比较前必须换算, 否则
-  // "40 > 30000" 永远为假。
-  const innerStopBudgetMs = Number((stop?.command.match(/\s(\d+)$/) || [])[1] || 0);
+  const watchdog = find('progress-watchdog.cjs');
+  const staleStopRunner = find('stop-runner.cjs');
+  const manifestValidation = validateHookManifest();
   const allTimeouts = entries
     .map((entry) => entry.raw?.timeout)
     .filter((value) => typeof value === 'number');
   const checks = {
-    memory: memory?.raw?.timeout === 5,
-    lint: lint?.raw?.timeout === 45,
-    pressure: pressure?.raw?.timeout === 5,
-    stop: stop?.raw?.timeout === 40 && stop.raw.timeout * 1000 > innerStopBudgetMs,
-    stopAsync: stop?.isAsync === true,
+    prompt: prompt?.point === 'UserPromptSubmit'
+      && prompt?.raw?.timeout === 8
+      && prompt?.isAsync === false,
+    preflight: preflight?.point === 'PreToolUse'
+      && preflight?.raw?.timeout === 20
+      && preflight?.isAsync === false,
+    postflight: postflight.length === 2
+      && postflight.every((entry) => entry.raw?.timeout <= 12 && entry.isAsync === false),
+    stopSummary: stopSummary?.raw?.timeout === 8 && stopSummary?.isAsync === false,
+    stopObserver: stopObserver?.raw?.timeout === 30 && stopObserver?.isAsync === true,
+    internalHooksRetired: !memory && !pressure && !watchdog,
+    lintRetired: !lint,
+    staleStopRunnerRetired: !staleStopRunner,
+    manifestMatchesSettings: manifestValidation.errors.length === 0,
     // 通用单位守卫: 任何 >600 的值几乎必然是误按毫秒填写的。
     unitsAreSeconds: allTimeouts.every((value) => value <= 600),
   };
@@ -1086,11 +1126,14 @@ define('HookRegistry', 'high-frequency and Stop hooks have bounded timeout contr
     detail: JSON.stringify({
       checks,
       values: {
-        memory: memory?.raw?.timeout,
+        prompt: prompt?.raw?.timeout,
+        preflight: preflight?.raw?.timeout,
+        postflight: postflight.map(entry => entry.raw?.timeout),
         lint: lint?.raw?.timeout,
-        pressure: pressure?.raw?.timeout,
-        stop: stop?.raw?.timeout,
-        innerStopBudgetMs,
+        stopSummary: stopSummary?.raw?.timeout,
+        stopObserver: stopObserver?.raw?.timeout,
+        staleStopRunner: staleStopRunner?.command || null,
+        manifestErrors: manifestValidation.errors,
       },
     }),
   };
@@ -1186,6 +1229,10 @@ define('SchemaCatalog', 'catalog covers every parseable schema exactly once', ()
 define('HookRegistry', 'loop scope guard covers every controlled PreToolUse action', () => {
   const settings = JSON.parse(fs.readFileSync(path.join(HOME, 'settings.json'), 'utf8'));
   const groups = settings.hooks?.PreToolUse || [];
+  const routerSource = fs.readFileSync(
+    path.join(HOME, 'engine/scripts/hooks/preflight-router.cjs'),
+    'utf8',
+  );
   const controlledTools = ['Bash', 'Edit', 'Write', 'MultiEdit', 'Agent', 'Task', 'Workflow'];
   const missing = [];
 
@@ -1193,10 +1240,12 @@ define('HookRegistry', 'loop scope guard covers every controlled PreToolUse acti
     const matchingGroups = groups.filter((group) => String(group.matcher || '*').split('|').includes('*')
       || String(group.matcher || '').split('|').includes(tool));
     const commands = matchingGroups.flatMap((group) => group.hooks || []).map((hook) => String(hook.command || ''));
-    const ledgerIndex = commands.findIndex((command) => command.includes('agent-transparency-ledger.cjs'));
-    const gateIndex = commands.findIndex((command) => command.includes('tool-action-contract-gate.cjs'));
-    if (ledgerIndex < 0 || gateIndex < 0 || ledgerIndex > gateIndex) missing.push(tool);
+    if (!commands.some((command) => command.includes('preflight-router.cjs'))) missing.push(tool);
   }
+
+  const ledgerIndex = routerSource.indexOf("require('./agent-transparency-ledger.cjs')");
+  const gateIndex = routerSource.indexOf("require('./tool-action-contract-gate.cjs')");
+  if (ledgerIndex < 0 || gateIndex < 0 || ledgerIndex > gateIndex) missing.push('ledger-to-contract-order');
 
   return {
     pass: missing.length === 0,
@@ -1221,7 +1270,7 @@ define('HookRegistry', 'legacy dry-run 入口使用统一注册表', () => {
 });
 
 define('HookRegistry', 'repair stop-loss is registered in effective settings without local duplicates', () => {
-  const { collectHookEntries, validateHookScripts } = require('../lib/hook-registry.cjs');
+  const { collectHookEntries, validateHookManifest, validateHookScripts } = require('../lib/hook-registry.cjs');
   const effectiveSettings = path.join(HOME, 'settings.json');
   const localSettings = path.join(HOME, 'settings.local.json');
   const entries = collectHookEntries({ files: [effectiveSettings] });
@@ -1229,22 +1278,47 @@ define('HookRegistry', 'repair stop-loss is registered in effective settings wit
   const watchdogEntries = entries.filter((entry) => entry.command.includes('progress-watchdog.cjs'));
   const localRepairEntries = localEntries.filter((entry) =>
     entry.command.includes('progress-watchdog.cjs') || entry.command.includes('repair-content-gate.cjs'));
-  const hasEntry = (point, matcher, fragment) => entries.some((entry) =>
-    entry.point === point && entry.matcher === matcher && entry.command.includes(fragment));
+  const matcherCovers = (matcher, tool) => matcher === '*'
+    || String(matcher || '').split('|').includes(tool);
+  const hasEntry = (point, tool, fragment) => entries.some((entry) =>
+    entry.point === point
+      && matcherCovers(entry.matcher, tool)
+      && entry.command.includes(fragment));
+  const preflight = entries.find((entry) => entry.point === 'PreToolUse'
+    && entry.matcher === '*' && entry.command.includes('preflight-router.cjs'));
+  const preflightSource = fs.readFileSync(
+    path.join(HOME, 'engine/scripts/hooks/preflight-router.cjs'),
+    'utf8',
+  );
+  const postflightSource = fs.readFileSync(
+    path.join(HOME, 'engine/scripts/hooks/postflight-router.cjs'),
+    'utf8',
+  );
+  const stopSource = fs.readFileSync(
+    path.join(HOME, 'engine/scripts/hooks/stop-summary.cjs'),
+    'utf8',
+  );
   const validation = validateHookScripts({ files: [effectiveSettings] });
-  const pass = hasEntry('PreToolUse', '*', 'progress-watchdog.cjs')
-    && hasEntry('PostToolUse', 'Bash', 'progress-watchdog.cjs')
-    && hasEntry('Stop', '*', 'progress-watchdog.cjs')
+  const manifestValidation = validateHookManifest({ files: [effectiveSettings] });
+  const pass = Boolean(preflight)
+    && preflightSource.includes("require('../../hooks/session/progress-watchdog.cjs')")
+    && preflightSource.includes("require('./repair-content-gate.cjs')")
+    && postflightSource.includes("require('../../hooks/session/progress-watchdog.cjs')")
+    && stopSource.includes("require('../../hooks/session/progress-watchdog.cjs')")
+    && hasEntry('PostToolUse', 'Bash', 'postflight-router.cjs')
+    && hasEntry('PostToolUseFailure', '*', 'postflight-router.cjs')
+    && hasEntry('Stop', '*', 'stop-summary.cjs')
+    && watchdogEntries.length === 0
     // 2026-07-27: --enforce 已从注册处移除 —— CLI 旗标会覆盖
     // PROGRESS_WATCHDOG_MODE=observe (settings.local.json), 曾把 8 次
     // 误判的"无进展"直接升级成全工具冻结。模式只由 env 决定。
-    && watchdogEntries.every((entry) => !entry.command.includes('--enforce'))
-    && hasEntry('PreToolUse', 'Edit|Write|MultiEdit', 'repair-content-gate.cjs')
+    && entries.every((entry) => !entry.command.includes('--enforce'))
     && localRepairEntries.length === 0
-    && validation.missing.length === 0;
+    && validation.missing.length === 0
+    && manifestValidation.errors.length === 0;
   return {
     pass,
-    detail: `watchdog=${watchdogEntries.map((entry) => `${entry.point}:${entry.matcher}:${entry.command}`).join('|')} localDuplicates=${localRepairEntries.length} missing=${validation.missing.length}`,
+    detail: `directWatchdog=${watchdogEntries.length} localDuplicates=${localRepairEntries.length} missing=${validation.missing.length} manifestErrors=${manifestValidation.errors.length}`,
   };
 });
 
@@ -2223,6 +2297,52 @@ define('PainpointRegression', 'harness-painpoints.cjs 全部通过', () => {
   return { pass: r.status === 0, detail: `exit=${r.status}` };
 });
 
+const AUDIT_REMEDIATION_CONTRACTS = [
+  ['DAG cancellation', 'dag-cancellation.cjs', 30000],
+  ['controlled gate bypass', 'gate-bypass-contract.test.cjs', 30000],
+  ['Git and CI reproducibility', 'git-ci-repro-contract.test.cjs', 30000],
+  ['single-process preflight router', 'preflight-router-contract.cjs', 30000],
+  ['single-process prompt context', 'prompt-context-contract.cjs', 30000],
+  ['single-process postflight state', 'postflight-router-contract.cjs', 30000],
+  ['single-process lifecycle routing', 'lifecycle-router-contract.cjs', 30000],
+  ['observer process consolidation', 'observer-consolidation-contract.cjs', 30000],
+  ['active hook manifest', 'hook-manifest-contract.cjs', 30000],
+  ['memory consumer and promotion lifecycle', 'memory-consumer-promotion-contract.test.cjs', 60000],
+  ['read-only hook side effects', 'read-only-hooks.cjs', 30000],
+  ['state concurrency', 'state-concurrency.cjs', 60000],
+  ['statusline hot path', 'statusline-contract.cjs', 30000],
+  ['transparency privacy and retention', 'transparency-retention.cjs', 30000],
+];
+
+for (const [name, relative, timeout] of AUDIT_REMEDIATION_CONTRACTS) {
+  define('AuditRemediationContracts', name, () => {
+    const p = path.join(HOME, 'engine/scripts/test-hooks', relative);
+    if (!fs.existsSync(p)) return { pass: false, detail: `${relative} 不存在` };
+    const nodeArgs = relative === 'dag-cancellation.cjs'
+      ? ['--unhandled-rejections=strict', p]
+      : [p];
+    const r = spawnSync(process.execPath, nodeArgs, {
+      cwd: HOME,
+      encoding: 'utf8',
+      timeout,
+      windowsHide: true,
+      env: {
+        ...process.env,
+        CLAUDE_HARNESS_NO_PERSIST: '1',
+        CLAUDE_HARNESS_VERIFY_READONLY: '1',
+        CLAUDE_NO_DIAGNOSTIC_WRITES: '1',
+      },
+    });
+    const passed = r.status === 0 && !r.error && !r.signal;
+    return {
+      pass: passed,
+      detail: passed
+        ? `exit=0 (${relative})`
+        : `exit=${r.status} signal=${r.signal || 'none'} ${(r.stderr || r.stdout || r.error?.message || '').slice(-400)}`,
+    };
+  });
+}
+
 define('WorkflowContracts', 'workflow-contracts.cjs 全部通过', () => {
   const p = path.join(HOME, 'engine/scripts/test-hooks/workflow-contracts.cjs');
   if (!fs.existsSync(p)) return { pass: false, detail: 'workflow-contracts.cjs 不存在' };
@@ -2970,8 +3090,17 @@ define('MemoryKnowledge', 'memory summaries strip frontmatter', () => {
       content: '---\nname: frontmatter-summary-test\n---\n# Useful Body\nBody details for retrieval.',
       confidence: 0.9,
       source: 'test',
+      scopeKind: 'global_harness',
+      triggerKind: 'user_query',
+      verificationState: 'verified',
+      evidenceRef: 'test:frontmatter-summary',
+      validUntil: Date.now() + 86_400_000,
     }, { db: wDb.db });
-    const rows = retrieveMemorySummary('Useful Body', { db: wDb.db, maxChars: 200 });
+    const rows = retrieveMemorySummary('Useful Body', {
+      db: wDb.db,
+      maxChars: 200,
+      scope: { triggerKind: 'user_query' },
+    });
     const summary = rows[0]?.summary || '';
     const pass = summary.includes('Useful Body') && !summary.startsWith('---');
     return { pass, detail: pass ? summary.slice(0, 80) : `bad summary: ${summary}` };
@@ -2999,6 +3128,636 @@ define('MemoryKnowledge', 'maintenance dry-run is runnable and side-effect safe'
   }
   const pass = result.mode === 'dry-run' && result.counts && !result.summaryFile;
   return { pass, detail: pass ? `memory=${result.counts.memoryCandidates}, literature=${result.counts.knowledgeCandidates}` : 'invalid dry-run result' };
+});
+
+// Phase 0: memory producer and Dream safety contracts.
+
+define('MemoryPhase0', 'success hooks do not manufacture memory signals or Markdown', () => {
+  const settings = JSON.parse(fs.readFileSync(path.join(HOME, 'settings.json'), 'utf8'));
+  const commandsAt = point => (settings.hooks?.[point] || [])
+    .flatMap(group => group.hooks || [])
+    .map(hook => String(hook.command || ''));
+  const successCommands = commandsAt('PostToolUse');
+  const failureCommands = commandsAt('PostToolUseFailure');
+  const staleDriftProducer = successCommands.find(command => /\bdrift_stuck\b/.test(command));
+  const successObserver = successCommands.find(command => command.includes('postflight-observer.cjs'));
+  const successMarkdownProducer = successCommands.find(command => command.includes('auto-record-success.sh'));
+  const failureObserver = failureCommands.find(command => command.includes('postflight-observer.cjs'));
+  const legacyCollector = [...successCommands, ...failureCommands]
+    .find(command => command.includes('signal-collector.cjs'));
+  const pass = !staleDriftProducer && !successMarkdownProducer && !legacyCollector
+    && Boolean(successObserver) && Boolean(failureObserver);
+  return {
+    pass,
+    detail: pass
+      ? 'single postflight observer routes success/failure without synthetic drift'
+      : `drift=${Boolean(staleDriftProducer)} successObserver=${Boolean(successObserver)} markdown=${Boolean(successMarkdownProducer)} failureObserver=${Boolean(failureObserver)} legacyCollector=${Boolean(legacyCollector)}`,
+  };
+});
+
+define('MemoryPhase0', 'real PostToolUseFailure payload records one scoped tool_fail event', () => {
+  const collector = require(path.join(HOME, 'engine/hooks/learning/signal-collector.cjs'));
+  if (typeof collector.collectHookPayload !== 'function') {
+    return { pass: false, detail: 'collectHookPayload export missing' };
+  }
+  const { openDb } = require(path.join(HOME, 'engine/sqlite/index.cjs'));
+  const { sinceWatermark } = require(path.join(HOME, 'engine/sqlite/store-events.cjs'));
+  const oldLog = console.log;
+  let wDb;
+  try {
+    console.log = () => {};
+    wDb = openDb({ path: ':memory:' });
+    const recorded = collector.collectHookPayload({
+      hook_event_name: 'PostToolUseFailure',
+      session_id: 'phase0-real-session',
+      tool_name: 'Bash',
+      tool_input: { command: 'node missing-script.cjs' },
+      error: 'spawn node ENOENT',
+      is_interrupt: false,
+    }, { db: wDb.db });
+    const events = sinceWatermark(0, 10, { db: wDb.db });
+    const event = events[0];
+    const pass = recorded === true
+      && events.length === 1
+      && event?.sessionId === 'phase0-real-session'
+      && event?.type === 'tool_fail'
+      && event?.payload?.tool === 'Bash'
+      && event?.payload?.error === 'spawn node ENOENT'
+      && !Object.hasOwn(event?.payload || {}, 'stdinPreview');
+    return { pass, detail: pass ? 'real payload preserved without raw stdin' : JSON.stringify(events) };
+  } finally {
+    console.log = oldLog;
+    if (wDb) wDb.close();
+  }
+});
+
+define('MemoryPhase0', 'Dream startup counts every event after the watermark', () => {
+  const startup = require(path.join(HOME, 'engine/scripts/dream-startup-inject.cjs'));
+  if (typeof startup.getUnprocessedEventCount !== 'function') {
+    return { pass: false, detail: 'getUnprocessedEventCount export missing' };
+  }
+  const { openDb } = require(path.join(HOME, 'engine/sqlite/index.cjs'));
+  const events = require(path.join(HOME, 'engine/sqlite/store-events.cjs'));
+  const oldLog = console.log;
+  let wDb;
+  try {
+    console.log = () => {};
+    wDb = openDb({ path: ':memory:' });
+    const ids = [];
+    for (let i = 0; i < 7; i++) {
+      ids.push(events.record({ sessionId: 'phase0-count', type: 'rule_load', payload: { i } }, null, { db: wDb.db }));
+    }
+    events.setWatermark(ids[1], { db: wDb.db });
+    const result = startup.getUnprocessedEventCount({ db: wDb.db });
+    const pass = result.count === 5 && result.watermark === ids[1];
+    return { pass, detail: `count=${result.count} watermark=${result.watermark}` };
+  } finally {
+    console.log = oldLog;
+    if (wDb) wDb.close();
+  }
+});
+
+define('MemoryPhase0', 'Dream dry-run leaves facts, skills, and watermark unchanged', () => {
+  const dreamPath = path.join(HOME, 'engine/scripts/dream-consolidate.cjs');
+  const source = fs.readFileSync(dreamPath, 'utf8');
+  if (!source.includes('if (require.main === module)')) {
+    return { pass: false, detail: 'Dream CLI is not require-safe' };
+  }
+  const dream = require(dreamPath);
+  if (typeof dream.runDream !== 'function') {
+    return { pass: false, detail: 'runDream export missing' };
+  }
+  const { openDb } = require(path.join(HOME, 'engine/sqlite/index.cjs'));
+  const { writeMemory } = require(path.join(HOME, 'engine/sqlite/store-memory.cjs'));
+  const events = require(path.join(HOME, 'engine/sqlite/store-events.cjs'));
+  const oldLog = console.log;
+  let wDb;
+  try {
+    console.log = () => {};
+    wDb = openDb({ path: ':memory:' });
+    const { id: factId } = writeMemory({
+      namespace: 'learnings',
+      name: 'phase0-dry-run-fact',
+      description: 'must not change in dry-run',
+      content: 'dry-run sentinel',
+      confidence: 0.4,
+      source: 'test',
+    }, { db: wDb.db });
+    wDb.db.prepare('UPDATE facts SET hit_count = 3 WHERE id = ?').run(factId);
+    events.record({ sessionId: 'phase0-dry-run', type: 'rule_load', payload: { file: '00-core.md' } }, null, { db: wDb.db });
+    const snapshot = () => JSON.stringify({
+      facts: wDb.db.prepare('SELECT id, confidence, hit_count FROM facts ORDER BY id').all(),
+      skills: wDb.db.prepare('SELECT name, tier FROM skills ORDER BY name').all(),
+      watermark: events.getWatermark({ db: wDb.db }),
+    });
+    const before = snapshot();
+    dream.runDream({ dryRun: true, db: wDb.db, logger: () => {} });
+    const after = snapshot();
+    return { pass: before === after, detail: before === after ? 'database unchanged' : `before=${before} after=${after}` };
+  } finally {
+    console.log = oldLog;
+    if (wDb) wDb.close();
+  }
+});
+
+define('MemoryLifecycle', 'LIKE fallback ignores polluted hit counts and ranks by trust freshness deterministically', () => {
+  const { openDb } = require(path.join(HOME, 'engine/sqlite/index.cjs'));
+  const { writeMemory, retrieveMemory } = require(path.join(HOME, 'engine/sqlite/store-memory.cjs'));
+  let wDb;
+  try {
+    wDb = openDb({ path: ':memory:' });
+    const createFact = (name, content, confidence) => writeMemory({
+      namespace: 'learnings',
+      name,
+      content,
+      description: name,
+      confidence,
+      source: 'test',
+      scopeKind: 'global_harness',
+      triggerKind: 'user_query',
+      verificationState: 'verified',
+      evidenceRef: 'test:like-fallback-ranking',
+      validUntil: Date.now() + 86_400_000,
+    }, { db: wDb.db });
+    const polluted = createFact('polluted-old', '历史前缀排序锚点后缀低可信事实', 0.4);
+    const trustedOld = createFact('trusted-old', '较旧前缀排序锚点后缀可信事实', 0.9);
+    const tiedA = createFact('trusted-tie-a', '新版甲前缀排序锚点后缀可信事实', 0.9);
+    const tiedB = createFact('trusted-tie-b', '新版乙前缀排序锚点后缀可信事实', 0.9);
+
+    const setRankInputs = wDb.db.prepare(`
+      UPDATE facts SET hit_count = ?, created_at = ?, updated_at = ? WHERE id = ?
+    `);
+    setRankInputs.run(1_000_000_000, 100, 100, polluted.id);
+    setRankInputs.run(100_000_000, 200, 200, trustedOld.id);
+    setRankInputs.run(0, 300, 300, tiedA.id);
+    setRankInputs.run(999_999_999, 300, 300, tiedB.id);
+
+    const results = retrieveMemory('排序锚点', {
+      db: wDb.db,
+      namespaces: ['learnings'],
+      limit: 10,
+      minConfidence: 0,
+      trackHit: false,
+      scope: { triggerKind: 'user_query' },
+    });
+    const deterministicTie = [tiedA.id, tiedB.id].sort();
+    const expected = [...deterministicTie, trustedOld.id, polluted.id];
+    const actual = results.map(row => row.id);
+    const pass = results.length === 4
+      && results.every(row => row.score === 0)
+      && JSON.stringify(actual) === JSON.stringify(expected);
+    return {
+      pass,
+      detail: pass
+        ? `order=${actual.join(',')}`
+        : `expected=${expected.join(',')} actual=${actual.join(',')} scores=${results.map(row => row.score).join(',')}`,
+    };
+  } finally {
+    if (wDb) wDb.close();
+  }
+});
+
+define('MemoryLifecycle', 'collector refuses events without a stable session identity', () => {
+  const collector = require(path.join(HOME, 'engine/hooks/learning/signal-collector.cjs'));
+  const { openDb } = require(path.join(HOME, 'engine/sqlite/index.cjs'));
+  const events = require(path.join(HOME, 'engine/sqlite/store-events.cjs'));
+  let wDb;
+  try {
+    wDb = openDb({ path: ':memory:' });
+    const missing = collector.emitSync('user_correct', { message: 'missing session' }, { db: wDb.db });
+    const stable = collector.emitSync('user_correct', { message: 'stable session' }, {
+      db: wDb.db,
+      hookPayload: { session_id: 'memory-lifecycle-session' },
+    });
+    const rows = events.sinceWatermark(0, 10, { db: wDb.db });
+    const pass = missing === false
+      && stable === true
+      && rows.length === 1
+      && rows[0].sessionId === 'memory-lifecycle-session';
+    return { pass, detail: `missing=${missing} stable=${stable} rows=${JSON.stringify(rows)}` };
+  } finally {
+    if (wDb) wDb.close();
+  }
+});
+
+define('MemoryLifecycle', 'collector exposes causal lifecycle signals for postflight observers', () => {
+  const collector = require(path.join(HOME, 'engine/hooks/learning/signal-collector.cjs'));
+  if (typeof collector.recordLifecycleSignal !== 'function') {
+    return { pass: false, detail: 'recordLifecycleSignal export missing' };
+  }
+  const { openDb } = require(path.join(HOME, 'engine/sqlite/index.cjs'));
+  const events = require(path.join(HOME, 'engine/sqlite/store-events.cjs'));
+  let wDb;
+  try {
+    wDb = openDb({ path: ':memory:' });
+    const hookPayload = { session_id: 'memory-causal-session' };
+    const accepted = [
+      collector.recordLifecycleSignal('user_correct', hookPayload, { message: 'expected RED first' }, { db: wDb.db }),
+      collector.recordLifecycleSignal('verification_pass', hookPayload, { command: 'node test.cjs', evidence: '12/12' }, { db: wDb.db }),
+      collector.recordLifecycleSignal('resolution', hookPayload, { rootCause: 'shared watermark', fix: 'consumer scope' }, { db: wDb.db }),
+    ];
+    const rows = events.sinceWatermark(0, 10, { db: wDb.db });
+    const pass = accepted.every(Boolean)
+      && rows.map(row => row.type).join(',') === 'user_correct,verification_pass,resolution'
+      && rows.every(row => row.sessionId === 'memory-causal-session')
+      && rows[2]?.payload?.rootCause === 'shared watermark';
+    return { pass, detail: `accepted=${accepted.join(',')} rows=${JSON.stringify(rows)}` };
+  } finally {
+    if (wDb) wDb.close();
+  }
+});
+
+define('MemoryLifecycle', 'Dream and Skill-Evolve use independent consumer watermarks', () => {
+  const { openDb } = require(path.join(HOME, 'engine/sqlite/index.cjs'));
+  const events = require(path.join(HOME, 'engine/sqlite/store-events.cjs'));
+  let wDb;
+  try {
+    wDb = openDb({ path: ':memory:' });
+    events.setWatermark(11, { db: wDb.db, consumer: 'dream' });
+    events.setWatermark(4, { db: wDb.db, consumer: 'skill-evolve' });
+    const dream = events.getWatermark({ db: wDb.db, consumer: 'dream' });
+    const skill = events.getWatermark({ db: wDb.db, consumer: 'skill-evolve' });
+    const defaultConsumer = events.getWatermark({ db: wDb.db });
+    const pass = dream === 11 && skill === 4 && defaultConsumer === dream;
+    return { pass, detail: `dream=${dream} skill=${skill} default=${defaultConsumer}` };
+  } finally {
+    if (wDb) wDb.close();
+  }
+});
+
+define('MemoryLifecycle', 'event retention deletes only expired events consumed by every consumer', () => {
+  const { openDb } = require(path.join(HOME, 'engine/sqlite/index.cjs'));
+  const events = require(path.join(HOME, 'engine/sqlite/store-events.cjs'));
+  if (typeof events.purgeConsumedEvents !== 'function') {
+    return { pass: false, detail: 'purgeConsumedEvents export missing' };
+  }
+  let wDb;
+  try {
+    wDb = openDb({ path: ':memory:' });
+    const old = '2025-01-01T00:00:00.000Z';
+    const recent = new Date().toISOString();
+    const first = events.record({ sessionId: 'retention', type: 'tool_fail' }, old, { db: wDb.db });
+    const second = events.record({ sessionId: 'retention', type: 'tool_fail' }, old, { db: wDb.db });
+    const dreamOnly = events.record({ sessionId: 'retention', type: 'tool_fail' }, old, { db: wDb.db });
+    const fresh = events.record({ sessionId: 'retention', type: 'tool_fail' }, recent, { db: wDb.db });
+    events.setWatermark(dreamOnly, { db: wDb.db, consumer: 'dream' });
+    events.setWatermark(second, { db: wDb.db, consumer: 'skill-evolve' });
+    const result = events.purgeConsumedEvents(30, { db: wDb.db });
+    const remaining = events.sinceWatermark(0, 10, { db: wDb.db });
+    const pass = result.deleted === 2
+      && result.safeWatermark === second
+      && remaining.map(row => row.eventId).join(',') === `${dreamOnly},${fresh}`
+      && !remaining.some(row => row.eventId === first);
+    return { pass, detail: `result=${JSON.stringify(result)} remaining=${JSON.stringify(remaining)}` };
+  } finally {
+    if (wDb) wDb.close();
+  }
+});
+
+define('MemoryLifecycle', 'Dream consumes a bounded batch and writes review-only candidates', () => {
+  const { openDb } = require(path.join(HOME, 'engine/sqlite/index.cjs'));
+  const events = require(path.join(HOME, 'engine/sqlite/store-events.cjs'));
+  const dream = require(path.join(HOME, 'engine/scripts/dream-consolidate.cjs'));
+  let wDb;
+  try {
+    wDb = openDb({ path: ':memory:' });
+    const ids = [];
+    for (let i = 0; i < 6; i++) {
+      ids.push(events.record({
+        sessionId: `dream-candidate-${i}`,
+        type: 'user_correct',
+        payload: { message: 'Always prove RED before implementation' },
+      }, null, { db: wDb.db }));
+    }
+    const result = dream.runDream({ db: wDb.db, maxEvents: 3, logger: () => {} });
+    const facts = wDb.db.prepare(`
+      SELECT namespace, source, confidence, content FROM facts
+      WHERE source = 'script:dream'
+    `).all();
+    const pass = result.processed === 3
+      && result.pending === 3
+      && result.watermarkBefore === 0
+      && result.watermarkAfter === ids[2]
+      && events.getWatermark({ db: wDb.db, consumer: 'dream' }) === ids[2]
+      && facts.length >= 1
+      && facts.every(fact => fact.namespace === 'learnings'
+        && fact.confidence <= 0.4
+        && fact.content.includes('review_required'));
+    return { pass, detail: `result=${JSON.stringify(result)} facts=${JSON.stringify(facts)}` };
+  } finally {
+    if (wDb) wDb.close();
+  }
+});
+
+define('MemoryLifecycle', 'Dream startup injects only explicitly verified learnings, never review candidates', () => {
+  const { openDb } = require(path.join(HOME, 'engine/sqlite/index.cjs'));
+  const { writeMemory } = require(path.join(HOME, 'engine/sqlite/store-memory.cjs'));
+  const startup = require(path.join(HOME, 'engine/scripts/dream-startup-inject.cjs'));
+  if (!startup.getRecentDreamLearnings.toString().includes('opts = {}')) {
+    return { pass: false, detail: 'getRecentDreamLearnings has no injected DB contract' };
+  }
+  let wDb;
+  try {
+    wDb = openDb({ path: ':memory:' });
+    const add = (name, source = 'script:dream', namespace = 'learnings', status = 'review_required') => writeMemory({
+      namespace,
+      name,
+      description: name,
+      content: `status: ${status}\n${name}`,
+      source,
+      confidence: status === 'verified' ? 0.9 : 0.4,
+      ttlDays: 90,
+      scopeKind: 'global_harness',
+      triggerKind: 'session_start',
+      verificationState: status === 'verified' ? 'verified' : 'candidate',
+      evidenceRef: status === 'verified' ? 'test:dream-startup-learning' : null,
+      validUntil: status === 'verified' ? Date.now() + 86_400_000 : null,
+    }, { db: wDb.db }).id;
+    add('review-required-dream-candidate');
+    const valid = add('verified-dream-learning', 'script:dream', 'learnings', 'verified');
+    const expired = add('expired-dream-candidate');
+    const old = add('old-dream-candidate');
+    const superseded = add('superseded-dream-candidate');
+    add('manual-learning', 'user');
+    add('wrong-namespace', 'script:dream', 'errors');
+    wDb.db.prepare('UPDATE facts SET ttl_until = ? WHERE id = ?').run(Date.now() - 1, expired);
+    wDb.db.prepare('UPDATE facts SET created_at = ? WHERE id = ?').run(Date.parse('2020-01-01T00:00:00.000Z'), old);
+    wDb.db.prepare("UPDATE facts SET status = 'superseded' WHERE id = ?").run(superseded);
+    const rows = startup.getRecentDreamLearnings(30, { db: wDb.db });
+    const pass = rows.length === 1 && rows[0].id === valid && rows[0].name === 'verified-dream-learning';
+    return { pass, detail: JSON.stringify(rows) };
+  } finally {
+    if (wDb) wDb.close();
+  }
+});
+
+define('MemoryLifecycle', 'SessionStart runs bounded Dream consumption instead of repeated preview', () => {
+  const { openDb } = require(path.join(HOME, 'engine/sqlite/index.cjs'));
+  const events = require(path.join(HOME, 'engine/sqlite/store-events.cjs'));
+  const startup = require(path.join(HOME, 'engine/scripts/dream-startup-inject.cjs'));
+  if (typeof startup.runStartup !== 'function') {
+    return { pass: false, detail: 'runStartup export missing' };
+  }
+  let wDb;
+  try {
+    wDb = openDb({ path: ':memory:' });
+    const ids = [];
+    for (let i = 0; i < 6; i++) {
+      ids.push(events.record({
+        sessionId: `startup-dream-${i}`,
+        type: 'user_correct',
+        payload: { message: 'retain causal evidence' },
+      }, null, { db: wDb.db }));
+    }
+    const result = startup.runStartup({
+      db: wDb.db,
+      minEvents: 5,
+      maxEvents: 3,
+      logger: () => {},
+    });
+    const pass = result?.dreamTriggered === true
+      && result?.dream?.processed === 3
+      && result?.dream?.pending === 3
+      && result?.pendingEvents === 3
+      && events.getWatermark({ db: wDb.db, consumer: 'dream' }) === ids[2];
+    return { pass, detail: JSON.stringify(result) };
+  } finally {
+    if (wDb) wDb.close();
+  }
+});
+
+define('MemoryLifecycle', 'Skill-Evolve is require-safe for injected lifecycle tests', () => {
+  const skillPath = path.join(HOME, 'engine/scripts/skill-evolve.cjs');
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'skill-evolve-require-'));
+  const dbPath = path.join(tmp, 'memory.db');
+  const { openDb } = require(path.join(HOME, 'engine/sqlite/index.cjs'));
+  const initialized = openDb({ path: dbPath });
+  initialized.close();
+  const script = `require(${JSON.stringify(skillPath)}); process.stdout.write('loaded');`;
+  const result = spawnSync(process.execPath, ['-e', script], {
+    encoding: 'utf8',
+    timeout: 15_000,
+    windowsHide: true,
+    env: { ...process.env, CLAUDE_SQLITE_PATH: dbPath },
+  });
+  fs.rmSync(tmp, { recursive: true, force: true });
+  const pass = result.status === 0 && result.stdout === 'loaded';
+  return { pass, detail: `exit=${result.status} stdout=${JSON.stringify(result.stdout)} stderr=${JSON.stringify(result.stderr)}` };
+});
+
+define('MemoryLifecycle', 'Skill-Evolve commits its exact watermark only after a successful terminal outcome', () => {
+  const skillPath = path.join(HOME, 'engine/scripts/skill-evolve.cjs');
+  const source = fs.readFileSync(skillPath, 'utf8');
+  const skill = require(skillPath);
+  if (typeof skill.runSkillEvolve !== 'function') {
+    return { pass: false, detail: 'runSkillEvolve export missing' };
+  }
+  if (source.includes('setMyWatermark(999999)')) {
+    return { pass: false, detail: '999999 sentinel watermark still present' };
+  }
+  const assert = require('node:assert/strict');
+  const { openDb } = require(path.join(HOME, 'engine/sqlite/index.cjs'));
+  const events = require(path.join(HOME, 'engine/sqlite/store-events.cjs'));
+  let wDb;
+  try {
+    wDb = openDb({ path: ':memory:' });
+    const first = events.record({
+      sessionId: 'skill-watermark',
+      type: 'user_correct',
+      payload: { message: 'preserve RED' },
+    }, null, { db: wDb.db });
+    events.setWatermark(first, { db: wDb.db, consumer: 'dream' });
+    const suggestion = { op: 'add', skill: 'tdd', section: 'rules', content: 'defer commit', source: 'test' };
+    const base = {
+      db: wDb.db,
+      logger: () => {},
+      mineFn: () => [suggestion],
+      validateFn: values => values.map(value => ({ ...value, valid: true })),
+      gateFn: values => values,
+      stageFn: () => ({ staged: 1 }),
+    };
+
+    assert.throws(
+      () => skill.runSkillEvolve({ ...base, validateFn: () => { throw new Error('validate exploded'); } }),
+      /validate exploded/,
+    );
+    const afterValidateFailure = events.getWatermark({ db: wDb.db, consumer: 'skill-evolve' });
+    assert.throws(
+      () => skill.runSkillEvolve({ ...base, stageFn: () => { throw new Error('stage exploded'); } }),
+      /stage exploded/,
+    );
+    const afterStageFailure = events.getWatermark({ db: wDb.db, consumer: 'skill-evolve' });
+
+    const dry = skill.runSkillEvolve({ ...base, dryRun: true });
+    const afterDryRun = events.getWatermark({ db: wDb.db, consumer: 'skill-evolve' });
+    const staged = skill.runSkillEvolve(base);
+    const afterStage = events.getWatermark({ db: wDb.db, consumer: 'skill-evolve' });
+
+    const noActionEvent = events.record({
+      sessionId: 'skill-watermark',
+      type: 'rule_load',
+      payload: { file: '00-core.md' },
+    }, null, { db: wDb.db });
+    const noAction = skill.runSkillEvolve({ ...base, mineFn: () => [] });
+    const afterNoAction = events.getWatermark({ db: wDb.db, consumer: 'skill-evolve' });
+
+    for (let i = 0; i < 101; i++) {
+      events.record({ sessionId: 'skill-bound', type: 'rule_load', payload: { i } }, null, { db: wDb.db });
+    }
+    const bounded = skill.runSkillEvolve({ ...base, dryRun: true, limit: 1000 });
+    const finalSkillWatermark = events.getWatermark({ db: wDb.db, consumer: 'skill-evolve' });
+    const dreamWatermark = events.getWatermark({ db: wDb.db, consumer: 'dream' });
+    const pass = afterValidateFailure === 0
+      && afterStageFailure === 0
+      && dry.processed === 0
+      && afterDryRun === 0
+      && staged.status === 'staged'
+      && staged.processed === 1
+      && afterStage === first
+      && noAction.status === 'no-action'
+      && noAction.processed === 1
+      && afterNoAction === noActionEvent
+      && bounded.inspected === 100
+      && bounded.processed === 0
+      && finalSkillWatermark === noActionEvent
+      && dreamWatermark === first;
+    return {
+      pass,
+      detail: `validate=${afterValidateFailure} stageFail=${afterStageFailure} dry=${JSON.stringify(dry)} staged=${JSON.stringify(staged)} noAction=${JSON.stringify(noAction)} bounded=${JSON.stringify(bounded)}`,
+    };
+  } finally {
+    if (wDb) wDb.close();
+  }
+});
+
+define('MemoryLifecycle', 'SessionStart Dream hook emits exactly one JSON line', () => {
+  const startupPath = path.join(HOME, 'engine/scripts/dream-startup-inject.cjs');
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'dream-startup-output-'));
+  const dbPath = path.join(tmp, 'memory.db');
+  const { openDb } = require(path.join(HOME, 'engine/sqlite/index.cjs'));
+  const events = require(path.join(HOME, 'engine/sqlite/store-events.cjs'));
+  const initialized = openDb({ path: dbPath });
+  for (let i = 0; i < 5; i++) {
+    events.record({
+      sessionId: `startup-output-${i}`,
+      type: 'user_correct',
+      payload: { message: 'single JSON hook output' },
+    }, null, { db: initialized.db });
+  }
+  initialized.close();
+  const result = spawnSync(process.execPath, [startupPath], {
+    encoding: 'utf8',
+    timeout: 15_000,
+    windowsHide: true,
+    env: { ...process.env, CLAUDE_SQLITE_PATH: dbPath },
+  });
+  fs.rmSync(tmp, { recursive: true, force: true });
+  const lines = result.stdout.trim().split(/\r?\n/).filter(Boolean);
+  let parsed = null;
+  if (lines.length === 1) parsed = JSON.parse(lines[0]);
+  const pass = result.status === 0
+    && lines.length === 1
+    && parsed?.source === 'dream-startup-inject'
+    && parsed?.dream?.processed === 5;
+  return { pass, detail: `exit=${result.status} lines=${lines.length} stdout=${JSON.stringify(result.stdout)}` };
+});
+
+define('MemoryLifecycle', 'repeated Dream patterns update one stable candidate instead of accumulating facts', () => {
+  const { openDb } = require(path.join(HOME, 'engine/sqlite/index.cjs'));
+  const events = require(path.join(HOME, 'engine/sqlite/store-events.cjs'));
+  const dream = require(path.join(HOME, 'engine/scripts/dream-consolidate.cjs'));
+  let wDb;
+  try {
+    wDb = openDb({ path: ':memory:' });
+    const recordCorrections = count => {
+      for (let i = 0; i < count; i++) {
+        events.record({
+          sessionId: `candidate-upsert-${count}-${i}`,
+          type: 'user_correct',
+          payload: { message: 'the same corrected workflow' },
+        }, null, { db: wDb.db });
+      }
+    };
+    recordCorrections(3);
+    dream.runDream({ db: wDb.db, maxEvents: 3, logger: () => {} });
+    recordCorrections(4);
+    dream.runDream({ db: wDb.db, maxEvents: 4, logger: () => {} });
+    const facts = wDb.db.prepare(`
+      SELECT id, source_key, content FROM facts
+      WHERE source = 'script:dream' AND status = 'active'
+    `).all();
+    const pass = facts.length === 1
+      && String(facts[0].source_key || '').startsWith('dream:')
+      && facts[0].content.includes('user_correct×4');
+    return { pass, detail: JSON.stringify(facts) };
+  } finally {
+    if (wDb) wDb.close();
+  }
+});
+
+define('MemoryLifecycle', 'Dream turns a verified resolution chain into an evidence-rich candidate', () => {
+  const { openDb } = require(path.join(HOME, 'engine/sqlite/index.cjs'));
+  const events = require(path.join(HOME, 'engine/sqlite/store-events.cjs'));
+  const dream = require(path.join(HOME, 'engine/scripts/dream-consolidate.cjs'));
+  let wDb;
+  try {
+    wDb = openDb({ path: ':memory:' });
+    const sessionId = 'verified-resolution-session';
+    events.record({ sessionId, type: 'tool_fail', payload: { tool: 'Dream', error: 'shared watermark overwrote progress' } }, null, { db: wDb.db });
+    events.record({
+      sessionId,
+      type: 'resolution',
+      payload: { rootCause: 'one global consumer watermark', fix: 'scope watermarks by consumer' },
+    }, null, { db: wDb.db });
+    events.record({
+      sessionId,
+      type: 'verification_pass',
+      payload: { command: 'node lifecycle-tests.cjs', evidence: '12/12 passed' },
+    }, null, { db: wDb.db });
+    const result = dream.runDream({ db: wDb.db, maxEvents: 3, logger: () => {} });
+    const facts = wDb.db.prepare(`
+      SELECT content FROM facts WHERE source = 'script:dream' AND status = 'active'
+    `).all();
+    const content = facts.map(fact => fact.content).join('\n');
+    const pass = result.candidatesWritten === 1
+      && facts.length === 1
+      && content.includes('verified_resolution')
+      && content.includes('one global consumer watermark')
+      && content.includes('scope watermarks by consumer')
+      && content.includes('12/12 passed');
+    return { pass, detail: `result=${JSON.stringify(result)} facts=${JSON.stringify(facts)}` };
+  } finally {
+    if (wDb) wDb.close();
+  }
+});
+
+define('MemoryLifecycle', 'Dream startup help is read-only and never consumes events', () => {
+  const startupPath = path.join(HOME, 'engine/scripts/dream-startup-inject.cjs');
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'dream-startup-help-'));
+  const dbPath = path.join(tmp, 'memory.db');
+  const { openDb } = require(path.join(HOME, 'engine/sqlite/index.cjs'));
+  const events = require(path.join(HOME, 'engine/sqlite/store-events.cjs'));
+  let db = openDb({ path: dbPath });
+  for (let i = 0; i < 5; i++) {
+    events.record({ sessionId: `startup-help-${i}`, type: 'user_correct', payload: { message: 'do not consume' } }, null, { db: db.db });
+  }
+  db.close();
+  const result = spawnSync(process.execPath, [startupPath, '--help'], {
+    encoding: 'utf8',
+    timeout: 15_000,
+    windowsHide: true,
+    env: { ...process.env, CLAUDE_SQLITE_PATH: dbPath },
+  });
+  db = openDb({ path: dbPath });
+  const watermark = events.getWatermark({ db: db.db, consumer: 'dream' });
+  const facts = db.db.prepare("SELECT COUNT(1) AS count FROM facts WHERE source = 'script:dream'").get().count;
+  db.close();
+  fs.rmSync(tmp, { recursive: true, force: true });
+  const pass = result.status === 0
+    && result.stdout.includes('Usage:')
+    && watermark === 0
+    && Number(facts) === 0;
+  return { pass, detail: `exit=${result.status} watermark=${watermark} facts=${facts} stdout=${JSON.stringify(result.stdout)}` };
 });
 
 // ── Suite 9: Diagnostic 工具 ──
@@ -3541,7 +4300,7 @@ function runSuite() {
   if (LIST_ONLY) {
     console.log('\n📋 可用测试:');
     const bySuite = {};
-    for (const t of tests) {
+    for (const t of tests.filter(test => !SUITE_FILTER || test.suite === SUITE_FILTER)) {
       if (!bySuite[t.suite]) bySuite[t.suite] = [];
       bySuite[t.suite].push(t.name);
     }
@@ -3554,10 +4313,11 @@ function runSuite() {
   }
 
   console.log('\n━━━ Hook 全量测试运行器 ━━━\n');
-  console.log(`测试总数: ${tests.length}\n`);
+  const selectedTests = tests.filter(test => !SUITE_FILTER || test.suite === SUITE_FILTER);
+  console.log(`测试总数: ${selectedTests.length}\n`);
 
   const bySuite = {};
-  for (const t of tests) {
+  for (const t of selectedTests) {
     if (!bySuite[t.suite]) bySuite[t.suite] = [];
     bySuite[t.suite].push(t);
   }

@@ -3,8 +3,8 @@
 /**
  * engine/scripts/dream-consolidate.cjs — Dream 提炼器。
  *
- * 分析运行时事件, 识别重复模式, 输出结构化的 Lessons。
- * 仿 xihe Dream: runtime events → pattern detection → confidence upgrade → write learnings.
+ * 分析运行时事件, 识别重复模式, 输出低置信、待人工审查的候选。
+ * runtime events → pattern detection → review-only candidates.
  *
  * 用法:
  *   node engine/scripts/dream-consolidate.cjs              # 全量运行
@@ -14,16 +14,18 @@
 
 'use strict';
 
-const fs = require('node:fs');
-const path = require('node:path');
+const crypto = require('node:crypto');
 
 const { openDb } = require('../sqlite/index.cjs');
-const { sinceWatermark, getWatermark, setWatermark, countByType } = require('../sqlite/store-events.cjs');
-const { writeMemory, retrieveMemory } = require('../sqlite/store-memory.cjs');
-const { report, decayCandidates, setTier } = require('../sqlite/store-skills.cjs');
-
-const HOME_DIR = path.resolve(__dirname, '..', '..');
-const LEARNINGS_DIR = path.join(HOME_DIR, 'memory', 'learnings');
+const {
+  sinceWatermark,
+  countSinceWatermark,
+  getWatermark,
+  setWatermark,
+  countByType,
+} = require('../sqlite/store-events.cjs');
+const { writeMemory } = require('../sqlite/store-memory.cjs');
+const { decayCandidates, setTier } = require('../sqlite/store-skills.cjs');
 
 // ── 模式检测 ──────────────────────────────────────────────────────────────
 
@@ -192,6 +194,34 @@ function detectPatterns(events, sessionCount) {
     });
   }
 
+  // ── 8.5 已验证解决链: 失败 → 根因/修复 → 验证通过 ─────────────
+  const resolutions = byType['resolution'] || [];
+  for (const resolution of resolutions) {
+    const sessionEvents = bySession[resolution.sessionId] || [];
+    const verification = sessionEvents.find(event => (
+      event.type === 'verification_pass' && event.eventId > resolution.eventId
+    ));
+    const rootCause = String(resolution.payload?.rootCause || '').trim();
+    const fix = String(resolution.payload?.fix || '').trim();
+    const evidence = String(
+      verification?.payload?.evidence || verification?.payload?.command || '',
+    ).trim();
+    if (!verification || !rootCause || !fix || !evidence) continue;
+    const failure = sessionEvents.find(event => event.type === 'tool_fail');
+    const subject = String(failure?.payload?.tool || 'workflow').slice(0, 60);
+    patterns.push({
+      signal: `verified_resolution:${subject}`,
+      count: 1,
+      examples: [
+        `root cause: ${rootCause.slice(0, 200)}`,
+        `fix: ${fix.slice(0, 200)}`,
+        `verification: ${evidence.slice(0, 200)}`,
+      ],
+      suggestion: `已验证解决链。根因: ${rootCause.slice(0, 200)}；修复: ${fix.slice(0, 200)}；证据: ${evidence.slice(0, 200)}。`,
+      severity: 'high',
+    });
+  }
+
   // ── 9. 难题模式 (新增) ──────────────────────────────────
   const hardProblems = byType['hard_problem'] || [];
   if (hardProblems.length >= 1) {
@@ -296,9 +326,18 @@ function checkSkillHealth(db) {
 // ── 输出 ──────────────────────────────────────────────────────────────────
 
 /**
- * 将检测到的模式写为 Learnings 事实 (非 dry-run 时)。
+ * 将检测到的模式写为待审候选 (非 dry-run 时)。
  */
-function writeLearnings(patterns, db, isDryRun) {
+function candidateSourceKey(pattern) {
+  const family = String(pattern.signal || '').replace(/×\d+(?:\s*\([^)]*\))?/g, '').trim();
+  const example = String(pattern.examples?.[0] || pattern.suggestion || '')
+    .replace(/\d+/g, 'N')
+    .slice(0, 200);
+  const digest = crypto.createHash('sha256').update(`${family}|${example}`).digest('hex').slice(0, 20);
+  return `dream:${digest}`;
+}
+
+function writeCandidates(patterns, db, isDryRun) {
   const now = new Date();
   const dateStr = now.toISOString().slice(0, 10);
   let written = 0;
@@ -312,12 +351,13 @@ function writeLearnings(patterns, db, isDryRun) {
 
     // 生成可检索的 description (不只是信号名)
     const descText = p.examples.length > 0
-      ? `Dream: ${p.signal} — ${p.examples[0].slice(0, 80)}`
-      : `Dream: ${p.signal} — ${p.suggestion.slice(0, 80)}`;
+      ? `Dream candidate: ${p.signal} — ${p.examples[0].slice(0, 80)}`
+      : `Dream candidate: ${p.signal} — ${p.suggestion.slice(0, 80)}`;
       const content = [
-        `# Dream 提炼: ${p.signal}`,
+        `# Dream 候选: ${p.signal}`,
         '',
-        `> 自动检测于 ${dateStr}。来源: dream-consolidate v2.0`,
+        'status: review_required',
+        `> 自动检测于 ${dateStr}。来源: dream-consolidate v3.0`,
         '',
         '## 模式',
         `- 信号: ${p.signal}`,
@@ -330,19 +370,21 @@ function writeLearnings(patterns, db, isDryRun) {
         '## 严重度',
         p.severity === 'high' ? '**高** — 建议审视工作流' : p.severity,
         '',
-        '## 自动提炼',
-        '此条由 Dream v2.0 从运行时事件中自动检测并写入。',
+        '## 候选约束',
+        '此条仅是待审候选，不是 Harness 规则，也不会自动晋升。',
+        '需补齐根因、修复、验证证据、适用条件和反例后再人工审查。',
         '如果此模式不再出现，将在 180 天后过期。',
       ].filter(Boolean).join('\n');
 
       if (!isDryRun) {
-        const baseConfidence = p.severity === 'high' ? 0.6 : 0.4;
+        const baseConfidence = p.severity === 'high' ? 0.4 : (p.severity === 'medium' ? 0.3 : 0.25);
         writeMemory({
           namespace: 'learnings',
           name: `dream-${dateStr}-${p.signal.replace(/[^a-zA-Z0-9一-鿿]/g, '-').slice(0, 40)}`,
           content,
           description: descText,
           source: 'script:dream',
+          sourceKey: candidateSourceKey(p),
           confidence: baseConfidence,
           ttlDays: 180,
         }, { db });
@@ -355,92 +397,120 @@ function writeLearnings(patterns, db, isDryRun) {
 
 // ── 主函数 ─────────────────────────────────────────────────────────────────
 
-async function main() {
-  const args = process.argv.slice(2);
-  const isDryRun = args.includes('--dry-run');
-  const force = args.includes('--force');
+function runDream(opts = {}) {
+  const isDryRun = opts.dryRun === true;
+  const force = opts.force === true;
+  const requestedLimit = Number(opts.maxEvents ?? 100);
+  const maxEvents = Number.isFinite(requestedLimit)
+    ? Math.min(500, Math.max(1, Math.trunc(requestedLimit)))
+    : 100;
+  const log = typeof opts.logger === 'function' ? opts.logger : console.log;
+  const wDb = opts.db ? null : openDb(opts.dbPath ? { path: opts.dbPath } : {});
+  const db = opts.db || wDb.db;
 
-  console.log(`🧠 Dream 提炼${isDryRun ? ' (DRY RUN)' : ''}`);
-  console.log('');
+  try {
+    log(`🧠 Dream 提炼${isDryRun ? ' (DRY RUN)' : ''}`);
+    log('');
 
-  const wDb = openDb();
-
-  // 1. 读取事件
-  const watermark = force ? 0 : getWatermark({ db: wDb.db });
-  const events = sinceWatermark(watermark, 200, { db: wDb.db });
-
-  if (events.length === 0) {
-    console.log('无新事件。跳过提炼。');
-    if (!force) {
-      wDb.close();
-      return;
+    // 1. 读取事件
+    const committedWatermark = getWatermark({ db, consumer: 'dream' });
+    const watermark = force ? 0 : committedWatermark;
+    const events = sinceWatermark(watermark, maxEvents, { db });
+    if (events.length === 0) {
+      log('无新事件。跳过提炼。');
+      return {
+        inspected: 0,
+        processed: 0,
+        pending: countSinceWatermark(committedWatermark, { db }),
+        patterns: 0,
+        candidatesWritten: 0,
+        watermarkBefore: committedWatermark,
+        watermarkAfter: committedWatermark,
+        dryRun: isDryRun,
+      };
     }
+    log(`读取 ${events.length} 个事件 (watermark=${watermark})`);
+
+    // 2. 按 session 分组
+    const bySession = {};
+    for (const ev of events) {
+      if (!bySession[ev.sessionId]) bySession[ev.sessionId] = [];
+      bySession[ev.sessionId].push(ev);
+    }
+    const sessionCount = Object.keys(bySession).length;
+    log(`涉及 ${sessionCount} 个 session`);
+
+    // 3. 模式检测
+    const patterns = detectPatterns(events, sessionCount);
+    log(`检测到 ${patterns.length} 个模式 (${sessionCount} sessions)`);
+    for (const [severity, label] of [['high', '🔴 高严重度'], ['medium', '🟡 中严重度'], ['low', '🟢 低严重度']]) {
+      const matching = patterns.filter(pattern => pattern.severity === severity);
+      if (matching.length === 0) continue;
+      log(`  ${label}:`);
+      for (const pattern of matching) log(`    ${pattern.signal} — ${pattern.suggestion.slice(0, 80)}`);
+    }
+
+    // 4. Candidate writes are read-only when isDryRun=true.
+    const written = writeCandidates(patterns, db, isDryRun);
+    log(`写入 ${written} 条待审候选`);
+
+    let watermarkAfter = committedWatermark;
+    if (!isDryRun) {
+      // 5. Advance only Dream's watermark after candidate writes succeed.
+      if (events.length > 0) {
+        const maxId = events[events.length - 1].eventId;
+        watermarkAfter = Math.max(committedWatermark, maxId);
+        setWatermark(watermarkAfter, { db, consumer: 'dream' });
+        log(`Dream 水印更新至 ${watermarkAfter}`);
+      }
+    }
+
+    // 8. 事件概要
+    log('');
+    log('事件类型分布:');
+    const byType = countByType({ db });
+    for (const item of byType) log(`  ${item.type}: ${item.count}`);
+    log('\n✅ Dream 完成');
+    return {
+      inspected: events.length,
+      processed: isDryRun ? 0 : events.length,
+      pending: countSinceWatermark(watermarkAfter, { db }),
+      patterns: patterns.length,
+      candidatesWritten: written,
+      watermarkBefore: committedWatermark,
+      watermarkAfter,
+      dryRun: isDryRun,
+    };
+  } finally {
+    if (wDb) wDb.close();
   }
-
-  console.log(`读取 ${events.length} 个事件 (watermark=${watermark})`);
-
-  // 2. 按 session 分组
-  const bySession = {};
-  for (const ev of events) {
-    if (!bySession[ev.sessionId]) bySession[ev.sessionId] = [];
-    bySession[ev.sessionId].push(ev);
-  }
-  console.log(`涉及 ${Object.keys(bySession).length} 个 session`);
-
-  // 3. 模式检测 (v2: 传入 sessionCount)
-  const sessionCount = Object.keys(bySession).length;
-  const patterns = detectPatterns(events, sessionCount);
-  console.log(`检测到 ${patterns.length} 个模式 (${sessionCount} sessions)`);
-
-  // 按严重度分组输出
-  const highPatterns = patterns.filter(p => p.severity === 'high');
-  const medPatterns = patterns.filter(p => p.severity === 'medium');
-  const lowPatterns = patterns.filter(p => p.severity === 'low');
-  if (highPatterns.length > 0) {
-    console.log('  🔴 高严重度:');
-    for (const p of highPatterns) console.log(`    ${p.signal} — ${p.suggestion.slice(0, 80)}`);
-  }
-  if (medPatterns.length > 0) {
-    console.log('  🟡 中严重度:');
-    for (const p of medPatterns) console.log(`    ${p.signal} — ${p.suggestion.slice(0, 80)}`);
-  }
-  if (lowPatterns.length > 0) {
-    console.log('  🟢 低严重度:');
-    for (const p of lowPatterns) console.log(`    ${p.signal} — ${p.suggestion.slice(0, 80)}`);
-  }
-
-  // 4. 写入 Learnings
-  const written = writeLearnings(patterns, wDb.db, isDryRun);
-  console.log(`写入 ${written} 条 Learning 事实`);
-
-  // 5. 置信度升级
-  const upgraded = upgradeConfidence(wDb.db);
-  if (upgraded > 0) console.log(`升级 ${upgraded} 条事实置信度`);
-
-  // 6. 技能健康检查
-  const quarantined = checkSkillHealth(wDb.db);
-  if (quarantined > 0) console.log(`标记 ${quarantined} 个技能为 quarantine`);
-
-  // 7. 更新水印
-  if (!isDryRun && events.length > 0) {
-    const maxId = events[events.length - 1].eventId;
-    setWatermark(maxId, { db: wDb.db });
-    console.log(`水印更新至 ${maxId}`);
-  }
-
-  // 8. 事件概要
-  console.log('');
-  console.log('事件类型分布:');
-  const byType = countByType({ db: wDb.db });
-  for (const t of byType) {
-    console.log(`  ${t.type}: ${t.count}`);
-  }
-
-  wDb.close();
-  console.log('\n✅ Dream 完成');
 }
 
-main().catch(err => {
-  console.error('Dream 失败:', err.message);
-  process.exit(1);
-});
+function main() {
+  const args = process.argv.slice(2);
+  const maxEventsArg = args.find(arg => arg.startsWith('--max-events='));
+  return runDream({
+    dryRun: args.includes('--dry-run'),
+    force: args.includes('--force'),
+    maxEvents: maxEventsArg ? Number(maxEventsArg.slice('--max-events='.length)) : undefined,
+  });
+}
+
+if (require.main === module) {
+  try {
+    main();
+  } catch (err) {
+    console.error('Dream 失败:', err.message);
+    process.exit(1);
+  }
+}
+
+module.exports = {
+  runDream,
+  detectPatterns,
+  writeCandidates,
+  writeLearnings: writeCandidates,
+  candidateSourceKey,
+  upgradeConfidence,
+  checkSkillHealth,
+};

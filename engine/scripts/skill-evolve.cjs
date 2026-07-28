@@ -34,7 +34,6 @@ const os = require('node:os');
 const HOME_DIR = path.resolve(__dirname, '..', '..');
 const SKILLS_DIR = path.join(HOME_DIR, 'skills');
 const STAGING_BASE = path.join(HOME_DIR, '.skillopt-sleep', 'staging');
-const EVOLVE_WATERMARK = path.join(HOME_DIR, '.skillopt-sleep', '.evolve-watermark');
 
 // ── 词法分析: 从 skill 中提取规则 ──────────────────────────────────────
 
@@ -120,16 +119,25 @@ function extractKeyTerms(text) {
  * 获取最近 session 中的用户纠正信号。
  * 使用 SQLite runtime_events 中的 event_id 水印机制。
  */
-function harvestCorrections() {
+function harvestCorrections(opts = {}) {
+  let wDb = null;
   try {
     const { openDb } = require('../sqlite/index.cjs');
-    const { sinceWatermark, getWatermark } = require('../sqlite/store-events.cjs');
-    openDb(); // 确保连接初始化
+    const {
+      sinceWatermark,
+      countSinceWatermark,
+      getWatermark,
+    } = require('../sqlite/store-events.cjs');
+    if (!opts.db) wDb = openDb(opts.dbPath ? { path: opts.dbPath } : {});
+    const db = opts.db || wDb.db;
+    const committedWatermark = getWatermark({ db, consumer: 'skill-evolve' });
+    const watermarkId = opts.force === true ? 0 : committedWatermark;
+    const requestedLimit = Number(opts.limit ?? 100);
+    const limit = Number.isFinite(requestedLimit)
+      ? Math.min(100, Math.max(1, Math.trunc(requestedLimit)))
+      : 100;
 
-    const watermarkId = getWatermark();
-    const limit = 100;
-
-    const events = sinceWatermark(watermarkId, limit);
+    const events = sinceWatermark(watermarkId, limit, { db });
 
     const corrections = events
       .filter(e => e.type === 'user_correct')
@@ -156,25 +164,38 @@ function harvestCorrections() {
         time: e.createdAt,
       }));
 
-    // 记录最新 event_id 作为水印
-    if (events.length > 0) {
-      setMyWatermark(Math.max(...events.map(e => e.eventId)));
-    }
+    const batchWatermark = events.length > 0
+      ? Math.max(committedWatermark, events[events.length - 1].eventId)
+      : committedWatermark;
 
-    return { corrections, stuck, toolFails };
+    return {
+      corrections,
+      stuck,
+      toolFails,
+      inspected: events.length,
+      processed: 0,
+      pending: countSinceWatermark(committedWatermark, { db }),
+      watermarkBefore: committedWatermark,
+      watermarkAfter: committedWatermark,
+      batchWatermark,
+    };
   } catch (e) {
+    if (opts.throwOnError === true) throw e;
     console.error('[skill-evolve] harvest error:', e.message);
-    return { corrections: [], stuck: [], toolFails: [] };
+    return {
+      corrections: [], stuck: [], toolFails: [],
+      inspected: 0, processed: 0, pending: 0,
+      watermarkBefore: 0, watermarkAfter: 0, batchWatermark: 0,
+    };
+  } finally {
+    if (wDb) wDb.close();
   }
 }
 
-function setMyWatermark(eventId) {
-  try {
-    const { setWatermark } = require('../sqlite/store-events.cjs');
-    setWatermark(eventId);
-  } catch (e) {
-    // 非关键操作：设置水印失败不影响后续处理，下次启动会重新尝试
-  }
+function setMyWatermark(eventId, opts = {}) {
+  const { setWatermark } = require('../sqlite/store-events.cjs');
+  setWatermark(eventId, { ...opts, consumer: 'skill-evolve' });
+  return eventId;
 }
 
 // ── Mine: 从纠正信号中提取可操作的改进 ────────────────────────────────
@@ -810,84 +831,173 @@ function harvestFromSessions() {
 
 // ── Main ──────────────────────────────────────────────────────────────
 
-function main() {
-  const args = process.argv.slice(2);
-  const dryRun = args.includes('--dry-run');
-  const force = args.includes('--force');
+function runSkillEvolve(opts = {}) {
+  const dryRun = opts.dryRun === true;
+  const force = opts.force === true;
+  const log = typeof opts.logger === 'function' ? opts.logger : console.log;
+  const mineFn = opts.mineFn || mineImprovements;
+  const validateFn = opts.validateFn || validateSuggestions;
+  const gateFn = opts.gateFn || gateSuggestions;
+  const stageFn = opts.stageFn || stageProposals;
+  const { openDb } = require('../sqlite/index.cjs');
+  const crypto = require('node:crypto');
+  const eventStore = require('../sqlite/store-events.cjs');
+  const { countSinceWatermark } = eventStore;
+  const wDb = opts.db ? null : openDb(opts.dbPath ? { path: opts.dbPath } : {});
+  const db = opts.db || wDb.db;
+  const runId = String(opts.runId || crypto.randomUUID());
+  let heartbeatStarted = false;
+  let harvest;
 
-  console.log('[skill-evolve] SkillOpt 蒸馏: harvest → mine → reflect → bounded edit → validate → stage');
-
-  // 1. Harvest
-  console.log('[skill-evolve] 阶段 1/5: Harvest — 收集用户纠正信号...');
-  const { corrections, stuck, toolFails } = harvestCorrections();
-  console.log(`[skill-evolve]    用户纠正: ${corrections.length} 条`);
-  console.log(`[skill-evolve]    挫败信号: ${stuck.length} 条`);
-  console.log(`[skill-evolve]    工具错误: ${toolFails.length} 条`);
-
-  if (corrections.length === 0 && stuck.length === 0 && toolFails.length === 0) {
-    if (!force) {
-      console.log('[skill-evolve] 无新信号，跳过 (使用 --force 强制从 session 文件采集)');
-      return;
+  const finish = (status, extra = {}) => {
+    let watermarkAfter = harvest.watermarkBefore;
+    let processed = 0;
+    if (!dryRun && harvest.inspected > 0) {
+      setMyWatermark(harvest.batchWatermark, { db });
+      watermarkAfter = harvest.batchWatermark;
+      processed = harvest.inspected;
     }
-    console.log('[skill-evolve] --force 模式: session 内容 + 模式挖掘...');
-    // 采集所有真实 session（排除临时目录）
-    const allSessions = collectAllSessions();
-    // 方式 1: 从最近 session JSONL 中找用户纠正
-    const sessionSignals = harvestFromSessions();
-    corrections.push(...sessionSignals.corrections);
-    stuck.push(...sessionSignals.stuck);
-    toolFails.push(...sessionSignals.toolFails);
-    // 方式 2: 从 session 内容中直接挖高频模式
-    const mined = minePatternsFromSessions(allSessions, force);
-    corrections.push(...mined.corrections);
-    toolFails.push(...mined.toolFails);
+    const result = {
+      status,
+      dryRun,
+      inspected: harvest.inspected,
+      processed,
+      pending: countSinceWatermark(watermarkAfter, { db }),
+      watermarkBefore: harvest.watermarkBefore,
+      watermarkAfter,
+      ...extra,
+    };
+    if (!dryRun) {
+      eventStore.completeConsumerRun('skill-evolve', {
+        db,
+        runId,
+        status: status === 'staged' ? 'success' : 'skipped',
+        processedThrough: watermarkAfter,
+        processed,
+        pending: result.pending,
+        nextDueAt: result.pending > 0 ? Date.now() + 86_400_000 : null,
+        at: opts.now,
+      });
+    }
+    return result;
+  };
+
+  try {
+    if (!dryRun) {
+      const watermark = eventStore.getWatermark({ db, consumer: 'skill-evolve' });
+      eventStore.beginConsumerRun('skill-evolve', {
+        db,
+        runId,
+        pending: countSinceWatermark(watermark, { db }),
+        processedThrough: watermark,
+        at: opts.now,
+      });
+      heartbeatStarted = true;
+    }
+    log('[skill-evolve] SkillOpt 蒸馏: harvest → mine → reflect → bounded edit → validate → stage');
+    log('[skill-evolve] 阶段 1/5: Harvest — 收集用户纠正信号...');
+    harvest = harvestCorrections({
+      db,
+      dryRun,
+      force,
+      limit: opts.limit,
+      throwOnError: true,
+    });
+    const corrections = [...harvest.corrections];
+    const stuck = [...harvest.stuck];
+    const toolFails = [...harvest.toolFails];
+    log(`[skill-evolve]    用户纠正: ${corrections.length} 条`);
+    log(`[skill-evolve]    挫败信号: ${stuck.length} 条`);
+    log(`[skill-evolve]    工具错误: ${toolFails.length} 条`);
+
     if (corrections.length === 0 && stuck.length === 0 && toolFails.length === 0) {
-      console.log('[skill-evolve] 无信号，跳过');
-      return;
+      if (!force) {
+        log('[skill-evolve] 无可操作信号，提交本批消费位置');
+        return finish(dryRun ? 'dry-run' : 'no-action', { reason: 'no-actionable-signals' });
+      }
+      log('[skill-evolve] --force 模式: session 内容 + 模式挖掘...');
+      const allSessions = collectAllSessions();
+      const sessionSignals = harvestFromSessions();
+      corrections.push(...sessionSignals.corrections);
+      stuck.push(...sessionSignals.stuck);
+      toolFails.push(...sessionSignals.toolFails);
+      const mined = minePatternsFromSessions(allSessions, force);
+      corrections.push(...mined.corrections);
+      toolFails.push(...mined.toolFails);
+      if (corrections.length === 0 && stuck.length === 0 && toolFails.length === 0) {
+        log('[skill-evolve] 无可操作信号，提交本批消费位置');
+        return finish(dryRun ? 'dry-run' : 'no-action', { reason: 'no-force-signals' });
+      }
     }
+
+    log('[skill-evolve] 阶段 2/5: Mine — 提取可操作改进...');
+    const suggestions = mineFn(corrections, stuck, toolFails);
+    log(`[skill-evolve]    提取建议: ${suggestions.length} 条`);
+    if (suggestions.length === 0) {
+      log('[skill-evolve] 无可操作改进，提交本批消费位置');
+      return finish(dryRun ? 'dry-run' : 'no-action', { reason: 'no-suggestions' });
+    }
+
+    log('[skill-evolve] 阶段 3/5: Reflect — 生成 bounded edit...');
+    suggestions.forEach(suggestion => {
+      log(`[skill-evolve]    [${suggestion.op}] ${suggestion.skill}/${suggestion.section}: ${suggestion.content.slice(0, 60)}...`);
+    });
+
+    log('[skill-evolve] 阶段 4/5: Validate — 检查冲突...');
+    const validated = validateFn(suggestions);
+    validated.forEach(value => {
+      const status = value.valid ? '✅' : '⛔';
+      log(`[skill-evolve]    ${status} [${value.op}] ${value.skill}: ${value.warning || '通过'}`);
+    });
+
+    log('[skill-evolve] 阶段 4.5/5: Gate — 验证门禁...');
+    const gated = gateFn(validated);
+    const gatedAccept = gated.filter(value => value.valid).length;
+    log(`[skill-evolve]    门禁通过: ${gatedAccept}/${gated.length}`);
+
+    log('[skill-evolve] 阶段 5/5: Stage — 输出提案...');
+    const stageResult = stageFn(gated, dryRun);
+    log('[skill-evolve] 完成');
+    return finish(dryRun ? 'dry-run' : 'staged', {
+      suggestions: suggestions.length,
+      accepted: gatedAccept,
+      stageResult,
+    });
+  } catch (error) {
+    if (heartbeatStarted) {
+      try {
+        const watermark = eventStore.getWatermark({ db, consumer: 'skill-evolve' });
+        eventStore.failConsumerRun('skill-evolve', {
+          db,
+          runId,
+          error,
+          pending: countSinceWatermark(watermark, { db }),
+          processedThrough: watermark,
+          at: opts.now,
+        });
+      } catch { /* health will expose a missing or stale heartbeat */ }
+    }
+    throw error;
+  } finally {
+    if (wDb) wDb.close();
   }
-
-  // 2. Mine
-  console.log('[skill-evolve] 阶段 2/5: Mine — 提取可操作改进...');
-  const suggestions = mineImprovements(corrections, stuck, toolFails);
-  console.log(`[skill-evolve]    提取建议: ${suggestions.length} 条`);
-
-  if (suggestions.length === 0) {
-    console.log('[skill-evolve] 无可操作改进，跳过');
-    return;
-  }
-
-  // 3. Reflect (bounded edit 生成已在 mine 中完成)
-  console.log('[skill-evolve] 阶段 3/5: Reflect — 生成 bounded edit...');
-  suggestions.forEach(s => {
-    console.log(`[skill-evolve]    [${s.op}] ${s.skill}/${s.section}: ${s.content.slice(0, 60)}...`);
-  });
-
-  // 4. Validate (语法+冲突检查)
-  console.log('[skill-evolve] 阶段 4/5: Validate — 检查冲突...');
-  const validated = validateSuggestions(suggestions);
-  const validCount = validated.filter(v => v.valid).length;
-  validated.forEach(v => {
-    const status = v.valid ? '✅' : '⛔';
-    console.log(`[skill-evolve]    ${status} [${v.op}] ${v.skill}: ${v.warning || '通过'}`);
-  });
-
-  // 4.5 Gate (SkillOpt 验证门禁 — held-out 评分)
-  console.log('[skill-evolve] 阶段 4.5/5: Gate — 验证门禁...');
-  const gated = gateSuggestions(validated);
-  const gatedAccept = gated.filter(v => v.valid).length;
-  console.log(`[skill-evolve]    门禁通过: ${gatedAccept}/${gated.length}`);
-
-  // 5. Stage
-  console.log('[skill-evolve] 阶段 5/5: Stage — 输出提案...');
-  stageProposals(gated, dryRun);
-
-  // 更新水印
-  if (!dryRun) {
-    setMyWatermark(999999);
-  }
-
-  console.log('[skill-evolve] 完成');
 }
 
-main();
+function main() {
+  const args = process.argv.slice(2);
+  return runSkillEvolve({
+    dryRun: args.includes('--dry-run'),
+    force: args.includes('--force'),
+  });
+}
+
+if (require.main === module) {
+  main();
+}
+
+module.exports = {
+  main,
+  runSkillEvolve,
+  harvestCorrections,
+  setMyWatermark,
+};

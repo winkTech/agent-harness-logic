@@ -21,11 +21,17 @@
 const fs = require('fs');
 const path = require('path');
 const { HARNESS_ROOT } = require('./lib/harness-root.cjs');
+const {
+  atomicWriteJson,
+  updateJsonFileSync,
+  withFileLockSync,
+} = require('./lib/project-scope.cjs');
 
 const HARNESS = HARNESS_ROOT;
-const STATE_FILE = path.join(HARNESS, 'var', 'index', 'runtime-state.json');
-const COMPACT_LOG = path.join(HARNESS, 'var', 'sessions', 'compaction-log.txt');
-const PRESSURE_SIGNAL = path.join(HARNESS, 'var', 'sessions', '.compact-needed');
+const STATE_FILE = process.env.CLAUDE_RUNTIME_STATE_FILE || path.join(HARNESS, 'var', 'index', 'runtime-state.json');
+const COMPACT_LOG = process.env.CLAUDE_COMPACTION_LOG_FILE || path.join(HARNESS, 'var', 'sessions', 'compaction-log.txt');
+const PRESSURE_SIGNAL = process.env.CLAUDE_COMPACT_SIGNAL_FILE || path.join(HARNESS, 'var', 'sessions', '.compact-needed');
+const COMPACT_LOG_MAX_ENTRIES = Math.max(10, Number.parseInt(process.env.CLAUDE_COMPACTION_LOG_MAX_ENTRIES || '500', 10));
 
 // ── 辅助 ─────────────────────────────────────────────────────────────────────
 
@@ -44,9 +50,19 @@ function readJSON(filePath) {
   return null;
 }
 
-function writeJSON(filePath, data) {
-  ensureDir(path.dirname(filePath));
-  fs.writeFileSync(filePath, JSON.stringify(data, null, 2), 'utf8');
+function appendCompactionEvent(event) {
+  withFileLockSync(COMPACT_LOG, () => {
+    let lines = [];
+    try {
+      if (fs.existsSync(COMPACT_LOG)) {
+        lines = fs.readFileSync(COMPACT_LOG, 'utf8').split(/\r?\n/).filter(Boolean);
+      }
+    } catch { /* malformed historical logs are replaced by new valid events */ }
+    lines.push(JSON.stringify(event));
+    lines = lines.slice(-COMPACT_LOG_MAX_ENTRIES);
+    ensureDir(path.dirname(COMPACT_LOG));
+    fs.writeFileSync(COMPACT_LOG, `${lines.join('\n')}\n`, 'utf8');
+  });
 }
 
 // ── 核心功能 ──────────────────────────────────────────────────────────────────
@@ -56,27 +72,20 @@ function writeJSON(filePath, data) {
  * 读取当前 runtime state，写入 session checkpoint 字段。
  */
 function saveCheckpoint() {
-  const state = readJSON(STATE_FILE) || {};
-
-  // 更新检查点标记
-  state.lastCompactCheckpoint = new Date().toISOString();
-  state.lastCompactToolCalls = (state.toolCalls || []).length;
-  state.compactCount = (state.compactCount || 0) + 1;
-
-  // 记录压缩事件
-  const event = {
-    timestamp: state.lastCompactCheckpoint,
-    sessionId: process.env.CLAUDE_SESSION_ID || 'unknown',
-    toolCallsAtCompact: state.lastCompactToolCalls,
-    compactNumber: state.compactCount,
-  };
-
-  ensureDir(path.dirname(COMPACT_LOG));
-  try {
-    fs.appendFileSync(COMPACT_LOG, JSON.stringify(event) + '\n', 'utf8');
-  } catch { /* ignore */ }
-
-  writeJSON(STATE_FILE, state);
+  let event;
+  updateJsonFileSync(STATE_FILE, () => ({}), (state) => {
+    state.lastCompactCheckpoint = new Date().toISOString();
+    state.lastCompactToolCalls = (state.toolCalls || []).length;
+    state.compactCount = (state.compactCount || 0) + 1;
+    event = {
+      timestamp: state.lastCompactCheckpoint,
+      sessionId: process.env.CLAUDE_SESSION_ID || 'unknown',
+      toolCallsAtCompact: state.lastCompactToolCalls,
+      compactNumber: state.compactCount,
+    };
+    return state;
+  });
+  appendCompactionEvent(event);
   return event;
 }
 
@@ -116,7 +125,7 @@ function signalCompact() {
     reason: process.argv[2] === '--trigger' ? 'manual-trigger' : 'auto-threshold',
     suggestedAction: 'compact',
   };
-  fs.writeFileSync(PRESSURE_SIGNAL, JSON.stringify(signal, null, 2), 'utf8');
+  atomicWriteJson(PRESSURE_SIGNAL, signal);
   saveCheckpoint();
   return signal;
 }

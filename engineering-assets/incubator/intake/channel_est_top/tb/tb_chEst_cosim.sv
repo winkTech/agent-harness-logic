@@ -29,7 +29,8 @@ module tb_chEst_cosim;
     // ========================================================================
     // Signals
     // ========================================================================
-    logic         clk, rst_n;
+    // 2026-07-28 随 RTL 规范整改同步更新: clk/rst_n -> i_clk/i_rst (同步高有效)
+    logic         clk, rst;
     logic         s_axis_tvalid, s_axis_tready;
     logic [31:0]  s_axis_tdata;
     logic         m_axis_tvalid, m_axis_tready;
@@ -41,8 +42,8 @@ module tb_chEst_cosim;
     channel_est_top #(
         .DATA_W(DATA_W)
     ) dut (
-        .clk            (clk),
-        .rst_n          (rst_n),
+        .i_clk          (clk),
+        .i_rst          (rst),
         .s_axis_tvalid  (s_axis_tvalid),
         .s_axis_tready  (s_axis_tready),
         .s_axis_tdata   (s_axis_tdata),
@@ -80,12 +81,12 @@ module tb_chEst_cosim;
         $display("  N_FFT: %d, DATA_W: %d", N_FFT, DATA_W);
         $display("================================================");
 
-        // Reset
-        rst_n = 0;
+        // Reset (同步高有效)
+        rst = 1;
         s_axis_tvalid = 0;
         m_axis_tready = 1;
         repeat (20) @(posedge clk);
-        rst_n = 1;
+        rst = 0;
         repeat (10) @(posedge clk);
 
         // 向量目录注入；缺失即 fail-closed，不得回落默认路径（规范 §5.5 V-2）

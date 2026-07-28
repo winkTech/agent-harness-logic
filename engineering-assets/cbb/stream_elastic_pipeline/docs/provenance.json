@@ -1,0 +1,12 @@
+{
+  "source": "repository-local reusable templates",
+  "license": "internal-authorized",
+  "retrieved": "2026-07-26",
+  "commit": null,
+  "retrieved_basis": "The normalized implementation was derived from the retained repository templates below; both source templates remain protected evidence and are not deleted.",
+  "reference_sources": [
+    "skills/hdl-coding/templates/comm/axis_pipeline_reg.sv",
+    "skills/hdl-coding/templates/comm/pipe_delay.sv"
+  ],
+  "license_basis": "Repository-local template provenance; no third-party license is asserted for this normalized internal asset."
+}

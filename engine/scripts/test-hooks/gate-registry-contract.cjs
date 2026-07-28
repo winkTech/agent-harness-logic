@@ -29,6 +29,7 @@
 const fs = require('node:fs');
 const path = require('node:path');
 const { HARNESS_ROOT } = require('../lib/harness-root.cjs');
+const { staticRouterDependencies } = require('../lib/hook-registry.cjs');
 
 const HOME = HARNESS_ROOT;
 const tests = [];
@@ -40,7 +41,7 @@ function readJson(p) {
 }
 
 /** 收集 settings 里注册的全部脚本名(展开 local-runner --batch)。 */
-function registeredScripts() {
+function registeredScripts(opts = {}) {
   const names = new Set();
   for (const f of ['settings.json', 'settings.local.json']) {
     const cfg = readJson(path.join(HOME, f));
@@ -57,6 +58,10 @@ function registeredScripts() {
         }
       }
     }
+  }
+  if (opts.includeRouterDependencies !== false && names.has('preflight-router.cjs')) {
+    const router = path.join(HOME, 'engine', 'scripts', 'hooks', 'preflight-router.cjs');
+    for (const ref of staticRouterDependencies(router)) names.add(path.basename(ref.script));
   }
   return names;
 }
@@ -95,12 +100,15 @@ function hasCliEntry(src) {
 }
 
 const REGISTERED = registeredScripts();
+const DIRECTLY_REGISTERED = registeredScripts({ includeRouterDependencies: false });
 const GATES = gateScripts();
 
 test('C1 已注册的门禁脚本都有 CLI 入口（注册不等于会执行）', () => {
   const dead = [];
   for (const g of GATES) {
-    if (!REGISTERED.has(g.name)) continue;
+    // Router dependencies are invoked as imported evaluators, not standalone
+    // hook processes. C5 validates that dependency graph and runtime path.
+    if (!DIRECTLY_REGISTERED.has(g.name)) continue;
     const src = fs.readFileSync(g.full, 'utf8');
     if (!hasCliEntry(src)) dead.push(g.name);
   }
@@ -180,6 +188,30 @@ test('C4 写入类门禁的注册 matcher 与实现的工具矩阵一致', () =>
 });
 
 // ── 运行 ─────────────────────────────────────────────────────────────────────
+test('C5 preflight router recursively declares nested local dependencies', () => {
+  const os = require('node:os');
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'router-dependency-contract-'));
+  try {
+    const router = path.join(root, 'preflight-router.cjs');
+    const guard = path.join(root, 'guard.cjs');
+    fs.writeFileSync(router, "require('./guard.cjs');\n", 'utf8');
+    fs.writeFileSync(guard, [
+      "/** Example only: require('./ignored-example.cjs') */",
+      "require('./missing-helper.cjs');",
+      '',
+    ].join('\n'), 'utf8');
+    const dependencies = staticRouterDependencies(router);
+    assert(dependencies.some((entry) => entry.script === guard),
+      'direct router dependency was not discovered');
+    assert(dependencies.some((entry) => entry.script === path.join(root, 'missing-helper.cjs')),
+      'nested missing dependency was not discovered');
+    assert(!dependencies.some((entry) => entry.script === path.join(root, 'ignored-example.cjs')),
+      'commented require example was misclassified as an executable dependency');
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
 console.log('门禁注册表契约检查\n');
 let pass = 0; let fail = 0;
 for (const t of tests) {

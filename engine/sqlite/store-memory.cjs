@@ -24,6 +24,10 @@ const VALID_NAMESPACES = new Set([
   'user', 'feedback', 'project', 'projects', 'reference',
   'learnings', 'errors', 'archive',
 ]);
+const VALID_SCOPE_KINDS = new Set([
+  'unscoped', 'global_harness', 'repository', 'path', 'component', 'toolchain',
+]);
+const VALID_VERIFICATION_STATES = new Set(['candidate', 'verified', 'needs_reverify']);
 
 // ── ID 生成 ───────────────────────────────────────────────────────────────
 
@@ -38,6 +42,125 @@ function factId(content, namespace) {
     .update(namespace)
     .digest('hex')
     .slice(0, 16);
+}
+
+function normalizeSourceKey(value) {
+  const normalized = String(value || '').trim().replace(/\\/g, '/').replace(/^\.\//, '');
+  return normalized || null;
+}
+
+function normalizeOptional(value) {
+  const normalized = String(value || '').trim();
+  return normalized || null;
+}
+
+function normalizeRelativePath(value) {
+  const normalized = String(value || '').trim().replace(/\\/g, '/').replace(/^\.\//, '');
+  return normalized || null;
+}
+
+function normalizeEnum(value, allowed, fallback, label) {
+  const normalized = normalizeOptional(value) || fallback;
+  if (!allowed.has(normalized)) throw new TypeError(`[store-memory] invalid ${label}: ${normalized}`);
+  return normalized;
+}
+
+function normalizeOptionalEnum(value, allowed, label) {
+  if (value === undefined || value === null || String(value).trim() === '') return null;
+  return normalizeEnum(value, allowed, null, label);
+}
+
+function factApplicability(fact = {}) {
+  return {
+    projectId: normalizeOptional(fact.projectId || fact.project_id),
+    scopeKind: normalizeOptionalEnum(
+      fact.scopeKind ?? fact.scope_kind, VALID_SCOPE_KINDS, 'scopeKind',
+    ),
+    pathScope: normalizeRelativePath(fact.pathScope || fact.path_scope),
+    triggerKind: normalizeOptional(fact.triggerKind || fact.trigger_kind),
+    triggerSignature: normalizeOptional(fact.triggerSignature || fact.trigger_signature),
+    verificationState: normalizeOptionalEnum(
+      fact.verificationState ?? fact.verification_state,
+      VALID_VERIFICATION_STATES,
+      'verificationState',
+    ),
+    evidenceRef: normalizeOptional(fact.evidenceRef || fact.evidence_ref),
+    contractHash: normalizeOptional(fact.contractHash || fact.contract_hash),
+    validUntil: fact.validUntil ?? fact.valid_until ?? null,
+  };
+}
+
+function retrievalScopeClause(scope, alias = 'f') {
+  if (!scope || typeof scope !== 'object') return { sql: '', params: [] };
+  const projectId = normalizeOptional(scope.projectId || scope.project_id);
+  const relativePath = normalizeRelativePath(scope.relativePath || scope.relative_path);
+  const triggerKind = normalizeOptional(scope.triggerKind || scope.trigger_kind);
+  const triggerSignature = normalizeOptional(scope.triggerSignature || scope.trigger_signature);
+  const includeGlobal = scope.includeGlobal !== false;
+  const allowUnscoped = scope.allowUnscoped === true;
+  const alternatives = [];
+  const params = [];
+  if (includeGlobal) alternatives.push(`${alias}.scope_kind = 'global_harness'`);
+  if (projectId) {
+    const projectScopes = [
+      `${alias}.scope_kind IN ('repository','component','toolchain')`,
+    ];
+    if (relativePath) {
+      projectScopes.push(`(${alias}.scope_kind = 'path' AND (
+        ${alias}.path_scope = ?
+        OR (
+          substr(${alias}.path_scope, -3) = '/**'
+          AND (
+            ? = substr(${alias}.path_scope, 1, length(${alias}.path_scope) - 3)
+            OR ? LIKE substr(${alias}.path_scope, 1, length(${alias}.path_scope) - 3) || '/%'
+          )
+        )
+      ))`);
+    }
+    alternatives.push(`(${alias}.project_id = ? AND (${projectScopes.join(' OR ')}))`);
+    params.push(projectId);
+    if (relativePath) params.push(relativePath, relativePath, relativePath);
+  }
+  if (allowUnscoped) alternatives.push(`${alias}.scope_kind = 'unscoped'`);
+  const triggerClauses = [];
+  if (triggerKind) {
+    triggerClauses.push(`(${alias}.trigger_kind IS NULL OR ${alias}.trigger_kind = ?)`);
+    params.push(triggerKind);
+  } else {
+    triggerClauses.push(`${alias}.trigger_kind IS NULL`);
+  }
+  if (triggerSignature) {
+    triggerClauses.push(`(${alias}.trigger_signature IS NULL OR ${alias}.trigger_signature = ?)`);
+    params.push(triggerSignature);
+  } else {
+    triggerClauses.push(`${alias}.trigger_signature IS NULL`);
+  }
+  return {
+    sql: alternatives.length > 0
+      ? `AND (${alternatives.join(' OR ')}) AND ${triggerClauses.join(' AND ')}`
+      : 'AND 0',
+    params,
+  };
+}
+
+function retrievalTrustClause(opts = {}, alias = 'f') {
+  const now = opts.now ?? Date.now();
+  const clauses = opts.includeCandidates === true
+    ? [`(${alias}.valid_until IS NULL OR ${alias}.valid_until > ?)`]
+    : [
+      `${alias}.verification_state = 'verified'`,
+      `NULLIF(TRIM(${alias}.evidence_ref), '') IS NOT NULL`,
+      `NULLIF(TRIM(${alias}.trigger_kind), '') IS NOT NULL`,
+      `${alias}.valid_until IS NOT NULL`,
+      `${alias}.valid_until > ?`,
+    ];
+  const params = [now];
+  return { sql: `AND ${clauses.join(' AND ')}`, params };
+}
+
+function effectiveRetrievalScope(opts = {}, alias = 'f') {
+  if (opts.allowCrossScopeReview === true) return { sql: '', params: [] };
+  return retrievalScopeClause(opts.scope || { includeGlobal: true }, alias);
 }
 
 // ── 写入 ───────────────────────────────────────────────────────────────────
@@ -55,6 +178,7 @@ function factId(content, namespace) {
  * @param {number} [fact.ttlDays]    — TTL 天数 (null=永久)
  * @param {object} [opts]           — 选项
  * @param {import('node:sqlite').DatabaseSync} [opts.db] — 注入式连接
+ * @param {boolean} [opts.authoritative] — 完整快照更新，可显式清空旧元数据
  * @returns {{ id: string, isNew: boolean }}
  */
 function writeMemory(fact, opts = {}) {
@@ -68,39 +192,130 @@ function writeMemory(fact, opts = {}) {
     );
   }
 
-  const id = factId(fact.content, fact.namespace);
+  const sourcePath = fact.sourcePath || fact.source_path || null;
+  const sourceKey = normalizeSourceKey(fact.sourceKey || fact.source_key || sourcePath);
+  const applicability = factApplicability(fact);
+  const requestedId = factId(fact.content, fact.namespace);
   const now = Date.now();
   const ttlUntil = fact.ttlDays ? now + fact.ttlDays * 86_400_000 : null;
 
-  // 检查是否已存在
-  const existing = db.prepare('SELECT id, content FROM facts WHERE id = ?').get(id);
+  // 文件事实按稳定 source_key 更新；首次同步可接管同内容的旧迁移行。
+  const existing = sourceKey
+    ? (db.prepare('SELECT id, content FROM facts WHERE source_key = ?').get(sourceKey)
+      || db.prepare(`
+        SELECT id, content FROM facts
+        WHERE namespace = ? AND content = ? AND source_key IS NULL
+          AND COALESCE(status, 'active') = 'active'
+        ORDER BY updated_at DESC LIMIT 1
+      `).get(fact.namespace, fact.content))
+    : db.prepare('SELECT id, content FROM facts WHERE id = ?').get(requestedId);
+  const id = existing?.id || requestedId;
   const isNew = !existing;
 
   if (existing) {
-    db.prepare(`
+    if (opts.authoritative === true) {
+      db.prepare(`
+        UPDATE facts SET
+          namespace = ?,
+          name = ?,
+          content = ?,
+          description = ?,
+          source = ?,
+          confidence = ?,
+          ttl_until = ?,
+          source_path = ?,
+          source_key = ?,
+          project_id = ?,
+          scope_kind = ?,
+          path_scope = ?,
+          trigger_kind = ?,
+          trigger_signature = ?,
+          verification_state = ?,
+          evidence_ref = ?,
+          contract_hash = ?,
+          valid_until = ?,
+          status = ?,
+          superseded_by = NULL,
+          updated_at = ?
+        WHERE id = ?
+      `).run(
+        fact.namespace,
+        fact.name || null,
+        fact.content,
+        fact.description || '',
+        fact.source || 'manual',
+        fact.confidence ?? 0.5,
+        ttlUntil,
+        sourcePath,
+        sourceKey,
+        applicability.projectId,
+        applicability.scopeKind || 'unscoped',
+        applicability.pathScope,
+        applicability.triggerKind,
+        applicability.triggerSignature,
+        applicability.verificationState || 'candidate',
+        applicability.evidenceRef,
+        applicability.contractHash,
+        applicability.validUntil,
+        fact.status || 'active',
+        now,
+        id,
+      );
+    } else db.prepare(`
       UPDATE facts SET
+        namespace = ?,
         name = COALESCE(?, name),
         content = ?,
         description = COALESCE(?, description),
         source      = COALESCE(?, source),
         confidence  = COALESCE(?, confidence),
         ttl_until   = COALESCE(?, ttl_until),
+        source_path = COALESCE(?, source_path),
+        source_key  = COALESCE(?, source_key),
+        project_id = COALESCE(?, project_id),
+        scope_kind = COALESCE(?, scope_kind),
+        path_scope = COALESCE(?, path_scope),
+        trigger_kind = COALESCE(?, trigger_kind),
+        trigger_signature = COALESCE(?, trigger_signature),
+        verification_state = COALESCE(?, verification_state),
+        evidence_ref = COALESCE(?, evidence_ref),
+        contract_hash = COALESCE(?, contract_hash),
+        valid_until = COALESCE(?, valid_until),
+        status      = ?,
+        superseded_by = NULL,
         updated_at  = ?
       WHERE id = ?
     `).run(
+      fact.namespace,
       fact.name || null,
       fact.content,
       fact.description || null,
       fact.source || null,
       fact.confidence ?? null,
       ttlUntil,
+      sourcePath,
+      sourceKey,
+      applicability.projectId,
+      applicability.scopeKind,
+      applicability.pathScope,
+      applicability.triggerKind,
+      applicability.triggerSignature,
+      applicability.verificationState,
+      applicability.evidenceRef,
+      applicability.contractHash,
+      applicability.validUntil,
+      fact.status || 'active',
       now,
       id,
     );
   } else {
     db.prepare(`
-      INSERT INTO facts (id, namespace, name, content, description, source, confidence, ttl_until, created_at, updated_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO facts (
+        id, namespace, name, content, description, source, confidence, ttl_until,
+        created_at, updated_at, source_path, source_key, status,
+        project_id, scope_kind, path_scope, trigger_kind, trigger_signature,
+        verification_state, evidence_ref, contract_hash, valid_until
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).run(
       id,
       fact.namespace,
@@ -112,6 +327,18 @@ function writeMemory(fact, opts = {}) {
       ttlUntil,
       now,
       now,
+      sourcePath,
+      sourceKey,
+      fact.status || 'active',
+      applicability.projectId,
+      applicability.scopeKind || 'unscoped',
+      applicability.pathScope,
+      applicability.triggerKind,
+      applicability.triggerSignature,
+      applicability.verificationState || 'candidate',
+      applicability.evidenceRef,
+      applicability.contractHash,
+      applicability.validUntil,
     );
   }
 
@@ -169,6 +396,8 @@ function retrieveMemory(query, opts = {}) {
   if (!cleanQuery) return [];
 
   const terms = cleanQuery.split(/\s+/).filter(Boolean);
+  const scopeFilter = effectiveRetrievalScope(opts, 'f');
+  const trustFilter = retrievalTrustClause(opts, 'f');
 
   // 构建 FTS5 查询: 纯中文词使用字符级 bigram 前缀匹配
   // unicode61 将连续中文字符合并为一个 token, 导致子串查询失败。
@@ -194,7 +423,11 @@ function retrieveMemory(query, opts = {}) {
     const placeholders = opts.namespaces.map(() => '?').join(',');
     sql = `
       SELECT f.id, f.namespace, f.name, f.content, f.description,
-             f.confidence, f.hit_count, f.created_at,
+             f.confidence, f.hit_count, f.created_at, f.updated_at,
+             f.source, f.source_path, f.source_key, f.status,
+             f.project_id, f.scope_kind, f.path_scope, f.trigger_kind,
+             f.trigger_signature, f.verification_state, f.evidence_ref,
+             f.contract_hash, f.valid_until,
              fts.rank AS score
       FROM facts_fts fts
       JOIN facts f ON f.rowid = fts.rowid
@@ -202,24 +435,35 @@ function retrieveMemory(query, opts = {}) {
         AND f.namespace IN (${placeholders})
         AND f.confidence >= ?
         AND (f.ttl_until IS NULL OR f.ttl_until > ?)
+        AND COALESCE(f.status, 'active') = 'active'
+        ${scopeFilter.sql}
+        ${trustFilter.sql}
       ORDER BY score
       LIMIT ?
     `;
-    params = [ftsQuery, ...opts.namespaces, minConfidence, Date.now(), limit];
+    params = [ftsQuery, ...opts.namespaces, minConfidence, Date.now(),
+      ...scopeFilter.params, ...trustFilter.params, limit];
   } else {
     sql = `
       SELECT f.id, f.namespace, f.name, f.content, f.description,
-             f.confidence, f.hit_count, f.created_at,
+             f.confidence, f.hit_count, f.created_at, f.updated_at,
+             f.source, f.source_path, f.source_key, f.status,
+             f.project_id, f.scope_kind, f.path_scope, f.trigger_kind,
+             f.trigger_signature, f.verification_state, f.evidence_ref,
+             f.contract_hash, f.valid_until,
              fts.rank AS score
       FROM facts_fts fts
       JOIN facts f ON f.rowid = fts.rowid
       WHERE facts_fts MATCH ?
         AND f.confidence >= ?
         AND (f.ttl_until IS NULL OR f.ttl_until > ?)
+        AND COALESCE(f.status, 'active') = 'active'
+        ${scopeFilter.sql}
+        ${trustFilter.sql}
       ORDER BY score
       LIMIT ?
     `;
-    params = [ftsQuery, minConfidence, Date.now(), limit];
+    params = [ftsQuery, minConfidence, Date.now(), ...scopeFilter.params, ...trustFilter.params, limit];
   }
 
   let results;
@@ -236,10 +480,12 @@ function retrieveMemory(query, opts = {}) {
     return fallbackSearch(db, query, opts);
   }
 
-  // 更新 hit_count
-  const touchStmt = db.prepare('UPDATE facts SET hit_count = hit_count + 1, last_hit_at = ? WHERE id = ?');
-  for (const r of results) {
-    touchStmt.run(Date.now(), r.id);
+  // Hook/benchmark 可显式只读，避免一次检索同时成为数据库写事务。
+  if (opts.trackHit !== false) {
+    const touchStmt = db.prepare('UPDATE facts SET hit_count = hit_count + 1, last_hit_at = ? WHERE id = ?');
+    for (const r of results) {
+      touchStmt.run(Date.now(), r.id);
+    }
   }
 
   return results.map(r => ({
@@ -251,6 +497,21 @@ function retrieveMemory(query, opts = {}) {
     confidence: r.confidence,
     hit_count: r.hit_count,
     score: r.score,
+    source: r.source,
+    source_path: r.source_path,
+    source_key: r.source_key,
+    status: r.status || 'active',
+    project_id: r.project_id,
+    scope_kind: r.scope_kind || 'unscoped',
+    path_scope: r.path_scope,
+    trigger_kind: r.trigger_kind,
+    trigger_signature: r.trigger_signature,
+    verification_state: r.verification_state || 'candidate',
+    evidence_ref: r.evidence_ref,
+    contract_hash: r.contract_hash,
+    valid_until: r.valid_until,
+    created_at: r.created_at,
+    updated_at: r.updated_at,
   }));
 }
 
@@ -261,6 +522,8 @@ function fallbackSearch(db, query, opts = {}) {
   const limit = opts.limit ?? 5;
   const minConfidence = opts.minConfidence ?? 0;
   const likeQuery = `%${query}%`;
+  const scopeFilter = effectiveRetrievalScope(opts, 'f');
+  const trustFilter = retrievalTrustClause(opts, 'f');
 
   let sql;
   let params;
@@ -268,27 +531,43 @@ function fallbackSearch(db, query, opts = {}) {
   if (opts.namespaces && opts.namespaces.length > 0) {
     const placeholders = opts.namespaces.map(() => '?').join(',');
     sql = `
-      SELECT id, namespace, name, content, description, confidence, hit_count
-      FROM facts
-      WHERE (content LIKE ? OR name LIKE ?)
-        AND namespace IN (${placeholders})
-        AND confidence >= ?
-        AND (ttl_until IS NULL OR ttl_until > ?)
-      ORDER BY hit_count DESC, confidence DESC
+      SELECT f.id, f.namespace, f.name, f.content, f.description, f.confidence, f.hit_count,
+             f.source, f.source_path, f.source_key, f.status, f.created_at, f.updated_at,
+             f.project_id, f.scope_kind, f.path_scope, f.trigger_kind,
+             f.trigger_signature, f.verification_state, f.evidence_ref,
+             f.contract_hash, f.valid_until
+      FROM facts f
+      WHERE (f.content LIKE ? OR f.name LIKE ?)
+        AND f.namespace IN (${placeholders})
+        AND f.confidence >= ?
+        AND (f.ttl_until IS NULL OR f.ttl_until > ?)
+        AND COALESCE(f.status, 'active') = 'active'
+        ${scopeFilter.sql}
+        ${trustFilter.sql}
+      ORDER BY confidence DESC, COALESCE(updated_at, created_at, 0) DESC, id ASC
       LIMIT ?
     `;
-    params = [likeQuery, likeQuery, ...opts.namespaces, minConfidence, Date.now(), limit];
+    params = [likeQuery, likeQuery, ...opts.namespaces, minConfidence, Date.now(),
+      ...scopeFilter.params, ...trustFilter.params, limit];
   } else {
     sql = `
-      SELECT id, namespace, name, content, description, confidence, hit_count
-      FROM facts
-      WHERE (content LIKE ? OR name LIKE ?)
-        AND confidence >= ?
-        AND (ttl_until IS NULL OR ttl_until > ?)
-      ORDER BY hit_count DESC, confidence DESC
+      SELECT f.id, f.namespace, f.name, f.content, f.description, f.confidence, f.hit_count,
+             f.source, f.source_path, f.source_key, f.status, f.created_at, f.updated_at,
+             f.project_id, f.scope_kind, f.path_scope, f.trigger_kind,
+             f.trigger_signature, f.verification_state, f.evidence_ref,
+             f.contract_hash, f.valid_until
+      FROM facts f
+      WHERE (f.content LIKE ? OR f.name LIKE ?)
+        AND f.confidence >= ?
+        AND (f.ttl_until IS NULL OR f.ttl_until > ?)
+        AND COALESCE(f.status, 'active') = 'active'
+        ${scopeFilter.sql}
+        ${trustFilter.sql}
+      ORDER BY confidence DESC, COALESCE(updated_at, created_at, 0) DESC, id ASC
       LIMIT ?
     `;
-    params = [likeQuery, likeQuery, minConfidence, Date.now(), limit];
+    params = [likeQuery, likeQuery, minConfidence, Date.now(),
+      ...scopeFilter.params, ...trustFilter.params, limit];
   }
 
   return db.prepare(sql).all(...params).map(r => ({
@@ -300,7 +579,102 @@ function fallbackSearch(db, query, opts = {}) {
     confidence: r.confidence,
     hit_count: r.hit_count,
     score: 0,
+    source: r.source,
+    source_path: r.source_path,
+    source_key: r.source_key,
+    status: r.status || 'active',
+    project_id: r.project_id,
+    scope_kind: r.scope_kind || 'unscoped',
+    path_scope: r.path_scope,
+    trigger_kind: r.trigger_kind,
+    trigger_signature: r.trigger_signature,
+    verification_state: r.verification_state || 'candidate',
+    evidence_ref: r.evidence_ref,
+    contract_hash: r.contract_hash,
+    valid_until: r.valid_until,
+    created_at: r.created_at,
+    updated_at: r.updated_at,
   }));
+}
+
+function revokeMemorySource(sourceKey, opts = {}) {
+  const db = resolveDb(opts);
+  const key = normalizeSourceKey(sourceKey);
+  if (!key) return 0;
+  return db.prepare(`
+    UPDATE facts SET status = 'tombstone', updated_at = ?
+    WHERE source_key = ? AND status != 'tombstone'
+  `).run(Date.now(), key).changes;
+}
+
+/**
+ * Reconcile the complete set of file-backed facts. Exact-content path changes are
+ * moves and retain the original fact id. Sources absent from the input are tombstoned.
+ */
+function reconcileMemoryFacts(facts, opts = {}) {
+  const db = resolveDb(opts);
+  const desired = new Set();
+  let created = 0;
+  let updated = 0;
+  let moved = 0;
+
+  db.exec('BEGIN IMMEDIATE');
+  try {
+    for (const fact of facts || []) {
+      const sourcePath = fact.sourcePath || fact.source_path || null;
+      const sourceKey = normalizeSourceKey(fact.sourceKey || fact.source_key || sourcePath);
+      if (!sourceKey) throw new Error('[store-memory] reconcile facts require sourceKey or sourcePath');
+      desired.add(sourceKey);
+
+      const existing = db.prepare('SELECT id FROM facts WHERE source_key = ?').get(sourceKey);
+      let wasMoved = false;
+      if (!existing) {
+        const moveCandidate = db.prepare(`
+          SELECT id FROM facts
+          WHERE namespace = ? AND content = ?
+            AND source_key IS NOT NULL AND source_path IS NOT NULL
+            AND COALESCE(status, 'active') = 'active'
+          ORDER BY updated_at DESC LIMIT 1
+        `).get(fact.namespace, fact.content);
+        if (moveCandidate) {
+          db.prepare(`
+            UPDATE facts SET source_key = ?, source_path = ?, name = COALESCE(?, name),
+              source = COALESCE(?, source), status = 'active', superseded_by = NULL,
+              updated_at = ? WHERE id = ?
+          `).run(sourceKey, sourcePath, fact.name || null, fact.source || null, Date.now(), moveCandidate.id);
+          moved += 1;
+          wasMoved = true;
+        }
+      }
+
+      const result = writeMemory(
+        { ...fact, sourceKey, sourcePath, status: 'active' },
+        { db, authoritative: true },
+      );
+      if (result.isNew) created += 1;
+      else if (!wasMoved) updated += 1;
+    }
+
+    const activeSources = db.prepare(`
+      SELECT id, source_key FROM facts
+      WHERE source_key IS NOT NULL AND source_path IS NOT NULL
+        AND COALESCE(status, 'active') = 'active'
+    `).all();
+    let tombstoned = 0;
+    const tombstone = db.prepare(`
+      UPDATE facts SET status = 'tombstone', updated_at = ? WHERE id = ?
+    `);
+    for (const row of activeSources) {
+      if (desired.has(row.source_key)) continue;
+      tombstoned += tombstone.run(Date.now(), row.id).changes;
+    }
+
+    db.exec('COMMIT');
+    return { total: desired.size, created, updated, moved, tombstoned };
+  } catch (error) {
+    db.exec('ROLLBACK');
+    throw error;
+  }
 }
 
 // ── 删除 / 清理 ────────────────────────────────────────────────────────────
@@ -310,7 +684,7 @@ function fallbackSearch(db, query, opts = {}) {
  */
 function softDeleteMemory(id, opts = {}) {
   const db = resolveDb(opts);
-  db.prepare('UPDATE facts SET confidence = 0, ttl_until = 1, updated_at = ? WHERE id = ?')
+  db.prepare("UPDATE facts SET confidence = 0, ttl_until = 1, status = 'tombstone', updated_at = ? WHERE id = ?")
     .run(Date.now(), id);
 }
 
@@ -355,6 +729,21 @@ function retrieveMemorySummary(query, opts = {}) {
     summary: summarizeContent(r).slice(0, maxChars),
     confidence: r.confidence,
     hit_count: r.hit_count,
+    source: r.source,
+    source_path: r.source_path,
+    source_key: r.source_key,
+    status: r.status,
+    project_id: r.project_id,
+    scope_kind: r.scope_kind,
+    path_scope: r.path_scope,
+    trigger_kind: r.trigger_kind,
+    trigger_signature: r.trigger_signature,
+    verification_state: r.verification_state,
+    evidence_ref: r.evidence_ref,
+    contract_hash: r.contract_hash,
+    valid_until: r.valid_until,
+    created_at: r.created_at,
+    updated_at: r.updated_at,
   }));
 }
 
@@ -381,6 +770,7 @@ function memoryStats(opts = {}) {
       SUM(CASE WHEN confidence < 0.3 THEN 1 ELSE 0 END) AS low,
       COUNT(DISTINCT namespace) AS namespaces
     FROM facts
+    WHERE COALESCE(status, 'active') = 'active'
   `).get();
 }
 
@@ -389,9 +779,16 @@ module.exports = {
   writeBatch,
   retrieveMemory,
   retrieveMemorySummary,
+  reconcileMemoryFacts,
+  revokeMemorySource,
   softDeleteMemory,
   purgeExpired,
   memoryStats,
   factId,
+  normalizeSourceKey,
+  normalizeRelativePath,
+  retrievalScopeClause,
   VALID_NAMESPACES,
+  VALID_SCOPE_KINDS,
+  VALID_VERIFICATION_STATES,
 };

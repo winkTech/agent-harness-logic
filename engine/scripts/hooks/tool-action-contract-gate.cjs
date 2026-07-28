@@ -87,6 +87,9 @@ function validate(ctx, contract) {
   if (!Number.isFinite(age)) return 'contract updatedAt is missing or unparsable';
   if (age > maxAgeMs()) return `contract is stale: ${age}ms old`;
 
+  const inputHash = contract.toolPayload?.inputSha256 || '';
+  if (!inputHash || inputHash !== ctx.toolInputSha256) return 'tool input hash mismatch';
+
   if (ctx.filePath) {
     const fileHash = contract.toolPayload?.filePathSha256 || '';
     if (fileHash !== sha256(ctx.filePath)) return 'file path hash mismatch';
@@ -106,6 +109,38 @@ function validate(ctx, contract) {
   }
 
   return '';
+}
+
+function evaluate(payload, runtime = {}) {
+  const ctx = runtime.context || buildContext(payload);
+  if (!CONTROLLED_TOOLS.has(ctx.toolName)) {
+    return { source: 'tool-action-contract', decision: 'allow', skipped: true };
+  }
+  if ((ctx.eventName || '') !== 'PreToolUse' || !requiresActionContract(ctx)) {
+    return { source: 'tool-action-contract', decision: 'allow', skipped: true };
+  }
+
+  let contract = runtime.contract || null;
+  const filePath = path.join(ctx.runDir, 'tool-action-contract.json');
+  if (!contract) {
+    try {
+      contract = JSON.parse(fs.readFileSync(filePath, 'utf8'));
+    } catch {
+      return {
+        source: 'tool-action-contract',
+        decision: ctx.loopScope?.status === 'blocked' ? 'block' : 'warn',
+        diagnostics: [`tool action contract is missing: ${filePath}`],
+      };
+    }
+  }
+
+  const failure = validate(ctx, contract);
+  if (!failure) return { source: 'tool-action-contract', decision: 'allow' };
+  return {
+    source: 'tool-action-contract',
+    decision: ctx.loopScope?.status === 'blocked' ? 'block' : 'warn',
+    diagnostics: [failure],
+  };
 }
 
 function run(payload) {
@@ -173,6 +208,7 @@ function main() {
 if (require.main === module) main();
 
 module.exports = {
+  evaluate,
   run,
   validate,
 };

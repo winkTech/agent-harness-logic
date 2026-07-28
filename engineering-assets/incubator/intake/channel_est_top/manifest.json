@@ -19,12 +19,12 @@
   },
   "ports": [
     {
-      "name": "clk",
+      "name": "i_clk",
       "direction": "input",
       "width": 1
     },
     {
-      "name": "rst_n",
+      "name": "i_rst",
       "direction": "input",
       "width": 1
     },
@@ -66,13 +66,14 @@
     }
   ],
   "clock": {
-    "name": "clk",
+    "name": "i_clk",
     "period_ns": 10
   },
   "reset": {
-    "name": "rst_n",
-    "polarity": "active_low",
-    "type": "async"
+    "name": "i_rst",
+    "polarity": "active_high",
+    "type": "sync",
+    "async_release_synchronized": true
   },
   "constraints": {
     "target": {
@@ -85,57 +86,57 @@
     {
       "path": "rtl/channel_est_top.sv",
       "role": "rtl",
-      "sha256": "b4d13d9929aba77de7cb728617d1e5be6e94cb1129c043782eaced6fe96a20d2"
+      "sha256": "a045560188ac3cc39f68674ed07913184ab723d47ec64d6ed7445c8a30f73863"
     },
     {
       "path": "rtl/ls_estimator.sv",
       "role": "rtl",
-      "sha256": "28cb4ae48997d3e1f2646f41bbf6b2c6d4ba157fb972805b525776d8e88af9b0"
+      "sha256": "d370855b9acc014e7b58698d992a8a9b8ad6ce5e8155a16cf5875572cfb186ac"
     },
     {
       "path": "rtl/channel_interpolator.sv",
       "role": "rtl",
-      "sha256": "43e010b5255d7700c47940e7bba3b2ec5273c6c7309c6a135536f6d9a9cd3cad"
+      "sha256": "a577b3ff6c44cc89c148d3680d8729232017652c5a5bf37b72c7f3045b147453"
     },
     {
       "path": "tb/tb_channel_est_top.sv",
       "role": "tb",
-      "sha256": "94dd0553b55493c31822652d223f7f7afdcc91b60b016ce62b9e653923bd0828"
+      "sha256": "fbb0bb75dfe9257faaf2e624741687b62bb910d3b03207fc7a3ec81fdffbdcfd"
     },
     {
       "path": "tb/tb_chEst_cosim.sv",
       "role": "tb",
-      "sha256": "cb659aba33f921b17c045396a230e510c9a6af20ba70d261e775bcb7606121a9"
+      "sha256": "abaf28c04b62d9f304b54dba5e759193d3ff59505649a65d4a101935cac79773"
     },
     {
       "path": "tb/uvm/chEst_uvm_pkg.sv",
       "role": "tb",
-      "sha256": "b68b57f8ab34bb0ab2d413393463eb04c93f11359bae931b367dd99a99a0130f"
+      "sha256": "354b24413fb62a99d1171ff361e5d282cb2447829b558f7e2ddab9416b3c4666"
     },
     {
       "path": "tb/uvm/chEst_scoreboard.sv",
       "role": "tb",
-      "sha256": "0c21a3c751c83abe6fec78801a3603a90a51a4ad4ea160a9b1c802d88d36087e"
+      "sha256": "d3181d6f4db1c63c25ab9ed50f5c9912154d00624cee1f1e98ba870e9a827b04"
     },
     {
       "path": "tb/uvm/chEst_sequences.sv",
       "role": "tb",
-      "sha256": "dc96d44d0ad94622adddf0cfaa106758927f774208def72a4320d1cf186e76f6"
+      "sha256": "2c089310329e2fac8fb242b28b22fe865b74569d528dc9dcf4953737ec878deb"
     },
     {
       "path": "tb/uvm/chEst_base_test.sv",
       "role": "tb",
-      "sha256": "240d3778900ec64f9ca4bc2c972da7b30ce65a8347970e702b55237645d98831"
+      "sha256": "eb45e733e8553b1a45d4c24a76207a51cdfeb5410e6eea0b2c2d03c80208ee45"
     },
     {
       "path": "tb/uvm/chEst_basic_test.sv",
       "role": "tb",
-      "sha256": "08f8b2b7ba988083d3a92d14e9bdc1116a37a464e7d779d08b9a11368f9743d0"
+      "sha256": "7513095d9c21719e3bf25db362eb2204e4f5fdd9c2efc6c97a542cbc8219bc72"
     },
     {
       "path": "tb/uvm/tb_chEst_uvm_top.sv",
       "role": "tb",
-      "sha256": "e52d874d2b377b607a0964cc9a3111302245271901c4d8291a2f9dd4c6c26a1d"
+      "sha256": "5a1e61dcc76a73115473d7c834917f14c61ede46e56cccf440436fb508693129"
     }
   ],
   "generality": {
@@ -164,5 +165,6 @@
     ]
   },
   "waivers": [],
-  "superseded_by": null
+  "superseded_by": null,
+  "top": "channel_est_top"
 }

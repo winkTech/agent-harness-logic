@@ -7,6 +7,11 @@ const {
   validateActionPath,
   CONTRACT_FILE,
 } = require('../lib/project-directory-contract.cjs');
+const {
+  evaluateGuardBypass,
+} = require('../lib/gate-bypass.cjs');
+
+const GATE_ID = 'project-directory-guard.cjs';
 
 function readPayload() {
   try {
@@ -47,19 +52,58 @@ function block(filePath, failures, details = {}) {
   process.exit(2);
 }
 
-function main() {
-  if (process.env.CLAUDE_GATES_DISABLED === 'true') process.exit(0);
-  const payload = readPayload();
+function evaluate(payload, runtime = {}) {
+  const bypass = evaluateGuardBypass({
+    gateId: GATE_ID,
+    payload,
+    context: runtime.context,
+  });
+  if (bypass.allowed) {
+    return { source: GATE_ID, decision: 'allow', diagnostics: [] };
+  }
+
   const name = toolName(payload).toLowerCase();
-  if (!['write', 'edit', 'multiedit'].includes(name)) process.exit(0);
+  if (!['write', 'edit', 'multiedit'].includes(name)) {
+    return { source: GATE_ID, decision: 'allow', diagnostics: [] };
+  }
 
   const input = toolInput(payload);
-  const filePath = String(input.file_path || input.path || '').trim();
-  if (!filePath) process.exit(0);
+  const filePath = String(input.file_path || input.filePath || input.path || '').trim();
+  if (!filePath) {
+    return { source: GATE_ID, decision: 'allow', diagnostics: [] };
+  }
 
-  const result = validateActionPath(path.normalize(filePath), cwdFromPayload(payload));
-  if (!result.ok) block(filePath, result.failures, result);
+  const cwd = runtime.cwd || cwdFromPayload(payload);
+  const result = validateActionPath(path.normalize(filePath), cwd);
+  if (result.ok) {
+    return { source: GATE_ID, decision: 'allow', diagnostics: [] };
+  }
+  return {
+    source: GATE_ID,
+    decision: 'block',
+    diagnostics: (result.failures || []).map((message) => ({
+      code: 'directory-contract',
+      message,
+      filePath,
+      projectRoot: result.projectRoot || '',
+      relPath: result.relPath || '',
+      contract: CONTRACT_FILE,
+    })),
+  };
+}
+
+function main() {
+  const payload = readPayload();
+  const result = evaluate(payload);
+  if (result.decision === 'block') {
+    const first = result.diagnostics[0] || {};
+    block(first.filePath || '', result.diagnostics.map((item) => item.message), first);
+  }
   process.exit(0);
 }
 
-main();
+if (require.main === module) main();
+
+module.exports = {
+  evaluate,
+};

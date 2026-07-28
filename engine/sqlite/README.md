@@ -11,9 +11,11 @@ engine/sqlite/
 ├── index.cjs           # 统一入口: openDb / closeDb / backupDb
 ├── schema.cjs          # 迁移管理: 扫描 + 幂等执行
 ├── migrations/
-│   └── 001-init.cjs    # 全系统初始 DDL (13 张表 + FTS5 + 种子数据)
-├── store-memory.cjs    # 记忆仓库 (CRUD + FTS5 + 链接 + 批量/清理)
-├── store-events.cjs    # 运行时事件 (Dream 自学习输入源)
+│   ├── 001-init.cjs    # 全系统初始 DDL
+│   └── 004..008        # 事件/事实/作用域/消费者心跳/归因合同
+├── store-memory.cjs    # 事实仓库 (scope/trust 过滤 + FTS5 + 链接)
+├── store-memory-attribution.cjs # exposure/application/outcome 证据链
+├── store-events.cjs    # 运行时事件 + consumer watermark/heartbeat
 ├── store-skills.cjs    # 技能注册表 (生命周期 + 统计 + 退役)
 └── README.md
 ```
@@ -50,13 +52,37 @@ const { id } = mem.writeMemory({
   namespace: 'learnings',
   name: 'ldpc-encoding-tips',
   content: 'LDPC 编码时注意 H 矩阵的 girth 值...',
-  source: 'skill:handoff',
-  confidence: 0.7,
+  source: 'manual:verified-learning',
+  confidence: 0.9,
+  projectId: 'project-<stable-hash>',
+  scopeKind: 'path',
+  pathScope: 'rtl/ldpc/**',
+  triggerKind: 'file_edit',
+  triggerSignature: 'ldpc_encoder',
+  verificationState: 'verified',
+  evidenceRef: 'test:ldpc-regression',
+  contractHash: 'sha256:<contract-hash>',
+  validUntil: Date.now() + 180 * 86_400_000,
 });
 
-// 检索
-const results = mem.retrieveMemory('LDPC 编码', { limit: 5 });
-// → FTS5 BM25 排名结果, 自动更新 hit_count
+// 默认只返回当前 scope 内未过期的 verified 事实
+const results = mem.retrieveMemory('LDPC 编码', {
+  limit: 3,
+  trackHit: false,
+  scope: {
+    projectId: 'project-<stable-hash>',
+    relativePath: 'rtl/ldpc/encoder.sv',
+    triggerKind: 'file_edit',
+    triggerSignature: 'ldpc_encoder',
+  },
+});
+
+// 候选或跨作用域只能用于显式审查，不得作为默认 Agent 注入参数
+const review = mem.retrieveMemory('LDPC 编码', {
+  includeCandidates: true,
+  allowCrossScopeReview: true,
+  trackHit: false,
+});
 
 // 批量写入 (事务)
 mem.writeBatch([
@@ -84,9 +110,23 @@ events.record({
   payload: { tool: 'vlog', error: 'lint 失败' },
 });
 
-// 消费事件 (Dream 用)
-const items = events.sinceWatermark(0);     // 水印之后
-events.setWatermark(42);                    // 更新水印
+// 每个消费者独立消费并报告真实执行状态
+const watermark = events.getWatermark({ consumer: 'dream' });
+const items = events.sinceWatermark(watermark, 100);
+events.beginConsumerRun('dream', {
+  runId: 'dream-<unique-run-id>',
+  processedThrough: watermark,
+  pending: items.length,
+});
+// 仅真实成功消费后先推进独立 watermark，再闭合相同 runId 的 heartbeat
+events.setWatermark(42, { consumer: 'dream' });
+events.completeConsumerRun('dream', {
+  runId: 'dream-<unique-run-id>',
+  status: 'success',
+  processedThrough: 42,
+  processed: items.length,
+  pending: 0,
+});
 
 // 统计
 events.countByType();
@@ -121,11 +161,11 @@ const candidates = skills.decayCandidates(90);
   3. 执行未应用的迁移 (事务内, 幂等)
 ```
 
-添加新迁移: `migrations/002-cjk-fts5.cjs`
+添加新迁移时使用下一个未占用序号；不得修改已应用迁移：
 
 ```js
 module.exports = {
-  name: '002-add-columns',
+  name: '009-add-columns',
   up: `ALTER TABLE facts ADD COLUMN tags TEXT DEFAULT '[]'`,
 };
 ```
@@ -134,8 +174,9 @@ module.exports = {
 
 1. **零外部依赖** — 只用 `node:sqlite` (Node ≥22 内置)
 2. **幂等迁移** — 所有 DDL 使用 IF NOT EXISTS
-3. **双写兼容** — Phase 1 前文件系统 + SQLite 共存
+3. **单一逻辑事实层** — Markdown 是可审计来源，SQLite 是检索/事件/归因运行时；通过 stable source identity 对账
 4. **注射式 db** — 所有 store 接受 `opts.db` 参数 (测试/共享连接)
 5. **WAL 模式** — 并发读写不锁库
 6. **同步 API** — DatabaseSync 是同步的, 适合 hook 场景
-7. **FTS5 全文搜索** — 生产用 BM25, 失败降级到 LIKE
+7. **先过滤后排名** — project/path/trigger/trust 在 SQL 层失败关闭，FTS5/LIKE 只对合格集合排名
+8. **命中不等于效果** — hit count 仅是访问统计；效果必须经过 exposure → application → Verification Gate outcome，且不自动主张因果

@@ -1,0 +1,34 @@
+{
+  "schema_version": "1.0",
+  "asset_uid": "pulse_merge",
+  "version": "0.4.0",
+  "generated_by": "extract-cbb.cjs",
+  "commands": {
+    "probe": [
+      "vlog -version",
+      "vsim -version",
+      "vivado -version"
+    ],
+    "modelsim_sva": "vsim -c -do eda/modelsim_sva.do",
+    "vivado": "vivado -mode batch -source eda/vivado_cert.tcl -tclargs <part>",
+    "cdc": "structural audit plus authorized CDC tool report when multiple clocks/primitives exist"
+  },
+  "required_artifacts": [
+    "G-SVA-RUNTIME.json",
+    "synth-meta.json",
+    "utilization.rpt",
+    "timing-summary.rpt",
+    "clocks.rpt",
+    "cdc-report.json"
+  ],
+  "cdc_contract": {
+    "status": "na",
+    "reviewed_by": "lihan",
+    "rationale": "CDC crossing analysis is not applicable: manifest declares one clock (i_clk), structural RTL scan found no second clock or CDC primitive. This NA is explicit and reviewable; single-clock structural evidence is still retained.",
+    "clocks": [
+      "i_clk"
+    ],
+    "primitives": 0
+  },
+  "fail_closed": true
+}

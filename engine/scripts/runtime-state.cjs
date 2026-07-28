@@ -19,14 +19,19 @@
  */
 
 const { HARNESS_ROOT } = require('./lib/harness-root.cjs');
+const {
+  atomicWriteJson,
+  replaceJsonFileSync,
+  updateJsonFileSync,
+  withFileLockSync,
+} = require('./lib/project-scope.cjs');
 
 const p = require('node:path');
 const f = require('node:fs');
-const os = require('node:os');
 
 const HOME = HARNESS_ROOT;
 const INDEX_DIR = p.join(HOME, 'var', 'index');
-const STATE_FILE = p.join(INDEX_DIR, 'runtime-state.json');
+const STATE_FILE = process.env.CLAUDE_RUNTIME_STATE_FILE || p.join(INDEX_DIR, 'runtime-state.json');
 
 const MODES = ['根因分析', '第一性原理', '减法', '搜索优先', '倒推', '证据驱动', '闭环'];
 
@@ -66,20 +71,32 @@ function read() {
 }
 
 function write(state) {
-  f.mkdirSync(INDEX_DIR, { recursive: true });
   state.lastActivityAt = new Date().toISOString();
-  f.writeFileSync(STATE_FILE, JSON.stringify(state, null, 2));
+  replaceJsonFileSync(STATE_FILE, state);
+}
+
+function update(mutator) {
+  return updateJsonFileSync(STATE_FILE, defaultState, (state) => {
+    const next = mutator(state) || state;
+    next.lastActivityAt = new Date().toISOString();
+    return next;
+  });
 }
 
 // ── Commands ──────────────────────────────────────────────────────────────
 
 function cmdInit() {
-  if (f.existsSync(STATE_FILE)) {
-    console.error('Runtime state already exists. Use "reset" to clear.');
-    process.exit(1);
-  }
-  const state = defaultState();
-  write(state);
+  withFileLockSync(STATE_FILE, () => {
+    if (f.existsSync(STATE_FILE)) {
+      console.error('Runtime state already exists. Use "reset" to clear.');
+      process.exitCode = 1;
+      return;
+    }
+    const state = defaultState();
+    state.lastActivityAt = new Date().toISOString();
+    atomicWriteJson(STATE_FILE, state);
+  });
+  if (process.exitCode) return;
   console.error('Runtime state initialized at', STATE_FILE);
 }
 
@@ -95,21 +112,21 @@ function cmdUpdate(jsonStr) {
     console.error('Invalid JSON:', jsonStr);
     process.exit(1);
   }
-  const state = read() || defaultState();
-  Object.assign(state, updates);
-  write(state);
+  update((state) => Object.assign(state, updates));
   console.error('State updated.');
 }
 
 function cmdBumpFailure() {
-  const state = read() || defaultState();
-  state.failureCount = (state.failureCount || 0) + 1;
-  state.failureHistory.push({
-    count: state.failureCount,
-    at: new Date().toISOString(),
-    mode: state.currentMode,
+  const state = update((next) => {
+    next.failureCount = (next.failureCount || 0) + 1;
+    if (!Array.isArray(next.failureHistory)) next.failureHistory = [];
+    next.failureHistory.push({
+      count: next.failureCount,
+      at: new Date().toISOString(),
+      mode: next.currentMode,
+    });
+    return next;
   });
-  write(state);
   console.error(`Failure count: ${state.failureCount}`);
 }
 
@@ -118,28 +135,29 @@ function cmdSetMode(mode) {
     console.error(`Invalid mode. Valid modes: ${MODES.join(', ')}`);
     process.exit(1);
   }
-  const state = read() || defaultState();
-  if (state.currentMode) {
-    state.modeHistory.push({ from: state.currentMode, to: mode, at: new Date().toISOString() });
-  }
-  state.currentMode = mode;
-  write(state);
+  update((state) => {
+    if (!Array.isArray(state.modeHistory)) state.modeHistory = [];
+    if (state.currentMode) {
+      state.modeHistory.push({ from: state.currentMode, to: mode, at: new Date().toISOString() });
+    }
+    state.currentMode = mode;
+    return state;
+  });
   console.error(`Mode set to: ${mode || '(none)'}`);
 }
 
 function cmdRecordTool(toolName, result) {
-  const state = read() || defaultState();
-  state.toolCalls.push({
-    tool: toolName,
-    result: result || 'ok',
-    at: new Date().toISOString(),
-    mode: state.currentMode,
+  update((state) => {
+    if (!Array.isArray(state.toolCalls)) state.toolCalls = [];
+    state.toolCalls.push({
+      tool: toolName,
+      result: result || 'ok',
+      at: new Date().toISOString(),
+      mode: state.currentMode,
+    });
+    if (state.toolCalls.length > 50) state.toolCalls = state.toolCalls.slice(-50);
+    return state;
   });
-  // Keep last 50
-  if (state.toolCalls.length > 50) {
-    state.toolCalls = state.toolCalls.slice(-50);
-  }
-  write(state);
 }
 
 function cmdReset() {

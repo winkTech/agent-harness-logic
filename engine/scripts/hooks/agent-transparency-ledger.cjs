@@ -11,6 +11,8 @@ const crypto = require('node:crypto');
 const {
   atomicWriteJson,
   findProjectRoot,
+  isInsidePath,
+  isSamePath,
   payloadCwd,
   payloadFilePath,
   readJson,
@@ -20,14 +22,20 @@ const {
 const HOME = HARNESS_ROOT;
 const MAX_PREVIEW_CHARS = 220;
 const MAX_TRANSCRIPT_TAIL = 1024 * 1024;
-// 找用户消息时的逐级扩大窗口 (见 latestUserText)。上限 32MB 兜底, 避免在
-// 异常巨大的转录上整file读取。
-const TRANSCRIPT_TAIL_WINDOWS = [
+const configuredTranscriptMax = Number.parseInt(
+  process.env.CLAUDE_TRANSPARENCY_TRANSCRIPT_MAX_BYTES || String(4 * 1024 * 1024),
+  10,
+);
+const TRANSCRIPT_MAX_BYTES = Number.isFinite(configuredTranscriptMax)
+  ? Math.min(32 * 1024 * 1024, Math.max(MAX_TRANSCRIPT_TAIL, configuredTranscriptMax))
+  : 4 * 1024 * 1024;
+const TRANSCRIPT_TAIL_WINDOWS = [...new Set([
   MAX_TRANSCRIPT_TAIL,
   4 * 1024 * 1024,
   12 * 1024 * 1024,
   32 * 1024 * 1024,
-];
+  TRANSCRIPT_MAX_BYTES,
+].filter((value) => value <= TRANSCRIPT_MAX_BYTES))].sort((a, b) => a - b);
 const MAX_EVENTS_BYTES = 5 * 1024 * 1024;
 
 const CONTROLLED_TOOLS = new Set(['Bash', 'Edit', 'Write', 'MultiEdit', 'Agent', 'Task', 'Workflow']);
@@ -137,6 +145,19 @@ function eventNameFrom(payload) {
 
 function toolInputFrom(payload) {
   return payload?.tool_input || payload?.tool?.input || payload?.input || payload?.arguments || {};
+}
+
+function canonicalJson(value) {
+  const normalize = (entry) => {
+    if (Array.isArray(entry)) return entry.map(normalize);
+    if (!entry || typeof entry !== 'object') return entry;
+    const out = {};
+    for (const key of Object.keys(entry).sort()) {
+      if (entry[key] !== undefined) out[key] = normalize(entry[key]);
+    }
+    return out;
+  };
+  return JSON.stringify(normalize(value));
 }
 
 function commandFrom(payload) {
@@ -394,6 +415,7 @@ function buildContext(payload) {
   const eventName = eventNameFrom(payload);
   const command = commandFrom(payload);
   const content = contentFrom(payload);
+  const toolInputJson = canonicalJson(toolInputFrom(payload));
   const combined = [userInstruction, filePath, command, content.slice(0, 2000)].filter(Boolean).join('\n');
   const signals = detectSignals(combined);
   const taskType = inferTaskType(signals);
@@ -403,9 +425,14 @@ function buildContext(payload) {
     || payload?.sessionId
     || `local-${new Date().toISOString().slice(0, 10)}-${sha256(projectRoot).slice(0, 10)}`
   );
-  const runDir = process.env.CLAUDE_TRANSPARENCY_RUN_DIR
+  const explicitRunDir = process.env.CLAUDE_TRANSPARENCY_RUN_DIR;
+  const runsRoot = resolvePath(
+    process.env.CLAUDE_TRANSPARENCY_RUNS_DIR || path.join(HOME, 'var', 'runs'),
+    projectRoot,
+  );
+  const runDir = explicitRunDir
     ? resolvePath(process.env.CLAUDE_TRANSPARENCY_RUN_DIR, projectRoot)
-    : path.join(HOME, 'var', 'runs', runId);
+    : path.join(runsRoot, runId);
   const loopScope = loopScopeFrom(payload, projectRoot, userInstruction);
 
   return {
@@ -418,10 +445,14 @@ function buildContext(payload) {
     eventName,
     command,
     content,
+    toolInputSha256: sha256(toolInputJson),
+    toolInputBytes: Buffer.byteLength(toolInputJson),
     signals,
     taskType,
     runId,
     runDir,
+    runsRoot,
+    managedRunsRoot: !explicitRunDir,
     loopScope,
   };
 }
@@ -447,17 +478,46 @@ function requiresActionContract(ctx) {
   return ctx.toolName === 'Bash' && HIGH_RISK_BASH_COMMAND.test(ctx.command || '');
 }
 
+function mayRequireActionContract(payload) {
+  const mode = actionContractMode();
+  if (mode === 'off') return false;
+  const toolName = toolNameFrom(payload);
+  if (!CONTROLLED_TOOLS.has(toolName)) return false;
+  if (mode === 'all') return true;
+  if (toolName === 'Bash' && HIGH_RISK_BASH_COMMAND.test(commandFrom(payload))) return true;
+  if (['Agent', 'Task', 'Workflow'].includes(toolName)) return true;
+  const explicitInstruction = String(
+    payload?.user_message
+    || payload?.userMessage
+    || payload?.prompt
+    || process.env.CLAUDE_USER_MESSAGE
+    || ''
+  );
+  return /^\s*<codex_delegation(?:\s[^>]*)?>/i.test(decodeDelegationMarkup(explicitInstruction));
+}
+
+function instructionMetadata(value) {
+  const text = String(value || '');
+  return {
+    instructionCaptured: Boolean(text),
+    instructionSha256: text ? sha256(text) : '',
+    instructionBytes: text ? Buffer.byteLength(text) : 0,
+  };
+}
+
 function writeTaskContract(ctx) {
   const filePath = path.join(ctx.runDir, 'task-contract.json');
   const previous = readJson(filePath, {});
+  const priorInstruction = previous.userInstruction || '';
+  const instruction = instructionMetadata(ctx.userInstruction || priorInstruction);
   const contract = {
     schemaVersion: 1,
     runId: ctx.runId,
     projectRoot: ctx.projectRoot,
     taskType: ctx.taskType,
-    userInstruction: ctx.userInstruction || previous.userInstruction || '',
-    source: ctx.userInstruction ? 'transcript-or-env' : previous.source || 'unavailable',
-    ambiguityStatus: ctx.userInstruction ? 'captured' : 'unknown',
+    ...instruction,
+    source: instruction.instructionCaptured ? 'transcript-or-env' : previous.source || 'unavailable',
+    ambiguityStatus: instruction.instructionCaptured ? 'captured' : 'unknown',
     instructionPolicy: 'model statements are not evidence; tool logs and gate artifacts are evidence',
     loopScope: ctx.loopScope,
     createdAt: previous.createdAt || new Date().toISOString(),
@@ -581,6 +641,7 @@ function gateMap(ledger) {
 function writeToolActionContract(ctx, plan, ledger) {
   if (!requiresActionContract(ctx)) return null;
   const filePath = path.join(ctx.runDir, 'tool-action-contract.json');
+  const instruction = instructionMetadata(ctx.userInstruction);
   const contract = {
     schemaVersion: 1,
     createdBy: 'agent-transparency-ledger',
@@ -591,8 +652,9 @@ function writeToolActionContract(ctx, plan, ledger) {
     loopScope: ctx.loopScope,
     action: summarizeAction(ctx),
     match: {
-      status: ctx.userInstruction ? 'user-instruction-captured' : 'missing-user-instruction',
-      userInstructionQuote: preview(ctx.userInstruction, 500),
+      status: instruction.instructionCaptured ? 'user-instruction-captured' : 'missing-user-instruction',
+      userInstructionSha256: instruction.instructionSha256,
+      userInstructionBytes: instruction.instructionBytes,
       policy: 'controlled tools require a fresh machine-readable action contract before execution',
     },
     gates: gateMap(ledger),
@@ -600,6 +662,8 @@ function writeToolActionContract(ctx, plan, ledger) {
     loadedRules: plan.loadedRules,
     toolPayload: {
       cwd: ctx.cwd,
+      inputSha256: ctx.toolInputSha256,
+      inputBytes: ctx.toolInputBytes,
       filePathSha256: ctx.filePath ? sha256(ctx.filePath) : '',
       commandSha256: ctx.command ? sha256(ctx.command) : '',
       contentSha256: ctx.content ? sha256(ctx.content) : '',
@@ -628,7 +692,9 @@ function buildRuleTrace(ctx, plan, ledger) {
     ctx.command ? `Command: ${preview(ctx.command)}` : '',
     '',
     '## Instruction Source',
-    ctx.userInstruction ? `- Captured: ${preview(ctx.userInstruction, 500)}` : '- Captured: unavailable in hook payload/transcript',
+    ctx.userInstruction
+      ? `- Captured: sha256=${sha256(ctx.userInstruction)} bytes=${Buffer.byteLength(ctx.userInstruction)}`
+      : '- Captured: unavailable in hook payload/transcript',
     '',
     '## Required Skills',
     ...(plan.requiredSkills.length ? plan.requiredSkills.map((skill) => `- ${skill}: required`) : ['- none inferred']),
@@ -682,9 +748,35 @@ function writeRuleTrace(ctx, plan, ledger) {
 function rotateEventsIfNeeded(filePath) {
   try {
     const stat = fs.statSync(filePath);
-    if (stat.size <= MAX_EVENTS_BYTES) return;
-    const rotated = filePath.replace(/\.ndjson$/i, `.${Date.now()}.ndjson`);
+    const configuredBytes = Number.parseInt(
+      process.env.CLAUDE_TRANSPARENCY_MAX_EVENTS_BYTES || MAX_EVENTS_BYTES,
+      10,
+    );
+    const maxBytes = Number.isFinite(configuredBytes) ? Math.max(1, configuredBytes) : MAX_EVENTS_BYTES;
+    if (stat.size <= maxBytes) return;
+    const suffix = `${Date.now()}-${process.pid}-${crypto.randomBytes(3).toString('hex')}`;
+    const rotated = filePath.replace(/\.ndjson$/i, `.${suffix}.ndjson`);
     fs.renameSync(filePath, rotated);
+
+    const configuredRotated = Number.parseInt(
+      process.env.CLAUDE_TRANSPARENCY_MAX_ROTATED_EVENTS || '5',
+      10,
+    );
+    const maxRotated = Number.isFinite(configuredRotated) ? Math.max(1, configuredRotated) : 5;
+    const dir = path.dirname(filePath);
+    const base = path.basename(filePath, '.ndjson');
+    const rotatedFiles = fs.readdirSync(dir, { withFileTypes: true })
+      .filter((entry) => entry.isFile() && entry.name.startsWith(`${base}.`) && entry.name.endsWith('.ndjson'))
+      .map((entry) => {
+        const target = path.join(dir, entry.name);
+        let mtimeMs = 0;
+        try { mtimeMs = fs.statSync(target).mtimeMs; } catch { /* deterministic name fallback */ }
+        return { target, name: entry.name, mtimeMs };
+      })
+      .sort((a, b) => a.mtimeMs - b.mtimeMs || a.name.localeCompare(b.name));
+    for (const entry of rotatedFiles.slice(0, Math.max(0, rotatedFiles.length - maxRotated))) {
+      fs.unlinkSync(entry.target);
+    }
   } catch {
     // Missing files and rotation races are harmless.
   }
@@ -742,12 +834,35 @@ function appendEvent(ctx, event) {
   fs.appendFileSync(filePath, `${JSON.stringify(cleanUndefined(event))}\n`, 'utf8');
 }
 
-function ensureRunDir(ctx) {
-  fs.mkdirSync(ctx.runDir, { recursive: true });
+function pruneRunDirs(ctx) {
+  if (!ctx.managedRunsRoot || !fs.existsSync(ctx.runsRoot)) return;
+  const configuredMax = Number.parseInt(process.env.CLAUDE_TRANSPARENCY_MAX_RUNS || '50', 10);
+  const maxRuns = Number.isFinite(configuredMax) ? Math.max(5, configuredMax) : 50;
+  const dirs = fs.readdirSync(ctx.runsRoot, { withFileTypes: true })
+    .filter((entry) => entry.isDirectory())
+    .map((entry) => {
+      const dirPath = path.join(ctx.runsRoot, entry.name);
+      let mtimeMs = 0;
+      try { mtimeMs = fs.statSync(dirPath).mtimeMs; } catch { /* deterministic name fallback */ }
+      return { dirPath, name: entry.name, mtimeMs };
+    })
+    .sort((a, b) => a.mtimeMs - b.mtimeMs || a.name.localeCompare(b.name));
+  let remaining = dirs.length;
+  for (const entry of dirs) {
+    if (remaining <= maxRuns) break;
+    if (isSamePath(entry.dirPath, ctx.runDir) || !isInsidePath(entry.dirPath, ctx.runsRoot)) continue;
+    fs.rmSync(entry.dirPath, { recursive: true, force: true });
+    remaining -= 1;
+  }
 }
 
-function run(payload) {
-  const ctx = buildContext(payload);
+function ensureRunDir(ctx) {
+  fs.mkdirSync(ctx.runDir, { recursive: true });
+  pruneRunDirs(ctx);
+}
+
+function run(payload, options = {}) {
+  const ctx = options.context || buildContext(payload);
   ctx.payload = payload;
   if (!shouldCapture(ctx)) return ctx;
   const isPreToolUse = (ctx.eventName || '') === 'PreToolUse';
@@ -762,6 +877,12 @@ function run(payload) {
   const ledger = writeGateLedger(ctx, plan);
   const toolActionContract = writeToolActionContract(ctx, plan, ledger);
   writeRuleTrace(ctx, plan, ledger);
+  ctx.artifacts = {
+    taskContract: contract,
+    skillPlan: plan,
+    gateLedger: ledger,
+    toolActionContract,
+  };
   appendEvent(ctx, {
     ...buildEvent(ctx, plan),
     contractStatus: contract.ambiguityStatus,
@@ -806,10 +927,12 @@ if (require.main === module) main();
 module.exports = {
   buildContext,
   buildEvent,
+  canonicalJson,
   delegationFrom,
   detectSignals,
   inferTaskType,
   loopScopeFrom,
+  mayRequireActionContract,
   shouldCapture,
   preview,
   redact,

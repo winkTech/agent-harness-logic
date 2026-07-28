@@ -71,7 +71,7 @@ function shouldInjectForCwd(cwd) {
   return isSamePath(cwd, HOME_ROOT);
 }
 
-function main() {
+function main(opts = {}) {
   const state = readJSON(STATE_FILE);
 
   // 无 state 或新 session → 无输出
@@ -160,7 +160,7 @@ function main() {
     }
   } catch { /* 工作记忆初始化失败不阻塞 */ }
 
-  console.log(JSON.stringify({
+  const output = {
     ...summary,
     taskSummary,
     taskStale,
@@ -168,9 +168,16 @@ function main() {
     handoffBrief: hoursSinceLast > 24
       ? `上次活动在 ${hoursSinceLast} 小时前。前 session 失败 ${state.failureCount || 0} 次，最后模式为 ${state.currentMode || '闭环'}。${taskStale ? 'active-task.yaml 可能已过期。' : ''}`
       : `前 session 失败 ${state.failureCount || 0} 次，最后模式为 ${state.currentMode || '闭环'}。`,
-  }));
+  };
+  if (opts.emit !== false) {
+    const write = typeof opts.write === 'function' ? opts.write : console.log;
+    write(JSON.stringify(output));
+  }
+  return output;
 }
 
 if (require.main === module) {
   main();
 }
+
+module.exports = { main };

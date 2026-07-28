@@ -1,0 +1,46 @@
+{
+  "schema_version": "1.1",
+  "asset_uid": "stream_elastic_pipeline_golden",
+  "name": "stream_elastic_pipeline_queue_golden",
+  "kind": "golden-model",
+  "version": "0.1.0",
+  "owner": "lihan",
+  "maturity": {
+    "level": "qualification"
+  },
+  "requirement_ref": "engineering-assets/cbb/stream_elastic_pipeline/docs/requirements.md",
+  "implements_for": [
+    "stream_elastic_pipeline"
+  ],
+  "models": [
+    {
+      "role": "reference",
+      "trait": "transaction_queue",
+      "path": "stream_elastic_pipeline_model.py",
+      "note": "Independent bounded ordered queue with ready/valid transfer semantics."
+    }
+  ],
+  "vectors": {
+    "config": "DATA_WIDTH=12, DEPTH=1/2/4, fixed seeds 1001/1002/1004, randomized reset/backpressure",
+    "provenance": "Model code is local and replayed with Python unittest; RTL TB maintains an independent queue checker."
+  },
+  "sources": [
+    {
+      "path": "stream_elastic_pipeline_model.py",
+      "role": "reference",
+      "sha256": "448938b482ea05b90f0e5e07753a27e7790fae5fa97a77a6a3cc178419d3488d"
+    },
+    {
+      "path": "test_stream_elastic_pipeline_model.py",
+      "role": "test",
+      "sha256": "d9a5c61308496b4d6d7710d52863b7b81cacbf19df0170f2069bccf52cba9d85"
+    }
+  ],
+  "waivers": [],
+  "superseded_by": null,
+  "maintenance": {
+    "owner": "lihan",
+    "review_cadence": "quarterly",
+    "status": "active"
+  }
+}

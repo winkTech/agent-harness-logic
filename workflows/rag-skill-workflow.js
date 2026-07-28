@@ -43,11 +43,26 @@ const result = await agent(
   { label: 'rag-search', agentType: 'claude' }
 );
 
-const citations = Array.isArray(result?.citations) ? result.citations : [];
+const rawCitations = Array.isArray(result?.citations) ? result.citations : [];
+const citationPattern = /^(?![A-Za-z]:[\\/])(?![\\/])(?!.*(?:^|[\\/])\.\.(?:[\\/]|$))[^:\r\n]+:\d+(?:-\d+)?$/;
+const citations = rawCitations
+  .filter((item) => typeof item === 'string')
+  .map((item) => item.trim())
+  .filter((item) => citationPattern.test(item));
+const invalidCitations = rawCitations.filter((item) => (
+  typeof item !== 'string' || !citationPattern.test(item.trim())
+));
+const hasAnswer = typeof result?.answer === 'string' && result.answer.trim().length > 0;
+const pass = hasAnswer && citations.length > 0 && invalidCitations.length === 0;
 return {
-  pass: citations.length > 0,
-  reason: citations.length > 0 ? 'citation-backed retrieval completed' : 'missing citations; retrieval is not evidence-backed',
+  pass,
+  reason: pass
+    ? 'citation-backed retrieval completed'
+    : (!hasAnswer
+      ? 'missing answer; retrieval did not produce a usable response'
+      : 'missing or invalid file:line citations; retrieval is not evidence-backed'),
   query,
   result,
   citations,
+  invalidCitations,
 };

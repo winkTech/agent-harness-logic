@@ -1,6 +1,5 @@
 {
   "env": {
-    "CLAUDE_AUTOCOMPACT_PCT_OVERRIDE": "40",
     "CLAUDE_MAX_CONTEXT_WINDOW": "1000000",
     "SPAWN_SKILL_SECTION_MODE": "names_only",
     "SPAWN_PROMPT_BUDGET_LOG": "on",
@@ -16,7 +15,7 @@
   "enabledPlugins": {
     "andrej-karpathy-skills@karpathy-skills": true,
     "github@claude-plugins-official": true,
-    "superpowers@claude-plugins-official": true,
+    "superpowers@claude-plugins-official": false,
     "skill-creator@claude-plugins-official": true
   },
   "includeCoAuthoredBy": false,
@@ -30,14 +29,13 @@
       "PowerShell(git commit:*)"
     ],
     "allow": [
-      "Bash",
       "Read",
       "Write",
       "Edit",
       "WebFetch",
       "NotebookEdit"
     ],
-    "defaultMode": "bypassPermissions",
+    "defaultMode": "acceptEdits",
     "deny": [
       "Bash(git push origin main)",
       "Bash(git push origin master)",

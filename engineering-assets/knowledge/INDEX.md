@@ -10,7 +10,7 @@ tags: [index, navigation, knowledge-base]
 # 知识库索引
 
 > 导航: [场景入口卡](SCENE_CARDS.md) — [标签索引](TAG_INDEX.md) — [知识库规则](KNOWLEDGE_RULES.md)
-> 最后更新: 2026-07-18 | 文档: 97 篇 primary + 37 篇 source + 40 篇 鸢尾花书蒸馏 + 4 篇 methodology + 17 篇 references + 19 篇 templates
+> 最后更新: 2026-07-28 | 文档: 98 篇 primary + 37 篇 source + 40 篇 鸢尾花书蒸馏 + 4 篇 methodology + 19 篇 references + 19 篇 templates
 
 ---
 
@@ -163,3 +163,12 @@ knowledge/
 | UVM testbenches | 5 algorithms |
 
 > 计数自动更新: `node engine/scripts/kb-stats.cjs`
+
+
+## CBB admission references
+The admitted foundation assets are indexed in `../catalog/KNOWLEDGE-INDEX.md`; machine truth is `../catalog/knowledge-index.json`.
+Current admitted packages: `../cbb/stream_elastic_pipeline` and `../cbb/pulse_merge` (v0.4.0).
+
+<!-- BEGIN:KIDX:STATS -->
+<!-- files=126; .md=126 -->
+<!-- END:KIDX:STATS -->

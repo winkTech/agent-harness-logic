@@ -117,8 +117,16 @@ async function runWorkflow(name, args = {}, opts = {}) {
         configIssues: [],
         dependencyIssues: [],
         automatedEvidence: {
-          command: 'node engine/scripts/workflow-evidence-scan.cjs --json --targets src',
+          runner: 'argv',
+          argv: ['node', 'engine/scripts/workflow-evidence-scan.cjs', '--json', '--root', '.', '--targets-json', '["src"]'],
+          scanner: 'workflow-evidence-scan',
+          schemaVersion: 2,
+          exitCode: 0,
+          status: opts.badSecurityEvidence ? 'clean' : 'clean',
+          truncated: opts.badSecurityEvidence === true,
+          manifestSha256: 'a'.repeat(64),
           filesScanned: 1,
+          totalCandidates: 1,
           issueCount: 0,
         },
         scanSummary: 'clean',
@@ -137,7 +145,12 @@ async function runWorkflow(name, args = {}, opts = {}) {
       return { p0: [], p1: [], p2: [], verificationSteps: ['rerun scan'], summary: 'clean' };
     }
     if (label === 'rag-search') {
-      return { answer: 'Use the cited rule.', citations: ['docs/rules/00-core.md:1'] };
+      return {
+        answer: 'Use the cited rule.',
+        citations: opts.badRagCitation
+          ? ['not-a-file-reference']
+          : ['docs/rules/00-core.md:1'],
+      };
     }
     return {};
   };
@@ -218,13 +231,25 @@ test('code-review workflow fails the run when Pass 1 has a blocking finding', as
   assert(run.result.blockingIssues.length === 1, 'blocking issue was not surfaced');
 });
 
-test('security workflow injects deterministic scan command into Phase 2', async () => {
+test('security workflow binds Phase 2 to a deterministic argv scan manifest', async () => {
   const run = await runWorkflow('security-review-workflow', { targets: ['src'], scope: 'full' });
   assert(run.ok, `security-review threw: ${run.error?.message}`);
   const scanCall = run.calls.find((call) => call.opts.label === 'p2-scan');
   assert(scanCall, 'p2-scan agent call missing');
-  assert(scanCall.prompt.includes('workflow-evidence-scan.cjs'), 'deterministic scan command missing from p2 prompt');
+  assert(scanCall.prompt.includes('"runner":"argv"'), 'structured runner request missing from p2 prompt');
+  assert(scanCall.prompt.includes('"--targets-json","[\\"src\\"]"'), 'JSON target argv missing from p2 prompt');
   assert(run.result.automatedScan.automatedEvidence.filesScanned === 1, 'automated evidence was not returned');
+  assert(run.result.pass === true, 'valid bound scan evidence did not pass the workflow');
+  assert(run.result.scanEvidenceValid === true, 'valid scan evidence was not marked bound');
+});
+
+test('security workflow rejects a truncated manifest even when it claims clean', async () => {
+  const run = await runWorkflow('security-review-workflow', { targets: ['src'], scope: 'full' }, { badSecurityEvidence: true });
+  assert(run.ok, `security-review threw: ${run.error?.message}`);
+  assert(run.result.pass === false, 'truncated scan evidence produced pass=true');
+  assert(run.result.scanEvidenceValid === false, 'truncated scan evidence was accepted');
+  assert((run.result.blockingIssues || []).some((item) => /truncated/.test(item)),
+    `missing truncation blocker: ${JSON.stringify(run.result.blockingIssues)}`);
 });
 
 test('rag workflow requires citations for a successful answer', async () => {
@@ -232,6 +257,18 @@ test('rag workflow requires citations for a successful answer', async () => {
   assert(run.ok, `rag workflow threw: ${run.error?.message}`);
   assert(run.result.pass === true, 'rag workflow did not pass with cited stub result');
   assert(run.result.citations.length === 1, 'rag workflow did not expose citations');
+});
+
+test('rag workflow rejects non-file citations instead of counting arbitrary strings', async () => {
+  const run = await runWorkflow(
+    'rag-skill-workflow',
+    { query: 'reset rule' },
+    { badRagCitation: true }
+  );
+  assert(run.ok, `rag workflow threw: ${run.error?.message}`);
+  assert(run.result.pass === false, 'rag workflow accepted an invalid citation string');
+  assert(run.result.invalidCitations.includes('not-a-file-reference'),
+    'rag workflow did not expose the rejected citation');
 });
 
 test('hdl dag workflow blocks until the preflight checkpoint is confirmed', async () => {
