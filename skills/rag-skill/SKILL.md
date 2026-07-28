@@ -1,7 +1,6 @@
 ---
 name: rag-skill
-description: 知识库检索问答。意图路由 → 标签优先 → 渐进加载。替代旧版 grep 轮询。
-version: 2.0.0
+description: 本地 FPGA/通信知识库检索问答。用户要求查知识库、参考既往设计/调试经验、比较方案或定位本地技术文档时使用；按意图路由、标签和标题锚点渐进加载，避免全库 grep 与过时行号。
 ---
 
 # 知识库检索 v2
@@ -56,9 +55,9 @@ version: 2.0.0
 不再一次加载 INDEX.md。严格按层级加载，**禁止全量读取 SCENE_CARDS.md 或 TAG_INDEX.md**：
 
 ```
-L0: SCENE_CARDS 总览行 (L1-L24, ~480 tok) → 用行号索引精确读
+L0: 用 rg 定位 SCENE_CARDS 的“场景总览”和各场景标题
     ↓ 选择场景
-L1: 匹配场景卡片 (L25-L291 中某段, ~900 tok)
+L1: 从匹配标题读取到下一个同级标题（单张卡片, ~900 tok）
     ↓ 提取标签
 L2: TAG_INDEX 相关标签区 (~600 tok)
     ↓ 定位文档
@@ -69,11 +68,14 @@ L4: 目标文档全文 (500-3k tok)
 L5: grep primary/ (全文扫描, 最后手段)
 ```
 
-**行号精准加载**（SCENE_CARDS.md 含行号映射 YAML）:
+**标题锚点加载**（文档增删内容后仍稳定）:
+```powershell
+rg -n "^## (场景总览|[0-9]{2} )" engineering-assets/knowledge/SCENE_CARDS.md
 ```
-SCENE_CARDS.md L1-L24   → 场景总览（选场景号）
-然后 Read file offset=N limit=M → 仅读匹配场景
-```
+
+先读取“场景总览”标题到第一个编号场景；选择场景后，从对应 `## NN` 标题
+读取到下一个 `##` 标题之前。`offset/limit` 必须根据本次 `rg -n` 结果计算，
+不得保存或复用历史行号。
 
 **预算控制**：
 - 单次检索总消耗 ≤ 5,000 tok（含已读文档）

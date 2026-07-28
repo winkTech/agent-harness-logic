@@ -38,7 +38,20 @@ export const meta = {
 const targets = args?.targets || args?.files || [];
 const scope = args?.scope || 'full';
 const allowGlobal = args?.allowGlobal === true;
-const evidenceScanCommand = `node engine/scripts/workflow-evidence-scan.cjs --json --targets "${targets.join(',') || '.'}"`;
+const scanTargets = targets.length > 0 ? targets : ['.'];
+const evidenceScanRequest = {
+  runner: 'argv',
+  argv: [
+    'node',
+    'engine/scripts/workflow-evidence-scan.cjs',
+    '--json',
+    '--root',
+    '.',
+    '--targets-json',
+    JSON.stringify(scanTargets),
+  ],
+};
+const evidenceScanRequestJson = JSON.stringify(evidenceScanRequest);
 
 phase('Phase 1 威胁建模');
 
@@ -106,7 +119,10 @@ const scanResult = await agent(`你是**安全工程师**，执行安全审查 P
 重点区域: ${(threatModel?.focusAreas || []).join(', ')}
 
 必须先运行确定性证据扫描，并把输出作为 automatedEvidence 引用；不要只凭记忆或自述扫描:
-${evidenceScanCommand}
+可信执行请求(JSON，必须原样交给支持 argv 数组的 runner；禁止转换为 shell 字符串):
+${evidenceScanRequestJson}
+
+若运行时没有 argv runner，必须返回 evidenceUnavailable 并使审查 fail closed。
 
 请执行:
 1. **代码扫描** — 搜索以下模式:
@@ -125,17 +141,17 @@ ${evidenceScanCommand}
 
 输出 JSON:
 {
-  "hardcodedSecrets": [{"file": "路径", "pattern": "匹配模式", "severity": "HIGH|MEDIUM"}],
+  "hardcodedSecrets": [{"file": "路径", "line": 1, "ruleId": "hardcoded-secret", "key": "token", "valueHash": "SHA-256", "severity": "HIGH|MEDIUM"}],
   "injectionRisks": [{"file": "路径", "type": "SQL|Command|Path", "severity": "HIGH|MEDIUM"}],
   "dangerousCalls": [{"file": "路径", "function": "函数名", "severity": "HIGH|MEDIUM|LOW"}],
   "configIssues": [{"issue": "问题描述", "severity": "HIGH|MEDIUM|LOW"}],
   "dependencyIssues": [{"package": "包名", "issue": "问题", "severity": "HIGH|MEDIUM|LOW"}],
-  "automatedEvidence": {"command": "实际运行命令", "filesScanned": 0, "issueCount": 0},
+  "automatedEvidence": {"runner": "argv", "argv": [], "scanner": "workflow-evidence-scan", "schemaVersion": 2, "exitCode": 0, "status": "clean|issues_found|invalid_target|empty_scan|truncated", "truncated": false, "filesScanned": 0, "totalCandidates": 0, "issueCount": 0, "manifestSha256": "64位十六进制哈希"},
   "scanSummary": "扫描总结"
 }`, { label: 'p2-scan', phase: 'Phase 2 自动化扫描', schema: {
     type: 'object',
     properties: {
-      hardcodedSecrets: { type: 'array', items: { type: 'object', properties: { file: { type: 'string' }, pattern: { type: 'string' }, severity: { type: 'string' } }, required: ['file', 'severity'] } },
+      hardcodedSecrets: { type: 'array', items: { type: 'object', properties: { file: { type: 'string' }, line: { type: 'number' }, ruleId: { type: 'string' }, key: { type: 'string' }, valueHash: { type: 'string' }, severity: { type: 'string' } }, required: ['file', 'line', 'ruleId', 'key', 'valueHash', 'severity'] } },
       injectionRisks: { type: 'array', items: { type: 'object', properties: { file: { type: 'string' }, type: { type: 'string' }, severity: { type: 'string' } }, required: ['file', 'type', 'severity'] } },
       dangerousCalls: { type: 'array', items: { type: 'object', properties: { file: { type: 'string' }, function: { type: 'string' }, severity: { type: 'string' } }, required: ['file', 'function', 'severity'] } },
       configIssues: { type: 'array', items: { type: 'object', properties: { issue: { type: 'string' }, severity: { type: 'string' } }, required: ['issue', 'severity'] } },
@@ -143,16 +159,49 @@ ${evidenceScanCommand}
       automatedEvidence: {
         type: 'object',
         properties: {
-          command: { type: 'string' },
+          runner: { type: 'string', enum: ['argv'] },
+          argv: { type: 'array', items: { type: 'string' } },
+          scanner: { type: 'string', enum: ['workflow-evidence-scan'] },
+          schemaVersion: { type: 'number' },
+          exitCode: { type: 'number' },
+          status: { type: 'string' },
+          truncated: { type: 'boolean' },
           filesScanned: { type: 'number' },
+          totalCandidates: { type: 'number' },
           issueCount: { type: 'number' },
+          manifestSha256: { type: 'string' },
         },
-        required: ['command', 'filesScanned', 'issueCount'],
+        required: ['runner', 'argv', 'scanner', 'schemaVersion', 'exitCode', 'status', 'truncated', 'filesScanned', 'totalCandidates', 'issueCount', 'manifestSha256'],
       },
       scanSummary: { type: 'string' },
     },
     required: ['automatedEvidence', 'scanSummary'],
   }});
+
+const automatedEvidence = scanResult?.automatedEvidence || {};
+const blockingIssues = [];
+if (automatedEvidence.runner !== evidenceScanRequest.runner) blockingIssues.push('scanner runner is not argv');
+if (JSON.stringify(automatedEvidence.argv || []) !== JSON.stringify(evidenceScanRequest.argv)) blockingIssues.push('scanner argv does not match the trusted request');
+if (automatedEvidence.scanner !== 'workflow-evidence-scan' || automatedEvidence.schemaVersion !== 2) blockingIssues.push('scanner identity/schema mismatch');
+if (automatedEvidence.exitCode !== 0) blockingIssues.push(`scanner exitCode=${automatedEvidence.exitCode}`);
+if (!['clean', 'issues_found'].includes(automatedEvidence.status)) blockingIssues.push(`scanner status=${automatedEvidence.status || 'missing'}`);
+if (automatedEvidence.truncated !== false) blockingIssues.push('scanner evidence is truncated');
+if (!Number.isInteger(automatedEvidence.filesScanned) || automatedEvidence.filesScanned < 1) blockingIssues.push('scanner filesScanned is zero or invalid');
+if (!Number.isInteger(automatedEvidence.totalCandidates) || automatedEvidence.totalCandidates < automatedEvidence.filesScanned) blockingIssues.push('scanner candidate count is invalid');
+if (!/^[a-f0-9]{64}$/.test(automatedEvidence.manifestSha256 || '')) blockingIssues.push('scanner manifestSha256 is invalid');
+const scanEvidenceValid = blockingIssues.length === 0;
+if (!scanEvidenceValid) {
+  return {
+    pass: false,
+    scanEvidenceValid,
+    blockingIssues,
+    threatModel,
+    automatedScan: scanResult,
+    manualVerification: null,
+    fixPlan: null,
+    summary: 'Security review stopped because deterministic scan evidence was incomplete or unbound.',
+  };
+}
 
 const totalScanIssues = (scanResult?.hardcodedSecrets?.length || 0) +
   (scanResult?.injectionRisks?.length || 0) +
@@ -266,6 +315,9 @@ log(`   🟡 P1 短期修复: ${(fixPlan?.p1 || []).length} 项`);
 log(`   🟢 P2 长期改进: ${(fixPlan?.p2 || []).length} 项`);
 
 return {
+  pass: true,
+  scanEvidenceValid,
+  blockingIssues,
   threatModel,
   automatedScan: scanResult,
   manualVerification: manualResult,

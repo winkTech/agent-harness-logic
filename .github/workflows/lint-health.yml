@@ -6,23 +6,74 @@ on:
   pull_request:
     branches: [main]
 
+permissions:
+  contents: read
+
 jobs:
   harness-health:
-    name: Static, Registry, Regression, Coverage
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-    steps:
-      - uses: actions/checkout@v4
+    name: Static, Registry, Regression, Coverage (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
 
-      - name: Use Node.js 22
-        uses: actions/setup-node@v4
+    steps:
+      - name: Checkout without persisted credentials
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with:
-          node-version: '22'
+          persist-credentials: false
+
+      - name: Use Node.js 22.17.1
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: '22.17.1'
+
+      - name: Use Python 3.12.11
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
+        with:
+          python-version: '3.12.11'
+
+      - name: Verify Git, CI, MCP, and plugin contracts
+        shell: bash
+        run: |
+          set -o pipefail
+          mkdir -p var/ci
+          node --test engine/scripts/test-hooks/git-ci-repro-contract.test.cjs \
+            engine/scripts/test-hooks/gate-bypass-contract.test.cjs 2>&1 \
+            | tee "var/ci/git-ci-contract-${RUNNER_OS}.log"
 
       - name: Run the fail-closed Harness gate
+        shell: bash
         env:
           CLAUDE_HARNESS_ROOT: ${{ github.workspace }}
           CLAUDE_HARNESS_NO_PERSIST: '1'
           CLAUDE_HARNESS_VERIFY_READONLY: '1'
           CLAUDE_NO_DIAGNOSTIC_WRITES: '1'
-        run: node engine/scripts/harness-ci.cjs
+        run: |
+          set -o pipefail
+          node engine/scripts/harness-ci.cjs 2>&1 \
+            | tee "var/ci/harness-ci-${RUNNER_OS}.log"
+
+      - name: Write immutable-run provenance
+        if: always()
+        shell: bash
+        env:
+          CI_COMMIT_SHA: ${{ github.sha }}
+          CI_REF: ${{ github.ref }}
+          CI_RUN_ID: ${{ github.run_id }}
+        run: |
+          mkdir -p var/ci
+          node -e 'const fs=require("node:fs"); const cp=require("node:child_process"); const o={schemaVersion:1,commitSha:process.env.CI_COMMIT_SHA,ref:process.env.CI_REF,runId:process.env.CI_RUN_ID,runnerOs:process.env.RUNNER_OS,node:process.version,python:cp.execFileSync("python",["--version"],{encoding:"utf8"}).trim(),coverage:"var/coverage/coverage-summary.json",generatedAt:new Date().toISOString()}; fs.writeFileSync(`var/ci/provenance-${process.env.RUNNER_OS}.json`,JSON.stringify(o,null,2)+"\n");'
+
+      - name: Upload logs, coverage, and provenance
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: harness-evidence-${{ runner.os }}
+          path: |
+            var/ci/
+            var/coverage/coverage-summary.json
+          if-no-files-found: warn
+          retention-days: 14

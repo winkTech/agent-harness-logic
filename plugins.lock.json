@@ -1,0 +1,18 @@
+{
+  "$schema": "./engine/schemas/plugin-lock.schema.json",
+  "version": 1,
+  "plugins": {
+    "andrej-karpathy-skills@karpathy-skills": {
+      "version": "1.0.0",
+      "gitCommitSha": "2c606141936f1eeef17fa3043a72095b4765b9c2"
+    },
+    "github@claude-plugins-official": {
+      "version": "b664e152af57",
+      "gitCommitSha": "b664e152af5742dd11b6a6e5d7a65848a8c5a261"
+    },
+    "skill-creator@claude-plugins-official": {
+      "version": "b664e152af57",
+      "gitCommitSha": "b664e152af5742dd11b6a6e5d7a65848a8c5a261"
+    }
+  }
+}
