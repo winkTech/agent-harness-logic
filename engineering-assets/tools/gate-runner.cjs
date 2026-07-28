@@ -59,6 +59,19 @@ function validate(schema, data, p = '$', errs = []) {
 const sha256 = (buf) => crypto.createHash('sha256').update(buf).digest('hex');
 const BUS_RE = /_axis_|_axi_|^wb_|^s_wb_|^m_wb_|^tck$|^tms$|^tdi$|^tdo$/i; // 协议豁免
 function stripComments(src) { return src.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/[^\n]*/g, ''); }
+function escapeRegExp(value) { return String(value).replace(/[.*+?^${}()|[\]\\]/g, '\\$&'); }
+
+function redlineChecks(manifest, code) {
+  const v = [];
+  const reset = manifest.reset || {};
+  if (reset.polarity === 'active_low') v.push('复位为 active_low → 违红线3(须高有效)');
+  if (reset.type === 'async' && !reset.async_release_synchronized) v.push('异步复位且无"异步复位同步释放"证据 → 违红线3');
+  const resetName = reset.name || 'i_rst';
+  const resetNegedge = new RegExp(`\\bnegedge\\s+${escapeRegExp(resetName)}\\b`).test(code);
+  if (reset.type === 'sync' && resetNegedge) v.push(`RTL 出现 reset async 边沿 'negedge ${resetName}' → manifest 声明为同步复位`);
+  if (reset.type === 'async' && resetNegedge) v.push(`RTL 出现 async 边沿 'negedge ${resetName}' (确认异步复位)`);
+  return v;
+}
 // 声明中"标识符后紧跟 [" 者为存储器阵列 (reg [4:0] rom [0:N-1]);
 // 而 reg [4:0] foo; 的 [ ] 在标识符之前, 是向量不是阵列。
 function memoryArrayNames(code) {
@@ -113,7 +126,18 @@ function alwaysBlocks(code) {
 // ── 门禁实现 ─────────────────────────────────────────────────────────────
 function runGates(pkgDir, manifest, repoRoot) {
   const gates = [];
-  const add = (g) => gates.push(g);
+  const engineRoot = fs.existsSync(path.join(repoRoot, 'var')) ? repoRoot : path.join(repoRoot, 'engineering-assets');
+  const waiverPath = fs.existsSync(path.join(engineRoot, 'var', 'cbb', 'waiver-ledger.json'))
+    ? path.join(engineRoot, 'var', 'cbb', 'waiver-ledger.json')
+    : path.join(engineRoot, 'catalog', 'waiver-ledger.json');
+  let waiverEntries = [];
+  try { waiverEntries = JSON.parse(fs.readFileSync(waiverPath, 'utf8')).entries || []; } catch {}
+  const DENY_GATES = new Set(['G-A-00', 'G-A-01', 'G-A-02', 'RL-OUT', 'G-C-03', 'G-B-03', 'G-B-05']);
+  const add = (g) => {
+    const waiver = waiverEntries.find((entry) => entry.asset_uid === manifest.asset_uid && entry.gate === g.id && entry.status === 'open' && !DENY_GATES.has(g.id) && (!entry.expires_at || Date.parse(entry.expires_at) >= Date.now()));
+    if (waiver && ['fail', 'blocked'].includes(g.status)) gates.push({ ...g, status: 'waived', waiver_id: waiver.id, detail: `${g.detail}; waived by ${waiver.id} within scope` });
+    else gates.push(g);
+  };
   const rtlSrcs = (manifest.sources || []).filter((s) => s.role === 'rtl');
   const rtlAbs = rtlSrcs.map((s) => path.join(pkgDir, s.path));
   const rtlText = rtlAbs.map((f) => (fs.existsSync(f) ? fs.readFileSync(f, 'utf8') : '')).join('\n');
@@ -147,22 +171,27 @@ function runGates(pkgDir, manifest, repoRoot) {
   // G-A-00 lint — 优先 ModelSim vlog (用户工具链), 回退 iverilog
   (() => {
     const build = path.join(repoRoot, 'engineering-assets', 'var', 'build', 'lint', manifest.asset_uid || 'x');
+    const defaultNettypeNone = path.join(repoRoot, 'engineering-assets', 'tools', 'lib', 'default_nettype_none.vh');
+    const defaultNettypeWire = path.join(repoRoot, 'engineering-assets', 'tools', 'lib', 'default_nettype_wire.vh');
+    const compileSources = [defaultNettypeNone, ...rtlAbs, defaultNettypeWire];
     try { fs.rmSync(build, { recursive: true, force: true }); } catch {}
     fs.mkdirSync(build, { recursive: true });
     const vlib = cp.spawnSync('vlib', ['work'], { cwd: build, encoding: 'utf8' });
     if (!(vlib.error && vlib.error.code === 'ENOENT')) {
-      const vlog = cp.spawnSync('vlog', ['-sv', '-quiet', '-work', 'work', ...rtlAbs.map((f) => path.resolve(f))], { cwd: build, encoding: 'utf8' });
+      const vlog = cp.spawnSync('vlog', ['-sv', '-quiet', '-work', 'work', ...compileSources.map((f) => path.resolve(f))], { cwd: build, encoding: 'utf8' });
       const out = `${vlog.stdout || ''}${vlog.stderr || ''}`;
       const mm = out.match(/Errors:\s*(\d+),\s*Warnings:\s*(\d+)/);
       const errs = mm ? parseInt(mm[1], 10) : (vlog.status === 0 ? 0 : 1);
       const warns = mm ? parseInt(mm[2], 10) : 0;
-      add({ id: 'G-A-00', name: 'ModelSim vlog lint', level: 'intake', must: true, status: errs === 0 ? 'pass' : 'fail', severity: 'high', detail: errs === 0 ? `vlog 编译干净 (Errors:0 Warnings:${warns})` : out.split('\n').filter((l) => /error/i.test(l)).slice(0, 12) });
+      const implicitNets = out.split(/\r?\n/).filter((line) => /implicit|net.*not declared|not declared.*net/i.test(line));
+      add({ id: 'G-A-00', name: 'ModelSim vlog lint', level: 'intake', must: true, status: errs === 0 && implicitNets.length === 0 ? 'pass' : 'fail', severity: 'high', ...(implicitNets.length ? { implicit_nets: implicitNets.length } : {}), detail: errs === 0 && implicitNets.length === 0 ? `vlog 编译干净 (Errors:0 Warnings:${warns})` : [...out.split('\n').filter((l) => /error/i.test(l)).slice(0, 12), ...implicitNets.slice(0, 12)] });
       return;
     }
-    const iv = cp.spawnSync('iverilog', ['-g2012', '-t', 'null', ...rtlAbs], { encoding: 'utf8' });
+    const iv = cp.spawnSync('iverilog', ['-g2012', '-t', 'null', ...compileSources], { encoding: 'utf8' });
     if (iv.error && iv.error.code === 'ENOENT') { add({ id: 'G-A-00', name: 'lint', level: 'intake', must: true, status: 'blocked', severity: 'high', detail: 'ModelSim/iverilog 均不可用' }); return; }
     const out = `${iv.stdout || ''}${iv.stderr || ''}`.trim();
-    add({ id: 'G-A-00', name: 'iverilog lint(回退)', level: 'intake', must: true, status: iv.status === 0 ? 'pass' : 'fail', severity: 'high', detail: iv.status === 0 ? '编译干净 exit 0' : out.split('\n').slice(0, 20) });
+    const implicitNets = out.split(/\r?\n/).filter((line) => /implicit|net.*not declared|not declared.*net/i.test(line));
+    add({ id: 'G-A-00', name: 'iverilog lint(回退)', level: 'intake', must: true, status: iv.status === 0 && implicitNets.length === 0 ? 'pass' : 'fail', severity: 'high', ...(implicitNets.length ? { implicit_nets: implicitNets.length } : {}), detail: iv.status === 0 && implicitNets.length === 0 ? '编译干净 exit 0; implicit_nets=0' : [...out.split('\n').slice(0, 20), ...implicitNets.slice(0, 12)] });
   })();
 
   // G-A-02 命名 (clk/rst + 端口前缀, AXI 豁免)
@@ -180,13 +209,9 @@ function runGates(pkgDir, manifest, repoRoot) {
     add({ id: 'G-A-02', name: '命名规范', level: 'intake', must: true, status: v.length ? 'fail' : 'pass', severity: 'high', detail: v.length ? v : '命名合规 (AXI 豁免已计)' });
   })();
 
-  // G-A-01 复位红线 (源 docs/rules/01-hdl §红线3)
+  // G-A-01 复位红线 (源 rules/01-hdl §红线3)
   (() => {
-    const v = [];
-    if (manifest.reset.polarity === 'active_low') v.push('复位为 active_low → 违红线3(须高有效)');
-    if (manifest.reset.type === 'async' && !manifest.reset.async_release_synchronized) v.push('异步复位且无"异步复位同步释放"证据 → 违红线3');
-    const m = code.match(/negedge\s+(\w+)/);
-    if (m) v.push(`RTL 出现 async 边沿 'negedge ${m[1]}' (确认异步复位)`);
+    const v = redlineChecks(manifest, code);
     add({ id: 'G-A-01', name: '复位红线', level: 'qualification', must: true, status: v.length ? 'fail' : 'pass', severity: 'high', detail: v.length ? v : '同步高有效复位' });
   })();
 
@@ -284,6 +309,19 @@ function runGates(pkgDir, manifest, repoRoot) {
     add({ id: 'G-A-04', name: '尺寸上限', level: 'qualification', must: true, status: v.length ? 'fail' : 'pass', severity: 'mid', detail: v.length ? v : '模块≤300 行/always≤50 行' });
   })();
 
+  // G-DOC-03 CHANGELOG and G-DOC-04 limitations are lifecycle gates, not prose-only claims.
+  (() => {
+    const changelog = path.join(pkgDir, 'CHANGELOG.md');
+    const readme = path.join(pkgDir, 'README.md');
+    const v = [];
+    if (!fs.existsSync(changelog) || !fs.readFileSync(changelog, 'utf8').trim()) v.push('CHANGELOG.md missing or empty');
+    add({ id: 'G-DOC-03', name: 'CHANGELOG lifecycle', level: 'intake', must: true, status: v.length ? 'fail' : 'pass', severity: 'warning', detail: v.length ? v : 'CHANGELOG.md present' });
+    const docs = [readme, path.join(pkgDir, 'docs', 'limitations.md'), path.join(pkgDir, 'docs', 'LIMITATIONS.md')].filter((file) => fs.existsSync(file));
+    const limitationText = docs.map((file) => fs.readFileSync(file, 'utf8')).join('\n');
+    const missing = docs.length === 0 || !/(limitation|known issue|限制|已知问题|边界)/i.test(limitationText);
+    add({ id: 'G-DOC-04', name: 'limitations and boundaries', level: 'intake', must: true, status: missing ? 'fail' : 'pass', severity: 'warning', detail: missing ? 'README/docs must state limitations and verification boundaries' : `limitations documented in ${docs.map((file) => path.relative(pkgDir, file)).join(', ')}` });
+  })();
+
   // G-DOC-01 README + 模块头
   (() => {
     const v = [];
@@ -308,24 +346,8 @@ function runGates(pkgDir, manifest, repoRoot) {
     add({ id: 'G-B-01', name: '需求/文档锚绑定', level: 'intake', must: true, status: v.length ? 'fail' : 'pass', severity: 'mid', detail: v.length ? v : '锚链起点已连' });
   })();
 
-  // G-B-02 正确性锚 — 按资产类分锚 (owner 裁决 2026-07-27):
-  //   算法资产 (kind 缺省/rtl): 锚 = golden model, golden_model_ref 必须解析;
-  //   结构原语 (kind=primitive): golden 锚的是算法, 不是所有模块 —— 原语的
-  //   正确性锚 = 包内自检 TB (含反假绿约定), 不要求 golden_model_ref。
+  // G-B-02 golden 锚解析到受治理资产
   (() => {
-    if (manifest.kind === 'primitive') {
-      const tbSrcs = (manifest.sources || []).filter((s) => s.role === 'tb');
-      const tbExists = tbSrcs.length > 0
-        && tbSrcs.every((s) => fs.existsSync(path.join(pkgDir, s.path)));
-      add({
-        id: 'G-B-02', name: '正确性锚 (原语=自检 TB)', level: 'qualification', must: true,
-        status: tbExists ? 'pass' : 'fail', severity: 'high',
-        detail: tbExists
-          ? `结构原语正确性锚 = 自检 TB (${tbSrcs.map((s) => s.path).join(', ')}); golden 豁免 (owner 裁决 2026-07-27)`
-          : 'kind=primitive 但 sources 中无可解析的 tb 角色文件 — 原语的正确性锚缺失',
-      });
-      return;
-    }
     const ref = manifest.golden_model_ref;
     let found = false;
     if (ref) {
@@ -343,19 +365,7 @@ function runGates(pkgDir, manifest, repoRoot) {
   })();
 
   // G-B-03 bit-true 对标 — 读 ModelSim cosim 证据 (tb 场景5 写入 alignment-report.json)
-  // 结构原语 (kind=primitive) 无 golden 可对标: 本门重定义为"自检 TB 实跑
-  // PASS 证据" (tb-selfcheck.json: {pass:true, compares>=1, tool}), 由 TB 或
-  // 运行脚本写入证据目录。
   (() => {
-    if (manifest.kind === 'primitive') {
-      const rpt = path.join(repoRoot, 'engineering-assets', 'var', 'gates', 'pg', manifest.asset_uid || 'x', 'tb-selfcheck.json');
-      if (!fs.existsSync(rpt)) { add({ id: 'G-B-03', name: '自检 TB 实跑证据 (原语)', level: 'certified', must: true, status: 'blocked', severity: 'high', detail: '无 tb-selfcheck.json — 原语的 bit-true 门 = 自检 TB 实跑 PASS 证据落盘' }); return; }
-      let r;
-      try { r = JSON.parse(fs.readFileSync(rpt, 'utf8')); } catch { add({ id: 'G-B-03', name: '自检 TB 实跑证据 (原语)', level: 'certified', must: true, status: 'fail', severity: 'high', detail: 'tb-selfcheck.json 非法 JSON' }); return; }
-      const ok = r.pass === true && Number(r.compares) >= 1;
-      add({ id: 'G-B-03', name: '自检 TB 实跑证据 (原语)', level: 'certified', must: true, status: ok ? 'pass' : 'fail', severity: 'high', detail: ok ? `自检 TB PASS: ${r.compares} 次比对 [${r.tool || 'unknown'}]` : `tb-selfcheck 证据不合格: pass=${r.pass} compares=${r.compares}` });
-      return;
-    }
     const rpt = path.join(repoRoot, 'engineering-assets', 'var', 'gates', 'pg', manifest.asset_uid || 'x', 'alignment-report.json');
     if (!fs.existsSync(rpt)) { add({ id: 'G-B-03', name: 'bit-true 对标', level: 'certified', must: true, status: 'blocked', severity: 'high', detail: '无 cosim 证据 (先跑 vsim -c -do run.do 生成 alignment-report.json)' }); return; }
     let r;
@@ -623,14 +633,14 @@ function main() {
   const mustByLevel = (lvl) => gates.filter((g) => g.must && g.level === lvl);
   let cleared = 'reference';
   for (const lvl of ['intake', 'qualification', 'certified']) {
-    const blockers = mustByLevel(lvl).filter((g) => g.status !== 'pass' && g.status !== 'na');
+    const blockers = mustByLevel(lvl).filter((g) => !['pass', 'na', 'waived'].includes(g.status));
     if (blockers.length) break;
     cleared = lvl;
   }
   const firstBlockedLevel = LEVEL_ORDER[LEVEL_ORDER.indexOf(cleared) + 1];
-  const blockers = firstBlockedLevel ? mustByLevel(firstBlockedLevel).filter((g) => g.status !== 'pass' && g.status !== 'na') : [];
+  const blockers = firstBlockedLevel ? mustByLevel(firstBlockedLevel).filter((g) => !['pass', 'na', 'waived'].includes(g.status)) : [];
 
-  const summary = { asset_uid: uid, name: manifest.name, declared_level: manifest.maturity.level, cleared_level: cleared, blocking_at: firstBlockedLevel || null, gate_count: gates.length, generated_by: 'gate-runner.cjs MVP', gates: gates.map((g) => ({ id: g.id, level: g.level, must: g.must, status: g.status, severity: g.severity })) };
+  const summary = { asset_uid: uid, name: manifest.name, declared_level: manifest.maturity.level, cleared_level: cleared, blocking_at: firstBlockedLevel || null, gate_count: gates.length, generated_by: 'gate-runner.cjs v1.1', redline_contract: 'reset-signal-scoped', gates: gates.map((g) => ({ id: g.id, level: g.level, must: g.must, status: g.status, severity: g.severity })) };
   fs.writeFileSync(path.join(evDir, 'gate-results.json'), JSON.stringify(summary, null, 2));
 
   // 打印
@@ -649,4 +659,6 @@ function main() {
   console.log(`证据: ${path.relative(repoRoot, evDir)}/`);
   process.exit(cleared === 'certified' ? 0 : 1);
 }
-main();
+if (require.main === module) main();
+
+module.exports = { main, redlineChecks, runGates, validate };

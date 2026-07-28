@@ -163,3 +163,12 @@ knowledge/
 | UVM testbenches | 5 algorithms |
 
 > 计数自动更新: `node engine/scripts/kb-stats.cjs`
+
+
+## CBB admission references
+The admitted foundation assets are indexed in `../catalog/KNOWLEDGE-INDEX.md`; machine truth is `../catalog/knowledge-index.json`.
+Current admitted packages: `../cbb/stream_elastic_pipeline` and `../cbb/pulse_merge` (v0.4.0).
+
+<!-- BEGIN:KIDX:STATS -->
+<!-- files=126; .md=126 -->
+<!-- END:KIDX:STATS -->

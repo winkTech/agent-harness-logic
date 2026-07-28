@@ -1,0 +1,9 @@
+{
+  "status": "na",
+  "reviewed_by": "lihan",
+  "rationale": "CDC crossing analysis is not applicable: manifest declares one clock (i_clk), structural RTL scan found no second clock or CDC primitive. This NA is explicit and reviewable; single-clock structural evidence is still retained.",
+  "clocks": [
+    "i_clk"
+  ],
+  "primitives": 0
+}

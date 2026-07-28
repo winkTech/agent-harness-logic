@@ -1,0 +1,242 @@
+{
+  "schema_version": "1.1",
+  "asset_uid": "stream_elastic_pipeline",
+  "name": "stream_elastic_pipeline",
+  "kind": "rtl",
+  "version": "0.4.0",
+  "owner": "lihan",
+  "maturity": {
+    "level": "certified",
+    "evidence_ref": "engineering-assets/evidence/stream_elastic_pipeline/0.4.0/SNAPSHOT.json"
+  },
+  "requirement_ref": "engineering-assets/cbb/stream_elastic_pipeline/docs/requirements.md",
+  "doc_refs": [
+    "engineering-assets/cbb/stream_elastic_pipeline/docs/verification.md",
+    "engineering-assets/cbb/stream_elastic_pipeline/docs/limitations.md",
+    "engineering-assets/cbb/stream_elastic_pipeline/docs/provenance.json"
+  ],
+  "golden_model_ref": "stream_elastic_pipeline_golden",
+  "params": [
+    {
+      "name": "DATA_WIDTH",
+      "value": 32,
+      "units": "bits",
+      "rationale": "Opaque stream word width; qualification also runs 12 bits."
+    },
+    {
+      "name": "DEPTH",
+      "value": 2,
+      "units": "words",
+      "rationale": "Number of one-word elastic stages; qualification runs 1, 2, and 4."
+    }
+  ],
+  "alignment": {
+    "compare_mode": "scoreboard",
+    "pipeline_delay_min": 0,
+    "pipeline_delay_max": 4
+  },
+  "fidelity": {
+    "status": "bit_true",
+    "bit_accurate_against": "stream_elastic_pipeline_golden@0.1.0"
+  },
+  "ports": [
+    {
+      "name": "i_clk",
+      "direction": "input",
+      "width": 1
+    },
+    {
+      "name": "i_rst",
+      "direction": "input",
+      "width": 1
+    },
+    {
+      "name": "i_tdata",
+      "direction": "input",
+      "width": 32,
+      "bus": "valid-ready"
+    },
+    {
+      "name": "i_tvalid",
+      "direction": "input",
+      "width": 1,
+      "bus": "valid-ready"
+    },
+    {
+      "name": "o_tready",
+      "direction": "output",
+      "width": 1,
+      "bus": "valid-ready"
+    },
+    {
+      "name": "o_tdata",
+      "direction": "output",
+      "width": 32,
+      "bus": "valid-ready"
+    },
+    {
+      "name": "o_tvalid",
+      "direction": "output",
+      "width": 1,
+      "bus": "valid-ready"
+    },
+    {
+      "name": "i_tready",
+      "direction": "input",
+      "width": 1,
+      "bus": "valid-ready"
+    }
+  ],
+  "top": "stream_elastic_pipeline",
+  "clock": {
+    "name": "i_clk",
+    "period_ns": 10
+  },
+  "reset": {
+    "name": "i_rst",
+    "polarity": "active_high",
+    "type": "sync"
+  },
+  "constraints": {
+    "target": {
+      "fmax": "100MHz",
+      "fmax_mhz": 100,
+      "lut": 1000,
+      "ff": 1000,
+      "bram": 0,
+      "dsp": 0,
+      "latency": 4,
+      "note": "Generic verification target; Vivado 2023.1.1 evidence is recorded in the EDA manifest and 0.4.0 snapshot."
+    }
+  },
+  "sources": [
+    {
+      "path": "rtl/stream_elastic_pipeline.sv",
+      "role": "rtl",
+      "sha256": "4d7dcd13e2c98848c5ac506c9a297cf626a4a69a7510f381bec2eeac96176ed3"
+    },
+    {
+      "path": "constraints/stream_elastic_pipeline.xdc",
+      "role": "constraint",
+      "sha256": "c380f1a487b9de145a04972884852c925c0133c108bf929960947c4d437e6103",
+      "note": "100 MHz create_clock constraint; timing closure requires Vivado evidence."
+    },
+    {
+      "path": "tb/tb_stream_elastic_pipeline.sv",
+      "role": "tb",
+      "sha256": "0203fd209e401f48a84288667e52863e186c4e7089eb03a1c73ec408160debb0"
+    },
+    {
+      "path": "sva/stream_elastic_pipeline_sva.sv",
+      "role": "reference",
+      "sha256": "a5c5ed21286f00fbbc35567008b3db157b52754dcee7394d99b8eb54baa7a693",
+      "note": "Reusable SVA; deterministic ModelSim runtime and assertion instance passed."
+    },
+    {
+      "path": "docs/requirements.md",
+      "role": "doc",
+      "sha256": "16c472b1c36edc1cdae4ebfdb36bb4a137e834e21022f9ec9c9b73ad25ce0a5e"
+    },
+    {
+      "path": "docs/verification.md",
+      "role": "doc",
+      "sha256": "fe6afa9fbc579dd9a342fff14929e73209839c3ecf497e1e358fa0b5d91db851"
+    },
+    {
+      "path": "docs/limitations.md",
+      "role": "doc",
+      "sha256": "9fd7302245a43c4d9af6e52fbe458982d3c5905adf194d65a776951e422157fb"
+    },
+    {
+      "path": "docs/provenance.json",
+      "role": "reference",
+      "sha256": "a0b7c29c69387b36b592c4a9b04603cf6f12db10d953396f90c92927cf69425c"
+    },
+    {
+      "path": "eda/README.md",
+      "role": "doc",
+      "sha256": "8445e62cf66a961356bae73f79101a6cbf8504970cb805c9c7797f1fec0446e3",
+      "note": "Deterministic external certification recipe; execution evidence is separate."
+    },
+    {
+      "path": "eda/modelsim_sva.do",
+      "role": "sim",
+      "sha256": "d891591694fdcfc15fd28544dc472aec2a4d4ccb00318d0e4221e7c6236e1830",
+      "note": "Deterministic external certification recipe; execution evidence is separate."
+    },
+    {
+      "path": "eda/vivado_cert.tcl",
+      "role": "harness",
+      "sha256": "dd17a989fbafc78d37e4b8ed0935c8a4cce783a7ee87193ec2715cb084c9d8d6",
+      "note": "Deterministic external certification recipe; execution evidence is separate."
+    },
+    {
+      "path": "eda/eda-manifest.json",
+      "role": "harness",
+      "sha256": "e59f34a3bcfc29ceeb3b706f4384c6666c531782d1d76a051c68eab761702f38",
+      "note": "Deterministic external certification recipe; execution evidence is separate."
+    },
+    {
+      "path": "eda/structural-cdc-check.json",
+      "role": "doc",
+      "sha256": "7250ffca8e27c4bb2b09b512632bf307237c4f36ca47e8633fc1305afc585b8c",
+      "note": "Deterministic external certification recipe; execution evidence is separate."
+    }
+  ],
+  "generality": {
+    "param_space": [
+      {
+        "name": "DATA_WIDTH",
+        "values": [
+          12,
+          32
+        ],
+        "support": true
+      },
+      {
+        "name": "DEPTH",
+        "values": [
+          1,
+          2,
+          4
+        ],
+        "support": true
+      }
+    ],
+    "note": "Only the listed values have local randomized evidence; other values require requalification."
+  },
+  "lineage": {
+    "changelog": "CHANGELOG.md"
+  },
+  "maintenance": {
+    "owner": "lihan",
+    "review_cadence": "quarterly",
+    "status": "active"
+  },
+  "provenance": {
+    "source": "repository-local reusable templates",
+    "license": "internal-authorized",
+    "retrieved": "2026-07-26",
+    "retrieved_basis": "docs/provenance.json and retained source templates",
+    "commit": null
+  },
+  "waivers": [],
+  "superseded_by": null,
+  "device": {
+    "part": "xc7a35tcpg236-1",
+    "family": "artix7",
+    "note": "Generic verification target only; routed implementation, board and field validation remain outside this admission."
+  },
+  "signoff": {
+    "by": "lihan",
+    "at": "2026-07-27",
+    "scope": [
+      "Reviewed and accepted RTL, reusable SVA, ModelSim 10.6c runtime and 2600-sample Golden alignment evidence (mismatch=0, pipeline offset=4).",
+      "Reviewed and accepted Vivado 2023.1.1 synthesis, utilization, timing, clocks and post-synthesis checkpoint for xc7a35tcpg236-1.",
+      "Accepted explicit limitation: generic-device synthesis is not board/field validation; routed implementation, bitstream and hardware bring-up remain required for deployment."
+    ],
+    "panel_verdicts_ref": "engineering-assets/var/gates/pg/stream_elastic_pipeline/G-SIGN-01.json"
+  },
+  "evidence_snapshot_ref": "evidence/stream_elastic_pipeline/0.4.0/SNAPSHOT.json",
+  "notes": "Certified foundation CBB admission with generic-device evidence; routed implementation, board and field validation remain outside this admission."
+}

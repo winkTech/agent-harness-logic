@@ -1,0 +1,46 @@
+{
+  "schema_version": "1.1",
+  "asset_uid": "pulse_merge_golden",
+  "name": "pulse_merge_credit_golden",
+  "kind": "golden-model",
+  "version": "0.1.0",
+  "owner": "lihan",
+  "maturity": {
+    "level": "qualification"
+  },
+  "requirement_ref": "engineering-assets/cbb/pulse_merge/docs/requirements.md",
+  "implements_for": [
+    "pulse_merge"
+  ],
+  "models": [
+    {
+      "role": "reference",
+      "trait": "credit_counter",
+      "path": "pulse_merge_model.py",
+      "note": "Independent old-count decrement plus input popcount model."
+    }
+  ],
+  "vectors": {
+    "config": "INPUT_WIDTH=4/2, COUNT_WIDTH=12/4, bounded random/reset/drain",
+    "provenance": "Local Python model and independent RTL TB; upstream MIT provenance retained by parent manifest."
+  },
+  "sources": [
+    {
+      "path": "pulse_merge_model.py",
+      "role": "reference",
+      "sha256": "2cf68f3f17a7285ed1585c031d893bd454276867409dc8a54b38f678d0a3b342"
+    },
+    {
+      "path": "test_pulse_merge_model.py",
+      "role": "test",
+      "sha256": "858397fcf8fd95d6e9376feb4cd6f0e553c01c9fdb7672d7b46ff978e0177801"
+    }
+  ],
+  "waivers": [],
+  "superseded_by": null,
+  "maintenance": {
+    "owner": "lihan",
+    "review_cadence": "quarterly",
+    "status": "active"
+  }
+}

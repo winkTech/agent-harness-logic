@@ -1,0 +1,347 @@
+{
+  "schema_version": "1.1",
+  "owner": "lihan",
+  "entries": [
+    {
+      "id": "ITG-0001",
+      "project": "phy-intake",
+      "project_ref": "incubator/intake/channel_est_top",
+      "asset_uid": "channel_est_top",
+      "version_pinned": "0.1.0",
+      "config": {
+        "DATA_W": 16,
+        "N_FFT": 64,
+        "N_PILOT": 4
+      },
+      "integrated_at": "2026-07-26T00:00:00Z",
+      "status": "active",
+      "maturity_status": "deferred",
+      "owner": "lihan",
+      "consumers": [],
+      "issues": [
+        "bit-true-vectors",
+        "vivado-timing",
+        "axis-contract"
+      ],
+      "badge_gap": [
+        "bit-true-vectors",
+        "vivado-timing",
+        "axis-contract"
+      ],
+      "deferred_reason": "project-specific PHY; keep intake under foundation-first policy",
+      "last_reviewed": "2026-07-26"
+    },
+    {
+      "id": "ITG-0002",
+      "project": "phy-intake",
+      "project_ref": "incubator/intake/ldpc_codec",
+      "asset_uid": "ldpc_codec",
+      "version_pinned": "0.1.0",
+      "config": {},
+      "integrated_at": "2026-07-26T00:00:00Z",
+      "status": "active",
+      "maturity_status": "deferred",
+      "owner": "lihan",
+      "consumers": [],
+      "issues": [
+        "G-C-03",
+        "G-B-03",
+        "vivado-timing",
+        "signoff"
+      ],
+      "badge_gap": [
+        "G-C-03",
+        "G-B-03",
+        "vivado-timing",
+        "signoff"
+      ],
+      "deferred_reason": "missing reproducible bit-true and Vivado evidence; no forced promotion",
+      "last_reviewed": "2026-07-26"
+    },
+    {
+      "id": "ITG-0003",
+      "project": "reference-evidence",
+      "project_ref": "models/comm/channel_est",
+      "asset_uid": "model_comm_channel_est",
+      "version_pinned": "1.0.0",
+      "config": {},
+      "integrated_at": "2026-07-26T00:00:00Z",
+      "status": "active",
+      "maturity_status": "evidence-only",
+      "owner": "lihan",
+      "consumers": [
+        "channel_est_top"
+      ],
+      "issues": [
+        "exported-vectors"
+      ],
+      "badge_gap": [
+        "exported-vectors"
+      ],
+      "deferred_reason": "golden/reference source is retained as correctness evidence",
+      "last_reviewed": "2026-07-26"
+    },
+    {
+      "id": "ITG-0004",
+      "project": "reference-evidence",
+      "project_ref": "models/comm/ldpc",
+      "asset_uid": "model_comm_ldpc",
+      "version_pinned": "1.0.0",
+      "config": {},
+      "integrated_at": "2026-07-26T00:00:00Z",
+      "status": "active",
+      "maturity_status": "evidence-only",
+      "owner": "lihan",
+      "consumers": [
+        "ldpc_codec"
+      ],
+      "issues": [
+        "exported-vectors"
+      ],
+      "badge_gap": [
+        "exported-vectors"
+      ],
+      "deferred_reason": "golden/reference source is retained as correctness evidence",
+      "last_reviewed": "2026-07-26"
+    },
+    {
+      "id": "ITG-0005",
+      "project": "reference-evidence",
+      "project_ref": "models/comm/ofdm",
+      "asset_uid": "model_comm_ofdm",
+      "version_pinned": "1.0.0",
+      "config": {},
+      "integrated_at": "2026-07-26T00:00:00Z",
+      "status": "active",
+      "maturity_status": "evidence-only",
+      "owner": "lihan",
+      "consumers": [
+        "ofdm_tx_top"
+      ],
+      "issues": [
+        "exported-vectors"
+      ],
+      "badge_gap": [
+        "exported-vectors"
+      ],
+      "deferred_reason": "golden/reference source is retained as correctness evidence",
+      "last_reviewed": "2026-07-26"
+    },
+    {
+      "id": "ITG-0006",
+      "project": "reference-evidence",
+      "project_ref": "models/comm/rrc",
+      "asset_uid": "model_comm_rrc",
+      "version_pinned": "1.0.0",
+      "config": {},
+      "integrated_at": "2026-07-26T00:00:00Z",
+      "status": "active",
+      "maturity_status": "evidence-only",
+      "owner": "lihan",
+      "consumers": [
+        "rrc_polyphase_fir"
+      ],
+      "issues": [
+        "native-matlab-recheck"
+      ],
+      "badge_gap": [
+        "native-matlab-recheck"
+      ],
+      "deferred_reason": "golden/reference source remains a correctness anchor",
+      "last_reviewed": "2026-07-26"
+    },
+    {
+      "id": "ITG-0007",
+      "project": "reference-evidence",
+      "project_ref": "models/comm/synch",
+      "asset_uid": "model_comm_synch",
+      "version_pinned": "1.0.0",
+      "config": {},
+      "integrated_at": "2026-07-26T00:00:00Z",
+      "status": "active",
+      "maturity_status": "evidence-only",
+      "owner": "lihan",
+      "consumers": [
+        "sync_top"
+      ],
+      "issues": [
+        "exported-vectors",
+        "cfo-correction"
+      ],
+      "badge_gap": [
+        "exported-vectors",
+        "cfo-correction"
+      ],
+      "deferred_reason": "golden/reference source is retained as correctness evidence",
+      "last_reviewed": "2026-07-26"
+    },
+    {
+      "id": "ITG-0008",
+      "project": "phy-intake",
+      "project_ref": "incubator/intake/ofdm_tx_top",
+      "asset_uid": "ofdm_tx_top",
+      "version_pinned": "0.1.0",
+      "config": {},
+      "integrated_at": "2026-07-26T00:00:00Z",
+      "status": "active",
+      "maturity_status": "deferred",
+      "owner": "lihan",
+      "consumers": [],
+      "issues": [
+        "fft-contract",
+        "bit-true-vectors",
+        "vivado-timing"
+      ],
+      "badge_gap": [
+        "fft-contract",
+        "bit-true-vectors",
+        "vivado-timing"
+      ],
+      "deferred_reason": "project-specific PHY; keep intake under foundation-first policy",
+      "last_reviewed": "2026-07-26"
+    },
+    {
+      "id": "ITG-0009",
+      "project": "cbb-foundation",
+      "project_ref": "cbb/rrc_polyphase_fir",
+      "asset_uid": "rrc_polyphase_fir",
+      "version_pinned": "0.4.0",
+      "config": {
+        "DATA_W": 16,
+        "COEFF_W": 16,
+        "ACC_W": 38,
+        "SPS": 4,
+        "TAPS_PP": 9
+      },
+      "integrated_at": "2026-07-26T00:00:00Z",
+      "status": "active",
+      "maturity_status": "internal-validation",
+      "owner": "lihan",
+      "consumers": [
+        "cbb/rrc_polyphase_fir/tb/tb_rrc_polyphase_fir.sv"
+      ],
+      "issues": [
+        "board-validation",
+        "hold-closure"
+      ],
+      "badge_gap": [
+        "board-validation",
+        "hold-closure"
+      ],
+      "last_reviewed": "2026-07-26"
+    },
+    {
+      "id": "ITG-0010",
+      "project": "phy-intake",
+      "project_ref": "incubator/intake/sync_top",
+      "asset_uid": "sync_top",
+      "version_pinned": "0.1.0",
+      "config": {},
+      "integrated_at": "2026-07-26T00:00:00Z",
+      "status": "active",
+      "maturity_status": "deferred",
+      "owner": "lihan",
+      "consumers": [],
+      "issues": [
+        "cfo-correction",
+        "exported-vectors",
+        "vivado-timing"
+      ],
+      "badge_gap": [
+        "cfo-correction",
+        "exported-vectors",
+        "vivado-timing"
+      ],
+      "deferred_reason": "project-specific PHY; keep intake under foundation-first policy",
+      "last_reviewed": "2026-07-26"
+    },
+    {
+      "id": "ITG-0011",
+      "project": "cbb-foundation",
+      "project_ref": "cbb/stream_elastic_pipeline",
+      "asset_uid": "stream_elastic_pipeline",
+      "version_pinned": "0.4.0",
+      "config": {
+        "DATA_WIDTH": 32,
+        "DEPTH": 2
+      },
+      "integrated_at": "2026-07-26T00:00:00Z",
+      "status": "active",
+      "maturity_status": "certified",
+      "owner": "lihan",
+      "consumers": [],
+      "issues": [
+        "board-validation"
+      ],
+      "badge_gap": [
+        "board-validation"
+      ],
+      "deferred_reason": "Certified generic-device scope; board/field validation remains open.",
+      "last_reviewed": "2026-07-27"
+    },
+    {
+      "id": "ITG-0012",
+      "project": "cbb-foundation",
+      "project_ref": "models/comm/stream_elastic_pipeline",
+      "asset_uid": "stream_elastic_pipeline_golden",
+      "version_pinned": "0.1.0",
+      "config": {},
+      "integrated_at": "2026-07-26T00:00:00Z",
+      "status": "active",
+      "maturity_status": "evidence-only",
+      "owner": "lihan",
+      "consumers": [
+        "stream_elastic_pipeline"
+      ],
+      "issues": [],
+      "badge_gap": [],
+      "deferred_reason": "independent queue model is retained as evidence; 2600-sample ModelSim trace alignment passed for the consuming RTL",
+      "last_reviewed": "2026-07-27"
+    },
+    {
+      "id": "ITG-0013",
+      "project": "cbb-foundation",
+      "project_ref": "cbb/pulse_merge",
+      "asset_uid": "pulse_merge",
+      "version_pinned": "0.4.0",
+      "config": {
+        "INPUT_WIDTH": 4,
+        "COUNT_WIDTH": 12
+      },
+      "integrated_at": "2026-07-26T00:00:00Z",
+      "status": "active",
+      "maturity_status": "certified",
+      "owner": "lihan",
+      "consumers": [],
+      "issues": [
+        "upstream-commit-unpinned",
+        "board-validation"
+      ],
+      "badge_gap": [
+        "upstream-commit-unpinned",
+        "board-validation"
+      ],
+      "deferred_reason": "Certified generic-device scope; board/field validation and upstream commit pinning remain open.",
+      "last_reviewed": "2026-07-27"
+    },
+    {
+      "id": "ITG-0014",
+      "project": "cbb-foundation",
+      "project_ref": "models/comm/pulse_merge",
+      "asset_uid": "pulse_merge_golden",
+      "version_pinned": "0.1.0",
+      "config": {},
+      "integrated_at": "2026-07-26T00:00:00Z",
+      "status": "active",
+      "maturity_status": "evidence-only",
+      "owner": "lihan",
+      "consumers": [
+        "pulse_merge"
+      ],
+      "issues": [],
+      "badge_gap": [],
+      "deferred_reason": "independent pulse-credit model is retained as evidence; 2600-sample ModelSim trace alignment passed for the consuming RTL",
+      "last_reviewed": "2026-07-27"
+    }
+  ]
+}

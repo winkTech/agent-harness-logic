@@ -1,0 +1,218 @@
+{
+  "schema_version": "1.0",
+  "generated_by": "knowledge-index.cjs",
+  "entries": [
+    {
+      "asset_uid": "axis_skid_buffer",
+      "level": "qualification",
+      "requirement_ref": "engineering-assets/docs/comm模块族认证差距清单.md",
+      "doc_refs": [
+        "engineering-assets/docs/governance/CBB-治理与生产级准入规范-V1.0.md"
+      ],
+      "golden_model_ref": null
+    },
+    {
+      "asset_uid": "cdc_sync",
+      "level": "qualification",
+      "requirement_ref": "engineering-assets/docs/comm模块族认证差距清单.md",
+      "doc_refs": [
+        "engineering-assets/docs/governance/CBB-治理与生产级准入规范-V1.0.md",
+        "engineering-assets/docs/CBB候选台账-hdl-coding-templates.md"
+      ],
+      "golden_model_ref": null
+    },
+    {
+      "asset_uid": "channel_est_top",
+      "level": "intake",
+      "requirement_ref": "engineering-assets/knowledge/primary/domains/comm/channel_est/algorithm_spec.md",
+      "doc_refs": [
+        "engineering-assets/knowledge/primary/domains/comm/channel_est/fixed_point_report.md",
+        "engineering-assets/knowledge/primary/domains/comm/channel_est/report_channel_est_fpga_implementation.md",
+        "engineering-assets/knowledge/primary/domains/comm/channel_est/resource_estimate.md"
+      ],
+      "golden_model_ref": "model_comm_channel_est"
+    },
+    {
+      "asset_uid": "complex_multiplier",
+      "level": "qualification",
+      "requirement_ref": "engineering-assets/docs/comm模块族认证差距清单.md",
+      "doc_refs": [
+        "engineering-assets/docs/governance/CBB-治理与生产级准入规范-V1.0.md"
+      ],
+      "golden_model_ref": null
+    },
+    {
+      "asset_uid": "crc32",
+      "level": "qualification",
+      "requirement_ref": "engineering-assets/docs/CBB候选台账-hdl-coding-templates.md",
+      "doc_refs": [
+        "engineering-assets/docs/governance/CBB-治理与生产级准入规范-V1.0.md"
+      ],
+      "golden_model_ref": null
+    },
+    {
+      "asset_uid": "ddr_axi4_controller",
+      "level": "qualification",
+      "requirement_ref": "engineering-assets/docs/CBB候选台账-hdl-coding-templates.md",
+      "doc_refs": [
+        "engineering-assets/docs/governance/CBB-治理与生产级准入规范-V1.0.md"
+      ],
+      "golden_model_ref": null
+    },
+    {
+      "asset_uid": "delay_line",
+      "level": "qualification",
+      "requirement_ref": "engineering-assets/docs/comm模块族认证差距清单.md",
+      "doc_refs": [
+        "engineering-assets/docs/governance/CBB-治理与生产级准入规范-V1.0.md",
+        "engineering-assets/docs/CBB候选台账-hdl-coding-templates.md"
+      ],
+      "golden_model_ref": null
+    },
+    {
+      "asset_uid": "frame_sync",
+      "level": "qualification",
+      "requirement_ref": "engineering-assets/docs/CBB候选台账-hdl-coding-templates.md",
+      "doc_refs": [
+        "engineering-assets/docs/governance/CBB-治理与生产级准入规范-V1.0.md"
+      ],
+      "golden_model_ref": null
+    },
+    {
+      "asset_uid": "ldpc_codec",
+      "level": "qualification",
+      "requirement_ref": "engineering-assets/knowledge/primary/domains/comm/ldpc/algorithm_spec.md",
+      "doc_refs": [
+        "engineering-assets/knowledge/primary/domains/comm/ldpc/encoding_spec.md",
+        "engineering-assets/knowledge/primary/domains/comm/ldpc/stage3_fixed_point_report.md",
+        "engineering-assets/knowledge/primary/domains/comm/ldpc/stage4_resource_estimation.md",
+        "engineering-assets/knowledge/primary/domains/comm/ldpc/stage7_fpga_implementation_report.md"
+      ],
+      "golden_model_ref": "model_comm_ldpc"
+    },
+    {
+      "asset_uid": "lfsr_gen",
+      "level": "qualification",
+      "requirement_ref": "engineering-assets/docs/comm模块族认证差距清单.md",
+      "doc_refs": [
+        "engineering-assets/docs/governance/CBB-治理与生产级准入规范-V1.0.md",
+        "engineering-assets/docs/CBB候选台账-hdl-coding-templates.md"
+      ],
+      "golden_model_ref": null
+    },
+    {
+      "asset_uid": "model_comm_channel_est",
+      "level": "intake",
+      "requirement_ref": "engineering-assets/knowledge/primary/domains/comm/channel_est/algorithm_spec.md",
+      "doc_refs": [],
+      "golden_model_ref": null
+    },
+    {
+      "asset_uid": "model_comm_ldpc",
+      "level": "intake",
+      "requirement_ref": "engineering-assets/knowledge/primary/domains/comm/ldpc/algorithm_spec.md",
+      "doc_refs": [],
+      "golden_model_ref": null
+    },
+    {
+      "asset_uid": "model_comm_ofdm",
+      "level": "intake",
+      "requirement_ref": "engineering-assets/knowledge/primary/domains/comm/ofdm/algorithm_spec.md",
+      "doc_refs": [],
+      "golden_model_ref": null
+    },
+    {
+      "asset_uid": "model_comm_rrc",
+      "level": "qualification",
+      "requirement_ref": "engineering-assets/knowledge/primary/domains/comm/rrc/algorithm_spec.md",
+      "doc_refs": [],
+      "golden_model_ref": null
+    },
+    {
+      "asset_uid": "model_comm_synch",
+      "level": "intake",
+      "requirement_ref": "engineering-assets/knowledge/primary/domains/comm/synch/algorithm_spec.md",
+      "doc_refs": [],
+      "golden_model_ref": null
+    },
+    {
+      "asset_uid": "ofdm_tx_top",
+      "level": "intake",
+      "requirement_ref": "engineering-assets/knowledge/primary/domains/comm/ofdm/algorithm_spec.md",
+      "doc_refs": [
+        "engineering-assets/knowledge/primary/domains/comm/ofdm/rtl_architecture.md",
+        "engineering-assets/knowledge/primary/domains/comm/ofdm/fixed_point_report.md",
+        "engineering-assets/knowledge/primary/domains/comm/ofdm/report_ofdm_fpga_implementation.md",
+        "engineering-assets/knowledge/primary/domains/comm/ofdm/resource_estimate.md",
+        "engineering-assets/knowledge/primary/domains/comm/ofdm/testbench_plan.md"
+      ],
+      "golden_model_ref": "model_comm_ofdm"
+    },
+    {
+      "asset_uid": "pulse_merge",
+      "level": "certified",
+      "requirement_ref": "engineering-assets/cbb/pulse_merge/docs/requirements.md",
+      "doc_refs": [
+        "engineering-assets/cbb/pulse_merge/docs/verification.md",
+        "engineering-assets/cbb/pulse_merge/docs/limitations.md",
+        "engineering-assets/cbb/pulse_merge/docs/provenance.json"
+      ],
+      "golden_model_ref": "pulse_merge_golden"
+    },
+    {
+      "asset_uid": "pulse_merge_golden",
+      "level": "qualification",
+      "requirement_ref": "engineering-assets/cbb/pulse_merge/docs/requirements.md",
+      "doc_refs": [],
+      "golden_model_ref": null
+    },
+    {
+      "asset_uid": "rrc_polyphase_fir",
+      "level": "certified",
+      "requirement_ref": "engineering-assets/knowledge/primary/domains/comm/rrc/algorithm_spec.md",
+      "doc_refs": [
+        "engineering-assets/knowledge/primary/domains/comm/rrc/fixed_point_report.md",
+        "engineering-assets/knowledge/primary/domains/comm/rrc/report_rrc_fpga_implementation.md"
+      ],
+      "golden_model_ref": "model_comm_rrc"
+    },
+    {
+      "asset_uid": "sdp_ram",
+      "level": "qualification",
+      "requirement_ref": "engineering-assets/docs/comm模块族认证差距清单.md",
+      "doc_refs": [
+        "engineering-assets/docs/governance/CBB-治理与生产级准入规范-V1.0.md"
+      ],
+      "golden_model_ref": null
+    },
+    {
+      "asset_uid": "stream_elastic_pipeline",
+      "level": "certified",
+      "requirement_ref": "engineering-assets/cbb/stream_elastic_pipeline/docs/requirements.md",
+      "doc_refs": [
+        "engineering-assets/cbb/stream_elastic_pipeline/docs/verification.md",
+        "engineering-assets/cbb/stream_elastic_pipeline/docs/limitations.md",
+        "engineering-assets/cbb/stream_elastic_pipeline/docs/provenance.json"
+      ],
+      "golden_model_ref": "stream_elastic_pipeline_golden"
+    },
+    {
+      "asset_uid": "stream_elastic_pipeline_golden",
+      "level": "qualification",
+      "requirement_ref": "engineering-assets/cbb/stream_elastic_pipeline/docs/requirements.md",
+      "doc_refs": [],
+      "golden_model_ref": null
+    },
+    {
+      "asset_uid": "sync_top",
+      "level": "intake",
+      "requirement_ref": "engineering-assets/knowledge/primary/domains/comm/synch/algorithm_spec.md",
+      "doc_refs": [
+        "engineering-assets/knowledge/primary/domains/comm/synch/fixed_point_report.md",
+        "engineering-assets/knowledge/primary/domains/comm/synch/report_sync_fpga_implementation.md",
+        "engineering-assets/knowledge/primary/domains/comm/synch/resource_estimate.md"
+      ],
+      "golden_model_ref": "model_comm_synch"
+    }
+  ]
+}
