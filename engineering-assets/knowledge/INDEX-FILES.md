@@ -115,7 +115,7 @@
 | `references/eda-debug-checklist.md` | eda-debug-checklist |
 | `references/error-recovery.md` | error-recovery |
 | `references/harness-five-layer-analogy.md` | harness-five-layer-analogy |
-| `references/matlab-rule.md` | MATLAB 代码约束 |
+| `references/matlab-rule.md` | matlab-code-rules |
 | `references/mcp-matlab-usage.md` | mcp-matlab-usage |
 | `references/memory-system.md` | memory-system |
 | `references/new-plugins.md` | new-plugins |
@@ -126,7 +126,7 @@
 | `references/skills-catalog.md` | skills-catalog |
 | `references/sva-patterns.md` | sva-patterns |
 | `references/tool-scripts.md` | tool-scripts |
-| `references/toolchain.md` | 开发工具说明 |
+| `references/toolchain.md` | development-toolchain-reference |
 | `references/version-rules.md` | version-rules |
 | `SCENE_CARDS.md` | scene-cards |
 | `TAG_INDEX.md` | tag-index |

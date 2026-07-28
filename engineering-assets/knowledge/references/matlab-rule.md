@@ -1,3 +1,12 @@
+---
+name: matlab-code-rules
+description: MATLAB 文件组织、命名、代码风格、函数设计与验证约束
+metadata:
+  type: design-guide
+  domain: meta
+tags: [matlab, coding-style, modeling, verification]
+---
+
 # MATLAB 代码约束
 
 ## 一、文件组织

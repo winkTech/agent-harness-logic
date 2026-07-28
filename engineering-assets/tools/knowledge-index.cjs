@@ -71,6 +71,63 @@ function updateStats(existing, files) {
   return pattern.test(existing) ? existing.replace(pattern, block) : `${existing.trimEnd()}\n\n${block}\n`;
 }
 
+function countMarkdown(dir, excludedDirectories = new Set()) {
+  if (!fs.existsSync(dir)) return 0;
+  let total = 0;
+  for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+    if (entry.name.startsWith('.')) continue;
+    const full = path.join(dir, entry.name);
+    if (entry.isDirectory()) {
+      if (!excludedDirectories.has(entry.name)) total += countMarkdown(full, excludedDirectories);
+    } else if (entry.isFile() && entry.name.toLowerCase().endsWith('.md')) {
+      total += 1;
+    }
+  }
+  return total;
+}
+
+function validateDate(value) {
+  const date = String(value || '');
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date)
+      || new Date(`${date}T00:00:00.000Z`).toISOString().slice(0, 10) !== date) {
+    throw new Error(`[knowledge-index] invalid --date ${date}`);
+  }
+  return date;
+}
+
+function visibleStats(root) {
+  const knowledge = path.join(root, 'knowledge');
+  const cardDirectories = [
+    'python-basics', 'math-foundation', 'linear-algebra',
+    'probability-statistics', 'data-viz',
+  ];
+  return {
+    primary: countMarkdown(path.join(knowledge, 'primary'), new Set(['examples'])),
+    sources: countMarkdown(path.join(knowledge, 'archive', 'sources')),
+    iris: cardDirectories.reduce((total, name) => total + countMarkdown(path.join(knowledge, name)), 0),
+    methodology: countMarkdown(path.join(knowledge, 'methodology')),
+    references: countMarkdown(path.join(knowledge, 'references')),
+    templates: countMarkdown(path.join(knowledge, 'docs', 'templates')),
+  };
+}
+
+function updateIndexMetadata(existing, root, date) {
+  const generatedDate = validateDate(date);
+  const stats = visibleStats(root);
+  const line = `> 最后更新: ${generatedDate} | 文档: ${stats.primary} 篇 primary + ${stats.sources} 篇 source + ${stats.iris} 篇 鸢尾花书蒸馏 + ${stats.methodology} 篇 methodology + ${stats.references} 篇 references + ${stats.templates} 篇 templates`;
+  const pattern = /^>\s*最后更新\s*[:：].*$/m;
+  if (pattern.test(existing)) return existing.replace(pattern, line);
+  return `${existing.trimEnd()}\n\n${line}\n`;
+}
+
+function generationDateFor(existing, argv = [], now = Date.now()) {
+  const dateIndex = argv.indexOf('--date');
+  if (dateIndex >= 0) return validateDate(argv[dateIndex + 1]);
+  if (argv.includes('--write')) return new Date(now).toISOString().slice(0, 10);
+  const existingDate = String(existing || '').match(/(?:last\s+updated|最后更新)\s*[:：]?\s*(\d{4}-\d{2}-\d{2})/i);
+  return existingDate ? validateDate(existingDate[1]) : new Date(now).toISOString().slice(0, 10);
+}
+
 function render(index) {
   const lines = ['# CBB Knowledge Index', '', '> Generated from managed manifests; this is a navigation index, not a certification claim.', '', '| Asset | Level | Requirement | Golden | Documents |', '|---|---|---|---|---|'];
   for (const entry of index.entries) lines.push(`| \`${entry.asset_uid}\` | ${entry.level} | ${entry.requirement_ref || '—'} | ${entry.golden_model_ref || '—'} | ${entry.doc_refs.length} refs |`);
@@ -89,7 +146,8 @@ function main(argv = process.argv.slice(2)) {
   const json = `${JSON.stringify(index, null, 2)}\n`;
   const md = render(index);
   const existingIndex = fs.existsSync(indexPath) ? fs.readFileSync(indexPath, 'utf8').replace(/\r\n/g, '\n') : '';
-  const updatedIndex = updateStats(existingIndex, files);
+  const generatedDate = generationDateFor(existingIndex, argv);
+  const updatedIndex = updateIndexMetadata(updateStats(existingIndex, files), root, generatedDate);
   const filesMd = renderFiles(files);
   if (argv.includes('--write')) {
     fs.mkdirSync(path.dirname(jsonPath), { recursive: true });
@@ -118,4 +176,17 @@ function main(argv = process.argv.slice(2)) {
 }
 
 if (require.main === module) process.exitCode = main();
-module.exports = { build, knowledgeFiles, main, render, renderFiles, statsBlock, updateStats };
+module.exports = {
+  build,
+  knowledgeFiles,
+  main,
+  render,
+  renderFiles,
+  statsBlock,
+  updateStats,
+  countMarkdown,
+  visibleStats,
+  updateIndexMetadata,
+  validateDate,
+  generationDateFor,
+};
