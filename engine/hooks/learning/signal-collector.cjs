@@ -7,7 +7,7 @@
  * 轻量 + 静默失败：从不阻塞 hook 链。
  *
  * v2.0 新增:
- *   - 6 种新信号类型（rule_load / context_pressure / mode_switch / memory_cross_ref / session_handoff / loop_skip）
+ *   - 运行遥测 + user_correct / verification_pass / resolution 因果闭环信号
  *   - 导出 emit() 函数，供其他模块直接导入调用（无需走 CLI）
  *
  * 用法 (settings.local.json 中注册):
@@ -48,6 +48,8 @@ const SIGNAL_TYPES = {
   tool_fail:       { label: '工具失败' },
   drift_stuck:     { label: '卡住/挫败' },
   user_correct:    { label: '用户纠正' },
+  verification_pass:{ label: '验证通过' },
+  resolution:      { label: '问题解决' },
   hard_problem:    { label: '攻克难题' },
   memory_miss:     { label: '记忆未命中' },
 
@@ -62,8 +64,41 @@ const SIGNAL_TYPES = {
 
 // ── 工具函数 ───────────────────────────────────────────────────────────────
 
-function getSessionId() {
-  return process.env.CLAUDE_SESSION_ID || `s-${Date.now()}`;
+function getSessionId(payload = {}, opts = {}) {
+  const sessionId = (
+    opts.sessionId
+    || payload.session_id
+    || payload.sessionId
+    || payload.thread_id
+    || payload.threadId
+    || process.env.CLAUDE_SESSION_ID
+    || ''
+  );
+  const normalized = String(sessionId).trim();
+  return normalized || null;
+}
+
+function recordSignal(type, payload = {}, opts = {}) {
+  if (!type || !SIGNAL_TYPES[type]) return false;
+  const sessionId = getSessionId(opts.hookPayload, opts);
+  if (!sessionId) return false;
+
+  let wDb = null;
+  try {
+    const { record } = require('../../sqlite/store-events.cjs');
+    const { openDb } = require('../../sqlite/index.cjs');
+    if (!opts.db) wDb = openDb(opts.dbPath ? { path: opts.dbPath } : {});
+    record({
+      sessionId,
+      type,
+      payload: { ...payload, _v: 2 },
+    }, null, { db: opts.db || wDb.db });
+    return true;
+  } catch {
+    return false;
+  } finally {
+    if (wDb) wDb.close();
+  }
 }
 
 // ── emitSync() — 同步版，供 CLI hook 脚本使用 ─────────────────────────────
@@ -78,23 +113,7 @@ function getSessionId() {
  * @returns {boolean}
  */
 function emitSync(type, payload = {}, opts = {}) {
-  if (!type || !SIGNAL_TYPES[type]) return false;
-
-  try {
-    const { record } = require('../../sqlite/store-events.cjs');
-    const { openDb } = require('../../sqlite/index.cjs');
-
-    const wDb = openDb();
-    record({
-      sessionId: opts.sessionId || getSessionId(),
-      type,
-      payload: { ...payload, _v: 2 },
-    }, null, { db: wDb.db });
-    wDb.close();
-    return true;
-  } catch {
-    return false;
-  }
+  return recordSignal(type, payload, opts);
 }
 
 // ── emit() — 异步版 ────────────────────────────────────────────────────────
@@ -109,66 +128,84 @@ function emitSync(type, payload = {}, opts = {}) {
  * @returns {Promise<boolean>} 是否成功写入
  */
 async function emit(type, payload = {}, opts = {}) {
-  if (!type || !SIGNAL_TYPES[type]) return false;
+  return recordSignal(type, payload, opts);
+}
 
+function compactText(value, maxLength = 200) {
+  if (value === undefined || value === null) return '';
+  if (typeof value === 'string') return value.slice(0, maxLength);
+  if (value instanceof Error) return String(value.message || value).slice(0, maxLength);
   try {
-    const { record } = require('../../sqlite/store-events.cjs');
-    const { openDb } = require('../../sqlite/index.cjs');
-
-    const wDb = openDb();
-    record({
-      sessionId: opts.sessionId || getSessionId(),
-      type,
-      payload: { ...payload, _v: 2 },
-    }, null, { db: wDb.db });
-    wDb.close();
-    return true;
+    return JSON.stringify(value).slice(0, maxLength);
   } catch {
-    return false; // 静默失败
+    return String(value).slice(0, maxLength);
   }
+}
+
+function signalFromHookPayload(hookPayload = {}, explicitType = '', extraInfo = '') {
+  const eventName = String(hookPayload.hook_event_name || hookPayload.event || '').trim();
+  const type = SIGNAL_TYPES[explicitType]
+    ? explicitType
+    : (eventName === 'PostToolUseFailure' ? 'tool_fail' : '');
+  if (!type) return null;
+
+  const payload = { extra: compactText(extraInfo, 100) };
+  if (type === 'tool_fail') {
+    const response = hookPayload.tool_response || hookPayload.tool_result || hookPayload.response || {};
+    payload.tool = compactText(
+      hookPayload.tool_name || hookPayload.tool?.name || hookPayload.tool || hookPayload.name || 'unknown',
+      80,
+    );
+    payload.error = compactText(
+      hookPayload.error || response.error || response.stderr || hookPayload.message || '',
+      200,
+    );
+    payload.isInterrupt = hookPayload.is_interrupt === true || response.interrupted === true;
+  } else if (type === 'drift_stuck' && extraInfo) {
+    payload.matchedPattern = compactText(extraInfo, 100);
+  }
+  return { type, payload };
+}
+
+function collectHookPayload(hookPayload = {}, opts = {}) {
+  const signal = signalFromHookPayload(hookPayload, opts.explicitType || '', opts.extraInfo || '');
+  if (!signal) return false;
+  return recordSignal(signal.type, signal.payload, {
+    ...opts,
+    hookPayload,
+    sessionId: getSessionId(hookPayload, opts),
+  });
+}
+
+const LIFECYCLE_SIGNAL_TYPES = new Set(['user_correct', 'verification_pass', 'resolution']);
+
+/**
+ * Record a causal learning lifecycle event from a postflight observer.
+ * The hook payload must carry a stable session/thread identity; anonymous
+ * events are rejected rather than being assigned a synthetic timestamp ID.
+ */
+function recordLifecycleSignal(type, hookPayload = {}, details = {}, opts = {}) {
+  if (!LIFECYCLE_SIGNAL_TYPES.has(type)) return false;
+  return recordSignal(type, details, { ...opts, hookPayload });
 }
 
 // ── CLI 入口 ─────────────────────────────────────────────────────────────────
 
 async function main() {
   const args = process.argv.slice(2);
-  const signalType = args[0];
+  const signalType = SIGNAL_TYPES[args[0]] ? args[0] : '';
   const extraInfo = args[1] || '';
 
-  if (!signalType || !SIGNAL_TYPES[signalType]) {
-    return; // 静默忽略
-  }
-
   try {
-    const { record } = require('../../sqlite/store-events.cjs');
-    const { openDb } = require('../../sqlite/index.cjs');
-
     let stdin = '';
     try {
       stdin = fs.readFileSync(0, 'utf8');
     } catch { /* ignore */ }
-
-    let payload = { extra: extraInfo, _v: 2 };
-
-    if (signalType === 'tool_fail') {
-      const toolMatch = stdin.match(/"tool"\s*:\s*"([^"]+)"/);
-      const errorMatch = stdin.match(/"error"\s*:\s*"([^"]+)"/);
-      if (toolMatch) payload.tool = toolMatch[1];
-      if (errorMatch) payload.error = errorMatch[1].slice(0, 200);
-      payload.stdinPreview = stdin.slice(0, 500);
-    }
-
-    if (signalType === 'drift_stuck' && extraInfo) {
-      payload.matchedPattern = extraInfo.slice(0, 100);
-    }
-
-    const wDb = openDb();
-    record({
-      sessionId: getSessionId(),
-      type: signalType,
-      payload,
-    }, null, { db: wDb.db });
-    wDb.close();
+    let hookPayload = {};
+    try {
+      hookPayload = JSON.parse(stdin || '{}');
+    } catch { /* malformed hook payload: ignore unless an explicit signal was supplied */ }
+    collectHookPayload(hookPayload, { explicitType: signalType, extraInfo });
   } catch {
     // 静默失败
   }
@@ -182,4 +219,12 @@ if (require.main === module) {
 }
 
 // 被 require → 导出 emit() 供程序内调用
-module.exports = { emit, emitSync, SIGNAL_TYPES };
+module.exports = {
+  emit,
+  emitSync,
+  collectHookPayload,
+  recordLifecycleSignal,
+  signalFromHookPayload,
+  getSessionId,
+  SIGNAL_TYPES,
+};

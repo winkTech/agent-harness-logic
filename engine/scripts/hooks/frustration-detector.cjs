@@ -14,16 +14,15 @@
  */
 
 const { HARNESS_ROOT } = require('../lib/harness-root.cjs');
+const { updateJsonFileSync } = require('../lib/project-scope.cjs');
 
 const p = require('node:path');
 const f = require('node:fs');
-const os = require('node:os');
 
 const HOME = HARNESS_ROOT;
-const STATE_FILE = p.join(HOME, 'var', 'index', 'runtime-state.json');
+const STATE_FILE = process.env.CLAUDE_RUNTIME_STATE_FILE || p.join(HOME, 'var', 'index', 'runtime-state.json');
 const FAILURE_SIGNAL_THROTTLE_MS = 60 * 1000;
 
-if (process.env.CLAUDE_BENCH === '1') process.exit(0);
 const MODES = ['根因分析', '第一性原理', '减法', '搜索优先', '倒推', '证据驱动', '闭环'];
 
 // ── 挫败关键词（中英双语） ──────────────────────────────────────────────
@@ -52,27 +51,30 @@ function readState() {
   try { return JSON.parse(f.readFileSync(STATE_FILE, 'utf8')); } catch { return null; }
 }
 
-function writeState(state) {
-  f.writeFileSync(STATE_FILE, JSON.stringify(state, null, 2));
+function updateState(mutator) {
+  return updateJsonFileSync(STATE_FILE, () => ({}), (state) => mutator(state) || state);
 }
 
-function shouldThrottleFailureSignal(state, signal) {
-  if (!state || !signal) return false;
+function shouldThrottleFailureSignal(state, signal, mutateState = updateState) {
+  if (!signal) return false;
   const now = Date.now();
-  const key = [
-    signal.mode || '',
-    signal.forceModeSwitch ? 'force' : 'suggest',
-    signal.deEscalate ? 'deescalate' : 'active',
-    state.failureCount || 0,
-  ].join(':');
-  const last = state.frustrationDetectorLastSignal || {};
-  const lastAt = Date.parse(last.at || '');
-  if (last.key === key && Number.isFinite(lastAt) && now - lastAt < FAILURE_SIGNAL_THROTTLE_MS) {
-    return true;
-  }
-  state.frustrationDetectorLastSignal = { key, at: new Date(now).toISOString() };
-  try { writeState(state); } catch { /* ignore state write failures */ }
-  return false;
+  let throttled = false;
+  mutateState((current) => {
+    const key = [
+      signal.mode || '',
+      signal.forceModeSwitch ? 'force' : 'suggest',
+      signal.deEscalate ? 'deescalate' : 'active',
+      current.failureCount || 0,
+    ].join(':');
+    const last = current.frustrationDetectorLastSignal || {};
+    const lastAt = Date.parse(last.at || '');
+    throttled = last.key === key
+      && Number.isFinite(lastAt)
+      && now - lastAt < FAILURE_SIGNAL_THROTTLE_MS;
+    if (!throttled) current.frustrationDetectorLastSignal = { key, at: new Date(now).toISOString() };
+    return current;
+  });
+  return throttled;
 }
 
 function detect(text) {
@@ -114,10 +116,7 @@ function checkToolFailure(state) {
   if (recentCalls.length >= 3 && recentCalls.every(c => c.result === 'ok' || c.result === 'success')) {
     // 连续成功 → 降级: 清除 failureCount 和 currentMode（切回闭环）
     if (state.failureCount > 0) {
-      state.failureCount = 0;
       const oldMode = state.currentMode;
-      state.currentMode = '';
-      writeState(state);
       return { mode: '闭环', reason: `${recentCalls.length} 次连续成功，从 ${oldMode || '高失败'} 模式降级回闭环`, deEscalate: true };
     }
   }
@@ -152,86 +151,90 @@ function checkToolFailure(state) {
   return null;
 }
 
-// ── Main ──────────────────────────────────────────────────────────────────
-
-// Try arg first, then env var, then stdin
-let input = process.argv[2];
-if (!input) {
-  input = process.env.CLAUDE_USER_MESSAGE || '';
+function persistenceDisabled(deps = {}) {
+  return deps.persist === false
+    || process.env.CLAUDE_HARNESS_NO_PERSIST === '1'
+    || process.env.CLAUDE_HOOK_NO_WRITE === '1'
+    || process.env.CLAUDE_HARNESS_VERIFY_READONLY === '1'
+    || process.env.CLAUDE_NO_DIAGNOSTIC_WRITES === '1';
 }
-// If still empty, try reading from stdin (non-blocking)
-if (!input && !process.stdin.isTTY) {
-  try {
-    const fd = require('node:fs').readFileSync(0, 'utf8').slice(0, 2000);
-    if (fd) input = fd;
-  } catch { /* stdin not available */ }
-}
-const state = readState();
 
-// 1. Check tool failure count
-const failureSignal = checkToolFailure(state);
-if (failureSignal) {
-  if (shouldThrottleFailureSignal(state, failureSignal)) process.exit(0);
-  const isForce = failureSignal.forceModeSwitch === true;
-  // Emit signal: 模式切换事件
+function emitModeSignal(type, payload, deps = {}) {
+  if (persistenceDisabled(deps)) return false;
   try {
-    const { emitSync } = require('../../hooks/learning/signal-collector.cjs');
-    emitSync('mode_switch', {
+    const emit = deps.emitSignal || require('../../hooks/learning/signal-collector.cjs').emitSync;
+    emit(type, payload);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function evaluateSignal(input, deps = {}) {
+  if (process.env.CLAUDE_BENCH === '1' && deps.allowBench !== true) return null;
+  const loadState = deps.readState || readState;
+  const mutateState = deps.updateState || updateState;
+  const canPersist = !persistenceDisabled(deps);
+  let state = loadState();
+
+  const failureSignal = checkToolFailure(state);
+  if (failureSignal) {
+    if (canPersist && failureSignal.deEscalate) {
+      state = mutateState((current) => {
+        current.failureCount = 0;
+        current.currentMode = '';
+        return current;
+      });
+    }
+    if (canPersist && shouldThrottleFailureSignal(state, failureSignal, mutateState)) return null;
+    const isForce = failureSignal.forceModeSwitch === true;
+    emitModeSignal('mode_switch', {
       mode: failureSignal.mode,
       trigger: 'failure-count',
       forceModeSwitch: isForce,
       deEscalate: failureSignal.deEscalate || false,
       failureCount: state?.failureCount || 0,
-    });
-  } catch { /* 静默 */ }
-  console.log(JSON.stringify({
-    source: 'frustration-detector',
-    type: isForce ? 'mode-switch-force' : 'mode-switch-suggest',
-    mode: failureSignal.mode,
-    reason: failureSignal.reason,
-    trigger: 'failure-count',
-    count: state?.failureCount || 0,
-    deEscalate: failureSignal.deEscalate || false,
-    forceModeSwitch: isForce,
-    suggestReset: failureSignal.suggestReset || false,
-    // 注入强制指令（Claude 必须执行的切换命令）
-    instruction: isForce
-      ? `【强制模式切换】failureCount=${state?.failureCount || 0}。立即切换到 ${failureSignal.mode} 模式。${failureSignal.suggestReset ? '当前 session 上下文可能已污染，建议保存进度后 /compact。' : ''}`
-      : failureSignal.deEscalate
-        ? `【自动降级】检测到连续成功，复位 failureCount 并切回闭环模式。`
-        : `【模式切换建议】考虑切换到 ${failureSignal.mode} 模式以适应当前进展。`,
-  }));
-  process.exit(0);
-}
-
-// 2. Check for frustration keywords in input
-const result = detect(input);
-if (result.frustrated) {
-  // Bump failure count
-  if (state) {
-    state.failureCount = (state.failureCount || 0) + 1;
-    state.failureHistory = state.failureHistory || [];
-    state.failureHistory.push({
-      count: state.failureCount,
-      at: new Date().toISOString(),
-      trigger: result.matches[0],
-      suggestedMode: result.suggestion?.mode,
-    });
-    writeState(state);
+    }, deps);
+    return {
+      source: 'frustration-detector',
+      type: isForce ? 'mode-switch-force' : 'mode-switch-suggest',
+      mode: failureSignal.mode,
+      reason: failureSignal.reason,
+      trigger: 'failure-count',
+      count: state?.failureCount || 0,
+      deEscalate: failureSignal.deEscalate || false,
+      forceModeSwitch: isForce,
+      suggestReset: failureSignal.suggestReset || false,
+      instruction: isForce
+        ? `【强制模式切换】failureCount=${state?.failureCount || 0}。立即切换到 ${failureSignal.mode} 模式。${failureSignal.suggestReset ? '当前 session 上下文可能已污染，建议保存进度后 /compact。' : ''}`
+        : failureSignal.deEscalate
+          ? '【自动降级】检测到连续成功，复位 failureCount 并切回闭环模式。'
+          : `【模式切换建议】考虑切换到 ${failureSignal.mode} 模式以适应当前进展。`,
+    };
   }
 
-  // Emit signal: 关键词触发的模式切换
-  try {
-    const { emitSync } = require('../../hooks/learning/signal-collector.cjs');
-    emitSync('mode_switch', {
-      mode: result.suggestion.mode,
-      trigger: 'keyword',
-      keyword: result.matches[0],
-      failureCount: state?.failureCount || 0,
+  const result = detect(input);
+  if (!result.frustrated) return null;
+  if (state && canPersist) {
+    state = mutateState((current) => {
+      current.failureCount = (current.failureCount || 0) + 1;
+      current.failureHistory = current.failureHistory || [];
+      current.failureHistory.push({
+        count: current.failureCount,
+        at: new Date().toISOString(),
+        trigger: result.matches[0],
+        suggestedMode: result.suggestion?.mode,
+      });
+      return current;
     });
-  } catch { /* 静默 */ }
-
-  console.log(JSON.stringify({
+  }
+  emitModeSignal('mode_switch', {
+    mode: result.suggestion.mode,
+    trigger: 'keyword',
+    keyword: result.matches[0],
+    failureCount: state?.failureCount || 0,
+  }, deps);
+  return {
     source: 'frustration-detector',
     type: 'mode-switch-force',
     mode: result.suggestion.mode,
@@ -241,6 +244,53 @@ if (result.frustrated) {
     failureCount: state?.failureCount || 0,
     forceModeSwitch: true,
     instruction: `【强制模式切换】检测到挫败关键词"${result.matches[0]}"。切换到 ${result.suggestion.mode} 模式。`,
-  }));
-  process.exit(0);
+  };
 }
+
+function retrieveContext(payload = {}, deps = {}) {
+  const input = String(payload.prompt || payload.user_prompt || payload.message || '').slice(0, 2000);
+  const signal = evaluateSignal(input, deps);
+  if (!signal) return null;
+  return {
+    hookSpecificOutput: {
+      hookEventName: payload.hook_event_name || 'UserPromptSubmit',
+      additionalContext: [
+        '[frustration-detector] 认知模式调整:',
+        signal.instruction,
+        `原因: ${signal.reason}`,
+      ].join('\n'),
+    },
+  };
+}
+
+function readCliInput(deps = {}) {
+  let input = deps.argv?.[0] || process.argv[2] || process.env.CLAUDE_USER_MESSAGE || '';
+  if (!input && !process.stdin.isTTY) {
+    try {
+      const raw = (deps.readStdin || (() => f.readFileSync(0, 'utf8')))();
+      if (raw) input = String(raw).slice(0, 2000);
+    } catch { /* stdin not available */ }
+  }
+  return input;
+}
+
+function main(deps = {}) {
+  const signal = evaluateSignal(readCliInput(deps), deps);
+  if (!signal) return null;
+  const write = deps.writeStdout || ((value) => process.stdout.write(value));
+  write(`${JSON.stringify(signal)}\n`);
+  return signal;
+}
+
+if (require.main === module) main();
+
+module.exports = {
+  MODES,
+  detect,
+  checkToolFailure,
+  persistenceDisabled,
+  evaluateSignal,
+  retrieveContext,
+  readCliInput,
+  main,
+};

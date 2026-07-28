@@ -1,0 +1,153 @@
+{
+  "version": 2,
+  "consumerRegistry": [
+    {
+      "id": "dream",
+      "kind": "event-stream",
+      "event": "SessionStart",
+      "hostScript": "engine/scripts/hooks/session-bootstrap.cjs",
+      "component": "dreamStartup",
+      "requiresWatermark": true,
+      "requiresHeartbeat": true,
+      "minBatch": 5,
+      "maxBatch": 100,
+      "maxPendingAgeSeconds": 86400,
+      "timeoutSeconds": 12,
+      "active": true
+    },
+    {
+      "id": "skill-evolve",
+      "kind": "event-stream",
+      "event": "Stop",
+      "hostScript": "engine/hooks/learning/postflight-observer.cjs",
+      "component": "skill-evolve",
+      "requiresWatermark": true,
+      "requiresHeartbeat": true,
+      "minBatch": 1,
+      "maxBatch": 100,
+      "maxPendingAgeSeconds": 86400,
+      "timeoutSeconds": 30,
+      "active": true
+    },
+    {
+      "id": "promoted-harness-gate",
+      "kind": "policy",
+      "event": "PreToolUse",
+      "hostScript": "engine/scripts/hooks/preflight-router.cjs",
+      "component": "promotedHarnessGate",
+      "requiresWatermark": false,
+      "requiresHeartbeat": false,
+      "timeoutSeconds": 20,
+      "active": true
+    }
+  ],
+  "entries": [
+    {
+      "script": "engine/hooks/learning/postflight-observer.cjs",
+      "kind": "observer",
+      "events": ["PostToolUse", "PostToolUseFailure", "Stop"],
+      "tools": ["*"],
+      "payloadSchema": "claude-hook/postflight-v1",
+      "blocking": false,
+      "sideEffects": ["sqlite-events", "sqlite-memory", "cost-ledger", "transparency-ledger", "skill-candidates"],
+      "consumers": ["skill-evolve"],
+      "timeoutSeconds": 30,
+      "owner": "harness-observability",
+      "fixture": "engine/scripts/test-hooks/observer-consolidation-contract.cjs",
+      "active": true
+    },
+    {
+      "script": "engine/scripts/hooks/postflight-router.cjs",
+      "kind": "router",
+      "events": ["PostToolUse", "PostToolUseFailure"],
+      "tools": ["*"],
+      "payloadSchema": "claude-hook/postflight-v1",
+      "blocking": true,
+      "sideEffects": ["verification-state", "watchdog-state", "toolchain-health", "readonly-memory"],
+      "timeoutSeconds": 12,
+      "owner": "harness-gates",
+      "fixture": "engine/scripts/test-hooks/postflight-router-contract.cjs",
+      "active": true
+    },
+    {
+      "script": "engine/scripts/hooks/prompt-context.cjs",
+      "kind": "router",
+      "events": ["UserPromptSubmit"],
+      "tools": ["*"],
+      "payloadSchema": "claude-hook/user-prompt-v1",
+      "blocking": false,
+      "sideEffects": ["rule-cache", "readonly-memory", "runtime-state", "sqlite-events"],
+      "timeoutSeconds": 8,
+      "owner": "harness-context",
+      "fixture": "engine/scripts/test-hooks/prompt-context-contract.cjs",
+      "active": true
+    },
+    {
+      "script": "engine/scripts/pre-compact.cjs",
+      "kind": "checkpoint",
+      "events": ["PreCompact"],
+      "tools": ["*"],
+      "payloadSchema": "claude-hook/pre-compact-v1",
+      "blocking": false,
+      "sideEffects": ["runtime-state", "checkpoint-files"],
+      "timeoutSeconds": 60,
+      "owner": "harness-context",
+      "fixture": "engine/scripts/test-hooks/harness-painpoints.cjs",
+      "active": true
+    },
+    {
+      "script": "engine/scripts/hooks/preflight-router.cjs",
+      "kind": "router",
+      "events": ["PreToolUse"],
+      "tools": ["*"],
+      "payloadSchema": "claude-hook/pre-tool-v1",
+      "blocking": true,
+      "sideEffects": ["gate-state", "action-contract", "readonly-memory"],
+      "consumers": ["promoted-harness-gate"],
+      "timeoutSeconds": 20,
+      "owner": "harness-gates",
+      "fixture": "engine/scripts/test-hooks/preflight-router-contract.cjs",
+      "active": true
+    },
+    {
+      "script": "engine/scripts/hooks/session-bootstrap.cjs",
+      "kind": "router",
+      "events": ["SessionStart"],
+      "tools": ["*"],
+      "payloadSchema": "claude-hook/session-start-v1",
+      "blocking": false,
+      "sideEffects": ["runtime-state", "work-memory", "sqlite-events", "readonly-memory"],
+      "consumers": ["dream"],
+      "timeoutSeconds": 12,
+      "owner": "harness-context",
+      "fixture": "engine/scripts/test-hooks/lifecycle-router-contract.cjs",
+      "active": true
+    },
+    {
+      "script": "engine/scripts/memory-knowledge-maintenance.cjs",
+      "kind": "maintenance",
+      "events": ["SessionStart"],
+      "tools": ["*"],
+      "payloadSchema": "claude-hook/session-start-v1",
+      "blocking": false,
+      "sideEffects": ["sqlite-retention", "memory-reconcile", "rule-candidates", "semantic-index", "maintenance-state"],
+      "timeoutSeconds": 120,
+      "owner": "harness-memory",
+      "fixture": "engine/scripts/test-hooks/read-only-hooks.cjs",
+      "active": true
+    },
+    {
+      "script": "engine/scripts/hooks/stop-summary.cjs",
+      "kind": "router",
+      "events": ["Stop"],
+      "tools": ["*"],
+      "payloadSchema": "claude-hook/stop-v1",
+      "blocking": true,
+      "sideEffects": ["watchdog-state"],
+      "timeoutSeconds": 8,
+      "owner": "harness-context",
+      "fixture": "engine/scripts/test-hooks/lifecycle-router-contract.cjs",
+      "active": true
+    }
+  ]
+}

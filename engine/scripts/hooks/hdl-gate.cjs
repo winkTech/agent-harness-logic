@@ -23,6 +23,9 @@ const fs = require('fs');
 const path = require('path');
 const os = require('os');
 const logicAnalyzer = require('../hdl-lint/logic-analyzer.cjs');
+const { evaluateGuardBypass } = require('../lib/gate-bypass.cjs');
+
+const GATE_ID = 'hdl-gate.cjs';
 
 /** Git Bash → Windows 原生路径转换 */
 function toNativePath(p) {
@@ -299,9 +302,9 @@ function block(title, messages, command) {
 const HDL_WRITE_TOOLS = new Set(['write', 'edit', 'multiedit']);
 
 /** 还原「本次操作完成后」的文件全文。Write 直接给, Edit/MultiEdit 需叠加替换。 */
-function postEditContent(payload, filePath) {
+function postEditContent(payload, filePath, runtime = {}) {
   const input = payload?.tool_input || payload?.tool?.input || payload?.input || payload?.arguments || {};
-  const direct = input.content || payload?.content || '';
+  const direct = runtime.content !== undefined ? runtime.content : (input.content || payload?.content || '');
   if (direct) return String(direct);
 
   const edits = Array.isArray(input.edits) ? input.edits
@@ -311,7 +314,8 @@ function postEditContent(payload, filePath) {
   if (edits.length === 0) return '';
 
   let text;
-  try { text = fs.readFileSync(filePath, 'utf8'); } catch { return ''; }
+  const readFileSync = runtime.readFileSync || fs.readFileSync.bind(fs);
+  try { text = readFileSync(filePath, 'utf8'); } catch { return ''; }
   for (const e of edits) {
     const oldS = String(e?.old_string ?? '');
     if (!oldS) continue;
@@ -323,15 +327,75 @@ function postEditContent(payload, filePath) {
 
 // ── 主逻辑 ───────────────────────────────────────────────────────────────────
 
-async function main() {
-  // 逃生开关: CLAUDE_GATES_DISABLED=true 跳过所有门禁
-  if (process.env.CLAUDE_GATES_DISABLED === 'true') process.exit(0);
+function evaluate(payload, runtime = {}) {
+  const source = GATE_ID;
+  if (evaluateGuardBypass({ gateId: GATE_ID, payload, context: runtime.context }).allowed) {
+    return { source, decision: 'allow', diagnostics: [] };
+  }
+  const eventName = payload?.hook_event_name || payload?.event || '';
+  const toolName = String(payload?.tool?.name || payload?.tool_name || payload?.name || '').toLowerCase();
+  const input = payload?.tool_input || payload?.tool?.input || payload?.input || payload?.arguments || {};
+  const filePath = String(runtime.filePath || input.file_path || input.filePath || '').trim();
+  if (!HDL_WRITE_TOOLS.has(toolName) || !filePath || !/\.(sv|v)$/i.test(filePath)) {
+    return { source, decision: 'allow', diagnostics: [] };
+  }
+  const fp = toNativePath(filePath) || filePath;
 
+  if (!eventName || eventName === 'PreToolUse') {
+    const content = postEditContent(payload, fp, runtime);
+    if (!content) return { source, decision: 'allow', diagnostics: [] };
+    const diagnostics = [];
+    if (isSourcePath(filePath)) {
+      for (const message of checkSynthesisViolations(content)) {
+        diagnostics.push({ code: 'synthesis-rule', message, filePath });
+      }
+      for (const message of checkNamingViolations(content, path.basename(fp), filePath)) {
+        diagnostics.push({ code: 'naming-rule', message, filePath });
+      }
+      const fileName = path.basename(fp);
+      if (!/tb_|_tb|testbench/i.test(fileName)) {
+        const tbPath = findTbForModule(fp);
+        if (!tbPath && isNewModuleFile(fp)) {
+          const moduleName = fileName.replace(/\.(sv|v)$/i, '');
+          diagnostics.push({
+            code: 'testbench-first',
+            message: `New RTL module requires an existing testbench (tb_${moduleName}.sv or ${moduleName}_tb.sv).`,
+            filePath,
+          });
+        }
+      }
+    }
+    return {
+      source,
+      decision: diagnostics.length > 0 ? 'block' : 'allow',
+      diagnostics,
+    };
+  }
+
+  if (eventName === 'PostToolUse' && isSourcePath(filePath)) {
+    const report = logicAnalyzer.analyzeFile(fp);
+    const diagnostics = (report?.violations || []).map((item) => ({
+      code: item.type || 'logic-analysis',
+      message: item.detail || String(item),
+      filePath,
+    }));
+    return {
+      source,
+      decision: diagnostics.length > 0 ? 'warn' : 'allow',
+      diagnostics,
+      advisories: diagnostics,
+    };
+  }
+  return { source, decision: 'allow', diagnostics: [] };
+}
+
+async function main() {
   const raw = await readStdin();
   if (!raw) process.exit(0);
 
   let payload;
   try { payload = JSON.parse(raw); } catch { process.exit(0); }
+  if (evaluateGuardBypass({ gateId: GATE_ID, payload }).allowed) process.exit(0);
 
   const eventName = payload?.hook_event_name || '';
   const toolName = (payload?.tool?.name || payload?.tool_name || payload?.name || '').toLowerCase();
@@ -420,4 +484,9 @@ async function main() {
   process.exit(0);
 }
 
-main();
+if (require.main === module) main();
+
+module.exports = {
+  evaluate,
+  postEditContent,
+};

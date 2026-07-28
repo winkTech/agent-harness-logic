@@ -54,7 +54,12 @@ function collectRuns(runsDir) {
     rows.push({
       runId: task.runId || skill.runId || ledger.runId || entry.name,
       taskType: task.taskType || skill.taskType || 'unknown',
-      instructionCaptured: Boolean(task.userInstruction || toolContract.match?.userInstructionQuote),
+      instructionCaptured: Boolean(
+        task.instructionCaptured
+        || task.userInstruction
+        || toolContract.match?.userInstructionSha256
+        || toolContract.match?.userInstructionQuote
+      ),
       matchStatus: toolContract.match?.status || 'not-captured',
       currentTool: ledger.summary?.currentTool || toolContract.tool || 'unknown',
       requiredSkills: skill.requiredSkills || [],

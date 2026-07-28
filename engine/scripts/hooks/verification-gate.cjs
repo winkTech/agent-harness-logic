@@ -39,6 +39,9 @@
 
 const fs = require('fs');
 const path = require('path');
+const { evaluateGuardBypass } = require('../lib/gate-bypass.cjs');
+
+const GATE_ID = 'verification-gate.cjs';
 const {
   markEditedFromPayload,
   markVerifiedForCwd,
@@ -423,6 +426,25 @@ function commandSegments(cmd) {
     }
     if (c === '"' || c === "'") { quote = c; cur += c; continue; }
     if (c === '\\' && raw[i + 1] === '\n') { i++; continue; }
+    if (c === '<' && raw[i + 1] === '#'
+        && (i === 0 || /\s|[;|&(){}]/.test(raw[i - 1]))) {
+      if (cur && !/\s$/.test(cur)) cur += ' ';
+      i += 2;
+      let depth = 1;
+      while (i < raw.length && depth > 0) {
+        if (raw[i] === '<' && raw[i + 1] === '#') { depth++; i += 2; continue; }
+        if (raw[i] === '#' && raw[i + 1] === '>') { depth--; i += 2; continue; }
+        i++;
+      }
+      i--;
+      continue;
+    }
+    if (c === '#' && (i === 0 || /\s|[;|&()]/.test(raw[i - 1]))) {
+      while (i + 1 < raw.length && raw[i + 1] !== '\n' && raw[i + 1] !== '\r') i++;
+      segs.push(cur);
+      cur = '';
+      continue;
+    }
     if (c === '\n' || c === '\r' || c === ';' || c === '|' || c === '&') {
       // 吃掉成对的 && / ||
       if ((c === '&' || c === '|') && raw[i + 1] === c) i++;
@@ -440,6 +462,290 @@ function commandSegments(cmd) {
     .map((s) => s.replace(/^(?:time|exec|nohup|command|builtin)\s+/, ''))
     .filter(Boolean);
   return out.length ? out : [raw];
+}
+
+/**
+ * Return the first controlled Git action in a shell command chain.
+ *
+ * Git global options live between `git` and the subcommand, so matching only
+ * `^git push` misses common forms such as `git -C repo push`.  Reusing the
+ * quote-aware command splitter also keeps `echo "git push"` from being
+ * classified as a real Git operation.
+ */
+function shellWords(segment) {
+  const words = [];
+  let current = '';
+  let quote = null;
+  let started = false;
+  for (let index = 0; index < String(segment).length; index++) {
+    const char = String(segment)[index];
+    if (quote) {
+      if (char === '\\' && quote === '"' && index + 1 < String(segment).length) {
+        const escaped = String(segment)[index + 1];
+        if (['"', '\\', '$', '`'].includes(escaped)) {
+          current += escaped;
+          index++;
+        } else {
+          current += char;
+        }
+        started = true;
+      } else if (char === quote) {
+        quote = null;
+      } else {
+        current += char;
+        started = true;
+      }
+      continue;
+    }
+    if (char === "'" || char === '"') { quote = char; started = true; continue; }
+    if (/\s/.test(char)) {
+      if (started) { words.push(current); current = ''; started = false; }
+      continue;
+    }
+    if (char === '\\' && index + 1 < String(segment).length) {
+      const escaped = String(segment)[index + 1];
+      if (/\s/.test(escaped) || ['"', "'", '\\'].includes(escaped)) {
+        current += escaped;
+        index++;
+      } else {
+        current += char;
+      }
+      started = true;
+      continue;
+    }
+    current += char;
+    started = true;
+  }
+  if (started) words.push(current);
+  return words;
+}
+
+function commandSubstitutions(command) {
+  const source = String(command || '');
+  const substitutions = [];
+  let quote = null;
+  for (let index = 0; index < source.length; index++) {
+    const char = source[index];
+    if (char === '\\') { index++; continue; }
+    if (char === "'") {
+      if (quote === 'single') quote = null;
+      else if (!quote) quote = 'single';
+      continue;
+    }
+    if (char === '"') {
+      if (quote === 'double') quote = null;
+      else if (!quote) quote = 'double';
+      continue;
+    }
+    if (quote === 'single') continue;
+    if (!quote && char === '<' && source[index + 1] === '#'
+        && (index === 0 || /\s|[;|&(){}]/.test(source[index - 1]))) {
+      index += 2;
+      let depth = 1;
+      while (index < source.length && depth > 0) {
+        if (source[index] === '<' && source[index + 1] === '#') { depth++; index += 2; continue; }
+        if (source[index] === '#' && source[index + 1] === '>') { depth--; index += 2; continue; }
+        index++;
+      }
+      index--;
+      continue;
+    }
+    if (!quote && char === '#' && (index === 0 || /\s|[;|&()]/.test(source[index - 1]))) {
+      while (index < source.length && source[index] !== '\n' && source[index] !== '\r') index++;
+      continue;
+    }
+    if (char === '`') {
+      const end = source.indexOf('`', index + 1);
+      if (end !== -1) {
+        substitutions.push(source.slice(index + 1, end));
+        index = end;
+      }
+      continue;
+    }
+    const startsSubstitution = source[index + 1] === '('
+      && (char === '$' || (!quote && (char === '<' || char === '>')));
+    if (!startsSubstitution) continue;
+    const start = index + 2;
+    let depth = 1;
+    let innerQuote = null;
+    let innerComment = false;
+    let end = start;
+    for (; end < source.length; end++) {
+      const inner = source[end];
+      if (innerComment) {
+        if (inner === '\n' || inner === '\r') innerComment = false;
+        continue;
+      }
+      if (inner === '\\') { end++; continue; }
+      if (inner === "'" && innerQuote !== 'double') {
+        innerQuote = innerQuote === 'single' ? null : 'single';
+        continue;
+      }
+      if (inner === '"' && innerQuote !== 'single') {
+        innerQuote = innerQuote === 'double' ? null : 'double';
+        continue;
+      }
+      if (innerQuote) continue;
+      if (inner === '<' && source[end + 1] === '#'
+          && (end === start || /\s|[;|&(){}]/.test(source[end - 1]))) {
+        end += 2;
+        let commentDepth = 1;
+        while (end < source.length && commentDepth > 0) {
+          if (source[end] === '<' && source[end + 1] === '#') { commentDepth++; end += 2; continue; }
+          if (source[end] === '#' && source[end + 1] === '>') { commentDepth--; end += 2; continue; }
+          end++;
+        }
+        end--;
+        continue;
+      }
+      if (inner === '#' && (end === start || /\s|[;|&()]/.test(source[end - 1]))) {
+        innerComment = true;
+        continue;
+      }
+      if (inner === '(') depth++;
+      else if (inner === ')' && --depth === 0) break;
+    }
+    if (depth === 0) {
+      substitutions.push(source.slice(start, end));
+      index = end;
+    }
+  }
+  return substitutions;
+}
+
+function directGitSubcommand(segment, allowed, depth = 0) {
+  const words = shellWords(segment);
+  let index = 0;
+  const controlPrefixes = new Set(['if', 'then', 'elif', 'else', 'while', 'until', 'do', '!']);
+  const wrappers = new Set(['time', 'exec', 'nohup', 'command', 'builtin']);
+  while (index < words.length) {
+    const rawWord = String(words[index] || '');
+    const ungrouped = rawWord.replace(/^[({]+/, '');
+    if (ungrouped !== rawWord) {
+      if (ungrouped) words[index] = ungrouped;
+      else index++;
+      continue;
+    }
+    const word = rawWord.toLowerCase();
+    if (word === 'case') {
+      const inIndex = words.findIndex((candidate, candidateIndex) => (
+        candidateIndex > index && String(candidate).toLowerCase() === 'in'
+      ));
+      if (inIndex === -1) return '';
+      index = inIndex + 1;
+      while (index < words.length && !/\)$/.test(words[index])) index++;
+      if (index < words.length) index++;
+      continue;
+    }
+    if (/^[A-Za-z_]\w*=/.test(rawWord) || controlPrefixes.has(word) || wrappers.has(word)) {
+      index++;
+      continue;
+    }
+    if (word === 'env') {
+      index++;
+      const envOptionsWithValue = new Set(['-u', '--unset', '-C', '--chdir', '-S', '--split-string']);
+      while (index < words.length) {
+        const option = words[index];
+        if (option === '-S' || option === '--split-string') {
+          if (index + 1 >= words.length) return '';
+          return gitSubcommand(words.slice(index + 1).join(' '), [...allowed], depth + 1);
+        }
+        if (/^--split-string=/.test(option)) {
+          const inline = option.slice(option.indexOf('=') + 1);
+          return gitSubcommand([inline, ...words.slice(index + 1)].join(' '), [...allowed], depth + 1);
+        }
+        if (envOptionsWithValue.has(option)) { index += 2; continue; }
+        if (/^--(?:unset|chdir|split-string)=/.test(option)
+            || option.startsWith('-')
+            || /^[A-Za-z_]\w*=/.test(option)) {
+          index++;
+          continue;
+        }
+        break;
+      }
+      continue;
+    }
+    break;
+  }
+  const executable = String(words[index] || '').replace(/\\/g, '/').split('/').pop().toLowerCase();
+  if (executable === 'cmd' || executable === 'cmd.exe') {
+    const commandIndex = words.findIndex((word, wordIndex) => (
+      wordIndex > index && /^\/(?:c|k)$/i.test(word)
+    ));
+    if (commandIndex !== -1 && commandIndex + 1 < words.length) {
+      return gitSubcommand(words.slice(commandIndex + 1).join(' '), [...allowed], depth + 1);
+    }
+    return '';
+  }
+  if (['powershell', 'powershell.exe', 'pwsh', 'pwsh.exe'].includes(executable)) {
+    const flags = new Set(['-nologo', '-noprofile', '-noninteractive', '-mta', '-sta']);
+    const optionsWithValue = new Set([
+      '-configurationname', '-custompipename', '-executionpolicy', '-inputformat',
+      '-outputformat', '-settingsfile', '-windowstyle', '-workingdirectory',
+      '-encodedcommand', '-e', '-ec', '-file', '-f',
+    ]);
+    let cursor = index + 1;
+    while (cursor < words.length) {
+      const option = words[cursor].toLowerCase();
+      if (option === '-command' || option === '-c') {
+        return cursor + 1 < words.length
+          ? gitSubcommand(words.slice(cursor + 1).join(' '), [...allowed], depth + 1)
+          : '';
+      }
+      if (flags.has(option)) { cursor++; continue; }
+      if (optionsWithValue.has(option)) { cursor += 2; continue; }
+      if (option.startsWith('-')) return '';
+      return gitSubcommand(words.slice(cursor).join(' '), [...allowed], depth + 1);
+    }
+    return '';
+  }
+  if (['bash', 'sh', 'zsh'].includes(executable)) {
+    const commandIndex = words.findIndex((word, wordIndex) => (
+      wordIndex > index && (/^(?:-c|--command)$/i.test(word) || /^-[a-z]*c[a-z]*$/i.test(word))
+    ));
+    if (commandIndex !== -1 && commandIndex + 1 < words.length) {
+      return gitSubcommand(words.slice(commandIndex + 1).join(' '), [...allowed], depth + 1);
+    }
+    return '';
+  }
+  if (executable !== 'git' && executable !== 'git.exe') return '';
+  index++;
+
+  const optionsWithValue = new Set(['-c', '-C', '--git-dir', '--work-tree', '--namespace', '--config-env']);
+  const flagOptions = new Set([
+    '--bare', '--literal-pathspecs', '--no-literal-pathspecs', '--glob-pathspecs',
+    '--noglob-pathspecs', '--icase-pathspecs', '--no-pager', '--paginate',
+    '--no-replace-objects', '--no-optional-locks',
+  ]);
+  while (index < words.length) {
+    const word = words[index];
+    if (word === '--') { index++; break; }
+    if (optionsWithValue.has(word)) { index += 2; continue; }
+    if (/^-C.+/.test(word) || /^-c.+/.test(word)
+        || /^--(?:git-dir|work-tree|namespace|config-env)=/.test(word)
+        || flagOptions.has(word)) {
+      index++;
+      continue;
+    }
+    if (word.startsWith('-')) return '';
+    break;
+  }
+  const action = String(words[index] || '').replace(/[)}]+$/, '').toLowerCase();
+  return allowed.has(action) ? action : '';
+}
+
+function gitSubcommand(cmd, actions = ['commit', 'push'], depth = 0) {
+  const allowed = new Set(actions.map((action) => String(action || '').trim().toLowerCase()).filter(Boolean));
+  if (allowed.size === 0 || depth > 8) return '';
+  for (const segment of commandSegments(cmd)) {
+    const action = directGitSubcommand(segment, allowed, depth);
+    if (action) return action;
+  }
+  for (const nested of commandSubstitutions(cmd)) {
+    const action = gitSubcommand(nested, [...allowed], depth + 1);
+    if (action) return action;
+  }
+  return '';
 }
 
 /** 任一段命中 → 命中。用于 TEST/LINT/CUSTOM: 链中出现过验证命令就算跑过验证。 */
@@ -477,12 +783,105 @@ function isRescue(cmd) {
   return commandSegments(cmd).some((seg) => RESCUE_PATTERN.test(seg));
 }
 
+function allow(diagnostics = [], extra = {}) {
+  return { source: 'verification-gate', decision: 'allow', diagnostics, ...extra };
+}
+
+function warn(diagnostics, extra = {}) {
+  return { source: 'verification-gate', decision: 'warn', diagnostics, ...extra };
+}
+
+function block(diagnostics, extra = {}) {
+  return { source: 'verification-gate', decision: 'block', diagnostics, ...extra };
+}
+
+function evaluate(payload, _runtime = {}) {
+  if (evaluateGuardBypass({ gateId: GATE_ID, payload }).allowed) {
+    return allow([], { bypassed: true });
+  }
+
+  const eventName = payload?.hook_event_name || '';
+  const toolName = String(payload?.tool?.name || payload?.tool_name || payload?.name || '').toLowerCase();
+  const isShellTool = toolName === 'bash' || toolName === 'powershell';
+  const command = String(
+    payload?.tool_input?.command
+    || payload?.tool?.input?.command
+    || payload?.input?.command
+    || payload?.command
+    || ''
+  ).trim();
+
+  if ((eventName === 'PostToolUse' || !eventName) && ['edit', 'write', 'multiedit'].includes(toolName)) {
+    const filePath = payloadFilePath(payload);
+    const normalizedPath = filePath.toLowerCase();
+    const isCode = /\.(sv|v|vh|py|c|cpp|h|vhd)$/i.test(filePath);
+    const isGateFile = /[\\/]var[\\/]gates[\\/]/.test(normalizedPath)
+      || normalizedPath.endsWith('verify-gate.json');
+    if (isCode && !isGateFile) markEdited(payload, toolName);
+    return allow([], { stateUpdated: isCode && !isGateFile });
+  }
+
+  if ((eventName === 'PostToolUse' || eventName === 'PostToolUseFailure') && isShellTool && command) {
+    const pending = pendingForPayload(readState(), payload);
+    if (pending.length === 0 || !matchesAny(command, TEST_PATTERNS)) return allow([], { pending });
+
+    const result = bashResultFromPayload(payload);
+    const verdict = eventName === 'PostToolUseFailure'
+      ? { ok: false, reason: 'PostToolUseFailure event' }
+      : verificationVerdict(command, result);
+    recordVerificationEvidence(payload, command, result, verdict);
+    if (verdict.ok) {
+      markVerified(payload, command);
+      return allow([], { pending, verification: verdict, stateUpdated: true });
+    }
+    const diagnostics = [`[VerificationGate] verification result rejected: ${verdict.reason}`];
+    if (verdict.reason === 'no explicit PASS evidence in output') {
+      diagnostics.push(
+        'Exit code 0 without failure markers is insufficient without explicit PASS evidence.',
+        'Emit RESULT: PASS / 0 errors and make failure paths return a non-zero exit code.',
+      );
+    }
+    if (verdict.reason === 'verification command produced no log evidence') {
+      diagnostics.push('The verification command produced no output evidence.');
+    }
+    return warn(diagnostics, { pending, verification: verdict, stateUpdated: false });
+  }
+
+  if ((eventName === 'PreToolUse' || !eventName) && isShellTool && command) {
+    const pending = pendingForPayload(readState(), payload);
+    if (pending.length === 0 || isRescue(command)) return allow([], { pending });
+
+    if (matchesAny(command, TEST_PATTERNS)) {
+      if (matchesAll(command, [...TEST_PATTERNS, ...LINT_PATTERNS, ...SAFE_PATTERNS])) {
+        return allow([], { pending, reason: 'verification-command' });
+      }
+      return block([
+        '[VerificationGate] mixed verification chain rejected.',
+        'Run the verification command separately before the remaining command.',
+        `command: ${command.slice(0, 160)}`,
+      ], { pending, reason: 'mixed-verification-chain' });
+    }
+
+    if (matchesAny(command, LINT_PATTERNS)) {
+      return warn([
+        '[VerificationGate] LINT PASSED - functional verification is still required.',
+      ], { pending, reason: 'lint-only' });
+    }
+    if (matchesAll(command, SAFE_PATTERNS)) return allow([], { pending, reason: 'safe-command' });
+
+    return block([
+      '[VerificationGate] command blocked: functional verification is still pending.',
+      'Run functional verification (pytest / vsim / iverilog / check_*.py) first.',
+      `command: ${command.slice(0, 160)}`,
+    ], { pending, reason: 'verification-required' });
+  }
+
+  return allow();
+}
+
 // ── 主逻辑 ───────────────────────────────────────────────────────────────────
 
 async function main() {
-  // 逃生开关: CLAUDE_GATES_DISABLED=true 跳过所有门禁
-  if (process.env.CLAUDE_GATES_DISABLED === 'true') process.exit(0);
-
   // --reset / reset: 清除待验证标记 (两种写法都接受, 与 progress-watchdog 对齐)
   if (process.argv.includes('--reset') || process.argv.includes('reset')) {
     resetVerificationState();
@@ -499,6 +898,7 @@ async function main() {
   } catch {
     process.exit(0); // 解析失败不阻断
   }
+  if (evaluateGuardBypass({ gateId: GATE_ID, payload }).allowed) process.exit(0);
 
   // 提取事件名和工具名 (兼容多种 stdin 格式)
   const eventName = payload?.hook_event_name || '';
@@ -633,4 +1033,14 @@ async function main() {
   process.exit(0);
 }
 
-main();
+if (require.main === module) main();
+
+module.exports = {
+  bashResultFromPayload,
+  commandSegments,
+  evaluate,
+  gitSubcommand,
+  matchesAll,
+  matchesAny,
+  verificationVerdict,
+};

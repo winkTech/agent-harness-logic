@@ -22,20 +22,27 @@ HOME_DIR="$SCRIPT_DIR/../.."
 ENGINE_SCRIPTS="$HOME_DIR/engine/scripts"
 INDEX_DIR="$HOME_DIR/var/index"
 
-mkdir -p "$INDEX_DIR"
-
 # ── 0. SQLite FTS5 全文搜索 (Phase 1 新增, 优先) ─────────────────────
 if command -v node &>/dev/null; then
     sqlite_out=$(node -e "
         var p = require('path');
         var mem = require(p.join(process.argv[1], 'engine', 'sqlite', 'store-memory.cjs'));
+        var sqlite = require(p.join(process.argv[1], 'engine', 'sqlite', 'index.cjs'));
+        var wDb;
         try {
-            var results = mem.retrieveMemory(process.argv[2], { limit: 5 });
+            wDb = sqlite.openDb({ readonly: true });
+            var results = mem.retrieveMemory(process.argv[2], {
+                db: wDb.db, limit: 5, trackHit: false
+            });
             for (var r of results) {
                 var snippet = r.content.replace(/\"/g,'\\\\\"').replace(/\n/g,' ').slice(0,200);
                 console.log(JSON.stringify({tool:'sqlite-fts',id:r.id,ns:r.namespace,name:r.name||'',score:r.score.toFixed(3),snippet:snippet}));
             }
-        } catch(e) { console.log(JSON.stringify({tool:'sqlite-fts-error',msg:'retrieve: '+e.message})); }
+        } catch(e) {
+            console.log(JSON.stringify({tool:'sqlite-fts-error',msg:'retrieve: '+e.message}));
+        } finally {
+            try { if (wDb) wDb.close(); } catch(e) {}
+        }
     " "$(cd "$HOME_DIR" && pwd)" "$QUERY" 2>/dev/null || true)
 
     if [ -n "$sqlite_out" ]; then
@@ -44,7 +51,7 @@ if command -v node &>/dev/null; then
 fi
 
 # ── 1. grep 精确匹配 ──────────────────────────────────────────────────
-grep_hits=$(find "$HOME_DIR/memory" "$HOME_DIR/knowledge" -name "*.md" -not -name "MEMORY.md" -not -name "MEMORY_RULES.md" 2>/dev/null \
+grep_hits=$(find "$HOME_DIR/memory" "$HOME_DIR/engineering-assets/knowledge" -name "*.md" -not -name "MEMORY.md" -not -name "MEMORY_RULES.md" 2>/dev/null \
   | xargs grep -r -l -i "$QUERY" 2>/dev/null | head -10)
 
 if [ -n "$grep_hits" ]; then
@@ -57,11 +64,6 @@ fi
 
 # ── 2. Semantic search ─────────────────────────────────────────────────
 if command -v node &>/dev/null && [ -f "$ENGINE_SCRIPTS/semantic-search.cjs" ]; then
-    # Auto-build index if missing
-    if [ ! -f "$INDEX_DIR/semantic-index.json" ]; then
-        node "$ENGINE_SCRIPTS/semantic-search.cjs" index 2>/dev/null || true
-    fi
-
     if [ -f "$INDEX_DIR/semantic-index.json" ]; then
         semantic_out=$(node "$ENGINE_SCRIPTS/semantic-search.cjs" query "$QUERY" --top 3 2>/dev/null || true)
         if [ -n "$semantic_out" ]; then

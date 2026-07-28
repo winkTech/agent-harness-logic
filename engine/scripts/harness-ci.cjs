@@ -5,7 +5,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const { spawnSync } = require('node:child_process');
 const { HARNESS_ROOT } = require('./lib/harness-root.cjs');
-const { validateHookScripts } = require('./lib/hook-registry.cjs');
+const { validateHookScripts, validateHookManifest } = require('./lib/hook-registry.cjs');
 const { settingsFiles } = require('./lib/harness-root.cjs');
 const { validateSchemaCatalog } = require('./lib/schema-catalog.cjs');
 
@@ -62,7 +62,7 @@ function checkJson(files) {
 // 最关键的文件, 却从不参与 CI 的 JSON 语法校验。这里单独校验它, 并检查两类
 // 曾经真实发生过的配置错误。
 const VALID_HOOK_EVENTS = new Set([
-  'PreToolUse', 'PostToolUse', 'UserPromptSubmit', 'Notification',
+  'PreToolUse', 'PostToolUse', 'PostToolUseFailure', 'UserPromptSubmit', 'Notification',
   'Stop', 'SubagentStop', 'PreCompact', 'SessionStart', 'SessionEnd',
 ]);
 
@@ -187,6 +187,10 @@ function main() {
     fail(hooks.missing.map((entry) => `missing hook target: ${entry.script}`));
   }
   console.log(`[harness-ci] hook registry passed (${hooks.found.length} script references)`);
+
+  const hookManifest = validateHookManifest({ root: HARNESS_ROOT });
+  if (hookManifest.errors.length > 0) fail(hookManifest.errors.map(error => `hook manifest: ${error}`));
+  console.log(`[harness-ci] hook manifest passed (${hookManifest.checked} active registrations)`);
 
   const schemas = validateSchemaCatalog();
   if (schemas.errors.length > 0) fail(schemas.errors);

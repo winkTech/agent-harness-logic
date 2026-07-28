@@ -4,15 +4,16 @@ const path = require('node:path');
 
 const {
   HOME,
-  atomicWriteJson,
   findProjectRoot,
   isInsidePath,
   isSamePath,
   payloadCwd,
   payloadFilePath,
   readJson,
+  replaceJsonFileSync,
   resolvePath,
   scopeId,
+  updateJsonFileSync,
 } = require('./project-scope.cjs');
 
 const STATE_FILE = process.env.CLAUDE_VERIFY_GATE_STATE_FILE ||
@@ -144,7 +145,7 @@ function readVerificationState(opts = {}) {
 }
 
 function writeVerificationState(state, opts = {}) {
-  atomicWriteJson(STATE_FILE, summarize(state, opts));
+  replaceJsonFileSync(STATE_FILE, summarize(state, opts));
 }
 
 function resetVerificationState() {
@@ -159,34 +160,35 @@ function markEdited(opts = {}) {
   const id = pendingKey(projectRoot, sessionId);
   const now = opts.now || new Date().toISOString();
   const ttlMs = pendingTtlMs(opts);
-  const state = readVerificationState({ ...opts, now, ttlMs });
-  const prev = state.pending[id] || {
-    pendingKey: id,
-    scopeId: scopeId(projectRoot),
-    projectRoot,
-    sessionId,
-    files: [],
-    editCount: 0,
-    firstEditTime: now,
-    lastEditTime: null,
-    lastTool: null,
-    expiresAt: null,
-  };
-  const files = new Set(prev.files || []);
-  if (filePath) files.add(filePath);
-  state.pending[id] = {
-    ...prev,
-    projectRoot,
-    sessionId,
-    files: [...files].sort(),
-    editCount: (prev.editCount || 0) + 1,
-    firstEditTime: prev.firstEditTime || now,
-    lastEditTime: now,
-    lastTool: opts.toolName || prev.lastTool || null,
-    expiresAt: new Date(Date.parse(now) + ttlMs).toISOString(),
-  };
-  writeVerificationState(state, { ...opts, now, ttlMs });
-  return summarize(state, { ...opts, now, ttlMs });
+  return updateJsonFileSync(STATE_FILE, emptyState, (raw) => {
+    const state = migrate(raw, { ...opts, now, ttlMs });
+    const prev = state.pending[id] || {
+      pendingKey: id,
+      scopeId: scopeId(projectRoot),
+      projectRoot,
+      sessionId,
+      files: [],
+      editCount: 0,
+      firstEditTime: now,
+      lastEditTime: null,
+      lastTool: null,
+      expiresAt: null,
+    };
+    const files = new Set(prev.files || []);
+    if (filePath) files.add(filePath);
+    state.pending[id] = {
+      ...prev,
+      projectRoot,
+      sessionId,
+      files: [...files].sort(),
+      editCount: (prev.editCount || 0) + 1,
+      firstEditTime: prev.firstEditTime || now,
+      lastEditTime: now,
+      lastTool: opts.toolName || prev.lastTool || null,
+      expiresAt: new Date(Date.parse(now) + ttlMs).toISOString(),
+    };
+    return summarize(state, { ...opts, now, ttlMs });
+  });
 }
 
 function pendingForCwd(state, cwd = process.cwd(), opts = {}) {
@@ -204,21 +206,19 @@ function pendingForPayload(state, payload) {
 }
 
 function markVerifiedForCwd(cwd = process.cwd(), opts = {}) {
-  const state = readVerificationState(opts);
-  const pending = pendingForCwd(state, cwd, opts);
-  if (pending.length === 0) {
-    writeVerificationState(state, opts);
-    return { state: summarize(state, opts), cleared: [] };
-  }
-
-  for (const entry of pending) {
-    delete state.pending[entry.pendingKey];
-  }
-  state.lastVerifyTime = opts.now || new Date().toISOString();
-  state.lastVerifyCommand = opts.command || null;
-  state.lastVerifySessionId = String(opts.sessionId || '').trim() || null;
-  writeVerificationState(state, opts);
-  return { state: readVerificationState(opts), cleared: pending };
+  let cleared = [];
+  const state = updateJsonFileSync(STATE_FILE, emptyState, (raw) => {
+    const next = migrate(raw, opts);
+    cleared = pendingForCwd(next, cwd, opts);
+    for (const entry of cleared) delete next.pending[entry.pendingKey];
+    if (cleared.length > 0) {
+      next.lastVerifyTime = opts.now || new Date().toISOString();
+      next.lastVerifyCommand = opts.command || null;
+      next.lastVerifySessionId = String(opts.sessionId || '').trim() || null;
+    }
+    return summarize(next, opts);
+  });
+  return { state, cleared };
 }
 
 function markEditedFromPayload(payload, opts = {}) {

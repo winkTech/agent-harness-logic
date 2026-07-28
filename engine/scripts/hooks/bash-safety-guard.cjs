@@ -18,6 +18,15 @@
 // ── 危险模式定义 ───────────────────────────────────────────────────────────
 
 const DANGEROUS_PATTERNS = [
+  {
+    category: 'catastrophic-delete',
+    severity: 'CRITICAL',
+    patterns: [
+      /\brm\s+-(?:[a-z]*r[a-z]*f|[a-z]*f[a-z]*r)[a-z]*\s+(?:--\s+)?(?:["']?\/["']?(?:\s|$)|["']?\/\*|~(?:\/|\s|$)|["']?\$(?:\{HOME\}|HOME)(?:\/|\s|["']?$))/i,
+      /\bRemove-Item\b(?=[^\r\n]*-(?:Recurse|r)\b)(?=[^\r\n]*-(?:Force|fo)\b)[^\r\n]*(?:["']?[A-Za-z]:\\["']?(?:\s|$)|\$HOME\b|\$env:(?:USERPROFILE|SystemRoot)\b)/i,
+    ],
+    message: 'Catastrophic recursive delete targets a filesystem root or home directory',
+  },
   // ===== 1. 脚本子进程绕道写入受保护路径 =====
   {
     category: 'golden-model-bypass',
@@ -196,21 +205,23 @@ function readStdin() {
 /**
  * 输出阻断信息到 stderr（会被反馈给 Claude）。
  */
-function block(info, command) {
-  console.error('');
-  console.error('╔══════════════════════════════════════════════════════════════╗');
-  console.error('║      🛑  BASH SAFETY GUARD — 命令被阻断                    ║');
-  console.error('╠══════════════════════════════════════════════════════════════╣');
-  console.error(`║  风险等级: ${info.severity.padEnd(40)}║`);
-  console.error(`║  类别:     ${info.category.padEnd(40)}║`);
-  console.error(`║  原因:     ${info.message.padEnd(40)}║`);
-  console.error('║                                                              ║');
-  console.error('║  此命令被 Bash 安全门禁止执行。                                 ║');
-  console.error('║  如需绕过: 在 settings.local.json 中添加例外规则。             ║');
-  console.error('╚══════════════════════════════════════════════════════════════╝');
-  console.error('');
-  console.error(`[BashSafetyGuard] BLOCKED: ${info.message}`);
-  console.error(`[BashSafetyGuard] Command (truncated): ${command.slice(0, 200)}`);
+function blockDiagnostics(info, command) {
+  return [
+    '',
+    '╔══════════════════════════════════════════════════════════════╗',
+    '║      🛑  BASH SAFETY GUARD — 命令被阻断                    ║',
+    '╠══════════════════════════════════════════════════════════════╣',
+    `║  风险等级: ${info.severity.padEnd(40)}║`,
+    `║  类别:     ${info.category.padEnd(40)}║`,
+    `║  原因:     ${info.message.padEnd(40)}║`,
+    '║                                                              ║',
+    '║  此命令被 Bash 安全门禁止执行。                                 ║',
+    '║  如需绕过: 在 settings.local.json 中添加例外规则。             ║',
+    '╚══════════════════════════════════════════════════════════════╝',
+    '',
+    `[BashSafetyGuard] BLOCKED: ${info.message}`,
+    `[BashSafetyGuard] Command (truncated): ${command.slice(0, 200)}`,
+  ];
 }
 
 /**
@@ -234,6 +245,36 @@ function scanCommand(command) {
   return { matched: false, info: null };
 }
 
+function commandFrom(payload) {
+  return String(
+    payload?.tool_input?.command
+    || payload?.tool?.input?.command
+    || payload?.input?.command
+    || payload?.command
+    || ''
+  ).trim();
+}
+
+function evaluate(payload, _runtime = {}) {
+  const command = commandFrom(payload);
+  if (!command) {
+    return { source: 'bash-safety-guard', decision: 'allow', diagnostics: [] };
+  }
+
+  const { matched, info } = scanCommand(command);
+  if (!matched) {
+    return { source: 'bash-safety-guard', decision: 'allow', diagnostics: [] };
+  }
+
+  return {
+    source: 'bash-safety-guard',
+    decision: 'block',
+    diagnostics: blockDiagnostics(info, command),
+    category: info.category,
+    severity: info.severity,
+  };
+}
+
 // ── 主逻辑 ───────────────────────────────────────────────────────────────────
 
 async function main() {
@@ -243,21 +284,9 @@ async function main() {
 
     const payload = JSON.parse(raw);
 
-    // 兼容 stdin 格式:  (a) tool.input.command  (b) tool_input.command  (c) 平铺
-    const command = (payload?.tool?.input?.command
-      || payload?.tool_input?.command
-      || payload?.input?.command
-      || payload?.command
-      || '').trim();
-
-    if (!command) process.exit(0);
-
-    const { matched, info } = scanCommand(command);
-
-    if (matched) {
-      block(info, command);
-      process.exit(2); // 硬拦截
-    }
+    const result = evaluate(payload);
+    for (const line of result.diagnostics) process.stderr.write(`${line}\n`);
+    if (result.decision === 'block') process.exit(2); // 硬拦截
   } catch (e) {
     // 解析失败时不阻断，静默放行
     console.error(`[BashSafetyGuard] 解析错误(放行): ${e.message}`);
@@ -266,4 +295,10 @@ async function main() {
   process.exit(0);
 }
 
-main();
+if (require.main === module) main();
+
+module.exports = {
+  commandFrom,
+  evaluate,
+  scanCommand,
+};

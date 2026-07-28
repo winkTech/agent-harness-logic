@@ -18,6 +18,11 @@
 const { spawnSync } = require('node:child_process');
 const path = require('node:path');
 const fs = require('node:fs');
+const {
+  bypassRequested,
+  evaluateGateBypass,
+  sessionIdFrom,
+} = require('../lib/gate-bypass.cjs');
 
 const HOOKS_DIR = __dirname;
 const SCRIPTS_DIR = path.join(HOOKS_DIR, '..'); // engine/scripts/
@@ -96,19 +101,83 @@ function shouldSkipScript(scriptName, payload) {
   return false;
 }
 
-function runSingle(scriptName, extraArgs, stdinData) {
+function structuredFailure(scriptName, details) {
+  const record = {
+    event: 'local-runner-failure',
+    script: scriptName,
+    status: details.status,
+    timedOut: details.timedOut,
+    signal: details.signal || null,
+    errorCode: details.errorCode,
+  };
+  console.error(`[local-runner] ${JSON.stringify(record)}`);
+}
+
+function childEnvironment() {
+  const env = {};
+  const exact = new Set([
+    'PATH', 'PATHEXT', 'SYSTEMROOT', 'WINDIR', 'COMSPEC', 'TEMP', 'TMP',
+    'HOME', 'USERPROFILE', 'HOMEDRIVE', 'HOMEPATH', 'APPDATA', 'LOCALAPPDATA',
+    'PROGRAMDATA', 'NUMBER_OF_PROCESSORS', 'PROCESSOR_ARCHITECTURE', 'LANG',
+    'TERM', 'LM_LICENSE_FILE', 'MGLS_LICENSE_FILE',
+    'CLAUDE_SESSION_ID', 'CLAUDE_USER_MESSAGE', 'CLAUDE_TRANSCRIPT_PATH',
+    'CLAUDE_SESSION_DIR', 'CLAUDE_PROJECT_DIR', 'CLAUDE_TOOL_NAME', 'CLAUDE_TOOL_INPUT',
+    'CLAUDE_HARNESS_ROOT', 'CLAUDE_CONFIG_DIR', 'CLAUDE_NO_DIAGNOSTIC_WRITES',
+    'CLAUDE_HARNESS_NO_PERSIST', 'CLAUDE_BENCH', 'CLAUDE_HOOK_DEADLINE_MS',
+    'CLAUDE_RUNTIME_STATE_FILE', 'CLAUDE_REPAIR_SPEC', 'CLAUDE_VERIFICATION_LEDGER_FILE',
+    'CLAUDE_VERIFY_GATE_TTL_MS', 'CLAUDE_RTL_SEMANTIC_ORACLE_DISABLED',
+    'CLAUDE_PROTECTED_WRITE_APPROVAL', 'CLAUDE_PROTECTED_WRITE_REASON',
+    'CLAUDE_TOOL_ACTION_CONTRACT_MODE', 'CLAUDE_TOOL_ACTION_CONTRACT_MAX_AGE_MS',
+    'CLAUDE_TOOL_ACTION_CONTRACT_ALLOW_MISSING_USER', 'CLAUDE_TOOL_ACTION_CONTRACT_GATE_DISABLED',
+    'CLAUDE_VISIBLE_CHECKLIST_GATE_MODE', 'CLAUDE_VISIBLE_CHECKLIST_GATE_STRICT',
+    'CLAUDE_VISIBLE_CHECKLIST_GATE_DISABLED', 'CLAUDE_SKIP_HOOK',
+    'CLAUDE_TRANSPARENCY_TRANSCRIPT_MAX_BYTES', 'CLAUDE_TRANSPARENCY_RUN_ID',
+    'CLAUDE_TRANSPARENCY_RUN_DIR', 'CLAUDE_TRANSPARENCY_RUNS_DIR',
+    'CLAUDE_TRANSPARENCY_CAPTURE_ALL', 'CLAUDE_TRANSPARENCY_MAX_EVENTS_BYTES',
+    'CLAUDE_TRANSPARENCY_MAX_ROTATED_EVENTS', 'CLAUDE_TRANSPARENCY_MAX_RUNS',
+    'CLAUDE_TRANSPARENCY_LEDGER_DISABLED', 'CLAUDE_TRANSPARENCY_DEBUG',
+  ]);
+  const prefixes = ['LC_', 'XILINX_', 'VIVADO_', 'QUESTA_', 'MODELSIM_'];
+  for (const [key, value] of Object.entries(process.env)) {
+    const upper = key.toUpperCase();
+    if (upper.startsWith('CLAUDE_GATES_DISABLE')) continue;
+    if (exact.has(upper) || prefixes.some(prefix => upper.startsWith(prefix))) {
+      env[key] = value;
+    }
+  }
+  return env;
+}
+
+function evaluateScriptBypass(scriptName, payload) {
+  if (!bypassRequested(process.env)) return { requested: false, allowed: false, errors: [] };
+  const gateId = path.basename(resolveScript(scriptName));
+  const result = evaluateGateBypass({
+    gateId,
+    sessionId: sessionIdFrom(payload),
+  });
+  const event = result.allowed ? 'local-runner-gate-bypass' : 'local-runner-gate-bypass-rejected';
+  console.error(`[local-runner] ${JSON.stringify({
+    event,
+    gateId,
+    target: result.target || null,
+    errors: result.errors || [],
+  })}`);
+  return result;
+}
+
+function runSingle(scriptName, extraArgs, stdinData, timeoutMs) {
   const scriptPath = resolveScript(scriptName);
   if (!fs.existsSync(scriptPath)) {
     console.error(`[local-runner] 脚本不存在: ${scriptPath}`);
-    return { status: 1 };
+    return { status: 1, timedOut: false };
   }
 
   const result = spawnSync(process.execPath, [scriptPath, ...extraArgs], {
     input: stdinData,
     encoding: 'utf8',
-    env: process.env,
+    env: childEnvironment(),
     cwd: process.cwd(),
-    timeout: 30000,
+    timeout: Math.max(1, timeoutMs),
     windowsHide: true,
     stdio: stdinData ? ['pipe', 'pipe', 'pipe'] : 'inherit',
   });
@@ -117,23 +186,43 @@ function runSingle(scriptName, extraArgs, stdinData) {
   if (result.stderr) process.stderr.write(result.stderr);
 
   if (result.error || result.status === null || result.signal) {
-    const reason = result.error
-      ? result.error.message
-      : result.signal ? `signal ${result.signal}` : 'unknown error';
-    console.error(`[local-runner] ${scriptName} 执行失败: ${reason}`);
-    return { status: 1 };
+    const timedOut = result.error?.code === 'ETIMEDOUT';
+    const status = timedOut ? 124 : 1;
+    structuredFailure(scriptName, {
+      status,
+      timedOut,
+      signal: result.signal,
+      errorCode: timedOut
+        ? 'HOOK_DEADLINE_EXCEEDED'
+        : result.signal ? 'HOOK_SIGNALLED' : result.error?.code || 'HOOK_EXEC_ERROR',
+    });
+    return { status, timedOut };
   }
 
-  return { status: result.status };
+  return { status: result.status, timedOut: false };
+}
+
+function parseDeadline(args) {
+  const cleaned = [];
+  let deadlineMs = Number.parseInt(process.env.CLAUDE_HOOK_DEADLINE_MS || '', 10);
+  if (!Number.isFinite(deadlineMs) || deadlineMs <= 0) deadlineMs = 30000;
+
+  for (let index = 0; index < args.length; index += 1) {
+    if (args[index] === '--deadline-ms') {
+      const value = Number.parseInt(args[index + 1] || '', 10);
+      if (Number.isFinite(value) && value > 0) deadlineMs = value;
+      index += 1;
+      continue;
+    }
+    cleaned.push(args[index]);
+  }
+  return { args: cleaned, deadlineMs };
 }
 
 function main() {
-  // 逃生开关: CLAUDE_GATES_DISABLED=true 跳过所有门禁
-  if (process.env.CLAUDE_GATES_DISABLED === 'true') {
-    process.exit(0);
-  }
-
-  const args = process.argv.slice(2);
+  const parsed = parseDeadline(process.argv.slice(2));
+  const args = parsed.args;
+  const deadlineAt = Date.now() + parsed.deadlineMs;
   if (args.length === 0) {
     console.error('[local-runner] 用法:');
     console.error('  node local-runner.cjs <script-name> [args...]');
@@ -161,16 +250,37 @@ function main() {
     let highestStatus = 0;
     const payload = parsePayload(stdinData);
     for (const script of scripts) {
+      const bypass = evaluateScriptBypass(script, payload);
+      if (bypass.allowed) {
+        continue;
+      }
       if (shouldSkipScript(script, payload)) continue;
-      const { status } = runSingle(script, extraArgs, stdinData);
+      const remainingMs = deadlineAt - Date.now();
+      if (remainingMs <= 0) {
+        structuredFailure(script, {
+          status: 124,
+          timedOut: true,
+          signal: null,
+          errorCode: 'HOOK_DEADLINE_EXCEEDED',
+        });
+        highestStatus = Math.max(highestStatus, 124);
+        break;
+      }
+      const { status, timedOut } = runSingle(script, extraArgs, stdinData, remainingMs);
       if (status > highestStatus) highestStatus = status;
+      if (timedOut) break;
       if (status === 2) break; // 硬拦截信号，停止后续检查
     }
     process.exit(highestStatus);
   }
 
   // 单脚本模式（向后兼容）
-  const { status } = runSingle(args[0], args.slice(1), stdinData);
+  const payload = parsePayload(stdinData);
+  const bypass = evaluateScriptBypass(args[0], payload);
+  if (bypass.allowed) {
+    process.exit(0);
+  }
+  const { status } = runSingle(args[0], args.slice(1), stdinData, parsed.deadlineMs);
   process.exit(status);
 }
 

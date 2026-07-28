@@ -27,6 +27,35 @@ const SETTINGS_FILES = [
   path.join(HOME, 'settings.local.json'),
 ];
 
+function createBenchSandbox() {
+  const base = fs.mkdtempSync(path.join(os.tmpdir(), 'claude-hook-bench-'));
+  const root = path.join(base, '.claude');
+  fs.mkdirSync(path.join(root, 'engine', 'scripts'), { recursive: true });
+  fs.mkdirSync(path.join(root, 'var'), { recursive: true });
+  const agentsSource = path.join(HOME, 'AGENTS.md');
+  const agentsTarget = path.join(root, 'AGENTS.md');
+  if (fs.existsSync(agentsSource)) fs.copyFileSync(agentsSource, agentsTarget);
+  else fs.writeFileSync(agentsTarget, '# Benchmark sandbox\n', 'utf8');
+
+  let cleaned = false;
+  return {
+    base,
+    root,
+    env: {
+      HOME: base,
+      USERPROFILE: base,
+      CLAUDE_HARNESS_ROOT: root,
+      CLAUDE_BENCH: '1',
+      CLAUDE_NO_DIAGNOSTIC_WRITES: '1',
+    },
+    cleanup() {
+      if (cleaned) return;
+      cleaned = true;
+      fs.rmSync(base, { recursive: true, force: true });
+    },
+  };
+}
+
 // ── 工具 ───────────────────────────────────────────────────────────────────
 
 function now() { return Date.now(); }
@@ -72,7 +101,33 @@ function readSettings() {
  * 执行一条 hook 命令并测量耗时。
  * @returns {{ ok: boolean, elapsed: number, script: string, id: string, isAsync: boolean }}
  */
-function benchHook(cmd, id, isAsync) {
+function percentile(values, ratio) {
+  if (values.length === 0) return 0;
+  const sorted = [...values].sort((a, b) => a - b);
+  return sorted[Math.min(sorted.length - 1, Math.floor(sorted.length * ratio))];
+}
+
+function runSample(executable, args, opts = {}) {
+  const payload = opts.payload || { hook_event_name: 'PreToolUse', tool_name: 'Bash', tool_input: { command: 'git status' } };
+  const start = now();
+  const result = spawnSync(executable, args, {
+    encoding: 'utf8',
+    timeout: opts.timeoutMs || 10000,
+    windowsHide: true,
+    cwd: opts.cwd || process.cwd(),
+    env: { ...process.env, ...(opts.env || {}), CLAUDE_BENCH: '1' },
+    input: JSON.stringify(payload),
+  });
+  return {
+    ok: !result.error && !result.signal && result.status === 0,
+    elapsed: now() - start,
+    status: result.status,
+    signal: result.signal || null,
+    error: result.error?.message || null,
+  };
+}
+
+function benchHook(cmd, id, isAsync, opts = {}) {
   const parts = parseCommandLine(cmd).map(expandPathArg);
   if (parts.length === 0) return { ok: false, elapsed: 0, script: 'empty', id, isAsync };
 
@@ -83,24 +138,32 @@ function benchHook(cmd, id, isAsync) {
     return { ok: false, elapsed: 0, script: cmd.slice(0, 60), id, isAsync };
   }
 
-  const start = now();
-  const result = spawnSync(executable, args, {
-    encoding: 'utf8',
-    timeout: 10000,
-    windowsHide: true,
-    env: { ...process.env, CLAUDE_BENCH: '1' },
-    input: JSON.stringify({ tool: 'Bash', input: { command: 'git status' } }),
-  });
-  const elapsed = now() - start;
+  const warmupRuns = Number.isInteger(opts.warmupRuns) ? Math.max(0, opts.warmupRuns) : 1;
+  const sampleRuns = Number.isInteger(opts.sampleRuns) ? Math.max(1, opts.sampleRuns) : 3;
+  const cold = runSample(executable, args, opts);
+  for (let index = 0; index < warmupRuns; index += 1) runSample(executable, args, opts);
+  const warmSamples = [];
+  for (let index = 0; index < sampleRuns; index += 1) {
+    warmSamples.push(runSample(executable, args, opts));
+  }
+  const measured = [cold, ...warmSamples];
+  const firstFailure = measured.find(sample => !sample.ok);
+  const warmElapsed = warmSamples.map(sample => sample.elapsed);
 
   return {
-    ok: !result.error && !result.signal,
-    elapsed,
+    ok: measured.every(sample => sample.ok),
+    elapsed: percentile(warmElapsed, 0.5),
     script: cmd.slice(0, 60),
     id: id || 'unknown',
     isAsync,
-    status: result.status,
-    error: result.error?.message || null,
+    status: firstFailure ? firstFailure.status : 0,
+    signal: firstFailure?.signal || null,
+    error: firstFailure?.error || null,
+    cold,
+    warmupRuns,
+    warmSamples,
+    warm_p50_ms: percentile(warmElapsed, 0.5),
+    warm_p95_ms: percentile(warmElapsed, 0.95),
   };
 }
 
@@ -117,12 +180,86 @@ function collectHooks() {
   }));
 }
 
+function payloadForEntry(entry, cwd) {
+  const point = String(entry.point || 'PreToolUse');
+  const matcher = String(entry.matcher || '*');
+  const session_id = 'hook-benchmark-session';
+  const base = { hook_event_name: point, session_id, cwd };
+  if (point === 'UserPromptSubmit') {
+    return { ...base, prompt: 'Benchmark hook lifecycle latency.' };
+  }
+  if (point === 'SessionStart') {
+    const source = matcher.split('|').find(value => ['startup', 'resume', 'clear', 'compact'].includes(value)) || 'startup';
+    return { ...base, source };
+  }
+  if (point === 'Stop') {
+    return { ...base, stop_hook_active: false, last_assistant_message: 'Benchmark sample response.' };
+  }
+  if (point === 'PreCompact') {
+    return { ...base, trigger: 'manual' };
+  }
+  if (point === 'Notification') {
+    return { ...base, notification_type: 'benchmark', message: 'Benchmark notification.' };
+  }
+
+  const toolName = matcher.split('|').find(value => value && value !== '*') || 'Bash';
+  const toolInput = ['Bash', 'PowerShell'].includes(toolName)
+    ? { command: 'git status' }
+    : ['Write', 'Edit', 'MultiEdit'].includes(toolName)
+      ? { file_path: path.join(cwd, 'benchmark.txt'), content: 'benchmark' }
+      : {};
+  const payload = { ...base, tool_name: toolName, tool_input: toolInput };
+  if (point === 'PostToolUse') payload.tool_response = { status: 0, stdout: '', stderr: '' };
+  if (point === 'PostToolUseFailure') payload.tool_response = { status: 1, stdout: '', stderr: 'benchmark failure' };
+  return payload;
+}
+
+function benchmarkEntries(entries, opts = {}) {
+  const sandbox = opts.sandbox || createBenchSandbox();
+  const results = [];
+  try {
+    for (const entry of entries) {
+      if ((opts.isQuick && !entry.point.startsWith('PreToolUse')) || entry.isAsync) {
+        results.push({
+          ...entry,
+          elapsed: -1,
+          ok: true,
+          skipped: true,
+          skipReason: entry.isAsync ? 'async-hook' : 'quick-mode',
+        });
+        continue;
+      }
+
+      const result = benchHook(entry.cmd, entry.id, entry.isAsync, {
+        warmupRuns: opts.warmupRuns,
+        sampleRuns: opts.sampleRuns,
+        timeoutMs: opts.timeoutMs,
+        payload: opts.payload || payloadForEntry(entry, sandbox.root),
+        cwd: opts.cwd || sandbox.root,
+        env: { ...sandbox.env, ...(opts.env || {}) },
+      });
+      results.push({ point: entry.point, ...result, skipped: false });
+    }
+    return { results, isolated: true };
+  } finally {
+    if (!opts.keepSandbox) sandbox.cleanup();
+  }
+}
+
 // ── 主流程 ─────────────────────────────────────────────────────────────────
 
 function main() {
   const args = process.argv.slice(2);
   const isQuick = args.includes('--quick');
   const isJson = args.includes('--json');
+  const valueAfter = (flag, fallback) => {
+    const index = args.indexOf(flag);
+    if (index < 0) return fallback;
+    const value = Number.parseInt(args[index + 1] || '', 10);
+    return Number.isFinite(value) && value >= 0 ? value : fallback;
+  };
+  const sampleRuns = Math.max(1, valueAfter('--samples', 3));
+  const warmupRuns = valueAfter('--warmup', 1);
 
   const entries = collectHooks();
   if (entries.length === 0) {
@@ -131,7 +268,6 @@ function main() {
     process.exit(1);
   }
 
-  const results = [];
   const startAll = now();
 
   let byteCount = 0;
@@ -139,16 +275,7 @@ function main() {
     byteCount += JSON.stringify(entry).length;
   }
 
-  for (const entry of entries) {
-    // --quick 模式只测 PreToolUse
-    if (isQuick && !entry.point.startsWith('PreToolUse')) {
-      results.push({ ...entry, elapsed: -1, ok: true, skipped: true });
-      continue;
-    }
-
-    const r = benchHook(entry.cmd, entry.id, entry.isAsync);
-    results.push({ point: entry.point, ...r, skipped: false });
-  }
+  const { results } = benchmarkEntries(entries, { isQuick, sampleRuns, warmupRuns });
 
   const totalElapsed = now() - startAll;
 
@@ -233,4 +360,4 @@ if (require.main === module) {
   main();
 }
 
-module.exports = { benchHook, collectHooks, main };
+module.exports = { benchHook, benchmarkEntries, collectHooks, createBenchSandbox, main, payloadForEntry };

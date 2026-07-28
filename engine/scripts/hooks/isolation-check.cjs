@@ -17,11 +17,13 @@
 'use strict';
 
 const fs = require('fs');
+const os = require('node:os');
 const path = require('path');
 const { HARNESS_ROOT } = require('../lib/harness-root.cjs');
+const { updateJsonFileSync } = require('../lib/project-scope.cjs');
 
 const HARNESS = HARNESS_ROOT;
-const STATE_FILE = path.join(HARNESS, 'var', 'index', 'runtime-state.json');
+const STATE_FILE = process.env.CLAUDE_RUNTIME_STATE_FILE || path.join(HARNESS, 'var', 'index', 'runtime-state.json');
 
 // ── 隔离检测 ─────────────────────────────────────────────────────────────────
 
@@ -109,21 +111,23 @@ function main() {
 
   // 记录到 runtime state
   try {
-    let state = {};
-    if (fs.existsSync(STATE_FILE)) {
-      state = JSON.parse(fs.readFileSync(STATE_FILE, 'utf8'));
-    }
-    state.lastIsolationCheck = {
-      timestamp: new Date().toISOString(),
-      isIsolated: isolation.isIsolated,
-      method: isolation.method,
-      permissionMode: mode,
-      platform: process.platform,
-    };
-    const dir = path.dirname(STATE_FILE);
-    if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
-    fs.writeFileSync(STATE_FILE, JSON.stringify(state, null, 2), 'utf8');
-  } catch { /* ignore */ }
+    updateJsonFileSync(STATE_FILE, () => ({}), (state) => {
+      state.lastIsolationCheck = {
+        timestamp: new Date().toISOString(),
+        isIsolated: isolation.isIsolated,
+        method: isolation.method,
+        permissionMode: mode,
+        platform: process.platform,
+      };
+      return state;
+    });
+  } catch (error) {
+    console.error(JSON.stringify({
+      source: 'isolation-check',
+      type: 'state-write-warning',
+      error: error.code || error.message,
+    }));
+  }
 
   // ── 警告逻辑 ──────────────────────────────────────────────────────────────
   let warnings = [];
@@ -162,7 +166,9 @@ function main() {
     console.error('');
   }
 
-  process.exit(0); // 仅警告，不阻断
+  return { exitCode: 0, isolation, permissionMode: mode, warnings };
 }
 
-main();
+if (require.main === module) main();
+
+module.exports = { detectIsolation, getPermissionMode, main };

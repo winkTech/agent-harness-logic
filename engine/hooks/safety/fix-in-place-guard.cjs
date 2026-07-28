@@ -20,6 +20,9 @@
 'use strict';
 
 const p = require('node:path');
+const { evaluateGuardBypass } = require('../../scripts/lib/gate-bypass.cjs');
+
+const GATE_ID = 'fix-in-place-guard.cjs';
 
 /**
  * 从文件路径中提取基本文件名。
@@ -109,8 +112,6 @@ function checkVariant(filename, dir) {
  * 输出 JSON 错误到 stderr。
  * @param {object} info
  */
-const VIOLATIONS = [];
-
 function reportViolation(info) {
   const msg = {
     source: 'fix-in-place-guard',
@@ -122,8 +123,17 @@ function reportViolation(info) {
     pattern: info.pattern,
     ...(info.base ? { base: info.base } : {}),
   };
-  VIOLATIONS.push(msg);
-  console.error(JSON.stringify(msg));
+  return msg;
+}
+
+function outcomeFor(violations = []) {
+  const hard = violations.some((item) => item.severity === 'ERROR');
+  return {
+    source: GATE_ID,
+    decision: hard ? 'block' : (violations.length > 0 ? 'warn' : 'allow'),
+    diagnostics: violations,
+    advisories: violations.filter((item) => item.severity !== 'ERROR'),
+  };
 }
 
 /**
@@ -131,8 +141,10 @@ function reportViolation(info) {
  * @param {object} [toolUse]
  * @param {object} [context]
  */
-module.exports = function fixInPlaceGuard(toolUse, context) {
-  if (!toolUse || !toolUse.name) return;
+function evaluateToolUse(toolUse, context) {
+  if (evaluateGuardBypass({ gateId: GATE_ID, payload: toolUse, context }).allowed) return outcomeFor();
+  if (!toolUse || !toolUse.name) return outcomeFor();
+  const violations = [];
 
   // ---- Write 操作 ----
   if (toolUse.name === 'Write') {
@@ -145,16 +157,16 @@ module.exports = function fixInPlaceGuard(toolUse, context) {
     const filename = extractFilename(filePath);
     const result = checkVariant(filename, p.dirname(filePath));
     if (result.matched) {
-      reportViolation({
+      violations.push(reportViolation({
         message: `检测到变体文件名: "${filename}"（匹配模式: ${result.pattern}）。不要创建文件变体，应原地修改已有文件。`,
         hint: '原地修改已有文件，不要创建带版本号/编号/关键字的变体',
         filename,
         pattern: result.pattern,
         confident: result.confident,
         base: result.base,
-      });
+      }));
     }
-    return;
+    return outcomeFor(violations);
   }
 
   // ---- Bash / PowerShell 操作 ----
@@ -172,19 +184,37 @@ module.exports = function fixInPlaceGuard(toolUse, context) {
       const filename = extractFilename(target);
       const result = checkVariant(filename, p.dirname(target));
       if (result.matched) {
-        reportViolation({
+        violations.push(reportViolation({
           message: `检测到 shell 写入变体文件: "${filename}"（匹配模式: ${result.pattern}）。不要创建文件变体，应原地修改已有文件。`,
           hint: '原地修改已有文件，不要创建带版本号/编号/关键字的变体',
           filename,
           pattern: result.pattern,
           confident: result.confident,
           base: result.base,
-        });
+        }));
       }
     }
-    return;
+    return outcomeFor(violations);
   }
-};
+  return outcomeFor(violations);
+}
+
+function evaluate(payload, runtime = {}) {
+  if (process.env.FIX_IN_PLACE_GUARD_DISABLED === '1') {
+    return { source: 'fix-in-place-guard', decision: 'allow', diagnostics: [], skipped: true };
+  }
+  const toolName = payload?.tool_name || payload?.tool?.name || payload?.name || '';
+  const input = payload?.tool_input || payload?.tool?.input || payload?.input || payload?.arguments || {};
+  return evaluateToolUse({ name: toolName, input }, runtime.context || payload);
+}
+
+function fixInPlaceGuard(toolUse, context) {
+  return evaluateToolUse(toolUse, context);
+}
+
+fixInPlaceGuard.evaluate = evaluate;
+module.exports = fixInPlaceGuard;
+module.exports.evaluate = evaluate;
 
 // ── CLI 入口 ────────────────────────────────────────────────────────────────
 //
@@ -206,7 +236,6 @@ function readStdin() {
 }
 
 async function main() {
-  if (process.env.CLAUDE_GATES_DISABLED === 'true') process.exit(0);
   if (process.env.FIX_IN_PLACE_GUARD_DISABLED === '1') process.exit(0);
 
   const raw = await readStdin();
@@ -217,14 +246,16 @@ async function main() {
 
   const toolName = payload?.tool_name || payload?.tool?.name || payload?.name || '';
   const input = payload?.tool_input || payload?.tool?.input || payload?.input || payload?.arguments || {};
+  let outcome;
   try {
-    module.exports({ name: toolName, input });
+    outcome = module.exports({ name: toolName, input }, payload);
   } catch (e) {
     console.error(`[fix-in-place-guard] 内部错误, 放行: ${e.message}`);
     process.exit(0);
   }
 
-  const hard = VIOLATIONS.filter((v) => v.severity === 'ERROR');
+  for (const diagnostic of outcome.diagnostics || []) console.error(JSON.stringify(diagnostic));
+  const hard = (outcome.diagnostics || []).filter((v) => v.severity === 'ERROR');
   if (hard.length > 0) {
     console.error('');
     console.error('╔══════════════════════════════════════════════════════════════╗');

@@ -11,7 +11,7 @@
  *   - 层2 只在 Write 代码文件时触发，不依赖用户消息
  *   - SQLite 查询预计 <10ms
  *
- * 注册: settings.json PreToolUse matcher="*"
+ * 注册: settings.json UserPromptSubmit matcher="*"
  */
 
 'use strict';
@@ -22,14 +22,41 @@ const fs = require('node:fs');
 const path = require('node:path');
 const os = require('node:os');
 const crypto = require('node:crypto');
+const { memoryScopeFromPayload } = require('./lib/project-scope.cjs');
 const HARNESS = HARNESS_ROOT;
-const CACHE_FILE = path.join(HARNESS, 'var', 'index', 'memory-retrieve-cache.json');
 const DEFAULT_CACHE_TTL_MS = 10 * 60 * 1000;
+
+function memoryHintCacheFile(opts = {}) {
+  const namespace = crypto.createHash('sha256').update(HARNESS).digest('hex').slice(0, 16);
+  const cacheRoot = opts.tempRoot
+    || process.env.CLAUDE_MEMORY_HINT_CACHE_DIR
+    || path.join(os.tmpdir(), 'claude-harness-cache', namespace, 'memory');
+  return process.env.CLAUDE_MEMORY_HINT_CACHE_FILE || path.join(cacheRoot, 'memory-retrieve-cache.json');
+}
+
+function cacheDisabled() {
+  return process.env.CLAUDE_MEMORY_HINT_CACHE_DISABLED === '1'
+    || process.env.CLAUDE_HOOK_NO_WRITE === '1'
+    || process.env.CLAUDE_BENCH === '1'
+    || process.env.CLAUDE_HARNESS_NO_PERSIST === '1'
+    || process.env.CLAUDE_HARNESS_VERIFY_READONLY === '1'
+    || process.env.CLAUDE_NO_DIAGNOSTIC_WRITES === '1';
+}
+
+function attributionPersistenceDisabled() {
+  return process.env.CLAUDE_MEMORY_ATTRIBUTION_DISABLED === '1'
+    || process.env.CLAUDE_HOOK_NO_WRITE === '1'
+    || process.env.CLAUDE_BENCH === '1'
+    || process.env.CLAUDE_HARNESS_NO_PERSIST === '1'
+    || process.env.CLAUDE_HARNESS_VERIFY_READONLY === '1'
+    || process.env.CLAUDE_NO_DIAGNOSTIC_WRITES === '1';
+}
 
 // ── 层1: 用户消息触发模式 ──────────────────────────────────────────────────
 const TRIGGER_PATTERNS = [
   /查/i, /找/i, /搜/i, /记得/i, /参考/i, /经验/i, /教训/i,
   /为什么/i, /怎么(回|办|处)/i, /如何/, /什么原因/, /错误/, /报错/,
+  /(?:是否|是不是|有没有|没有|未).{0,8}(?:生效|启用|起作用)/,
   /还记得/, /参考一下/, /查一下/, /搜一下/, /找一下/,
   /类似/, /同类/, /之前/, /上次/, /以前/,
   /推荐/, /建议/, /最佳/, /模板/, /模式/,
@@ -47,6 +74,11 @@ const TYPE_ENRICH = {
   vhd: ['HDL', 'VHDL', 'FSM', '状态机', '时序', '接口'],
   py:  ['Python', 'pytest', 'ruff', '异常', '类型', '接口'],
 };
+const GENERIC_PATH_PARTS = new Set([
+  'users', 'home', 'repo', 'repository', 'project', 'workspace',
+  'src', 'source', 'sources', 'rtl', 'hdl', 'tb', 'test', 'tests',
+  'lib', 'libs', 'engine', 'scripts', 'include',
+]);
 
 function extractKeywords(filePath) {
   const base = path.basename(filePath, path.extname(filePath));
@@ -56,13 +88,31 @@ function extractKeywords(filePath) {
   return parts;
 }
 
+function extractDirectoryKeywords(filePath) {
+  const normalized = String(filePath || '').replace(/\\/g, '/');
+  const segments = normalized.split('/').filter(Boolean).slice(0, -1);
+  const candidates = segments.slice(-3).flatMap((segment) => segment
+    .toLowerCase()
+    .split(/[_\-\s.]+/)
+    .filter(Boolean));
+  return candidates
+    .filter((part) => part.length > 1 && !part.includes(':')
+      && !GENERIC_PATH_PARTS.has(part) && !/^\d+$/.test(part))
+    .slice(-2);
+}
+
 function buildContextQuery(filePath) {
   const ext = path.extname(filePath).toLowerCase().replace('.', '');
   const enrich = TYPE_ENRICH[ext] || [];
   const keywords = extractKeywords(filePath);
-  // 文件名关键词 + 类型关键词（取4个最有区分度的）
-  const allTerms = [...keywords, ...enrich.slice(0, 6)];
+  const directoryKeywords = extractDirectoryKeywords(filePath);
+  // 文件名 + 最近两级有区分度目录 + 类型词，避免绝对路径身份进入查询。
+  const allTerms = [...keywords, ...directoryKeywords, ...enrich.slice(0, 6)];
   return [...new Set(allTerms)].slice(0, 8).join(' ');
+}
+
+function fileTriggerSignature(filePath) {
+  return extractKeywords(filePath).join('_').toLowerCase() || null;
 }
 
 function shouldUserRetrieve(userMessage) {
@@ -75,19 +125,31 @@ function isCodeFile(filePath) {
   return CODE_EXTENSIONS.includes(path.extname(filePath).toLowerCase());
 }
 
+function filePathFromPayload(data = {}) {
+  const direct = data?.tool_input?.file_path || data?.tool_input?.filePath
+    || data?.toolInput?.file_path || data?.toolInput?.filePath
+    || data?.tool?.input?.file_path || data?.tool?.input?.filePath
+    || data?.input?.file_path || data?.input?.filePath || data?.filePath;
+  if (direct) return direct;
+
+  const edits = data?.tool_input?.edits || data?.toolInput?.edits
+    || data?.tool?.input?.edits || data?.input?.edits || [];
+  if (!Array.isArray(edits)) return null;
+  const paths = edits.map(edit => edit?.file_path || edit?.filePath).filter(Boolean);
+  return paths.find(isCodeFile) || paths[0] || null;
+}
+
 function extractFilePath(stdinRaw) {
   if (!stdinRaw) return null;
   try {
     const data = JSON.parse(stdinRaw);
-    return data?.tool_input?.file_path || data?.tool?.input?.file_path ||
-           data?.tool?.input?.filePath || data?.input?.file_path || data?.filePath || null;
+    return filePathFromPayload(data);
   } catch {
     // 多行 JSON
     for (const line of stdinRaw.split('\n')) {
       try {
         const data = JSON.parse(line);
-        const fp = data?.tool_input?.file_path || data?.tool?.input?.file_path ||
-                   data?.tool?.input?.filePath || data?.input?.file_path || data?.filePath;
+        const fp = filePathFromPayload(data);
         if (fp) return fp;
       } catch { /* 跳过 */ }
     }
@@ -102,8 +164,9 @@ function cacheTtlMs() {
 
 function readCache() {
   try {
-    if (!fs.existsSync(CACHE_FILE)) return {};
-    return JSON.parse(fs.readFileSync(CACHE_FILE, 'utf8'));
+    const cacheFile = memoryHintCacheFile();
+    if (!fs.existsSync(cacheFile)) return {};
+    return JSON.parse(fs.readFileSync(cacheFile, 'utf8'));
   } catch {
     return {};
   }
@@ -111,22 +174,30 @@ function readCache() {
 
 function writeCache(cache) {
   try {
-    fs.mkdirSync(path.dirname(CACHE_FILE), { recursive: true });
+    const cacheFile = memoryHintCacheFile();
+    fs.mkdirSync(path.dirname(cacheFile), { recursive: true });
     const entries = Object.entries(cache)
       .sort((a, b) => String(b[1]?.at || '').localeCompare(String(a[1]?.at || '')))
       .slice(0, 100);
-    fs.writeFileSync(CACHE_FILE, JSON.stringify(Object.fromEntries(entries), null, 2), 'utf8');
+    fs.writeFileSync(cacheFile, JSON.stringify(Object.fromEntries(entries), null, 2), 'utf8');
   } catch {
     // Cache failures should never affect tool use.
   }
 }
 
-function cacheKey(trigger, query) {
-  return crypto.createHash('sha1').update(`${trigger}\n${query}`).digest('hex');
+function cacheKey(trigger, query, scope = {}) {
+  const normalize = value => String(value || '').replace(/\\/g, '/').toLowerCase();
+  return crypto.createHash('sha1').update([
+    trigger,
+    query,
+    normalize(scope.project),
+    normalize(scope.cwd),
+    String(scope.session || ''),
+  ].join('\n')).digest('hex');
 }
 
 function recentlyInjected(key) {
-  if (process.env.CLAUDE_MEMORY_HINT_CACHE_DISABLED === '1') return false;
+  if (cacheDisabled()) return false;
   const ttl = cacheTtlMs();
   if (ttl === 0) return false;
   const cache = readCache();
@@ -135,117 +206,226 @@ function recentlyInjected(key) {
 }
 
 function markInjected(key, detail = {}) {
-  if (process.env.CLAUDE_MEMORY_HINT_CACHE_DISABLED === '1') return;
+  if (cacheDisabled()) return;
   const cache = readCache();
   cache[key] = { at: new Date().toISOString(), ...detail };
   writeCache(cache);
 }
 
-function doMemoryQuery(query, label) {
+const GENERIC_QUERY_TERMS = new Set([
+  'how', 'to', 'fix', 'error', 'bug', 'issue', 'problem', 'find', 'search',
+  'remember', 'reference', 'why', 'best', 'practice', 'lesson', 'tip',
+]);
+
+function distinctiveQueryTerms(query) {
+  const reduced = String(query || '').toLowerCase()
+    .replace(/之前|上次|以前|这个|那个|错误|报错|问题|怎么|如何|解决|处理|经验|教训|查一下|找一下|搜一下/g, ' ');
+  const asciiTerms = (reduced.match(/[a-z0-9_-]{2,}/g) || [])
+    .filter(term => !GENERIC_QUERY_TERMS.has(term));
+  const cjkTerms = [];
+  for (const run of reduced.match(/[\u3400-\u9fff]{2,}/g) || []) {
+    if (run.length === 2) {
+      cjkTerms.push(run);
+      continue;
+    }
+    for (let index = 0; index < run.length - 1; index += 1) {
+      cjkTerms.push(run.slice(index, index + 2));
+    }
+  }
+  return [...new Set([...asciiTerms, ...cjkTerms])];
+}
+
+function relevantResult(query, result) {
+  const terms = distinctiveQueryTerms(query);
+  if (terms.length === 0) return true;
+  const haystack = `${result.name || ''} ${result.summary || ''} ${result.source_key || ''}`.toLowerCase();
+  const overlap = terms.filter(term => haystack.includes(term)).length;
+  const required = Math.min(3, Math.max(1, Math.ceil(terms.length / 4)));
+  return overlap >= required;
+}
+
+function doMemoryQuery(query, label, deps = {}) {
+  let wDb;
   try {
-    const { openDb } = require('../sqlite/index.cjs');
-    const { retrieveMemorySummary } = require('../sqlite/store-memory.cjs');
-    const wDb = openDb();
+    const openDb = deps.openDb || require('../sqlite/index.cjs').openDb;
+    const retrieveMemorySummary = deps.retrieveMemorySummary
+      || require('../sqlite/store-memory.cjs').retrieveMemorySummary;
+    wDb = openDb({ readonly: true });
     const results = retrieveMemorySummary(query, {
-      limit: 3, maxChars: 200, minConfidence: 0.3,
+      db: wDb.db, limit: 5, maxChars: 200, minConfidence: 0.7, trackHit: false,
+      scope: deps.scope,
     });
-    wDb.close();
     if (results.length > 0) {
-      return results.map(r => ({
+      return results.filter(r => relevantResult(query, r)).slice(0, 3).map(r => ({
+        memoryId: r.id || r.memory_id || null,
         namespace: r.namespace,
         name: r.name || '(unnamed)',
         summary: r.summary,
         confidence: Math.round(r.confidence * 100) / 100,
+        source: r.source || 'unknown',
+        sourceKey: r.source_key || null,
+        status: r.status || 'active',
+        updatedAt: r.updated_at || r.created_at || null,
       }));
     }
   } catch { /* 静默 */ }
+  finally {
+    try { wDb?.close(); } catch { /* readonly cleanup */ }
+  }
   return [];
 }
 
-function main() {
-  // 输入走 stdin 的 hook payload。平台从不设置 CLAUDE_USER_MESSAGE /
-  // CLAUDE_TOOL_NAME —— 早期版本只读环境变量, 因此本 hook 触发率恒为 0。
-  // 环境变量保留为回退, 兼容手工调用。
-  let stdinRaw = '';
-  try { stdinRaw = fs.readFileSync(0, 'utf8'); } catch { /* 无 stdin */ }
-  let payload = {};
-  try { payload = stdinRaw.trim().startsWith('{') ? JSON.parse(stdinRaw) : {}; } catch { payload = {}; }
+function sessionIdFromPayload(payload = {}) {
+  return String(
+    payload.session_id || payload.sessionId || payload.thread_id || payload.threadId || '',
+  ).trim();
+}
 
+function platformCorrelationId(payload = {}) {
+  return String(
+    payload.tool_use_id || payload.toolUseId || payload.tool_call_id
+      || payload.toolCallId || payload.invocation_id || payload.invocationId || '',
+  ).trim();
+}
+
+function recordInjectedExposures(payload, matches, detail, deps = {}) {
+  const selected = matches.filter(match => String(match.memoryId || '').trim()).slice(0, 5);
+  const sessionId = sessionIdFromPayload(payload);
+  const projectId = String(detail.projectId || '').trim();
+  const persistenceDisabled = deps.attributionPersistenceDisabled || attributionPersistenceDisabled;
+  if (selected.length === 0 || !sessionId || !projectId || persistenceDisabled()) {
+    return { recorded: 0, rejected: true, reason: 'missing-attribution-identity' };
+  }
+
+  let wDb;
+  try {
+    const attribution = deps.attribution || require('../sqlite/store-memory-attribution.cjs');
+    const openAttributionDb = deps.openAttributionDb || require('../sqlite/index.cjs').openDb;
+    wDb = openAttributionDb({});
+    const retrievalId = attribution.createRetrievalId();
+    const correlationId = platformCorrelationId(payload) || retrievalId;
+    const eventName = String(payload.hook_event_name || payload.event || '');
+    const rawToolName = String(
+      payload.tool_name || payload.toolName || payload.tool?.name
+        || (typeof payload.tool === 'string' ? payload.tool : ''),
+    ).trim();
+    const anchored = (eventName === 'PreToolUse' || detail.anchorCurrentTool === true)
+      && rawToolName;
+    let recorded = 0;
+    wDb.db.exec('BEGIN IMMEDIATE');
+    try {
+      selected.forEach((match, index) => {
+        const result = attribution.recordExposure({
+          sessionId,
+          projectId,
+          memoryId: match.memoryId,
+          retrievalId,
+          correlationId,
+          triggerKind: detail.triggerKind,
+          query: detail.query,
+          targetPath: detail.targetPath || null,
+          rank: index + 1,
+          confidence: Number(match.confidence),
+          anchorTool: anchored ? rawToolName : null,
+          anchorInputSha256: anchored ? attribution.toolInputSha256(payload) : null,
+        }, {
+          db: wDb.db,
+          now: typeof deps.now === 'function' ? deps.now() : deps.now,
+        });
+        if (result.created) recorded += 1;
+      });
+      wDb.db.exec('COMMIT');
+    } catch (error) {
+      wDb.db.exec('ROLLBACK');
+      throw error;
+    }
+    return { recorded, rejected: false, retrievalId, correlationId };
+  } catch (error) {
+    if (typeof deps.warn === 'function') deps.warn(error);
+    return { recorded: 0, rejected: true, reason: 'attribution-write-failed' };
+  } finally {
+    try { wDb?.close(); } catch { /* fail-open attribution cleanup */ }
+  }
+}
+
+function retrieveContext(payload = {}, deps = {}) {
   const msg = payload.prompt || payload.user_prompt || process.env.CLAUDE_USER_MESSAGE || '';
   const toolName = String(
-    payload.tool_name || payload.tool?.name || process.env.CLAUDE_TOOL_NAME || '',
+    payload.tool_name || payload.toolName || payload.tool?.name
+    || (typeof payload.tool === 'string' ? payload.tool : '')
+    || process.env.CLAUDE_TOOL_NAME || '',
   ).toLowerCase();
   const eventName = payload.hook_event_name || '';
-
   // ── 层1: 用户消息触发 ──
   const userTriggered = shouldUserRetrieve(msg);
 
   // ── 层2: 任务上下文触发 (Write 代码文件) ──
   let contextQuery = null;
-  if (toolName === 'write' || toolName === 'edit') {
-    const filePath = extractFilePath(stdinRaw);
+  if (toolName === 'write' || toolName === 'edit' || toolName === 'multiedit') {
+    const filePath = extractFilePath(JSON.stringify(payload));
     if (filePath && isCodeFile(filePath)) {
       contextQuery = buildContextQuery(filePath);
     }
   }
 
+  const contextFilePath = contextQuery ? extractFilePath(JSON.stringify(payload)) : '';
+  const projectScope = memoryScopeFromPayload(
+    contextFilePath ? { ...payload, file_path: contextFilePath } : payload,
+  );
+  const cacheScope = {
+    project: projectScope.projectId,
+    cwd: projectScope.cwd,
+    session: payload.session_id || payload.sessionId || payload.thread_id || payload.threadId || '',
+  };
+  const userRetrievalScope = {
+    projectId: projectScope.projectId,
+    relativePath: projectScope.relativePath,
+    triggerKind: 'user_query',
+    triggerSignature: null,
+  };
+  const contextRetrievalScope = {
+    projectId: projectScope.projectId,
+    relativePath: projectScope.relativePath,
+    triggerKind: 'file_edit',
+    triggerSignature: fileTriggerSignature(contextFilePath),
+  };
+
   // 无触发 → 0 token
-  if (!userTriggered && !contextQuery) return;
+  if (!userTriggered && !contextQuery) return null;
 
   const triggerKind = contextQuery && userTriggered ? 'context+user' : contextQuery ? 'task-context' : 'user-query';
   const queryText = [userTriggered ? msg : '', contextQuery || ''].filter(Boolean).join('\n').slice(0, 500);
-  const key = cacheKey(triggerKind, queryText);
-  if (recentlyInjected(key)) return;
+  const key = cacheKey(triggerKind, queryText, cacheScope);
+  const wasRecentlyInjected = deps.recentlyInjected || recentlyInjected;
+  const rememberInjection = deps.markInjected || markInjected;
+  const queryMemory = deps.doMemoryQuery
+    || ((query, label, retrievalScope) => doMemoryQuery(query, label, { ...deps, scope: retrievalScope }));
+  if (wasRecentlyInjected(key)) return null;
 
   try {
     const allMemMatches = [];
 
     // 用户消息检索
     if (userTriggered && msg.length >= 3) {
-      const results = doMemoryQuery(msg, 'user');
+      const results = queryMemory(msg, 'user', userRetrievalScope);
       allMemMatches.push(...results);
     }
 
     // 任务上下文检索（去重：不同 query 词避免重复结果）
     if (contextQuery && contextQuery.length >= 3) {
-      // 只在用户没触发或 query 完全不同时才做上下文检索
-      if (!userTriggered || !msg.includes(contextQuery.split(' ')[0])) {
-        const results = doMemoryQuery(contextQuery, 'context');
-        // 去重：按 name 去重
-        const existingNames = new Set(allMemMatches.map(m => m.name));
-        for (const r of results) {
-          if (!existingNames.has(r.name)) {
-            allMemMatches.push(r);
-            existingNames.add(r.name);
-          }
+      const results = queryMemory(contextQuery, 'context', contextRetrievalScope);
+      // 去重：按 name 去重
+      const existingNames = new Set(allMemMatches.map(m => m.name));
+      for (const r of results) {
+        if (!existingNames.has(r.name)) {
+          allMemMatches.push(r);
+          existingNames.add(r.name);
         }
       }
     }
 
-    if (allMemMatches.length === 0) return;
-    markInjected(key, { trigger: triggerKind, query: queryText.slice(0, 120), count: allMemMatches.length });
-
-    // wiki-link 解析
-    const outputParts = [{
-      type: 'memory',
-      trigger: contextQuery ? 'context+user' : 'user',
-      matches: allMemMatches.slice(0, 5),
-    }];
-
-    try {
-      const { resolveWikiLinks } = require('./resolve-wiki-links.cjs');
-      const allText = allMemMatches.map(m => m.summary).join(' ');
-      const refs = (allText.match(/\[\[([^\]]+)\]\]/g) || []).map(r => r.slice(2, -2));
-      if (refs.length > 0) {
-        const wikiLinks = resolveWikiLinks([...new Set(refs)]);
-        if (wikiLinks?.resolved?.length > 0) {
-          outputParts.push({
-            type: 'wiki-links',
-            linkedMemories: wikiLinks.resolved.map(l => ({ name: l.name, file: l.file, summary: l.summary })),
-          });
-        }
-      }
-    } catch { /* 静默 */ }
+    if (allMemMatches.length === 0) return null;
+    rememberInjection(key, { trigger: triggerKind, query: queryText.slice(0, 120), count: allMemMatches.length });
 
     // 只有 hookSpecificOutput.additionalContext 才会进入模型上下文;
     // 裸 JSON 的 console.log 仅进日志, 等于没注入。
@@ -258,24 +438,54 @@ function main() {
 
     const lines = ['[memory] 与当前任务相关的既往记忆:'];
     for (const m of allMemMatches.slice(0, 5)) {
-      lines.push(`- (${m.namespace}) ${m.name}: ${brief(m.summary)}`);
+      const updated = Number.isFinite(Number(m.updatedAt))
+        ? new Date(Number(m.updatedAt)).toISOString()
+        : String(m.updatedAt || 'unknown');
+      lines.push(`- (${m.namespace}) ${m.name}: ${brief(m.summary)} `
+        + `[source=${m.source}; key=${m.sourceKey || 'none'}; confidence=${m.confidence}; `
+        + `status=${m.status}; updated=${updated}]`);
     }
-    for (const part of outputParts) {
-      if (part.type !== 'wiki-links') continue;
-      for (const l of part.linkedMemories) lines.push(`- (link) ${l.name}: ${brief(l.summary)}`);
-    }
-
-    process.stdout.write(JSON.stringify({
+    const output = {
       hookSpecificOutput: {
         hookEventName: eventName || 'UserPromptSubmit',
         additionalContext: lines.join('\n'),
       },
-    }));
+    };
+    recordInjectedExposures(payload, allMemMatches, {
+      projectId: projectScope.projectId,
+      triggerKind: contextQuery ? 'task-context' : 'user-query',
+      query: queryText,
+      targetPath: projectScope.relativePath,
+    }, deps);
+    return output;
   } catch {
-    // 静默失败
+    return null;
   }
+}
+
+function main() {
+  // 输入走 stdin 的 hook payload；环境变量仅保留为手工调用回退。
+  let stdinRaw = '';
+  try { stdinRaw = fs.readFileSync(0, 'utf8'); } catch { /* 无 stdin */ }
+  let payload = {};
+  try { payload = stdinRaw.trim().startsWith('{') ? JSON.parse(stdinRaw) : {}; } catch { payload = {}; }
+  const output = retrieveContext(payload);
+  if (output) process.stdout.write(JSON.stringify(output));
 }
 
 if (require.main === module) {
   main();
 }
+
+module.exports = {
+  memoryHintCacheFile,
+  cacheDisabled,
+  attributionPersistenceDisabled,
+  cacheKey,
+  doMemoryQuery,
+  recordInjectedExposures,
+  retrieveContext,
+  distinctiveQueryTerms,
+  relevantResult,
+  buildContextQuery,
+};

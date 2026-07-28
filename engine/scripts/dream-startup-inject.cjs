@@ -4,12 +4,11 @@
  *
  * 在 SessionStart 时执行:
  *   1. 检查是否有未处理的事件（since watermark）
- *   2. 如果事件数 ≥ 阈值，自动运行 dream-consolidate （dry-run 模式展示检测到的模式）
- *   3. 检索最近 90 天内的 Dream 产出 learning
+ *   2. 如果事件数 ≥ 阈值，有界运行 dream-consolidate 并推进 Dream 独立水印
+ *   3. 检索最近 90 天内的 Dream 待审候选
  *   4. 输出摘要注入到当前 session 上下文
  *
- * 这替代了 cron-only 的 dream-consolidate-daily 调度。
- * 优点是: 不需要等到凌晨 4:23，每次 Claude 启动时自动检查 + 注入。
+ * 每次 Claude 启动时自动检查、消费和注入，不依赖外部 cron。
  *
  * 注册:
  *   settings.local.json SessionStart
@@ -22,9 +21,8 @@
 
 'use strict';
 
-const fs = require('node:fs');
 const path = require('node:path');
-const { spawnSync } = require('node:child_process');
+const crypto = require('node:crypto');
 const { HARNESS_ROOT } = require('./lib/harness-root.cjs');
 
 const HARNESS = HARNESS_ROOT;
@@ -37,119 +35,202 @@ const MIN_EVENTS_THRESHOLD = 5;
 
 // ── 检查未处理事件数 ─────────────────────────────────────────────────────────
 
-function getUnprocessedEventCount() {
+function getUnprocessedEventCount(opts = {}) {
+  let wDb = null;
   try {
     const { openDb } = require(DB_INDEX);
-    const { sinceWatermark, getWatermark } = require(EVENTS_STORE);
-    const wDb = openDb();
-    const watermark = getWatermark({ db: wDb.db });
-    const events = sinceWatermark(watermark, 1, { db: wDb.db });
-    wDb.close();
-    return { count: events.length, watermark };
+    const { countSinceWatermark, getWatermark } = require(EVENTS_STORE);
+    if (!opts.db) wDb = openDb(opts.dbPath ? { path: opts.dbPath } : {});
+    const db = opts.db || wDb.db;
+    const watermark = getWatermark({ db, consumer: 'dream' });
+    return { count: countSinceWatermark(watermark, { db }), watermark };
   } catch {
     return { count: 0, watermark: 0 };
+  } finally {
+    if (wDb) wDb.close();
   }
 }
 
 // ── 获取近期 Dream 学习产出 ──────────────────────────────────────────────────
 
-function getRecentDreamLearnings(daysBack = 90) {
+function getRecentDreamLearnings(daysBack = 90, opts = {}) {
+  let wDb = null;
   try {
     const { openDb } = require(DB_INDEX);
-    const { retrieveMemory } = require(HARNESS + '/engine/sqlite/store-memory.cjs');
-    const wDb = openDb();
+    const { retrieveMemorySummary } = require('../sqlite/store-memory.cjs');
+    const { memoryScopeFromPayload } = require('./lib/project-scope.cjs');
+    if (!opts.db) {
+      wDb = openDb({ ...(opts.dbPath ? { path: opts.dbPath } : {}), readonly: true });
+    }
+    const db = opts.db || wDb.db;
+    const requestedDays = Number(daysBack);
+    const boundedDays = Number.isFinite(requestedDays) ? Math.max(0, requestedDays) : 90;
+    const parsedNow = opts.now instanceof Date ? opts.now.getTime() : Date.parse(String(opts.now || ''));
+    const nowMs = Number.isFinite(parsedNow) ? parsedNow : Date.now();
+    const createdCutoff = nowMs - boundedDays * 86_400_000;
+    const derived = memoryScopeFromPayload(opts.payload || { cwd: opts.cwd || process.cwd() });
+    const scope = opts.scope || {
+      projectId: derived.projectId,
+      relativePath: derived.relativePath,
+      triggerKind: 'session_start',
+      triggerSignature: null,
+    };
+    const rows = retrieveMemorySummary('Dream learning', {
+      db,
+      namespaces: ['learnings'],
+      limit: 25,
+      maxChars: 240,
+      minConfidence: 0.8,
+      trackHit: false,
+      now: nowMs,
+      scope,
+    }).filter(r => r.source === 'script:dream'
+      && Number(r.created_at || 0) >= createdCutoff)
+      .slice(0, 5);
 
-    // 从 facts 表中检索高置信度记忆（Dream + 用户写入 + 手动记录），不限 source
-    const rows = wDb.db.prepare(`
-      SELECT id, name, description, confidence, created_at, source
-      FROM facts
-      WHERE confidence >= 0.4
-        AND (ttl_until IS NULL OR ttl_until > datetime('now'))
-      ORDER BY confidence DESC, created_at DESC
-      LIMIT 5
-    `).all();
-
-    wDb.close();
     return rows.map(r => ({
       id: r.id,
       name: r.name,
-      description: r.description,
+      description: r.summary,
       confidence: r.confidence,
       source: r.source,
       createdAt: r.created_at,
     }));
   } catch {
     return [];
+  } finally {
+    if (wDb) wDb.close();
   }
 }
 
 // ── 主入口 ───────────────────────────────────────────────────────────────────
 
-function main() {
-  // 1. 检查未处理事件
-  const { count: pendingEvents, watermark } = getUnprocessedEventCount();
+function runStartup(opts = {}) {
+  const { openDb } = require(DB_INDEX);
+  const eventStore = require(EVENTS_STORE);
+  const wDb = opts.db ? null : openDb(opts.dbPath ? { path: opts.dbPath } : {});
+  const db = opts.db || wDb.db;
+  const runtimeOpts = { ...opts, db };
+  const runId = String(opts.runId || crypto.randomUUID());
+  const threshold = Number.isFinite(Number(opts.minEvents))
+    ? Math.max(1, Math.trunc(Number(opts.minEvents)))
+    : MIN_EVENTS_THRESHOLD;
+  const initial = getUnprocessedEventCount(runtimeOpts);
+  eventStore.beginConsumerRun('dream', {
+    db,
+    runId,
+    pending: initial.count,
+    processedThrough: initial.watermark,
+    at: opts.now,
+  });
+  let pendingEvents = initial.count;
+  let dreamResult = null;
+  let dreamError = '';
 
-  // 2. 获取近期 Dream 产出
-  const recentLearnings = getRecentDreamLearnings();
-
-  // 无新事件 + 无近期产出 → 静默跳过 (0 token)
-  if (pendingEvents < MIN_EVENTS_THRESHOLD && recentLearnings.length === 0) {
-    return;
-  }
-
-  const result = {
-    source: 'dream-startup-inject',
-    type: 'dream-check',
-    pendingEvents,
-    watermark,
-  };
-
-  // 3. 如果有足够事件，运行 Dream dry-run 检测模式
-  if (pendingEvents >= MIN_EVENTS_THRESHOLD) {
-    try {
-      const dream = spawnSync('node', [DREAM_SCRIPT, '--dry-run'], {
-        encoding: 'utf8',
-        timeout: 15000,
-        windowsHide: true,
-      });
-      if (dream.status === 0 && dream.stdout) {
-        // 提取模式行
-        const lines = dream.stdout.split('\n').filter(l => l.includes('🔴') || l.includes('🟡') || l.includes('🟢'));
-        result.dryRunOutput = dream.stdout.slice(0, 1000);
-        result.patternLines = lines.slice(0, 5);
-        result.dreamTriggered = true;
-      } else {
-        result.dryRunError = (dream.stderr || '').slice(0, 200);
-        result.dreamTriggered = false;
+  try {
+    if (pendingEvents >= threshold) {
+      try {
+        const runDream = opts.runDream || require(DREAM_SCRIPT).runDream;
+        dreamResult = runDream({
+          db,
+          dbPath: opts.dbPath,
+          maxEvents: opts.maxEvents,
+          logger: typeof opts.logger === 'function' ? opts.logger : () => {},
+        });
+        pendingEvents = dreamResult.pending;
+      } catch (err) {
+        dreamError = String(err.message || err).slice(0, 200);
       }
-    } catch (e) {
-      result.dryRunError = e.message;
-      result.dreamTriggered = false;
     }
-  }
 
-  // 4. 注入近期 Dream 学习
-  if (recentLearnings.length > 0) {
-    result.recentDreamLearnings = recentLearnings.map(l => ({
-      name: l.name,
-      desc: (l.description || '').replace(/^Dream 自动: /, ''),
-      confidence: l.confidence,
-    }));
-  }
+    const recentLearnings = getRecentDreamLearnings(opts.daysBack ?? 90, runtimeOpts);
+    const watermarkAfter = dreamResult?.watermarkAfter ?? initial.watermark;
+    if (dreamError) {
+      eventStore.failConsumerRun('dream', {
+        db,
+        runId,
+        error: dreamError,
+        pending: pendingEvents,
+        processedThrough: watermarkAfter,
+        at: opts.now,
+      });
+    } else {
+      const completedAt = opts.now == null ? Date.now() : new Date(opts.now).getTime();
+      eventStore.completeConsumerRun('dream', {
+        db,
+        runId,
+        status: dreamResult ? 'success' : 'skipped',
+        processedThrough: watermarkAfter,
+        processed: dreamResult?.processed || 0,
+        pending: pendingEvents,
+        nextDueAt: pendingEvents > 0 ? completedAt + 86_400_000 : null,
+        at: opts.now,
+      });
+    }
 
-  // 5. 生成人类可读简报
-  const briefParts = [];
-  if (pendingEvents >= MIN_EVENTS_THRESHOLD) {
-    briefParts.push(`📊 ${pendingEvents} 个新事件待 Dream 分析`);
-  }
-  if (recentLearnings.length > 0) {
-    briefParts.push(`💡 ${recentLearnings.length} 条近期 Dream 学习经验可用`);
-  }
-  result.brief = briefParts.join(' · ');
+    if (initial.count < threshold && recentLearnings.length === 0 && !dreamError) return null;
 
-  console.log(JSON.stringify(result));
+    const result = {
+      source: 'dream-startup-inject',
+      type: 'dream-check',
+      initialPendingEvents: initial.count,
+      pendingEvents,
+      watermark: initial.watermark,
+      dreamTriggered: Boolean(dreamResult),
+    };
+    if (dreamResult) result.dream = dreamResult;
+    if (dreamError) result.dreamError = dreamError;
+    if (recentLearnings.length > 0) {
+      result.recentDreamLearnings = recentLearnings.map(learning => ({
+        name: learning.name,
+        desc: String(learning.description || '').replace(/^Dream candidate: /, ''),
+        confidence: learning.confidence,
+      }));
+    }
+
+    const briefParts = [];
+    if (dreamResult) briefParts.push(`📊 Dream 已处理 ${dreamResult.processed}，剩余 ${dreamResult.pending}`);
+    else if (pendingEvents > 0) briefParts.push(`📊 ${pendingEvents} 个事件待 Dream 分析`);
+    if (recentLearnings.length > 0) briefParts.push(`💡 ${recentLearnings.length} 条已验证 Dream 经验`);
+    result.brief = briefParts.join(' · ');
+    return result;
+  } catch (error) {
+    try {
+      const current = eventStore.getConsumerRun('dream', { db });
+      if (current?.runId === runId && current.status === 'running') {
+        eventStore.failConsumerRun('dream', {
+          db,
+          runId,
+          error,
+          pending: pendingEvents,
+          processedThrough: initial.watermark,
+          at: opts.now,
+        });
+      }
+    } catch { /* health will expose a missing or stale heartbeat */ }
+    throw error;
+  } finally {
+    if (wDb) wDb.close();
+  }
+}
+
+function main() {
+  if (process.argv.includes('--help')) {
+    console.log('Usage: node engine/scripts/dream-startup-inject.cjs');
+    return null;
+  }
+  const result = runStartup();
+  if (result) console.log(JSON.stringify(result));
+  return result;
 }
 
 if (require.main === module) {
   main();
 }
+
+module.exports = {
+  getUnprocessedEventCount,
+  getRecentDreamLearnings,
+  runStartup,
+  MIN_EVENTS_THRESHOLD,
+};

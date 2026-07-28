@@ -68,7 +68,7 @@ function main() {
   const ctx = getContextStatus();
 
   if (!pressure && !ctx) {
-    process.exit(0); // 无压力信号，安静退出
+    return { exitCode: 0, pressure, context: ctx, suggestions: [] };
   }
 
   const suggestions = [];
@@ -113,7 +113,9 @@ function main() {
     console.error('└────────────────────────────────────────────────────────────┘');
   }
 
-  process.exit(0);
+  return { exitCode: 0, pressure, context: ctx, suggestions };
 }
 
-main();
+if (require.main === module) main();
+
+module.exports = { hasPressureSignal, getContextStatus, main };

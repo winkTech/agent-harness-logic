@@ -5,8 +5,8 @@
  * PreToolUse hook: intercepts Edit/Write operations and blocks them
  * if the target file path matches a protected pattern.
  *
- * Protected patterns are defined inline below in PROTECTED_PATTERNS.
- * To customize, edit that array — no external config file needed.
+ * Project-specific paths are declared in
+ * var/project-init/directory-contract.json `protectedPaths`.
  *
  * Exit code:
  *   0 — allow (no match or not an Edit/Write)
@@ -20,9 +20,17 @@
 'use strict';
 
 const fs = require('node:fs');
+const { evaluateGuardBypass } = require('../lib/gate-bypass.cjs');
+const {
+  findProjectRoot,
+  readDirectoryContract,
+  relativeToRoot,
+} = require('../lib/project-directory-contract.cjs');
+
+const GATE_ID = 'file-protection-guard.cjs';
 
 // ── Protected File Patterns ────────────────────────────────────────────────
-// Edit this array to add/remove patterns. Glob-like syntax:
+// Inline patterns are reserved for repository-wide governed model directories.
 //   **  = match across directory boundaries
 //   *   = match within a single path segment
 //   ?   = match a single character
@@ -30,15 +38,10 @@ const fs = require('node:fs');
 // See docs/rules-archive/08-constraints.md for the rationale behind each pattern.
 
 const PROTECTED_PATTERNS = [
-  '**/matlab/**',                // MATLAB golden model (浮点)
-  '**/*golden*',                 // Any golden model file
-  '**/*golden_model*',           // Explicit golden_model files
-  '**/*golden*/**',              // golden_model/ 等目录**内部**的全部文件 (2026-07-27 补洞:
-                                 //   原规则只匹配文件名, golden_model/fixed_point_report.md 与
-                                 //   golden_model_template/config.m 都能绕过)
-  '**/python/**/golden*',        // Python golden model scripts
-  '**/python/**/fixed_point*',   // Python fixed-point reference
-  '**/scripts/**/golden*',       // Shell/script golden model
+  '**/matlab/**',
+  '**/07_mat/**',
+  '**/golden_model*/**',
+  '**/engineering-assets/models/**',
 ];
 
 // ── Helpers ────────────────────────────────────────────────────────────────
@@ -57,6 +60,43 @@ function matchesPattern(filePath, pattern) {
   return new RegExp(`^${regexStr}$`, 'i').test(filePath);
 }
 
+function normalizeManifestPath(value) {
+  const normalized = String(value || '')
+    .trim()
+    .replace(/\\/g, '/')
+    .replace(/^\.\//, '')
+    .replace(/\/+$/, '');
+  if (!normalized || normalized.startsWith('/') || /^[a-zA-Z]:\//.test(normalized)) return '';
+  if (/[*?\0-\x1f]/.test(normalized)) return '';
+  const segments = normalized.split('/');
+  if (segments.some((segment) => !segment || segment === '.' || segment === '..')) return '';
+  return normalized;
+}
+
+function manifestProtection(filePath, cwd = process.cwd()) {
+  const projectRoot = findProjectRoot(filePath, cwd);
+  if (!projectRoot) return '';
+
+  let contract;
+  try {
+    contract = readDirectoryContract(projectRoot);
+  } catch {
+    return '';
+  }
+  if (!Array.isArray(contract?.protectedPaths)) return '';
+
+  const relative = relativeToRoot(projectRoot, filePath, cwd).toLowerCase();
+  for (const candidate of contract.protectedPaths) {
+    const protectedPath = normalizeManifestPath(candidate);
+    if (!protectedPath) continue;
+    const comparable = protectedPath.toLowerCase();
+    if (relative === comparable || relative.startsWith(`${comparable}/`)) {
+      return `manifest:${protectedPath}`;
+    }
+  }
+  return '';
+}
+
 /**
  * 受批准的例外写入。
  *
@@ -66,8 +106,8 @@ function matchesPattern(filePath, pattern) {
  *   CLAUDE_PROTECTED_WRITE_APPROVAL="<路径>[,<路径>...]"   逐个文件，禁止通配符
  *   CLAUDE_PROTECTED_WRITE_REASON="<一句话说明>"           必填，写入审计
  *
- * 与 CLAUDE_GATES_DISABLED 的区别：后者是全局逃生开关（关掉所有门禁、无记录）；
- * 本通道只对列出的确切文件生效，缺理由不放行，且每次放行都追加审计条目。
+ * 统一门禁旁路同样要求精确 gate/session、短 TTL 与审计；本通道额外绑定具体文件，
+ * 只对列出的确切文件生效，缺理由不放行，且每次放行都追加审计条目。
  *
  * @returns {{ok: boolean, reason?: string, why?: string} | null} null = 未申请例外
  */
@@ -131,6 +171,103 @@ function approvedException(normalizedPath) {
   return hit ? { ok: true, reason } : null;
 }
 
+function inspectFileApproval(normalizedPath, env = process.env) {
+  const raw = String(env.CLAUDE_PROTECTED_WRITE_APPROVAL || '').trim();
+  if (raw) {
+    const reason = String(env.CLAUDE_PROTECTED_WRITE_REASON || '').trim();
+    if (!reason) return { ok: false, why: 'approval reason is required' };
+    const targets = raw.split(',').map((item) => item.trim().replace(/\\/g, '/')).filter(Boolean);
+    if (targets.some((item) => item.includes('*') || item.includes('?'))) {
+      return { ok: false, why: 'approval paths must not contain wildcards' };
+    }
+    const hit = targets.some((target) => normalizedPath === target
+      || (target.includes('/') && normalizedPath.endsWith('/' + target.replace(/^\.\//, ''))));
+    return hit ? { ok: true, reason, kind: 'environment' } : null;
+  }
+
+  const filePath = approvalFilePath();
+  let list;
+  try {
+    if (!fs.existsSync(filePath)) return null;
+    list = JSON.parse(fs.readFileSync(filePath, 'utf8'));
+    if (!Array.isArray(list)) return null;
+  } catch {
+    return null;
+  }
+  const now = Date.now();
+  const token = list.find((item) => {
+    if (!item || typeof item.path !== 'string' || new Date(item.expiresAt || 0).getTime() <= now) return false;
+    const tokenPath = item.path.replace(/\\/g, '/');
+    if (tokenPath.includes('*') || tokenPath.includes('?')) return false;
+    return normalizedPath === tokenPath
+      || (tokenPath.includes('/') && normalizedPath.endsWith('/' + tokenPath.replace(/^\.\//, '')));
+  });
+  if (!token) return null;
+  if (!String(token.reason || '').trim()) return { ok: false, why: 'approval token is missing reason' };
+  return { ok: true, reason: `[one-time token] ${token.reason}`, kind: 'token' };
+}
+
+function evaluate(payload, runtime = {}) {
+  const source = GATE_ID;
+  if (evaluateGuardBypass({ gateId: GATE_ID, payload, context: runtime.context }).allowed) {
+    return { source, decision: 'allow', diagnostics: [] };
+  }
+  const toolName = String(payload?.tool_name || payload?.tool?.name || payload?.name || '').trim();
+  const input = payload?.tool_input || payload?.tool?.input || payload?.input || payload?.arguments || {};
+  const filePath = String(runtime.filePath || input.file_path || input.filePath || '').trim();
+  const writeTools = new Set(['Edit', 'Write', 'MultiEdit', 'NotebookEdit']);
+  if (!writeTools.has(toolName) || !filePath) return { source, decision: 'allow', diagnostics: [] };
+
+  const normalizedPath = filePath.replace(/\\/g, '/');
+  const cwd = runtime.cwd || payload?.cwd || process.cwd();
+  const projectPattern = manifestProtection(filePath, cwd);
+  const matchedPattern = (projectPattern ? [projectPattern, ...PROTECTED_PATTERNS] : PROTECTED_PATTERNS)
+    .find((pattern) => pattern.startsWith('manifest:') || matchesPattern(normalizedPath, pattern));
+  const needsBackup = normalizedPath.endsWith('settings.local.json') || normalizedPath.endsWith('settings.json');
+  const env = runtime.env || process.env;
+  let approval = null;
+
+  if (matchedPattern) {
+    approval = inspectFileApproval(normalizedPath, env);
+    if (!approval?.ok) {
+      return {
+        source,
+        decision: 'block',
+        diagnostics: [{
+          code: 'protected-file',
+          message: approval?.why || 'file is protected and requires explicit per-file approval',
+          filePath,
+          pattern: matchedPattern,
+        }],
+      };
+    }
+  }
+
+  const commit = (needsBackup || matchedPattern) ? () => {
+    if (approval?.kind === 'token') {
+      const consumed = consumeFileApproval(normalizedPath);
+      if (!consumed?.ok) throw new Error(consumed?.why || 'approval token was no longer available');
+    }
+    if (needsBackup && fs.existsSync(filePath)) fs.copyFileSync(filePath, `${filePath}.bak`);
+    if (matchedPattern) auditApprovedWrite(filePath, matchedPattern, approval.reason);
+    return { ok: true };
+  } : undefined;
+
+  return {
+    source,
+    decision: approval ? 'warn' : 'allow',
+    diagnostics: approval ? [{
+      code: 'protected-file-approved',
+      message: `approved protected write: ${filePath}`,
+      filePath,
+      pattern: matchedPattern,
+      reason: approval.reason,
+    }] : [],
+    advisories: approval ? [{ source, status: 'warning', blocking: false, target: filePath, reason: approval.reason }] : [],
+    ...(commit ? { commit } : {}),
+  };
+}
+
 /**
  * 审计留痕。CI / 只读诊断场景下跳过写盘，不影响放行判定。
  */
@@ -162,19 +299,19 @@ function parseToolCall() {
 
       // Format (a): {tool: {name: "Write", input: {file_path: "..."}}}
       if (data?.tool?.name && data?.tool?.input?.file_path) {
-        return { toolName: data.tool.name, filePath: data.tool.input.file_path };
+        return { toolName: data.tool.name, filePath: data.tool.input.file_path, payload: data };
       }
       // Format (b): {tool_name: "Write", tool_input: {file_path: "..."}}
       if (data?.tool_name && data?.tool_input?.file_path) {
-        return { toolName: data.tool_name, filePath: data.tool_input.file_path };
+        return { toolName: data.tool_name, filePath: data.tool_input.file_path, payload: data };
       }
       // Format (c): flat {name: "Write", input: {file_path: "..."}}
       if (data?.name && data?.input?.file_path) {
-        return { toolName: data.name, filePath: data.input.file_path };
+        return { toolName: data.name, filePath: data.input.file_path, payload: data };
       }
       // Format (d): flat {arguments: {file_path: "..."}}
       if (data?.name && data?.arguments?.file_path) {
-        return { toolName: data.name, filePath: data.arguments.file_path };
+        return { toolName: data.name, filePath: data.arguments.file_path, payload: data };
       }
     }
   } catch (_e) {
@@ -188,7 +325,17 @@ function parseToolCall() {
     try {
       const parsed = JSON.parse(envInput);
       const filePath = parsed?.file_path || parsed?.arguments?.file_path || '';
-      if (filePath) return { toolName: envName, filePath };
+      if (filePath) {
+        return {
+          toolName: envName,
+          filePath,
+          payload: {
+            session_id: process.env.CLAUDE_SESSION_ID || '',
+            tool_name: envName,
+            tool_input: parsed,
+          },
+        };
+      }
     } catch (_e) {
       // ignore
     }
@@ -200,17 +347,11 @@ function parseToolCall() {
 // ── Main ───────────────────────────────────────────────────────────────────
 
 function main() {
-  // 逃生开关: CLAUDE_GATES_DISABLED=true 跳过所有门禁
-  if (process.env.CLAUDE_GATES_DISABLED === 'true') process.exit(0);
-
-  if (PROTECTED_PATTERNS.length === 0) {
-    process.exit(0); // No patterns — allow everything
-  }
-
   const call = parseToolCall();
   if (!call) {
     process.exit(0); // Can't determine tool call — allow (fail-open)
   }
+  if (evaluateGuardBypass({ gateId: GATE_ID, payload: call.payload }).allowed) process.exit(0);
 
   // Only protect against file-modifying operations.
   //
@@ -225,6 +366,7 @@ function main() {
 
   // Normalize: use forward slashes for cross-platform matching
   const normalizedPath = call.filePath.replace(/\\/g, '/');
+  const projectPattern = manifestProtection(call.filePath);
 
   // ── Auto-backup settings.local.json ──────────────────────────────────────
   // 在修改 settings.local.json 前自动备份
@@ -240,8 +382,9 @@ function main() {
     }
   }
 
-  for (const pattern of PROTECTED_PATTERNS) {
-    if (matchesPattern(normalizedPath, pattern)) {
+  const applicablePatterns = projectPattern ? [projectPattern, ...PROTECTED_PATTERNS] : PROTECTED_PATTERNS;
+  for (const pattern of applicablePatterns) {
+    if (pattern.startsWith('manifest:') || matchesPattern(normalizedPath, pattern)) {
       // 受批准的逐文件例外 —— 默认仍然阻断，只有显式批准 + 理由才放行并留痕
       const appr = approvedException(normalizedPath);
       if (appr && appr.ok) {
@@ -274,4 +417,29 @@ function main() {
   process.exit(0); // No match — allow
 }
 
-main();
+function pureCliMain() {
+  const call = parseToolCall();
+  if (!call) process.exit(0);
+  const outcome = evaluate(call.payload);
+  if (outcome.decision === 'block') {
+    for (const diagnostic of outcome.diagnostics) {
+      console.error(`[FileProtection] ${diagnostic.message}: ${diagnostic.filePath || call.filePath}`);
+    }
+    process.exit(2);
+  }
+  try {
+    outcome.commit?.();
+  } catch (error) {
+    console.error(`[FileProtection] commit failed: ${error.message}`);
+    process.exit(2);
+  }
+  for (const diagnostic of outcome.diagnostics) console.error(`[FileProtection] ${diagnostic.message}`);
+  process.exit(0);
+}
+
+if (require.main === module) pureCliMain();
+
+module.exports = {
+  evaluate,
+  matchesPattern,
+};
