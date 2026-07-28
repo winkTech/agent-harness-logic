@@ -82,7 +82,11 @@ fi
 # engineering-assets/var/gates/ 是门禁证据目录（已 gitignore）：G-C-01/02 的判据
 # 就来自其中的 timing-summary.rpt / utilization.rpt，它们是刻意产出的证据而非垃圾，
 # 由 tools/pg-synth.cjs 可重生。误删会让门禁失去判据来源。
-EXCLUDE_DIRS="memory/work/|plugins/cache/|knowledge/|.git/|engineering-assets/.*/vectors/|engineering-assets/.*/vectors-ref/|engineering-assets/reference-assets/|engineering-assets/var/build/|engineering-assets/var/gates/"
+# engineering-assets/evidence/ 是证据快照目录（内含的 .dcp/.rpt 已 gitignore）：
+# 与 var/gates/ 同性质 —— SNAPSHOT.json 记录各门判据，同目录下的 Vivado
+# post_synth.dcp 是可由综合重跑再生的中间检查点。此前该目录未列入豁免，
+# 导致本扫描把它当垃圾并阻断**与之无关**的提交。
+EXCLUDE_DIRS="memory/work/|plugins/cache/|knowledge/|.git/|engineering-assets/.*/vectors/|engineering-assets/.*/vectors-ref/|engineering-assets/reference-assets/|engineering-assets/var/build/|engineering-assets/var/gates/|engineering-assets/evidence/"
 
 # ---- 5a. 暂存区检查：禁止仿真文件被提交 ----
 FORBIDDEN_STAGED_PATTERNS="(^|/)transcript$|vsim\.wlf|\.vcd$|\.wlftmp|vsim\.dump|\.wdb$|xsim\.jou|xsim\.log|xsim\.tcl|xelab\.pb|xvlog\.pb|tr_db\.log|wev\.log|vlog\.log"
