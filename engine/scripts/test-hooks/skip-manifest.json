@@ -1,6 +1,7 @@
 {
-  "maxSkips": 13,
+  "maxSkips": 14,
   "allowedIds": [
+    "LongTaskEval::固定历史产物不再计为 fresh live 通过",
     "PythonGate::安全命令放行 (pytest)",
     "PythonGate::黄金模型写入拦截",
     "PythonGate::敏感文件读取拦截",
@@ -15,5 +16,5 @@
     "FPRHook::Exit 0 不阻塞",
     "CommitGate::脚本语法正确"
   ],
-  "reason": "Optional legacy gates are bounded by exact test IDs. New skips fail until explicitly reviewed."
+  "reason": "Optional legacy gates are bounded by exact test IDs. New skips fail until explicitly reviewed. LongTaskEval 是环境条件跳过：它复算 var/agent-evals/long-task 下已捕获的真实 agent 运行产物，var/ 不入版本库，全新 checkout 与 CI 上无对象可复算；本机有产物时照常执行，因此实际跳过数在本机仍为 13。"
 }

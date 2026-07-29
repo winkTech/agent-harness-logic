@@ -122,8 +122,19 @@
 >
 > `settings.local.json` 现在只承载 `permissions` / `enabledPlugins` / `env`。
 >
-> ⚠️ `settings.json` 在 `.gitignore` 里（hook 命令含本机绝对路径），因此 **hook 配置不入版本库**：
-> 换机或新克隆需要重新生成。改 hook 后请自测一次触发，不要只看 JSON 语法。
+> ⚠️ `settings.json` 在 `.gitignore` 里（hook 命令含本机绝对路径），文件本身不入版本库。
+> 但**注册内容入库**：权威声明在 `engine/hooks/registrations.json`，用 `{{HARNESS_ROOT}}` 占位。
+>
+> ```bash
+> node engine/scripts/render-hook-settings.cjs          # 换机/新克隆：生成本机 settings.json
+> node engine/scripts/render-hook-settings.cjs --check   # 校验本机注册是否与模板漂移
+> node engine/scripts/sync-workflow-mirror.cjs           # 同理重建 .claude/workflows/ 镜像
+> ```
+>
+> 改 hook 请改**模板**再渲染；直接改 `settings.json` 会被 `--check` 报漂移。
+> CI 在跑门禁前会执行这两步 —— 否则全新 checkout 上一条注册都没有，
+> `engine/hooks/manifest.json` 里标 `active` 的条目会全部核对不上。
+> 改完请自测一次触发，不要只看 JSON 语法。
 
 下表以 `settings.json` 为唯一事实源；`preflight-router.cjs` 在一个进程内加载匹配门禁，README 不复制易漂移的内部清单。
 

@@ -47,7 +47,15 @@ settings.json
 # 2026-07-27 起：**所有 hook 统一放 settings.json**（见 README「Hook 事件」一节）。
 # 该文件被忽略，因为 hook 命令里含 C:/Users/<name>/... 本机绝对路径
 # （历史教训：改用 $HOME 会导致 hook 静默不触发，见 memory/reference/hooks-fix-2026-06-24.md）。
-# 代价：hook 配置不入版本库 —— 换机/新克隆需要重新生成 settings.json。
+#
+# 2026-07-29 起不再需要手工重建：注册的权威声明入库在 engine/hooks/registrations.json
+# （用 {{HARNESS_ROOT}} 占位保持可移植），换机/新克隆跑
+#     node engine/scripts/render-hook-settings.cjs
+# 即可生成本机 settings.json；--check 可校验二者是否漂移。CI 也走这一步 ——
+# 否则全新 checkout 上一条注册都没有，engine/hooks/manifest.json 声称 active 的条目
+# 会全部核对不上（表现为 "hook registry passed (0 script references)"）。
+#
+# 同理，.claude/workflows/ 镜像由 engine/scripts/sync-workflow-mirror.cjs 从 workflows/ 重建。
 #
 # settings.local.json 未列入，仍需版本控制：现在只承载 permissions / enabledPlugins / env，
 # 不再放 hook。

@@ -23,7 +23,7 @@
 | `02-python.md` | L1 | Python ruff + 硬件调试 | .py |
 | `03-gates.md` | L0 | 新资产或契约变化的需求与验证质量门禁 | 按上下文 |
 | `04-git.md` | L2 | Git 提交/分支规范 | commit/push |
-| `05-harness.md` | L1 | 记忆、Dream、Hook、维护、检索与规则晋升边界 | memory/Dream/hook/harness/maintenance |
+| `05-harness.md` | L1 | 记忆、Dream、Hook 注册与修缮、维护、检索与规则晋升边界 | memory/Dream/hook/harness/maintenance/settings.json/注册/CI/门禁/镜像 |
 
 ## docs/rules-archive/ — 低频规则（按需 Read）
 

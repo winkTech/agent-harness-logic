@@ -26,6 +26,17 @@ const {
 
 const HOME = HARNESS_ROOT;
 
+/**
+ * 固定的假项目根，用于构造 hook payload 的 cwd / file_path。
+ *
+ * 必须是**当前平台意义上的绝对路径**。原先硬编码 'C:/repo'，在 Linux 上那是相对路径：
+ * hook 内部会把它解析成 `<process.cwd()>/C:/repo`，于是 payload 里的 projectId 与测试
+ * 侧 `memoryProjectId('C:/repo')` 算出来的对不上，记忆检索命中不了，注入为空 ——
+ * 表现为 "did not inject context" 与 "did not hard-scope the failure signature"。
+ * Windows 上跑不出来，只有 CI 的 ubuntu 腿会红。
+ */
+const FIXTURE_REPO = process.platform === 'win32' ? 'C:/repo' : '/repo';
+
 const tests = [];
 
 function test(name, fn) {
@@ -34,6 +45,18 @@ function test(name, fn) {
 
 function assert(condition, message) {
   if (!condition) throw new Error(message);
+}
+
+/**
+ * 显式跳过：用于"检的是本机操作员配置、不是仓库契约"的断言。
+ * 这类断言依赖 settings.json / var/ 这些 .gitignore 的路径，全新 checkout 与 CI 上
+ * 根本不存在，硬跑必然误报。跳过必须**打印出来**，不能当成 PASS 混过去 ——
+ * 否则就分不清"检过了"和"没检"。
+ */
+class SkippedTest extends Error {}
+
+function skip(reason) {
+  throw new SkippedTest(reason);
 }
 
 function readJson(filePath, fallback = null) {
@@ -471,13 +494,13 @@ test('memory retrieval is readonly scoped relevant and returns provenance metada
     `retrieval provenance metadata missing: ${JSON.stringify(results[0])}`);
 
   const base = hook.cacheKey('user-query', 'same query', {
-    project: 'C:/repo/a', cwd: 'C:/repo/a', session: 'session-a',
+    project: `${FIXTURE_REPO}/a`, cwd: `${FIXTURE_REPO}/a`, session: 'session-a',
   });
   const otherSession = hook.cacheKey('user-query', 'same query', {
-    project: 'C:/repo/a', cwd: 'C:/repo/a', session: 'session-b',
+    project: `${FIXTURE_REPO}/a`, cwd: `${FIXTURE_REPO}/a`, session: 'session-b',
   });
   const otherProject = hook.cacheKey('user-query', 'same query', {
-    project: 'C:/repo/b', cwd: 'C:/repo/b', session: 'session-a',
+    project: `${FIXTURE_REPO}/b`, cwd: `${FIXTURE_REPO}/b`, session: 'session-a',
   });
   assert(base !== otherSession && base !== otherProject,
     'memory cache key is not scoped by project/cwd/session');
@@ -509,7 +532,7 @@ test('memory relevance recognizes Chinese task signatures and rejects unrelated 
 test('memory context queries retain discriminating directory components', () => {
   const hook = require(path.join(HOME, 'engine/scripts/memory-retrieve-hook.cjs'));
   assert(typeof hook.buildContextQuery === 'function', 'buildContextQuery is not an exported contract');
-  const query = hook.buildContextQuery('C:/repo/decoder/control/common.sv').toLowerCase();
+  const query = hook.buildContextQuery(`${FIXTURE_REPO}/decoder/control/common.sv`).toLowerCase();
   assert(query.includes('decoder') && query.includes('control') && query.includes('common'),
     `directory context was discarded from memory query: ${query}`);
   assert(!query.includes('c:') && !query.includes('repo'),
@@ -914,7 +937,7 @@ test('memory retrieval handles PreToolUse Edit and Write file path payload shape
     confidence: 0.8,
     sourceKey: 'learnings/rx-fifo.md',
     sourcePath: path.join(tempDir, 'memory', 'learnings', 'rx-fifo.md'),
-    projectId: projectScope.memoryProjectId('C:/repo'),
+    projectId: projectScope.memoryProjectId(FIXTURE_REPO),
     scopeKind: 'repository',
     triggerKind: 'file_edit',
     triggerSignature: 'rx_fifo',
@@ -933,15 +956,15 @@ test('memory retrieval handles PreToolUse Edit and Write file path payload shape
     hook_event_name: 'PreToolUse',
     tool_name: 'Edit',
     session_id: 'edit-session',
-    cwd: 'C:/repo',
-    tool_input: { file_path: 'C:/repo/rtl/rx_fifo.sv' },
+    cwd: FIXTURE_REPO,
+    tool_input: { file_path: `${FIXTURE_REPO}/rtl/rx_fifo.sv` },
   }), env);
   const write = runNode(hookPath, JSON.stringify({
     hook_event_name: 'PreToolUse',
     tool_name: 'Write',
     session_id: 'write-session',
-    cwd: 'C:/repo',
-    tool_input: { filePath: 'C:/repo/rtl/rx_fifo.sv' },
+    cwd: FIXTURE_REPO,
+    tool_input: { filePath: `${FIXTURE_REPO}/rtl/rx_fifo.sv` },
   }), env);
   const editOutput = edit.stdout ? JSON.parse(edit.stdout) : null;
   const writeOutput = write.stdout ? JSON.parse(write.stdout) : null;
@@ -976,15 +999,15 @@ test('memory retrieval exposes an injectable in-process context contract for pre
     hook_event_name: 'PreToolUse',
     tool_name: 'Edit',
     session_id: 'router-session',
-    cwd: 'C:/repo',
-    tool_input: { file_path: 'C:/repo/rtl/rx_fifo.sv' },
+    cwd: FIXTURE_REPO,
+    tool_input: { file_path: `${FIXTURE_REPO}/rtl/rx_fifo.sv` },
   }, deps);
   const miss = hook.retrieveContext({
     hook_event_name: 'PreToolUse',
     tool_name: 'Edit',
     session_id: 'router-session',
-    cwd: 'C:/repo',
-    tool_input: { file_path: 'C:/repo/rtl/rx_fifo.sv' },
+    cwd: FIXTURE_REPO,
+    tool_input: { file_path: `${FIXTURE_REPO}/rtl/rx_fifo.sv` },
   }, { ...deps, doMemoryQuery: () => [] });
 
   assert(output?.hookSpecificOutput?.hookEventName === 'PreToolUse'
@@ -1193,14 +1216,14 @@ test('in-process memory retrieval handles MultiEdit direct and edits-array paths
     resolveWikiLinks: () => ({ resolved: [] }),
   };
   const direct = hook.retrieveContext({
-    hook_event_name: 'PreToolUse', tool_name: 'MultiEdit', session_id: 'multi-direct', cwd: 'C:/repo',
-    tool_input: { file_path: 'C:/repo/rtl/rx_fifo.sv', edits: [] },
+    hook_event_name: 'PreToolUse', tool_name: 'MultiEdit', session_id: 'multi-direct', cwd: FIXTURE_REPO,
+    tool_input: { file_path: `${FIXTURE_REPO}/rtl/rx_fifo.sv`, edits: [] },
   }, deps);
   const array = hook.retrieveContext({
-    hook_event_name: 'PreToolUse', tool_name: 'MultiEdit', session_id: 'multi-array', cwd: 'C:/repo',
+    hook_event_name: 'PreToolUse', tool_name: 'MultiEdit', session_id: 'multi-array', cwd: FIXTURE_REPO,
     tool_input: { edits: [
-      { file_path: 'C:/repo/README.md', old_string: 'a', new_string: 'b' },
-      { filePath: 'C:/repo/rtl/rx_fifo.sv', old_string: 'a', new_string: 'b' },
+      { file_path: `${FIXTURE_REPO}/README.md`, old_string: 'a', new_string: 'b' },
+      { filePath: `${FIXTURE_REPO}/rtl/rx_fifo.sv`, old_string: 'a', new_string: 'b' },
     ] },
   }, deps);
 
@@ -1253,7 +1276,7 @@ test('cross-link retrieval uses only the fresh failure payload without hit or si
     hook_event_name: 'PostToolUseFailure',
     tool_use_id: 'tool-use-negative-hold',
     session_id: 'failure-session',
-    cwd: 'C:/repo',
+    cwd: FIXTURE_REPO,
     timestamp: 1722124799000,
     tool_name: 'Bash',
     tool_input: { command: 'vivado -mode batch -source route.tcl' },
@@ -1289,7 +1312,7 @@ test('cross-link retrieval uses only the fresh failure payload without hit or si
       && call.options.trackHit === false),
     `cross-link query mutated retrieval state: ${JSON.stringify(calls)}`);
   const { memoryProjectId } = require(path.join(HOME, 'engine/scripts/lib/project-scope.cjs'));
-  assert(calls.every((call) => call.options.scope?.projectId === memoryProjectId('C:/repo')
+  assert(calls.every((call) => call.options.scope?.projectId === memoryProjectId(FIXTURE_REPO)
       && call.options.scope?.triggerKind === 'tool_failure'
       && call.options.scope?.triggerSignature === 'negative_hold_slack'),
     `cross-link did not hard-scope the failure signature: ${JSON.stringify(calls)}`);
@@ -1303,7 +1326,7 @@ test('cross-link retrieval uses only the fresh failure payload without hit or si
     `failure injection did not use one managed attribution DB: ${JSON.stringify(exposureRows)}`);
   const exposure = exposureRows[0];
   assert(exposure.session_id === failurePayload.session_id
-      && exposure.project_id === memoryProjectId('C:/repo')
+      && exposure.project_id === memoryProjectId(FIXTURE_REPO)
       && exposure.memory_id === 'fact-negative-hold'
       && Boolean(exposure.retrieval_id)
       && exposure.correlation_id === failurePayload.tool_use_id,
@@ -1338,7 +1361,7 @@ test('postflight records causal lifecycle events and refuses anonymous telemetry
     hook_event_name: 'UserPromptSubmit',
     session_id: 'causal-session',
     prompt: "不对，S_CFG 应该是 4'd1，而不是 4'd2。",
-    cwd: 'C:/repo',
+    cwd: FIXTURE_REPO,
   }, { dbPath });
   const verification = observer.handlePayload({
     hook_event_name: 'PostToolUse',
@@ -1659,15 +1682,32 @@ test('local settings do not force context compaction below fifty percent', () =>
   const raw = local.env?.CLAUDE_AUTOCOMPACT_PCT_OVERRIDE;
   assert(raw === undefined || Number(raw) >= 50,
     `low autocompact override still amplifies SessionStart(compact): ${raw}`);
-  const base = readJson(path.join(HOME, 'settings.json'), {});
+  // settings.json 不入版本库（hook 命令含本机绝对路径，见 engine/hooks/registrations.json）。
+  // 全新 checkout / CI 上它要么不存在，要么只有渲染器生成的 hooks 块 —— model/effortLevel
+  // 是操作员的本机选择，不是仓库契约，那里没有"正确值"可断言。
+  const settingsPath = path.join(HOME, 'settings.json');
+  if (!fs.existsSync(settingsPath)) {
+    skip('settings.json 不存在（全新 checkout / CI）——本机 model/effort 断言不适用');
+  }
+  const base = readJson(settingsPath, {});
+  const keys = Object.keys(base);
+  if (keys.length === 1 && keys[0] === 'hooks') {
+    skip('settings.json 由 render-hook-settings.cjs 生成，未含本机 model/effort 配置');
+  }
   assert(base.model === 'opus[1m]' && base.effortLevel === 'max',
     'model or effort was changed without A/B latency evidence');
 });
 
 test('local plugins do not inject a second full skill router at SessionStart', () => {
   const local = readJson(path.join(HOME, 'settings.local.json'), {});
+  // 这半条是真正的仓库契约：settings.local.json 入库，插件是否启用可以被断言。
   assert(local.enabledPlugins?.['superpowers@claude-plugins-official'] !== true,
     'superpowers still adds a duplicate using-superpowers SessionStart hook');
+  // 这半条不是：var/ 是 .gitignore 的本机运行时目录，全新 checkout / CI 上必然没有，
+  // "缓存还在不在" 只有本机答得上来。
+  if (!fs.existsSync(path.join(HOME, 'var/plugins'))) {
+    skip('var/plugins 不存在（全新 checkout / CI）——本机插件缓存断言不适用');
+  }
   assert(fs.existsSync(path.join(HOME, 'var/plugins/cache/claude-plugins-official/superpowers')),
     'superpowers cache was deleted instead of only disabling the plugin');
 });
@@ -2045,6 +2085,7 @@ test('workflow evidence gates are not based on agent self-report or catch-and-co
 function main() {
   let passed = 0;
   let failed = 0;
+  let skipped = 0;
 
   console.log('\nHarness painpoint regression tests\n');
   for (const t of tests) {
@@ -2054,13 +2095,19 @@ function main() {
       passed += 1;
       console.log('PASS');
     } catch (e) {
+      if (e instanceof SkippedTest) {
+        skipped += 1;
+        console.log('SKIP');
+        console.log(`    ${e.message}`);
+        continue;
+      }
       failed += 1;
       console.log('FAIL');
       console.log(`    ${e.message}`);
     }
   }
 
-  console.log(`\nSummary: ${passed}/${tests.length} passed, ${failed} failed`);
+  console.log(`\nSummary: ${passed}/${tests.length} passed, ${failed} failed, ${skipped} skipped`);
   if (failed > 0) process.exit(1);
 }
 
