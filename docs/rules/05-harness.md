@@ -2,7 +2,7 @@
 name: harness-memory-rules
 description: "Harness memory, Dream, hook telemetry, maintenance, retrieval, and durable rule governance."
 priority: L1
-trigger: "memory,记忆,dream,Dream,hook,harness,maintenance,维护,semantic,语义索引,watermark,候选规则"
+trigger: "memory,记忆,dream,Dream,hook,harness,maintenance,维护,semantic,语义索引,watermark,候选规则,settings.json,注册,registrations,CI,门禁,镜像"
 skip: ""
 ---
 
@@ -15,8 +15,10 @@ skip: ""
 以下任务必须加载本规则：
 
 - 修改 Hook 事件语义、Dream、SQLite 记忆表、检索、健康检查或维护脚本；
+- 新增、删除、改名或改变触发条件的 Hook，以及改动 `settings.json`、`engine/hooks/manifest.json`、CI workflow；
 - 根据历史错误新增全局约束；
 - 声称记忆“健康、已学习、可召回、已清理、已晋升”为规则；
+- 声称门禁“已通过”“已生效”，而验证只在本机跑过；
 - 排查重复失败，但此前经验没有被召回或已经过时。
 
 ## Trigger conditions
@@ -60,6 +62,46 @@ Agent 只有在任务主题、路径、错误签名或用户明确要求与候�
 
 `tool_success`、单次 `tool_error`、Hook 触发记录和 singleton session 是运行遥测，不是长期记忆。只有能回答“何时触发、为何发生、如何修复、用什么证据验证、何时失效”的条目才有资格成为候选经验。
 
+### 7. Hook 注册的权威源是入库模板，不是 `settings.json`
+
+`settings.json` 是**渲染产物**，在 `.gitignore` 里。它必须含本机绝对路径——hook 命令改用 `$HOME` 会导致静默不触发，既不报错也不执行，是本仓库代价最高的一类失败。
+
+因此注册的唯一权威声明是 `engine/hooks/registrations.json`，用 `{{HARNESS_ROOT}}` 占位保持可移植。
+
+| 动作 | 必须 | 不允许 |
+|:-----|:-----|:-------|
+| 新增/修改/删除 Hook | 改模板，再跑渲染器生成 `settings.json` | 直接编辑 `settings.json`（会被 `--check` 判为漂移） |
+| 模板写路径 | `{{HARNESS_ROOT}}/...` 占位 | 本机绝对路径；`$HOME`/`~` 等 shell 展开 |
+| 同一个 Hook | 只在一处注册 | 同时写进 `settings.json` 与 `settings.local.json`（会每次触发跑两遍） |
+| 新增 Hook 落地 | 同时在 `engine/hooks/manifest.json` 声明，且 `active` 与真实注册一致 | 只注册不声明，或声明 `active: true` 却没有注册 |
+| `.claude/workflows/` 镜像 | 由 `sync-workflow-mirror.cjs` 从 `workflows/` 单向重建 | 反向同步（会把手工改镜像的错误“修”掉，那正是漂移检查要抓的） |
+
+`manifest.json` 与实际注册的交叉核对是硬门禁。它读不到任何注册来源时**必须报错**，不得因“环境里没有 settings.json”而跳过——那正是它唯一有意义的场景。
+
+### 8. 门禁断言不得依赖未入库路径；依赖了就显式跳过
+
+断言的对象若位于 `.gitignore` 覆盖的路径（`settings.json`、`var/`、`.claude/`、`plugins/`），它检的是**操作员本机状态**，不是仓库契约，在干净环境里永远不可能成立。
+
+处理方式只有一种：按环境条件**显式跳过并打印原因**，并登记进 `engine/scripts/test-hooks/skip-manifest.json` 的白名单（`maxSkips` 同步上调）。
+
+- 不允许删断言——本机的检查价值仍在；
+- 不允许让它无声通过——那样“检过了”和“没检”就分不开了；
+- 不允许为了让 CI 变绿而放宽门禁本身的判定条件。
+
+一条断言若同时含仓库契约与本机状态两部分，只跳过本机那部分，契约部分在任何环境都继续强制执行。
+
+### 9. 本机绿不是 CI 绿的证据
+
+本机带着全部 `.gitignore` 产物（`settings.json`、`.claude/`、`var/`），干净 checkout 一个都没有。“本机 CI 通过”对 GitHub 结果没有推断力。
+
+改动 Hook 注册、CI workflow、门禁判定或任何读取上述路径的检查后，验证必须在**不含 gitignore 产物的干净工作树**里复跑：
+
+```bash
+git -c core.longpaths=true worktree add --detach <短路径> HEAD   # Windows 上路径要短，否则 MAX_PATH 会截断 checkout
+```
+
+先在干净树里**复现失败**，再验证修复；两个环境的通过/跳过数差异必须能逐条解释。解释不了的差异说明跳过是无条件的，不是环境条件触发的。
+
 ## Rule promotion lifecycle
 
 唯一允许的生命周期是：
@@ -85,6 +127,8 @@ Dream output MUST NOT auto-promote a candidate into a durable rule; explicit app
 | 经验已验证 | 真实输入 RED→修复→GREEN 或等价回归证据 | 静态审查、Dream 相关性、模型自报 |
 | 规则已生效 | 规则文件已晋升且对应触发/阻断测试通过 | 候选已生成或被读取过 |
 | 记忆健康 | 健康报告全部关键链路达标 | 文件数量少、SQLite 能打开 |
+| Hook 已注册并生效 | 模板渲染后 `--check` 无漂移，`manifest` 交叉核对 0 error，且真实触发过一次 | `settings.json` 里有这一行、JSON 语法正确 |
+| CI 会通过 | 干净 worktree 里 `harness-ci.cjs` exit 0，且与本机的通过/跳过差异可逐条解释 | 本机 exit 0 |
 
 结论必须区分“已观察”“推断”“未实时验证”。代码或事件契约变化后，相关 promoted 规则回到待复核状态；旧证据不能自动覆盖新 payload。
 
@@ -103,6 +147,21 @@ node engine/scripts/semantic-search.cjs index --rebuild
 
 # 查看候选
 node engine/scripts/harness-rule-candidates.cjs list
+```
+
+Hook 注册的重建与校验（换机、新克隆、CI，以及每次改完 Hook）：
+
+```powershell
+# 改 engine/hooks/registrations.json 之后渲染出本机 settings.json
+# 只替换 hooks 字段，env/model/statusLine/theme 等本机配置原样保留
+node engine/scripts/render-hook-settings.cjs
+
+# 校验本机注册是否与模板漂移；CI 与提交前都要跑
+node engine/scripts/render-hook-settings.cjs --check
+
+# 同理从 workflows/ 单向重建 .claude/workflows/ 镜像
+node engine/scripts/sync-workflow-mirror.cjs
+node engine/scripts/sync-workflow-mirror.cjs --check
 ```
 
 事件消费者的调度合同：Dream 与 Skill-Evolve 都必须有真实、有界、可观测的执行路径。当前 Dream 由 Session bootstrap 触发，Skill-Evolve 由异步 Stop observer 在同一进程调用，默认每次最多 harvest 100 条且只 stage 提案。每个消费者必须在 `engine/hooks/manifest.json` 的 `consumerRegistry` 中声明事件、宿主入口、批量/时效阈值和 heartbeat/watermark 要求；宿主 entry 必须显式链接 consumer，且该宿主必须真实注册在 `settings.json`。health 只依据这份结构化注册表、实际 Hook 注册和 SQLite heartbeat 判定 `scheduled`、`never-run`、`stale`、`failing`，不扫描源码文本猜测依赖；只在 migration 中插入 watermark 行不算已启用。health 还必须报告 exposure/application/outcome 计数与身份链完整性，以及 candidate 各状态数量、字段完整性和 30/90 天审查期限；没有 outcome 本身不是失败，孤儿身份链与逾期未审才是问题。
