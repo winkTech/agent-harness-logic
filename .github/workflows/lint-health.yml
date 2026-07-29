@@ -47,6 +47,16 @@ jobs:
             engine/scripts/test-hooks/gate-bypass-contract.test.cjs 2>&1 \
             | tee "var/ci/git-ci-contract-${RUNNER_OS}.log"
 
+      # agent-managed-action-eval 的 functional 维度真的会跑 `python -m pytest -q`
+      # （fixture 在 engine/scripts/test-hooks/fixtures/long-task/，入库的），
+      # 而 setup-python 只装解释器不装包。缺 pytest → functionalStatus=failed → exit 1，
+      # 表现为 "coverage-runner 测试运行 exit=1"。与 LongTaskEval 不同：那个缺的是
+      # var/ 下未入库的历史产物只能跳过，这个缺的只是依赖，装上就能真跑。
+      # 钉版本与本仓库其它依赖（node/actions/mcp-pdf/plugins.lock）保持一致的可复现口径。
+      - name: Install Python test dependencies
+        shell: bash
+        run: python -m pip install --disable-pip-version-check --quiet 'pytest==9.1.1'
+
       # 两个运行时产物不入版本库，全新 checkout 上都没有：
       #   settings.json      —— hook 命令含本机绝对路径；缺了它 manifest 校验会把
       #                         8 个 active 条目全判成"未注册"

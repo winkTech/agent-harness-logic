@@ -312,9 +312,20 @@ test('hook registrations are reproducible from a tracked template', () => {
   // CI 必须在跑门禁前把模板渲染出来，否则全新 checkout 上 manifest 校验必然失败。
   const workflow = fs.readFileSync(WORKFLOW, 'utf8');
   const renderStep = workflow.indexOf('render-hook-settings.cjs');
+  const mirrorStep = workflow.indexOf('sync-workflow-mirror.cjs');
   const gateStep = workflow.indexOf('harness-ci.cjs');
   assert.notEqual(renderStep, -1, 'CI never materializes hook registrations');
+  assert.notEqual(mirrorStep, -1, 'CI never materializes the workflow mirror');
   assert.ok(renderStep < gateStep, 'hook registrations must be rendered before the harness gate');
+  assert.ok(mirrorStep < gateStep, 'the workflow mirror must be rebuilt before the harness gate');
+
+  // agent-managed-action-eval 的 functional 维度真的执行 `python -m pytest -q`；
+  // setup-python 只装解释器。少了这一步 CI 会在 coverage/regression 阶段挂掉，
+  // 而本机因为全局装了 pytest 看不出来 —— 所以必须由契约钉住，不能靠本机跑一遍来确认。
+  const pytestStep = workflow.search(/pip install[^\n]*pytest/);
+  assert.notEqual(pytestStep, -1, 'CI never installs pytest, but the managed-action eval runs it');
+  assert.ok(pytestStep < gateStep, 'pytest must be installed before the harness gate');
+  assert.match(workflow, /pytest==\d+\.\d+\.\d+/, 'pytest must be pinned for reproducibility');
 
   const { renderHooks } = require(renderer);
   const { validateHookManifest } = require(path.join(ROOT, 'engine', 'scripts', 'lib', 'hook-registry.cjs'));

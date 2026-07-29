@@ -90,17 +90,33 @@ Agent 只有在任务主题、路径、错误签名或用户明确要求与候�
 
 一条断言若同时含仓库契约与本机状态两部分，只跳过本机那部分，契约部分在任何环境都继续强制执行。
 
-### 9. 本机绿不是 CI 绿的证据
+### 9. 本机绿不是 CI 绿的证据；复现环境必须同时剥离产物**和**工具链
 
-本机带着全部 `.gitignore` 产物（`settings.json`、`.claude/`、`var/`），干净 checkout 一个都没有。“本机 CI 通过”对 GitHub 结果没有推断力。
+本机与 CI runner 有两类差异，缺一类都会漏判：
 
-改动 Hook 注册、CI workflow、门禁判定或任何读取上述路径的检查后，验证必须在**不含 gitignore 产物的干净工作树**里复跑：
+| 差异 | 本机 | CI runner |
+|:-----|:-----|:----------|
+| `.gitignore` 产物 | `settings.json`、`.claude/`、`var/`、`plugins/` 齐全 | 一个都没有 |
+| 工具链 | Vivado/ModelSim/iverilog、全局 `pytest` 等 | 只有 workflow 里显式安装的 |
+
+只剥离前者不够。实测教训：干净 worktree 里通过，GitHub 仍挂在 `coverage/regression` —— 因为 worktree 继承了本机 PATH 上的全局 `pytest`，而 `setup-python` 只装解释器，`agent-managed-action-eval` 的 functional 维度真的会执行 `python -m pytest -q`。曾据此错误地判定“CI 不需要 pytest”并删掉安装步骤。
+
+复现必须两者同时剥离：
 
 ```bash
-git -c core.longpaths=true worktree add --detach <短路径> HEAD   # Windows 上路径要短，否则 MAX_PATH 会截断 checkout
+git -c core.longpaths=true worktree add --detach <短路径> HEAD   # Windows 路径要短，否则 MAX_PATH 会截断 checkout
+python -m venv <venv>                                           # 裸解释器，不带任何全局包
+PATH=<venv>/Scripts:<node>:<git>:<system>  # 排除 EDA 工具与本机 site-packages
 ```
 
-先在干净树里**复现失败**，再验证修复；两个环境的通过/跳过数差异必须能逐条解释。解释不了的差异说明跳过是无条件的，不是环境条件触发的。
+先在该环境里**复现失败**，再验证修复；两个环境的通过/跳过数差异必须能逐条解释。解释不了的差异说明跳过是无条件的，不是环境条件触发的。
+
+区分两类缺失，处理方式不同：
+
+- **缺依赖**（fixture 已入库，只是包没装）→ 在 workflow 里显式安装并钉版本，让检查真跑；
+- **缺未入库产物**（`var/` 下的历史运行记录等）→ 只能按规则 8 显式跳过。
+
+判错方向的代价是：前者被当成后者会永久失去一项检查，后者被当成前者会让 CI 一直红。凡是 CI 需要而本机全局已有的依赖，必须由契约测试钉住其安装步骤——本机跑一遍看不出它缺失。
 
 ## Rule promotion lifecycle
 
@@ -128,7 +144,7 @@ Dream output MUST NOT auto-promote a candidate into a durable rule; explicit app
 | 规则已生效 | 规则文件已晋升且对应触发/阻断测试通过 | 候选已生成或被读取过 |
 | 记忆健康 | 健康报告全部关键链路达标 | 文件数量少、SQLite 能打开 |
 | Hook 已注册并生效 | 模板渲染后 `--check` 无漂移，`manifest` 交叉核对 0 error，且真实触发过一次 | `settings.json` 里有这一行、JSON 语法正确 |
-| CI 会通过 | 干净 worktree 里 `harness-ci.cjs` exit 0，且与本机的通过/跳过差异可逐条解释 | 本机 exit 0 |
+| CI 会通过 | **同时**剥离 gitignore 产物与本机工具链的环境里 `harness-ci.cjs` exit 0，且与本机的通过/跳过差异可逐条解释 | 本机 exit 0；只换干净 worktree 但沿用本机 PATH |
 
 结论必须区分“已观察”“推断”“未实时验证”。代码或事件契约变化后，相关 promoted 规则回到待复核状态；旧证据不能自动覆盖新 payload。
 
