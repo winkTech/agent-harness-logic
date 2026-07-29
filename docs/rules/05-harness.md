@@ -92,22 +92,29 @@ Agent 只有在任务主题、路径、错误签名或用户明确要求与候�
 
 ### 9. 本机绿不是 CI 绿的证据；复现环境必须同时剥离产物**和**工具链
 
-本机与 CI runner 有两类差异，缺一类都会漏判：
+本机与 CI runner 有三类差异，缺一类都会漏判。三类都实际漏判过一次：
 
-| 差异 | 本机 | CI runner |
-|:-----|:-----|:----------|
-| `.gitignore` 产物 | `settings.json`、`.claude/`、`var/`、`plugins/` 齐全 | 一个都没有 |
-| 工具链 | Vivado/ModelSim/iverilog、全局 `pytest` 等 | 只有 workflow 里显式安装的 |
+| 差异 | 本机 | CI runner | 漏判时的表现 |
+|:-----|:-----|:----------|:-------------|
+| `.gitignore` 产物 | `settings.json`、`.claude/`、`var/`、`plugins/` 齐全 | 一个都没有 | manifest 交叉核对 8 条全判“未注册” |
+| 工具链 | Vivado/ModelSim/iverilog、全局 `pytest` | 只有 workflow 里显式安装的 | `coverage/regression exit=1`，且据此误删了 pytest 安装步骤 |
+| 操作系统 | Windows | matrix 含 `ubuntu-latest` | 只有 ubuntu 腿红：fixture 里的 `C:/repo` 在 POSIX 上是**相对路径**，projectId 对不上；`spawnSync` 的 timeout 在 POSIX 只杀直接子进程，孙进程被 init 收养后继续运行，而 Windows 的 job object 会级联终止把这个缺陷掩盖掉 |
 
-只剥离前者不够。实测教训：干净 worktree 里通过，GitHub 仍挂在 `coverage/regression` —— 因为 worktree 继承了本机 PATH 上的全局 `pytest`，而 `setup-python` 只装解释器，`agent-managed-action-eval` 的 functional 维度真的会执行 `python -m pytest -q`。曾据此错误地判定“CI 不需要 pytest”并删掉安装步骤。
-
-复现必须两者同时剥离：
+复现必须三者同时剥离。Windows 上可用 WSL 取得真实 Linux：
 
 ```bash
+# 产物：干净 checkout
 git -c core.longpaths=true worktree add --detach <短路径> HEAD   # Windows 路径要短，否则 MAX_PATH 会截断 checkout
-python -m venv <venv>                                           # 裸解释器，不带任何全局包
-PATH=<venv>/Scripts:<node>:<git>:<system>  # 排除 EDA 工具与本机 site-packages
+# 工具链：裸解释器 + PATH 排除 EDA 与本机 site-packages
+python -m venv <venv>
+PATH=<venv>/bin:<node>:<git>:<system>
+# 操作系统：WSL 原生文件系统里 clone，不要用 /mnt/c（权限与行尾语义都不同）
+wsl -d Ubuntu-24.04 -- git clone --branch <分支> /mnt/c/<repo> /var/tmp/<dir>
 ```
+
+WSL 注意：`/tmp` 会被 systemd 清理，跨调用要用 `/var/tmp`；参数经 `wsl.exe` 传递会被 MSYS 路径转换和引号处理破坏，脚本写成文件再 `bash <路径>` 调用；Ubuntu 默认只有 `python3` 而 runner 的 `setup-python` 提供 `python`，需要建 shim 对齐。
+
+跨平台代码的两条硬约束：**测试 fixture 里的路径必须按平台取绝对形式**（`process.platform === 'win32' ? 'C:/repo' : '/repo'`）；**进程树回收必须显式处理 POSIX 进程组**（`detached` + 超时后 `process.kill(-pid)`），不能依赖 Windows job object 的级联行为。
 
 先在该环境里**复现失败**，再验证修复；两个环境的通过/跳过数差异必须能逐条解释。解释不了的差异说明跳过是无条件的，不是环境条件触发的。
 
@@ -144,7 +151,7 @@ Dream output MUST NOT auto-promote a candidate into a durable rule; explicit app
 | 规则已生效 | 规则文件已晋升且对应触发/阻断测试通过 | 候选已生成或被读取过 |
 | 记忆健康 | 健康报告全部关键链路达标 | 文件数量少、SQLite 能打开 |
 | Hook 已注册并生效 | 模板渲染后 `--check` 无漂移，`manifest` 交叉核对 0 error，且真实触发过一次 | `settings.json` 里有这一行、JSON 语法正确 |
-| CI 会通过 | **同时**剥离 gitignore 产物与本机工具链的环境里 `harness-ci.cjs` exit 0，且与本机的通过/跳过差异可逐条解释 | 本机 exit 0；只换干净 worktree 但沿用本机 PATH |
+| CI 会通过 | **同时**剥离 gitignore 产物、本机工具链**并覆盖 matrix 里每个 OS** 的环境里 exit 0，且与本机的通过/跳过差异可逐条解释 | 本机 exit 0；只换干净 worktree 但沿用本机 PATH；只在一个 OS 上验证过 |
 
 结论必须区分“已观察”“推断”“未实时验证”。代码或事件契约变化后，相关 promoted 规则回到待复核状态；旧证据不能自动覆盖新 payload。
 

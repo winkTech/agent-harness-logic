@@ -172,6 +172,12 @@ function runSingle(scriptName, extraArgs, stdinData, timeoutMs) {
     return { status: 1, timedOut: false };
   }
 
+  // POSIX: spawnSync 的 timeout 只向**直接子进程**发信号，子进程再 spawn 出来的孙进程
+  // 会被 init 收养后继续跑，比 hook 活得还久。detached 让子进程成为进程组组长，
+  // 其后代默认继承同一进程组，超时后即可按负 pid 整组回收。
+  // Windows 上 libuv 把子进程挂进 job object 会级联终止，不需要也没有进程组语义。
+  const groupKillable = process.platform !== 'win32';
+
   const result = spawnSync(process.execPath, [scriptPath, ...extraArgs], {
     input: stdinData,
     encoding: 'utf8',
@@ -179,8 +185,19 @@ function runSingle(scriptName, extraArgs, stdinData, timeoutMs) {
     cwd: process.cwd(),
     timeout: Math.max(1, timeoutMs),
     windowsHide: true,
+    detached: groupKillable,
     stdio: stdinData ? ['pipe', 'pipe', 'pipe'] : 'inherit',
   });
+
+  // 只在确实超时时整组回收：此时子进程刚被杀，pid 尚未被系统回收再分配，
+  // 按负 pid 杀掉的必然是这一组，不会误伤无关进程。
+  if (groupKillable && result.error?.code === 'ETIMEDOUT' && Number.isInteger(result.pid) && result.pid > 0) {
+    try {
+      process.kill(-result.pid, 'SIGKILL');
+    } catch {
+      // 进程组已自行退出：ESRCH，属正常路径
+    }
+  }
 
   if (result.stdout) process.stdout.write(result.stdout);
   if (result.stderr) process.stderr.write(result.stderr);
