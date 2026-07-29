@@ -2961,6 +2961,13 @@ define('LiveRegressionMatrix', 'spawn failures retain timeout and signal diagnos
 define('LongTaskEval', '固定历史产物不再计为 fresh live 通过', () => {
   const p = path.join(HOME, 'engine/scripts/test-hooks/long-task-eval.cjs');
   if (!fs.existsSync(p)) return { pass: false, detail: 'long-task-eval.cjs 不存在' };
+  // 这条复算的是 var/agent-evals/long-task/ 下**已捕获的真实 agent 运行产物**。
+  // var/ 在 .gitignore 里，全新 checkout / CI 上根本没有可复算的对象 —— 硬跑会把
+  // "没有历史产物" 误报成 "历史产物判定错误"。没有证据就明说没有，不能假装检过。
+  const runRoot = path.join(HOME, 'var/agent-evals/long-task');
+  if (!fs.existsSync(runRoot)) {
+    return { pass: true, skip: true, detail: 'var/agent-evals/long-task 不存在（全新 checkout / CI），无历史产物可复算' };
+  }
   const r = spawnSync('node', [p, '--json'], {
     encoding: 'utf8', timeout: 60000, windowsHide: true,
   });

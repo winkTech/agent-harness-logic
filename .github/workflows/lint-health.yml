@@ -30,10 +30,13 @@ jobs:
         with:
           node-version: '22.17.1'
 
-      - name: Use Python 3.12.11
+      # 3.12.10 是 3.12 系列最后一个有 Windows 构建的版本：CPython 3.12 在此之后
+      # 进入 security-only，只发源码，actions/python-versions 因而做不出 win32 包
+      # （3.12.11/12/13 在 manifest 里只有 linux）。升级前先确认新版能跑通 .py 校验与 pytest。
+      - name: Use Python 3.12.10
         uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
         with:
-          python-version: '3.12.11'
+          python-version: '3.12.10'
 
       - name: Verify Git, CI, MCP, and plugin contracts
         shell: bash
@@ -43,6 +46,22 @@ jobs:
           node --test engine/scripts/test-hooks/git-ci-repro-contract.test.cjs \
             engine/scripts/test-hooks/gate-bypass-contract.test.cjs 2>&1 \
             | tee "var/ci/git-ci-contract-${RUNNER_OS}.log"
+
+      # 两个运行时产物不入版本库，全新 checkout 上都没有：
+      #   settings.json      —— hook 命令含本机绝对路径；缺了它 manifest 校验会把
+      #                         8 个 active 条目全判成"未注册"
+      #   .claude/workflows/ —— 整个 .claude/ 被忽略；缺了它工作流镜像漂移检查 ENOENT
+      # 这一步按仓库里的权威源重建两者，再各自 --check 一遍，确保门禁校验到真实契约。
+      - name: Materialize hook registrations and the workflow mirror
+        shell: bash
+        env:
+          CLAUDE_HARNESS_ROOT: ${{ github.workspace }}
+        run: |
+          set -o pipefail
+          node engine/scripts/render-hook-settings.cjs
+          node engine/scripts/render-hook-settings.cjs --check
+          node engine/scripts/sync-workflow-mirror.cjs
+          node engine/scripts/sync-workflow-mirror.cjs --check
 
       - name: Run the fail-closed Harness gate
         shell: bash

@@ -36,6 +36,18 @@ function assert(condition, message) {
   if (!condition) throw new Error(message);
 }
 
+/**
+ * 显式跳过：用于"检的是本机操作员配置、不是仓库契约"的断言。
+ * 这类断言依赖 settings.json / var/ 这些 .gitignore 的路径，全新 checkout 与 CI 上
+ * 根本不存在，硬跑必然误报。跳过必须**打印出来**，不能当成 PASS 混过去 ——
+ * 否则就分不清"检过了"和"没检"。
+ */
+class SkippedTest extends Error {}
+
+function skip(reason) {
+  throw new SkippedTest(reason);
+}
+
 function readJson(filePath, fallback = null) {
   try {
     return JSON.parse(fs.readFileSync(filePath, 'utf8'));
@@ -1659,15 +1671,32 @@ test('local settings do not force context compaction below fifty percent', () =>
   const raw = local.env?.CLAUDE_AUTOCOMPACT_PCT_OVERRIDE;
   assert(raw === undefined || Number(raw) >= 50,
     `low autocompact override still amplifies SessionStart(compact): ${raw}`);
-  const base = readJson(path.join(HOME, 'settings.json'), {});
+  // settings.json 不入版本库（hook 命令含本机绝对路径，见 engine/hooks/registrations.json）。
+  // 全新 checkout / CI 上它要么不存在，要么只有渲染器生成的 hooks 块 —— model/effortLevel
+  // 是操作员的本机选择，不是仓库契约，那里没有"正确值"可断言。
+  const settingsPath = path.join(HOME, 'settings.json');
+  if (!fs.existsSync(settingsPath)) {
+    skip('settings.json 不存在（全新 checkout / CI）——本机 model/effort 断言不适用');
+  }
+  const base = readJson(settingsPath, {});
+  const keys = Object.keys(base);
+  if (keys.length === 1 && keys[0] === 'hooks') {
+    skip('settings.json 由 render-hook-settings.cjs 生成，未含本机 model/effort 配置');
+  }
   assert(base.model === 'opus[1m]' && base.effortLevel === 'max',
     'model or effort was changed without A/B latency evidence');
 });
 
 test('local plugins do not inject a second full skill router at SessionStart', () => {
   const local = readJson(path.join(HOME, 'settings.local.json'), {});
+  // 这半条是真正的仓库契约：settings.local.json 入库，插件是否启用可以被断言。
   assert(local.enabledPlugins?.['superpowers@claude-plugins-official'] !== true,
     'superpowers still adds a duplicate using-superpowers SessionStart hook');
+  // 这半条不是：var/ 是 .gitignore 的本机运行时目录，全新 checkout / CI 上必然没有，
+  // "缓存还在不在" 只有本机答得上来。
+  if (!fs.existsSync(path.join(HOME, 'var/plugins'))) {
+    skip('var/plugins 不存在（全新 checkout / CI）——本机插件缓存断言不适用');
+  }
   assert(fs.existsSync(path.join(HOME, 'var/plugins/cache/claude-plugins-official/superpowers')),
     'superpowers cache was deleted instead of only disabling the plugin');
 });
@@ -2045,6 +2074,7 @@ test('workflow evidence gates are not based on agent self-report or catch-and-co
 function main() {
   let passed = 0;
   let failed = 0;
+  let skipped = 0;
 
   console.log('\nHarness painpoint regression tests\n');
   for (const t of tests) {
@@ -2054,13 +2084,19 @@ function main() {
       passed += 1;
       console.log('PASS');
     } catch (e) {
+      if (e instanceof SkippedTest) {
+        skipped += 1;
+        console.log('SKIP');
+        console.log(`    ${e.message}`);
+        continue;
+      }
       failed += 1;
       console.log('FAIL');
       console.log(`    ${e.message}`);
     }
   }
 
-  console.log(`\nSummary: ${passed}/${tests.length} passed, ${failed} failed`);
+  console.log(`\nSummary: ${passed}/${tests.length} passed, ${failed} failed, ${skipped} skipped`);
   if (failed > 0) process.exit(1);
 }
 

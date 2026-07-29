@@ -262,7 +262,8 @@ test('CI is least-privilege, immutable, cross-platform, and uploads provenance',
   assert.match(workflow, /actions\/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020\s+# v4\.4\.0/);
   assert.match(workflow, /node-version:\s*['"]22\.17\.1['"]/);
   assert.match(workflow, /actions\/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065\s+# v5\.6\.0/);
-  assert.match(workflow, /python-version:\s*['"]3\.12\.11['"]/);
+  // 必须钉在有 win32 构建的版本上，否则 windows-latest 那条腿装不上 Python。
+  assert.match(workflow, /python-version:\s*['"]3\.12\.10['"]/);
   assert.match(workflow, /node --test engine\/scripts\/test-hooks\/git-ci-repro-contract\.test\.cjs/);
   assert.match(workflow, /actions\/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02\s+# v4\.6\.2/);
   assert.match(workflow, /var\/coverage\/coverage-summary\.json/);
@@ -295,4 +296,36 @@ test('MCP package and enabled plugins are reproducibly locked', () => {
   assert.equal(schema.$schema, 'https://json-schema.org/draft/2020-12/schema');
   assert.deepEqual(schema.required, ['$schema', 'version', 'plugins']);
   assert.equal(schema.additionalProperties, false);
+});
+
+test('hook registrations are reproducible from a tracked template', () => {
+  const template = path.join(ROOT, 'engine', 'hooks', 'registrations.json');
+  const renderer = path.join(ROOT, 'engine', 'scripts', 'render-hook-settings.cjs');
+  assert.equal(fs.existsSync(template), true, 'engine/hooks/registrations.json is missing');
+  assert.equal(fs.existsSync(renderer), true, 'render-hook-settings.cjs is missing');
+
+  // 模板必须可移植：不得含本机绝对路径，注册命令一律走 {{HARNESS_ROOT}} 占位符。
+  const templateText = fs.readFileSync(template, 'utf8');
+  assert.doesNotMatch(templateText, /[A-Za-z]:[\/]Users[\/]/, 'template leaks a machine-local path');
+  assert.match(templateText, /\{\{HARNESS_ROOT\}\}/);
+
+  // CI 必须在跑门禁前把模板渲染出来，否则全新 checkout 上 manifest 校验必然失败。
+  const workflow = fs.readFileSync(WORKFLOW, 'utf8');
+  const renderStep = workflow.indexOf('render-hook-settings.cjs');
+  const gateStep = workflow.indexOf('harness-ci.cjs');
+  assert.notEqual(renderStep, -1, 'CI never materializes hook registrations');
+  assert.ok(renderStep < gateStep, 'hook registrations must be rendered before the harness gate');
+
+  const { renderHooks } = require(renderer);
+  const { validateHookManifest } = require(path.join(ROOT, 'engine', 'scripts', 'lib', 'hook-registry.cjs'));
+
+  // 渲染结果必须让 manifest 的 active 条目全部有据可依 —— 这正是 GitHub 上失败的那条。
+  const rendered = renderHooks({ root: ROOT });
+  const validated = validateHookManifest({ root: ROOT, config: { hooks: rendered } });
+  assert.deepEqual(validated.errors, [], `manifest disagrees with the template: ${validated.errors.join('; ')}`);
+  assert.ok(validated.checked > 0, 'template registers no hooks at all');
+
+  // 反向证明：没有任何注册来源时该门禁必须报错，不能静默放行。
+  const withoutSettings = validateHookManifest({ root: ROOT, config: { hooks: {} } });
+  assert.ok(withoutSettings.errors.length > 0, 'manifest check must fail when nothing is registered');
 });
