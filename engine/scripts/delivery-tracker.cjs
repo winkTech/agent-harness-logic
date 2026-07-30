@@ -94,7 +94,17 @@ function ensureMigration(db) {
 // ── 记录交付事件 ────────────────────────────────────────────────────────────
 
 function recordEvent(args) {
-  const db = getDb();
+  const ok = recordDelivery(args);
+  if (ok) console.log(`[delivery-tracker] ✅ 记录: phase=${args.phase} status=${args.status}`);
+  return ok;
+}
+
+/**
+ * 静默 lib 入口 (hook/router 内调用, 不污染 hook 协议的 stdout)。
+ * opts.db 可注入连接; 缺 SQLite 时落 JSONL 后备文件。
+ */
+function recordDelivery(args, opts = {}) {
+  const db = opts.db || getDb();
   if (!db) {
     // SQLite 不可用 → 写 JSON 文件作为后备
     return recordEventFile(args);
@@ -106,7 +116,7 @@ function recordEvent(args) {
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
   `);
 
-  const sessionId = process.env.CLAUDE_SESSION_ID || 'unknown';
+  const sessionId = args.sessionId || process.env.CLAUDE_SESSION_ID || 'unknown';
 
   stmt.run(
     args.workflow || 'hdl-coding-dag-workflow',
@@ -116,11 +126,9 @@ function recordEvent(args) {
     parseInt(args.retries) || 0,
     parseInt(args.duration) || 0,
     args.error || null,
-    args.project || path.basename(process.cwd()),
+    args.project || path.basename(args.cwd || process.cwd()),
     sessionId,
   );
-
-  console.log(`[delivery-tracker] ✅ 记录: phase=${args.phase} status=${args.status}`);
   return true;
 }
 
@@ -267,4 +275,6 @@ function main() {
   }
 }
 
-main();
+module.exports = { recordDelivery, recordEvent, ensureMigration };
+
+if (require.main === module) main();

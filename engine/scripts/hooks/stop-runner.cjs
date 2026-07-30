@@ -76,6 +76,16 @@ function main() {
   const [, , flagName, scriptRelPath, flags, timeoutStr] = process.argv;
   const timeout = parseInt(timeoutStr, 10) || 30000;
 
+  // 延迟遥测: 本 runner 以 process.exit 结束, 用 exit 监听器兜底记录 wall time。
+  const latencyStartedAt = Date.now();
+  process.on('exit', () => {
+    try {
+      require('../lib/hook-latency.cjs').record(
+        `stop-runner:${flagName || 'unknown'}`, 'Stop', Date.now() - latencyStartedAt,
+      );
+    } catch { /* 遥测静默 */ }
+  });
+
   // 1. 读取 stdin
   let raw = '';
   try {

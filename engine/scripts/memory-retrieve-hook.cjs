@@ -244,6 +244,32 @@ function relevantResult(query, result) {
   return overlap >= required;
 }
 
+/** 候选层补位阈值: 低于 verified 的 0.7, 但把 0.3/0.4 的噪声挡在外面。 */
+const CANDIDATE_MIN_CONFIDENCE = 0.6;
+const CANDIDATE_SLOTS = 2;
+
+function toMatch(r) {
+  return {
+    memoryId: r.id || r.memory_id || null,
+    namespace: r.namespace,
+    name: r.name || '(unnamed)',
+    summary: r.summary,
+    confidence: Math.round(r.confidence * 100) / 100,
+    source: r.source || 'unknown',
+    sourceKey: r.source_key || null,
+    status: r.status || 'active',
+    verification: r.verification_state || 'candidate',
+    updatedAt: r.updated_at || r.created_at || null,
+  };
+}
+
+/**
+ * 两层检索 (D5 召回修复, 2026-07-29):
+ *   层A: verified 事实 (原路径, 完整信任链) — 优先注入;
+ *   层B: verified 不足 3 条时, candidate 事实 (≥0.6) 补位, 注入时显式标注未验证。
+ * 依据: 51 条活跃事实中仅 2 条 verified, 默认信任门禁使其余 49 条结构性不可达;
+ * 候选注入是摘要级 hint, 由 exposure→outcome 归因数据回头校准或退役。
+ */
 function doMemoryQuery(query, label, deps = {}) {
   let wDb;
   try {
@@ -251,23 +277,29 @@ function doMemoryQuery(query, label, deps = {}) {
     const retrieveMemorySummary = deps.retrieveMemorySummary
       || require('../sqlite/store-memory.cjs').retrieveMemorySummary;
     wDb = openDb({ readonly: true });
-    const results = retrieveMemorySummary(query, {
+    const verified = retrieveMemorySummary(query, {
       db: wDb.db, limit: 5, maxChars: 200, minConfidence: 0.7, trackHit: false,
       scope: deps.scope,
-    });
-    if (results.length > 0) {
-      return results.filter(r => relevantResult(query, r)).slice(0, 3).map(r => ({
-        memoryId: r.id || r.memory_id || null,
-        namespace: r.namespace,
-        name: r.name || '(unnamed)',
-        summary: r.summary,
-        confidence: Math.round(r.confidence * 100) / 100,
-        source: r.source || 'unknown',
-        sourceKey: r.source_key || null,
-        status: r.status || 'active',
-        updatedAt: r.updated_at || r.created_at || null,
-      }));
+    }).filter(r => relevantResult(query, r)).slice(0, 3);
+
+    const matches = verified.map(toMatch);
+    if (matches.length < 3) {
+      const seen = new Set(matches.map(m => m.memoryId));
+      // 候选层放开 unscoped: 存量事实多为未迁移 scope 的 legacy 条目
+      // (实测 49/51 为 scope_kind='unscoped'), 严格 scope 会把候选层整体清零。
+      const candidates = retrieveMemorySummary(query, {
+        db: wDb.db, limit: 5, maxChars: 200, minConfidence: CANDIDATE_MIN_CONFIDENCE,
+        trackHit: false, includeCandidates: true,
+        scope: { ...(deps.scope || {}), includeGlobal: true, allowUnscoped: true },
+      })
+        .filter(r => relevantResult(query, r))
+        .filter(r => r.verification_state !== 'verified')
+        .filter(r => !seen.has(r.id || r.memory_id || null))
+        .slice(0, CANDIDATE_SLOTS)
+        .map(toMatch);
+      matches.push(...candidates);
     }
+    return matches;
   } catch { /* 静默 */ }
   finally {
     try { wDb?.close(); } catch { /* readonly cleanup */ }
@@ -441,9 +473,10 @@ function retrieveContext(payload = {}, deps = {}) {
       const updated = Number.isFinite(Number(m.updatedAt))
         ? new Date(Number(m.updatedAt)).toISOString()
         : String(m.updatedAt || 'unknown');
-      lines.push(`- (${m.namespace}) ${m.name}: ${brief(m.summary)} `
+      const tag = m.verification === 'verified' ? '' : '候选(未验证,仅供参考) ';
+      lines.push(`- (${m.namespace}) ${tag}${m.name}: ${brief(m.summary)} `
         + `[source=${m.source}; key=${m.sourceKey || 'none'}; confidence=${m.confidence}; `
-        + `status=${m.status}; updated=${updated}]`);
+        + `verify=${m.verification}; status=${m.status}; updated=${updated}]`);
     }
     const output = {
       hookSpecificOutput: {

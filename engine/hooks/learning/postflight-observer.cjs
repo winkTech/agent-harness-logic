@@ -83,6 +83,13 @@ function runAuxiliaryServices(payload = {}, opts = {}) {
       args: [],
     });
   }
+  if (eventName === 'Stop' && (typeof opts.fpRateHarvest === 'function' || !injectedRuntime)) {
+    services.push({
+      source: 'fp-rate',
+      run: opts.fpRateHarvest || (() => require('../../scripts/fp-rate-tracker.cjs').harvestFpRate()),
+      args: [],
+    });
+  }
 
   const completed = [];
   const warnings = [];
@@ -290,7 +297,11 @@ function handlePayload(payload = {}, opts = {}) {
   if (sessionId && eventName === 'PostToolUse' && toolName === 'Skill' && toolInput.skill) {
     actions.push(`skill:${toolInput.skill}`);
   }
-  if (sessionId && eventName === 'Stop' && assistantMessage) actions.push('cost:estimate');
+  const transcriptPath = String(payload.transcript_path || payload.transcriptPath || '');
+  if (sessionId && eventName === 'Stop') {
+    if (transcriptPath) actions.push('cost:usage');
+    else if (assistantMessage) actions.push('cost:estimate');
+  }
   if (memoryFact) actions.push('memory:sync');
   if (sessionId && (eventName === 'PostToolUse' || eventName === 'PostToolUseFailure')) {
     actions.push('memory:attribution');
@@ -347,6 +358,21 @@ function handlePayload(payload = {}, opts = {}) {
         type: 'skill_trigger',
         payload: { skill: skillName, args: compact(toolInput.args || '', 200) },
       }, null, { db: wDb.db });
+    }
+    if (actions.includes('cost:usage')) {
+      const costs = require('../../sqlite/store-costs.cjs');
+      try {
+        const usage = costs.recordTranscriptUsage({ sessionId, transcriptPath }, { db: wDb.db });
+        if (usage.recorded === 0 && assistantMessage) costs.estimate(sessionId, assistantMessage, { db: wDb.db });
+      } catch (error) {
+        (opts.warn || defaultWarn)({
+          event: 'postflight-observer-warning',
+          kind: 'cost-usage-dropped',
+          sessionId,
+          error: compact(error.message || error, 200),
+        });
+        if (assistantMessage) costs.estimate(sessionId, assistantMessage, { db: wDb.db });
+      }
     }
     if (actions.includes('cost:estimate')) {
       require('../../sqlite/store-costs.cjs').estimate(sessionId, assistantMessage, { db: wDb.db });

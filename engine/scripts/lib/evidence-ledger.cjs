@@ -53,17 +53,28 @@ function commandEvidence(command, runResult, opts = {}) {
     stderr,
   });
 
+  // Claude Code 的 Bash tool_response 只有 {stdout, stderr, interrupted}, 不带退出码;
+  // exitCode:null 因此是"载荷未提供", 不是"没执行"。显式区分, 防止下游 (如候选验证器
+  // 核对真实退出码) 把观察型条目误读成 spawn 失败, 也防止把它当成可信的 exit=0。
+  const exitCodeKnown = status !== null
+    || Boolean(runResult?.signal) || Boolean(runResult?.error);
+  const timingKnown = runResult?.durationMs != null
+    || Boolean((opts.startedAt || runResult?.startedAt) && (opts.completedAt || runResult?.completedAt));
+
   return {
     schemaVersion: 1,
     type: 'command',
     command,
     contractHash: opts.contractHash || behaviorContractHash(command),
     exitCode: status,
+    exitCodeKnown,
     signal: runResult?.signal || null,
     error: runResult?.error || null,
+    interrupted: runResult?.interrupted === true || undefined,
     startedAt,
     completedAt,
     durationMs: runResult?.durationMs ?? Math.max(0, Date.parse(completedAt) - Date.parse(startedAt)),
+    timingKnown,
     stdoutSha256: sha256(stdout),
     stderrSha256: sha256(stderr),
     stdoutTail: tail(stdout),
@@ -119,8 +130,11 @@ function statusFromEvidence(entries, expectedCommands = []) {
   for (const entry of list) {
     if (entry.classification?.status === 'toolchain_failure') {
       failures.push(`toolchain failure for command: ${entry.command}`);
-    } else if (entry.exitCode !== 0) {
+    } else if (entry.exitCode !== null && entry.exitCode !== 0) {
       failures.push(`command failed: ${entry.command} exit=${entry.exitCode}`);
+    } else if (entry.exitCode === null && entry.status === 'failed') {
+      // 观察型条目 (载荷无退出码) 按正面标记判定的结果兜底
+      failures.push(`command failed by verdict markers: ${entry.command}`);
     }
   }
 

@@ -456,7 +456,7 @@ test('memory retrieval is readonly scoped relevant and returns provenance metada
   const injectedDb = { marker: 'readonly-db' };
   let openOptions = null;
   let receivedDb = null;
-  let receivedOptions = null;
+  const receivedCalls = [];
   let closed = false;
   const results = hook.doMemoryQuery('how to fix FPGA timing negative hold slack error', 'user', {
     openDb(options) {
@@ -465,7 +465,7 @@ test('memory retrieval is readonly scoped relevant and returns provenance metada
     },
     retrieveMemorySummary(_query, options) {
       receivedDb = options.db;
-      receivedOptions = options;
+      receivedCalls.push(options);
       return [
         {
           namespace: 'errors', name: 'negative-hold',
@@ -485,8 +485,17 @@ test('memory retrieval is readonly scoped relevant and returns provenance metada
 
   assert(openOptions?.readonly === true && receivedDb === injectedDb && closed,
     `retrieval did not use and close the readonly handle: ${JSON.stringify({ openOptions, receivedDb, closed })}`);
-  assert(receivedOptions?.minConfidence >= 0.7 && receivedOptions?.trackHit === false,
-    `automatic retrieval violated trust or hit-tracking policy: ${JSON.stringify(receivedOptions)}`);
+  // 两层召回契约 (2026-07-29): 每次调用都禁写 hit; verified 层保持 ≥0.7 且不含候选;
+  // 候选补位层必须显式 includeCandidates 且置信下限 ≥0.6 (挡住 0.3/0.4 噪声)。
+  assert(receivedCalls.length >= 1 && receivedCalls.every((o) => o.trackHit === false),
+    `automatic retrieval violated hit-tracking policy: ${JSON.stringify(receivedCalls)}`);
+  const verifiedCall = receivedCalls[0];
+  assert(verifiedCall.minConfidence >= 0.7 && !verifiedCall.includeCandidates,
+    `verified tier violated trust policy: ${JSON.stringify(verifiedCall)}`);
+  for (const call of receivedCalls.slice(1)) {
+    assert(call.includeCandidates === true && call.minConfidence >= 0.6,
+      `candidate tier violated bounded-candidate policy: ${JSON.stringify(call)}`);
+  }
   assert(results.length === 1 && results[0].name === 'negative-hold',
     `minimum relevance retained generic matches: ${JSON.stringify(results)}`);
   assert(results[0].source === 'reconcile:file' && results[0].sourceKey === 'errors/negative-hold.md'
@@ -1030,7 +1039,7 @@ test('PreToolUse memory retrieval passes project path and trigger scope to the s
   fs.writeFileSync(path.join(repoRoot, 'package.json'), '{}\n', 'utf8');
   fs.writeFileSync(filePath, 'module rx_fifo; endmodule\n', 'utf8');
 
-  let receivedOptions = null;
+  const receivedScopes = [];
   let output;
   try {
     output = hook.retrieveContext({
@@ -1042,7 +1051,7 @@ test('PreToolUse memory retrieval passes project path and trigger scope to the s
     }, {
       openDb: () => ({ db: { marker: 'scope-db' }, close() {} }),
       retrieveMemorySummary(_query, options) {
-        receivedOptions = options;
+        receivedScopes.push(options.scope);
         return [{
           namespace: 'learnings', name: 'rx-fifo',
           summary: 'rx fifo HDL Verilog FSM timing interface verified lesson',
@@ -1066,8 +1075,18 @@ test('PreToolUse memory retrieval passes project path and trigger scope to the s
   };
   assert(output?.hookSpecificOutput?.additionalContext.includes('rx-fifo'),
     `scoped retrieval did not produce context: ${JSON.stringify(output)}`);
-  assert(JSON.stringify(receivedOptions?.scope) === JSON.stringify(expected),
-    `PreToolUse scope was not passed to store retrieval: ${JSON.stringify(receivedOptions?.scope)}`);
+  // verified 层 (首次调用) 必须原样传递项目/路径/触发 scope
+  assert(JSON.stringify(receivedScopes[0]) === JSON.stringify(expected),
+    `PreToolUse scope was not passed to store retrieval: ${JSON.stringify(receivedScopes[0])}`);
+  // 候选补位层继承同一 scope, 只额外放开 unscoped 存量 (D5 两层召回契约)
+  for (const scope of receivedScopes.slice(1)) {
+    assert(scope.projectId === expected.projectId
+        && scope.relativePath === expected.relativePath
+        && scope.triggerKind === expected.triggerKind
+        && scope.triggerSignature === expected.triggerSignature
+        && scope.allowUnscoped === true,
+      `candidate tier scope drifted from PreToolUse scope: ${JSON.stringify(scope)}`);
+  }
 });
 
 test('memory retrieval records only injected exposures through a separate managed database', () => {
@@ -1694,8 +1713,11 @@ test('local settings do not force context compaction below fifty percent', () =>
   if (keys.length === 1 && keys[0] === 'hooks') {
     skip('settings.json 由 render-hook-settings.cjs 生成，未含本机 model/effort 配置');
   }
-  assert(base.model === 'opus[1m]' && base.effortLevel === 'max',
-    'model or effort was changed without A/B latency evidence');
+  // 已批准的本机模型选择:opus[1m](原基线)与 claude-fable-5[1m](2026-07-29 操作员显式
+  // /model 切换,允许两者间 A/B)。出现第三个值仍视为无决策记录的漂移。
+  const sanctionedModels = ['opus[1m]', 'claude-fable-5[1m]'];
+  assert(sanctionedModels.includes(base.model) && base.effortLevel === 'max',
+    `model ${base.model} is not a sanctioned choice (${sanctionedModels.join(' / ')}) — record A/B evidence before pinning a new one`);
 });
 
 test('local plugins do not inject a second full skill router at SessionStart', () => {

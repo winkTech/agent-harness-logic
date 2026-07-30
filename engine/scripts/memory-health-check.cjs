@@ -456,7 +456,7 @@ function queryFacts(db, now) {
       total: 0, fts: 0, active: 0, tombstone: 0, superseded: 0,
       confirmed: 0, tentative: 0, low: 0, permanent: 0, activeTtl: 0,
       sourceReconciledPermanent: 0, unmanagedPermanent: 0,
-      expired: 0, expiredActive: 0, expiredRetired: 0, neverHit: 0, dreamOutputs: 0,
+      expired: 0, expiredActive: 0, expiredRetired: 0, neverHit: 0, neverExposed: 0, dreamOutputs: 0,
       verifiedTotal: 0, verifiedComplete: 0, verifiedIncomplete: 0, verifiedIncompleteRecords: [],
     };
   }
@@ -498,6 +498,15 @@ function queryFacts(db, now) {
     expiredActive: Number(facts.expired_active || 0),
     expiredRetired: Number(facts.expired_retired || 0),
     neverHit: Number(facts.never_hit || 0),
+    // hit_count 在生产检索路径 (只读连接, trackHit:false) 永不递增, neverHit 是死仪表;
+    // 真实使用口径是 memory_retrieval_exposures — neverExposed 才反映召回利用率。
+    neverExposed: tableExists(db, 'memory_retrieval_exposures')
+      ? Number(db.prepare(`
+        SELECT COUNT(*) AS c FROM facts f
+        WHERE COALESCE(f.status, 'active') = 'active'
+          AND NOT EXISTS (SELECT 1 FROM memory_retrieval_exposures e WHERE e.memory_id = f.id)
+      `).get().c || 0)
+      : Number(facts.active || 0),
     dreamOutputs: Number(facts.dream_outputs || 0),
     verifiedTotal: verified.verifiedTotal,
     verifiedComplete: verified.verifiedComplete,
@@ -653,6 +662,58 @@ function queryEvents(db, opts = {}) {
   };
 }
 
+/**
+ * 成本遥测断流探测 (D6 升级, 2026-07-29)。
+ *
+ * 活动信号取 runtime_consumer_heartbeats 的最近完成时间 (会话在跑 ⇒ Stop 在发生
+ * ⇒ 应有成本行)。cost_ledger 缺表 / 有活动却无成本行 / 只剩 estimate 回退都要暴露 —
+ * costs.jsonl 无声死亡 45 天的教训: 每条数据链路必须有断流判定。
+ */
+function queryCostTelemetry(db, now) {
+  if (!tableExists(db, 'cost_ledger')) return { available: false };
+  const parseAt = (value) => {
+    const ts = Date.parse(value || '');
+    return Number.isFinite(ts) ? ts : null;
+  };
+  const lastUsageAt = parseAt(db.prepare(
+    "SELECT MAX(created_at) AS at FROM cost_ledger WHERE phase = 'usage'",
+  ).get().at);
+  const estimateRow = db.prepare(
+    "SELECT MAX(created_at) AS at, COUNT(*) AS n FROM cost_ledger WHERE phase = 'estimate'",
+  ).get();
+  const usageRows = Number(db.prepare(
+    "SELECT COUNT(*) AS n FROM cost_ledger WHERE phase = 'usage'",
+  ).get().n || 0);
+  const lastConsumerActivityAt = tableExists(db, 'runtime_consumer_heartbeats')
+    ? parseAt(db.prepare(
+      'SELECT MAX(last_completed_at) AS at FROM runtime_consumer_heartbeats',
+    ).get().at)
+    : null;
+  const hasUsageColumns = (() => {
+    try { db.prepare('SELECT cost_usd FROM cost_ledger LIMIT 1').get(); return true; }
+    catch { return false; }
+  })();
+  const usd30d = hasUsageColumns
+    ? Number(db.prepare(`
+      SELECT ROUND(SUM(cost_usd), 4) AS usd FROM cost_ledger
+      WHERE phase = 'usage' AND created_at >= ?
+    `).get(new Date(now - 30 * 86400000).toISOString()).usd || 0)
+    : 0;
+  return {
+    available: true,
+    hasUsageColumns,
+    usageRows,
+    estimateRows: Number(estimateRow.n || 0),
+    lastUsageAt: lastUsageAt ? new Date(lastUsageAt).toISOString() : null,
+    lastEstimateAt: parseAt(estimateRow.at) ? new Date(parseAt(estimateRow.at)).toISOString() : null,
+    lastConsumerActivityAt: lastConsumerActivityAt ? new Date(lastConsumerActivityAt).toISOString() : null,
+    usd30d,
+    _lastUsageTs: lastUsageAt,
+    _lastAnyTs: Math.max(lastUsageAt || 0, parseAt(estimateRow.at) || 0) || null,
+    _activityTs: lastConsumerActivityAt,
+  };
+}
+
 function buildHealthReport(opts = {}) {
   if (!opts.db) throw new Error('buildHealthReport requires an injected database');
   const db = opts.db;
@@ -796,6 +857,31 @@ function buildHealthReport(opts = {}) {
       'promoted harness rule artifacts do not match explicit approval and ledger hashes', promotedRules);
   }
 
+  const costs = queryCostTelemetry(db, now);
+  if (!costs.available) {
+    issue('cost_ledger_missing', 'high', 10, 'cost_ledger table is missing', {});
+  } else {
+    const sevenDays = 7 * 86400000;
+    const activityRecent = costs._activityTs && now - costs._activityTs < sevenDays;
+    const anyCostRecent = costs._lastAnyTs && now - costs._lastAnyTs < sevenDays;
+    const usageRecent = costs._lastUsageTs && now - costs._lastUsageTs < sevenDays;
+    if (activityRecent && !anyCostRecent) {
+      issue('cost_telemetry_dead', 'high', 10,
+        'sessions are running but no cost rows were written in the last 7 days', {
+          lastConsumerActivityAt: costs.lastConsumerActivityAt,
+          lastUsageAt: costs.lastUsageAt,
+          lastEstimateAt: costs.lastEstimateAt,
+        });
+    } else if (activityRecent && !usageRecent) {
+      issue('cost_usage_stale', 'medium', 5,
+        'cost telemetry is running on the estimate fallback only — transcript usage rows are stale or absent', {
+          lastConsumerActivityAt: costs.lastConsumerActivityAt,
+          lastUsageAt: costs.lastUsageAt,
+          lastEstimateAt: costs.lastEstimateAt,
+        });
+    }
+  }
+
   score = Math.max(0, Math.min(100, score));
   const status = score < 70 ? 'unhealthy' : score < 90 ? 'degraded' : 'healthy';
   return {
@@ -809,6 +895,18 @@ function buildHealthReport(opts = {}) {
       attribution,
       ruleCandidates,
       promotedRules,
+      costs: costs.available
+        ? {
+          available: true,
+          hasUsageColumns: costs.hasUsageColumns,
+          usageRows: costs.usageRows,
+          estimateRows: costs.estimateRows,
+          lastUsageAt: costs.lastUsageAt,
+          lastEstimateAt: costs.lastEstimateAt,
+          lastConsumerActivityAt: costs.lastConsumerActivityAt,
+          usd30d: costs.usd30d,
+        }
+        : { available: false },
       events: {
         total: eventSnapshot.total,
         safeWatermark: eventSnapshot.safeWatermark,

@@ -14,7 +14,24 @@ function defaultDependencies() {
     crossLinkMemory: require('../cross-link-memory.cjs'),
     memoryAttribution: require('../../sqlite/store-memory-attribution.cjs'),
     openAttributionDb: require('../../sqlite/index.cjs').openDb,
+    deliveryTracker: require('../delivery-tracker.cjs'),
   };
+}
+
+/** 验证判定 → delivery 事件 (D1 自动喂数): PASS/FAIL 不再依赖手工 record。 */
+function recordDeliveryFromVerdict(payload, gateResult, deps) {
+  if (process.env.CLAUDE_HARNESS_NO_PERSIST === '1'
+    || process.env.CLAUDE_HARNESS_VERIFY_READONLY === '1'
+    || process.env.CLAUDE_NO_DIAGNOSTIC_WRITES === '1') return { skipped: true };
+  const verification = gateResult.verification;
+  return deps.deliveryTracker.recordDelivery({
+    workflow: 'verification-gate',
+    phase: 'verification',
+    status: verification.ok ? 'pass' : 'fail',
+    error: verification.ok ? null : String(verification.reason || verification.detail || '').slice(0, 200) || null,
+    sessionId: String(payload?.session_id || payload?.sessionId || '') || undefined,
+    cwd: String(payload?.cwd || '') || undefined,
+  });
 }
 
 function normalizedResult(source, value) {
@@ -122,6 +139,11 @@ async function route(payload, injected = {}) {
         'memory-attribution',
         () => recordVerificationAttribution(payload, verificationResult, deps),
       );
+      await invoke(
+        results,
+        'delivery-tracker',
+        () => recordDeliveryFromVerdict(payload, verificationResult, deps),
+      );
     }
     if (isFailure || toolKey === 'bash') {
       await invoke(
@@ -188,7 +210,11 @@ function emit(payload, result) {
 
 async function main() {
   const payload = readPayload();
-  emit(payload, await route(payload));
+  await require('../lib/hook-latency.cjs').timed(
+    'postflight-router',
+    String(payload?.hook_event_name || ''),
+    async () => emit(payload, await route(payload)),
+  );
 }
 
 if (require.main === module) {
