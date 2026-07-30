@@ -270,6 +270,56 @@ function blockDiagnostics(info, command) {
   ];
 }
 
+// ── 受保护分支推送 ──────────────────────────────────────────────────────────
+//
+// 策略 (用户 2026-07-30 明确): main/master 不许推, 其他分支都放行。
+//
+// 为什么不靠 settings 的 deny glob: 实测 deny 里的 `Bash(git tag -d:*)` 没有
+// 拦住 `git tag -d <tag>`(裸命令与带管道两种形式都执行了)。glob 匹配对变形
+// (管道、`cd x &&` 前缀、多余旗标) 也天然脆弱, 而枚举 refspec 的各种写法
+// 就是本仓库反复付过代价的"名单漂移"。这里改成**按 token 解析 refspec**,
+// 判定目标分支名本身, 因此 `feat/main-refactor`、`mainline-work` 这类含
+// "main" 子串的分支不会被误拦。
+//
+// 已知边界: 裸 `git push`(依赖当前分支与 upstream)从命令文本无法判定目标,
+// 本检查放行 —— 它需要读 git 状态, 属于 guard 之外的信息。
+const PROTECTED_PUSH_BRANCHES = new Set(['main', 'master']);
+
+function pushSegments(command) {
+  return String(command || '')
+    .split(/\r?\n|&&|\|\||[;|&]/)
+    .map((segment) => segment.trim())
+    .filter((segment) => /^(?:[A-Za-z_][A-Za-z0-9_]*=\S*\s+)*git(?:\.exe)?\s+(?:-\S+\s+)*push\b/i.test(segment));
+}
+
+/** refspec 的目标侧是否为受保护分支。`+src:dst` 取 dst, 剥掉 refs/heads/。 */
+function refspecTargetsProtectedBranch(token) {
+  const spec = String(token || '').replace(/^\+/, '');
+  const destination = spec.includes(':') ? spec.slice(spec.lastIndexOf(':') + 1) : spec;
+  const name = destination.replace(/^refs\/heads\//i, '').replace(/["']/g, '');
+  return PROTECTED_PUSH_BRANCHES.has(name.toLowerCase());
+}
+
+function protectedBranchPush(command) {
+  for (const segment of pushSegments(command)) {
+    // --dry-run 不改远端状态, 放行 (它是排查推送问题的正当手段)
+    if (/--dry-run\b/i.test(segment)) continue;
+    // --all / --mirror 一次推送所有分支, 必然包含 main
+    if (/\s--(?:all|mirror)\b/i.test(segment)) return true;
+    const args = segment.split(/\s+/)
+      .slice(1)
+      .filter((token) => token !== 'push' && !token.startsWith('-'));
+    if (args.some(refspecTargetsProtectedBranch)) return true;
+  }
+  return false;
+}
+
+const PROTECTED_BRANCH_INFO = {
+  category: 'protected-branch-push',
+  severity: 'CRITICAL',
+  message: '受保护分支推送: main/master 只能经 PR 合入, 不接受直接推送',
+};
+
 /**
  * 扫描命令是否匹配任何危险模式。
  * @param {string} command
@@ -278,6 +328,10 @@ function blockDiagnostics(info, command) {
 function scanCommand(command) {
   if (!command || command.length === 0) {
     return { matched: false, info: null };
+  }
+
+  if (protectedBranchPush(command)) {
+    return { matched: true, info: PROTECTED_BRANCH_INFO };
   }
 
   for (const group of DANGEROUS_PATTERNS) {
@@ -344,7 +398,10 @@ async function main() {
 if (require.main === module) main();
 
 module.exports = {
+  PROTECTED_PUSH_BRANCHES,
   commandFrom,
   evaluate,
+  protectedBranchPush,
+  refspecTargetsProtectedBranch,
   scanCommand,
 };

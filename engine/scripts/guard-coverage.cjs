@@ -74,9 +74,13 @@ function coverage(opts = {}) {
     try { fs.rmSync(tmp, { recursive: true, force: true }); } catch { /* cleanup */ }
   }
 
+  // 有的类别不是正则表驱动而是 token 解析器 (protected-branch-push 判 refspec
+  // 目标分支)。它没有可数的 pattern 条目, 但同样要被 case 覆盖 —— 用 kind
+  // 区分两种实现, 而不是让 patterns=0 看起来像"没有防护"。
   const perCategory = [...declared.entries()].map(([category, patterns]) => ({
     category,
-    patterns,
+    kind: patterns > 0 ? 'regex-table' : 'parser',
+    patterns: patterns > 0 ? patterns : null,
     cases: hits.get(category) || 0,
     covered: (hits.get(category) || 0) > 0,
   }));
@@ -103,7 +107,8 @@ function main(argv = process.argv.slice(2)) {
     console.log(`guard-coverage: ${result.coveredCategories}/${result.categories} categories covered `
       + `(rate=${result.coverageRate}) from ${result.casesExecuted} bash-safety cases`);
     for (const entry of result.perCategory) {
-      console.log(`  ${entry.covered ? '✓' : '✗'} ${entry.category.padEnd(28)} patterns=${entry.patterns} cases=${entry.cases}`);
+      const impl = entry.kind === 'parser' ? 'parser' : `patterns=${entry.patterns}`;
+      console.log(`  ${entry.covered ? '✓' : '✗'} ${entry.category.padEnd(28)} ${impl.padEnd(12)} cases=${entry.cases}`);
     }
     if (result.uncovered.length) console.log(`  UNCOVERED: ${result.uncovered.join(', ')}`);
   }

@@ -33,7 +33,8 @@
       "Write",
       "Edit",
       "WebFetch",
-      "NotebookEdit"
+      "NotebookEdit",
+      "Bash(git push origin feat/ldpc-qual-primitives-intake)"
     ],
     "defaultMode": "acceptEdits",
     "deny": [
