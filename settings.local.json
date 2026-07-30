@@ -34,7 +34,8 @@
       "Edit",
       "WebFetch",
       "NotebookEdit",
-      "Bash(git push origin feat/ldpc-qual-primitives-intake)"
+      "Bash(git push:*)",
+      "PowerShell(git push:*)"
     ],
     "defaultMode": "acceptEdits",
     "deny": [
