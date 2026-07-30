@@ -9,6 +9,7 @@ const {
 } = require('./project-scope.cjs');
 const { sha256 } = require('./repair-contract.cjs');
 const { classifyToolchainRun } = require('./toolchain-health.cjs');
+const { markerVerdict } = require('./verification-markers.cjs');
 
 function tail(text, limit = 2000) {
   const value = String(text || '');
@@ -61,6 +62,25 @@ function commandEvidence(command, runResult, opts = {}) {
   const timingKnown = runResult?.durationMs != null
     || Boolean((opts.startedAt || runResult?.startedAt) && (opts.completedAt || runResult?.completedAt));
 
+  // 退出码未知时的状态判定 (2026-07-30 修): 旧实现直接用 classifyToolchainRun
+  // 的结论, 而它对 status=null 一律返回 command_failed('did not return a normal
+  // exit code') —— 于是**每条**观察型条目都被记成 failed。实测后果: 账本里 25 条
+  // verification.accepted=true 的通过记录, 22 条 status='failed', 账本自我矛盾。
+  // 现在退出码未知时按共享标记表判定, 既不默认通过也不默认失败:
+  //   失败标记 → failed; 正面 PASS 标记 → passed; 都没有 → unknown。
+  const failureIndicated = Boolean(runResult?.signal) || Boolean(runResult?.error)
+    || runResult?.interrupted === true;
+  let entryStatus;
+  let statusBasis;
+  if (exitCodeKnown || failureIndicated) {
+    entryStatus = classification.status === 'passed' ? 'passed' : 'failed';
+    statusBasis = 'exit-code';
+  } else {
+    const verdict = markerVerdict(`${stdout}\n${stderr}`);
+    entryStatus = verdict.status;
+    statusBasis = verdict.status === 'unknown' ? 'unknown' : 'markers';
+  }
+
   return {
     schemaVersion: 1,
     type: 'command',
@@ -80,7 +100,8 @@ function commandEvidence(command, runResult, opts = {}) {
     stdoutTail: tail(stdout),
     stderrTail: tail(stderr),
     classification,
-    status: classification.status === 'passed' ? 'passed' : 'failed',
+    status: entryStatus,
+    statusBasis,
   };
 }
 
@@ -128,13 +149,19 @@ function statusFromEvidence(entries, expectedCommands = []) {
     if (!byCommand.has(command)) failures.push(`missing evidence for command: ${command}`);
   }
   for (const entry of list) {
-    if (entry.classification?.status === 'toolchain_failure') {
+    const observed = entry.exitCode === null && entry.exitCodeKnown === false;
+    if (entry.classification?.status === 'toolchain_failure' && !observed) {
       failures.push(`toolchain failure for command: ${entry.command}`);
     } else if (entry.exitCode !== null && entry.exitCode !== 0) {
       failures.push(`command failed: ${entry.command} exit=${entry.exitCode}`);
-    } else if (entry.exitCode === null && entry.status === 'failed') {
-      // 观察型条目 (载荷无退出码) 按正面标记判定的结果兜底
-      failures.push(`command failed by verdict markers: ${entry.command}`);
+    } else if (entry.status === 'failed') {
+      // 观察型条目 (载荷无退出码) 按共享标记表判定的失败
+      failures.push(entry.exitCode === null
+        ? `command failed by verdict markers: ${entry.command}`
+        : `command failed: ${entry.command}`);
+    } else if (entry.status === 'unknown' && expectedCommands.includes(entry.command)) {
+      // 必需命令没有任何可判读的证据 = 未验证, 不能算通过 (证据边界)
+      failures.push(`no readable verdict evidence for required command: ${entry.command}`);
     }
   }
 

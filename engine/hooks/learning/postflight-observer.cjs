@@ -90,6 +90,17 @@ function runAuxiliaryServices(payload = {}, opts = {}) {
       args: [],
     });
   }
+  // 规划对账 (D2): 会话收尾时按已完成的需求门禁记录做 计划→实际 对账。
+  // 只读门禁文件 + 已落库遥测, 不做模型自评; harvest 内部 fail-open。
+  if (eventName === 'Stop' && (typeof opts.planAccuracy === 'function' || !injectedRuntime)) {
+    services.push({
+      source: 'plan-accuracy',
+      run: opts.planAccuracy || ((input) => require('../../scripts/plan-accuracy.cjs').harvestPlanAccuracy({
+        sessionId: String(input.session_id || input.sessionId || '') || undefined,
+      })),
+      args: [payload],
+    });
+  }
 
   const completed = [];
   const warnings = [];

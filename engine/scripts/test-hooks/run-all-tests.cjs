@@ -212,6 +212,20 @@ const CORE_SCRIPTS = [
   'engine/scripts/test-hooks/state-concurrency.cjs',
   'engine/scripts/test-hooks/statusline-contract.cjs',
   'engine/scripts/test-hooks/transparency-retention.cjs',
+  'engine/scripts/test-hooks/memory-outcome-loop-contract.cjs',
+  'engine/scripts/test-hooks/memory-retirement-contract.cjs',
+  'engine/scripts/test-hooks/evidence-status-basis-contract.cjs',
+  'engine/scripts/test-hooks/harness-gate-eval.cjs',
+  'engine/scripts/test-hooks/retrieval-eval-contract.cjs',
+  'engine/scripts/test-hooks/plan-accuracy-contract.cjs',
+  'engine/scripts/test-hooks/guard-coverage-contract.cjs',
+  'engine/scripts/test-hooks/ten-dimension-contract.cjs',
+  'engine/scripts/guard-coverage.cjs',
+  'engine/scripts/ten-dimension-dashboard.cjs',
+  'engine/scripts/lib/verification-markers.cjs',
+  'engine/scripts/plan-accuracy.cjs',
+  'engine/scripts/hdl-evidence-gate.cjs',
+  'engine/scripts/delivery-tracker.cjs',
 ];
 
 for (const script of CORE_SCRIPTS) {
@@ -2221,15 +2235,25 @@ const AUDIT_REMEDIATION_CONTRACTS = [
   ['transparency privacy and retention', 'transparency-retention.cjs', 30000],
   ['cost usage telemetry', 'cost-usage-contract.cjs', 30000],
   ['memory recall tiers', 'memory-recall-tier-contract.cjs', 30000],
+  ['memory outcome loop', 'memory-outcome-loop-contract.cjs', 30000],
+  ['memory attribution retirement', 'memory-retirement-contract.cjs', 30000],
+  ['evidence status basis', 'evidence-status-basis-contract.cjs', 30000],
+  ['harness gate eval corpus', 'harness-gate-eval.cjs', 120000, ['--variance']],
+  ['retrieval golden set', 'retrieval-eval-contract.cjs', 120000],
+  ['plan accuracy and delivery window', 'plan-accuracy-contract.cjs', 30000],
+  ['red-team adversarial corpus', 'harness-gate-eval.cjs', 120000,
+    ['--cases', 'engine/scripts/test-hooks/fixtures/harness-redteam-cases.json', '--variance']],
+  ['guard pattern coverage', 'guard-coverage-contract.cjs', 60000],
+  ['ten dimension dashboard', 'ten-dimension-contract.cjs', 180000],
 ];
 
-for (const [name, relative, timeout] of AUDIT_REMEDIATION_CONTRACTS) {
+for (const [name, relative, timeout, extraArgs = []] of AUDIT_REMEDIATION_CONTRACTS) {
   define('AuditRemediationContracts', name, () => {
     const p = path.join(HOME, 'engine/scripts/test-hooks', relative);
     if (!fs.existsSync(p)) return { pass: false, detail: `${relative} 不存在` };
     const nodeArgs = relative === 'dag-cancellation.cjs'
-      ? ['--unhandled-rejections=strict', p]
-      : [p];
+      ? ['--unhandled-rejections=strict', p, ...extraArgs]
+      : [p, ...extraArgs];
     const r = spawnSync(process.execPath, nodeArgs, {
       cwd: HOME,
       encoding: 'utf8',

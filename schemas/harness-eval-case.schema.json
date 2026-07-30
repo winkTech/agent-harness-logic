@@ -74,6 +74,29 @@
     },
     "notes": {
       "type": "string"
+    },
+    "entry": {
+      "type": "string",
+      "description": "Executable-case entry point consumed by harness-gate-eval.cjs (e.g. bash-safety, verification-gate-pre, verification-verdict, toolchain-classify, evidence-status, file-protection, frustration-context). Cases without entry are static verdict records."
+    },
+    "input": {
+      "type": "object",
+      "description": "Entry-specific input: a real hook payload, run result, or evidence entries."
+    },
+    "setup": {
+      "type": "array",
+      "description": "Payloads replayed through the same entry before the case input (e.g. mark a pending edit).",
+      "items": {
+        "type": "object"
+      }
+    },
+    "provenance": {
+      "type": "string",
+      "description": "Where this case came from: a real incident, runtime event, or locked regression. Required by corpus discipline (D8.4) — no imagined cases."
+    },
+    "varianceKey": {
+      "type": "boolean",
+      "description": "Marks a key case for the N-run consistency (variance) measurement."
     }
   }
 }

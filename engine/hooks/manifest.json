@@ -63,7 +63,7 @@
       "tools": ["*"],
       "payloadSchema": "claude-hook/postflight-v1",
       "blocking": false,
-      "sideEffects": ["sqlite-events", "sqlite-memory", "cost-ledger", "transparency-ledger", "skill-candidates", "fp-rate-log"],
+      "sideEffects": ["sqlite-events", "sqlite-memory", "cost-ledger", "transparency-ledger", "skill-candidates", "fp-rate-log", "plan-accuracy"],
       "consumers": ["skill-evolve", "fp-rate"],
       "timeoutSeconds": 30,
       "owner": "harness-observability",

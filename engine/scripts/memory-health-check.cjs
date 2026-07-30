@@ -162,6 +162,14 @@ function queryAttribution(db) {
       AND application.memory_id = outcome.memory_id
     WHERE application.application_id IS NULL
   `).get().c || 0);
+  const now = Date.now();
+  const windowStart = now - 30 * 86_400_000;
+  const exposures30d = Number(db.prepare(
+    'SELECT COUNT(*) AS c FROM memory_retrieval_exposures WHERE emitted_at >= ?',
+  ).get(windowStart).c || 0);
+  const outcomes30d = Number(db.prepare(
+    'SELECT COUNT(*) AS c FROM memory_outcomes WHERE observed_at >= ?',
+  ).get(windowStart).c || 0);
   return {
     available: true,
     missingTables: [],
@@ -176,6 +184,12 @@ function queryAttribution(db) {
     outcomeVerdicts: group('memory_outcomes', 'verdict'),
     orphanApplications,
     orphanOutcomes,
+    // 30d 窗口可见性 (2026-07-30): "有暴露但 outcome 恒 0 = 链路失效" 的计分
+    // 判定尚未获批 (候选 hrc 走晋升流程), 这里只报数据不改评分 —— 现行合同仍是
+    // "没有 outcome 本身不是失败, 孤儿身份链才是"。
+    exposures30d,
+    outcomes30d,
+    outcomeChainStale: exposures30d > 0 && outcomes30d === 0,
   };
 }
 
@@ -714,6 +728,91 @@ function queryCostTelemetry(db, now) {
   };
 }
 
+/**
+ * 交付与规划两条新数据链的断流探测 (D1/D2, 2026-07-30)。
+ * 每接一个数据源必须同步加断流判定 —— costs.jsonl 无声死亡 45 天的直接补课。
+ */
+function queryDeliveryPlanTelemetry(db, now) {
+  const sevenDays = 7 * 86400000;
+  const thirtyDays = 30 * 86400000;
+  const sqliteMs = (expr) => `CAST(strftime('%s', ${expr}) AS INTEGER) * 1000`;
+  const delivery = tableExists(db, 'delivery_events')
+    ? {
+      available: true,
+      rows: Number(db.prepare('SELECT COUNT(*) AS n FROM delivery_events').get().n || 0),
+      lastAt: Number(db.prepare(`SELECT MAX(${sqliteMs('timestamp')}) AS t FROM delivery_events`).get().t || 0) || null,
+      pass30d: Number(db.prepare(`SELECT COUNT(*) AS n FROM delivery_events WHERE status = 'pass' AND ${sqliteMs('timestamp')} >= ?`).get(now - thirtyDays).n || 0),
+      fail30d: Number(db.prepare(`SELECT COUNT(*) AS n FROM delivery_events WHERE status = 'fail' AND ${sqliteMs('timestamp')} >= ?`).get(now - thirtyDays).n || 0),
+    }
+    : { available: false };
+  const plans = tableExists(db, 'plan_snapshots')
+    ? {
+      available: true,
+      snapshots: Number(db.prepare('SELECT COUNT(*) AS n FROM plan_snapshots').get().n || 0),
+      reconciliations: tableExists(db, 'plan_reconciliations')
+        ? Number(db.prepare('SELECT COUNT(*) AS n FROM plan_reconciliations').get().n || 0)
+        : 0,
+      lastReconciledAt: tableExists(db, 'plan_reconciliations')
+        ? Number(db.prepare('SELECT MAX(reconciled_at) AS t FROM plan_reconciliations').get().t || 0) || null
+        : null,
+    }
+    : { available: false };
+  return {
+    delivery,
+    plans,
+    _deliveryStale: delivery.available && delivery.lastAt !== null && now - delivery.lastAt > sevenDays,
+    _planStale: plans.available && plans.snapshots > 0
+      && (plans.lastReconciledAt === null || now - plans.lastReconciledAt > thirtyDays),
+  };
+}
+
+/**
+ * 受保护写入的审计对账 (D9, 2026-07-30)。
+ *
+ * 一次性令牌命中即被消费, 所以"审批文件为空"是正常终态 —— 真正要对账的是:
+ *   1. 每条放行审计必须带非空 reason (证明当时存在批准);
+ *   2. 审批文件里不该积压已过期令牌 (过期令牌是长期敞开的门的残影);
+ *   3. 令牌不得含通配符 (逐文件批准是该通道的核心约束)。
+ */
+function queryProtectedWrites(home) {
+  const auditFile = path.join(home, 'var', 'audit', 'protected-writes.jsonl');
+  const approvalFile = path.join(home, 'var', 'audit', 'protected-write-approvals.json');
+  const result = {
+    auditAvailable: fs.existsSync(auditFile),
+    approvalsAvailable: fs.existsSync(approvalFile),
+    writes: 0,
+    writesWithoutReason: 0,
+    liveTokens: 0,
+    expiredTokens: 0,
+    wildcardTokens: 0,
+  };
+  if (result.auditAvailable) {
+    let raw = '';
+    try { raw = fs.readFileSync(auditFile, 'utf8'); } catch { raw = ''; }
+    for (const line of raw.split(/\r?\n/)) {
+      if (!line.trim()) continue;
+      result.writes += 1;
+      let entry;
+      try { entry = JSON.parse(line); } catch { result.writesWithoutReason += 1; continue; }
+      if (!String(entry?.reason || '').trim()) result.writesWithoutReason += 1;
+    }
+  }
+  if (result.approvalsAvailable) {
+    let tokens = [];
+    try { tokens = JSON.parse(fs.readFileSync(approvalFile, 'utf8')); } catch { tokens = []; }
+    if (Array.isArray(tokens)) {
+      const now = Date.now();
+      for (const token of tokens) {
+        const target = String(token?.path || '');
+        if (target.includes('*') || target.includes('?')) result.wildcardTokens += 1;
+        if (new Date(token?.expiresAt || 0).getTime() > now) result.liveTokens += 1;
+        else result.expiredTokens += 1;
+      }
+    }
+  }
+  return result;
+}
+
 function buildHealthReport(opts = {}) {
   if (!opts.db) throw new Error('buildHealthReport requires an injected database');
   const db = opts.db;
@@ -882,6 +981,42 @@ function buildHealthReport(opts = {}) {
     }
   }
 
+  const deliveryPlans = queryDeliveryPlanTelemetry(db, now);
+  const activityRecentForPipes = (() => {
+    const sevenDays = 7 * 86400000;
+    return costs._activityTs && now - costs._activityTs < sevenDays;
+  })();
+  if (activityRecentForPipes && deliveryPlans._deliveryStale) {
+    issue('delivery_telemetry_stale', 'medium', 5,
+      'sessions are running but no delivery verdict was recorded in the last 7 days', {
+        lastDeliveryAt: deliveryPlans.delivery.lastAt
+          ? new Date(deliveryPlans.delivery.lastAt).toISOString() : null,
+        rows: deliveryPlans.delivery.rows,
+      });
+  }
+  if (activityRecentForPipes && deliveryPlans._planStale) {
+    issue('plan_accuracy_stale', 'medium', 5,
+      'plan snapshots exist but no plan-vs-actual reconciliation landed in the last 30 days', {
+        snapshots: deliveryPlans.plans.snapshots,
+        lastReconciledAt: deliveryPlans.plans.lastReconciledAt
+          ? new Date(deliveryPlans.plans.lastReconciledAt).toISOString() : null,
+      });
+  }
+
+  const protectedWrites = queryProtectedWrites(home);
+  if (protectedWrites.writesWithoutReason > 0) {
+    issue('protected_write_without_approval', 'critical', 20,
+      'protected-write audit entries exist without a recorded approval reason', protectedWrites);
+  }
+  if (protectedWrites.wildcardTokens > 0) {
+    issue('protected_write_wildcard_token', 'high', 15,
+      'protected-write approval tokens contain wildcards — per-file approval is required', protectedWrites);
+  }
+  if (protectedWrites.expiredTokens > 0) {
+    issue('protected_write_stale_token', 'medium', 5,
+      'expired protected-write approval tokens are still present in the approvals file', protectedWrites);
+  }
+
   score = Math.max(0, Math.min(100, score));
   const status = score < 70 ? 'unhealthy' : score < 90 ? 'degraded' : 'healthy';
   return {
@@ -907,6 +1042,9 @@ function buildHealthReport(opts = {}) {
           usd30d: costs.usd30d,
         }
         : { available: false },
+      delivery: deliveryPlans.delivery,
+      plans: deliveryPlans.plans,
+      protectedWrites,
       events: {
         total: eventSnapshot.total,
         safeWatermark: eventSnapshot.safeWatermark,
@@ -996,6 +1134,9 @@ module.exports = {
   inspectRuleCandidateLifecycle,
   inspectPromotedRuleIntegrity,
   queryAttribution,
+  queryCostTelemetry,
+  queryDeliveryPlanTelemetry,
+  queryProtectedWrites,
   detectConsumerSchedules,
   loadConsumerRegistry,
   parseArgs,

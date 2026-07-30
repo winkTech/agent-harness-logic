@@ -18,17 +18,34 @@ function defaultDependencies() {
   };
 }
 
+/**
+ * "判定不可读"的原因族 (2026-07-30)。
+ *
+ * 这两个原因说的是**门禁看不到判据**, 不是"验证失败了": 命令输出被管道截断
+ * (`... | tail -3`) 或验证命令静默无输出时都会落到这里。实测 25 条 delivery
+ * 记录里 20 条是这一族, 把它们计成 fail 会让成功率变成"我有没有用 tail"的
+ * 度量, 而不是交付质量的度量。它们落 partial —— partial 不进成功率分母,
+ * 但记录仍在, 不会把问题藏起来。
+ */
+const UNREADABLE_VERDICT_REASONS = new Set([
+  'no explicit PASS evidence in output',
+  'verification command produced no log evidence',
+]);
+
 /** 验证判定 → delivery 事件 (D1 自动喂数): PASS/FAIL 不再依赖手工 record。 */
 function recordDeliveryFromVerdict(payload, gateResult, deps) {
   if (process.env.CLAUDE_HARNESS_NO_PERSIST === '1'
     || process.env.CLAUDE_HARNESS_VERIFY_READONLY === '1'
     || process.env.CLAUDE_NO_DIAGNOSTIC_WRITES === '1') return { skipped: true };
   const verification = gateResult.verification;
+  const reason = String(verification.reason || verification.detail || '');
+  const status = verification.ok ? 'pass'
+    : UNREADABLE_VERDICT_REASONS.has(reason) ? 'partial' : 'fail';
   return deps.deliveryTracker.recordDelivery({
     workflow: 'verification-gate',
     phase: 'verification',
-    status: verification.ok ? 'pass' : 'fail',
-    error: verification.ok ? null : String(verification.reason || verification.detail || '').slice(0, 200) || null,
+    status,
+    error: verification.ok ? null : reason.slice(0, 200) || null,
     sessionId: String(payload?.session_id || payload?.sessionId || '') || undefined,
     cwd: String(payload?.cwd || '') || undefined,
   });
@@ -227,6 +244,8 @@ module.exports = {
   main,
   route,
   hasVerificationVerdict,
+  recordDeliveryFromVerdict,
   recordVerificationAttribution,
   watchdogResult,
+  UNREADABLE_VERDICT_REASONS,
 };

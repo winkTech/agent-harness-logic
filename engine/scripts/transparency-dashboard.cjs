@@ -78,9 +78,19 @@ function summarize(rows) {
   const captured = rows.filter((row) => row.instructionCaptured).length;
   const blocked = rows.filter((row) => row.gateFailures.length > 0).length;
   const skillCount = new Set(rows.flatMap((row) => row.requiredSkills)).size;
+  // instructionCaptured 的正确分母 (2026-07-30 根因排查): 旧口径按**所有** run 目录
+  // 计, 得出 8/34=24% 的"低捕获率"。实测 34 个目录里 25 个只有 events.ndjson ——
+  // 那些会话全是只读/低风险调用, 从未进入 action-contract 路径, 本来就没有
+  // 需要捕获的受控动作。在真正走过该路径的 run 里捕获率是 8/9。
+  const eligible = rows.filter((row) => row.matchStatus !== 'not-captured');
   return {
     totalRuns: rows.length,
     instructionCaptured: captured,
+    contractRuns: eligible.length,
+    runsWithoutActionContract: rows.length - eligible.length,
+    instructionCaptureRate: eligible.length
+      ? Number((eligible.filter((row) => row.instructionCaptured).length / eligible.length).toFixed(6))
+      : null,
     gateFailureRuns: blocked,
     uniqueRequiredSkills: skillCount,
   };

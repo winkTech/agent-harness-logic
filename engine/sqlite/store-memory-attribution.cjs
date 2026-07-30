@@ -435,9 +435,11 @@ function projectIdFromPayload(payload = {}, opts = {}) {
   if (explicit) return explicit;
   if (!optionalString(payload.cwd)) return null;
   try {
-    const scope = require('../scripts/lib/project-scope.cjs');
-    const cwd = scope.payloadCwd(payload);
-    return scope.memoryProjectId(scope.findProjectRoot(cwd, { fallback: cwd }));
+    // 必须与 exposure 侧 (memory-retrieve-hook → memoryScopeFromPayload) 用同一个
+    // 归一化入口: 旧实现直接 findProjectRoot, 在无项目标记的 cwd 上回退到文件系统
+    // 根, 而 exposure 侧回退到 cwd 本身 —— 两侧 projectId 不一致, application/outcome
+    // 的身份链查询永远落空 (2026-07-30 D5.3 端到端契约实测)。
+    return require('../scripts/lib/project-scope.cjs').memoryScopeFromPayload(payload).projectId;
   } catch {
     return null;
   }

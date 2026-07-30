@@ -61,8 +61,19 @@ const {
 
 const STATE_DIR = path.join(HARNESS_ROOT, 'var');
 const STATE_FILE = path.join(STATE_DIR, 'verify-gate.json');
-const LEDGER_FILE = process.env.CLAUDE_VERIFICATION_LEDGER_FILE ||
-  path.join(STATE_DIR, 'verification-ledger.json');
+/**
+ * 证据账本路径**惰性解析** (2026-07-30 修)。
+ *
+ * 旧实现在模块加载时就把路径固化成常量, 于是"谁先 require"决定了写哪儿:
+ * 十维仪表盘先经 postflight-router 加载了本门禁 (拿到真实账本路径), 随后
+ * 评测执行器再设 CLAUDE_VERIFICATION_LEDGER_FILE 已经太晚 —— 评测把 60 多条
+ * 合成判定写进了生产账本。测量污染被测系统, 而且是静默污染。
+ * 改成每次写入时读环境变量: 隔离由调用方决定, 与 require 顺序无关。
+ */
+function ledgerFile() {
+  return process.env.CLAUDE_VERIFICATION_LEDGER_FILE
+    || path.join(STATE_DIR, 'verification-ledger.json');
+}
 
 // ── 模式定义 ────────────────────────────────────────────────────────────────
 
@@ -304,21 +315,12 @@ function bashResultFromPayload(payload) {
  *   - TB 在 0 时刻就挂掉 / 向量没加载 / 跑的是过期 binary, 都是静默 exit 0;
  *   - 编译成功但根本没执行仿真, 同样 exit 0 无输出。
  * 以上在旧的"无失败标记即通过"判据下全部记为验证通过 —— 假绿由此产生。
+ *
+ * 标记表本身已提取到 `lib/verification-markers.cjs` —— evidence-ledger 处理
+ * "载荷不带退出码"的观察型条目时需要同一套判据, 两处各抄一份就会重演
+ * "两份名单漂移" (vvp 曾只在其中一份里, 于是空输出仿真算通过)。
  */
-const PASS_MARKERS = [
-  /\bRESULT:\s*PASS\b/i,
-  /\b(?:ALL\s+)?(?:TESTS?|CHECKS?)\s+PASSED\b/i,
-  /\bPASSED\b/,
-  /\bPASS\b/,
-  /\b\d+\s+passed\b/i,
-  /\b0\s+(?:failed|failures|errors|mismatches)\b/i,
-  /\bno\s+(?:errors|mismatches|failures)\b/i,
-  /\bbit-true\b/i,
-  /\bsuccess(?:ful(?:ly)?)?\b/i,
-  /\bcompleted\s+successfully\b/i,
-  /\b(?:ok|OK)\b/,
-  /** 项目自定义通过标记 — 编辑此数组添加 */
-];
+const { PASS_MARKERS, failureMarker } = require('../lib/verification-markers.cjs');
 
 function verificationVerdict(command, result) {
   const stdout = String(result?.stdout || '');
@@ -336,13 +338,8 @@ function verificationVerdict(command, result) {
   if (result?.interrupted) return { ok: false, reason: 'command interrupted' };
   if (result?.signal) return { ok: false, reason: `signal=${result.signal}` };
   if (error.trim()) return { ok: false, reason: 'tool error present' };
-  if (/\bRESULT:\s*FAIL\b/i.test(combined)) return { ok: false, reason: 'RESULT: FAIL in output' };
-  const failedCount = combined.match(/\b(\d+)\s+failed\b/i);
-  if (failedCount && Number(failedCount[1]) > 0) return { ok: false, reason: 'failed test count in output' };
-  if (/\b(?:FAILURE|FATAL|ASSERTION\s+FAILED)\b/i.test(combined) ||
-      (/\bFAILED\b/i.test(combined) && !/\b0\s+failed\b/i.test(combined))) {
-    return { ok: false, reason: 'failure marker in output' };
-  }
+  const failure = failureMarker(combined);
+  if (failure) return { ok: false, reason: failure };
 
   // 能走到这里的命令必定命中 TEST_PATTERNS (调用方保证), 也就是说它是一条
   // "功能验证"命令。这类命令静默成功没有意义 —— 早期版本只对手抄的一小份
@@ -376,8 +373,9 @@ function recordVerificationEvidence(payload, command, result, verdict) {
     };
   }
   entry.cwd = payloadCwd(payload);
-  ensureEvidenceDir(LEDGER_FILE);
-  writeEvidenceLedger(LEDGER_FILE, entry);
+  const ledgerPath = ledgerFile();
+  ensureEvidenceDir(ledgerPath);
+  writeEvidenceLedger(ledgerPath, entry);
 }
 
 // ── stdin 读取 ───────────────────────────────────────────────────────────────
@@ -823,7 +821,12 @@ function evaluate(payload, _runtime = {}) {
 
   if ((eventName === 'PostToolUse' || eventName === 'PostToolUseFailure') && isShellTool && command) {
     const pending = pendingForPayload(readState(), payload);
-    if (pending.length === 0 || !matchesAny(command, TEST_PATTERNS)) return allow([], { pending });
+    // verdict 产出与 pending 解耦 (2026-07-30, D5.3 outcome 断链根因):
+    // 旧逻辑 pending 为空时直接 allow, 于是 verdict 只在"有待验证的 .sv/.py 编辑"
+    // 时产生 —— harness 会话编辑 .cjs 不进 pending, outcome/delivery 两条自动
+    // 喂数链整体空转 (实测 applications=364 而 outcomes=0)。现在凡 TEST_PATTERNS
+    // 命令完成就产出 verdict 并落证据账本; 阻断与 pending 清除语义保持不变。
+    if (!matchesAny(command, TEST_PATTERNS)) return allow([], { pending });
 
     const result = bashResultFromPayload(payload);
     const verdict = eventName === 'PostToolUseFailure'
@@ -831,8 +834,8 @@ function evaluate(payload, _runtime = {}) {
       : verificationVerdict(command, result);
     recordVerificationEvidence(payload, command, result, verdict);
     if (verdict.ok) {
-      markVerified(payload, command);
-      return allow([], { pending, verification: verdict, stateUpdated: true });
+      if (pending.length > 0) markVerified(payload, command);
+      return allow([], { pending, verification: verdict, stateUpdated: pending.length > 0 });
     }
     const diagnostics = [`[VerificationGate] verification result rejected: ${verdict.reason}`];
     if (verdict.reason === 'no explicit PASS evidence in output') {
@@ -1036,6 +1039,7 @@ async function main() {
 if (require.main === module) main();
 
 module.exports = {
+  PASS_MARKERS,
   bashResultFromPayload,
   commandSegments,
   evaluate,

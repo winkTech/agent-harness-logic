@@ -276,6 +276,19 @@ function main() {
   }
 }
 
-module.exports = { harvestFpRate, inferGate, autoRecord };
+/** 结构化摘要入口 (供十维仪表盘取用, 不打印)。 */
+function summary() {
+  if (!fs.existsSync(STORE_FILE)) return { available: false, total: 0 };
+  const records = fs.readFileSync(STORE_FILE, 'utf8').trim().split('\n')
+    .filter(Boolean)
+    .map((line) => { try { return JSON.parse(line); } catch { return null; } })
+    .filter(Boolean);
+  if (records.length === 0) return { available: false, total: 0 };
+  return { available: true, ...computeSummary(records) };
+}
+
+module.exports = {
+  harvestFpRate, inferGate, autoRecord, computeSummary, summary, STORE_FILE,
+};
 
 if (require.main === module) main();

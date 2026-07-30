@@ -19,6 +19,14 @@ const HARNESS_CASE_FIELDS = new Set([
   'userInterventions',
   'evidence',
   'notes',
+  // 可执行 case 扩展 (2026-07-30 D8 评测扩容): entry 指定 harness-gate-eval 的
+  // 执行入口, input/setup 携带真实 payload, provenance 记录真实来源 (语料纪律:
+  // 只从真实失败/真实通过提炼), varianceKey 标记多次运行一致率的关键 case。
+  'entry',
+  'input',
+  'setup',
+  'provenance',
+  'varianceKey',
 ]);
 
 function normalizeVerdict(value) {
@@ -41,10 +49,24 @@ function validateHarnessCase(testCase) {
   for (const field of Object.keys(testCase)) {
     if (!HARNESS_CASE_FIELDS.has(field)) failures.push(`unexpected property: ${field}`);
   }
-  for (const field of ['agent', 'taskType', 'sourceSuite', 'sourceTest', 'notes']) {
+  for (const field of ['agent', 'taskType', 'sourceSuite', 'sourceTest', 'notes', 'entry', 'provenance']) {
     if (testCase[field] !== undefined && typeof testCase[field] !== 'string') {
       failures.push(`${field} must be a string when provided`);
     }
+  }
+  if (testCase.input !== undefined
+    && (typeof testCase.input !== 'object' || testCase.input === null || Array.isArray(testCase.input))) {
+    failures.push('input must be an object when provided');
+  }
+  if (testCase.setup !== undefined
+    && (!Array.isArray(testCase.setup) || testCase.setup.some((item) => !item || typeof item !== 'object'))) {
+    failures.push('setup must be an array of objects when provided');
+  }
+  if (testCase.varianceKey !== undefined && typeof testCase.varianceKey !== 'boolean') {
+    failures.push('varianceKey must be boolean when provided');
+  }
+  if (testCase.entry !== undefined && testCase.input === undefined) {
+    failures.push('executable case with entry requires input');
   }
   if (testCase.evidence !== undefined
     && (!Array.isArray(testCase.evidence) || testCase.evidence.some((item) => typeof item !== 'string'))) {

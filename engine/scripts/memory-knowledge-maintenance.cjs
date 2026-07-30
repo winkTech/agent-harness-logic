@@ -389,6 +389,110 @@ function defaultReconcileFacts(_plan, context) {
   };
 }
 
+/**
+ * 归因驱动的记忆退役 (D5.4, 2026-07-30)。
+ * 三条证据规则, 全部只缩短 ttl_until (从检索中退役), 不删行不动 Markdown:
+ *   A negative-outcome: 30d 内 ≥2 次 fail outcome 且 0 次 pass → TTL 14d;
+ *   B exposed-never-applied: 90d 内 ≥5 次暴露且从无 application → TTL 30d;
+ *   C never-exposed: 遥测已连续在线 ≥90d 时, 90d 前创建且从未被暴露的
+ *     非 verified 事实 → TTL 30d。遥测在线时长门槛防止用"仪表刚接上"
+ *     的空白历史误判存量事实 (召回 2026-07-29 才修通)。
+ */
+const ATTRIBUTION_RETIREMENT = {
+  negativeWindowDays: 30, negativeMinFails: 2, negativeTtlDays: 14,
+  unusedWindowDays: 90, unusedMinExposures: 5, unusedTtlDays: 30,
+  neverExposedDays: 90, neverExposedTtlDays: 30,
+};
+
+function collectAttributionRetirement(context) {
+  try {
+    const { openDb } = require('../sqlite/index.cjs');
+    const wDb = openDb({ ...(context.dbPath ? { path: context.dbPath } : {}), readonly: true });
+    const db = wDb.db;
+    try {
+      if (!tableExists(db, 'facts') || !tableExists(db, 'memory_retrieval_exposures')) {
+        return { actions: [], telemetryLiveSince: null, reason: 'attribution tables missing' };
+      }
+      const now = context.now.getTime();
+      const cfg = ATTRIBUTION_RETIREMENT;
+      const actions = new Map();
+      const push = (row, rule, reason, ttlDays) => {
+        const ttlUntil = now + ttlDays * DAY_MS;
+        const existing = actions.get(row.id);
+        if (!existing || ttlUntil < existing.ttlUntil) {
+          actions.set(row.id, { id: row.id, name: row.name, source: row.source, rule, reason, ttlUntil });
+        }
+      };
+
+      const negative = db.prepare(`
+        SELECT f.id, f.name, f.source,
+               SUM(CASE WHEN o.verdict = 'fail' THEN 1 ELSE 0 END) AS fails,
+               SUM(CASE WHEN o.verdict = 'pass' THEN 1 ELSE 0 END) AS passes
+        FROM facts f JOIN memory_outcomes o ON o.memory_id = f.id
+        WHERE COALESCE(f.status, 'active') = 'active' AND o.observed_at >= ?
+        GROUP BY f.id HAVING fails >= ? AND passes = 0
+      `).all(now - cfg.negativeWindowDays * DAY_MS, cfg.negativeMinFails);
+      for (const row of negative) {
+        push(row, 'negative-outcome', `${row.fails} 次 fail outcome, 0 次 pass (${cfg.negativeWindowDays}d)`, cfg.negativeTtlDays);
+      }
+
+      const unused = db.prepare(`
+        SELECT f.id, f.name, f.source, COUNT(e.exposure_id) AS exposures
+        FROM facts f JOIN memory_retrieval_exposures e ON e.memory_id = f.id
+        WHERE COALESCE(f.status, 'active') = 'active' AND e.emitted_at >= ?
+          AND NOT EXISTS (SELECT 1 FROM memory_applications a WHERE a.memory_id = f.id)
+        GROUP BY f.id HAVING exposures >= ?
+      `).all(now - cfg.unusedWindowDays * DAY_MS, cfg.unusedMinExposures);
+      for (const row of unused) {
+        push(row, 'exposed-never-applied', `${row.exposures} 次暴露无任何 application (${cfg.unusedWindowDays}d)`, cfg.unusedTtlDays);
+      }
+
+      const oldest = Number(db.prepare('SELECT MIN(emitted_at) AS t FROM memory_retrieval_exposures').get()?.t || 0);
+      const telemetryLiveSince = oldest > 0 ? oldest : null;
+      if (telemetryLiveSince && telemetryLiveSince <= now - cfg.neverExposedDays * DAY_MS) {
+        const neverExposed = db.prepare(`
+          SELECT f.id, f.name, f.source
+          FROM facts f
+          WHERE COALESCE(f.status, 'active') = 'active'
+            AND COALESCE(f.verification_state, 'candidate') != 'verified'
+            AND f.created_at <= ?
+            AND NOT EXISTS (SELECT 1 FROM memory_retrieval_exposures e WHERE e.memory_id = f.id)
+        `).all(now - cfg.neverExposedDays * DAY_MS);
+        for (const row of neverExposed) {
+          push(row, 'never-exposed', `创建 ${cfg.neverExposedDays}d 以上且从未被暴露`, cfg.neverExposedTtlDays);
+        }
+      }
+      return { telemetryLiveSince, actions: [...actions.values()] };
+    } finally {
+      wDb.close();
+    }
+  } catch (error) {
+    return { actions: [], telemetryLiveSince: null, error: error.message };
+  }
+}
+
+function defaultRetireAttribution(plan, context) {
+  const list = plan.attributionRetirement?.actions || [];
+  if (list.length === 0) return { downgraded: 0, planned: 0 };
+  const { openDb } = require('../sqlite/index.cjs');
+  const wDb = openDb(context.dbPath ? { path: context.dbPath } : {});
+  try {
+    // 只缩短 ttl_until, 永不延长; reconcile 的 COALESCE 语义保证 Markdown
+    // 对账不会复活被降级的 TTL。
+    const stmt = wDb.db.prepare(`
+      UPDATE facts SET ttl_until = ?, updated_at = ?
+      WHERE id = ? AND (ttl_until IS NULL OR ttl_until > ?)
+    `);
+    let downgraded = 0;
+    for (const action of list) {
+      downgraded += Number(stmt.run(action.ttlUntil, context.now.getTime(), action.id, action.ttlUntil).changes || 0);
+    }
+    return { downgraded, planned: list.length };
+  } finally {
+    wDb.close();
+  }
+}
+
 function defaultStageCandidates(candidates, context) {
   if (candidates.length === 0) return { staged: 0, ids: [] };
   const candidateModule = require('./harness-rule-candidates.cjs');
@@ -434,6 +538,7 @@ function runMaintenance(opts = parseArgs(), now = new Date(), runtime = {}) {
     reason: candidate.reason,
   }));
   const inspection = (runtime.inspectSqlite || defaultInspectSqlite)(context);
+  const attributionRetirement = (runtime.collectAttributionRetirement || collectAttributionRetirement)(context);
   const plan = {
     eventRetentionDays: opts.eventRetentionDays,
     reconcile: opts.reconcile,
@@ -441,11 +546,13 @@ function runMaintenance(opts = parseArgs(), now = new Date(), runtime = {}) {
     ruleCandidates,
     fileActions,
     knowledgeActions: knowledgeCandidates.map((candidate) => ({ ...candidate, action: 'retain_for_review' })),
+    attributionRetirement,
   };
   const counts = {
     memoryCandidates: memoryCandidates.length,
     actionableMemory: ruleCandidates.length,
     knowledgeCandidates: knowledgeCandidates.length,
+    attributionRetirement: attributionRetirement.actions.length,
     moved: 0,
   };
 
@@ -468,6 +575,7 @@ function runMaintenance(opts = parseArgs(), now = new Date(), runtime = {}) {
     events: (runtime.retainEvents || defaultRetainEvents)(plan, context),
     reconcile: opts.reconcile ? (runtime.reconcileFacts || defaultReconcileFacts)(plan, context) : { skipped: true },
     candidates: (runtime.stageCandidates || defaultStageCandidates)(ruleCandidates, context),
+    attributionRetirement: (runtime.retireAttribution || defaultRetireAttribution)(plan, context),
     reindex: opts.reindex ? (runtime.rebuildIndex || defaultRebuildIndex)(plan, context) : { skipped: true },
   };
   const state = {
@@ -521,4 +629,7 @@ module.exports = {
   defaultInspectSqlite,
   defaultRetainEvents,
   defaultReconcileFacts,
+  ATTRIBUTION_RETIREMENT,
+  collectAttributionRetirement,
+  defaultRetireAttribution,
 };
