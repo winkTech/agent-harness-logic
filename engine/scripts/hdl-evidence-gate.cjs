@@ -107,6 +107,37 @@ function checkModule(projectRoot, mod) {
   return entry;
 }
 
+/**
+ * DAG 阶段级交付落库 (D1, 2026-07-30)。
+ *
+ * 为什么在这里而不在工作流里: workflow 脚本跑在没有 Node API 的沙箱, 不能直接
+ * 调 delivery-tracker —— 这正是 P1 留下的缺口。本脚本是工作流**真实调用**的
+ * 确定性证据门禁, 它同时知道阶段 (--arch / --modules) 与判定, 是唯一自然的
+ * 落库点。fail-open: 落库失败绝不影响门禁判定 (判定是本脚本的主职责)。
+ */
+function recordPhaseDelivery(report, opts, deps = {}) {
+  if (process.env.CLAUDE_HARNESS_NO_PERSIST === '1'
+    || process.env.CLAUDE_HARNESS_VERIFY_READONLY === '1'
+    || process.env.CLAUDE_NO_DIAGNOSTIC_WRITES === '1') return { skipped: true };
+  try {
+    const { recordDelivery } = deps.deliveryTracker || require('./delivery-tracker.cjs');
+    const phase = opts.arch && opts.modules.length > 0 ? 'P1b+P4.5'
+      : opts.arch ? 'P1b' : 'P4.5';
+    const recorded = recordDelivery({
+      workflow: 'hdl-coding-dag-workflow',
+      phase,
+      status: report.ok ? 'pass' : 'fail',
+      modules: opts.modules.length,
+      error: report.ok ? null : report.failures.join('; ').slice(0, 200) || null,
+      project: path.basename(path.resolve(opts.projectRoot)),
+      cwd: path.resolve(opts.projectRoot),
+    }, deps.db ? { db: deps.db } : {});
+    return { skipped: false, recorded: Boolean(recorded), phase };
+  } catch {
+    return { skipped: true, reason: 'delivery-record-failed' };
+  }
+}
+
 function main() {
   const opts = parseArgs(process.argv.slice(2));
   if (opts.error) {
@@ -135,9 +166,13 @@ function main() {
     }
   }
 
+  recordPhaseDelivery(report, opts);
+
   console.log(JSON.stringify(report, null, 2));
   console.log(report.ok ? 'RESULT: PASS' : 'RESULT: FAIL');
   process.exit(report.ok ? 0 : 1);
 }
 
-main();
+if (require.main === module) main();
+
+module.exports = { checkArch, checkModule, parseArgs, recordPhaseDelivery };

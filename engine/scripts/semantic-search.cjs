@@ -65,6 +65,39 @@ function tokenize(text) {
   return tokens.filter((token) => !STOP_WORDS.has(token));
 }
 
+/**
+ * 路径亲和度加成 (2026-07-30, D4 金标评测暴露的根因)。
+ *
+ * 旧实现只按**正文** TF-IDF 排序, 路径与文件名不参与任何环节 —— 于是
+ * "LDPC 定点量化"命中的是其他模块的 fixed_point_report.md, 而不是
+ * ldpc/stage3_fixed_point_report.md: 正文里模块名的出现次数远少于通用术语。
+ * 金标集 30 例实测 6 miss, 其中 5 例是这个原因。
+ *
+ * 先试过把路径词元塞进文档向量, 实测几乎无效 (3 次出现在数千词元的长文里被
+ * 归一化摊平, precision 0.722→0.733)。改为**查询时**按"查询词元在路径里出现的
+ * 比例"加成: 机制显式、上界固定 (PATH_AFFINITY_WEIGHT), 不改索引语义。
+ */
+const PATH_AFFINITY_WEIGHT = 0.35;
+
+function pathTokenSet(relativePath) {
+  const segments = slash(relativePath).replace(/\.md$/i, '').split('/');
+  const tokens = new Set();
+  for (const segment of segments) {
+    for (const token of tokenize(segment.replace(/[-_]/g, ' '))) tokens.add(token);
+    for (const token of tokenize(segment)) tokens.add(token);
+  }
+  return tokens;
+}
+
+/** 查询词元命中路径的比例 (0..1)。CJK 单字噪声大, 只看长度 ≥2 的词元。 */
+function pathAffinity(queryTerms, relativePath) {
+  const meaningful = queryTerms.filter((term) => term.length >= 2);
+  if (meaningful.length === 0) return 0;
+  const tokens = pathTokenSet(relativePath);
+  const hits = meaningful.filter((term) => tokens.has(term)).length;
+  return hits / meaningful.length;
+}
+
 function buildIndex(fileList) {
   const df = {};
   const tf = {};
@@ -281,16 +314,22 @@ function querySemantic(query, opts = {}) {
     for (const term of Object.keys(queryVector)) queryVector[term] /= norm;
   }
 
+  const queryTerms = Object.keys(queryVector);
   const scored = [];
   for (const [filePath, documentVector] of Object.entries(index.vectors || {})) {
-    const score = cosineSimilarity(queryVector, documentVector);
-    if (score > 0) scored.push({ filePath, score });
+    const cosine = cosineSimilarity(queryVector, documentVector);
+    const relativePath = slash(path.relative(home, filePath));
+    const affinity = pathAffinity(queryTerms, relativePath);
+    const score = cosine + PATH_AFFINITY_WEIGHT * affinity;
+    if (score > 0) scored.push({ filePath, relativePath, score, cosine, pathAffinity: affinity });
   }
   scored.sort((left, right) => right.score - left.score);
   const topK = Math.max(1, Number(opts.topK || 5));
-  const results = scored.slice(0, topK).map(({ filePath, score }) => ({
-    path: slash(path.relative(home, filePath)),
+  const results = scored.slice(0, topK).map(({ filePath, relativePath, score, cosine, pathAffinity: affinity }) => ({
+    path: relativePath,
     score,
+    cosine,
+    pathAffinity: affinity,
     snippet: extractSnippet(filePath, query),
   }));
   return {
@@ -304,6 +343,84 @@ function querySemantic(query, opts = {}) {
 function optionValue(argv, name, fallback = null) {
   const index = argv.indexOf(name);
   return index >= 0 && argv[index + 1] !== undefined ? argv[index + 1] : fallback;
+}
+
+const DEFAULT_EVAL_CASES = path.join(
+  'engine', 'scripts', 'test-hooks', 'fixtures', 'retrieval-eval-cases.json',
+);
+
+/**
+ * 检索金标评测 (D4)。金标的 expected 由文档主题决定, 不能按检索器当前输出反向标注,
+ * 否则指标退化成自我确认。三个口径同时报告:
+ *   hitRate@k  — 至少命中一条期望文档的 case 比例 (召回是否发生)
+ *   precision@k — 命中数 / min(k, |expected|) (排前面的是不是对的)
+ *   MRR        — 第一条正确结果的排名倒数 (要不要往下翻)
+ */
+function evaluateRetrieval(opts = {}) {
+  const home = path.resolve(opts.home || HARNESS_ROOT);
+  const casesFile = path.resolve(opts.casesFile || path.join(home, DEFAULT_EVAL_CASES));
+  const parsed = JSON.parse(fs.readFileSync(casesFile, 'utf8'));
+  const cases = Array.isArray(parsed) ? parsed : parsed.cases;
+  if (!Array.isArray(cases) || cases.length === 0) throw new Error('retrieval eval corpus is empty');
+  const topK = Math.max(1, Number(opts.topK || 5));
+  const freshness = inspectIndexFreshness({ home, now: opts.now, maxAgeDays: opts.maxAgeDays });
+
+  const perCase = [];
+  for (const testCase of cases) {
+    const expected = (testCase.expected || []).map(slash);
+    if (expected.length === 0) throw new Error(`${testCase.id}: expected documents are required`);
+    const result = querySemantic(testCase.query, { home, topK, allowStale: opts.allowStale, now: opts.now });
+    const returned = (result.results || []).map((entry) => slash(entry.path));
+    const hits = returned.filter((entry) => expected.includes(entry));
+    const firstHitIndex = returned.findIndex((entry) => expected.includes(entry));
+    perCase.push({
+      id: testCase.id,
+      query: testCase.query,
+      status: result.status,
+      expected,
+      returned,
+      hits: hits.length,
+      hit: hits.length > 0,
+      precision: Number((hits.length / Math.min(topK, expected.length)).toFixed(6)),
+      reciprocalRank: firstHitIndex >= 0 ? Number((1 / (firstHitIndex + 1)).toFixed(6)) : 0,
+    });
+  }
+
+  const mean = (values) => (values.length
+    ? Number((values.reduce((total, value) => total + value, 0) / values.length).toFixed(6))
+    : null);
+  const summary = {
+    cases: perCase.length,
+    topK,
+    hitRate: mean(perCase.map((entry) => (entry.hit ? 1 : 0))),
+    precisionAtK: mean(perCase.map((entry) => entry.precision)),
+    mrr: mean(perCase.map((entry) => entry.reciprocalRank)),
+    misses: perCase.filter((entry) => !entry.hit).map((entry) => entry.id),
+  };
+  const threshold = (value, fallback) => {
+    // null 来自"命令行没给该选项", 必须回落默认值 —— Number(null)=0 会让门禁失效。
+    if (value === undefined || value === null || value === '') return fallback;
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : fallback;
+  };
+  const minPrecision = threshold(opts.minPrecision, 0.8);
+  const minHitRate = threshold(opts.minHitRate, 0.9);
+  const failures = [];
+  if (freshness.stale && opts.allowStale !== true) failures.push(`index is stale: ${freshness.reason}`);
+  if (summary.precisionAtK < minPrecision) failures.push(`precision@${topK} ${summary.precisionAtK} < ${minPrecision}`);
+  if (summary.hitRate < minHitRate) failures.push(`hitRate@${topK} ${summary.hitRate} < ${minHitRate}`);
+
+  return {
+    schemaVersion: 1,
+    mode: 'retrieval-eval',
+    casesFile: slash(path.relative(home, casesFile)),
+    status: failures.length === 0 ? 'passed' : 'failed',
+    freshness,
+    summary,
+    thresholds: { minPrecision, minHitRate },
+    failures,
+    perCase,
+  };
 }
 
 function main(argv = process.argv.slice(2)) {
@@ -328,9 +445,30 @@ function main(argv = process.argv.slice(2)) {
     console.log(JSON.stringify(result.results, null, 2));
     return 0;
   }
+  if (command === 'eval') {
+    const result = evaluateRetrieval({
+      home,
+      casesFile: optionValue(argv, '--cases'),
+      topK: Number(optionValue(argv, '--top', 5)),
+      minPrecision: optionValue(argv, '--min-precision'),
+      minHitRate: optionValue(argv, '--min-hit-rate'),
+      allowStale: argv.includes('--allow-stale'),
+    });
+    if (argv.includes('--json')) {
+      console.log(JSON.stringify(result, null, 2));
+    } else {
+      const { summary } = result;
+      console.log(`retrieval-eval: ${result.status} cases=${summary.cases} `
+        + `hitRate@${summary.topK}=${summary.hitRate} precision@${summary.topK}=${summary.precisionAtK} MRR=${summary.mrr}`);
+      if (summary.misses.length) console.log(`  misses: ${summary.misses.join(', ')}`);
+      for (const failure of result.failures) console.log(`  FAIL ${failure}`);
+    }
+    return result.status === 'passed' ? 0 : 1;
+  }
   console.error('Usage:');
   console.error('  node semantic-search.cjs index [--rebuild] [--home PATH]');
   console.error('  node semantic-search.cjs query "question" [--top N] [--home PATH]');
+  console.error('  node semantic-search.cjs eval [--cases FILE] [--top N] [--min-precision X] [--json]');
   return 1;
 }
 
@@ -339,11 +477,13 @@ if (require.main === module) {
 }
 
 module.exports = {
+  DEFAULT_EVAL_CASES,
   tokenize,
   buildIndex,
   eligibleFiles,
   buildSemanticIndex,
   inspectIndexFreshness,
   querySemantic,
+  evaluateRetrieval,
   main,
 };

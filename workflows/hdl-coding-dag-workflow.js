@@ -869,9 +869,9 @@ ${String(debugOut).slice(0, 800)}
 1. 读取 JSON 证据: 02_sim/check_results/${mod}.json
 2. 验证: status=PASS 且 compared_points>0
 3. 读取 RTL 独立检查:
-   - 禁止: initial / disable / force 语句
+   - initial: 仅允许 RAM/ROM 存储器阵列初值（$readmemh 可）；禁止标量/FF initial；禁止 disable/force
    - 端口命名: i_/o_ 前缀
-   - 复位: i_rst (同步高有效)
+   - 复位: 凡复位须 i_rst 同步高有效；数据通路推荐少复位；BRAM/DSP/SRL 级须复位豁免注释
 4. 最终清理: rm -f wlft* transcript *.wlf vsim.wlf
 5. 输出 JSON:
 {"module":"${mod}","pass":true|false,"evidence_ok":true|false,"checks":["..."],"issues":["..."]}`,

@@ -338,6 +338,14 @@ async function main() {
     process.exitCode = 2;
     return;
   }
+  return require('../lib/hook-latency.cjs').timed(
+    'preflight-router',
+    String(payload?.hook_event_name || 'PreToolUse'),
+    () => mainWithPayload(payload),
+  );
+}
+
+async function mainWithPayload(payload) {
   const runtime = runtimeFrom(payload);
   const promotedPolicy = await runGate(runtime, {
     source: 'promoted-harness-gate',

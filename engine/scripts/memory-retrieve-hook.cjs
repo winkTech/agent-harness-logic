@@ -67,12 +67,25 @@ const TRIGGER_PATTERNS = [
 ];
 
 // ── 层2: 任务上下文 — 代码文件类型 → 检索增强词 ──────────────────────────
-const CODE_EXTENSIONS = ['.sv', '.v', '.vh', '.vhd', '.py', '.c', '.cpp', '.h'];
+// harness 自身的代码扩展名 (2026-07-30 补): 旧清单只有 HDL/Python/C 系,
+// 于是 harness 开发完全不触发层2 检索 —— 实测某会话 93 次 Edit + 21 次 Write
+// 全是 .cjs, 两层触发都没命中, 51 条活跃事实里只有 2 条被暴露过, D5 的
+// neverExposed 因此永远停在 0.96。刻意不含 .md/.json: 文档与配置改动频繁
+// 且检索价值低, 纳入只会增加注入噪声与 token 开销。
+const CODE_EXTENSIONS = ['.sv', '.v', '.vh', '.vhd', '.py', '.c', '.cpp', '.h', '.cjs', '.mjs', '.js', '.ts'];
+// 增强词刻意保持在 6 个以内且偏判别性语汇。relevantResult 的门槛是
+// overlap >= ceil(terms/4)(上限 3), 词表变大只会让过滤**更严**,
+// 所以过度增强的风险是漏注入, 不是误注入。
+const HARNESS_ENRICH = ['hook', 'harness', '门禁', '验证', '契约', '事件'];
 const TYPE_ENRICH = {
   sv:  ['HDL', 'Verilog', 'FSM', '状态机', '时序', '接口', 'valid', 'ready', '握手', '复位', '流水线', '位宽', '锁存器', '跨时钟域', 'CDC'],
   v:   ['HDL', 'Verilog', 'FSM', '状态机', '时序', '接口', '复位', '位宽'],
   vhd: ['HDL', 'VHDL', 'FSM', '状态机', '时序', '接口'],
   py:  ['Python', 'pytest', 'ruff', '异常', '类型', '接口'],
+  cjs: HARNESS_ENRICH,
+  mjs: HARNESS_ENRICH,
+  js:  HARNESS_ENRICH,
+  ts:  HARNESS_ENRICH,
 };
 const GENERIC_PATH_PARTS = new Set([
   'users', 'home', 'repo', 'repository', 'project', 'workspace',
@@ -244,6 +257,32 @@ function relevantResult(query, result) {
   return overlap >= required;
 }
 
+/** 候选层补位阈值: 低于 verified 的 0.7, 但把 0.3/0.4 的噪声挡在外面。 */
+const CANDIDATE_MIN_CONFIDENCE = 0.6;
+const CANDIDATE_SLOTS = 2;
+
+function toMatch(r) {
+  return {
+    memoryId: r.id || r.memory_id || null,
+    namespace: r.namespace,
+    name: r.name || '(unnamed)',
+    summary: r.summary,
+    confidence: Math.round(r.confidence * 100) / 100,
+    source: r.source || 'unknown',
+    sourceKey: r.source_key || null,
+    status: r.status || 'active',
+    verification: r.verification_state || 'candidate',
+    updatedAt: r.updated_at || r.created_at || null,
+  };
+}
+
+/**
+ * 两层检索 (D5 召回修复, 2026-07-29):
+ *   层A: verified 事实 (原路径, 完整信任链) — 优先注入;
+ *   层B: verified 不足 3 条时, candidate 事实 (≥0.6) 补位, 注入时显式标注未验证。
+ * 依据: 51 条活跃事实中仅 2 条 verified, 默认信任门禁使其余 49 条结构性不可达;
+ * 候选注入是摘要级 hint, 由 exposure→outcome 归因数据回头校准或退役。
+ */
 function doMemoryQuery(query, label, deps = {}) {
   let wDb;
   try {
@@ -251,23 +290,29 @@ function doMemoryQuery(query, label, deps = {}) {
     const retrieveMemorySummary = deps.retrieveMemorySummary
       || require('../sqlite/store-memory.cjs').retrieveMemorySummary;
     wDb = openDb({ readonly: true });
-    const results = retrieveMemorySummary(query, {
+    const verified = retrieveMemorySummary(query, {
       db: wDb.db, limit: 5, maxChars: 200, minConfidence: 0.7, trackHit: false,
       scope: deps.scope,
-    });
-    if (results.length > 0) {
-      return results.filter(r => relevantResult(query, r)).slice(0, 3).map(r => ({
-        memoryId: r.id || r.memory_id || null,
-        namespace: r.namespace,
-        name: r.name || '(unnamed)',
-        summary: r.summary,
-        confidence: Math.round(r.confidence * 100) / 100,
-        source: r.source || 'unknown',
-        sourceKey: r.source_key || null,
-        status: r.status || 'active',
-        updatedAt: r.updated_at || r.created_at || null,
-      }));
+    }).filter(r => relevantResult(query, r)).slice(0, 3);
+
+    const matches = verified.map(toMatch);
+    if (matches.length < 3) {
+      const seen = new Set(matches.map(m => m.memoryId));
+      // 候选层放开 unscoped: 存量事实多为未迁移 scope 的 legacy 条目
+      // (实测 49/51 为 scope_kind='unscoped'), 严格 scope 会把候选层整体清零。
+      const candidates = retrieveMemorySummary(query, {
+        db: wDb.db, limit: 5, maxChars: 200, minConfidence: CANDIDATE_MIN_CONFIDENCE,
+        trackHit: false, includeCandidates: true,
+        scope: { ...(deps.scope || {}), includeGlobal: true, allowUnscoped: true },
+      })
+        .filter(r => relevantResult(query, r))
+        .filter(r => r.verification_state !== 'verified')
+        .filter(r => !seen.has(r.id || r.memory_id || null))
+        .slice(0, CANDIDATE_SLOTS)
+        .map(toMatch);
+      matches.push(...candidates);
     }
+    return matches;
   } catch { /* 静默 */ }
   finally {
     try { wDb?.close(); } catch { /* readonly cleanup */ }
@@ -441,9 +486,10 @@ function retrieveContext(payload = {}, deps = {}) {
       const updated = Number.isFinite(Number(m.updatedAt))
         ? new Date(Number(m.updatedAt)).toISOString()
         : String(m.updatedAt || 'unknown');
-      lines.push(`- (${m.namespace}) ${m.name}: ${brief(m.summary)} `
+      const tag = m.verification === 'verified' ? '' : '候选(未验证,仅供参考) ';
+      lines.push(`- (${m.namespace}) ${tag}${m.name}: ${brief(m.summary)} `
         + `[source=${m.source}; key=${m.sourceKey || 'none'}; confidence=${m.confidence}; `
-        + `status=${m.status}; updated=${updated}]`);
+        + `verify=${m.verification}; status=${m.status}; updated=${updated}]`);
     }
     const output = {
       hookSpecificOutput: {

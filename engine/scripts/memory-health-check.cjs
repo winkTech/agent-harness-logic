@@ -162,6 +162,14 @@ function queryAttribution(db) {
       AND application.memory_id = outcome.memory_id
     WHERE application.application_id IS NULL
   `).get().c || 0);
+  const now = Date.now();
+  const windowStart = now - 30 * 86_400_000;
+  const exposures30d = Number(db.prepare(
+    'SELECT COUNT(*) AS c FROM memory_retrieval_exposures WHERE emitted_at >= ?',
+  ).get(windowStart).c || 0);
+  const outcomes30d = Number(db.prepare(
+    'SELECT COUNT(*) AS c FROM memory_outcomes WHERE observed_at >= ?',
+  ).get(windowStart).c || 0);
   return {
     available: true,
     missingTables: [],
@@ -176,6 +184,12 @@ function queryAttribution(db) {
     outcomeVerdicts: group('memory_outcomes', 'verdict'),
     orphanApplications,
     orphanOutcomes,
+    // 30d 窗口可见性 (2026-07-30): "有暴露但 outcome 恒 0 = 链路失效" 的计分
+    // 判定尚未获批 (候选 hrc 走晋升流程), 这里只报数据不改评分 —— 现行合同仍是
+    // "没有 outcome 本身不是失败, 孤儿身份链才是"。
+    exposures30d,
+    outcomes30d,
+    outcomeChainStale: exposures30d > 0 && outcomes30d === 0,
   };
 }
 
@@ -456,7 +470,7 @@ function queryFacts(db, now) {
       total: 0, fts: 0, active: 0, tombstone: 0, superseded: 0,
       confirmed: 0, tentative: 0, low: 0, permanent: 0, activeTtl: 0,
       sourceReconciledPermanent: 0, unmanagedPermanent: 0,
-      expired: 0, expiredActive: 0, expiredRetired: 0, neverHit: 0, dreamOutputs: 0,
+      expired: 0, expiredActive: 0, expiredRetired: 0, neverHit: 0, neverExposed: 0, dreamOutputs: 0,
       verifiedTotal: 0, verifiedComplete: 0, verifiedIncomplete: 0, verifiedIncompleteRecords: [],
     };
   }
@@ -498,6 +512,15 @@ function queryFacts(db, now) {
     expiredActive: Number(facts.expired_active || 0),
     expiredRetired: Number(facts.expired_retired || 0),
     neverHit: Number(facts.never_hit || 0),
+    // hit_count 在生产检索路径 (只读连接, trackHit:false) 永不递增, neverHit 是死仪表;
+    // 真实使用口径是 memory_retrieval_exposures — neverExposed 才反映召回利用率。
+    neverExposed: tableExists(db, 'memory_retrieval_exposures')
+      ? Number(db.prepare(`
+        SELECT COUNT(*) AS c FROM facts f
+        WHERE COALESCE(f.status, 'active') = 'active'
+          AND NOT EXISTS (SELECT 1 FROM memory_retrieval_exposures e WHERE e.memory_id = f.id)
+      `).get().c || 0)
+      : Number(facts.active || 0),
     dreamOutputs: Number(facts.dream_outputs || 0),
     verifiedTotal: verified.verifiedTotal,
     verifiedComplete: verified.verifiedComplete,
@@ -653,6 +676,174 @@ function queryEvents(db, opts = {}) {
   };
 }
 
+/**
+ * 成本遥测断流探测 (D6 升级, 2026-07-29)。
+ *
+ * 活动信号取 runtime_consumer_heartbeats 的最近完成时间 (会话在跑 ⇒ Stop 在发生
+ * ⇒ 应有成本行)。cost_ledger 缺表 / 有活动却无成本行 / 只剩 estimate 回退都要暴露 —
+ * costs.jsonl 无声死亡 45 天的教训: 每条数据链路必须有断流判定。
+ */
+function queryCostTelemetry(db, now) {
+  if (!tableExists(db, 'cost_ledger')) return { available: false };
+  const parseAt = (value) => {
+    const ts = Date.parse(value || '');
+    return Number.isFinite(ts) ? ts : null;
+  };
+  const lastUsageAt = parseAt(db.prepare(
+    "SELECT MAX(created_at) AS at FROM cost_ledger WHERE phase = 'usage'",
+  ).get().at);
+  const estimateRow = db.prepare(
+    "SELECT MAX(created_at) AS at, COUNT(*) AS n FROM cost_ledger WHERE phase = 'estimate'",
+  ).get();
+  const usageRows = Number(db.prepare(
+    "SELECT COUNT(*) AS n FROM cost_ledger WHERE phase = 'usage'",
+  ).get().n || 0);
+  const lastConsumerActivityAt = tableExists(db, 'runtime_consumer_heartbeats')
+    ? parseAt(db.prepare(
+      'SELECT MAX(last_completed_at) AS at FROM runtime_consumer_heartbeats',
+    ).get().at)
+    : null;
+  const hasUsageColumns = (() => {
+    try { db.prepare('SELECT cost_usd FROM cost_ledger LIMIT 1').get(); return true; }
+    catch { return false; }
+  })();
+  const usd30d = hasUsageColumns
+    ? Number(db.prepare(`
+      SELECT ROUND(SUM(cost_usd), 4) AS usd FROM cost_ledger
+      WHERE phase = 'usage' AND created_at >= ?
+    `).get(new Date(now - 30 * 86400000).toISOString()).usd || 0)
+    : 0;
+  return {
+    available: true,
+    hasUsageColumns,
+    usageRows,
+    estimateRows: Number(estimateRow.n || 0),
+    lastUsageAt: lastUsageAt ? new Date(lastUsageAt).toISOString() : null,
+    lastEstimateAt: parseAt(estimateRow.at) ? new Date(parseAt(estimateRow.at)).toISOString() : null,
+    lastConsumerActivityAt: lastConsumerActivityAt ? new Date(lastConsumerActivityAt).toISOString() : null,
+    usd30d,
+    _lastUsageTs: lastUsageAt,
+    _lastAnyTs: Math.max(lastUsageAt || 0, parseAt(estimateRow.at) || 0) || null,
+    _activityTs: lastConsumerActivityAt,
+  };
+}
+
+/**
+ * 交付与规划两条新数据链的断流探测 (D1/D2, 2026-07-30)。
+ * 每接一个数据源必须同步加断流判定 —— costs.jsonl 无声死亡 45 天的直接补课。
+ */
+function queryDeliveryPlanTelemetry(db, now) {
+  const sevenDays = 7 * 86400000;
+  const thirtyDays = 30 * 86400000;
+  const sqliteMs = (expr) => `CAST(strftime('%s', ${expr}) AS INTEGER) * 1000`;
+  const delivery = tableExists(db, 'delivery_events')
+    ? {
+      available: true,
+      rows: Number(db.prepare('SELECT COUNT(*) AS n FROM delivery_events').get().n || 0),
+      lastAt: Number(db.prepare(`SELECT MAX(${sqliteMs('timestamp')}) AS t FROM delivery_events`).get().t || 0) || null,
+      pass30d: Number(db.prepare(`SELECT COUNT(*) AS n FROM delivery_events WHERE status = 'pass' AND ${sqliteMs('timestamp')} >= ?`).get(now - thirtyDays).n || 0),
+      fail30d: Number(db.prepare(`SELECT COUNT(*) AS n FROM delivery_events WHERE status = 'fail' AND ${sqliteMs('timestamp')} >= ?`).get(now - thirtyDays).n || 0),
+    }
+    : { available: false };
+  const plans = tableExists(db, 'plan_snapshots')
+    ? {
+      available: true,
+      snapshots: Number(db.prepare('SELECT COUNT(*) AS n FROM plan_snapshots').get().n || 0),
+      reconciliations: tableExists(db, 'plan_reconciliations')
+        ? Number(db.prepare('SELECT COUNT(*) AS n FROM plan_reconciliations').get().n || 0)
+        : 0,
+      lastReconciledAt: tableExists(db, 'plan_reconciliations')
+        ? Number(db.prepare('SELECT MAX(reconciled_at) AS t FROM plan_reconciliations').get().t || 0) || null
+        : null,
+    }
+    : { available: false };
+  return {
+    delivery,
+    plans,
+    _deliveryStale: delivery.available && delivery.lastAt !== null && now - delivery.lastAt > sevenDays,
+    _planStale: plans.available && plans.snapshots > 0
+      && (plans.lastReconciledAt === null || now - plans.lastReconciledAt > thirtyDays),
+  };
+}
+
+/**
+ * 受保护写入的审计对账 (D9, 2026-07-30)。
+ *
+ * 一次性令牌命中即被消费, 所以"审批文件为空"是正常终态 —— 真正要对账的是:
+ *   1. 每条放行审计必须带非空 reason (证明当时存在批准);
+ *   2. 审批文件里不该积压已过期令牌 (过期令牌是长期敞开的门的残影);
+ *   3. 令牌不得含通配符 (逐文件批准是该通道的核心约束)。
+ */
+function queryProtectedWrites(home) {
+  const auditFile = path.join(home, 'var', 'audit', 'protected-writes.jsonl');
+  const approvalFile = path.join(home, 'var', 'audit', 'protected-write-approvals.json');
+  const result = {
+    auditAvailable: fs.existsSync(auditFile),
+    approvalsAvailable: fs.existsSync(approvalFile),
+    writes: 0,
+    writesWithoutReason: 0,
+    liveTokens: 0,
+    expiredTokens: 0,
+    wildcardTokens: 0,
+  };
+  if (result.auditAvailable) {
+    let raw = '';
+    try { raw = fs.readFileSync(auditFile, 'utf8'); } catch { raw = ''; }
+    for (const line of raw.split(/\r?\n/)) {
+      if (!line.trim()) continue;
+      result.writes += 1;
+      let entry;
+      try { entry = JSON.parse(line); } catch { result.writesWithoutReason += 1; continue; }
+      if (!String(entry?.reason || '').trim()) result.writesWithoutReason += 1;
+    }
+  }
+  if (result.approvalsAvailable) {
+    let tokens = [];
+    try { tokens = JSON.parse(fs.readFileSync(approvalFile, 'utf8')); } catch { tokens = []; }
+    if (Array.isArray(tokens)) {
+      const now = Date.now();
+      for (const token of tokens) {
+        const target = String(token?.path || '');
+        if (target.includes('*') || target.includes('?')) result.wildcardTokens += 1;
+        if (new Date(token?.expiresAt || 0).getTime() > now) result.liveTokens += 1;
+        else result.expiredTokens += 1;
+      }
+    }
+  }
+  return result;
+}
+
+/**
+ * 周报表断流探测 (2026-07-30)。
+ *
+ * 报表本身也是一条数据链路, 因此同样要有断流判定 —— 否则会重演 costs.jsonl:
+ * 采集悄悄停了, 没人知道。判定挂在"维护近期执行过"这个前提上, 避免全新环境
+ * 或从未维护过的机器被误报。
+ */
+function queryWeeklyReport(home, now, maintenance) {
+  const reportFile = path.join(home, 'var', 'metrics', 'weekly-report.json');
+  const result = { available: fs.existsSync(reportFile), generatedAt: null, ageDays: null, erroredSections: [] };
+  if (result.available) {
+    try {
+      const report = JSON.parse(fs.readFileSync(reportFile, 'utf8'));
+      result.generatedAt = report.generatedAt || null;
+      const at = Date.parse(result.generatedAt || '');
+      result.ageDays = Number.isFinite(at) ? Number(((now - at) / DAY_MS).toFixed(2)) : null;
+      result.erroredSections = Array.isArray(report.erroredSections) ? report.erroredSections : [];
+      result.history = Array.isArray(report.history) ? report.history.length : 0;
+    } catch (error) {
+      result.parseError = error.message;
+    }
+  }
+  // 维护本身近期跑过 (≤2 个周期) 却没有对应的报表快照 = 报表链路断了
+  const maintenanceRecent = Number.isFinite(maintenance?.ageDays)
+    && maintenance.ageDays <= (maintenance.intervalDays || 7) * 2;
+  const staleThreshold = (maintenance?.intervalDays || 7) * 2;
+  result.stale = maintenanceRecent
+    && (!result.available || result.ageDays === null || result.ageDays > staleThreshold);
+  return result;
+}
+
 function buildHealthReport(opts = {}) {
   if (!opts.db) throw new Error('buildHealthReport requires an injected database');
   const db = opts.db;
@@ -796,6 +987,85 @@ function buildHealthReport(opts = {}) {
       'promoted harness rule artifacts do not match explicit approval and ledger hashes', promotedRules);
   }
 
+  const costs = queryCostTelemetry(db, now);
+  if (!costs.available) {
+    issue('cost_ledger_missing', 'high', 10, 'cost_ledger table is missing', {});
+  } else {
+    const sevenDays = 7 * 86400000;
+    const activityRecent = costs._activityTs && now - costs._activityTs < sevenDays;
+    const anyCostRecent = costs._lastAnyTs && now - costs._lastAnyTs < sevenDays;
+    const usageRecent = costs._lastUsageTs && now - costs._lastUsageTs < sevenDays;
+    if (activityRecent && !anyCostRecent) {
+      issue('cost_telemetry_dead', 'high', 10,
+        'sessions are running but no cost rows were written in the last 7 days', {
+          lastConsumerActivityAt: costs.lastConsumerActivityAt,
+          lastUsageAt: costs.lastUsageAt,
+          lastEstimateAt: costs.lastEstimateAt,
+        });
+    } else if (activityRecent && !usageRecent) {
+      issue('cost_usage_stale', 'medium', 5,
+        'cost telemetry is running on the estimate fallback only — transcript usage rows are stale or absent', {
+          lastConsumerActivityAt: costs.lastConsumerActivityAt,
+          lastUsageAt: costs.lastUsageAt,
+          lastEstimateAt: costs.lastEstimateAt,
+        });
+    }
+  }
+
+  const deliveryPlans = queryDeliveryPlanTelemetry(db, now);
+  const activityRecentForPipes = (() => {
+    const sevenDays = 7 * 86400000;
+    return costs._activityTs && now - costs._activityTs < sevenDays;
+  })();
+  if (activityRecentForPipes && deliveryPlans._deliveryStale) {
+    issue('delivery_telemetry_stale', 'medium', 5,
+      'sessions are running but no delivery verdict was recorded in the last 7 days', {
+        lastDeliveryAt: deliveryPlans.delivery.lastAt
+          ? new Date(deliveryPlans.delivery.lastAt).toISOString() : null,
+        rows: deliveryPlans.delivery.rows,
+      });
+  }
+  if (activityRecentForPipes && deliveryPlans._planStale) {
+    issue('plan_accuracy_stale', 'medium', 5,
+      'plan snapshots exist but no plan-vs-actual reconciliation landed in the last 30 days', {
+        snapshots: deliveryPlans.plans.snapshots,
+        lastReconciledAt: deliveryPlans.plans.lastReconciledAt
+          ? new Date(deliveryPlans.plans.lastReconciledAt).toISOString() : null,
+      });
+  }
+
+  const weeklyReport = queryWeeklyReport(home, now, maintenance);
+  if (weeklyReport.stale) {
+    issue('weekly_report_stale', 'medium', 5,
+      'maintenance is running but the weekly report snapshot is missing or stale', {
+        available: weeklyReport.available,
+        generatedAt: weeklyReport.generatedAt,
+        ageDays: weeklyReport.ageDays,
+        maintenanceAgeDays: maintenance.ageDays,
+      });
+  }
+  if (weeklyReport.erroredSections.length > 0) {
+    issue('weekly_report_source_failed', 'medium', 5,
+      'the weekly report recorded failing data sources', {
+        erroredSections: weeklyReport.erroredSections,
+        generatedAt: weeklyReport.generatedAt,
+      });
+  }
+
+  const protectedWrites = queryProtectedWrites(home);
+  if (protectedWrites.writesWithoutReason > 0) {
+    issue('protected_write_without_approval', 'critical', 20,
+      'protected-write audit entries exist without a recorded approval reason', protectedWrites);
+  }
+  if (protectedWrites.wildcardTokens > 0) {
+    issue('protected_write_wildcard_token', 'high', 15,
+      'protected-write approval tokens contain wildcards — per-file approval is required', protectedWrites);
+  }
+  if (protectedWrites.expiredTokens > 0) {
+    issue('protected_write_stale_token', 'medium', 5,
+      'expired protected-write approval tokens are still present in the approvals file', protectedWrites);
+  }
+
   score = Math.max(0, Math.min(100, score));
   const status = score < 70 ? 'unhealthy' : score < 90 ? 'degraded' : 'healthy';
   return {
@@ -809,6 +1079,22 @@ function buildHealthReport(opts = {}) {
       attribution,
       ruleCandidates,
       promotedRules,
+      costs: costs.available
+        ? {
+          available: true,
+          hasUsageColumns: costs.hasUsageColumns,
+          usageRows: costs.usageRows,
+          estimateRows: costs.estimateRows,
+          lastUsageAt: costs.lastUsageAt,
+          lastEstimateAt: costs.lastEstimateAt,
+          lastConsumerActivityAt: costs.lastConsumerActivityAt,
+          usd30d: costs.usd30d,
+        }
+        : { available: false },
+      delivery: deliveryPlans.delivery,
+      plans: deliveryPlans.plans,
+      protectedWrites,
+      weeklyReport,
       events: {
         total: eventSnapshot.total,
         safeWatermark: eventSnapshot.safeWatermark,
@@ -898,6 +1184,10 @@ module.exports = {
   inspectRuleCandidateLifecycle,
   inspectPromotedRuleIntegrity,
   queryAttribution,
+  queryCostTelemetry,
+  queryDeliveryPlanTelemetry,
+  queryProtectedWrites,
+  queryWeeklyReport,
   detectConsumerSchedules,
   loadConsumerRegistry,
   parseArgs,

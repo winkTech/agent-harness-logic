@@ -1,0 +1,29 @@
+{
+  "$comment": [
+    "Claude 模型定价表 — cost 遥测唯一定价来源 (store-costs.cjs 消费)。",
+    "单位: USD / 1M tokens。cache write 按 5 分钟 TTL 系数 1.25 (1h TTL 为 2.0, 本 harness 不区分, 取保守低值);",
+    "cache read 系数 0.1。来源: claude-api skill 模型表 (cached 2026-06-24)。",
+    "模型匹配为最长前缀匹配, 以兼容带日期后缀的完整 ID (如 claude-haiku-4-5-20251001)。",
+    "更新方式: 改本文件后跑 node engine/scripts/test-hooks/cost-usage-contract.cjs 验证完整性。"
+  ],
+  "updatedAt": "2026-07-29",
+  "unit": "USD per MTok",
+  "cacheReadMultiplier": 0.1,
+  "cacheWriteMultiplier": 1.25,
+  "models": {
+    "claude-fable-5": { "input": 10, "output": 50 },
+    "claude-mythos-5": { "input": 10, "output": 50 },
+    "claude-opus-5": { "input": 5, "output": 25 },
+    "claude-opus-4-8": { "input": 5, "output": 25 },
+    "claude-opus-4-7": { "input": 5, "output": 25 },
+    "claude-opus-4-6": { "input": 5, "output": 25 },
+    "claude-opus-4-5": { "input": 5, "output": 25 },
+    "claude-opus-4-1": { "input": 15, "output": 75 },
+    "claude-opus-4-0": { "input": 15, "output": 75 },
+    "claude-sonnet-5": { "input": 3, "output": 15 },
+    "claude-sonnet-4-6": { "input": 3, "output": 15 },
+    "claude-sonnet-4-5": { "input": 3, "output": 15 },
+    "claude-haiku-4-5": { "input": 1, "output": 5 }
+  },
+  "fallback": { "input": 5, "output": 25 }
+}

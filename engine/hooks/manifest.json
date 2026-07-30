@@ -30,6 +30,20 @@
       "active": true
     },
     {
+      "id": "fp-rate",
+      "kind": "event-stream",
+      "event": "Stop",
+      "hostScript": "engine/hooks/learning/postflight-observer.cjs",
+      "component": "fp-rate",
+      "requiresWatermark": true,
+      "requiresHeartbeat": true,
+      "minBatch": 1,
+      "maxBatch": 100,
+      "maxPendingAgeSeconds": 86400,
+      "timeoutSeconds": 15,
+      "active": true
+    },
+    {
       "id": "promoted-harness-gate",
       "kind": "policy",
       "event": "PreToolUse",
@@ -49,8 +63,8 @@
       "tools": ["*"],
       "payloadSchema": "claude-hook/postflight-v1",
       "blocking": false,
-      "sideEffects": ["sqlite-events", "sqlite-memory", "cost-ledger", "transparency-ledger", "skill-candidates"],
-      "consumers": ["skill-evolve"],
+      "sideEffects": ["sqlite-events", "sqlite-memory", "cost-ledger", "transparency-ledger", "skill-candidates", "fp-rate-log", "plan-accuracy"],
+      "consumers": ["skill-evolve", "fp-rate"],
       "timeoutSeconds": 30,
       "owner": "harness-observability",
       "fixture": "engine/scripts/test-hooks/observer-consolidation-contract.cjs",

@@ -1,7 +1,7 @@
 ---
 name: hdl-coding
-description: HDL 编码规范 — FPGA/ASIC 的 Verilog/SystemVerilog 工作：RTL 模块、Testbench、模块例化、流水线、CDC、状态机、代码审查，以及 FPGA 架构原理讲解、RTL 框图和 Vivado 综合/工具流（综合属性、推断规则、report_methodology/RTL DRC/report_cdc、XDC、xsim）。强制 ri_/ro_ 命名、输入输出寄存、三段式 FSM 和无锁存器——违反红线的代码过不了本仓库的审查门禁。纯 Python/MATLAB、工具安装、算法调研不适用。
-version: 3.8.0
+description: HDL 编码规范 — FPGA/ASIC 的 Verilog/SystemVerilog 工作：RTL 模块、Testbench、模块例化、流水线、CDC、状态机、代码审查，以及 FPGA 架构原理讲解、RTL 框图和 Vivado 综合/工具流（综合属性、推断规则、report_methodology/RTL DRC/report_cdc、XDC、xsim）。强制 ri_/ro_ 命名、输入输出寄存、三段式 FSM、无锁存器；initial 仅允许 RAM/ROM 阵列初值；数据通路推荐少复位以利 BRAM/DSP/SRL 宏吸收。纯 Python/MATLAB、工具安装、算法调研不适用。
+version: 3.9.0
 ---
 
 # HDL 编码规范
@@ -10,7 +10,7 @@ version: 3.8.0
 **必须使用**: RTL 编写、Testbench、模块例化、时序约束。
 **可跳过**: 纯文档/注释、已完成的代码审查（但 lint 仍需）。
 **前置加载**: 编写 RTL 前先读 `references/RTL_DESIGN_RULE.md` 的 §代码对齐规范；涉及星座映射、查找表、比特-符号编码的模块，再加读 §LUT/映射门禁。
-涉及**存储器 / DSP 乘加 / 移位链延时 / CDC / 综合属性**，或需要给出**资源、Fmax、时序、可综合性**结论时，加读 `references/ug949-rtl-methodology.md` 与 `references/vivado-tool-flow.md`（见 §10）。
+涉及**存储器 / DSP 乘加 / 移位链延时 / CDC / 综合属性 / initial 初值 / 复位策略**，或需要给出**资源、Fmax、时序、可综合性**结论时，加读 `references/vivado-synthesis-ug901.md`、`references/ug949-rtl-methodology.md` 与 `references/vivado-tool-flow.md`（见 §1.1、§1.2、§10）。
 
 ---
 
@@ -20,9 +20,15 @@ version: 3.8.0
 
 1. **[MUST]** 输入信号必须寄存为 `ri_`，禁止直通 → 否则 FAIL
 2. **[MUST]** 输出必须由 `ro_` 驱动，禁止组合直出 → 否则 FAIL
-3. **[MUST]** 同步复位高有效 `i_rst`，异步必须做同步释放 → 否则 FAIL
+3. **[MUST]** **凡使用复位**必须是同步高有效 `i_rst`；异步源必须做同步释放 → 否则 FAIL  
+   > 红线 3 **不要求**每个寄存器都复位。数据通路推荐少复位（§1.1）；BRAM/DSP/SRL 宏吸收场景见豁免 §10.2。
 4. **[MUST]** 三段式状态机 + `default` 分支 → 否则 FAIL
 5. **[MUST]** 无锁存器：if→else、case→default、assign→完整条件（排查法见 §8）→ 否则 FAIL
+
+### 附加硬约束（与红线同级，审查/门禁 FAIL）
+
+6. **[MUST]** `initial` **仅允许**给 **RAM/ROM 存储器阵列**赋上电初值（可含 `$readmemh`/`$readmemb`）；禁止给标量/向量 FF、FSM、指针、valid 等赋 `initial` → 否则 FAIL（对齐 UG901 + 门禁 `G-C-03`）
+7. **[MUST]** Testbench 可用任意 `initial`/`force`/`#delay`；**综合 RTL** 禁止 `force`/`release`/`disable`/`#delay`（功能性）
 
 ---
 
@@ -30,15 +36,53 @@ version: 3.8.0
 
 红线 1、2、3、5 的展开理由与补充规则：
 
-1. **同步复位**（红线 3）
-   - *原因*：本项目目标器件（Xilinx 类 FPGA 架构）推荐同步高有效复位，统一极性避免混用出错；异步复位若不做同步释放，复位恢复时会产生亚稳态
+1. **同步复位**（红线 3）— 详见 §1.1  
+   - *原因*：Xilinx 类架构推荐同步高有效；异步释放未同步会产生亚稳态
 2. **输入寄存**（红线 1）
    - *原因*：组合输入在时序分析中无明确起点，导致时序收敛困难
 3. **输出寄存**（红线 2）
    - *原因*：组合输出 = 毛刺发射器，下游每级都可能采到错误值
-4. **CDC** — 异步输入双寄存同步，加 `_cdc` 后缀（模板: `templates/comm/cdc_sync.sv`）
-5. **数据-使能对** — valid/enable 与数据成对传递
-6. **时钟/复位配对** — `i_clk_xx` / `i_rst_xx` 配对出现，不得缺失
+4. **CDC** — 异步输入双寄存同步，加 `_cdc` 后缀（模板: `templates/comm/cdc_sync.sv`）；新设计优先 XPM_CDC
+5. **数据-使能对** — valid/enable 与数据成对传递；数据无效由 valid 屏蔽，**不要**靠数据通路复位清零“兜底”
+6. **时钟/复位配对** — 有跨时钟域时 `i_clk_xx` / `i_rst_xx` 配对；模块若完全无复位寄存器，可不声明 `i_rst`（少见，须在模块头注释说明）
+
+### §1.1 复位策略（对齐 UG949：数据通路少复位）
+
+**原则：能不复位就不复位；必须复位时才用同步高有效 `i_rst`。**
+
+| 类别 | 复位？ | 说明 |
+|:-----|:------|:-----|
+| FSM 状态、valid/ready/enable 控制链 | **必须** | 上电/错误恢复依赖已知控制态 |
+| 计数器、FIFO 指针、配置/状态寄存器 | **必须** | 位置/配置错误通常无法自恢复 |
+| **纯数据流水寄存器** | **推荐不加** | 无效数据由 valid 屏蔽；少复位 → 控制集少、打包好、利于 Fmax |
+| BRAM 读数据/输出寄存器、DSP 内部流水、SRL 中间级 | **禁止加**（豁免） | 加复位阻断宏吸收；见 §10.2 / `vivado-synthesis-ug901.md` §5.1 |
+
+- **[SHOULD]** 数据通路默认无复位；审查时把“数据寄存器顺手加 `if (i_rst)`”视为应删项，除非有书面理由  
+- **[MUST]** 豁免场景须注释 `// [复位豁免] …` 且综合后用 `report_utilization` 验证宏仍被推断  
+- 模板：`references/reset-templates.md`；方法学细节：`ug949-rtl-methodology.md` §2–§3
+
+### §1.2 `initial` 用法（对齐 UG901，仅 RAM/ROM）
+
+| 允许 | 禁止 |
+|:-----|:-----|
+| 对 **存储器阵列**（`logic [W-1:0] mem [0:D-1]`）在 `initial` 中赋常量/`$readmemh`/`$readmemb` | 对标量/向量寄存器、FSM、指针、valid 做 `initial` |
+| 上电配置位流初值（FPGA）；初值 **≠** 运行时复位 | 用 `initial` 代替 `i_rst`；ASIC 目标依赖 `initial` |
+| UltraRAM：通常 **不支持** 上电初值 → 勿对 URAM 写 `initial` 期望生效 | 带运行时条件的 `initial` 逻辑（易被 Vivado `[Synth 8-6896]` 整块丢弃） |
+
+```systemverilog
+// ✅ 允许：ROM/RAM 阵列上电初值（UG901 标准可综合写法）
+(* rom_style = "block" *) logic [15:0] r_rom_array [0:255];
+initial begin
+  $readmemh("rom.hex", r_rom_array);
+end
+
+// ❌ 禁止：给 FF / 控制寄存器 initial（仿真-综合差异；门禁 G-C-03 FAIL）
+// initial r_state = P_IDLE;
+// initial ro_valid = 1'b0;
+```
+
+- **[MUST]** 阵列-only `initial` 仍须综合日志确认无 `[Synth 8-6896]`（初值被采纳）  
+- 细则与反例：`references/vivado-synthesis-ug901.md` §1.4、§2.3
 
 ## §2 命名规范
 
@@ -60,12 +104,23 @@ version: 3.8.0
 - **[MUST]** 三段式（状态跳转 + 次态判断 + 输出），`localparam` 定义，`default` 必写
 - 编码：≤5→二进制, 5~50→独热, >50→格雷（模板: `references/fsm-templates.md`）
 
-## §5 位宽与符号
-- 左右位宽必须匹配，禁止有/无符号混算，乘法器输出位宽 = 输入位宽之和
+## §5 位宽与符号（向 UG901 靠齐）
+- 左右位宽必须匹配；有符号运算操作数 **同为 signed**，禁止有/无符号混算
+- 乘法器输出位宽 = 输入位宽之和；加法注意进位位
+- 截位/扩展必须显式：`$signed`/`$unsigned` 或按位拼接，禁止依赖工具隐式扩展
+- `for` 循环仅用于 **可静态展开** 的 generate/组合描述；运行时可变界循环不可综合
 
 ## §6 阻塞/非阻塞
 - 时序逻辑 @posedge clk → `<=`，组合逻辑 → `=`
 - **[MUST]** 禁止混用同一 always
+- **[SHOULD]** 优先 `always_ff` / `always_comb`（意图清晰，利于审查）；禁用 `always_latch`
+
+## §6.1 case / 控制流（UG901 薄弱项补齐）
+- **[MUST]** 组合 `case` 必有 `default`（红线 5）
+- **[SHOULD]** 不需要优先级时用 `case` 而非长 `if-else` 链（平坦 MUX，利于面积/时序）
+- **[MUST]** 综合 RTL **禁用 `casex`**（X 参与匹配 → 仿真/综合语义陷阱）
+- **[SHOULD]** 慎用 `casez`；掩码意图写清楚；优先 `unique case` / 完整枚举 + `default`
+- 计数器：同步计数 + 同步复位（控制类）；溢出/回绕行为必须在注释与 TB 中固定
 
 ## §7 工具使用与验证
 - **[SHOULD]** lint：提交前 `make lint` 通过（lint 检查基础语法，但不检查锁存器/命名等关键问题，不可替代人工审查）
@@ -73,6 +128,7 @@ version: 3.8.0
 - **[MUST]** 仿真报错按顺序排查：先检查端口位宽匹配，再查时序，最后查逻辑
 - **[SHOULD]** RTL 输出必须与 Golden Model bit-true 对齐，不允许用容差掩盖算法偏离
 - **[MUST]** 综合级结论（资源够不够 / 时序收不收敛 / 推断成没成功 / CDC 干不干净）**必须有 Vivado 报告支撑**，见 §10。无 EDA 环境时写"未验证"，不得把静态推断写成结论
+- **[MUST]** 含阵列 `initial` 的模块：综合后检查无 `[Synth 8-6896]`，且利用率中 ROM/RAM 映射符合预期
 
 ---
 
@@ -141,7 +197,7 @@ DSP 没吸收流水寄存器、Fmax 掉一半，而工具**不报任何错**。
 > 执行入口统一在 **`vivado-flow`** 技能（`skills/vivado-flow/SKILL.md`），本技能只负责
 > 「怎么写」的规则；「怎么跑、拿什么证据」看那边。
 
-### 10.2 推断静默失败的高危写法（记住这四条就够挡住大多数事故）
+### 10.2 推断静默失败的高危写法（数据通路少复位的直接原因）
 
 | 写法 | 后果 | 出处 |
 |:-----|:-----|:-----|
@@ -149,16 +205,20 @@ DSP 没吸收流水寄存器、Fmax 掉一半，而工具**不报任何错**。
 | BRAM 输出寄存器多扇出 | 同上 | 同上 |
 | 给 DSP 内部流水寄存器加复位 | MREG/PREG 吸收失败 → DSP 跑不满频率 | 同上 |
 | 给移位链/延时线加复位或取中间抽头 | SRL 掉成 FF 链，面积膨胀数十倍 | 同上 |
+| 纯数据流水寄存器滥加复位 | 控制集膨胀 → FF 打包差、面积虚高 | UG949 Control Sets |
 
-→ 这是红线 3 的**唯一豁免场景**，豁免要写注释 + 报告验证，细则见
-`references/vivado-synthesis-ug901.md` §5.1。
+→ BRAM/DSP/SRL 是红线 3 的**硬豁免场景**（必须不复位 + 注释 + 报告验证）。  
+→ 一般数据通路是 **推荐不复位**（§1.1），不是“禁止复位”，但默认写法应为无复位。  
+细则：`references/vivado-synthesis-ug901.md` §5 / §5.1。
 
-### 10.3 还必须知道的四件事
+### 10.3 还必须知道的几件事
 
 - **门控时钟是禁止写法**：用 BUFGCE 的时钟使能，不写 `always @(posedge (clk & en))`
-- **控制集**：数据通路寄存器少加复位，否则 FF 打包失败 → 面积虚高（`report_control_sets` 查）
+- **控制集**：数据通路少复位 + 合并 CE；`report_control_sets` 查打包
 - **优先用 XPM_CDC 宏**而不是手写同步器：`report_cdc` 能识别、内置 `ASYNC_REG`
 - **`report_timing_summary` 必带 `-report_unconstrained`**：未约束路径是最常见的假绿灯
+- **`initial` 只服务 RAM/ROM 阵列初值**（§1.2）；标量 initial = 仿真-综合差异
+- 官方推断模板：Vivado IDE → Language Templates；抄完必须改成 `ri_`/`ro_` 与本仓库复位策略
 
 ### 10.4 属性使用纪律
 

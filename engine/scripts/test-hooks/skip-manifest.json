@@ -1,20 +1,7 @@
 {
-  "maxSkips": 14,
+  "maxSkips": 1,
   "allowedIds": [
-    "LongTaskEval::固定历史产物不再计为 fresh live 通过",
-    "PythonGate::安全命令放行 (pytest)",
-    "PythonGate::黄金模型写入拦截",
-    "PythonGate::敏感文件读取拦截",
-    "PythonGate::TDD 新模块缺测试文件拦截",
-    "PythonGate::现有文件修改放行",
-    "MatlabGate::安全命令放行",
-    "MatlabGate::Golden 写入拦截",
-    "MatlabGate::Python 引擎调用拦截",
-    "CoverageGate::语法正确",
-    "CoverageGate::非 git 命令放行",
-    "FPRHook::语法正确",
-    "FPRHook::Exit 0 不阻塞",
-    "CommitGate::脚本语法正确"
+    "LongTaskEval::固定历史产物不再计为 fresh live 通过"
   ],
-  "reason": "Optional legacy gates are bounded by exact test IDs. New skips fail until explicitly reviewed. LongTaskEval 是环境条件跳过：它复算 var/agent-evals/long-task 下已捕获的真实 agent 运行产物，var/ 不入版本库，全新 checkout 与 CI 上无对象可复算；本机有产物时照常执行，因此实际跳过数在本机仍为 13。"
+  "reason": "唯一允许的跳过是环境条件跳过：LongTaskEval 复算 var/agent-evals/long-task 下已捕获的真实 agent 运行产物，var/ 不入版本库，全新 checkout 与 CI 上无对象可复算；本机有产物时照常执行，因此本机实际跳过数为 0，CI 为 1。原先白名单里的 13 条 PythonGate/MatlabGate/CoverageGate/FPRHook/CommitGate 已随测试一并删除——它们的目标脚本在本仓库任何位置都不存在，属门禁移除后的测试残骸，在所有环境恒定跳过，不是环境条件跳过。新增跳过在明确复核前一律失败。"
 }

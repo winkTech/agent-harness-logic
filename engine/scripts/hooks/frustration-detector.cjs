@@ -22,6 +22,9 @@ const f = require('node:fs');
 const HOME = HARNESS_ROOT;
 const STATE_FILE = process.env.CLAUDE_RUNTIME_STATE_FILE || p.join(HOME, 'var', 'index', 'runtime-state.json');
 const FAILURE_SIGNAL_THROTTLE_MS = 60 * 1000;
+// failureCount 的语义是"连续失败"——证据超过时效窗口后不再构成强制切换的依据。
+// 没有可解析时间戳的计数同样视为陈旧:宁可少注入一次提醒,不可跨会话误报。
+const FAILURE_EVIDENCE_TTL_MS = 60 * 60 * 1000;
 
 const MODES = ['根因分析', '第一性原理', '减法', '搜索优先', '倒推', '证据驱动', '闭环'];
 
@@ -108,6 +111,26 @@ function detect(text) {
   return { frustrated: true, matches, suggestion };
 }
 
+function lastFailureEvidenceAt(state) {
+  let latest = NaN;
+  for (const entry of state?.failureHistory || []) {
+    const at = Date.parse(entry?.at || '');
+    if (Number.isFinite(at) && !(at <= latest)) latest = at;
+  }
+  for (const call of state?.toolCalls || []) {
+    if (call?.result === 'ok' || call?.result === 'success') continue;
+    const at = Date.parse(call?.at || '');
+    if (Number.isFinite(at) && !(at <= latest)) latest = at;
+  }
+  return latest;
+}
+
+function isFailureEvidenceStale(state, now = Date.now()) {
+  if (!state || !(state.failureCount > 0)) return false;
+  const evidenceAt = lastFailureEvidenceAt(state);
+  return !Number.isFinite(evidenceAt) || now - evidenceAt > FAILURE_EVIDENCE_TTL_MS;
+}
+
 function checkToolFailure(state) {
   if (!state) return null;
 
@@ -176,6 +199,24 @@ function evaluateSignal(input, deps = {}) {
   const mutateState = deps.updateState || updateState;
   const canPersist = !persistenceDisabled(deps);
   let state = loadState();
+
+  if (isFailureEvidenceStale(state)) {
+    if (canPersist) {
+      state = mutateState((current) => {
+        current.failureCount = 0;
+        current.currentMode = '';
+        return current;
+      });
+      emitModeSignal('mode_switch', {
+        mode: '闭环',
+        trigger: 'stale-failure-evidence',
+        deEscalate: true,
+        failureCount: 0,
+      }, deps);
+    } else {
+      state = { ...state, failureCount: 0, currentMode: '' };
+    }
+  }
 
   const failureSignal = checkToolFailure(state);
   if (failureSignal) {
@@ -286,8 +327,11 @@ if (require.main === module) main();
 
 module.exports = {
   MODES,
+  FAILURE_EVIDENCE_TTL_MS,
   detect,
   checkToolFailure,
+  lastFailureEvidenceAt,
+  isFailureEvidenceStale,
   persistenceDisabled,
   evaluateSignal,
   retrieveContext,

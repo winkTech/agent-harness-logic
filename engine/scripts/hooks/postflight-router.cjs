@@ -14,7 +14,31 @@ function defaultDependencies() {
     crossLinkMemory: require('../cross-link-memory.cjs'),
     memoryAttribution: require('../../sqlite/store-memory-attribution.cjs'),
     openAttributionDb: require('../../sqlite/index.cjs').openDb,
+    deliveryTracker: require('../delivery-tracker.cjs'),
   };
+}
+
+// "判定不可读"的原因族由 lib/verification-markers.cjs 统一持有 —— delivery 的
+// partial 与 attribution 的 inconclusive 必须用同一份判据, 各抄一份就会漂移。
+const { UNREADABLE_VERDICT_REASONS } = require('../lib/verification-markers.cjs');
+
+/** 验证判定 → delivery 事件 (D1 自动喂数): PASS/FAIL 不再依赖手工 record。 */
+function recordDeliveryFromVerdict(payload, gateResult, deps) {
+  if (process.env.CLAUDE_HARNESS_NO_PERSIST === '1'
+    || process.env.CLAUDE_HARNESS_VERIFY_READONLY === '1'
+    || process.env.CLAUDE_NO_DIAGNOSTIC_WRITES === '1') return { skipped: true };
+  const verification = gateResult.verification;
+  const reason = String(verification.reason || verification.detail || '');
+  const status = verification.ok ? 'pass'
+    : UNREADABLE_VERDICT_REASONS.has(reason) ? 'partial' : 'fail';
+  return deps.deliveryTracker.recordDelivery({
+    workflow: 'verification-gate',
+    phase: 'verification',
+    status,
+    error: verification.ok ? null : reason.slice(0, 200) || null,
+    sessionId: String(payload?.session_id || payload?.sessionId || '') || undefined,
+    cwd: String(payload?.cwd || '') || undefined,
+  });
 }
 
 function normalizedResult(source, value) {
@@ -122,6 +146,11 @@ async function route(payload, injected = {}) {
         'memory-attribution',
         () => recordVerificationAttribution(payload, verificationResult, deps),
       );
+      await invoke(
+        results,
+        'delivery-tracker',
+        () => recordDeliveryFromVerdict(payload, verificationResult, deps),
+      );
     }
     if (isFailure || toolKey === 'bash') {
       await invoke(
@@ -188,7 +217,11 @@ function emit(payload, result) {
 
 async function main() {
   const payload = readPayload();
-  emit(payload, await route(payload));
+  await require('../lib/hook-latency.cjs').timed(
+    'postflight-router',
+    String(payload?.hook_event_name || ''),
+    async () => emit(payload, await route(payload)),
+  );
 }
 
 if (require.main === module) {
@@ -201,6 +234,8 @@ module.exports = {
   main,
   route,
   hasVerificationVerdict,
+  recordDeliveryFromVerdict,
   recordVerificationAttribution,
   watchdogResult,
+  UNREADABLE_VERDICT_REASONS,
 };

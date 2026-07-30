@@ -145,74 +145,91 @@ function computeSummary(records) {
   return { total, correctBlock, falsePositive, falseNegative, fpRate, fnRate, accuracy, byGate, recent };
 }
 
+/** tool_fail 事件 payload → 门禁归类; 非门禁失败返回 null。 */
+function inferGate(payload) {
+  const error = String(payload?.error || payload?.stderr || '').toLowerCase();
+  if (error.includes('verification gate') || error.includes('verify first')) return 'verification';
+  if (error.includes('commit gate') || error.includes('commit-gate')) return 'commit';
+  if (error.includes('bash safety') || error.includes('bash-safety')) return 'bash-safety';
+  if (error.includes('file protection') || error.includes('file-protection')) return 'file-protection';
+  if (error.includes('diff size') || error.includes('diff-size')) return 'diff-size';
+  if (error.includes('resource budget') || error.includes('resource-budget')) return 'resource-budget';
+  if (error.includes('hdl gate') || error.includes('hdl-gate')) return 'hdl';
+  if (error.includes('python gate') || error.includes('python-gate')) return 'verification';
+  if (error.includes('matlab gate') || error.includes('matlab-gate')) return 'verification';
+  if (error.includes('coverage gate') || error.includes('coverage-gate')) return 'verification';
+  return null;
+}
+
+const CONSUMER_ID = 'fp-rate';
+const HARVEST_MAX_BATCH = 100;
+
 /**
- * auto-record — 从 SQLite runtime_events 自动推断门禁准确率.
- * 读取当前 session 的 tool_fail 事件，解析 payload 判断是哪道门禁触发的，
- * 自动写入 fp-rate-log.jsonl.
+ * harvest — 注册消费者形态的 auto-record (D3 自动喂数, 2026-07-29)。
+ *
+ * 规则 3 合同: 独立 watermark (不与 dream/skill-evolve 共享)、真实 heartbeat、
+ * 有界批量。宿主是 postflight-observer 的 Stop 路径 (与 skill-evolve 同进程)。
+ * 扫过的事件无论是否命中门禁都推进水位; 失败不推进水位、留 failed 心跳。
  */
+function harvestFpRate(opts = {}) {
+  if (process.env.CLAUDE_HARNESS_NO_PERSIST === '1'
+    || process.env.CLAUDE_HARNESS_VERIFY_READONLY === '1'
+    || process.env.CLAUDE_NO_DIAGNOSTIC_WRITES === '1') return { skipped: true };
+  const crypto = require('node:crypto');
+  const { openDb } = require(path.join(HOME, 'engine/sqlite/index.cjs'));
+  const events = require(path.join(HOME, 'engine/sqlite/store-events.cjs'));
+  const wright = opts.db ? { db: opts.db, close() { /* injected */ } } : openDb();
+  const db = wright.db;
+  const runId = crypto.randomUUID();
+  const watermark = events.getWatermark({ db, consumer: CONSUMER_ID });
+  const pending = events.countSinceWatermark(watermark, { db });
+  events.beginConsumerRun(CONSUMER_ID, { db, runId, pending });
+  try {
+    const batch = events.sinceWatermark(watermark, HARVEST_MAX_BATCH, { db });
+    let processedThrough = watermark;
+    let recorded = 0;
+    for (const ev of batch) {
+      processedThrough = ev.eventId;
+      if (ev.type !== 'tool_fail') continue;
+      const gate = inferGate(ev.payload);
+      if (!gate) continue;
+      const entry = {
+        gate,
+        action: 'block',
+        correct: true, // 默认假设拦截正确; override/挫败信号或人工复核可改判
+        note: `auto: ${gate} 触发拦截`,
+        timestamp: ev.createdAt || new Date().toISOString(),
+        sessionId: ev.sessionId,
+        eventId: ev.eventId,
+      };
+      ensureDir(path.dirname(STORE_FILE));
+      fs.appendFileSync(STORE_FILE, JSON.stringify(entry) + '\n', 'utf8');
+      recorded += 1;
+    }
+    events.setWatermark(processedThrough, { db, consumer: CONSUMER_ID });
+    events.completeConsumerRun(CONSUMER_ID, {
+      db,
+      runId,
+      status: batch.length === 0 ? 'skipped' : 'success',
+      processedThrough,
+      processed: batch.length,
+      pending: events.countSinceWatermark(processedThrough, { db }),
+    });
+    return { recorded, scanned: batch.length, processedThrough };
+  } catch (error) {
+    try {
+      events.failConsumerRun(CONSUMER_ID, { db, runId, error, pending });
+    } catch { /* heartbeat best-effort */ }
+    throw error;
+  }
+}
+
+/** CLI 入口: 跑一次 harvest 并打印结果。 */
 function autoRecord() {
   try {
-    const { openDb } = require(path.join(HOME, 'engine/sqlite/index.cjs'));
-    const wright = openDb();
-    if (!wright || !wright.db) {
-      console.log('[fp-rate-tracker] auto-record: SQLite 不可用，跳过');
-      return;
-    }
-    const db = wright.db;
-
-    const sessionId = process.env.CLAUDE_SESSION_ID || 'unknown';
-
-    // 查询当前 session 的 tool_fail 事件
-    const events = db.prepare(`
-      SELECT payload, created_at FROM runtime_events
-      WHERE type = 'tool_fail' AND session_id = ?
-      ORDER BY event_id
-    `).all(sessionId);
-
-    if (!events || events.length === 0) {
-      console.log(`[fp-rate-tracker] auto-record: 无 tool_fail 事件 (session=${sessionId})`);
-      return;
-    }
-
-    let recorded = 0;
-    for (const ev of events) {
-      let payload;
-      try { payload = typeof ev.payload === 'string' ? JSON.parse(ev.payload) : ev.payload; } catch { continue; }
-
-      // 解析 tool_name/error 推断门禁
-      const toolName = (payload?.tool_name || payload?.tool || '').toLowerCase();
-      const error = (payload?.error || payload?.stderr || '').toLowerCase();
-      const command = (payload?.command || payload?.tool_input?.command || '').toLowerCase();
-
-      let gate = null;
-      if (error.includes('verification gate') || error.includes('verify first')) gate = 'verification';
-      else if (error.includes('commit gate') || error.includes('commit-gate')) gate = 'commit';
-      else if (error.includes('bash safety') || error.includes('bash-safety')) gate = 'bash-safety';
-      else if (error.includes('file protection') || error.includes('file-protection')) gate = 'file-protection';
-      else if (error.includes('diff size') || error.includes('diff-size')) gate = 'diff-size';
-      else if (error.includes('resource budget') || error.includes('resource-budget')) gate = 'resource-budget';
-      else if (error.includes('hdl gate') || error.includes('hdl-gate')) gate = 'hdl';
-      else if (error.includes('python gate') || error.includes('python-gate')) gate = 'verification';
-      else if (error.includes('matlab gate') || error.includes('matlab-gate')) gate = 'verification';
-      else if (error.includes('coverage gate') || error.includes('coverage-gate')) gate = 'verification';
-
-      if (gate) {
-        const entry = {
-          gate,
-          action: 'block',
-          correct: true, // 默认假设正确，人工可后续纠正
-          note: `auto: ${gate} 触发拦截`,
-          timestamp: ev.created_at || new Date().toISOString(),
-          sessionId,
-        };
-
-        ensureDir(path.dirname(STORE_FILE));
-        fs.appendFileSync(STORE_FILE, JSON.stringify(entry) + '\n', 'utf8');
-        recorded++;
-      }
-    }
-
-    console.log(`[fp-rate-tracker] auto-record: ✅ 记录了 ${recorded} 条门禁事件 (session=${sessionId})`);
+    const result = harvestFpRate();
+    if (result.skipped) console.log('[fp-rate-tracker] auto-record: 只读环境，跳过');
+    else console.log(`[fp-rate-tracker] auto-record: ✅ 扫描 ${result.scanned} 条事件, 记录 ${result.recorded} 条门禁拦截 (watermark→${result.processedThrough})`);
   } catch (e) {
     console.error(`[fp-rate-tracker] auto-record: ⚠️ ${e.message}`);
   }
@@ -259,4 +276,19 @@ function main() {
   }
 }
 
-main();
+/** 结构化摘要入口 (供十维仪表盘取用, 不打印)。 */
+function summary() {
+  if (!fs.existsSync(STORE_FILE)) return { available: false, total: 0 };
+  const records = fs.readFileSync(STORE_FILE, 'utf8').trim().split('\n')
+    .filter(Boolean)
+    .map((line) => { try { return JSON.parse(line); } catch { return null; } })
+    .filter(Boolean);
+  if (records.length === 0) return { available: false, total: 0 };
+  return { available: true, ...computeSummary(records) };
+}
+
+module.exports = {
+  harvestFpRate, inferGate, autoRecord, computeSummary, summary, STORE_FILE,
+};
+
+if (require.main === module) main();

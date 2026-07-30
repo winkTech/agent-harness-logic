@@ -196,6 +196,7 @@ const CORE_SCRIPTS = [
   'engine/scripts/test-hooks/harness-metrics-eval.cjs',
   'engine/scripts/test-hooks/hdl-project-directory-eval.cjs',
   'engine/scripts/test-hooks/agent-transcript-compliance.cjs',
+  'engine/scripts/test-hooks/cost-usage-contract.cjs',
   'engine/scripts/test-hooks/workflow-contracts.cjs',
   'engine/scripts/test-hooks/workflow-scenario-eval.cjs',
   'engine/scripts/test-hooks/dag-cancellation.cjs',
@@ -211,6 +212,22 @@ const CORE_SCRIPTS = [
   'engine/scripts/test-hooks/state-concurrency.cjs',
   'engine/scripts/test-hooks/statusline-contract.cjs',
   'engine/scripts/test-hooks/transparency-retention.cjs',
+  'engine/scripts/test-hooks/memory-outcome-loop-contract.cjs',
+  'engine/scripts/test-hooks/memory-retirement-contract.cjs',
+  'engine/scripts/test-hooks/evidence-status-basis-contract.cjs',
+  'engine/scripts/test-hooks/harness-gate-eval.cjs',
+  'engine/scripts/test-hooks/retrieval-eval-contract.cjs',
+  'engine/scripts/test-hooks/plan-accuracy-contract.cjs',
+  'engine/scripts/test-hooks/guard-coverage-contract.cjs',
+  'engine/scripts/test-hooks/ten-dimension-contract.cjs',
+  'engine/scripts/test-hooks/weekly-report-contract.cjs',
+  'engine/scripts/guard-coverage.cjs',
+  'engine/scripts/ten-dimension-dashboard.cjs',
+  'engine/scripts/weekly-report.cjs',
+  'engine/scripts/lib/verification-markers.cjs',
+  'engine/scripts/plan-accuracy.cjs',
+  'engine/scripts/hdl-evidence-gate.cjs',
+  'engine/scripts/delivery-tracker.cjs',
 ];
 
 for (const script of CORE_SCRIPTS) {
@@ -2001,77 +2018,9 @@ define('DiagnosticWrites', '只读验证模式跳过 auto-record 写入', () => 
   return { pass: true, detail: 'auto-record scripts skip before diagnostic writes' };
 });
 
-// ── Suite 5: 功能测试 — Python Gate ──
-
-define('PythonGate', '安全命令放行 (pytest)', () => {
-  const p = path.join(HOME, 'engine/scripts/hooks/python-gate.cjs');
-  if (!fs.existsSync(p)) return { pass: true, skip: true, detail: '文件不存在' };
-  const stdin = JSON.stringify({ hook_event_name: 'PreToolUse', tool_name: 'Bash', tool_input: { command: 'python -m pytest tests/' } });
-  const r = runNode(p, stdin);
-  return { pass: r.status === 0, detail: `pytest exit=${r.status}` };
-});
-
-define('PythonGate', '黄金模型写入拦截', () => {
-  const p = path.join(HOME, 'engine/scripts/hooks/python-gate.cjs');
-  if (!fs.existsSync(p)) return { pass: true, skip: true, detail: '文件不存在' };
-  const stdin = JSON.stringify({ hook_event_name: 'PreToolUse', tool_name: 'Bash', tool_input: { command: "python -c \"open('matlab/golden_model.m', 'w').write('data')\"" } });
-  const r = runNode(p, stdin);
-  return { pass: r.status === 2, detail: `golden write exit=${r.status} (期望 2)` };
-});
-
-define('PythonGate', '敏感文件读取拦截', () => {
-  const p = path.join(HOME, 'engine/scripts/hooks/python-gate.cjs');
-  if (!fs.existsSync(p)) return { pass: true, skip: true, detail: '文件不存在' };
-  const stdin = JSON.stringify({ hook_event_name: 'PreToolUse', tool_name: 'Bash', tool_input: { command: "python -c \"open('.env').read()\"" } });
-  const r = runNode(p, stdin);
-  return { pass: r.status === 2, detail: `sensitive read exit=${r.status} (期望 2)` };
-});
-
-define('PythonGate', 'TDD 新模块缺测试文件拦截', () => {
-  const p = path.join(HOME, 'engine/scripts/hooks/python-gate.cjs');
-  if (!fs.existsSync(p)) return { pass: true, skip: true, detail: '文件不存在' };
-  // 使用不存在的 /dev/null 风格的路径，确保测试文件不存在
-  const filePath = path.join(HOME, 'var', '_test_tmp_new_module.py');
-  const stdin = JSON.stringify({ hook_event_name: 'PreToolUse', tool_name: 'Write', tool_input: { file_path: filePath, content: 'def foo(): pass' } });
-  const r = runNode(p, stdin);
-  // 清理可能创建的临时文件
-  try { fs.unlinkSync(filePath); } catch {}
-  return { pass: r.status === 2, detail: `TDD exit=${r.status} (期望 2)` };
-});
-
-define('PythonGate', '现有文件修改放行', () => {
-  const p = path.join(HOME, 'engine/scripts/hooks/python-gate.cjs');
-  if (!fs.existsSync(p)) return { pass: true, skip: true, detail: '文件不存在' };
-  const stdin = JSON.stringify({ hook_event_name: 'PreToolUse', tool_name: 'Write', tool_input: { file_path: __filename, content: '# existing file' } });
-  const r = runNode(p, stdin);
-  return { pass: r.status === 0, detail: `existing file exit=${r.status}` };
-});
-
-// ── Suite 6: 功能测试 — MATLAB Gate ──
-
-define('MatlabGate', '安全命令放行', () => {
-  const p = path.join(HOME, 'engine/scripts/hooks/matlab-gate.cjs');
-  if (!fs.existsSync(p)) return { pass: true, skip: true, detail: '文件不存在' };
-  const stdin = JSON.stringify({ hook_event_name: 'PreToolUse', tool_name: 'Bash', tool_input: { command: 'matlab -batch "disp(1+1)"' } });
-  const r = runNode(p, stdin);
-  return { pass: r.status === 0, detail: `safe exit=${r.status}` };
-});
-
-define('MatlabGate', 'Golden 写入拦截', () => {
-  const p = path.join(HOME, 'engine/scripts/hooks/matlab-gate.cjs');
-  if (!fs.existsSync(p)) return { pass: true, skip: true, detail: '文件不存在' };
-  const stdin = JSON.stringify({ hook_event_name: 'PreToolUse', tool_name: 'Bash', tool_input: { command: "matlab -batch \"save('matlab/results.mat')\"" } });
-  const r = runNode(p, stdin);
-  return { pass: r.status === 2, detail: `golden write exit=${r.status} (期望 2)` };
-});
-
-define('MatlabGate', 'Python 引擎调用拦截', () => {
-  const p = path.join(HOME, 'engine/scripts/hooks/matlab-gate.cjs');
-  if (!fs.existsSync(p)) return { pass: true, skip: true, detail: '文件不存在' };
-  const stdin = JSON.stringify({ hook_event_name: 'PreToolUse', tool_name: 'Bash', tool_input: { command: 'python -c "import matlab.engine; eng = matlab.engine.start_matlab()"' } });
-  const r = runNode(p, stdin);
-  return { pass: r.status === 2, detail: `python engine exit=${r.status} (期望 2)` };
-});
+// Suite 5/6 (PythonGate / MatlabGate) 已删除：python-gate.cjs 与 matlab-gate.cjs
+// 在本仓库任何位置都不存在，这 8 条测试在所有环境里恒定跳过，属门禁脚本移除后
+// 留下的测试残骸，不是环境条件跳过。恢复这两个门禁时连同测试一起重写。
 
 // ── Suite 7: 功能测试 — Coverage ──
 
@@ -2147,20 +2096,8 @@ define('CoverageRunner', 'nested zero-count ranges remain uncovered', () => {
   };
 });
 
-define('CoverageGate', '语法正确', () => {
-  const p = path.join(HOME, 'engine/scripts/coverage-gate.cjs');
-  if (!fs.existsSync(p)) return { pass: true, skip: true, detail: '文件不存在' };
-  const r = nodeCheck(p);
-  return { pass: r.ok, detail: r.ok ? '语法通过' : r.stderr.slice(0, 200) };
-});
-
-define('CoverageGate', '非 git 命令放行', () => {
-  const p = path.join(HOME, 'engine/scripts/coverage-gate.cjs');
-  if (!fs.existsSync(p)) return { pass: true, skip: true, detail: '文件不存在' };
-  const stdin = JSON.stringify({ hook_event_name: 'PreToolUse', tool_name: 'Bash', tool_input: { command: 'ls -la' } });
-  const r = runNode(p, stdin);
-  return { pass: r.status === 0, detail: `non-git exit=${r.status}` };
-});
+// CoverageGate 的 2 条测试已删除：engine/scripts/coverage-gate.cjs 不存在。
+// 覆盖率能力现由 CoverageRunner（coverage-runner.cjs，真实存在）覆盖。
 
 // ── Suite 8: 功能测试 — FPR 校准 ──
 
@@ -2178,22 +2115,8 @@ define('FPRTracker', 'auto-record 可运行', () => {
   return { pass: !r.error, detail: r.error ? r.error.message : `exit=${r.status}` };
 });
 
-define('FPRHook', '语法正确', () => {
-  const p = path.join(HOME, 'engine/scripts/hooks/fpr-calibration-hook.cjs');
-  if (!fs.existsSync(p)) return { pass: true, skip: true, detail: '文件不存在' };
-  const r = nodeCheck(p);
-  return { pass: r.ok, detail: r.ok ? '语法通过' : r.stderr.slice(0, 200) };
-});
-
-define('FPRHook', 'Exit 0 不阻塞', () => {
-  const p = path.join(HOME, 'engine/scripts/hooks/fpr-calibration-hook.cjs');
-  if (!fs.existsSync(p)) return { pass: true, skip: true, detail: '文件不存在' };
-  const r = spawnSync('node', [p], {
-    encoding: 'utf8', timeout: 10000, windowsHide: true,
-    input: JSON.stringify({ hook_event_name: 'Stop' }),
-  });
-  return { pass: r.status === 0, detail: `exit=${r.status}` };
-});
+// FPRHook 的 2 条测试已删除：engine/scripts/hooks/fpr-calibration-hook.cjs 不存在。
+// FPR 能力现由 FPRTracker（fp-rate-tracker.cjs，真实存在）覆盖。
 
 // ── Suite 9: 功能测试 — Dashboard ──
 
@@ -2312,15 +2235,28 @@ const AUDIT_REMEDIATION_CONTRACTS = [
   ['state concurrency', 'state-concurrency.cjs', 60000],
   ['statusline hot path', 'statusline-contract.cjs', 30000],
   ['transparency privacy and retention', 'transparency-retention.cjs', 30000],
+  ['cost usage telemetry', 'cost-usage-contract.cjs', 30000],
+  ['memory recall tiers', 'memory-recall-tier-contract.cjs', 30000],
+  ['memory outcome loop', 'memory-outcome-loop-contract.cjs', 30000],
+  ['memory attribution retirement', 'memory-retirement-contract.cjs', 30000],
+  ['evidence status basis', 'evidence-status-basis-contract.cjs', 30000],
+  ['harness gate eval corpus', 'harness-gate-eval.cjs', 120000, ['--variance']],
+  ['retrieval golden set', 'retrieval-eval-contract.cjs', 120000],
+  ['plan accuracy and delivery window', 'plan-accuracy-contract.cjs', 30000],
+  ['red-team adversarial corpus', 'harness-gate-eval.cjs', 120000,
+    ['--cases', 'engine/scripts/test-hooks/fixtures/harness-redteam-cases.json', '--variance']],
+  ['guard pattern coverage', 'guard-coverage-contract.cjs', 60000],
+  ['ten dimension dashboard', 'ten-dimension-contract.cjs', 180000],
+  ['weekly report wiring', 'weekly-report-contract.cjs', 180000],
 ];
 
-for (const [name, relative, timeout] of AUDIT_REMEDIATION_CONTRACTS) {
+for (const [name, relative, timeout, extraArgs = []] of AUDIT_REMEDIATION_CONTRACTS) {
   define('AuditRemediationContracts', name, () => {
     const p = path.join(HOME, 'engine/scripts/test-hooks', relative);
     if (!fs.existsSync(p)) return { pass: false, detail: `${relative} 不存在` };
     const nodeArgs = relative === 'dag-cancellation.cjs'
-      ? ['--unhandled-rejections=strict', p]
-      : [p];
+      ? ['--unhandled-rejections=strict', p, ...extraArgs]
+      : [p, ...extraArgs];
     const r = spawnSync(process.execPath, nodeArgs, {
       cwd: HOME,
       encoding: 'utf8',
@@ -2993,14 +2929,8 @@ define('LongTaskEval', 'agent-eval-runner dry-run 支持 Claude/Codex', () => {
   return { pass: true, detail: 'claude/codex dry-run manifests created' };
 });
 
-// ── Suite 12: 功能测试 — Commit Gate ──
-
-define('CommitGate', '脚本语法正确', () => {
-  const p = path.join(HOME, 'engine/scripts/gates/commit-gate.cjs');
-  if (!fs.existsSync(p)) return { pass: true, skip: true, detail: '文件不存在' };
-  const r = nodeCheck(p);
-  return { pass: r.ok, detail: r.ok ? '语法通过' : r.stderr.slice(0, 200) };
-});
+// Suite 12 (CommitGate) 已删除：engine/scripts/gates/commit-gate.cjs 不存在。
+// 提交路径的实际防护是 pre-commit-lint.js 与 verification-gate 的 git 分支。
 
 // ── Suite 6: 功能测试 — Diff Size Gate ──
 
@@ -4303,7 +4233,21 @@ define('TransparencyDashboard', 'summarizes run artifacts without source content
   return { pass, detail: pass ? 'dashboard summarized artifacts' : html.slice(0, 500) };
 });
 
+// CI 钉住的 Node 版本是仓库契约(lint-health.yml);本机运行时是操作员状态,
+// 按 docs/rules/05-harness.md 规则 8 只警告不断言——但差异必须可见,否则
+// "本机绿"会在 node:sqlite 等实验 API 的版本行为差上误导 CI 预期(规则 9)。
+function warnNodeVersionDrift() {
+  try {
+    const workflow = fs.readFileSync(path.join(HOME, '.github', 'workflows', 'lint-health.yml'), 'utf8');
+    const pinned = workflow.match(/node-version:\s*'?([\d.]+)'?/)?.[1];
+    if (pinned && pinned !== process.versions.node) {
+      console.log(warn(`本机 Node ${process.versions.node} ≠ CI 钉住的 ${pinned} —— 本机结果不可外推为 CI 结论`));
+    }
+  } catch { /* workflow 缺失时不猜测 CI 契约 */ }
+}
+
 function runSuite() {
+  warnNodeVersionDrift();
   if (LIST_ONLY) {
     console.log('\n📋 可用测试:');
     const bySuite = {};

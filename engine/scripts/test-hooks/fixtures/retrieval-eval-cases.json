@@ -1,0 +1,186 @@
+{
+  "schemaVersion": 1,
+  "description": "检索金标集 (D4)。每条 case 的 expected 是**主题上应当命中**的已入库文档, 由文档主题决定, 不是由检索器当前输出决定 —— 否则评测退化成自我确认。query 取自本仓库真实任务主题 (LDPC/OFDM/时序收敛/黄金模型/验证纪律/harness 治理)。",
+  "cases": [
+    {
+      "id": "ldpc-fixed-point",
+      "query": "LDPC 定点量化 位宽 报告",
+      "expected": ["engineering-assets/knowledge/primary/domains/comm/ldpc/stage3_fixed_point_report.md"],
+      "provenance": "LDPC 流水线 stage3 是本仓库真实做过的定点阶段"
+    },
+    {
+      "id": "ldpc-algorithm-spec",
+      "query": "LDPC 校验矩阵 基图 算法规格",
+      "expected": ["engineering-assets/knowledge/primary/domains/comm/ldpc/algorithm_spec.md", "engineering-assets/knowledge/primary/domains/comm/5g-nr/nr-ldpc.md"],
+      "provenance": "LDPC 算法规格与 5G NR LDPC 章节"
+    },
+    {
+      "id": "ldpc-resource",
+      "query": "LDPC 资源估算 BRAM LUT",
+      "expected": ["engineering-assets/knowledge/primary/domains/comm/ldpc/stage4_resource_estimation.md"],
+      "provenance": "stage4 资源估算文档"
+    },
+    {
+      "id": "ofdm-rtl-architecture",
+      "query": "OFDM RTL 架构 流水线划分",
+      "expected": ["engineering-assets/knowledge/primary/domains/comm/ofdm/rtl_architecture.md"],
+      "provenance": "OFDM 模块的 RTL 架构文档"
+    },
+    {
+      "id": "ofdm-testbench-plan",
+      "query": "OFDM testbench 验证计划",
+      "expected": ["engineering-assets/knowledge/primary/domains/comm/ofdm/testbench_plan.md"],
+      "provenance": "OFDM TB 计划文档"
+    },
+    {
+      "id": "channel-est-fixed-point",
+      "query": "信道估计 定点 量化 误差",
+      "expected": ["engineering-assets/knowledge/primary/domains/comm/channel_est/fixed_point_report.md", "engineering-assets/knowledge/primary/domains/comm/channel_est/algorithm_spec.md"],
+      "provenance": "channel_est 定点报告"
+    },
+    {
+      "id": "rrc-implementation",
+      "query": "RRC 模块 FPGA 实现 报告",
+      "expected": ["engineering-assets/knowledge/primary/domains/comm/rrc/report_rrc_fpga_implementation.md"],
+      "provenance": "rrc 试点是资产库治理的真实试点模块"
+    },
+    {
+      "id": "synch-resource",
+      "query": "同步模块 资源估算",
+      "expected": ["engineering-assets/knowledge/primary/domains/comm/synch/resource_estimate.md"],
+      "provenance": "synch 资源估算文档"
+    },
+    {
+      "id": "timing-closure",
+      "query": "时序收敛 违例 修复 案例",
+      "expected": ["engineering-assets/knowledge/primary/domains/fpga/timing-convergence-cases.md", "engineering-assets/knowledge/primary/domains/fpga/timing-constraints-guide.md"],
+      "provenance": "FPGA 时序收敛案例集与约束指南"
+    },
+    {
+      "id": "verilog-coding-style",
+      "query": "Verilog 编码风格 命名 规范",
+      "expected": ["engineering-assets/knowledge/primary/domains/fpga/verilog-coding-style.md"],
+      "provenance": "编码风格文档, 对应 01-hdl 规则"
+    },
+    {
+      "id": "avoid-global-reset",
+      "query": "全局复位 扇出 反面模式",
+      "expected": ["engineering-assets/knowledge/primary/pitfalls/avoid-global-reset.md"],
+      "provenance": "UG949 少复位策略, 今天刚同步进 hdl-coding v3.9.0"
+    },
+    {
+      "id": "vivado-automation",
+      "query": "Vivado 自动化 TCL 批处理",
+      "expected": ["engineering-assets/knowledge/primary/domains/fpga/vivado-automation-guide.md", "engineering-assets/knowledge/primary/domains/fpga/vivado-guide.md"],
+      "provenance": "Vivado 自动化与总指南"
+    },
+    {
+      "id": "uvm-verification",
+      "query": "UVM 验证 环境 搭建 方法",
+      "expected": ["engineering-assets/knowledge/primary/domains/fpga/uvm-verification-guide.md", "memory/learnings/2026-06-04-UVM-验证流程与方法.md", "memory/learnings/2026-06-05-uvm-framework-architecture.md"],
+      "provenance": "UVM 指南与两条真实 UVM 学习记录"
+    },
+    {
+      "id": "sva-patterns",
+      "query": "SVA 断言 模式 握手",
+      "expected": ["engineering-assets/knowledge/references/sva-patterns.md"],
+      "provenance": "SVA 模式参考"
+    },
+    {
+      "id": "memory-cdc",
+      "query": "跨时钟域 CDC 存储器 模板",
+      "expected": ["engineering-assets/knowledge/primary/architecture-patterns/memory-cdc-patterns.md"],
+      "provenance": "CDC/存储器架构模式"
+    },
+    {
+      "id": "golden-model-lessons",
+      "query": "黄金模型 设计 教训 定点对齐",
+      "expected": ["engineering-assets/knowledge/primary/domains/comm/golden_model_lessons.md", "memory/learnings/hdl-golden-model-design-philosophy.md"],
+      "provenance": "黄金模型教训与设计哲学两份真实记录"
+    },
+    {
+      "id": "verification-functional",
+      "query": "验证必须是功能验证 不是语法检查",
+      "expected": ["memory/learnings/verification-must-be-functional.md"],
+      "provenance": "verification-gate 的核心依据记忆, 门禁注释直接引用"
+    },
+    {
+      "id": "memory-retrieval-trust",
+      "query": "记忆检索 信任边界 未验证 候选",
+      "expected": ["memory/learnings/memory-retrieval-trust-boundary.md"],
+      "provenance": "召回信任门禁的记忆, 本次 D5 两层召回的直接背景"
+    },
+    {
+      "id": "fix-in-place",
+      "query": "原地修复 纪律 不新建变体文件",
+      "expected": ["memory/learnings/2026-06-19-fix-in-place-discipline.md", "memory/errors/2026-06-19-file-variant-explosion.md"],
+      "provenance": "fix-in-place-guard 的来源事故与纪律记录"
+    },
+    {
+      "id": "instruction-compliance",
+      "query": "指令遵从 用户要求 边界",
+      "expected": ["memory/learnings/instruction-compliance.md"],
+      "provenance": "instructionCaptured 指标对应的记忆"
+    },
+    {
+      "id": "knowledge-search-mandate",
+      "query": "知识库检索 强制 优先级",
+      "expected": ["memory/learnings/knowledge-base-search-mandate.md", "memory/learnings/2026-06-02-知识检索优先级规则.md"],
+      "provenance": "检索强制规则的两份记录"
+    },
+    {
+      "id": "harness-memory-system",
+      "query": "harness 记忆系统 SQLite 事实 表",
+      "expected": ["engineering-assets/knowledge/references/memory-system.md"],
+      "provenance": "记忆系统参考文档"
+    },
+    {
+      "id": "agent-harness-reference",
+      "query": "agent harness 架构 hook 分层",
+      "expected": ["engineering-assets/knowledge/references/agent-harness.md", "engineering-assets/knowledge/references/harness-five-layer-analogy.md"],
+      "provenance": "harness 架构两份参考"
+    },
+    {
+      "id": "eda-debug-checklist",
+      "query": "EDA 工具 调试 检查表 崩溃",
+      "expected": ["engineering-assets/knowledge/references/eda-debug-checklist.md"],
+      "provenance": "toolchain-health 分类器的现场依据"
+    },
+    {
+      "id": "pipeline-discipline",
+      "query": "流水线框架 严格执行 阶段",
+      "expected": ["memory/learnings/2026-06-02-流水线框架必须严格执行.md", "memory/learnings/2026-06-19-per-module-pipeline.md"],
+      "provenance": "两条真实流水线纪律记录"
+    },
+    {
+      "id": "compact-preservation",
+      "query": "上下文压缩 保留 检查点",
+      "expected": ["engineering-assets/knowledge/references/compact-preservation-guide.md", "memory/learnings/2026-06-02-上下文压缩规则.md"],
+      "provenance": "pre-compact hook 的依据文档"
+    },
+    {
+      "id": "wifi-golden-setup",
+      "query": "WiFi 黄金模型 环境 搭建",
+      "expected": ["engineering-assets/knowledge/primary/domains/comm/wifi/golden_model_setup.md"],
+      "provenance": "WiFi PHY 真实 agent 运行涉及的黄金模型环境"
+    },
+    {
+      "id": "viterbi-traceback",
+      "query": "Viterbi 回溯 双回溯 缺陷",
+      "expected": ["memory/viterbi-double-traceback-fix.md"],
+      "provenance": "真实修复记录"
+    },
+    {
+      "id": "frame-boundary-bug",
+      "query": "整帧 testbench 帧边界 缺陷",
+      "expected": ["memory/fullframe-tb-frame-boundary-bug.md"],
+      "provenance": "真实 TB 缺陷记录"
+    },
+    {
+      "id": "skill-evolve",
+      "query": "skill evolve 技能演化 提案",
+      "expected": ["memory/projects/skill-evolve-harness.md"],
+      "provenance": "skill-evolve 消费者的项目记录"
+    }
+  ]
+}
