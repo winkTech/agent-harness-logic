@@ -1,5 +1,25 @@
 # hdl-coding 变更日志
 
+## v3.9.0 (2026-07-29) — `initial` 仅 RAM/ROM + 数据通路少复位 + UG901 薄弱项靠齐
+
+**动机**：UG901 允许上电初值，但仓库曾混用「全面禁 initial」与「仅阵列可 initial」两套说法；
+红线 3 易被误读为「每个寄存器都要复位」，与 UG949「数据通路少复位以利控制集/宏吸收」冲突。
+
+- **`initial` 硬约束**（SKILL 附加约束 6 / `vivado-synthesis-ug901.md` §1.4）  
+  - **仅允许**对 RAM/ROM **存储器阵列** 使用 `initial` / `$readmemh` / `$readmemb`  
+  - **禁止**标量/向量 FF、FSM、指针、valid 的 `initial`（对齐门禁 `G-C-03`）  
+  - 阵列-only 仍须综合日志无 `[Synth 8-6896]`  
+  - UltraRAM 不支持上电初值  
+- **复位策略**（SKILL §1.1 / ug901 §5 / 红线 3 措辞）  
+  - 红线 3 =「**凡复位**须同步高有效 `i_rst`」，**不**要求每寄存器复位  
+  - 纯数据流水：**推荐不加复位**（valid 屏蔽）  
+  - BRAM/DSP/SRL：**硬豁免必须不复位** + 注释 + `report_utilization`  
+  - FSM/valid/指针/计数器：**必须复位**  
+- **UG901 薄弱项补齐**：§5 符号/位宽、§6.1 `casex` 禁用 / `casez` 慎用、§2.4 计数器/MUX/SRL 速记  
+- **同步**：`docs/rules/01-hdl.md`、`memory-templates.md`、`reset-templates.md`、  
+  `ug949-rtl-methodology.md` §4.5、`workflows/hdl-coding-dag-workflow.js` 终验提示、  
+  `~/.agents/skills/hdl-coding/` 副本（含 ug901 提炼，避免 Grok 加载旧 3.5 无 UG901）
+
 ## v3.8.0 (2026-07-27) — Vivado 执行入口收敛到 vivado-flow 技能
 
 **动机**：v3.7 在本技能下加的两个 TCL 脚本（vivado_rtl_check / vivado_synth_report，已删除），

@@ -43,15 +43,47 @@ Vivado 综合只接受 Verilog / SystemVerilog / VHDL 的**可综合子集**，�
 | 时间/实数 | `#delay`（综合忽略）、`real`（仅常量表达式）、`time` | 写进 RTL 会产生仿真-综合不一致 |
 | 其他 | `specify` 块（忽略）、跨层次引用 `top.u1.sig`、`defparam`（受限） | — |
 
-> `initial` 块：Vivado 综合**仅**用于给寄存器/存储器设定上电初值（映射到 FPGA 配置位），
-> **不能**当复位用，也不能在 ASIC 目标下使用。本仓库 Phase 4 终验直接禁止 RTL 里出现
-> `initial` / `disable` / `force`，比工具约束更严，不必逐条查 UG901 表格。
-
 ### 1.3 遇到拿不准的构造怎么办
 
 1. 查 UG901 的 *Verilog Language Support* / *SystemVerilog Support* 章节 —— 那里有逐条的支持/受限表格；
 2. 或直接实测：`synth_design -rtl` 跑一次 elaborate，不支持的构造会报 `[Synth 8-xxx]`；
 3. **不要靠"仿真通过了"判断可综合性** —— xsim 接受的构造远多于综合器接受的。
+
+### 1.4 `initial` —— 仅 RAM/ROM 存储器阵列（本仓库硬约束）
+
+UG901：Vivado 综合可将 **存储器/部分寄存器** 的上电初值写入配置位流。  
+本仓库进一步收紧为与门禁 `G-C-03` 一致：
+
+| 规则 | 要求 |
+|:-----|:-----|
+| **允许** | `initial` 块**只**对 **unpacked 存储器阵列**（RAM/ROM）赋值：常量、`for` 静态展开常量、`$readmemh`/`$readmemb` |
+| **禁止** | 对标量/向量 FF、FSM、指针、valid、计数器等做 `initial`（仿真执行、综合常忽略 → 上板不一致） |
+| **禁止** | 用 `initial` 充当复位；ASIC 目标不得依赖 `initial` |
+| **禁止** | `initial` 内写运行时条件/非常量路径导致整块被 `[Synth 8-6896]` 丢弃 |
+| **UltraRAM** | **不支持**上电初值 → 勿对 URAM 写 `initial` 并期望生效 |
+| **验证** | 阵列-only `initial` 综合后日志须无 `[Synth 8-6896]`；利用率中 ROM/RAM 映射符合预期 |
+| **TB** | Testbench 可用任意 `initial`；本规则只约束**综合 RTL** |
+
+```systemverilog
+// ✅ ROM 初值
+(* rom_style = "block" *) logic [7:0] r_rom [0:255];
+initial $readmemh("coeff.hex", r_rom);
+
+// ✅ RAM 上电清零（仍建议用 for 静态展开常量，勿写依赖仿真时刻的逻辑）
+logic [31:0] r_mem [0:1023];
+integer init_i;
+initial begin
+  for (init_i = 0; init_i < 1024; init_i = init_i + 1)
+    r_mem[init_i] = 32'h0;
+end
+
+// ❌ 标量 / 控制寄存器
+// initial r_state = 2'd0;
+// initial ro_valid = 1'b0;
+```
+
+> **初值 ≠ 复位**：配置时生效；运行时 `i_rst` 不会把阵列拉回初值。  
+> 需要运行时清空时，用控制逻辑 + 写端口显式写，或接受 valid 屏蔽脏数据。
 
 ---
 
@@ -105,9 +137,25 @@ end
 
 ### 2.3 存储器初值
 
-- 用 `initial` 块或 `$readmemh`/`$readmemb` 给数组赋初值 → 综合器写进配置位流；
+- **仅**用 `initial` / `$readmemh` / `$readmemb` 给 **阵列** 赋初值 → 综合器写进配置位流（§1.4）；
 - **UltraRAM 不支持上电初值**（URAM 上电为 0）；
-- 初值不是复位：重配置才恢复，运行时 `i_rst` 拉高不会让存储器回到初值。
+- 初值不是复位：重配置才恢复，运行时 `i_rst` 拉高不会让存储器回到初值；
+- **禁止**用同步复位循环清整块大 RAM（慢、占逻辑）；需要确定性内容时用初值或显式写端口。
+
+### 2.4 其它 HDL Coding Techniques 速记（薄弱项补齐）
+
+| 结构 | 推荐写法 | 破坏/陷阱 |
+|:-----|:---------|:----------|
+| **计数器** | `always_ff` + 同步复位 + 使能；位宽够用 | 异步复位；组合自增 |
+| **多路选择** | 完整 `case`/`unique case` | 长 `if-else` 优先链（无优先级需求时） |
+| **移位/延时** | 无复位定长链 → SRL | 复位或中间抽头 → FF 链 |
+| **乘法/MAC** | `*` / `p <= p + a*b` 紧邻寄存器 | 中间寄存器加复位/多扇出 |
+| **`casex`** | **禁用** | X 匹配仿真综合不一致 |
+| **`casez`** | 慎用；意图注释 | 掩码位语义不清 |
+| **signed** | 操作数同 signed；显式扩展 | 混 signed/unsigned |
+| **generate for** | 界为常量/parameter | 运行时可变界 |
+
+权威示例：Vivado → Language Templates；抄完改 `ri_`/`ro_` 与 §5 复位策略。
 
 ---
 
@@ -195,28 +243,37 @@ end
 
 ## §5 与本仓库红线的交叉点
 
-| 本仓库红线 | UG901/UG949 立场 | 结论 |
+| 本仓库规则 | UG901/UG949 立场 | 结论 |
 |:-----------|:-----------------|:-----|
-| 红线 1/2 输入输出寄存 `ri_`/`ro_` | UG949 推荐"在逻辑边界打拍" | **一致**，继续执行 |
-| 红线 3 同步复位高有效 `i_rst` | UG949 推荐同步复位；并进一步建议**数据通路尽量无复位** | 红线保留；**数据通路上的 BRAM/DSP/SRL 内部流水寄存器豁免加复位**（见下） |
+| 红线 1/2 输入输出寄存 `ri_`/`ro_` | UG949 推荐"在逻辑边界打拍" | **一致** |
+| 红线 3：**凡复位**须同步高有效 `i_rst` | UG949 推荐同步复位；**数据通路尽量无复位** | **一致**：红线约束极性/同步性，**不**强制每寄存器复位 |
+| 数据通路少复位（SKILL §1.1） | UG949 Control Sets / Resets | **对齐**：默认数据流水无复位 |
 | 红线 4 三段式 FSM + default | UG901 FSM 推断模板要求 `default` | **一致** |
-| 红线 5 无锁存器 | `always_latch` 虽可综合，UG949 明确不推荐 | **一致**，禁用 `always_latch` |
+| 红线 5 无锁存器 | `always_latch` 可综合但不推荐 | **一致**，禁用 `always_latch` |
+| `initial` 仅 RAM/ROM 阵列 | UG901 上电初值；防仿真-综合差 | **本仓库更严**：禁止标量 initial（§1.4 / G-C-03） |
 
-### 5.1 复位豁免清单（唯一允许不加复位的场景）
+### 5.1 复位：推荐不复位 vs 硬豁免
 
-以下寄存器**不加复位**，因为加了会直接阻断硬件宏的推断/吸收：
+**A. 推荐不复位（默认写法）** — 纯数据流水寄存器  
 
-1. BRAM 的读数据寄存器与输出寄存器；
-2. DSP48 的内部流水寄存器（AREG/BREG/MREG/PREG 对应的 RTL 级寄存器）；
-3. SRL 移位链中间级（有复位就掉成 FF 链，面积膨胀 32 倍量级）。
+- 无效数据由 **valid/enable** 屏蔽；少复位 → 控制集少、FF 打包好、利于 Fmax  
+- 审查默认删掉数据通路上的“顺手 `if (i_rst)`”，除非有协议/安全书面理由  
 
-**豁免条件（三条都要满足）：**
-- 该寄存器在数据通路上，其无效数据由**配套的 valid/enable 通道**屏蔽，valid 通道必须有 `i_rst`；
-- RTL 里在该寄存器上方写明 `// [复位豁免] BRAM 输出寄存器吸收 — 见 vivado-synthesis-ug901.md §5.1`；
-- 综合后用 `report_utilization` 确认 BRAM/DSP 使用量符合 `resource_budget_tracking.md` 预算，
-  即确认吸收真的发生了。
+**B. 硬豁免（必须不复位 + 注释 + 报告）** — 加了会阻断宏吸收  
 
-不写注释、不验证的"顺手不加复位" = 违反红线 3，审查直接 FAIL。
+1. BRAM 的读数据寄存器与输出寄存器；  
+2. DSP48 内部流水（AREG/BREG/MREG/PREG 对应 RTL 寄存器）；  
+3. SRL 移位链中间级（有复位 → FF 链，面积膨胀约 32×）。  
+
+**硬豁免条件（三条都要满足）：**
+
+- 寄存器在数据通路上，无效数据由 **valid/enable** 屏蔽；valid/控制通道**必须有** `i_rst`；  
+- RTL 注释：`// [复位豁免] BRAM 输出寄存器吸收 — 见 vivado-synthesis-ug901.md §5.1`；  
+- 综合后 `report_utilization` 确认 BRAM/DSP/SRL 映射符合预期。  
+
+**C. 必须复位** — FSM、valid 链、指针/计数器、配置寄存器（同步高有效 `i_rst`）。
+
+> 红线 3 的含义是：“要复位就用同步高有效 `i_rst`”，**不是**“每个 `r_` 都要进复位分支”。
 
 ---
 
@@ -227,3 +284,4 @@ end
 - 存储器模板: `memory-templates.md`
 - 时序约束: `timing-constraints.md`
 - 资源与时序优化: `fpga-optimization.md`
+- 技能主文: `../SKILL.md` §1.1 / §1.2 / §10

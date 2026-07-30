@@ -163,9 +163,14 @@ URAM 只在 UltraScale+ 上有，且约束比 BRAM 严：
 
 ### 4.5 寄存器/SRL/存储器初值
 
-- FPGA 支持上电初值（写进配置位流），可以替代一部分复位需求；
+- FPGA 支持上电初值（写进配置位流），可减少一部分“仅为上电已知”的复位需求；
 - **初值 ≠ 复位**：只在配置时生效，运行时 `i_rst` 不会恢复初值；
-- ASIC 目标下初值完全无效 —— 本仓库 RTL 禁 `initial`，用初值请走参数化的复位默认值。
+- ASIC 目标下初值完全无效，不得依赖 `initial`；
+- **本仓库 `initial` 策略（对齐 UG901 + G-C-03）**：
+  - **允许**：仅对 **RAM/ROM 存储器阵列** 使用 `initial` / `$readmemh` / `$readmemb`；
+  - **禁止**：对标量/向量 FF、FSM、指针、valid 等使用 `initial`（仿真-综合差异）；
+  - UltraRAM **无**上电初值支持；
+  - 细则见 `vivado-synthesis-ug901.md` §1.4。
 
 ---
 
