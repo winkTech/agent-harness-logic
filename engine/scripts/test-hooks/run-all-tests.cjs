@@ -220,8 +220,10 @@ const CORE_SCRIPTS = [
   'engine/scripts/test-hooks/plan-accuracy-contract.cjs',
   'engine/scripts/test-hooks/guard-coverage-contract.cjs',
   'engine/scripts/test-hooks/ten-dimension-contract.cjs',
+  'engine/scripts/test-hooks/weekly-report-contract.cjs',
   'engine/scripts/guard-coverage.cjs',
   'engine/scripts/ten-dimension-dashboard.cjs',
+  'engine/scripts/weekly-report.cjs',
   'engine/scripts/lib/verification-markers.cjs',
   'engine/scripts/plan-accuracy.cjs',
   'engine/scripts/hdl-evidence-gate.cjs',
@@ -2245,6 +2247,7 @@ const AUDIT_REMEDIATION_CONTRACTS = [
     ['--cases', 'engine/scripts/test-hooks/fixtures/harness-redteam-cases.json', '--variance']],
   ['guard pattern coverage', 'guard-coverage-contract.cjs', 60000],
   ['ten dimension dashboard', 'ten-dimension-contract.cjs', 180000],
+  ['weekly report wiring', 'weekly-report-contract.cjs', 180000],
 ];
 
 for (const [name, relative, timeout, extraArgs = []] of AUDIT_REMEDIATION_CONTRACTS) {

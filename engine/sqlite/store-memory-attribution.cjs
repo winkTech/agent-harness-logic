@@ -410,7 +410,9 @@ function recordOutcome(signal = {}, opts = {}) {
     WHERE exposure_id = ? AND retrieval_id = ? AND session_id = ?
       AND project_id = ? AND memory_id = ?
   `).run(
-    stored.accepted ? 'verified-pass' : 'verified-fail',
+    // inconclusive 判定不能翻成 verified-fail —— 那会让"读不到判据"在账本里
+    // 长得跟"验证失败"一样, 后续任何按状态做的统计都会跟着错。
+    stored.accepted ? 'verified-pass' : verdict === 'inconclusive' ? 'unverified' : 'verified-fail',
     exposureId,
     retrievalId,
     sessionId,
@@ -510,6 +512,11 @@ function observePostToolInternal(payload = {}, opts = {}, trustedVerification = 
       if (result.created) recorded += 1;
       if (trustedVerification) {
         const evidence = verificationEvidenceFromPayload(payload);
+        // 判定不可读 ≠ 记忆没用 (2026-07-30): 输出被管道截断时门禁看不到判据,
+        // 旧实现记成 fail outcome, 退役规则据此把两条无辜记忆的 TTL 砍到 14 天。
+        // 这类判定落 inconclusive —— 既进账本可查, 又不参与奖惩。
+        const unreadable = !trustedVerification.ok
+          && require('../scripts/lib/verification-markers.cjs').isUnreadableVerdict(trustedVerification.reason);
         const outcome = recordOutcome({
           sessionId: exposure.session_id,
           projectId: exposure.project_id,
@@ -518,7 +525,7 @@ function observePostToolInternal(payload = {}, opts = {}, trustedVerification = 
           exposureId: exposure.exposure_id,
           applicationId: result.applicationId,
           correlationId,
-          verdict: trustedVerification.ok ? 'pass' : 'fail',
+          verdict: trustedVerification.ok ? 'pass' : unreadable ? 'inconclusive' : 'fail',
           accepted: trustedVerification.ok,
           reason: trustedVerification.reason,
           command: evidence.command,

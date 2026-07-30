@@ -152,8 +152,28 @@ async function main() {
     assert.equal(failExposure[0].status, 'verified-fail');
     assert.equal(deliveries[1].status, 'fail');
 
+    // ── 3b. 判定不可读 → inconclusive, 且 exposure 不得翻成 verified-fail ──
+    // 真实事故: 输出被 `| tail -3` 截断时门禁看不到 PASS 判据, 旧实现记成
+    // fail outcome, 退役规则据此把两条无辜记忆的 TTL 砍到 14 天。
+    const out3 = inject(db, 'outcome-loop-unreadable', cwd);
+    assert.ok(out3, 'third session must inject');
+    // 注意 fixture 里不能出现任何正面标记字样 (含 "PASS" 三个字母本身),
+    // 否则会被 PASS_MARKERS 命中而变成通过判定。
+    await routeVerification(db, 'outcome-loop-unreadable', cwd, '输出的最后三行被管道截断了', deliveries);
+    const unreadable = rows(db, "SELECT * FROM memory_outcomes WHERE session_id = 'outcome-loop-unreadable'");
+    assert.equal(unreadable.length, 1);
+    assert.equal(unreadable[0].verdict, 'inconclusive',
+      `unreadable verdict must not be recorded as fail: ${unreadable[0].verdict} (${unreadable[0].reason})`);
+    assert.equal(Number(unreadable[0].accepted), 0, 'inconclusive must never be accepted');
+    const unreadableExposure = rows(db, "SELECT status FROM memory_retrieval_exposures WHERE session_id = 'outcome-loop-unreadable'");
+    assert.equal(unreadableExposure[0].status, 'unverified',
+      'an unreadable verdict must leave the exposure unverified, not verified-fail');
+    assert.equal(deliveries[2].status, 'partial',
+      'the same verdict must land as a partial delivery, not a failure');
+
     // ── 4. 非验证命令不产出 verdict, 不喂 outcome/delivery ──
     const before = rows(db, 'SELECT COUNT(*) n FROM memory_outcomes')[0].n;
+    const deliveriesBefore = deliveries.length;
     const plain = await postflight.route({
       hook_event_name: 'PostToolUse',
       tool_name: 'Bash',
@@ -173,7 +193,10 @@ async function main() {
     const plainGate = plain.results.find(r => r.source === 'verification-gate');
     assert.ok(!plainGate.verification, 'non-verification command must not fabricate a verdict');
     assert.equal(rows(db, 'SELECT COUNT(*) n FROM memory_outcomes')[0].n, before, 'no outcome for non-verification command');
-    assert.equal(deliveries.length, 2, 'no delivery for non-verification command');
+    assert.equal(deliveries.length, deliveriesBefore,
+      'non-verification command must not add a delivery record');
+    assert.deepEqual(deliveries.map((entry) => entry.status), ['pass', 'fail', 'partial'],
+      '三条判定各自映射一条 delivery: 通过 / 真失败 / 判定不可读');
 
     console.log('memory-outcome-loop-contract: all assertions passed');
   } finally {

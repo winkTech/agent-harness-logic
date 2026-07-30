@@ -503,6 +503,32 @@ function defaultStageCandidates(candidates, context) {
   return { staged: ids.length, ids, ledgerPath };
 }
 
+/**
+ * 周报表快照 (2026-07-30)。
+ *
+ * 骑这条**已被调度**的路径 (settings.json 的 SessionStart 调
+ * `--auto --execute --interval-days 7`), 因为 weekly-maintenance.sh 在本机
+ * 根本没有调度器 —— 报表写在那里等于从未自动跑过。
+ * 只读采集 + 写自己的快照文件; 不打 stdout (SessionStart 路径会污染会话上下文)。
+ */
+function defaultWriteWeeklyReport(_plan, context) {
+  try {
+    const report = require('./weekly-report.cjs').collectWeeklyReport({
+      write: true,
+      now: context.now.getTime(),
+    });
+    return {
+      reportFile: report.reportFile || null,
+      tenDimension: report.tenDimension?.summary || null,
+      erroredSections: report.erroredSections || [],
+      emptySections: report.emptySections || [],
+    };
+  } catch (error) {
+    // 报表失败绝不能影响维护本体 (保留、对账、索引重建才是主职责)
+    return { skipped: true, reason: error.message };
+  }
+}
+
 function defaultRebuildIndex(_plan, context) {
   const script = path.join(context.home, 'engine', 'scripts', 'semantic-search.cjs');
   const result = spawnSync(process.execPath, [script, 'index', '--rebuild', '--home', context.home], {
@@ -577,6 +603,7 @@ function runMaintenance(opts = parseArgs(), now = new Date(), runtime = {}) {
     candidates: (runtime.stageCandidates || defaultStageCandidates)(ruleCandidates, context),
     attributionRetirement: (runtime.retireAttribution || defaultRetireAttribution)(plan, context),
     reindex: opts.reindex ? (runtime.rebuildIndex || defaultRebuildIndex)(plan, context) : { skipped: true },
+    weeklyReport: (runtime.writeWeeklyReport || defaultWriteWeeklyReport)(plan, context),
   };
   const state = {
     lastExecutedAt: now.toISOString(),
@@ -632,4 +659,5 @@ module.exports = {
   ATTRIBUTION_RETIREMENT,
   collectAttributionRetirement,
   defaultRetireAttribution,
+  defaultWriteWeeklyReport,
 };

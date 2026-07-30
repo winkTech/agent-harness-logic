@@ -22,7 +22,8 @@ process.env.CLAUDE_HARNESS_NO_PERSIST = '1'; // 关缓存与归因持久化, 测
 const ROOT = path.resolve(__dirname, '..', '..', '..');
 const { openDb } = require(path.join(ROOT, 'engine/sqlite/index.cjs'));
 const storeMemory = require(path.join(ROOT, 'engine/sqlite/store-memory.cjs'));
-const { retrieveContext } = require(path.join(ROOT, 'engine/scripts/memory-retrieve-hook.cjs'));
+const retrieveHook = require(path.join(ROOT, 'engine/scripts/memory-retrieve-hook.cjs'));
+const { retrieveContext, buildContextQuery } = retrieveHook;
 
 function seedFact(db, name, confidence, verificationState) {
   const now = Date.now();
@@ -62,6 +63,31 @@ function retrieve(db, message) {
   );
 }
 
+/**
+ * 层2 触发判定: 用真实 PreToolUse(Edit) 载荷形状问"这个文件会不会触发上下文检索"。
+ * 只看是否发生检索, 不看命中内容 —— 命中质量由前面几段负责。
+ */
+function editTriggers(db, relativeFile) {
+  const seen = [];
+  retrieveContext(
+    {
+      hook_event_name: 'PreToolUse',
+      tool_name: 'Edit',
+      session_id: 'recall-trigger-test',
+      cwd: ROOT,
+      tool_input: { file_path: path.join(ROOT, relativeFile), old_string: 'a', new_string: 'b' },
+    },
+    {
+      openDb: () => ({ db, close() { /* shared handle */ } }),
+      recentlyInjected: () => false,
+      markInjected: () => {},
+      attributionPersistenceDisabled: () => true,
+      doMemoryQuery: (query, label) => { seen.push({ query, label }); return []; },
+    },
+  );
+  return seen.some((entry) => entry.label === 'context');
+}
+
 function main() {
   const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'recall-tier-'));
   const handle = openDb({ path: path.join(tmp, 'memory.db') });
@@ -91,6 +117,35 @@ function main() {
 
     // 5: 无触发词 → 零注入
     assert.equal(retrieve(db, '好的谢谢'), null);
+
+    // ── 6: 层2 触发范围 (2026-07-30) ──
+    // harness 自身是 .cjs, 旧清单只有 HDL/Python/C 系, 于是 harness 开发完全
+    // 不产生记忆暴露 (实测 51 条活跃事实只有 2 条被暴露过, D5 永远停在 0.96)。
+    for (const file of [
+      'engine/scripts/hooks/verification-gate.cjs',
+      'engine/scripts/lib/hook-latency.mjs',
+      'web/src/app.js',
+      'web/src/app.ts',
+      'rtl/rx_fifo.sv',
+      'tools/check_rrc.py',
+    ]) {
+      assert.ok(editTriggers(db, file), `${file} must trigger context retrieval`);
+    }
+    // 文档与配置刻意不触发: 改动频繁、检索价值低, 纳入只增注入噪声与 token
+    for (const file of ['docs/rules/05-harness.md', 'engine/hooks/manifest.json', 'var/state.txt']) {
+      assert.equal(editTriggers(db, file), false, `${file} must not trigger context retrieval`);
+    }
+
+    // 7: harness 语汇进入查询, 且各类型的增强词互不串味
+    const harnessQuery = buildContextQuery('engine/scripts/hooks/verification-gate.cjs');
+    assert.ok(/harness/.test(harnessQuery), `harness enrichment missing: ${harnessQuery}`);
+    assert.ok(/门禁/.test(harnessQuery), `gate enrichment missing: ${harnessQuery}`);
+    assert.ok(!/Verilog|HDL/.test(harnessQuery), `HDL terms must not leak into .cjs query: ${harnessQuery}`);
+    const rtlQuery = buildContextQuery('rtl/rx_fifo.sv');
+    assert.ok(/Verilog/.test(rtlQuery), `HDL enrichment regressed: ${rtlQuery}`);
+    assert.ok(!/harness/.test(rtlQuery), `harness terms must not leak into .sv query: ${rtlQuery}`);
+    // 查询词上限保持在 8 个 —— 词表越大 relevantResult 的门槛越高, 不能失控
+    assert.ok(harnessQuery.split(' ').length <= 8, `query term budget exceeded: ${harnessQuery}`);
 
     console.log('memory-recall-tier-contract: all assertions passed');
   } finally {

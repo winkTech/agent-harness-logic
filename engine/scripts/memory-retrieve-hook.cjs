@@ -67,12 +67,25 @@ const TRIGGER_PATTERNS = [
 ];
 
 // ── 层2: 任务上下文 — 代码文件类型 → 检索增强词 ──────────────────────────
-const CODE_EXTENSIONS = ['.sv', '.v', '.vh', '.vhd', '.py', '.c', '.cpp', '.h'];
+// harness 自身的代码扩展名 (2026-07-30 补): 旧清单只有 HDL/Python/C 系,
+// 于是 harness 开发完全不触发层2 检索 —— 实测某会话 93 次 Edit + 21 次 Write
+// 全是 .cjs, 两层触发都没命中, 51 条活跃事实里只有 2 条被暴露过, D5 的
+// neverExposed 因此永远停在 0.96。刻意不含 .md/.json: 文档与配置改动频繁
+// 且检索价值低, 纳入只会增加注入噪声与 token 开销。
+const CODE_EXTENSIONS = ['.sv', '.v', '.vh', '.vhd', '.py', '.c', '.cpp', '.h', '.cjs', '.mjs', '.js', '.ts'];
+// 增强词刻意保持在 6 个以内且偏判别性语汇。relevantResult 的门槛是
+// overlap >= ceil(terms/4)(上限 3), 词表变大只会让过滤**更严**,
+// 所以过度增强的风险是漏注入, 不是误注入。
+const HARNESS_ENRICH = ['hook', 'harness', '门禁', '验证', '契约', '事件'];
 const TYPE_ENRICH = {
   sv:  ['HDL', 'Verilog', 'FSM', '状态机', '时序', '接口', 'valid', 'ready', '握手', '复位', '流水线', '位宽', '锁存器', '跨时钟域', 'CDC'],
   v:   ['HDL', 'Verilog', 'FSM', '状态机', '时序', '接口', '复位', '位宽'],
   vhd: ['HDL', 'VHDL', 'FSM', '状态机', '时序', '接口'],
   py:  ['Python', 'pytest', 'ruff', '异常', '类型', '接口'],
+  cjs: HARNESS_ENRICH,
+  mjs: HARNESS_ENRICH,
+  js:  HARNESS_ENRICH,
+  ts:  HARNESS_ENRICH,
 };
 const GENERIC_PATH_PARTS = new Set([
   'users', 'home', 'repo', 'repository', 'project', 'workspace',

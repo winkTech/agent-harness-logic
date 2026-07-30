@@ -58,4 +58,31 @@ function markerVerdict(text) {
   return { status: 'passed', reason: 'explicit PASS evidence' };
 }
 
-module.exports = { PASS_MARKERS, failureMarker, hasPassMarker, markerVerdict };
+/**
+ * "判定不可读"的原因族 —— 门禁**看不到判据**, 而不是"验证失败了"。
+ *
+ * 触发场景: 命令输出被管道截断 (`... | tail -3`), 或验证命令静默无输出。
+ * 为什么必须单独成一类 (2026-07-30 两次实测):
+ *   - delivery: 25 条记录里 20 条落在这一族, 计成 fail 会让"成功率"变成
+ *     "我有没有用 tail"的度量;
+ *   - outcome: 更严重 —— 归因把它记成 fail outcome, 退役规则据此把两条无辜的
+ *     记忆 TTL 砍到 14 天。度量误差在这里会**破坏记忆库**。
+ * 因此凡是按 verdict 做后续决策的地方, 都必须先过这个集合。
+ */
+const UNREADABLE_VERDICT_REASONS = new Set([
+  'no explicit PASS evidence in output',
+  'verification command produced no log evidence',
+]);
+
+function isUnreadableVerdict(reason) {
+  return UNREADABLE_VERDICT_REASONS.has(String(reason || ''));
+}
+
+module.exports = {
+  PASS_MARKERS,
+  UNREADABLE_VERDICT_REASONS,
+  failureMarker,
+  hasPassMarker,
+  isUnreadableVerdict,
+  markerVerdict,
+};

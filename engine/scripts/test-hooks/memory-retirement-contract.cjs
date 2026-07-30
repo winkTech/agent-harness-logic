@@ -106,6 +106,14 @@ function main() {
     seedOutcome(db, mixedFact, 1, 'fail', NOW - 5 * DAY);
     seedOutcome(db, mixedFact, 2, 'pass', NOW - 3 * DAY);
 
+    // Rule A 的边界: inconclusive 判定不得参与奖惩。
+    // 真实事故 (2026-07-30): 输出被管道截断时门禁读不到判据, 旧实现记成 fail
+    // outcome, 退役规则据此把两条无辜记忆的 TTL 从 NULL 砍到 14 天。
+    const inconclusiveFact = seedFact(db, 'inconclusive-fact');
+    seedOutcome(db, inconclusiveFact, 1, 'inconclusive', NOW - 5 * DAY);
+    seedOutcome(db, inconclusiveFact, 2, 'inconclusive', NOW - 3 * DAY);
+    seedOutcome(db, inconclusiveFact, 3, 'inconclusive', NOW - 1 * DAY);
+
     // Rule B: 5 次暴露无 application
     const unusedFact = seedFact(db, 'unused-fact');
     for (let i = 0; i < 5; i++) seedExposure(db, unusedFact, i, NOW - (i + 1) * DAY);
@@ -118,6 +126,8 @@ function main() {
     const rules = Object.fromEntries(plan.actions.map(a => [a.id, a.rule]));
     assert.equal(rules[badFact], 'negative-outcome', `bad-fact must retire: ${JSON.stringify(plan.actions)}`);
     assert.ok(!(mixedFact in rules), 'fact with a pass outcome must not retire');
+    assert.ok(!(inconclusiveFact in rules),
+      'inconclusive outcomes must never punish a memory — 判定不可读不是记忆没用');
     assert.equal(rules[unusedFact], 'exposed-never-applied');
     assert.ok(!(staleFact in rules), 'never-exposed must be gated while telemetry history <90d');
 

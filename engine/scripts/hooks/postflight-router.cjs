@@ -18,19 +18,9 @@ function defaultDependencies() {
   };
 }
 
-/**
- * "判定不可读"的原因族 (2026-07-30)。
- *
- * 这两个原因说的是**门禁看不到判据**, 不是"验证失败了": 命令输出被管道截断
- * (`... | tail -3`) 或验证命令静默无输出时都会落到这里。实测 25 条 delivery
- * 记录里 20 条是这一族, 把它们计成 fail 会让成功率变成"我有没有用 tail"的
- * 度量, 而不是交付质量的度量。它们落 partial —— partial 不进成功率分母,
- * 但记录仍在, 不会把问题藏起来。
- */
-const UNREADABLE_VERDICT_REASONS = new Set([
-  'no explicit PASS evidence in output',
-  'verification command produced no log evidence',
-]);
+// "判定不可读"的原因族由 lib/verification-markers.cjs 统一持有 —— delivery 的
+// partial 与 attribution 的 inconclusive 必须用同一份判据, 各抄一份就会漂移。
+const { UNREADABLE_VERDICT_REASONS } = require('../lib/verification-markers.cjs');
 
 /** 验证判定 → delivery 事件 (D1 自动喂数): PASS/FAIL 不再依赖手工 record。 */
 function recordDeliveryFromVerdict(payload, gateResult, deps) {

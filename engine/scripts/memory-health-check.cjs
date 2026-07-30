@@ -813,6 +813,37 @@ function queryProtectedWrites(home) {
   return result;
 }
 
+/**
+ * 周报表断流探测 (2026-07-30)。
+ *
+ * 报表本身也是一条数据链路, 因此同样要有断流判定 —— 否则会重演 costs.jsonl:
+ * 采集悄悄停了, 没人知道。判定挂在"维护近期执行过"这个前提上, 避免全新环境
+ * 或从未维护过的机器被误报。
+ */
+function queryWeeklyReport(home, now, maintenance) {
+  const reportFile = path.join(home, 'var', 'metrics', 'weekly-report.json');
+  const result = { available: fs.existsSync(reportFile), generatedAt: null, ageDays: null, erroredSections: [] };
+  if (result.available) {
+    try {
+      const report = JSON.parse(fs.readFileSync(reportFile, 'utf8'));
+      result.generatedAt = report.generatedAt || null;
+      const at = Date.parse(result.generatedAt || '');
+      result.ageDays = Number.isFinite(at) ? Number(((now - at) / DAY_MS).toFixed(2)) : null;
+      result.erroredSections = Array.isArray(report.erroredSections) ? report.erroredSections : [];
+      result.history = Array.isArray(report.history) ? report.history.length : 0;
+    } catch (error) {
+      result.parseError = error.message;
+    }
+  }
+  // 维护本身近期跑过 (≤2 个周期) 却没有对应的报表快照 = 报表链路断了
+  const maintenanceRecent = Number.isFinite(maintenance?.ageDays)
+    && maintenance.ageDays <= (maintenance.intervalDays || 7) * 2;
+  const staleThreshold = (maintenance?.intervalDays || 7) * 2;
+  result.stale = maintenanceRecent
+    && (!result.available || result.ageDays === null || result.ageDays > staleThreshold);
+  return result;
+}
+
 function buildHealthReport(opts = {}) {
   if (!opts.db) throw new Error('buildHealthReport requires an injected database');
   const db = opts.db;
@@ -1003,6 +1034,24 @@ function buildHealthReport(opts = {}) {
       });
   }
 
+  const weeklyReport = queryWeeklyReport(home, now, maintenance);
+  if (weeklyReport.stale) {
+    issue('weekly_report_stale', 'medium', 5,
+      'maintenance is running but the weekly report snapshot is missing or stale', {
+        available: weeklyReport.available,
+        generatedAt: weeklyReport.generatedAt,
+        ageDays: weeklyReport.ageDays,
+        maintenanceAgeDays: maintenance.ageDays,
+      });
+  }
+  if (weeklyReport.erroredSections.length > 0) {
+    issue('weekly_report_source_failed', 'medium', 5,
+      'the weekly report recorded failing data sources', {
+        erroredSections: weeklyReport.erroredSections,
+        generatedAt: weeklyReport.generatedAt,
+      });
+  }
+
   const protectedWrites = queryProtectedWrites(home);
   if (protectedWrites.writesWithoutReason > 0) {
     issue('protected_write_without_approval', 'critical', 20,
@@ -1045,6 +1094,7 @@ function buildHealthReport(opts = {}) {
       delivery: deliveryPlans.delivery,
       plans: deliveryPlans.plans,
       protectedWrites,
+      weeklyReport,
       events: {
         total: eventSnapshot.total,
         safeWatermark: eventSnapshot.safeWatermark,
@@ -1137,6 +1187,7 @@ module.exports = {
   queryCostTelemetry,
   queryDeliveryPlanTelemetry,
   queryProtectedWrites,
+  queryWeeklyReport,
   detectConsumerSchedules,
   loadConsumerRegistry,
   parseArgs,
