@@ -170,6 +170,87 @@ function assertFrustrationContextIsRequireSafeAndReadOnly() {
   }
 }
 
+function assertStaleFailureEvidenceFailsClosed() {
+  const previous = {
+    noPersist: process.env.CLAUDE_HARNESS_NO_PERSIST,
+    noWrite: process.env.CLAUDE_HOOK_NO_WRITE,
+    readonly: process.env.CLAUDE_HARNESS_VERIFY_READONLY,
+    noDiag: process.env.CLAUDE_NO_DIAGNOSTIC_WRITES,
+  };
+  try {
+    delete process.env.CLAUDE_HARNESS_NO_PERSIST;
+    delete process.env.CLAUDE_HOOK_NO_WRITE;
+    delete process.env.CLAUDE_HARNESS_VERIFY_READONLY;
+    delete process.env.CLAUDE_NO_DIAGNOSTIC_WRITES;
+    delete require.cache[require.resolve(frustrationPath)];
+    const detector = require(frustrationPath);
+    const neutralPayload = (session) => ({
+      hook_event_name: 'UserPromptSubmit',
+      prompt: '评价一下 harness 仓库的健壮程度。',
+      cwd: HARNESS_ROOT,
+      session_id: session,
+    });
+    const staleAt = new Date(Date.now() - 19 * 24 * 60 * 60 * 1000).toISOString();
+    const staleState = () => ({
+      failureCount: 3,
+      failureHistory: [
+        { count: 1, at: staleAt, trigger: 'timeout', suggestedMode: '第一性原理' },
+        { count: 2, at: staleAt, trigger: 'timeout', suggestedMode: '第一性原理' },
+        { count: 3, at: staleAt, trigger: 'timeout', suggestedMode: '第一性原理' },
+      ],
+      toolCalls: [],
+    });
+
+    // 1) 陈旧失败证据 + 中性 prompt:不得注入强制切换,且允许持久化时必须复位计数
+    let resetState = null;
+    const stale = detector.retrieveContext(neutralPayload('prompt-frustration-stale'), {
+      readState: staleState,
+      updateState: (mutator) => { resetState = mutator(staleState()) || resetState; return resetState; },
+      emitSignal: () => {},
+    });
+    assert.equal(stale, null,
+      '19 天前的 failureCount 仍注入强制模式切换——失败证据必须有时效窗口');
+    assert.equal(resetState?.failureCount, 0, '陈旧失败证据必须复位 failureCount');
+
+    // 2) 只读模式下同样不注入,且零写入
+    let writes = 0;
+    const readOnly = detector.retrieveContext(neutralPayload('prompt-frustration-stale-ro'), {
+      persist: false,
+      readState: staleState,
+      updateState: () => { writes += 1; },
+      emitSignal: () => {},
+    });
+    assert.equal(readOnly, null, '只读模式下陈旧失败证据不得注入强制切换');
+    assert.equal(writes, 0, '只读模式下陈旧证据处理不得写运行时状态');
+
+    // 3) 新鲜失败证据必须照常触发——绊线本身不能因时效窗口失效
+    const fresh = detector.retrieveContext(neutralPayload('prompt-frustration-fresh'), {
+      persist: false,
+      readState: () => ({
+        failureCount: 3,
+        failureHistory: [
+          { count: 3, at: new Date(Date.now() - 5 * 60 * 1000).toISOString(), trigger: 'timeout' },
+        ],
+        toolCalls: [],
+      }),
+      updateState: () => {},
+      emitSignal: () => {},
+    });
+    assert.match(fresh?.hookSpecificOutput?.additionalContext || '', /强制模式切换/,
+      '5 分钟前的失败证据必须仍触发强制模式切换');
+  } finally {
+    if (previous.noPersist === undefined) delete process.env.CLAUDE_HARNESS_NO_PERSIST;
+    else process.env.CLAUDE_HARNESS_NO_PERSIST = previous.noPersist;
+    if (previous.noWrite === undefined) delete process.env.CLAUDE_HOOK_NO_WRITE;
+    else process.env.CLAUDE_HOOK_NO_WRITE = previous.noWrite;
+    if (previous.readonly === undefined) delete process.env.CLAUDE_HARNESS_VERIFY_READONLY;
+    else process.env.CLAUDE_HARNESS_VERIFY_READONLY = previous.readonly;
+    if (previous.noDiag === undefined) delete process.env.CLAUDE_NO_DIAGNOSTIC_WRITES;
+    else process.env.CLAUDE_NO_DIAGNOSTIC_WRITES = previous.noDiag;
+    delete require.cache[require.resolve(frustrationPath)];
+  }
+}
+
 function assertDiagnosticQuestionTriggersMemoryRetrieval() {
   const memoryHook = require(memoryHookPath);
   const previous = process.env.CLAUDE_HARNESS_NO_PERSIST;
@@ -244,6 +325,7 @@ try {
   assertFailOpenIsolation();
   assertRuleContextIsRequireSafeAndReadOnly();
   assertFrustrationContextIsRequireSafeAndReadOnly();
+  assertStaleFailureEvidenceFailsClosed();
   assertDiagnosticQuestionTriggersMemoryRetrieval();
   process.stdout.write('PROMPT_CONTEXT_RESULT: PASS\n');
 } catch (error) {
