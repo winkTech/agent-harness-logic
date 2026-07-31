@@ -2,7 +2,7 @@
 
 > Generated from manifest.json and gate-results.json. Do not edit by hand.
 
-Assets: 23 · RED: 0 · YELLOW: 3
+Assets: 23 · RED: 9 · YELLOW: 3
 
 ## certified
 
@@ -17,17 +17,17 @@ Assets: 23 · RED: 0 · YELLOW: 3
 
 | UID | Version | Kind | Directory | Machine cleared | Blocking | Used by | Badge gap |
 |---|---:|---|---|---|---|---|---|
-| `axis_skid_buffer` | 0.1.0 | primitive | `incubator/intake/axis_skid_buffer` | qualification | certified | — | G-B-03, G-C-01, G-C-02, G-C-04, G-C-05, G-GATE-01, G-SIGN-01 |
-| `cdc_sync` | 0.1.0 | primitive | `incubator/intake/cdc_sync` | qualification | certified | — | G-B-03, G-C-01, G-C-02, G-C-04, G-C-05, G-GATE-01, G-SIGN-01 |
-| `complex_multiplier` | 0.1.0 | primitive | `incubator/intake/complex_multiplier` | qualification | certified | — | G-B-03, G-C-01, G-C-02, G-C-04, G-C-05, G-GATE-01, G-SIGN-01 |
-| `crc32` | 0.1.0 | primitive | `incubator/intake/crc32` | qualification | certified | — | G-B-03, G-C-01, G-C-02, G-C-04, G-C-05, G-GATE-01, G-SIGN-01 |
-| `ddr_axi4_controller` | 0.1.0 | primitive | `incubator/intake/ddr_axi4_controller` | qualification | certified | — | G-B-03, G-C-01, G-C-02, G-C-04, G-C-05, G-GATE-01, G-SIGN-01 |
-| `delay_line` | 0.1.0 | primitive | `incubator/intake/delay_line` | qualification | certified | — | G-B-03, G-C-01, G-C-02, G-C-04, G-C-05, G-GATE-01, G-SIGN-01 |
-| `frame_sync` | 0.1.0 | primitive | `incubator/intake/frame_sync` | qualification | certified | — | G-B-03, G-C-01, G-C-02, G-C-04, G-C-05, G-GATE-01, G-SIGN-01 |
-| `lfsr_gen` | 0.1.0 | primitive | `incubator/intake/lfsr_gen` | qualification | certified | — | G-B-03, G-C-01, G-C-02, G-C-04, G-C-05, G-GATE-01, G-SIGN-01 |
+| `axis_skid_buffer` | 0.1.0 | primitive | `incubator/intake/axis_skid_buffer` | intake | qualification | — | G-B-03, G-C-01, G-C-02, G-C-04, G-C-05, G-DOC-03, G-DOC-04, G-GATE-01, G-SIGN-01 |
+| `cdc_sync` | 0.1.0 | primitive | `incubator/intake/cdc_sync` | intake | qualification | — | G-B-03, G-C-01, G-C-02, G-C-04, G-C-05, G-DOC-03, G-DOC-04, G-GATE-01, G-SIGN-01 |
+| `complex_multiplier` | 0.1.0 | primitive | `incubator/intake/complex_multiplier` | intake | qualification | — | G-B-03, G-C-01, G-C-02, G-C-04, G-C-05, G-DOC-03, G-DOC-04, G-GATE-01, G-SIGN-01 |
+| `crc32` | 0.1.0 | primitive | `incubator/intake/crc32` | intake | qualification | — | G-B-03, G-C-01, G-C-02, G-C-04, G-C-05, G-DOC-03, G-DOC-04, G-GATE-01, G-SIGN-01 |
+| `ddr_axi4_controller` | 0.1.0 | primitive | `incubator/intake/ddr_axi4_controller` | intake | qualification | — | G-B-03, G-C-01, G-C-02, G-C-04, G-C-05, G-DOC-03, G-GATE-01, G-SIGN-01 |
+| `delay_line` | 0.1.0 | primitive | `incubator/intake/delay_line` | intake | qualification | — | G-B-03, G-C-01, G-C-02, G-C-04, G-C-05, G-DOC-03, G-DOC-04, G-GATE-01, G-SIGN-01 |
+| `frame_sync` | 0.1.0 | primitive | `incubator/intake/frame_sync` | intake | qualification | — | G-B-03, G-C-01, G-C-02, G-C-04, G-C-05, G-DOC-03, G-DOC-04, G-GATE-01, G-SIGN-01 |
+| `lfsr_gen` | 0.1.0 | primitive | `incubator/intake/lfsr_gen` | intake | qualification | — | G-B-03, G-C-01, G-C-02, G-C-04, G-C-05, G-DOC-03, G-DOC-04, G-GATE-01, G-SIGN-01 |
 | `model_comm_rrc` | 1.0.0 | golden-model | `models/comm/rrc` | — | no gate-results | 1 | native-matlab-recheck |
 | `pulse_merge_golden` | 0.1.0 | golden-model | `models/comm/pulse_merge` | — | no gate-results | 1 | — |
-| `sdp_ram` | 0.1.0 | primitive | `incubator/intake/sdp_ram` | qualification | certified | — | G-B-03, G-C-01, G-C-02, G-C-04, G-C-05, G-GATE-01, G-SIGN-01 |
+| `sdp_ram` | 0.1.0 | primitive | `incubator/intake/sdp_ram` | intake | qualification | — | G-B-03, G-C-01, G-C-02, G-C-04, G-C-05, G-DOC-03, G-DOC-04, G-GATE-01, G-SIGN-01 |
 | `stream_elastic_pipeline_golden` | 0.1.0 | golden-model | `models/comm/stream_elastic_pipeline` | — | no gate-results | 1 | — |
 
 ## intake

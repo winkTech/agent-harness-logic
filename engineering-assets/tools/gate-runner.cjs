@@ -315,11 +315,11 @@ function runGates(pkgDir, manifest, repoRoot) {
     const readme = path.join(pkgDir, 'README.md');
     const v = [];
     if (!fs.existsSync(changelog) || !fs.readFileSync(changelog, 'utf8').trim()) v.push('CHANGELOG.md missing or empty');
-    add({ id: 'G-DOC-03', name: 'CHANGELOG lifecycle', level: 'intake', must: true, status: v.length ? 'fail' : 'pass', severity: 'warning', detail: v.length ? v : 'CHANGELOG.md present' });
+    add({ id: 'G-DOC-03', name: 'CHANGELOG lifecycle', level: 'qualification', must: true, status: v.length ? 'fail' : 'pass', severity: 'mid', detail: v.length ? v : 'CHANGELOG.md present' });
     const docs = [readme, path.join(pkgDir, 'docs', 'limitations.md'), path.join(pkgDir, 'docs', 'LIMITATIONS.md')].filter((file) => fs.existsSync(file));
     const limitationText = docs.map((file) => fs.readFileSync(file, 'utf8')).join('\n');
     const missing = docs.length === 0 || !/(limitation|known issue|限制|已知问题|边界)/i.test(limitationText);
-    add({ id: 'G-DOC-04', name: 'limitations and boundaries', level: 'intake', must: true, status: missing ? 'fail' : 'pass', severity: 'warning', detail: missing ? 'README/docs must state limitations and verification boundaries' : `limitations documented in ${docs.map((file) => path.relative(pkgDir, file)).join(', ')}` });
+    add({ id: 'G-DOC-04', name: 'limitations and boundaries', level: 'qualification', must: true, status: missing ? 'fail' : 'pass', severity: 'mid', detail: missing ? 'README/docs must state limitations and verification boundaries' : `limitations documented in ${docs.map((file) => path.relative(pkgDir, file)).join(', ')}` });
   })();
 
   // G-DOC-01 README + 模块头
@@ -346,8 +346,24 @@ function runGates(pkgDir, manifest, repoRoot) {
     add({ id: 'G-B-01', name: '需求/文档锚绑定', level: 'intake', must: true, status: v.length ? 'fail' : 'pass', severity: 'mid', detail: v.length ? v : '锚链起点已连' });
   })();
 
-  // G-B-02 golden 锚解析到受治理资产
+  // G-B-02 正确性锚 — 按资产类分锚 (owner 裁决 2026-07-27, 决策⑦; 272899f 曾误删):
+  //   算法资产 (kind 缺省/rtl): 锚 = golden model, golden_model_ref 必须解析;
+  //   结构原语 (kind=primitive): golden 锚的是算法, 不是所有模块 —— 原语的
+  //   正确性锚 = 包内自检 TB (含反假绿约定), 不要求 golden_model_ref。
   (() => {
+    if (manifest.kind === 'primitive') {
+      const tbSrcs = (manifest.sources || []).filter((s) => s.role === 'tb');
+      const tbExists = tbSrcs.length > 0
+        && tbSrcs.every((s) => fs.existsSync(path.join(pkgDir, s.path)));
+      add({
+        id: 'G-B-02', name: '正确性锚 (原语=自检 TB)', level: 'qualification', must: true,
+        status: tbExists ? 'pass' : 'fail', severity: 'high',
+        detail: tbExists
+          ? `结构原语正确性锚 = 自检 TB (${tbSrcs.map((s) => s.path).join(', ')}); golden 豁免 (owner 裁决 2026-07-27)`
+          : 'kind=primitive 但 sources 中无可解析的 tb 角色文件 — 原语的正确性锚缺失',
+      });
+      return;
+    }
     const ref = manifest.golden_model_ref;
     let found = false;
     if (ref) {
@@ -365,7 +381,19 @@ function runGates(pkgDir, manifest, repoRoot) {
   })();
 
   // G-B-03 bit-true 对标 — 读 ModelSim cosim 证据 (tb 场景5 写入 alignment-report.json)
+  // 结构原语 (kind=primitive) 无 golden 可对标: 本门重定义为"自检 TB 实跑
+  // PASS 证据" (tb-selfcheck.json: {pass:true, compares>=1, tool}), 由 TB 或
+  // 运行脚本写入证据目录。(决策⑦; 272899f 曾误删本分支)
   (() => {
+    if (manifest.kind === 'primitive') {
+      const rpt = path.join(repoRoot, 'engineering-assets', 'var', 'gates', 'pg', manifest.asset_uid || 'x', 'tb-selfcheck.json');
+      if (!fs.existsSync(rpt)) { add({ id: 'G-B-03', name: '自检 TB 实跑证据 (原语)', level: 'certified', must: true, status: 'blocked', severity: 'high', detail: '无 tb-selfcheck.json — 原语的 bit-true 门 = 自检 TB 实跑 PASS 证据落盘' }); return; }
+      let r;
+      try { r = JSON.parse(fs.readFileSync(rpt, 'utf8')); } catch { add({ id: 'G-B-03', name: '自检 TB 实跑证据 (原语)', level: 'certified', must: true, status: 'fail', severity: 'high', detail: 'tb-selfcheck.json 非法 JSON' }); return; }
+      const ok = r.pass === true && Number(r.compares) >= 1;
+      add({ id: 'G-B-03', name: '自检 TB 实跑证据 (原语)', level: 'certified', must: true, status: ok ? 'pass' : 'fail', severity: 'high', detail: ok ? `自检 TB PASS: ${r.compares} 次比对 [${r.tool || 'unknown'}]` : `tb-selfcheck 证据不合格: pass=${r.pass} compares=${r.compares}` });
+      return;
+    }
     const rpt = path.join(repoRoot, 'engineering-assets', 'var', 'gates', 'pg', manifest.asset_uid || 'x', 'alignment-report.json');
     if (!fs.existsSync(rpt)) { add({ id: 'G-B-03', name: 'bit-true 对标', level: 'certified', must: true, status: 'blocked', severity: 'high', detail: '无 cosim 证据 (先跑 vsim -c -do run.do 生成 alignment-report.json)' }); return; }
     let r;

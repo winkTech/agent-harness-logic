@@ -7,7 +7,7 @@
       "intake": 7,
       "qualification": 12
     },
-    "red_count": 0,
+    "red_count": 9,
     "yellow_count": 3,
     "unregistered_root_count": 2
   },
@@ -16,7 +16,62 @@
     "reference-assets/vendor"
   ],
   "drift": {
-    "red": [],
+    "red": [
+      {
+        "code": "D3",
+        "asset_uid": "axis_skid_buffer",
+        "dir": "incubator/intake/axis_skid_buffer",
+        "message": "declared level qualification exceeds machine-cleared intake"
+      },
+      {
+        "code": "D3",
+        "asset_uid": "cdc_sync",
+        "dir": "incubator/intake/cdc_sync",
+        "message": "declared level qualification exceeds machine-cleared intake"
+      },
+      {
+        "code": "D3",
+        "asset_uid": "complex_multiplier",
+        "dir": "incubator/intake/complex_multiplier",
+        "message": "declared level qualification exceeds machine-cleared intake"
+      },
+      {
+        "code": "D3",
+        "asset_uid": "crc32",
+        "dir": "incubator/intake/crc32",
+        "message": "declared level qualification exceeds machine-cleared intake"
+      },
+      {
+        "code": "D3",
+        "asset_uid": "ddr_axi4_controller",
+        "dir": "incubator/intake/ddr_axi4_controller",
+        "message": "declared level qualification exceeds machine-cleared intake"
+      },
+      {
+        "code": "D3",
+        "asset_uid": "delay_line",
+        "dir": "incubator/intake/delay_line",
+        "message": "declared level qualification exceeds machine-cleared intake"
+      },
+      {
+        "code": "D3",
+        "asset_uid": "frame_sync",
+        "dir": "incubator/intake/frame_sync",
+        "message": "declared level qualification exceeds machine-cleared intake"
+      },
+      {
+        "code": "D3",
+        "asset_uid": "lfsr_gen",
+        "dir": "incubator/intake/lfsr_gen",
+        "message": "declared level qualification exceeds machine-cleared intake"
+      },
+      {
+        "code": "D3",
+        "asset_uid": "sdp_ram",
+        "dir": "incubator/intake/sdp_ram",
+        "message": "declared level qualification exceeds machine-cleared intake"
+      }
+    ],
     "yellow": [
       {
         "code": "D3",
@@ -61,6 +116,8 @@
         "G-C-02",
         "G-C-04",
         "G-C-05",
+        "G-DOC-03",
+        "G-DOC-04",
         "G-GATE-01",
         "G-SIGN-01"
       ],
@@ -70,8 +127,8 @@
         "limitations": false
       },
       "gates": {
-        "cleared_level": "qualification",
-        "blocking_at": "certified",
+        "cleared_level": "intake",
+        "blocking_at": "qualification",
         "pass_count": 11
       }
     },
@@ -97,6 +154,8 @@
         "G-C-02",
         "G-C-04",
         "G-C-05",
+        "G-DOC-03",
+        "G-DOC-04",
         "G-GATE-01",
         "G-SIGN-01"
       ],
@@ -106,8 +165,8 @@
         "limitations": false
       },
       "gates": {
-        "cleared_level": "qualification",
-        "blocking_at": "certified",
+        "cleared_level": "intake",
+        "blocking_at": "qualification",
         "pass_count": 11
       }
     },
@@ -172,6 +231,8 @@
         "G-C-02",
         "G-C-04",
         "G-C-05",
+        "G-DOC-03",
+        "G-DOC-04",
         "G-GATE-01",
         "G-SIGN-01"
       ],
@@ -181,8 +242,8 @@
         "limitations": false
       },
       "gates": {
-        "cleared_level": "qualification",
-        "blocking_at": "certified",
+        "cleared_level": "intake",
+        "blocking_at": "qualification",
         "pass_count": 11
       }
     },
@@ -208,6 +269,8 @@
         "G-C-02",
         "G-C-04",
         "G-C-05",
+        "G-DOC-03",
+        "G-DOC-04",
         "G-GATE-01",
         "G-SIGN-01"
       ],
@@ -217,8 +280,8 @@
         "limitations": false
       },
       "gates": {
-        "cleared_level": "qualification",
-        "blocking_at": "certified",
+        "cleared_level": "intake",
+        "blocking_at": "qualification",
         "pass_count": 11
       }
     },
@@ -244,6 +307,7 @@
         "G-C-02",
         "G-C-04",
         "G-C-05",
+        "G-DOC-03",
         "G-GATE-01",
         "G-SIGN-01"
       ],
@@ -253,9 +317,9 @@
         "limitations": false
       },
       "gates": {
-        "cleared_level": "qualification",
-        "blocking_at": "certified",
-        "pass_count": 11
+        "cleared_level": "intake",
+        "blocking_at": "qualification",
+        "pass_count": 12
       }
     },
     {
@@ -280,6 +344,8 @@
         "G-C-02",
         "G-C-04",
         "G-C-05",
+        "G-DOC-03",
+        "G-DOC-04",
         "G-GATE-01",
         "G-SIGN-01"
       ],
@@ -289,8 +355,8 @@
         "limitations": false
       },
       "gates": {
-        "cleared_level": "qualification",
-        "blocking_at": "certified",
+        "cleared_level": "intake",
+        "blocking_at": "qualification",
         "pass_count": 11
       }
     },
@@ -316,6 +382,8 @@
         "G-C-02",
         "G-C-04",
         "G-C-05",
+        "G-DOC-03",
+        "G-DOC-04",
         "G-GATE-01",
         "G-SIGN-01"
       ],
@@ -325,8 +393,8 @@
         "limitations": false
       },
       "gates": {
-        "cleared_level": "qualification",
-        "blocking_at": "certified",
+        "cleared_level": "intake",
+        "blocking_at": "qualification",
         "pass_count": 11
       }
     },
@@ -385,6 +453,8 @@
         "G-C-02",
         "G-C-04",
         "G-C-05",
+        "G-DOC-03",
+        "G-DOC-04",
         "G-GATE-01",
         "G-SIGN-01"
       ],
@@ -394,8 +464,8 @@
         "limitations": false
       },
       "gates": {
-        "cleared_level": "qualification",
-        "blocking_at": "certified",
+        "cleared_level": "intake",
+        "blocking_at": "qualification",
         "pass_count": 11
       }
     },
@@ -684,13 +754,13 @@
       ],
       "documents": {
         "readme": true,
-        "changelog": false,
+        "changelog": true,
         "limitations": false
       },
       "gates": {
         "cleared_level": "certified",
         "blocking_at": null,
-        "pass_count": 18
+        "pass_count": 20
       }
     },
     {
@@ -715,6 +785,8 @@
         "G-C-02",
         "G-C-04",
         "G-C-05",
+        "G-DOC-03",
+        "G-DOC-04",
         "G-GATE-01",
         "G-SIGN-01"
       ],
@@ -724,8 +796,8 @@
         "limitations": false
       },
       "gates": {
-        "cleared_level": "qualification",
-        "blocking_at": "certified",
+        "cleared_level": "intake",
+        "blocking_at": "qualification",
         "pass_count": 11
       }
     },
