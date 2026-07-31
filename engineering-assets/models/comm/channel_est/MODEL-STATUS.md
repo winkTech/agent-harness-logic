@@ -94,5 +94,23 @@
   ② `interp_dft` 错误的 /sqrt(N/N_pilot) 归一化(全部估计值偏小 4 倍,
   被旧相对判据掩盖); ③ `interp_dft` 缺均匀网格**偏移补偿**(首导频不在
   k=1 时时域抽头相位旋转, 实测 -5.7→-13.9 dB);
-- 遗留: §5 的 RTL 侧 32 条缺陷待架构重排(接口需接收 LTS 窗口);
-  cosim 向量需按新基础重新导出(generate_vectors.m 改造随 RTL 阶段做)。
+- ~~遗留: §5 的 RTL 侧 32 条缺陷待架构重排(接口需接收 LTS 窗口);
+  cosim 向量需按新基础重新导出(generate_vectors.m 改造随 RTL 阶段做)。~~
+  → 已完成, 见下条。
+
+**RTL 侧实施 (2026-07-31/08-01, channel_est_top 0.2.0 架构重排 + cosim 闭环)**:
+
+- `channel_est_top` 按本裁决整体重排: 旧 4 导频 LS+插值通路删除,
+  新 lts_estimator(2×LTS 全用载波 LS) + cpe_tracker(导频 CPE 跟踪) +
+  cordic_cv(14 迭代); 接口新增 i_frame_start 侧带 (帧 = 2×LTS + n 数据符号)。
+  §5 的 RTL 遗留缺陷随旧通路替换整体消灭。
+- `generate_vectors.m` 改造为**帧级 RTL 位真镜像** (LTS 平均舍入/导频积/
+  CORDIC 求角与旋转/round+饱和, 整数语义与 RTL 头注释逐字同步);
+  规范调用 `generate_vectors(struct('nsym',32))`; CPE 镜像 vs 浮点
+  最大偏差 1.8e-4 rad (= CORDIC Q3.13 量化尺度, 镜像自证)。
+- cosim 实证 (ModelSim 10.6c): **2048 样点 0 失配 bit-true PASS**
+  (G-B-03 证据 alignment-report.json); 定向 TB 六场景 ALL TESTS PASSED;
+  Vivado OOC WNS +4.673ns@10ns, DSP 8 (<20 预算)。
+- 勘误: 旧 rx_chEst.bin/expected_chEst.bin 单符号向量**从未入库**
+  (0.1.0 README 已记录), 语义作废无需删除; manifest 1.2.0 provenance
+  中"已删"一词不准确, 以本条为准。

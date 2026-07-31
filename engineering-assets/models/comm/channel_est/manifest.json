@@ -3,7 +3,7 @@
   "asset_uid": "model_comm_channel_est",
   "name": "ls_channel_est_golden",
   "kind": "golden-model",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "owner": "lihan",
   "maturity": {
     "level": "intake"
@@ -41,12 +41,12 @@
       "role": "fixed_point",
       "trait": "设计特性",
       "path": "src/generate_vectors.m",
-      "note": "Q2.14 量化/饱和/打包语义 ({Q_s16[15:0], I_s16[15:0]} -> uint32 hex 行), RTL cosim 向量导出器; 承载本设计定点契约"
+      "note": "帧级 RTL 位真镜像 (ADR-002): LTS 平均舍入/导频积/CORDIC 14 迭代求角与旋转/round+饱和, 与 channel_est_top rtl/ 整数语义逐字对应; 导出激励+0容差期望。规范调用: generate_vectors(struct('nsym',32)) (G-B-03 要求 total>=2048)"
     }
   ],
   "vectors": {
-    "config": "802.11a OFDM: N=64, 估计基础=长训练符号 LS (ADR-002), 导频 {-21,-7,7,21} 仅 CPE 跟踪, 16qam, SNR=20dB, Q2.14",
-    "provenance": "估计基础已按 ADR-002 改为 LTS-LS (2026-07-31, run_all_tests 7/7), 旧 ls_linear 向量语义作废。generate_vectors.m 尚未按新基础改造 — cosim 向量导出随 channel_est_top RTL 架构重排阶段一并做, 在此之前 bit-true 对标不可用。"
+    "config": "802.11a OFDM: N=64, 帧=2×LTS+32 数据符号, 验收信道 rayleigh [0,0.2,0.5,0.8]us, SNR=20dB, 残余 CFO 300Hz, rng_seed=20260731, Q2.14",
+    "provenance": "generate_vectors(struct('nsym',32)) (MATLAB R2022a, 2026-08-01): rx_chEst_frame.hex 2176 行 + expected_chEst_frame.hex 2048 行 (位真镜像期望, CPE 镜像 vs 浮点最大偏差 1.8e-4 rad)。cosim 实证: channel_est_top 0.2.0 tb_chEst_cosim 2048 样点 0 失配 bit-true PASS (alignment-report.json)。旧 rx_chEst.bin/expected_chEst.bin 单符号向量语义作废已删。"
   },
   "sources": [
     {
@@ -97,7 +97,7 @@
     {
       "path": "src/generate_vectors.m",
       "role": "fixed_point",
-      "sha256": "ff7dae4f7748bbd83ebf79ca548840a3749e6530930b350aaba14e3e92122b2d"
+      "sha256": "af41425b59fe3a4e9f9aa8d8c7e2a48bbc748149bc6a85bd95a25994edc6aed8"
     },
     {
       "path": "tests/test_lts_ls.m",

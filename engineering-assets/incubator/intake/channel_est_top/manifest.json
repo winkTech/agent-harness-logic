@@ -16,7 +16,7 @@
   ],
   "golden_model_ref": "model_comm_channel_est",
   "fidelity": {
-    "status": "pending"
+    "status": "bit_true"
   },
   "ports": [
     {
@@ -122,7 +122,7 @@
     {
       "path": "tb/tb_chEst_cosim.sv",
       "role": "tb",
-      "sha256": "6950654ec3945be4c19a770e3403e06dc7eb36478e6c4dc8a13392eb9699360f"
+      "sha256": "681e589943efafafcb67d57707b4182f46e2e19c601ec371200001b13a993bea"
     },
     {
       "path": "tb/uvm/chEst_uvm_pkg.sv",

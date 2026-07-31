@@ -8,8 +8,11 @@
 //      任何比特差异即失配; X/Z 显式计为失配 (规范 §5.5 V-5)
 //   ⑤ 任一失配 $fatal (非零退出); 通过打印 "CHEST COSIM PASSED"
 // 用法: vsim -c tb_chEst_cosim +VEC_DIR=<models/comm/channel_est/vectors/>
+//                              +EVID_DIR=<var/gates/pg/channel_est_top/>
 //   向量目录缺失即 fail-closed, 不回落默认路径 (规范 §5.5 V-2)
+//   +EVID_DIR 给定时落盘 alignment-report.json (G-B-03 证据; 失败也落盘)
 // nsym 由文件行数自推: 期望行数/64; 激励行数须等于 (2+nsym)×64
+// G-B-03 要求 total>=2048 → 向量须以 nsym>=32 生成 (generate_vectors nsym=32)
 // ============================================================================
 
 `timescale 1ns / 1ps
@@ -22,6 +25,8 @@ module tb_chEst_cosim;
     localparam int GAP        = 16;      // 符号间空闲拍 (CP 近似)
 
     string VEC_DIR;
+    string EVID_DIR;
+    bit    evid_en;
 
     logic         clk, rst, fs;
     logic         s_axis_tvalid, s_axis_tready;
@@ -92,6 +97,26 @@ module tb_chEst_cosim;
     endtask
 
     // ========================================================================
+    // G-B-03 证据落盘 (成功/失败都写, fail-closed 审计)
+    // ========================================================================
+    task automatic write_evidence(input int total, input int mismatch);
+        int fd;
+        if (!evid_en) return;
+        fd = $fopen({EVID_DIR, "alignment-report.json"}, "w");
+        if (fd == 0) $fatal(1, "无法写 %salignment-report.json", EVID_DIR);
+        $fdisplay(fd, "{");
+        $fdisplay(fd, "  \"bit_true\": %s,", (mismatch == 0) ? "true" : "false");
+        $fdisplay(fd, "  \"total\": %0d,", total);
+        $fdisplay(fd, "  \"mismatch\": %0d,", mismatch);
+        $fdisplay(fd, "  \"pipeline_offset\": 0,");
+        $fdisplay(fd, "  \"tool\": \"ModelSim 10.6c\",");
+        $fdisplay(fd, "  \"tb\": \"tb_chEst_cosim (帧级, 握手对齐, 0 容差)\",");
+        $fdisplay(fd, "  \"vectors\": \"rx_chEst_frame.hex / expected_chEst_frame.hex (generate_vectors 位真镜像)\"");
+        $fdisplay(fd, "}");
+        $fclose(fd);
+    endtask
+
+    // ========================================================================
     // 主流程
     // ========================================================================
     int mismatch_cnt, out_fd;
@@ -113,6 +138,7 @@ module tb_chEst_cosim;
 
         if (!$value$plusargs("VEC_DIR=%s", VEC_DIR))
             $fatal(1, "缺 +VEC_DIR — 向量权威位置 models/comm/channel_est/vectors/");
+        evid_en = $value$plusargs("EVID_DIR=%s", EVID_DIR);
 
         load_file({VEC_DIR, "rx_chEst_frame.hex"},       stim_q);
         load_file({VEC_DIR, "expected_chEst_frame.hex"}, gold_q);
@@ -172,6 +198,7 @@ module tb_chEst_cosim;
 
         $display("");
         $display("  比对: %0d 点, 失配 %0d", nsym*N_FFT, mismatch_cnt);
+        write_evidence(nsym*N_FFT, mismatch_cnt);
         if (mismatch_cnt != 0)
             $fatal(1, "CHEST COSIM FAILED — %0d mismatches", mismatch_cnt);
         $display("================================================");
