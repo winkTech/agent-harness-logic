@@ -193,3 +193,4 @@ memory/.last-active
 
 # 运行时统计缓存（自动生成，无需版本控制）
 stats-cache.json
+var_build/

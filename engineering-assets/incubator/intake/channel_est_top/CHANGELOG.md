@@ -1,5 +1,31 @@
 # CHANGELOG — channel_est_top
 
+## [0.2.0] — 2026-07-31 ADR-002 架构重排：LTS-LS + 导频 CPE 跟踪
+
+估计基础按 ADR-002 从「4 导频 LS + 线性插值」整体重排为「长训练符号全用载波
+LS + 导频公共相位跟踪」（插值路径违反采样定理，spec §1.4 已降为备选）。
+
+### 架构变更
+
+- **删除** `ls_estimator.sv`（旧导频提取）与 `channel_interpolator.sv`（线性插值）。
+- **新增** `lts_estimator.sv`（2×LTS 平均全用载波 LS → 64×36 H_LTS RAM +
+  导频位旁路捕获）、`cpe_tracker.sv`（导频积累加 → CPE → e^{jCPE} 逐点校正输出）、
+  `cordic_cv.sv`（向量/旋转双模 CORDIC，14 迭代，无 DSP）。
+- **接口变更**：新增 `i_frame_start` 侧带脉冲（标记 LTS1，领先 ≥1 拍；
+  风格同 `sync_top.o_fft_start`）；复位后 UNSYNC 静默丢弃样点直至帧起始。
+- 0.1.0 遗留缺陷（极性表/斜率定点/累加溢出/`interp_busy` 自指/无双缓冲/
+  `o_pilot_valid` 未用）随旧数据通路整体替换而消灭。
+- 定点语义（LTS 平均 +1 舍入 / S 累加 >>>14 / CORDIC 常数表 / round+饱和）
+  在 RTL 头注释中固定，要求与 `generate_vectors.m` 位真镜像逐字同步。
+
+### 验证（全部实跑）
+
+- 定向自检 TB 重写（S1-S5 六场景，解析期望 ±12 LSB，$fatal 失败路径）：
+  **ALL TESTS PASSED**，末拍→输出完成实测 **111 拍**（门限 400）。
+- Vivado 2023.1.1 OOC @ xc7k325t：rtlcheck 0 违例；synth WNS **+4.673 ns**
+  @10 ns；LUT 749 / FF 610 / BRAM 1 / **DSP 8**（预算 <20）；CDC critical 0。
+- cosim TB 改造为帧级 0 容差逐字比对（fail-closed），待位真向量后运行（G-B-03）。
+
 ## [0.1.0] — 2026-07-28 hdl-coding 规范整改
 
 按 `docs/rules/01-hdl.md` 五条红线整改全部 RTL，并修复两个让整条信道估计链

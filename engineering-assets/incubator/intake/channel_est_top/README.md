@@ -2,14 +2,24 @@
 
 # channel_est_top
 
-> `asset_uid: channel_est_top` · `version: 0.1.0` · `owner: lihan`
+> `asset_uid: channel_est_top` · `version: 0.2.0` · `owner: lihan`
 > 成熟度: **intake（评估性打包）** — 见 `../../../var/gates/pg/channel_est_top/gate-results.json`
 
 ## 用途
 
-802.11a OFDM 信道估计核：从 FFT 输出 (64 子载波/符号) 中按导频位置 {11,25,39,53}（对应子载波 -21/-7/7/21）提取 4 个 BPSK 导频，LS 估计（符号选择：导频 2 为 -1 取反），随后线性插值到全部 64 个子载波输出 H_est。三段流水：捕获(64 clk) + 斜率计算(3 clk) + 输出(64 clk)，符号级流水化，标称延迟 131 clk @ 100 MHz。
+802.11a OFDM 信道估计核，估计基础为 **长训练符号 LS + 导频公共相位跟踪**
+（ADR-002 裁决，2026-07-31 架构重排）：
 
-层级：`channel_est_top`（顶层）→ `ls_estimator`（导频提取/LS）+ `channel_interpolator`（线性插值）。
+- 每帧 = 2×LTS + N 个数据符号（均为 FFT 输出，64 子载波/符号，Q2.14）；
+- LTS 阶段：全用载波 LS —— `H_LTS[k] = ((X_lts·Y1 + X_lts·Y2 + 1) >>> 1)`
+  （X_lts ∈ {±1,0}，除法退化为符号翻转），保护带/DC 恒 +1.0；
+- 数据符号阶段：4 导频（{-21,-7,7,21}，极性 [1,1,-1,1]）估计公共相位
+  `CPE = angle(Σ Y[p]·conj(H_LTS[p])·pilot[p])`（CORDIC 14 迭代），
+  输出 `H(m) = H_LTS · e^{j·CPE(m)}`（逐点复乘 + round + 饱和）；
+- LTS 符号不产生输出；每个数据符号输出 64 点。
+
+层级：`channel_est_top`（帧定序）→ `lts_estimator`（LTS 累加 + H_LTS RAM）
++ `cpe_tracker`（导频积 + CPE 计算 + 校正输出）→ `cordic_cv`（向量/旋转双模）。
 
 ## 接口（manifest 派生视图，勿手改）
 
@@ -17,84 +27,59 @@
 |---|---|---|---|
 | i_clk | input | 1 | — |
 | i_rst | input | 1 | —（**同步复位，高有效**） |
+| i_frame_start | input | 1 | 侧带脉冲：标记其后首个符号为 LTS1，**须领先首个 LTS 样点 ≥1 拍**（风格同 `sync_top.o_fft_start`） |
 | s_axis_tvalid / s_axis_tready / s_axis_tdata | in/out/in | 1/1/32 | AXI4-Stream（Y from FFT, Q2.14 {Q,I}） |
-| m_axis_tvalid / m_axis_tready / m_axis_tdata | out/in/out | 1/1/32 | AXI4-Stream（H_est to EQ, Q2.14 {Q,I}） |
+| m_axis_tvalid / m_axis_tready / m_axis_tdata | out/in/out | 1/1/32 | AXI4-Stream（H(m) to EQ, Q2.14 {Q,I}） |
+
+节流语义（`s_axis_tready` 拉低，AXIS 合法，上游须容忍）：
+帧起始待决而计算/输出级未排空时；数据符号末 3 拍且上一符号 CPE 链未闲时。
 
 ## 参数
 
 | 参数 | 值 | 说明 |
 |---|---|---|
 | DATA_W | 16 | I/Q 各 16 bit（Q2.14） |
-| N_FFT | 64 | FFT 点数（ls_estimator/channel_interpolator） |
-| N_PILOT | 4 | 导频数 |
+| N_FFT | 64 | 设计常量（含 `P_IDX_W=6` 派生参数） |
+| N_PILOT | 4 | 设计常量；ADR-002 后导频仅作 CPE 跟踪 |
 
 ## 反偏离锚链
 
-- 需求/算法: `engineering-assets/knowledge/primary/domains/comm/channel_est/algorithm_spec.md`
-- 定点报告: `engineering-assets/knowledge/primary/domains/comm/channel_est/fixed_point_report.md`
-- 实现报告: `engineering-assets/knowledge/primary/domains/comm/channel_est/report_channel_est_fpga_implementation.md`
-- 资源估算: `engineering-assets/knowledge/primary/domains/comm/channel_est/resource_estimate.md`
-- Golden 模型: `model_comm_channel_est`（已迁入 `engineering-assets/models/comm/channel_est/`）
+- 需求/算法: `engineering-assets/knowledge/primary/domains/comm/channel_est/algorithm_spec.md`（§2.2 已按 ADR-002 修订）
+- 架构裁决: `engineering-assets/docs/governance/adr/ADR-002-channel-est-estimation-basis.md`
+- Golden 模型: `model_comm_channel_est` 1.1.0（`run_all_tests` 7/7，2026-07-31）
+- 定点/实现/资源三份历史报告仍锚定旧插值架构，**待随 qualification 阶段修订**
 
-## 红线整改结果（2026-07-28）
+## 验证现状（2026-07-31 架构重排后，全部实跑取证）
 
-| 红线 | 整改前 | 整改后 |
-|:-----|:-------|:-------|
-| 1 输入寄存 `ri_` | 三个模块输入均直接消费 | `ls_estimator` 新增 `ri_` 输入寄存级 |
-| 2 输出寄存 `ro_` | `s_axis_tready`/`pilot_valid`/`symbol_done`/`m_axis_*` 全部组合直出 | 全部由 `ro_` 寄存器驱动；插值器输出级与累加器共用统一使能，反压时整体冻结 |
-| 3 同步复位 `i_rst` | 全部 `negedge rst_n` 异步低有效；`channel_interpolator` 两个 `always_ff` 完全无复位 | 全部同步高有效 `i_rst`，无复位块已补齐 |
-| 4 三段式 FSM | 三个 FSM 均缺 `default` | 均改三段式并补 `default` |
-| 5 无锁存器 | 未发现违规 | 保持 |
-| §5 位宽 | `sub_idx` 声明 `[N_FFT-1:0]`=64 位、`pilot_cnt` 声明 `[N_PILOT-1:0]`=4 位（把计数上限误当位宽） | 改为 `$clog2` 推导的 6 位 / 3 位，并加数组索引范围保护 |
-| 命名 | `clk`/`rst_n`、非 AXI 输出无前缀、内部无 `r_`/`w_` | `i_clk`/`i_rst`、`o_*`、内部 `ri_/ro_/r_/w_`、状态 `P_` |
-| 封装 | `channel_est_top.sv:93` 跨层级引用 `u_interpolator.m_axis_tvalid` | 改用顶层端口信号，无跨层次引用 |
-
-## 整改中发现并修复的两个致命功能缺陷
-
-这两项**不是编码规范问题**，但它们让整个信道估计链从未产出过任何结果，
-不修就无法做任何验证，因此一并修复并在此明确记录：
-
-1. **子载波计数差一** —— `ls_estimator` 原先只在 `state == CAPTURE && 握手` 时计数，
-   而 `IDLE→CAPTURE` 恰好由第一个握手拍触发，**第一拍不计数**。64 拍激励下
-   `sub_idx` 最多到 62，`sub_idx == N_FFT-1` 永不成立，状态机出不了 CAPTURE，
-   `o_symbol_done` 从未置位过。
-2. **导频计数不按符号清零** —— `pilot_cnt` 原先只有复位才清零，第一个符号抓满
-   4 个导频后停在 4，之后所有符号的导频写入全部越界被丢弃。
-
-这两项此前一直没暴露，是因为原 TB 用裸 `#5000` 延时后直接读 `m_axis_tdata`
-（读到的是残留值），从未按握手捕获整个符号再比对。
-
-## 验证现状
-
-- `tb/tb_channel_est_top.sv` 随整改更新并修好了三处 TB 自身缺陷：
-  - 激励量化：原用 `$shortrealtobits(v*16384.0)` —— 该函数返回 IEEE-754 单精度
-    **位模式**而非定点整数，送进 DUT 的是无意义比特，而 `check_h` 却按 Q2.14 整数
-    解释。现改为 `$rtoi` 取整并做饱和。
-  - 输出采样：原用裸延时后直接读端口，`check_h` 的 `idx` 参数从未真正参与索引。
-    现按 `m_axis_tvalid` 握手捕获整个符号后再逐点比对。
-  - 失败退出：补 `$fatal`，原实现失败也退出 0。
-- **实测结果（ModelSim 10.6c）**：Test 1 平坦信道 H=1、Test 2 复常数信道 0.5+0.5j，
-  两个符号各 **64/64 子载波全部捕获**，抽查的 5 个子载波（含 DC）全部在 ±3 LSB 内，
-  `ALL TESTS PASSED`。这是本包第一次跑出端到端有效结果。
-- `tb/tb_chEst_cosim.sv` 已同步更新端口名并编译通过，但仍依赖
-  `rx_chEst.bin`/`expected_chEst.bin` 黄金向量，**向量文件从未导出入库**，
-  cosim 仍不可运行（G-B-03 blocked）。
-- `tb/uvm/` UVM 环境引用 `../../../../../docs/templates/uvm/*.sv`，该相对路径在本包内
-  断链，UVM TB 按原样仍不可编译。
-- **未验证项**：资源 / Fmax / 时序 / 可综合性均未跑 Vivado，无报告支撑。
-
-## 遗留缺陷（本次未改）
-
-- `ls_estimator`：导频极性表硬编码为"只有第 3 个导频取负"，与 802.11a 按符号序号
-  变化的导频扰码序列不符。
-- `channel_interpolator`：斜率定点标定（`prod[29:14]` 切片 + bit13 舍入）与 `DATA_W`
-  的关系是硬编码的，`DATA_W != 16` 时不成立；累加器 `DATA_W` 位强制截断，多次累加
-  可能溢出且无饱和保护。
-- `channel_est_top`：流水控制 FSM 的 `interp_busy` 定义自指；文件头注释宣称的
-  "抓取当前符号时处理上一符号"乒乓流水在代码里没有对应的双缓冲结构；
-  `o_pilot_valid` 未被顶层使用，插值器直接读导频寄存器，无显式握手保护。
+- **定向自检 TB**（`tb/tb_channel_est_top.sv`，ModelSim 10.6c）：
+  T1 平坦信道 / T2 变化复信道 + 逐符号 CPE(±0.3/-0.2 rad) + 数据内容无关性 /
+  T3 随机反压逐点一致 / T4 半帧重启 / T5 帧中复位恢复 / T6 背靠背 + 延迟实测
+  —— **ALL TESTS PASSED**，判据解析期望 ±12 LSB，实测延迟 **111 拍**（< 400）。
+- **Vivado 2023.1.1 OOC**（xc7k325t，`var_build/vivado/rpt/flow_summary.json`）：
+  rtlcheck 0 违例；synth **WNS +4.673 ns @10 ns**（≈187 MHz）；
+  **LUT 749 / FF 610 / BRAM 1 / DSP 8**（预算 <20，导频积 4 + 旋转 4，推断符合设计）；
+  CDC critical 0。
+- **cosim（G-B-03）**：`tb/tb_chEst_cosim.sv` 已改造为帧级 **0 容差逐字比对**；
+  等待 `generate_vectors.m` 位真镜像改造（models/ 受保护树）导出
+  `rx_chEst_frame.hex` / `expected_chEst_frame.hex` 后可跑。
+- `tb/uvm/` 仍引用断链的模板路径，按原样不可编译（遗留，不在本次验证面内）。
 
 ## 已知限制 / 认证阻塞
 
-由门禁 runner 判定（见 gate-results.json）。红线类阻塞已清；
-仍缺 **bit-true 对标所需的黄金向量**（G-B-03）与具名签字（G-SIGN-01）。
+- **G-B-03 bit-true 对标**：待 `generate_vectors.m` 帧级位真镜像 + 向量导出
+  （旧 `rx_chEst.bin`/`expected_chEst.bin` 单符号向量语义已作废）。
+- 定点语义镜像约定：RTL（`lts_estimator`/`cpe_tracker`/`cordic_cv` 头注释）与
+  `generate_vectors.m` 必须逐字同步，任何一侧改动定点语义都要同步另一侧。
+- UVM 环境断链（承自 0.1.0）。
+- G-A-04（qualification）：`cpe_tracker.sv` 372 行 > 300，待 qualification
+  推进时拆分或按白名单处理。
+- 导频极性为固定 [1,1,-1,1]（golden `sim_frame.m` 契约）；802.11a 逐符号导频
+  扰码未建模，golden 升级时需同步（需求门禁 D6 已记录）。
+
+## 0.1.0 历史缺陷的归宿
+
+0.1.0 README 所列遗留缺陷（导频极性表硬编码、斜率定点标定、累加器溢出、
+`interp_busy` 自指、无双缓冲、`o_pilot_valid` 未用）全部随插值数据通路
+（`ls_estimator`/`channel_interpolator`）的整体替换而消灭，不再逐条修补；
+0.1.0 修复的两个致命缺陷（计数差一、导频计数不清零）在新架构中以
+帧定序 + 逐符号 S 清零的结构性方式覆盖（TB T2/T6 多符号场景验证）。

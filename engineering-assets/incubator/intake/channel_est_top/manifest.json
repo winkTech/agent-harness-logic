@@ -2,7 +2,7 @@
   "schema_version": "1.0",
   "asset_uid": "channel_est_top",
   "name": "channel_est_top",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "owner": "lihan",
   "maturity": {
     "level": "intake"
@@ -11,7 +11,8 @@
   "doc_refs": [
     "engineering-assets/knowledge/primary/domains/comm/channel_est/fixed_point_report.md",
     "engineering-assets/knowledge/primary/domains/comm/channel_est/report_channel_est_fpga_implementation.md",
-    "engineering-assets/knowledge/primary/domains/comm/channel_est/resource_estimate.md"
+    "engineering-assets/knowledge/primary/domains/comm/channel_est/resource_estimate.md",
+    "engineering-assets/docs/governance/adr/ADR-002-channel-est-estimation-basis.md"
   ],
   "golden_model_ref": "model_comm_channel_est",
   "fidelity": {
@@ -25,6 +26,11 @@
     },
     {
       "name": "i_rst",
+      "direction": "input",
+      "width": 1
+    },
+    {
+      "name": "i_frame_start",
       "direction": "input",
       "width": 1
     },
@@ -79,34 +85,44 @@
     "target": {
       "fmax": "100MHz",
       "fmax_mhz": 100,
-      "latency": 131
+      "latency": 111
     }
   },
   "sources": [
     {
       "path": "rtl/channel_est_top.sv",
       "role": "rtl",
-      "sha256": "a045560188ac3cc39f68674ed07913184ab723d47ec64d6ed7445c8a30f73863"
+      "sha256": "7ea1a19fbf8b7a70e9795c7b8635b3fb7d01d454092ec1f214d7c15c799beea5"
     },
     {
-      "path": "rtl/ls_estimator.sv",
+      "path": "rtl/lts_estimator.sv",
       "role": "rtl",
-      "sha256": "d370855b9acc014e7b58698d992a8a9b8ad6ce5e8155a16cf5875572cfb186ac"
+      "sha256": "47367a53eae34525f4ca19d35d8d50cb460bc17cbed8e707f138be8898d00215"
     },
     {
-      "path": "rtl/channel_interpolator.sv",
+      "path": "rtl/cpe_tracker.sv",
       "role": "rtl",
-      "sha256": "a577b3ff6c44cc89c148d3680d8729232017652c5a5bf37b72c7f3045b147453"
+      "sha256": "75f8c957a22e3a398262c5c1255d84bcb7f0bd42c1cc252ec0edd86921c2564c"
+    },
+    {
+      "path": "rtl/cordic_cv.sv",
+      "role": "rtl",
+      "sha256": "a2b89ba40f7064f73b8b6178095736c2550365b95813a64124a1e7d0b66f500d"
+    },
+    {
+      "path": "constraints/channel_est_top.xdc",
+      "role": "constraint",
+      "sha256": "0d836a38d631070b9a0e3f99cf4178cd51e57ef29602e49f08229889d36cc3f1"
     },
     {
       "path": "tb/tb_channel_est_top.sv",
       "role": "tb",
-      "sha256": "fbb0bb75dfe9257faaf2e624741687b62bb910d3b03207fc7a3ec81fdffbdcfd"
+      "sha256": "23bdcdf6bf7a6e4b0518794b05a4ab7d23725500b93c4fef7b0e93c5d7758317"
     },
     {
       "path": "tb/tb_chEst_cosim.sv",
       "role": "tb",
-      "sha256": "abaf28c04b62d9f304b54dba5e759193d3ff59505649a65d4a101935cac79773"
+      "sha256": "6950654ec3945be4c19a770e3403e06dc7eb36478e6c4dc8a13392eb9699360f"
     },
     {
       "path": "tb/uvm/chEst_uvm_pkg.sv",
@@ -181,7 +197,7 @@
     {
       "name": "N_PILOT",
       "value": 4,
-      "rationale": "设计常量(algorithm_spec: 导频 {-21,-7,7,21}), 非顶层参数; 估计基础裁决(MODEL-STATUS L1)可能改变此值"
+      "rationale": "设计常量(algorithm_spec: 导频 {-21,-7,7,21}); ADR-002 裁决后导频仅用于 CPE 相位跟踪, 初始估计基础为 2×LTS 全用载波 LS"
     }
   ]
 }
