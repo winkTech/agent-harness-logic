@@ -1,23 +1,23 @@
 //-----------------------------------------------------------------
-//              LDPC Encoder Testbench
+//              LDPC Encoder Testbench (bit-true vs MATLAB golden)
 //-----------------------------------------------------------------
 // 功能: 验证 ldpc_encoder_top 编码正确性
 //
-// 测试: 1) 复位 2) 全零码 3) 随机码的系统码性质 (前 K 位 == 输入信息位)
+// 测试:
+//   1) 复位后可接受流
+//   2) 从 +VEC_DIR 加载 MATLAB 导出的 info/code 向量做 bit-true 比对
+//      (gen_encoder_test_vectors.m → tb_enc_info_*.hex / tb_enc_code_*.hex)
+//   3) 无向量文件时 fail-closed (非零退出), 不得假绿
 //
-// 2026-07-28 随 RTL 规范整改同步修正了本 TB 的三处缺陷:
-//   (1) collect_code 原在 @(posedge clk) 处直接读 m_tdata —— 取到的是该边沿
-//       **之前**的旧值, 整条码字整体错位一位; 且只看 tvalid 不看 tready,
-//       不是按握手采样。该缺陷此前被编码器挂死掩盖 (随机用例跑不到比对)。
-//   (2) drive_info 用非阻塞在边沿处换数据, 与 DUT 实际消费拍对不齐。
-//   (3) `$finish(n_fail ? 1 : 0)` —— $finish(N) 的 N 是**诊断详略等级**,
-//       不是进程退出码, 于是失败也以 0 退出, 上游读起来全是通过。
-//   现两个 task 均严格按 (tvalid && tready) 成交后 #1 越过边沿再采样/换数,
-//   失败走 $fatal。
+// 采样约定 (2026-07-28 修正后保留):
+//   - drive/collect 严格按 (tvalid && tready) 握手
+//   - 在 @(posedge clk) active 区读总线 = 该边沿之前的值 (AXI-S 语义)
+//   - 失败走 $fatal; 禁止 $finish(N) 当退出码
 //
-// 局限 (未解决): 本 TB 只验"系统码性质"(前 324 位透传) 与全零码, **不验校验位**。
-//   真正的 bit-true 对标需要 MATLAB golden 导出的 tb_code_bits_N.hex,
-//   该向量尚未入库。
+// Plusarg:
+//   +VEC_DIR=<path>   向量目录 (必填) — tb_enc_info_*.hex / tb_enc_code_*.hex
+//   +N_TESTS=N        覆盖默认 5 组 (1=全零, 2..N 随机 golden)
+// DUT PT ROM: 仿真 CWD 需有 pt_columns.hex (从 rtl/ 复制), 见 ldpc_encoder_top
 //-----------------------------------------------------------------
 
 `timescale 1ns / 1ps
@@ -25,7 +25,9 @@
 module tb_ldpc_encoder_top;
 
     parameter CLK_PERIOD = 10;
-    parameter N_TESTS    = 5;
+    parameter P_K        = 324;
+    parameter P_N        = 648;
+    parameter P_NTESTS_D = 5;
 
     reg           clk, rst;
     reg           s_tvalid, s_tdata;
@@ -33,11 +35,14 @@ module tb_ldpc_encoder_top;
     wire          m_tvalid, m_tdata;
     reg           m_tready;
 
-    reg [323:0]   info_mem;
-    reg [647:0]   code_mem;     // 期望码字 (从文件/MATLAB 加载)
-    reg [647:0]   enc_mem;      // RTL 输出
-    integer       bit_cnt;
-    integer       n_pass, n_fail;
+    reg           info_bits [0:P_K-1];
+    reg           code_exp  [0:P_N-1];
+    reg           code_got  [0:P_N-1];
+
+    integer       n_pass, n_fail, n_tests, t, i, n_err, guard;
+    reg [8*512-1:0] vec_dir;
+    reg [8*640-1:0] path;
+    integer       fd;
 
     ldpc_encoder_top u_dut (
         .i_clk_sys           (clk),
@@ -54,20 +59,58 @@ module tb_ldpc_encoder_top;
     always #(CLK_PERIOD/2) clk = ~clk;
 
     //-----------------------------------------------------------------
+    // 加载一组 golden (info + expected codeword)
+    //-----------------------------------------------------------------
+    task load_vec;
+        input integer idx;
+        integer k, c, v;
+    begin
+        // 与 decoder TB 相同: "%0s/file" (VEC_DIR 可带或不带尾斜杠均可)
+        $sformat(path, "%0s/tb_enc_info_%0d.hex", vec_dir, idx);
+        fd = $fopen(path, "r");
+        if (fd == 0)
+            $fatal(1, "tb_ldpc_encoder_top: 打不开 %0s (先跑 models/comm/ldpc/gen_encoder_test_vectors.m)", path);
+        for (k = 0; k < P_K; k = k + 1) begin
+            if ($fscanf(fd, "%d\n", v) != 1)
+                $fatal(1, "tb_ldpc_encoder_top: info 向量 %0d 行不足 (idx=%0d)", k, idx);
+            info_bits[k] = v[0];
+        end
+        $fclose(fd);
+
+        $sformat(path, "%0s/tb_enc_code_%0d.hex", vec_dir, idx);
+        fd = $fopen(path, "r");
+        if (fd == 0)
+            $fatal(1, "tb_ldpc_encoder_top: 打不开 %0s", path);
+        for (c = 0; c < P_N; c = c + 1) begin
+            if ($fscanf(fd, "%d\n", v) != 1)
+                $fatal(1, "tb_ldpc_encoder_top: code 向量 %0d 行不足 (idx=%0d)", c, idx);
+            code_exp[c] = v[0];
+        end
+        $fclose(fd);
+
+        // 系统码性质 (golden 自检)
+        for (k = 0; k < P_K; k = k + 1) begin
+            if (code_exp[k] !== info_bits[k])
+                $fatal(1, "tb_ldpc_encoder_top: golden 破坏系统码性质 idx=%0d bit=%0d", idx, k);
+        end
+    end
+    endtask
+
+    //-----------------------------------------------------------------
     // 驱动: 发送信息位 (严格按 AXI4-Stream 握手)
     //-----------------------------------------------------------------
-    task drive_info(input [323:0] bits);
-        integer i;
+    task drive_info;
+        integer j;
     begin
-        i = 0;
+        j = 0;
         s_tvalid = 1'b1;
-        s_tdata  = bits[0];
-        while (i < 324) begin
+        s_tdata  = info_bits[0];
+        while (j < P_K) begin
             @(posedge clk);
-            if (s_tready) begin        // 本拍成交
-                i = i + 1;
-                #1;                    // 越过边沿再换数据
-                s_tdata = (i < 324) ? bits[i] : 1'b0;
+            if (s_tready) begin
+                j = j + 1;
+                #1;
+                s_tdata = (j < P_K) ? info_bits[j] : 1'b0;
             end
         end
         @(negedge clk);
@@ -79,25 +122,21 @@ module tb_ldpc_encoder_top;
     // 收集: 读码字 (严格按 AXI4-Stream 握手)
     //-----------------------------------------------------------------
     task collect_code;
-        integer i;
-        integer guard;
+        integer j;
     begin
         m_tready = 1'b1;
-        i     = 0;
+        j     = 0;
         guard = 0;
-        while (i < 648 && guard < 200000) begin
+        while (j < P_N && guard < 200000) begin
             @(posedge clk);
             guard = guard + 1;
-            // AXI-S 语义: 一次成交携带的是**该时钟边沿之前**总线上的值。
-            // 在 @(posedge clk) 的 active 区直接读即可取到该值; 加 #1 越过边沿
-            // 会读到 DUT 在本边沿刚更新的下一拍数据, 整条码字前移一位。
             if (m_tvalid && m_tready) begin
-                enc_mem[i] = m_tdata;
-                i = i + 1;
+                code_got[j] = m_tdata;
+                j = j + 1;
             end
         end
-        if (i < 648) begin
-            $display("  FAIL: 收集超时, 只收到 %0d/648 位", i);
+        if (j < P_N) begin
+            $display("  FAIL: 收集超时, 只收到 %0d/%0d 位", j, P_N);
             n_fail = n_fail + 1;
         end
         @(negedge clk);
@@ -106,15 +145,44 @@ module tb_ldpc_encoder_top;
     endtask
 
     //-----------------------------------------------------------------
+    // bit-true 比对
+    //-----------------------------------------------------------------
+    task compare_code;
+        input integer idx;
+        integer j;
+        integer first;
+    begin
+        n_err = 0;
+        first = -1;
+        for (j = 0; j < P_N; j = j + 1) begin
+            if (code_got[j] !== code_exp[j]) begin
+                n_err = n_err + 1;
+                if (first < 0) first = j;
+            end
+        end
+        if (n_err == 0) begin
+            $display("  PASS: vec %0d bit-true (0/%0d mismatch)", idx, P_N);
+            n_pass = n_pass + 1;
+        end else begin
+            $display("  FAIL: vec %0d  %0d/%0d bit mismatch (first@%0d got=%0d exp=%0d)",
+                     idx, n_err, P_N, first, code_got[first], code_exp[first]);
+            n_fail = n_fail + 1;
+        end
+    end
+    endtask
+
+    //-----------------------------------------------------------------
     // 主测试
     //-----------------------------------------------------------------
-    integer t;
-    reg [323:0] test_info;
-    reg [647:0] test_code;
-
     initial begin
-        $dumpfile("tb_ldpc_encoder_top.vcd");
-        $dumpvars(0, tb_ldpc_encoder_top);
+        if (!$value$plusargs("VEC_DIR=%s", vec_dir))
+            $fatal(1, "tb_ldpc_encoder_top: 必须提供 +VEC_DIR=.../vectors (先跑 gen_encoder_test_vectors.m)");
+        if (!$value$plusargs("N_TESTS=%d", n_tests))
+            n_tests = P_NTESTS_D;
+
+        $display("=== tb_ldpc_encoder_top (bit-true) ===");
+        $display("  VEC_DIR = %0s", vec_dir);
+        $display("  N_TESTS = %0d", n_tests);
 
         rst = 1; s_tvalid = 0; s_tdata = 0; m_tready = 0;
         n_pass = 0; n_fail = 0;
@@ -122,58 +190,27 @@ module tb_ldpc_encoder_top;
         #(CLK_PERIOD * 5) rst = 0;
         #(CLK_PERIOD);
 
-        // Test 1: 全零码
-        $display("");
-        $display("=== Test 1: All-Zero ===");
-        test_info = 324'd0;
-        drive_info(test_info);
-        collect_code;
-        // 全零信息位的码字应为全零
-        if (enc_mem[647:0] == 648'd0) begin
-            $display("  PASS: All-zero codeword");
-            n_pass = n_pass + 1;
-        end else begin
-            $display("  FAIL: Expected all-zero, got %h", enc_mem);
-            n_fail = n_fail + 1;
-        end
-
-        #(CLK_PERIOD * 3);
-
-        // Test 2~N: 随机码 (检查系统码性质)
-        for (t = 2; t <= N_TESTS; t = t + 1) begin
+        for (t = 1; t <= n_tests; t = t + 1) begin
             $display("");
-            $display("=== Test %0d: Random Input ===", t);
-            test_info = {$random, $random, $random, $random, $random,
-                         $random, $random, $random, $random, $random};
-            test_info[323:320] = 4'd0;
-
-            drive_info(test_info);
+            $display("=== Test %0d / %0d ===", t, n_tests);
+            load_vec(t);
+            drive_info;
             collect_code;
-
-            // 检查: 前 K=324 位应等于信息位
-            if (enc_mem[323:0] !== test_info) begin
-                $display("  FAIL: Info bit mismatch");
-                $display("    in [31:0]=%h  out[31:0]=%h", test_info[31:0], enc_mem[31:0]);
-                n_fail = n_fail + 1;
-            end else begin
-                $display("  PASS: Info bit verified, code length=%0d", 648);
-                n_pass = n_pass + 1;
-            end
-
+            compare_code(t);
             #(CLK_PERIOD * 3);
         end
 
         $display("");
         $display("=============================");
-        $display("  Encoder Test: %0d/%0d passed", n_pass, n_pass+n_fail);
+        $display("  Encoder bit-true: %0d/%0d passed", n_pass, n_pass + n_fail);
         $display("=============================");
         if (n_fail != 0)
-            $fatal(1, "tb_ldpc_encoder_top: %0d/%0d 用例失败", n_fail, n_pass+n_fail);
+            $fatal(1, "tb_ldpc_encoder_top: %0d/%0d 用例失败", n_fail, n_pass + n_fail);
+        $display("=== ENCODER BIT-TRUE PASS ===");
         $finish;
     end
 
-    // 超时
-    initial #(CLK_PERIOD * 50000) begin
+    initial #(CLK_PERIOD * 500000) begin
         $display("FAIL: Timeout");
         $fatal(1, "tb_ldpc_encoder_top: 仿真超时未完成");
     end

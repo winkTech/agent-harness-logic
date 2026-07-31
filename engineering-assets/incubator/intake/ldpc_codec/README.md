@@ -65,22 +65,23 @@ constraints/  ldpc_decoder.xdc
 ### 已知限制与验证边界（遗留项）
 
 - **D1（红线1，编码器）**：`s_axis_info_tvalid/tdata` 仍被直接消费，未经 `ri_` 寄存。
-  该模块的加载相位与状态机计数强耦合（`bit_cnt` 既当写地址又当状态出口判据），
-  插入 `ri_` 级需同步移动写地址与出口判据，属控制通路重构；且编码器**尚无
-  bit-true golden 对标**（TB 只验全零码与系统码性质），重构后无法证明数值不变。
-  留待补齐编码器 golden 向量后再做。
-- `tb/run_sim.do`、`tb/uvm/compile.tcl` 中的相对路径仍指向源库旧布局（`../01_rtl/`）。
+  加载相位与计数耦合；**2026-07-31 起已有 bit-true 基线**，可安全做 `ri_` 重构回归。
+- 编码器现用 **PT 列 ROM**（`rtl/pt_columns.hex`），面积大于理想双对角；功能优先于资源。
+- UVM 环境依赖本机 Vivado UVM 包路径，未纳入 gate-runner 默认路径。
 
-## 验证证据（2026-07-28 复跑）
+## 验证证据
 
-- **译码器 bit-true 回归**：`tb_ldpc_decoder_top` + `models/comm/ldpc/vectors/`
-  10 组向量，**每组 0/324 bit 失配，`synd_fail=0`**；`[G-C-04]` 稳定性 26 拍 0 抖动。
-  编码器整改**未波及**译码器。
-- **编码器**：`tb_ldpc_encoder_top` **5/5 通过**（全零码 + 4 组随机的系统码性质），
-  整改前为 1/5（随机用例全部挂死超时）。
-- TB 采样时序同步修正：收集循环原在 `@(posedge clk)` 处加 `#1` 越过边沿采样
-  会取到下一拍数据；AXI-S 语义要求取边沿**之前**的总线值。
+### 2026-07-31
+- **译码器**：10 向量 **3240 bit 0 失配**，`BIT-TRUE PASS`（ModelSim 10.6c 复跑）。
+- **编码器 bit-true**：5 组 MATLAB golden（`tb_enc_{info,code}_*.hex`）**5/5 PASS**。
+  - 导出：`models/comm/ldpc/gen_encoder_test_vectors.m`（syndrome 自检）
+  - 仿真：`+VEC_DIR=.../vectors +PT_MEM=.../rtl/pt_columns.hex`
+- 旧双对角实现已替换（对非全零信息位 H·c≠0，已废弃）。
+
+### 2026-07-28
+- 编码器挂死 / initial / 命名整改；当时 TB 仅系统码性质（未覆盖校验位）。
 
 ## 门禁状态
 
-见 `engineering-assets/var/gates/pg/ldpc_codec/gate-results.json` (由 `node engineering-assets/tools/gate-runner.cjs engineering-assets/incubator/intake/ldpc_codec` 生成)。
+见 `engineering-assets/var/gates/pg/ldpc_codec/gate-results.json`  
+（`node engineering-assets/tools/gate-runner.cjs engineering-assets/incubator/intake/ldpc_codec`）。

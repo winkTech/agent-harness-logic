@@ -1,5 +1,30 @@
 # CHANGELOG — ldpc_codec
 
+## 2026-07-31 — 编码器 bit-true 闭环 (PT 算法)
+
+### 背景
+按计划推进编码器 golden：`gen_encoder_test_vectors.m` 用 `ldpc_encode_80211n`
+（`PT_1_2_648.mat`）导出 5 组 info/code。对照后发现旧双对角回代 RTL 对非全零
+信息位 **H·c ≠ 0**（syndrome 非零），全零碰巧通过 —— 性质测试遮不住校验位错误。
+
+### 变更
+- **`ldpc_encoder_top` 重写为 PT 列累加**：`parity = PT * info`（GF2），与 MATLAB golden
+  同构；ROM = `rtl/pt_columns.hex`（自 `PT_1_2_648.mat` 导出，324×324）。
+- **`tb_ldpc_encoder_top`**：加载 `tb_enc_info_*.hex` / `tb_enc_code_*.hex`，bit-true 比对；
+  需 `+VEC_DIR`；`+PT_MEM` 指向 PT ROM。
+- **`models/comm/ldpc/gen_encoder_test_vectors.m`**：固定 seed，syndrome 自检后导出。
+- **卫生**：`tb/run_sim.do` 去掉旧 `../01_rtl` 假设；`tb/uvm/compile.tcl` 指到 `package/rtl`。
+- manifest **0.3.0**。
+
+### 验证（本机 ModelSim 10.6c，2026-07-31）
+- 译码器复跑：10 向量 **3240 bit 0 失配**，`BIT-TRUE PASS`；G-C-04/05 子项仍过。
+- 编码器 bit-true：**5/5 PASS**（0/648 mismatch × 5）。
+- gate-runner：见同次运行输出（仍卡 `G-SIGN-01` 用户签字）。
+
+### 遗留
+- D1 编码器输入 `ri_` 寄存仍未做（控制通路重构，现已有 bit-true 基线可回归）。
+- PT-ROM 面积大于双对角；若需减资源，应在**保持 bit-true**前提下再做结构优化。
+
 ## 2026-07-28 — 编码器 hdl-coding 规范整改
 
 本轮**只动 `ldpc_encoder_top`**。译码器侧（`ldpc_decoder_top` / `ldpc_controller` /

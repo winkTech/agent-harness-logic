@@ -2,7 +2,7 @@
   "schema_version": "1.0",
   "asset_uid": "ldpc_codec",
   "name": "ldpc_codec",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "owner": "lihan",
   "maturity": {
     "level": "qualification",
@@ -134,7 +134,7 @@
     {
       "path": "rtl/ldpc_encoder_top.v",
       "role": "rtl",
-      "sha256": "4ed1efb1b74cae8feb93cdf18145ab5bbceb479d1c7a1834d0d2f0a27c798beb"
+      "sha256": "96715dcd11eba0eb8221368dd5e6043323e5e33dea7d5734198c9da5d21c75f0"
     },
     {
       "path": "rtl/llr_buffer.v",
@@ -154,7 +154,7 @@
     {
       "path": "tb/tb_ldpc_encoder_top.v",
       "role": "tb",
-      "sha256": "e08edcd3f8030b930973bbb9e57845d797fa53d0996230ae09a6507f12aff88b"
+      "sha256": "8b3af802a38e8735e181735a33c10db58f1d90b9318c085dd468fd9512dc68c8"
     },
     {
       "path": "tb/tb_ldpc_system.v",
@@ -220,6 +220,11 @@
       "path": "constraints/ldpc_decoder.xdc",
       "role": "constraint",
       "sha256": "52c5a09e7ddb0387d636695431719a17a988a913650364bd18cf4a1cf027536e"
+    },
+    {
+      "path": "rtl/pt_columns.hex",
+      "role": "vector",
+      "sha256": "6ddd12d082887278634189bee83ef7e9e5891fb08d4b426ec2cb4ba2c48af00c"
     }
   ],
   "waivers": [],

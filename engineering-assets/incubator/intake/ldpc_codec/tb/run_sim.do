@@ -1,20 +1,14 @@
 #-----------------------------------------------------------------
-# LDPC Simulation Script for ModelSim / Vivado Simulator
+# LDPC Simulation Script for ModelSim / Questa
 #-----------------------------------------------------------------
-# Usage:
-#   ModelSim: vsim -do run_sim.do
-#   Vivado:   xsim --gui -tclargs run_sim.do (or use the .tcl version)
+# Usage (from any cwd):
+#   vsim -do engineering-assets/incubator/intake/ldpc_codec/tb/run_sim.do
+# Or set EA_ROOT then: vsim -do run_sim.do
 #-----------------------------------------------------------------
 
-# 编译选项
-set SIM_TIME "10 us"
+set SIM_TIME "2 ms"
 
-# 库级约定（治理规范 §5.5）: 向量权威位置 = models/<domain>/<algo>/vectors/,
-# 经 +VEC_DIR 注入; TB 内不得硬编码或用指向包外的相对路径。
-# 注意: models/comm/ldpc/vectors/ 当前为空（向量从未由 MATLAB 导出），
-# 解码器 TB 预期在此 fail-closed —— 向量到位前不得产出可作证据的 PASS。
-# ROOT 自定位（脱敏：不硬编码本机路径）
-# 优先 EA_ROOT 环境变量；否则从本脚本位置向上找到 engineering-assets 目录。
+# ROOT = engineering-assets (via EA_ROOT or walk-up from this script)
 if {[info exists ::env(EA_ROOT)]} {
   set ROOT $::env(EA_ROOT)
 } else {
@@ -23,25 +17,25 @@ if {[info exists ::env(EA_ROOT)]} {
     set ROOT [file dirname $ROOT]
   }
 }
-set PKG  "$ROOT/incubator/intake/ldpc_codec"
-set VEC  "$ROOT/models/comm/ldpc/vectors/"
+set PKG   "$ROOT/incubator/intake/ldpc_codec"
+set VEC   "$ROOT/models/comm/ldpc/vectors"
+set PT    "$PKG/rtl/pt_columns.hex"
 set BUILD "$ROOT/var/build/ldpc_codec"
-# 在独立 build 目录内构建, 避免 work/ transcript *.vcd 污染资产包
 file mkdir $BUILD
 cd $BUILD
-# ModelSim 在启动时的 CWD 建 transcript；重定向到 build 目录
 transcript file "$BUILD/transcript"
 
-# 清理
-if {[file exists work]} {
-    vdel -all
-}
+# encoder 的 PT ROM 用 $readmemb 相对路径读 (综合友好, 见 ldpc_encoder_top 头注释),
+# 仿真 CWD 是 $BUILD —— 必须把 hex 拷到位, 否则 pt_rom 全 X, 非零帧校验位全错
+file copy -force $PT $BUILD/pt_columns.hex
+
+if {[file exists work]} { vdel -all }
 vlib work
 
 #-----------------------------------------------------------------
-# 编译 RTL 源文件
+# RTL
 #-----------------------------------------------------------------
-vlog -sv -work work \
+vlog -sv -work work +incdir+$PKG/rtl \
     $PKG/rtl/ldpc_defines.vh \
     $PKG/rtl/llr_buffer.v \
     $PKG/rtl/msg_buffer.v \
@@ -49,28 +43,30 @@ vlog -sv -work work \
     $PKG/rtl/cn_update.v \
     $PKG/rtl/early_term.v \
     $PKG/rtl/ldpc_controller.v \
+    $PKG/rtl/ldpc_stream_io.v \
     $PKG/rtl/ldpc_decoder_top.v \
     $PKG/rtl/ldpc_encoder_top.v
 
 #-----------------------------------------------------------------
-# 选择要运行的 Testbench
-#----------------------------------------------------------------=
-# 解码器 TB
-# vlog -sv tb_ldpc_decoder_top.v
-# vsim -voptargs=+acc +VEC_DIR=$VEC work.tb_ldpc_decoder_top
-
-# 编码器 TB
-# vlog -sv tb_ldpc_encoder_top.v
-# vsim -voptargs=+acc work.tb_ldpc_encoder_top
-
-# 系统级 TB (推荐 — 全链路验证)
-vlog -sv $PKG/tb/tb_ldpc_system.v
-vsim -voptargs=+acc +VEC_DIR=$VEC work.tb_ldpc_system
-
+# Choose ONE testbench (uncomment)
 #-----------------------------------------------------------------
-# 运行
-#-----------------------------------------------------------------
-# 记录所有信号波形
-log -r /*
-run ${SIM_TIME}
+
+# --- Decoder bit-true (10 vectors) ---
+# vlog -sv -work work $PKG/tb/tb_ldpc_decoder_top.v
+# vsim -c -voptargs=+acc work.tb_ldpc_decoder_top \
+#     +VEC_DIR=$VEC +EVID_DIR=$ROOT/var/gates/pg/ldpc_codec
+# run -all
+# quit -f
+
+# --- Encoder bit-true (5 vectors, PT ROM) ---
+vlog -sv -work work $PKG/tb/tb_ldpc_encoder_top.v
+vsim -c -voptargs=+acc work.tb_ldpc_encoder_top \
+    +VEC_DIR=$VEC +PT_MEM=$PT
+run -all
 quit -f
+
+# --- System (encoder+decoder) ---
+# vlog -sv -work work $PKG/tb/tb_ldpc_system.v
+# vsim -c -voptargs=+acc work.tb_ldpc_system +VEC_DIR=$VEC +PT_MEM=$PT
+# run -all
+# quit -f
