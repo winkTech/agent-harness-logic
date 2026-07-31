@@ -1,25 +1,24 @@
 //==============================================================================
-// cpe_tracker — 导频公共相位跟踪 + 校正输出 (ADR-002)
+// cpe_tracker — 导频公共相位跟踪 (ADR-002)
 // 功能: 对每个数据符号:
 //       (1) 导频拍即乘即累加 S = Σ_p Y[p]·conj(H_LTS[p])·pilot[p]
 //           (pilot = [1,1,-1,1] @ {11,25,39,53}, 取负即 -1);
 //       (2) 符号尾: CORDIC 向量模式求 CPE = angle(S), 旋转模式求
 //           (cos,sin) = e^{j·CPE} (Q2.14);
-//       (3) 输出级逐点读 H_LTS RAM, 复乘 e^{j·CPE}, round+饱和为 Q2.14,
-//           64 拍 AXIS 输出 (支持反压, 整级冻结不丢不重)。
+//       (3) 校正输出交给子模块 cpe_rotate_out (逐点读 H_LTS RAM 复乘
+//           e^{j·CPE}, round+饱和, 64 拍 AXIS 输出, 反压整级冻结)。
 // 端口: i_clk/i_rst (同步复位, 高有效); 已寄存样点流 (顶层 ri_ 级后);
 //       i_pilot_h_* (lts_estimator 导频位 H); RAM 读口; m_axis; 状态输出
-// 主要逻辑: 3 级导频积流水 -> S 累加 -> 计算 FSM (VEC->ROT->PEND) ->
-//           输出级 4 级流水 (addr -> RAM -> 复乘 -> round/sat -> AXIS reg)
+// 主要逻辑: 3 级导频积流水 -> S 累加 -> 计算 FSM (VEC->ROT->PEND)
+//           -> cpe_rotate_out (P_PEND 交接 (c,s), o_take 寄存回执)
 // 延迟: 数据符号末拍到该符号 H 输出完成约 110 拍 (< 1 OFDM 符号 = 400 拍@100M)
 // 复位: 同步高有效, 仅控制链复位; 乘法器/数据流水不复位
-//   // [复位豁免] r_m_*/r_om* 为 DSP 流水寄存器, 加复位阻断 MREG/PREG 吸收
+//   // [复位豁免] r_m_* 为 DSP 流水寄存器, 加复位阻断 MREG/PREG 吸收
 //   //            (UG949 Know What You Infer, SKILL §10.2)
 //
 // 定点约定 (与 generate_vectors.m 位真镜像逐字一致):
 //   t_re =  Yr·Hr + Yi·Hq;  t_im = Yq·Hr - Yr·Hq   (即 Y·conj(H))
 //   S: s36 累加; CORDIC 输入 = S >>> 14 (截取 [35:14], 22b)
-//   输出 = sat16( floor( (Hr·c - Hq·s + 8192) / 2^14 ) ) (+j 同理 Hr·s + Hq·c)
 //==============================================================================
 module cpe_tracker #(
     parameter int N_FFT   = 64,
@@ -167,7 +166,7 @@ module cpe_tracker #(
     logic signed [P_XY_W-1:0]  w_cd_x, w_cd_y, w_cd_ox, w_cd_oy;
     logic signed [15:0]        w_cd_z, w_cd_oz;
 
-    logic w_out_take;                             // 输出级本拍取走 (c,s)
+    logic w_take;                                 // 输出级已取走 (寄存回执)
 
     always_ff @(posedge i_clk) begin
         if (i_rst || i_abort)  r_sym_pend <= 1'b0;
@@ -191,7 +190,7 @@ module cpe_tracker #(
             P_VWAIT:  if (w_cd_done)   w_cstate_nxt = P_RSTART;
             P_RSTART:                  w_cstate_nxt = P_RWAIT;
             P_RWAIT:  if (w_cd_done)   w_cstate_nxt = P_PEND;
-            P_PEND:   if (w_out_take)  w_cstate_nxt = P_CIDLE;
+            P_PEND:   if (w_take)      w_cstate_nxt = P_CIDLE;
             default:                   w_cstate_nxt = P_CIDLE;
         endcase
     end
@@ -238,134 +237,41 @@ module cpe_tracker #(
     );
 
     //==========================================================================
-    // 输出级: 4 级流水 (addr -> RAM 读 -> 复乘 -> round/sat -> AXIS reg),
-    //         统一使能 w_oce, 反压整级冻结
+    // 校正输出级 (G-A-04 拆分子模块): P_PEND 态交接 (c,s), 寄存回执 w_take
     //==========================================================================
-    logic                     ro_tvalid;
-    logic [DATA_W*2-1:0]      ro_tdata;
-    logic                     w_oce;
-    logic                     ro_rd_ce;           // = 输出级活跃 (寄存, 红线 2)
-    logic [P_IDX_W-1:0]       ro_rd_addr;
-    logic                     r_ov1, r_ov2, r_ov3;
-    logic signed [P_CS_W-1:0] r_oc, r_os;         // 本符号的 cos/sin 快照
-
-    assign w_oce = !ro_tvalid || m_axis_tready;
-
-    // 启动: (c,s) 就绪且流水已排空 (r_oc/r_os 为共享操作数, 在途级必须用旧值算完)
-    assign w_out_take = (r_cstate == P_PEND) && !ro_rd_ce &&
-                        !r_ov1 && !r_ov2 && !r_ov3;
-
-    // 活跃标志与地址计数 (纯寄存输出; 读使能门控在顶层完成, 见端口注释)
-    always_ff @(posedge i_clk) begin
-        if (i_rst) begin
-            ro_rd_ce   <= 1'b0;
-            ro_rd_addr <= '0;
-        end else if (w_out_take) begin
-            ro_rd_ce   <= 1'b1;
-            ro_rd_addr <= '0;
-        end else if (ro_rd_ce && w_oce) begin
-            if (ro_rd_addr == P_IDX_W'(N_FFT-1)) ro_rd_ce <= 1'b0;
-            ro_rd_addr <= ro_rd_addr + 1'b1;
-        end
-    end
-
-    // cos/sin 快照 (数据通路, 由 w_out_take 定拍)
-    always_ff @(posedge i_clk) begin
-        if (w_out_take) begin
-            r_oc <= r_cs_cos;
-            r_os <= r_cs_sin;
-        end
-    end
-
-    assign o_rd_active = ro_rd_ce;
-    assign o_rd_addr   = ro_rd_addr;
-
-    // valid 链 (控制, 复位)
-    always_ff @(posedge i_clk) begin
-        if (i_rst) begin
-            r_ov1 <= 1'b0;
-            r_ov2 <= 1'b0;
-            r_ov3 <= 1'b0;
-        end else if (w_oce) begin
-            r_ov1 <= ro_rd_ce;
-            r_ov2 <= r_ov1;
-            r_ov3 <= r_ov2;
-        end
-    end
-
-    // 复乘 (DSP 流水寄存, 不复位 §10.2): H·(c+js)
-    logic signed [DATA_W+P_CS_W-1:0] r_om1, r_om2, r_om3, r_om4;   // s34
-
-    always_ff @(posedge i_clk) begin
-        if (w_oce && r_ov1) begin
-            r_om1 <= i_rd_di * r_oc;
-            r_om2 <= i_rd_dq * r_os;
-            r_om3 <= i_rd_di * r_os;
-            r_om4 <= i_rd_dq * r_oc;
-        end
-    end
-
-    // round + 饱和 (数据通路, 不复位, 由 r_ov3 屏蔽)
-    logic signed [DATA_W+P_CS_W:0] w_sum_re, w_sum_im;             // s35
-    logic signed [DATA_W+P_CS_W-14:0] w_rnd_re, w_rnd_im;          // s21
-    logic signed [DATA_W-1:0]      w_sat_re, w_sat_im;
-    logic signed [DATA_W-1:0]      r_out_re, r_out_im;
-
-    assign w_sum_re = r_om1 - r_om2;
-    assign w_sum_im = r_om3 + r_om4;
-    assign w_rnd_re = (w_sum_re + 35'sd8192) >>> 14;
-    assign w_rnd_im = (w_sum_im + 35'sd8192) >>> 14;
-
-    always_comb begin
-        if      (w_rnd_re > 21'sd32767)  w_sat_re = 16'sd32767;
-        else if (w_rnd_re < -21'sd32768) w_sat_re = -16'sd32768;
-        else                             w_sat_re = DATA_W'(w_rnd_re);
-        if      (w_rnd_im > 21'sd32767)  w_sat_im = 16'sd32767;
-        else if (w_rnd_im < -21'sd32768) w_sat_im = -16'sd32768;
-        else                             w_sat_im = DATA_W'(w_rnd_im);
-    end
-
-    always_ff @(posedge i_clk) begin
-        if (w_oce) begin
-            r_out_re <= w_sat_re;
-            r_out_im <= w_sat_im;
-        end
-    end
-
-    // AXIS 输出寄存 (红线 2): tvalid 不依赖 tready, 反压保持。
-    // ro_tdata 与 ro_tvalid 同拍装载 (r_out_* 由 r_ov3 定拍), 严格对齐
-    always_ff @(posedge i_clk) begin
-        if (i_rst) begin
-            ro_tvalid <= 1'b0;
-        end else if (w_oce) begin
-            ro_tvalid <= r_ov3;
-        end
-    end
-
-    always_ff @(posedge i_clk) begin
-        if (w_oce) ro_tdata <= {r_out_im, r_out_re};
-    end
-
-    assign m_axis_tvalid = ro_tvalid;
-    assign m_axis_tdata  = ro_tdata;
+    cpe_rotate_out #(
+        .N_FFT   (N_FFT),
+        .DATA_W  (DATA_W),
+        .P_IDX_W (P_IDX_W),
+        .P_CS_W  (P_CS_W)
+    ) u_rotate_out (
+        .i_clk         (i_clk),
+        .i_rst         (i_rst),
+        .i_cs_valid    (r_cstate == P_PEND),
+        .i_cos         (r_cs_cos),
+        .i_sin         (r_cs_sin),
+        .o_take        (w_take),
+        .o_rd_active   (o_rd_active),
+        .o_rd_addr     (o_rd_addr),
+        .i_rd_di       (i_rd_di),
+        .i_rd_dq       (i_rd_dq),
+        .m_axis_tvalid (m_axis_tvalid),
+        .m_axis_tready (m_axis_tready),
+        .m_axis_tdata  (m_axis_tdata),
+        .o_busy        (o_out_busy)
+    );
 
     //==========================================================================
     // 状态输出 (ro_ 寄存, 红线 2)
     //==========================================================================
-    logic ro_calc_busy, ro_out_busy;
+    logic ro_calc_busy;
 
     always_ff @(posedge i_clk) begin
-        if (i_rst) begin
-            ro_calc_busy <= 1'b0;
-            ro_out_busy  <= 1'b0;
-        end else begin
-            ro_calc_busy <= (w_cstate_nxt != P_CIDLE) || r_sym_pend || w_sym_end;
-            ro_out_busy  <= ro_rd_ce || r_ov1 || r_ov2 || r_ov3 ||
-                            ro_tvalid || w_out_take;
-        end
+        if (i_rst) ro_calc_busy <= 1'b0;
+        else       ro_calc_busy <= (w_cstate_nxt != P_CIDLE) || r_sym_pend ||
+                                   w_sym_end;
     end
 
     assign o_calc_busy = ro_calc_busy;
-    assign o_out_busy  = ro_out_busy;
 
 endmodule : cpe_tracker

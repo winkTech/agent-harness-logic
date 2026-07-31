@@ -32,6 +32,7 @@ vmap work work
 
 vlog -sv $ROOT/rtl/cordic_cv.sv
 vlog -sv $ROOT/rtl/lts_estimator.sv
+vlog -sv $ROOT/rtl/cpe_rotate_out.sv
 vlog -sv $ROOT/rtl/cpe_tracker.sv
 vlog -sv $ROOT/rtl/channel_est_top.sv
 vlog -sv $ROOT/tb/tb_chEst_cosim.sv

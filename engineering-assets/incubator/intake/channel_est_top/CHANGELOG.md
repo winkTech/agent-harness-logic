@@ -1,5 +1,21 @@
 # CHANGELOG — channel_est_top
 
+## [0.2.1] — 2026-08-01 qualification 推进：G-A-04 拆分 + certified 证据链
+
+行为零变化的结构拆分与证据补齐（cosim 拆分后复跑仍 **2048 样点 0 失配**）：
+
+- **G-A-04**：`cpe_tracker.sv` 372 行 > 300 → 输出级拆出 `cpe_rotate_out.sv`
+  （(c,s) 交接改寄存回执握手，`ro_rd_ce` 结构性防重取；全模块 ≤300 行）。
+- **TB 证据链（G-C-04/05）**：`+EVID_DIR` 落盘——`reset-sim.json`
+  （帧中再复位保持 3 拍，26 个复位控制寄存器逐一比对；数据通路寄存器按
+  §1.1 设计性不复位，不在比对面）+ `stability/{boundary,stress,regression,
+  backpressure}.json`；新增 T7 压力场景（背靠背 2×LTS+8 数据符号 + 随机
+  反压叠加，512 点全比对）。
+- **G-C-01/02**：manifest 补 `device.part` 与资源预算
+  （lut 900 / ff 750 / bram 2 / dsp 20，基于 0.2.0 实测 749/610/1/8 留裕量）；
+  pg-synth 产物链（timing-summary/utilization/synth.log/envelope-check）。
+- fidelity=bit_true（0.2.0 cosim 实证）；声明级 intake → **qualification**。
+
 ## [0.2.0] — 2026-07-31 ADR-002 架构重排：LTS-LS + 导频 CPE 跟踪
 
 估计基础按 ADR-002 从「4 导频 LS + 线性插值」整体重排为「长训练符号全用载波

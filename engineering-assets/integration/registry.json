@@ -7,7 +7,7 @@
    "project": "phy-intake",
    "project_ref": "incubator/intake/channel_est_top",
    "asset_uid": "channel_est_top",
-   "version_pinned": "0.2.0",
+   "version_pinned": "0.2.1",
    "config": {
     "DATA_W": 16,
     "N_FFT": 64,
@@ -18,13 +18,9 @@
    "maturity_status": "deferred",
    "owner": "lihan",
    "consumers": [],
-   "issues": [
-    "vivado-timing"
-   ],
-   "badge_gap": [
-    "vivado-timing"
-   ],
-   "deferred_reason": "ADR-002 架构重排 0.2.0 repin: bit-true-vectors 已还清 (cosim 2048 点 0 失配, G-B-03 pass); axis-contract 已还清 (tready 寄存 + TB 反压/帧界场景实证); vivado-timing 保留至 pg-synth 产物链 (G-C-01 timing-summary.rpt)",
+   "issues": [],
+   "badge_gap": [],
+   "deferred_reason": "0.2.1 repin: 三笔债全部还清 — bit-true-vectors (cosim 2048 点 0 失配), axis-contract (tready 寄存 + TB 反压/帧界实证), vivado-timing (pg-synth 产物链, G-C-01 WNS+4.673 pass)。qualification 达标, certified 仅剩 G-SIGN-01",
    "last_reviewed": "2026-08-01"
   },
   {

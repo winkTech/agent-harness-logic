@@ -11,6 +11,14 @@ while {![file exists [file join $ROOT manifest.json]]} {
     if {$parent eq $ROOT} { puts "FATAL: 找不到包根 (manifest.json)"; quit -code 1 }
     set ROOT $parent
 }
+set EA $ROOT
+while {[file tail $EA] ne "engineering-assets"} {
+    set parent [file dirname $EA]
+    if {$parent eq $EA} { puts "FATAL: 找不到 engineering-assets 根"; quit -code 1 }
+    set EA $parent
+}
+set EVID_DIR [file join $EA var gates pg channel_est_top]/
+file mkdir [file join $EA var gates pg channel_est_top stability]
 
 set BUILD [file join $ROOT var_build]
 file mkdir $BUILD
@@ -22,10 +30,11 @@ vmap work work
 
 vlog -sv $ROOT/rtl/cordic_cv.sv
 vlog -sv $ROOT/rtl/lts_estimator.sv
+vlog -sv $ROOT/rtl/cpe_rotate_out.sv
 vlog -sv $ROOT/rtl/cpe_tracker.sv
 vlog -sv $ROOT/rtl/channel_est_top.sv
 vlog -sv $ROOT/tb/tb_channel_est_top.sv
 
-vsim -c -onfinish stop work.tb_channel_est_top
+vsim -c -onfinish stop work.tb_channel_est_top +EVID_DIR=$EVID_DIR
 run -all
 quit -code 0

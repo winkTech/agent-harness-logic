@@ -1,9 +1,10 @@
-<!-- 级别横幅（由成熟度派生）: INCUBATOR / INTAKE — 未认证，勿在生产设计中直接复用 -->
+<!-- asset-status: qualification v0.2.1 -->
+<!-- 级别横幅（由成熟度派生）: QUALIFICATION — 机器门全绿，certified 待签字 -->
 
 # channel_est_top
 
-> `asset_uid: channel_est_top` · `version: 0.2.0` · `owner: lihan`
-> 成熟度: **intake（评估性打包）** — 见 `../../../var/gates/pg/channel_est_top/gate-results.json`
+> `asset_uid: channel_est_top` · `version: 0.2.1` · `owner: lihan`
+> 成熟度: **qualification** — 见 `../../../var/gates/pg/channel_est_top/gate-results.json`
 
 ## 用途
 
@@ -19,7 +20,8 @@
 - LTS 符号不产生输出；每个数据符号输出 64 点。
 
 层级：`channel_est_top`（帧定序）→ `lts_estimator`（LTS 累加 + H_LTS RAM）
-+ `cpe_tracker`（导频积 + CPE 计算 + 校正输出）→ `cordic_cv`（向量/旋转双模）。
++ `cpe_tracker`（导频积 + CPE 计算）→ `cordic_cv`（向量/旋转双模）
++ `cpe_rotate_out`（校正输出级，0.2.1 按 G-A-04 拆出）。
 
 ## 接口（manifest 派生视图，勿手改）
 
@@ -49,32 +51,34 @@
 - Golden 模型: `model_comm_channel_est` 1.1.0（`run_all_tests` 7/7，2026-07-31）
 - 定点/实现/资源三份历史报告仍锚定旧插值架构，**待随 qualification 阶段修订**
 
-## 验证现状（2026-07-31 架构重排后，全部实跑取证）
+## 验证现状（0.2.x，全部实跑取证）
 
 - **定向自检 TB**（`tb/tb_channel_est_top.sv`，ModelSim 10.6c）：
   T1 平坦信道 / T2 变化复信道 + 逐符号 CPE(±0.3/-0.2 rad) + 数据内容无关性 /
-  T3 随机反压逐点一致 / T4 半帧重启 / T5 帧中复位恢复 / T6 背靠背 + 延迟实测
-  —— **ALL TESTS PASSED**，判据解析期望 ±12 LSB，实测延迟 **111 拍**（< 400）。
-- **Vivado 2023.1.1 OOC**（xc7k325t，`var_build/vivado/rpt/flow_summary.json`）：
-  rtlcheck 0 违例；synth **WNS +4.673 ns @10 ns**（≈187 MHz）；
-  **LUT 749 / FF 610 / BRAM 1 / DSP 8**（预算 <20，导频积 4 + 旋转 4，推断符合设计）；
-  CDC critical 0。
-- **cosim（G-B-03）**：`tb/tb_chEst_cosim.sv` 已改造为帧级 **0 容差逐字比对**；
-  等待 `generate_vectors.m` 位真镜像改造（models/ 受保护树）导出
-  `rx_chEst_frame.hex` / `expected_chEst_frame.hex` 后可跑。
+  T3 随机反压逐点一致 / T4 半帧重启 / T5 帧中复位恢复（26 个复位控制寄存器
+  逐一比对）/ T6 背靠背 + 延迟实测 **111 拍**（< 400）/ T7 压力（背靠背
+  8 数据符号 + 随机反压叠加，512 点）—— **ALL TESTS PASSED**，判据解析期望
+  ±12 LSB。证据落盘 `reset-sim.json` + `stability/*.json`（G-C-04/05）。
+- **cosim（G-B-03）**：`generate_vectors.m` 帧级位真镜像向量（2×LTS+32 数据
+  符号，验收信道 + 300Hz 残余 CFO），**2048 样点 0 失配 bit-true PASS**
+  （0.2.0 与 0.2.1 拆分后各实跑一次）；`fidelity = bit_true`。
+- **Vivado 2023.1.1 OOC**（xc7k325t，0.2.1 pg-synth 产物链）：rtlcheck 0 违例；
+  **WNS +4.673 ns @10 ns**（achieved ≈187.7 MHz）；**LUT 653 / FF 611 /
+  BRAM 0.5 / DSP 8**，全部在包络内（预算 lut 900/ff 750/bram 2/dsp 20；
+  DSP = 导频积 4 + 旋转 4，推断符合设计）；CDC critical 0。
+  timing-summary/utilization/synth.log/envelope-check 见
+  `var/gates/pg/channel_est_top/`。
 - `tb/uvm/` 仍引用断链的模板路径，按原样不可编译（遗留，不在本次验证面内）。
 
 ## 已知限制 / 认证阻塞
 
-- **G-B-03 bit-true 对标**：待 `generate_vectors.m` 帧级位真镜像 + 向量导出
-  （旧 `rx_chEst.bin`/`expected_chEst.bin` 单符号向量语义已作废）。
-- 定点语义镜像约定：RTL（`lts_estimator`/`cpe_tracker`/`cordic_cv` 头注释）与
-  `generate_vectors.m` 必须逐字同步，任何一侧改动定点语义都要同步另一侧。
+- 定点语义镜像约定：RTL（`lts_estimator`/`cpe_tracker`/`cpe_rotate_out`/
+  `cordic_cv` 头注释）与 `generate_vectors.m` 必须逐字同步，任何一侧改动
+  定点语义都要同步另一侧。
 - UVM 环境断链（承自 0.1.0）。
-- G-A-04（qualification）：`cpe_tracker.sv` 372 行 > 300，待 qualification
-  推进时拆分或按白名单处理。
 - 导频极性为固定 [1,1,-1,1]（golden `sim_frame.m` 契约）；802.11a 逐符号导频
   扰码未建模，golden 升级时需同步（需求门禁 D6 已记录）。
+- G-SIGN-01：certified 需 owner 具名签字。
 
 ## 0.1.0 历史缺陷的归宿
 

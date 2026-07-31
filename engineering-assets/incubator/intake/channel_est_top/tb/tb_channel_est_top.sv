@@ -7,9 +7,13 @@
 //   T4  半帧后 i_frame_start 重启      -> 新帧正确, 无旧帧串扰
 //   T5  帧中复位 -> 无残留输出, 重新同步后功能正常
 //   T6  背靠背 (gap=0) 符号流无死锁; 末拍->输出完成延迟 < 400 拍 (spec §5)
+//   T7  压力: 8 数据符号 gap=0 + 随机反压叠加, 512 点全比对 (stress)
 // 判据: 解析期望 (量化 H_fx · e^{jCPE}) ± TOL LSB (CORDIC 14 迭代量化残差);
 //       bit-true 逐字对标由 tb_chEst_cosim 承担, 不在本 TB 职责内。
 // 失败路径: 一律 $fatal (非零退出), 通过打印 "ALL TESTS PASSED"。
+// 证据 (+EVID_DIR 给定时, G-C-04/05): reset-sim.json (26 个复位控制寄存器
+//   帧中再复位逐一比对; 数据通路寄存器按 §1.1 设计性不复位, 不在比对面) +
+//   stability/{boundary,stress,regression,backpressure}.json
 //==============================================================================
 `timescale 1ns/1ps
 
@@ -244,6 +248,77 @@ module tb_channel_est_top;
     endtask
 
     //==========================================================================
+    // 证据落盘 (G-C-04/05)
+    //==========================================================================
+    string EVID_DIR;
+    bit    evid_en;
+    int    rst_fail;
+
+    task automatic write_stab(input string name, input int beats,
+                              input string reason);
+        int fd;
+        if (!evid_en) return;
+        fd = $fopen({EVID_DIR, "stability/", name, ".json"}, "w");
+        if (fd == 0) $fatal(1, "无法写 %sstability/%s.json", EVID_DIR, name);
+        $fdisplay(fd, "{\"pass\": true, \"beats\": %0d, \"reason\": \"%s\", \"tool\": \"ModelSim 10.6c\", \"tb\": \"tb_channel_est_top\"}",
+                  beats, reason);
+        $fclose(fd);
+    endtask
+
+    // 帧中再复位 (保持 3 拍) 期间逐寄存器比对; want 全 0 (含 P_UNSYNC/P_CIDLE)
+    task automatic check_rst(input int fd, input string nm, input int got);
+        $fdisplay(fd, "    {\"reg\":\"%s\",\"got\":%0d,\"want\":0,\"pass\": %s},",
+                  nm, got, (got == 0) ? "true" : "false");
+        if (got != 0) rst_fail++;
+    endtask
+
+    task automatic dump_reset_sim();
+        int fd;
+        if (!evid_en) return;
+        rst_fail = 0;
+        fd = $fopen({EVID_DIR, "reset-sim.json"}, "w");
+        if (fd == 0) $fatal(1, "无法写 %sreset-sim.json", EVID_DIR);
+        $fdisplay(fd, "{");
+        $fdisplay(fd, "  \"id\": \"G-C-04.reset\",");
+        $fdisplay(fd, "  \"method\": \"mid-frame re-reset held 3 clk, per-register compare vs declared reset value; data-path regs are reset-free by design (SKILL 1.1) and excluded\",");
+        $fdisplay(fd, "  \"registers\": [");
+        check_rst(fd, "dut.ri_tvalid",   int'(dut.ri_tvalid));
+        check_rst(fd, "dut.ri_fs_take",  int'(dut.ri_fs_take));
+        check_rst(fd, "dut.r_fs_pend",   int'(dut.r_fs_pend));
+        check_rst(fd, "dut.r_phase",     int'(dut.r_phase));
+        check_rst(fd, "dut.r_sub",       int'(dut.r_sub));
+        check_rst(fd, "dut.ro_tready",   int'(dut.ro_tready));
+        check_rst(fd, "dut.u_lts_estimator.r_a_valid", int'(dut.u_lts_estimator.r_a_valid));
+        check_rst(fd, "dut.u_lts_estimator.r_a_lts2",  int'(dut.u_lts_estimator.r_a_lts2));
+        check_rst(fd, "dut.u_cpe_tracker.r_p1_v",      int'(dut.u_cpe_tracker.r_p1_v));
+        check_rst(fd, "dut.u_cpe_tracker.r_p2_v",      int'(dut.u_cpe_tracker.r_p2_v));
+        check_rst(fd, "dut.u_cpe_tracker.r_s_re",      int'(dut.u_cpe_tracker.r_s_re));
+        check_rst(fd, "dut.u_cpe_tracker.r_s_im",      int'(dut.u_cpe_tracker.r_s_im));
+        check_rst(fd, "dut.u_cpe_tracker.r_sym_pend",  int'(dut.u_cpe_tracker.r_sym_pend));
+        check_rst(fd, "dut.u_cpe_tracker.r_cstate",    int'(dut.u_cpe_tracker.r_cstate));
+        check_rst(fd, "dut.u_cpe_tracker.ro_calc_busy", int'(dut.u_cpe_tracker.ro_calc_busy));
+        check_rst(fd, "dut.u_cpe_tracker.u_rotate_out.ro_rd_ce",   int'(dut.u_cpe_tracker.u_rotate_out.ro_rd_ce));
+        check_rst(fd, "dut.u_cpe_tracker.u_rotate_out.ro_rd_addr", int'(dut.u_cpe_tracker.u_rotate_out.ro_rd_addr));
+        check_rst(fd, "dut.u_cpe_tracker.u_rotate_out.r_ov1",      int'(dut.u_cpe_tracker.u_rotate_out.r_ov1));
+        check_rst(fd, "dut.u_cpe_tracker.u_rotate_out.r_ov2",      int'(dut.u_cpe_tracker.u_rotate_out.r_ov2));
+        check_rst(fd, "dut.u_cpe_tracker.u_rotate_out.r_ov3",      int'(dut.u_cpe_tracker.u_rotate_out.r_ov3));
+        check_rst(fd, "dut.u_cpe_tracker.u_rotate_out.ro_tvalid",  int'(dut.u_cpe_tracker.u_rotate_out.ro_tvalid));
+        check_rst(fd, "dut.u_cpe_tracker.u_rotate_out.ro_take",    int'(dut.u_cpe_tracker.u_rotate_out.ro_take));
+        check_rst(fd, "dut.u_cpe_tracker.u_rotate_out.ro_busy",    int'(dut.u_cpe_tracker.u_rotate_out.ro_busy));
+        check_rst(fd, "dut.u_cpe_tracker.u_cordic.r_it",     int'(dut.u_cpe_tracker.u_cordic.r_it));
+        check_rst(fd, "dut.u_cpe_tracker.u_cordic.r_state",  int'(dut.u_cpe_tracker.u_cordic.r_state));
+        $fdisplay(fd, "    {\"reg\":\"dut.u_cpe_tracker.u_cordic.ro_done\",\"got\":%0d,\"want\":0,\"pass\": %s}",
+                  int'(dut.u_cpe_tracker.u_cordic.ro_done),
+                  (int'(dut.u_cpe_tracker.u_cordic.ro_done) == 0) ? "true" : "false");
+        if (int'(dut.u_cpe_tracker.u_cordic.ro_done) != 0) rst_fail++;
+        $fdisplay(fd, "  ]");
+        $fdisplay(fd, "}");
+        $fclose(fd);
+        if (rst_fail != 0)
+            $fatal(1, "[T5] 复位比对失败: %0d 个寄存器未回复位值", rst_fail);
+    endtask
+
+    //==========================================================================
     // 主流程
     //==========================================================================
     int unsigned t_last, t_done;
@@ -257,6 +332,7 @@ module tb_channel_est_top;
 
     initial begin : p_main
         rst = 1'b1; fs = 1'b0; s_tvalid = 1'b0; s_tdata = '0;
+        evid_en = $value$plusargs("EVID_DIR=%s", EVID_DIR);
         repeat (5) @(posedge clk);
         rst = 1'b0;
         repeat (3) @(posedge clk);
@@ -284,6 +360,8 @@ module tb_channel_est_top;
         check_sym("T2 sym0 (cpe=+0.3)", 0.3);
         check_sym("T2 sym1 (cpe=-0.2)", -0.2);
         expect_idle("T2");
+        write_stab("regression", 4*N,
+            "固定场景回归套件: T1 平坦信道 2 符号 + T2 变化复信道逐符号 CPE (+0.3/-0.2 rad) 及数据内容无关性, 256 点解析期望比对全过");
 
         //------------------------------------------------------------------
         $display("[T3] m_axis 随机反压重跑 T2 帧 (输出必须逐点一致)");
@@ -313,6 +391,8 @@ module tb_channel_est_top;
         end
         $display("  [T3] 128/128 点与无反压基准逐点一致");
         expect_idle("T3");
+        write_stab("backpressure", 2*N,
+            "m_axis 随机反压 (约 25% 拒收) 重跑整帧, 128 点与无反压基准逐点一致, 不丢不重");
 
         //------------------------------------------------------------------
         $display("[T4] 半帧后 i_frame_start 重启");
@@ -329,6 +409,8 @@ module tb_channel_est_top;
         wait_cap(N, "T4");
         check_sym("T4 sym0 (重启帧)", 0.1);
         expect_idle("T4");
+        write_stab("boundary", N,
+            "帧边界: LTS2 半途 (10/64 样点) 重发 i_frame_start, 新帧 (最小结构 2xLTS+1 数据符号) 64/64 全载波正确, 无旧帧串扰");
 
         //------------------------------------------------------------------
         $display("[T5] 帧中复位 -> 重新同步");
@@ -340,6 +422,7 @@ module tb_channel_est_top;
         @(posedge clk);
         rst <= 1'b1;
         repeat (3) @(posedge clk);
+        dump_reset_sim();          // 复位保持中逐寄存器比对 (G-C-04 证据)
         rst <= 1'b0;
         cap_re.delete(); cap_im.delete(); cap_t.delete();
         // 复位后 UNSYNC: 无 frame_start 时样点应被静默丢弃
@@ -373,6 +456,24 @@ module tb_channel_est_top;
             $fatal(1, "[T6] 延迟 %0d 拍 >= 上限 %0d", t_done - t_last, LAT_MAX);
         $display("  [T6] 末拍->输出完成 %0d 拍 (< %0d)", t_done - t_last, LAT_MAX);
         expect_idle("T6");
+
+        //------------------------------------------------------------------
+        $display("[T7] 压力: 8 数据符号 gap=0 + 随机反压叠加");
+        set_channel_varying();
+        bp_mode = 1;
+        pulse_fs();
+        build_lts();  send_symbol(0); send_symbol(0);
+        for (int m = 0; m < 8; m++) begin
+            build_data(0.05 * (m + 1), m);
+            send_symbol(0);
+        end
+        wait_cap(8*N, "T7");
+        bp_mode = 0;
+        for (int m = 0; m < 8; m++)
+            check_sym($sformatf("T7 sym%0d", m), 0.05 * (m + 1));
+        expect_idle("T7");
+        write_stab("stress", 8*N,
+            "压力: 背靠背 (gap=0) 2xLTS+8 数据符号连发, 叠加 m_axis 随机反压, 512 点逐符号 CPE 解析期望比对全过, 无死锁无丢重");
 
         //------------------------------------------------------------------
         $display("ALL TESTS PASSED");

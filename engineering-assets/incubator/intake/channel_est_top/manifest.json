@@ -2,10 +2,13 @@
   "schema_version": "1.0",
   "asset_uid": "channel_est_top",
   "name": "channel_est_top",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "owner": "lihan",
   "maturity": {
-    "level": "intake"
+    "level": "qualification"
+  },
+  "device": {
+    "part": "xc7k325tffg900-2"
   },
   "requirement_ref": "engineering-assets/knowledge/primary/domains/comm/channel_est/algorithm_spec.md",
   "doc_refs": [
@@ -85,7 +88,11 @@
     "target": {
       "fmax": "100MHz",
       "fmax_mhz": 100,
-      "latency": 111
+      "latency": 111,
+      "lut": 900,
+      "ff": 750,
+      "bram": 2,
+      "dsp": 20
     }
   },
   "sources": [
@@ -102,7 +109,12 @@
     {
       "path": "rtl/cpe_tracker.sv",
       "role": "rtl",
-      "sha256": "75f8c957a22e3a398262c5c1255d84bcb7f0bd42c1cc252ec0edd86921c2564c"
+      "sha256": "ceefd3e177841c3c85651e19c0ce308aa812af49e0f950b00fe81633e2e3bd99"
+    },
+    {
+      "path": "rtl/cpe_rotate_out.sv",
+      "role": "rtl",
+      "sha256": "b8fc7dcf0005b621716808d1e16a25172119199398661b38f62fd6f0266f39d9"
     },
     {
       "path": "rtl/cordic_cv.sv",
@@ -117,7 +129,7 @@
     {
       "path": "tb/tb_channel_est_top.sv",
       "role": "tb",
-      "sha256": "23bdcdf6bf7a6e4b0518794b05a4ab7d23725500b93c4fef7b0e93c5d7758317"
+      "sha256": "920d1c8014ff368eb01b068f73530247d8f19efbe8cde191b4b2dc555931da62"
     },
     {
       "path": "tb/tb_chEst_cosim.sv",
@@ -127,32 +139,32 @@
     {
       "path": "tb/uvm/chEst_uvm_pkg.sv",
       "role": "tb",
-      "sha256": "354b24413fb62a99d1171ff361e5d282cb2447829b558f7e2ddab9416b3c4666"
+      "sha256": "b68b57f8ab34bb0ab2d413393463eb04c93f11359bae931b367dd99a99a0130f"
     },
     {
       "path": "tb/uvm/chEst_scoreboard.sv",
       "role": "tb",
-      "sha256": "d3181d6f4db1c63c25ab9ed50f5c9912154d00624cee1f1e98ba870e9a827b04"
+      "sha256": "0c21a3c751c83abe6fec78801a3603a90a51a4ad4ea160a9b1c802d88d36087e"
     },
     {
       "path": "tb/uvm/chEst_sequences.sv",
       "role": "tb",
-      "sha256": "2c089310329e2fac8fb242b28b22fe865b74569d528dc9dcf4953737ec878deb"
+      "sha256": "dc96d44d0ad94622adddf0cfaa106758927f774208def72a4320d1cf186e76f6"
     },
     {
       "path": "tb/uvm/chEst_base_test.sv",
       "role": "tb",
-      "sha256": "eb45e733e8553b1a45d4c24a76207a51cdfeb5410e6eea0b2c2d03c80208ee45"
+      "sha256": "240d3778900ec64f9ca4bc2c972da7b30ce65a8347970e702b55237645d98831"
     },
     {
       "path": "tb/uvm/chEst_basic_test.sv",
       "role": "tb",
-      "sha256": "7513095d9c21719e3bf25db362eb2204e4f5fdd9c2efc6c97a542cbc8219bc72"
+      "sha256": "08f8b2b7ba988083d3a92d14e9bdc1116a37a464e7d779d08b9a11368f9743d0"
     },
     {
       "path": "tb/uvm/tb_chEst_uvm_top.sv",
       "role": "tb",
-      "sha256": "5a1e61dcc76a73115473d7c834917f14c61ede46e56cccf440436fb508693129"
+      "sha256": "e52d874d2b377b607a0964cc9a3111302245271901c4d8291a2f9dd4c6c26a1d"
     }
   ],
   "generality": {
