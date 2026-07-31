@@ -30,3 +30,10 @@ certified 级需上板证据。
 随机读写混合(len 1..16)+ 从机随机退避,**198 拍读回 0 失配**;
 AXI 三通道 valid&&!ready 载荷稳定性逐拍断言;wlast 协议检查;
 len=1/max 边界;帧中复位恢复;AR 静默超时 → `o_err` 置位并恢复;SLVERR 注入。
+
+## 限制与验证边界 (limitations)
+
+- 对测对象为 **TB 内建行为级 AXI4 从机**(按 AXI4 规范时序),未对真实 MIG 硬核实测;上板前须联调。
+- 单 ui_clk 时钟域,跨域由 MIG 侧负责(README 已明示)。
+- 突发长度 1..P_MAX_BURST 边界已覆盖;不支持 outstanding 多事务交织。仅默认参数实测。
+- **qualification 级证据边界**:自检 TB 功能验证已实跑,无综合时序/资源取证(certified 转正时按 pg-synth 流程补)。

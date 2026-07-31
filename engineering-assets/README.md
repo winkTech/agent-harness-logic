@@ -52,15 +52,15 @@ node tools/gate-runner.cjs <asset-package-dir> --repo-root ..
 | 资产 | 声明级别 | 机器达到级别 | 阻塞门 |
 |---|---|---|---|
 | `axis_skid_buffer` | certified | certified | — |
-| `cdc_sync` | qualification | intake | qualification |
+| `cdc_sync` | qualification | qualification | certified |
 | `channel_est_top` | intake | qualification | certified |
-| `complex_multiplier` | qualification | intake | qualification |
-| `crc32` | qualification | intake | qualification |
-| `ddr_axi4_controller` | qualification | intake | qualification |
-| `delay_line` | qualification | intake | qualification |
-| `frame_sync` | qualification | intake | qualification |
+| `complex_multiplier` | qualification | qualification | certified |
+| `crc32` | qualification | qualification | certified |
+| `ddr_axi4_controller` | qualification | qualification | certified |
+| `delay_line` | qualification | qualification | certified |
+| `frame_sync` | qualification | qualification | certified |
 | `ldpc_codec` | certified | certified | — |
-| `lfsr_gen` | qualification | intake | qualification |
+| `lfsr_gen` | qualification | qualification | certified |
 | `model_comm_channel_est` | intake | — | no gate-results |
 | `model_comm_ldpc` | intake | — | no gate-results |
 | `model_comm_ofdm` | intake | — | no gate-results |
@@ -70,7 +70,7 @@ node tools/gate-runner.cjs <asset-package-dir> --repo-root ..
 | `pulse_merge` | certified | certified | — |
 | `pulse_merge_golden` | qualification | — | no gate-results |
 | `rrc_polyphase_fir` | certified | certified | — |
-| `sdp_ram` | qualification | intake | qualification |
+| `sdp_ram` | qualification | qualification | certified |
 | `stream_elastic_pipeline` | certified | certified | — |
 | `stream_elastic_pipeline_golden` | qualification | — | no gate-results |
 | `sync_top` | intake | qualification | certified |

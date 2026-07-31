@@ -1,6 +1,6 @@
 # CHANGELOG — channel_est_top
 
-## 2026-07-28 — hdl-coding 规范整改
+## [0.1.0] — 2026-07-28 hdl-coding 规范整改
 
 按 `docs/rules/01-hdl.md` 五条红线整改全部 RTL，并修复两个让整条信道估计链
 从未产出过结果的功能缺陷（不修就无法做任何验证）。

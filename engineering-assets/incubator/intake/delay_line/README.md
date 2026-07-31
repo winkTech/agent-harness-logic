@@ -25,3 +25,9 @@
 - P_DELAY=2(最小)与 P_DELAY=7 双例化,共 9082 拍逐拍比对 0 失配
 - 随机气泡流 + 连续满流,valid 计数守恒(复位丢弃的在途 beat 按契约扣账)
 - 运行中复位后 P_DELAY 拍内 o_valid 无残留,恢复正常
+
+## 限制与验证边界 (limitations)
+
+- **定长延迟,无背压契约**(库级裁决:与 axis_skid_buffer 正交分职)。
+- 仅默认参数实测;SRL 推断未做综合取证。
+- **qualification 级证据边界**:自检 TB 功能验证已实跑,无综合时序/资源取证(certified 转正时按 pg-synth 流程补)。

@@ -1,6 +1,6 @@
 # CHANGELOG — sync_top
 
-## 2026-07-28 — hdl-coding 规范整改
+## [0.1.0] — 2026-07-28 hdl-coding 规范整改
 
 按 `docs/rules/01-hdl.md` 五条红线整改全部 RTL。**只动编码规范层面**；
 算法/数值层面的遗留缺陷未改，逐条列在 README「遗留缺陷」表。
