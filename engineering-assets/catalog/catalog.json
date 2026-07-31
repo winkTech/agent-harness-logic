@@ -395,7 +395,7 @@
       "asset_uid": "model_comm_channel_est",
       "name": "ls_channel_est_golden",
       "kind": "golden-model",
-      "version": "1.0.0",
+      "version": "1.1.0",
       "owner": "lihan",
       "level": "intake",
       "dir": "models/comm/channel_est",

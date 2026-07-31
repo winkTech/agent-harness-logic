@@ -64,7 +64,7 @@
    "project": "reference-evidence",
    "project_ref": "models/comm/channel_est",
    "asset_uid": "model_comm_channel_est",
-   "version_pinned": "1.0.0",
+   "version_pinned": "1.1.0",
    "config": {},
    "integrated_at": "2026-07-26T00:00:00Z",
    "status": "active",
@@ -74,13 +74,14 @@
     "channel_est_top"
    ],
    "issues": [
-    "exported-vectors"
+    "exported-vectors",
+    "adr-002-estimation-basis-revalidation"
    ],
    "badge_gap": [
     "exported-vectors"
    ],
    "deferred_reason": "golden/reference source is retained as correctness evidence",
-   "last_reviewed": "2026-07-26"
+   "last_reviewed": "2026-07-31"
   },
   {
    "id": "ITG-0004",

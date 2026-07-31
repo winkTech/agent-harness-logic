@@ -35,7 +35,7 @@ Assets: 23 · RED: 0 · YELLOW: 3
 | UID | Version | Kind | Directory | Machine cleared | Blocking | Used by | Badge gap |
 |---|---:|---|---|---|---|---|---|
 | `channel_est_top` | 0.1.0 | rtl | `incubator/intake/channel_est_top` | qualification | certified | — | G-B-03, G-C-01, G-C-02, G-C-04, G-C-05, G-GATE-01, G-SIGN-01, axis-contract, bit-true-vectors, vivado-timing |
-| `model_comm_channel_est` | 1.0.0 | golden-model | `models/comm/channel_est` | — | no gate-results | 1 | exported-vectors |
+| `model_comm_channel_est` | 1.1.0 | golden-model | `models/comm/channel_est` | — | no gate-results | 1 | exported-vectors |
 | `model_comm_ldpc` | 1.0.0 | golden-model | `models/comm/ldpc` | — | no gate-results | 1 | exported-vectors |
 | `model_comm_ofdm` | 1.0.0 | golden-model | `models/comm/ofdm` | — | no gate-results | 1 | exported-vectors |
 | `model_comm_synch` | 1.0.0 | golden-model | `models/comm/synch` | — | no gate-results | 1 | cfo-correction, exported-vectors |

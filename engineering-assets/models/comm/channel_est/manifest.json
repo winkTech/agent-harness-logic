@@ -3,7 +3,7 @@
   "asset_uid": "model_comm_channel_est",
   "name": "ls_channel_est_golden",
   "kind": "golden-model",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "owner": "lihan",
   "maturity": {
     "level": "intake"
@@ -16,8 +16,20 @@
     {
       "role": "reference",
       "trait": "普遍性",
+      "path": "lts_channel_est.m",
+      "note": "默认估计基础 (ADR-002): 2×LTS 平均全用载波 LS, 无插值; 配 lts_seq.m (802.11a LTS 序列) 与 pilot_phase_track.m (4 导频 CPE 跟踪)"
+    },
+    {
+      "role": "reference",
+      "trait": "普遍性",
+      "path": "sim_frame.m",
+      "note": "帧级激励 (ADR-002 配套): 2×LTS + nsym 数据符号同一信道实现, 可注入残余 CFO"
+    },
+    {
+      "role": "reference",
+      "trait": "普遍性",
       "path": "ls_channel_est.m",
-      "note": "浮点 LS 信道估计参考 (H_est = Y(pilot)./X_pilot) + linear/spline/dft 三种插值; DC/保护子载波置 1; 可跨项目当基准"
+      "note": "备选路径 (受采样定理约束, ADR-002): 浮点 LS + linear/spline/dft 插值; dft 已修归一化与网格偏移补偿; DC/保护子载波置 1"
     },
     {
       "role": "reference",
@@ -33,14 +45,34 @@
     }
   ],
   "vectors": {
-    "config": "802.11a OFDM: N=64, N_pilot=4 @ {-21,-7,7,21}, est_method=ls_linear, 16qam, SNR=20dB, Q2.14",
-    "provenance": "向量产物 (rx_chEst.bin / expected_chEst.bin / vector_config.txt) 未随源入库 — 源树 knowledge/primary/domains/comm/channel_est/ 下无 vectors/ 目录, generate_vectors.m 的导出产物从未提交。tb_chEst_cosim.sv 与 run_rtl_cosim.m 依赖这些文件, cosim 当前不可运行, 无法抽查常量轨/全同值健康度。需 MATLAB 跑 run_channel_sim.m -> generate_vectors.m 生成后方可做 bit-true 对标。golden .m 源码未改动。"
+    "config": "802.11a OFDM: N=64, 估计基础=长训练符号 LS (ADR-002), 导频 {-21,-7,7,21} 仅 CPE 跟踪, 16qam, SNR=20dB, Q2.14",
+    "provenance": "估计基础已按 ADR-002 改为 LTS-LS (2026-07-31, run_all_tests 7/7), 旧 ls_linear 向量语义作废。generate_vectors.m 尚未按新基础改造 — cosim 向量导出随 channel_est_top RTL 架构重排阶段一并做, 在此之前 bit-true 对标不可用。"
   },
   "sources": [
     {
+      "path": "lts_seq.m",
+      "role": "reference",
+      "sha256": "20b3c8accee082ece1cdc6433fd04af4b8abb3a1dcc11e1136270019838deb4e"
+    },
+    {
+      "path": "lts_channel_est.m",
+      "role": "reference",
+      "sha256": "ad3c7de3b49eb67c4b010f3f9b9850aef2065c422af1211e7200b73540790470"
+    },
+    {
+      "path": "pilot_phase_track.m",
+      "role": "reference",
+      "sha256": "0bce6954d91aa0c578ab5b7a03ef0a50b4d6dafc825f610f7436879a3b9065d1"
+    },
+    {
+      "path": "sim_frame.m",
+      "role": "reference",
+      "sha256": "5008cd84ede75e1d6e95f6097fb0ba154bf02c18c6acbe782c09758ce43c618e"
+    },
+    {
       "path": "ls_channel_est.m",
       "role": "reference",
-      "sha256": "640b6ad45e424e99dd988cc2e12d7b36e4f4c457404160d4bc1fd40a7e0b317c"
+      "sha256": "ef26634b09ebfda977de5e6d8e09e955858e9e8f95c4d18674d21c850a81e4eb"
     },
     {
       "path": "sim_channel.m",
@@ -55,12 +87,12 @@
     {
       "path": "run_channel_sim.m",
       "role": "harness",
-      "sha256": "f98b64eaba1d21cbe56208f9926748ca415b4b9d5b86bccdc235d48d5f5ff25a"
+      "sha256": "05c66196c977c26e92d9b07535d551119e307da1e6cb76e7838e225df0ce0021"
     },
     {
       "path": "run_all_tests.m",
       "role": "harness",
-      "sha256": "483b03072c65d0a011dc64df4e33cd4ba53290c7e4f392acec271147f5b6c053"
+      "sha256": "4cb01e24adc9c739584b04114580e752c665d31034dc597d429cb777632e068a"
     },
     {
       "path": "src/generate_vectors.m",
@@ -68,29 +100,39 @@
       "sha256": "ff7dae4f7748bbd83ebf79ca548840a3749e6530930b350aaba14e3e92122b2d"
     },
     {
+      "path": "tests/test_lts_ls.m",
+      "role": "test",
+      "sha256": "662eaea24d51f80093ff397bda6d279a5acf758bbf72184553805f4962670bb7"
+    },
+    {
+      "path": "tests/test_phase_track.m",
+      "role": "test",
+      "sha256": "673447cb145020c7b75518c560820a6fafc5417d01aee1c962cb374a50fba525"
+    },
+    {
       "path": "tests/test_ls_linear.m",
       "role": "test",
-      "sha256": "084558328d241810b6dc5fa3093d6501a89d3b2f4c76b7b189116351bb7df532"
+      "sha256": "4d949ee11fa7b45076f52e2e4c60a75e9cd23f0b495ffad880c5e96071d8499a"
     },
     {
       "path": "tests/test_ls_dft.m",
       "role": "test",
-      "sha256": "830d5deac0def85a2ae956ac3e01a183e46e851803f298fa73270a42980910fc"
+      "sha256": "6e09caa5700a0766d32a4053b85192bf59b8f6b7219a95d64a6c73498f64cc19"
     },
     {
       "path": "tests/test_awgn.m",
       "role": "test",
-      "sha256": "b82e0fb6f0ffa4d556bb8e99731c087c45740511e4f5ae38bc2dd8f751dec0cd"
+      "sha256": "96f3cae2a292b450bf8793410ea07657c01ad3a68a9bdaad1a0fc267097722bb"
     },
     {
       "path": "tests/test_snr_range.m",
       "role": "test",
-      "sha256": "688e3b050b0a09ec02a526d59fe256edbae665f6e4f376db56a10a52a68ca7e9"
+      "sha256": "1b7fb03efdb5cf5f278cae1b02292abe179c1cd69874410f92c73ac97c6f4412"
     },
     {
       "path": "tests/test_mod_order.m",
       "role": "test",
-      "sha256": "1eb7f6e06c77344dfcf06986df893d8784acfef353803e342bc0a42b9668d848"
+      "sha256": "22a9e3e628a8d310d887a534bf102e1acb2a7c9a09b31e40101645822cc63ceb"
     }
   ],
   "waivers": [],
