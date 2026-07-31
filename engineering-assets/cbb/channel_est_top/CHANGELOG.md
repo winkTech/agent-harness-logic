@@ -1,5 +1,17 @@
 # CHANGELOG — channel_est_top
 
+## [1.0.0] — 2026-08-01 certified 认证
+
+内容与 0.2.1 一致，无代码改动；本条为认证记账：
+
+- G-SIGN-01：owner lihan 具名签署（manifest.signoff，含证据复核清单与
+  7 条已接受限制）。
+- gate-runner 20/20 全绿，达到 **CERTIFIED**；证据快照
+  `evidence/channel_est_top/1.0.0/SNAPSHOT.json`（哈希锁定）。
+- registry ITG-0001 repin 1.0.0，maturity_status → certified。
+- 全流程：ADR-002 裁决 → golden 7/7 → RTL 架构重排 → bit-true cosim
+  2048 点 0 失配 → qualification 证据链 → 签署，全链实跑取证。
+
 ## [0.2.1] — 2026-08-01 qualification 推进：G-A-04 拆分 + certified 证据链
 
 行为零变化的结构拆分与证据补齐（cosim 拆分后复跑仍 **2048 样点 0 失配**）：

@@ -2,10 +2,24 @@
   "schema_version": "1.0",
   "asset_uid": "channel_est_top",
   "name": "channel_est_top",
-  "version": "0.2.1",
+  "version": "1.0.0",
   "owner": "lihan",
   "maturity": {
-    "level": "qualification"
+    "level": "certified",
+    "evidence_ref": "engineering-assets/evidence/channel_est_top/1.0.0/"
+  },
+  "signoff": {
+    "by": "lihan",
+    "at": "2026-08-01",
+    "scope": [
+      "证据已复核: alignment-report.json(bit-true cosim 2048 样点 0 失配, 位真镜像 0 容差) / reset-sim.json(帧中再复位 26 个复位控制寄存器逐一比对) / stability 四子结果(boundary/stress/regression/backpressure, 含 T7 背靠背 8 符号+随机反压 512 点) / timing-summary.rpt / utilization.rpt / envelope-check.json (WNS +4.673ns @ 100MHz, achieved 187.7MHz; LUT 653/900, FF 611/750, BRAM 0.5/2, DSP 8/20) / cdc-report.json(单时钟域结构扫描, cdc_tool=na)",
+      "正确性锚: golden model_comm_channel_est 1.2.0 (run_all_tests 7/7, ADR-002 LTS-LS 基础)",
+      "已接受限制: 导频极性固定 [1,1,-1,1], 802.11a 逐符号扰码未建模 (golden 契约, 升级时同步)",
+      "已接受限制: 定点语义与 generate_vectors.m 位真镜像逐字耦合, 单侧改动即 cosim 失配",
+      "已接受限制: i_frame_start 须领先首个 LTS 样点 ≥1 拍; 符号尾/帧起始存在 tready 节流",
+      "已接受限制: UVM 环境断链 (判卷不依赖); 综合级证据非布线后收敛, 上板以实现后时序为准",
+      "已接受限制: CORDIC 14 迭代, 角度量化 ≈1.2e-4 rad, 更高相位精度场景不适用"
+    ]
   },
   "device": {
     "part": "xc7k325tffg900-2"

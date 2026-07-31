@@ -1,10 +1,12 @@
-<!-- asset-status: qualification v0.2.1 -->
-<!-- 级别横幅（由成熟度派生）: QUALIFICATION — 机器门全绿，certified 待签字 -->
+<!-- asset-status: certified v1.0.0 -->
+<!-- 级别横幅（由成熟度派生）: CERTIFIED — 全门绿 + owner 签署 (2026-08-01) -->
 
 # channel_est_top
 
-> `asset_uid: channel_est_top` · `version: 0.2.1` · `owner: lihan`
-> 成熟度: **qualification** — 见 `../../../var/gates/pg/channel_est_top/gate-results.json`
+> `asset_uid: channel_est_top` · `version: 1.0.0` · `owner: lihan`
+> 成熟度: **certified** — 签署与证据快照见 manifest.signoff 与
+> `../../evidence/channel_est_top/1.0.0/`；机器判据见
+> `../../var/gates/pg/channel_est_top/gate-results.json`
 
 ## 用途
 

@@ -5,9 +5,9 @@
   {
    "id": "ITG-0001",
    "project": "phy-intake",
-   "project_ref": "incubator/intake/channel_est_top",
+   "project_ref": "cbb/channel_est_top",
    "asset_uid": "channel_est_top",
-   "version_pinned": "0.2.1",
+   "version_pinned": "1.0.0",
    "config": {
     "DATA_W": 16,
     "N_FFT": 64,
@@ -15,12 +15,11 @@
    },
    "integrated_at": "2026-07-26T00:00:00Z",
    "status": "active",
-   "maturity_status": "deferred",
+   "maturity_status": "certified",
    "owner": "lihan",
    "consumers": [],
    "issues": [],
    "badge_gap": [],
-   "deferred_reason": "0.2.1 repin: 三笔债全部还清 — bit-true-vectors (cosim 2048 点 0 失配), axis-contract (tready 寄存 + TB 反压/帧界实证), vivado-timing (pg-synth 产物链, G-C-01 WNS+4.673 pass)。qualification 达标, certified 仅剩 G-SIGN-01",
    "last_reviewed": "2026-08-01"
   },
   {
