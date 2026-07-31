@@ -166,5 +166,22 @@
   },
   "waivers": [],
   "superseded_by": null,
-  "top": "channel_est_top"
+  "top": "channel_est_top",
+  "params": [
+    {
+      "name": "DATA_W",
+      "value": 16,
+      "rationale": "RTL 顶层参数默认值; I/Q 样点位宽"
+    },
+    {
+      "name": "N_FFT",
+      "value": 64,
+      "rationale": "设计常量(algorithm_spec: 64 点 OFDM), 非顶层参数; 集成登记 config 可审计项"
+    },
+    {
+      "name": "N_PILOT",
+      "value": 4,
+      "rationale": "设计常量(algorithm_spec: 导频 {-21,-7,7,21}), 非顶层参数; 估计基础裁决(MODEL-STATUS L1)可能改变此值"
+    }
+  ]
 }

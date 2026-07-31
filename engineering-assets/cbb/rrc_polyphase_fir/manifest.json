@@ -170,5 +170,32 @@
       "已接受限制: 仅默认参数经验证",
       "已接受限制: cdc_tool=na — 单时钟域, 仅结构扫描, 未经具名 CDC 工具"
     ]
-  }
+  },
+  "params": [
+    {
+      "name": "DATA_W",
+      "value": 16,
+      "rationale": "RTL 顶层参数默认值; 输入/输出样点位宽"
+    },
+    {
+      "name": "COEFF_W",
+      "value": 16,
+      "rationale": "RTL 顶层参数默认值; RRC 系数位宽(Q1.15)"
+    },
+    {
+      "name": "ACC_W",
+      "value": 38,
+      "rationale": "RTL 顶层参数默认值; 累加全精度无截断(9 抽头 16x16)"
+    },
+    {
+      "name": "SPS",
+      "value": 4,
+      "rationale": "RTL 顶层参数默认值; 每符号采样数=多相相数"
+    },
+    {
+      "name": "TAPS_PP",
+      "value": 9,
+      "rationale": "RTL 顶层参数默认值; 每相抽头数(33 taps/4 相零补齐)"
+    }
+  ]
 }
