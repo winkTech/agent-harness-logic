@@ -2,12 +2,24 @@
   "schema_version": "1.0",
   "asset_uid": "axis_skid_buffer",
   "name": "axis_skid_buffer",
-  "version": "0.1.0",
+  "version": "1.0.0",
   "owner": "lihan",
   "kind": "primitive",
+  "signoff": {
+    "by": "lihan",
+    "at": "2026-07-31",
+    "scope": [
+      "证据已复核: tb-selfcheck.json(1966 拍比对 0 失配, 1337 次保持检查) / reset-sim.json(7 寄存器逐一复位比对) / stability 四子结果(boundary/stress/regression/backpressure) / timing-summary.rpt / utilization.rpt / envelope-check.json (WNS +2.605ns @ 250MHz, WHS +0.217ns, LUT 22/80, FF 69/80, BRAM 0, DSP 0)",
+      "已接受限制: 仅 P_DWIDTH=32 实测, 其他位宽未跑",
+      "已接受限制: 综合级证据非布线后收敛, 上板以实现后时序为准",
+      "已接受限制: 无 tkeep/tstrb/tuser 旁带信号",
+      "已接受限制: 复位释放后首拍 s_axis_tready=0 (寄存 tready 固有代价)",
+      "已接受限制: 复位比对读取 7 个内部寄存器名, RTL 改名须同步 TB"
+    ]
+  },
   "maturity": {
-    "level": "qualification",
-    "evidence_ref": "engineering-assets/var/gates/pg/axis_skid_buffer/"
+    "level": "certified",
+    "evidence_ref": "engineering-assets/evidence/axis_skid_buffer/1.0.0/"
   },
   "requirement_ref": "engineering-assets/docs/comm模块族认证差距清单.md",
   "doc_refs": [
@@ -78,12 +90,29 @@
     }
   ],
   "clock": {
-    "name": "i_clk"
+    "name": "i_clk",
+    "period_ns": 4
   },
   "reset": {
     "name": "i_rst",
     "polarity": "active_high",
     "type": "sync"
+  },
+  "device": {
+    "part": "xc7k325tffg900-2",
+    "family": "kintex7",
+    "note": "与库内 rrc/ldpc 统一器件; OOC 评估"
+  },
+  "constraints": {
+    "target": {
+      "fmax": "250MHz",
+      "fmax_mhz": 250,
+      "lut": 80,
+      "ff": 80,
+      "bram": 0,
+      "dsp": 0,
+      "note_budget": "结构推算: 数据主寄存+skid 各 P_DWIDTH+1 位 (2x33) + 控制 3 FF ≈ 69 FF; LUT 为数据 2:1 选择 + ready/装载译码, 预算各留 ~15% 裕量。纯寄存切片, BRAM/DSP 恒 0。实测见 envelope-check.json。"
+    }
   },
   "sources": [
     {
@@ -94,7 +123,12 @@
     {
       "path": "tb/tb_axis_skid_buffer.sv",
       "role": "tb",
-      "sha256": "f210be759ad9da62defa61341d4a25b7a9bc6d886817ebd2d2ef5fe22c30e9c5"
+      "sha256": "f57648ac7c7fb8ae58652d996c6f338d9684222e7fbcc219dd6b538f08ab8de5"
+    },
+    {
+      "path": "constraints/axis_skid_buffer.xdc",
+      "role": "constraint",
+      "sha256": "e11e1a9077300506e1526b97b6d74ad8c7cd842a75dd2fb460cc3916572603a9"
     }
   ],
   "waivers": [],

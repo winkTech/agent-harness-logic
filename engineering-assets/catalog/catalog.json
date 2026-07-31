@@ -3,11 +3,11 @@
   "summary": {
     "asset_count": 23,
     "by_level": {
-      "certified": 4,
+      "certified": 5,
       "intake": 7,
-      "qualification": 12
+      "qualification": 11
     },
-    "red_count": 9,
+    "red_count": 8,
     "yellow_count": 3,
     "unregistered_root_count": 2
   },
@@ -17,12 +17,6 @@
   ],
   "drift": {
     "red": [
-      {
-        "code": "D3",
-        "asset_uid": "axis_skid_buffer",
-        "dir": "incubator/intake/axis_skid_buffer",
-        "message": "declared level qualification exceeds machine-cleared intake"
-      },
       {
         "code": "D3",
         "asset_uid": "cdc_sync",
@@ -98,38 +92,28 @@
       "asset_uid": "axis_skid_buffer",
       "name": "axis_skid_buffer",
       "kind": "primitive",
-      "version": "0.1.0",
+      "version": "1.0.0",
       "owner": "lihan",
-      "level": "qualification",
-      "dir": "incubator/intake/axis_skid_buffer",
+      "level": "certified",
+      "dir": "cbb/axis_skid_buffer",
       "top": "axis_skid_buffer",
       "golden_model_ref": null,
       "fidelity": "na",
-      "device": null,
-      "target_fmax": null,
-      "signoff_at": null,
+      "device": "xc7k325tffg900-2",
+      "target_fmax": "250MHz",
+      "signoff_at": "2026-07-31",
       "waiver_count": 0,
       "used_by": [],
-      "badge_gap": [
-        "G-B-03",
-        "G-C-01",
-        "G-C-02",
-        "G-C-04",
-        "G-C-05",
-        "G-DOC-03",
-        "G-DOC-04",
-        "G-GATE-01",
-        "G-SIGN-01"
-      ],
+      "badge_gap": [],
       "documents": {
         "readme": true,
-        "changelog": false,
+        "changelog": true,
         "limitations": false
       },
       "gates": {
-        "cleared_level": "intake",
-        "blocking_at": "qualification",
-        "pass_count": 11
+        "cleared_level": "certified",
+        "blocking_at": null,
+        "pass_count": 20
       }
     },
     {

@@ -608,12 +608,15 @@ function runGates(pkgDir, manifest, repoRoot) {
     });
 
     // G-GATE-01 证据齐备 — 判 pass 的 tool 类门必须有对应产物文件
+    // G-B-03 产物按资产类分锚(决策⑦): 算法资产=alignment-report, 原语=tb-selfcheck
     const REQ = [
       { f: 'timing-summary.rpt', for: 'G-C-01' },
       { f: 'utilization.rpt', for: 'G-C-02' },
       { f: 'envelope-check.json', for: 'G-C-01/02' },
       { f: 'synth.log', for: 'G-C-03' },
-      { f: 'alignment-report.json', for: 'G-B-03' },
+      manifest.kind === 'primitive'
+        ? { f: 'tb-selfcheck.json', for: 'G-B-03' }
+        : { f: 'alignment-report.json', for: 'G-B-03' },
     ];
     const missingEv = REQ.filter((r) => !has(r.f));
     add({

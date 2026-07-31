@@ -2,12 +2,13 @@
 
 > Generated from manifest.json and gate-results.json. Do not edit by hand.
 
-Assets: 23 · RED: 9 · YELLOW: 3
+Assets: 23 · RED: 8 · YELLOW: 3
 
 ## certified
 
 | UID | Version | Kind | Directory | Machine cleared | Blocking | Used by | Badge gap |
 |---|---:|---|---|---|---|---|---|
+| `axis_skid_buffer` | 1.0.0 | primitive | `cbb/axis_skid_buffer` | certified | — | — | — |
 | `ldpc_codec` | 1.0.0 | rtl | `cbb/ldpc_codec` | certified | — | — | G-B-03, G-C-03, signoff, vivado-timing |
 | `pulse_merge` | 0.4.0 | rtl | `cbb/pulse_merge` | certified | — | — | board-validation, upstream-commit-unpinned |
 | `rrc_polyphase_fir` | 0.4.0 | rtl | `cbb/rrc_polyphase_fir` | certified | — | 1 | board-validation, hold-closure |
@@ -17,7 +18,6 @@ Assets: 23 · RED: 9 · YELLOW: 3
 
 | UID | Version | Kind | Directory | Machine cleared | Blocking | Used by | Badge gap |
 |---|---:|---|---|---|---|---|---|
-| `axis_skid_buffer` | 0.1.0 | primitive | `incubator/intake/axis_skid_buffer` | intake | qualification | — | G-B-03, G-C-01, G-C-02, G-C-04, G-C-05, G-DOC-03, G-DOC-04, G-GATE-01, G-SIGN-01 |
 | `cdc_sync` | 0.1.0 | primitive | `incubator/intake/cdc_sync` | intake | qualification | — | G-B-03, G-C-01, G-C-02, G-C-04, G-C-05, G-DOC-03, G-DOC-04, G-GATE-01, G-SIGN-01 |
 | `complex_multiplier` | 0.1.0 | primitive | `incubator/intake/complex_multiplier` | intake | qualification | — | G-B-03, G-C-01, G-C-02, G-C-04, G-C-05, G-DOC-03, G-DOC-04, G-GATE-01, G-SIGN-01 |
 | `crc32` | 0.1.0 | primitive | `incubator/intake/crc32` | intake | qualification | — | G-B-03, G-C-01, G-C-02, G-C-04, G-C-05, G-DOC-03, G-DOC-04, G-GATE-01, G-SIGN-01 |

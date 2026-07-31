@@ -10,12 +10,22 @@
 //   - 消息一律 ASCII, 保证在任意控制台代码页下证据可读。
 //
 // 检查项:
-//   C1 数据完整性  : 出口序列 == 入口序列 (不丢/不重/不乱序)
+//   C1 数据完整性  : 出口序列 == 入口序列 (不丢/不重/不乱序, 含 tlast)
 //   C2 AXI-S 稳定性: tvalid 拉高后未被接收前, tvalid 不得撤回且 tdata/tlast 不得变化
 //   C3 无多余输出  : 出口握手时参考队列不得为空
 //   C4 满吞吐      : tvalid/tready 恒高时逐拍成交
-//   C5 复位        : 复位期间 tvalid=0; 复位后不得残留旧数据
+//   C5 复位        : 复位期间 tvalid=0; 复位后不得残留旧数据; 逐寄存器复位比对
 //   C6 排空        : 结束时参考队列必须为空 (入口全部流出)
+//   C7 容量边界    : 出口堵死时缓冲(主+skid)填满后 tready 必须撤销 (防溢出窗口)
+//
+// 证据落盘 (+EVID_DIR=<dir>, 可选; 目录及 stability/ 子目录须预先存在):
+//   tb-selfcheck.json          G-B-03 原语自检实跑证据 {pass, compares, tool}
+//   reset-sim.json             G-C-04 逐寄存器复位比对
+//   stability/boundary.json    G-C-05 子结果: 单/双 beat 帧, tlast 边界, 容量边界
+//   stability/stress.json      G-C-05 子结果: 3000 拍随机握手浸泡
+//   stability/regression.json  G-C-05 子结果: 确定性满吞吐 + 复位后恢复
+//   stability/backpressure.json G-C-05 子结果: 持续/重度背压 + 保持语义
+//   仅在全部检查通过后写入 (fail-fast: 任一失败 $fatal, 不产证据 => 门禁 blocked)
 //==============================================================================
 module tb_axis_skid_buffer;
 
@@ -68,6 +78,19 @@ module tb_axis_skid_buffer;
     int unsigned n_stallchk = 0;   // C2 稳定性检查命中次数
     string       s_phase    = "init";
     bit          b_active   = 1'b0;
+
+    // 子场景出口比对计数 (G-C-05 证据)
+    int unsigned nb_regression   = 0;
+    int unsigned nb_boundary     = 0;
+    int unsigned nb_stress       = 0;
+    int unsigned nb_backpressure = 0;
+    int unsigned ph_base         = 0;
+
+    // 证据落盘
+    string evid_dir;
+    bit    b_evid;
+    string rst_json = "";
+    initial b_evid = $value$plusargs("EVID_DIR=%s", evid_dir);
 
     //==========================================================================
     // 确定性伪随机 (xorshift32)
@@ -189,6 +212,80 @@ module tb_axis_skid_buffer;
         m_axis_tready = rdy;
     endtask
 
+    // 显式 tlast 版本 (boundary 场景用)
+    task automatic beat_x(input bit vld, input bit rdy, input bit lst);
+        @(negedge i_clk);
+        if (vld && !(s_axis_tvalid && !s_axis_tready)) begin
+            r_payload     = r_payload + 32'h0001_0001;
+            s_axis_tdata  = r_payload;
+            s_axis_tlast  = lst;
+        end
+        s_axis_tvalid = vld;
+        m_axis_tready = rdy;
+    endtask
+
+    //==========================================================================
+    // C5 逐寄存器复位比对 (证据进 reset-sim.json)
+    //==========================================================================
+    task automatic rst_check(input string rname, input logic [31:0] got, input logic [31:0] want);
+        automatic bit ok = (got === want);
+        if (!ok) begin
+            n_mismatch++;
+            $display("[FAIL] reset reg %s got=%h want=%h", rname, got, want);
+        end
+        rst_json = {rst_json, (rst_json.len() > 0 ? ",\n    " : ""),
+                    $sformatf("{\"reg\":\"u_dut.%s\",\"got\":%0d,\"want\":%0d,\"pass\":%s}",
+                              rname, got, want, ok ? "true" : "false")};
+    endtask
+
+    //==========================================================================
+    // 证据落盘 (仅全绿路径调用)
+    //==========================================================================
+    task automatic write_sub(input string name, input int unsigned beats, input string reason);
+        automatic int fd = $fopen({evid_dir, "/stability/", name, ".json"}, "w");
+        if (fd == 0) $fatal(1, "cannot write stability evidence: %s", name);
+        $fdisplay(fd, "{\"pass\": true, \"beats\": %0d, \"reason\": \"%s\", \"tool\": \"ModelSim 10.6c\", \"tb\": \"tb_axis_skid_buffer\"}",
+                  beats, reason);
+        $fclose(fd);
+    endtask
+
+    task automatic dump_evidence();
+        automatic int fd;
+        if (!b_evid) return;
+        fd = $fopen({evid_dir, "/tb-selfcheck.json"}, "w");
+        if (fd == 0) $fatal(1, "cannot write tb-selfcheck.json");
+        $fdisplay(fd, "{");
+        $fdisplay(fd, "  \"id\": \"G-B-03\",");
+        $fdisplay(fd, "  \"pass\": true,");
+        $fdisplay(fd, "  \"compares\": %0d,", n_checks);
+        $fdisplay(fd, "  \"mismatch\": %0d,", n_mismatch);
+        $fdisplay(fd, "  \"stall_checks\": %0d,", n_stallchk);
+        $fdisplay(fd, "  \"tool\": \"ModelSim 10.6c\",");
+        $fdisplay(fd, "  \"tb\": \"tb_axis_skid_buffer\",");
+        $fdisplay(fd, "  \"dwidth\": %0d", P_DWIDTH);
+        $fdisplay(fd, "}");
+        $fclose(fd);
+
+        fd = $fopen({evid_dir, "/reset-sim.json"}, "w");
+        if (fd == 0) $fatal(1, "cannot write reset-sim.json");
+        $fdisplay(fd, "{");
+        $fdisplay(fd, "  \"id\": \"G-C-04.reset\",");
+        $fdisplay(fd, "  \"method\": \"mid-run re-reset held 3 clk, per-register compare vs declared reset value\",");
+        $fdisplay(fd, "  \"registers\": [");
+        $fdisplay(fd, "    %s", rst_json);
+        $fdisplay(fd, "  ]");
+        $fdisplay(fd, "}");
+        $fclose(fd);
+
+        write_sub("regression",   nb_regression,   "deterministic full-rate window + post-reset resume, scoreboard 0 mismatch");
+        write_sub("boundary",     nb_boundary,     "single-beat frame, two-beat frame with tlast, capacity-full tready deassert check");
+        write_sub("stress",       nb_stress,       "3000-cycle random valid/ready soak, scoreboard 0 mismatch");
+        write_sub("backpressure", nb_backpressure, "sustained hold + heavy ~12.5%% ready duty, C2 hold semantics enforced");
+    endtask
+
+    //==========================================================================
+    // 主序列
+    //==========================================================================
     initial begin
         // ── 复位 ──
         s_phase       = "reset";
@@ -209,8 +306,9 @@ module tb_axis_skid_buffer;
         @(negedge i_clk);
         b_active = 1'b1;
 
-        // ── C4: 满吞吐 —— tvalid/tready 恒高 200 拍 ──
+        // ── C4: 满吞吐 —— tvalid/tready 恒高 200 拍 (regression 子场景) ──
         s_phase = "C4-fullrate";
+        ph_base = n_checks;
         begin
             automatic int unsigned base = n_checks;
             for (int k = 0; k < 200; k++) beat(1'b1, 1'b1);
@@ -223,9 +321,39 @@ module tb_axis_skid_buffer;
                 $fatal(1, "C4 throughput");
             end
         end
+        nb_regression += n_checks - ph_base;
+
+        // ── C7/boundary: 单 beat 帧 / 双 beat 帧 / 容量边界 ──
+        s_phase = "boundary";
+        ph_base = n_checks;
+        // 单 beat 帧 (tlast=1)
+        beat_x(1'b1, 1'b1, 1'b1);
+        beat_x(1'b0, 1'b1, 1'b0);
+        repeat (3) @(negedge i_clk);
+        // 双 beat 帧 (次拍 tlast)
+        beat_x(1'b1, 1'b1, 1'b0);
+        beat_x(1'b1, 1'b1, 1'b1);
+        beat_x(1'b0, 1'b1, 1'b0);
+        repeat (3) @(negedge i_clk);
+        // 容量边界: 堵死出口连续压 4 拍 (主寄存+skid 容量=2, 满后 tready 必须撤销)
+        beat_x(1'b1, 1'b0, 1'b0);
+        beat_x(1'b1, 1'b0, 1'b0);
+        beat_x(1'b1, 1'b0, 1'b0);
+        beat_x(1'b1, 1'b0, 1'b1);
+        repeat (4) @(negedge i_clk);
+        if (s_axis_tready !== 1'b0) begin
+            $display("[FAIL] tready still high with main+skid full (overrun window)");
+            $fatal(1, "C7 capacity: tready must deassert when full");
+        end
+        // 放行排空 (保持中的 beat 按 AXI 语义继续给到握手)
+        repeat (6) beat_x(1'b1, 1'b1, 1'b1);
+        beat_x(1'b0, 1'b1, 1'b0);
+        repeat (6) @(negedge i_clk);
+        nb_boundary += n_checks - ph_base;
 
         // ── 下游持续背压, 上游持续给数 (填满 skid) ──
         s_phase = "backpressure-hold";
+        ph_base = n_checks;
         beat(1'b1, 1'b0);
         beat(1'b1, 1'b0);
         beat(1'b1, 1'b0);
@@ -236,8 +364,19 @@ module tb_axis_skid_buffer;
         beat(1'b0, 1'b1);
         repeat (6) @(negedge i_clk);
 
-        // ── 随机 valid/ready 组合 ──
+        // ── 重度背压: ~12.5% ready 占空比, 持续给数 ──
+        s_phase = "backpressure-heavy";
+        for (int k = 0; k < 400; k++) begin
+            automatic logic [31:0] rv = next_rand();
+            beat(1'b1, rv[2] & rv[5] & rv[9]);
+        end
+        beat(1'b0, 1'b1);
+        repeat (10) @(negedge i_clk);
+        nb_backpressure += n_checks - ph_base;
+
+        // ── 随机 valid/ready 组合 (stress 子场景) ──
         s_phase = "random-handshake";
+        ph_base = n_checks;
         for (int k = 0; k < 3000; k++) begin
             automatic logic [31:0] rv = next_rand();
             beat(rv[0] | rv[1], rv[2] & rv[3] | rv[4]);
@@ -246,15 +385,29 @@ module tb_axis_skid_buffer;
         s_phase = "drain";
         beat(1'b0, 1'b1);
         repeat (20) @(negedge i_clk);
+        nb_stress += n_checks - ph_base;
 
-        // ── C5: 运行中再复位 ──
+        // ── C5: 运行中再复位 + 逐寄存器复位比对 ──
         s_phase  = "C5-rereset";
+        b_active = 1'b0;
+        // 先制造非空状态: 堵死出口塞 2 拍再拉复位, 复位必须清干净
+        b_active = 1'b1;
+        beat(1'b1, 1'b0);
+        beat(1'b1, 1'b0);
         b_active = 1'b0;
         @(negedge i_clk);
         i_rst         = 1'b1;
         s_axis_tvalid = 1'b0;
         m_axis_tready = 1'b0;
         repeat (3) @(negedge i_clk);
+        rst_check("ro_tvalid",    u_dut.ro_tvalid,    32'd0);
+        rst_check("ro_sready",    u_dut.ro_sready,    32'd0);
+        rst_check("ro_tdata",     u_dut.ro_tdata,     32'd0);
+        rst_check("ro_tlast",     u_dut.ro_tlast,     32'd0);
+        rst_check("r_skid_valid", u_dut.r_skid_valid, 32'd0);
+        rst_check("r_skid_data",  u_dut.r_skid_data,  32'd0);
+        rst_check("r_skid_last",  u_dut.r_skid_last,  32'd0);
+        if (n_mismatch != 0) $fatal(1, "C5 per-register reset compare failed");
         if (m_axis_tvalid !== 1'b0) begin
             $display("[FAIL] m_axis_tvalid=%b after re-reset (expect 0)", m_axis_tvalid);
             $fatal(1, "C5 re-reset behaviour");
@@ -265,10 +418,13 @@ module tb_axis_skid_buffer;
         @(negedge i_clk);
         b_active = 1'b1;
 
+        // ── 复位后恢复 (regression 子场景) ──
         s_phase = "C5-resume";
+        ph_base = n_checks;
         for (int k = 0; k < 40; k++) beat(1'b1, 1'b1);
         beat(1'b0, 1'b1);
         repeat (8) @(negedge i_clk);
+        nb_regression += n_checks - ph_base;
 
         // ── 收尾判定 ──
         b_active = 1'b0;
@@ -285,11 +441,19 @@ module tb_axis_skid_buffer;
         if (n_mismatch != 0) begin
             $fatal(1, "[FAIL] %0d mismatches", n_mismatch);
         end
+        if (nb_regression == 0 || nb_boundary == 0 || nb_stress == 0 || nb_backpressure == 0) begin
+            $fatal(1, "[FAIL] a stability sub-scenario compared zero beats (anti-false-green rule)");
+        end
+
+        dump_evidence();
+
         $display("========================================================");
         $display("[PASS] tb_axis_skid_buffer");
         $display("       beats in  = %0d", n_in);
         $display("       beats out = %0d (compared, 0 mismatch)", n_checks);
         $display("       stall-stability checks = %0d", n_stallchk);
+        $display("       sub: regression=%0d boundary=%0d stress=%0d backpressure=%0d",
+                 nb_regression, nb_boundary, nb_stress, nb_backpressure);
         $display("       P_DWIDTH = %0d", P_DWIDTH);
         $display("========================================================");
         $finish;

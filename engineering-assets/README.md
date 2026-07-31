@@ -51,7 +51,7 @@ node tools/gate-runner.cjs <asset-package-dir> --repo-root ..
 <!-- BEGIN:CATALOG:STATUS -->
 | 资产 | 声明级别 | 机器达到级别 | 阻塞门 |
 |---|---|---|---|
-| `axis_skid_buffer` | qualification | intake | qualification |
+| `axis_skid_buffer` | certified | certified | — |
 | `cdc_sync` | qualification | intake | qualification |
 | `channel_est_top` | intake | qualification | certified |
 | `complex_multiplier` | qualification | intake | qualification |
