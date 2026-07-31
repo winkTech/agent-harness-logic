@@ -1,5 +1,15 @@
 # CHANGELOG — ldpc_codec
 
+## [1.0.0] — 2026-07-31 转正 certified
+
+- ADR-001 accepted（方案 A 分级判据）：decoder `s_axis_llr_tready` 组合-自-寄存
+  判定合规（扇入锥 = 内部寄存态，无 input 依赖），encoder tready 已寄存。
+- version 0.3.0 → 1.0.0；evidence_ref 指向 `evidence/ldpc_codec/1.0.0/` 快照。
+- signoff（owner: lihan）+ maturity certified；`git mv` incubator/intake → cbb/。
+- 证据终态：gate-runner 18/18；decoder bit-true 3240 样点 0 失配；
+  encoder bit-true 5/5（含 run_sim.do PT ROM 拷贝修复，修复前非零帧全 X 假绿风险）；
+  OOC synth WNS 4.958ns @ 10ns / LUT 410 / FF 244 / BRAM 3 / DSP 0。
+
 ## 2026-07-31 — 编码器 bit-true 闭环 (PT 算法)
 
 ### 背景

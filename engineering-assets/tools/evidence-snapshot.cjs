@@ -8,8 +8,10 @@ const path = require('node:path');
 const { scanRepository } = require('./catalog-gen.cjs');
 
 const MAX_BYTES = 1024 * 1024;
-const ALLOWED = /^(?:gate-results\.json|RL-OUT\.json|(?:G|CS|RL-OUT)-[A-Z0-9./_-]+\.json|envelope-check\.json|alignment-report\.json|reset-sim\.json|cdc-report\.json|timing-summary\.rpt|utilization\.rpt|clocks\.rpt|synth-meta\.json|stability[\\/][^\\/]+\.json)$/;
-const EXCLUDED = /(?:^|[\\/])(?:synth\.log|backup|work|waves?|.*\.(?:wlf|vcd|vpd|fsdb))(?=$|[\\/])/i;
+const ALLOWED = /^(?:gate-results\.json|RL-OUT\.json|(?:G|CS|RL-OUT)-[A-Z0-9./_-]+\.json|envelope-check\.json|alignment-report\.json|reset-sim\.json|cdc-report\.json|synthesis-timing-evidence\.json|timing-summary\.rpt|utilization\.rpt|clocks\.rpt|synth-meta\.json|stability[\\/][^\\/]+\.json)$/;
+// trace/ = bit-true 对拍原始数据(hex/txt, MB 级), 性质同波形: 可由 TB+golden 复现,
+// 摘要在 alignment-report.json 里 —— 不入快照
+const EXCLUDED = /(?:^|[\\/])(?:synth\.log|backup|work|waves?|trace|.*\.(?:wlf|vcd|vpd|fsdb))(?=$|[\\/])/i;
 
 function canonicalBytes(file) {
   const bytes = fs.readFileSync(file);

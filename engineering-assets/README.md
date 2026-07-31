@@ -48,11 +48,33 @@ node tools/gate-runner.cjs <asset-package-dir> --repo-root ..
 
 工具切片就绪并已在 Vivado 2023.1 + ModelSim 上跑通。当前各包达到级别：
 
-| 资产 | 达到级别 | 阻塞门 |
-|---|---|---|
-| `cbb/rrc_polyphase_fir` | **certified** | — (18/18 全绿, signoff.by=lihan) |
-| `ldpc_codec` | qualification | `G-SIGN-01`（仅差具名签字，其余 17 门全绿） |
-| `ofdm_tx_top` / `channel_est_top` / `sync_top` | qualification | certified 级证据门：`G-B-03` cosim、`G-C-01/02/04/05` Vivado 报告、`G-GATE-01`、`G-SIGN-01` |
+<!-- BEGIN:CATALOG:STATUS -->
+| 资产 | 声明级别 | 机器达到级别 | 阻塞门 |
+|---|---|---|---|
+| `axis_skid_buffer` | qualification | qualification | certified |
+| `cdc_sync` | qualification | qualification | certified |
+| `channel_est_top` | intake | qualification | certified |
+| `complex_multiplier` | qualification | qualification | certified |
+| `crc32` | qualification | qualification | certified |
+| `ddr_axi4_controller` | qualification | qualification | certified |
+| `delay_line` | qualification | qualification | certified |
+| `frame_sync` | qualification | qualification | certified |
+| `ldpc_codec` | certified | certified | — |
+| `lfsr_gen` | qualification | qualification | certified |
+| `model_comm_channel_est` | intake | — | no gate-results |
+| `model_comm_ldpc` | intake | — | no gate-results |
+| `model_comm_ofdm` | intake | — | no gate-results |
+| `model_comm_rrc` | qualification | — | no gate-results |
+| `model_comm_synch` | intake | — | no gate-results |
+| `ofdm_tx_top` | intake | qualification | certified |
+| `pulse_merge` | certified | certified | — |
+| `pulse_merge_golden` | qualification | — | no gate-results |
+| `rrc_polyphase_fir` | certified | certified | — |
+| `sdp_ram` | qualification | qualification | certified |
+| `stream_elastic_pipeline` | certified | certified | — |
+| `stream_elastic_pipeline_golden` | qualification | — | no gate-results |
+| `sync_top` | intake | qualification | certified |
+<!-- END:CATALOG:STATUS -->
 
 > 2026-07-28：以上四个包完成 hdl-coding 五条红线整改，**红线类门（`G-A-00`
 > 编译 / `G-A-01` 同步复位 / `G-A-02` 命名 / `G-A-04` 尺寸 / `G-C-03` initial /

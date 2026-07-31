@@ -2,11 +2,22 @@
   "schema_version": "1.0",
   "asset_uid": "ldpc_codec",
   "name": "ldpc_codec",
-  "version": "0.3.0",
+  "version": "1.0.0",
   "owner": "lihan",
+  "signoff": {
+    "by": "lihan",
+    "at": "2026-07-31",
+    "scope": [
+      "证据已复核: timing-summary.rpt / utilization.rpt / clocks.rpt / alignment-report.json(译码器 bit-true 3240 样点 0 失配) / 编码器 bit-true 5/5 (2026-07-31 实跑) / reset-sim.json / cdc-report.json / envelope-check.json (WNS 4.958ns @ 10ns, LUT 410/900, FF 244/500, BRAM 3/3, DSP 0/0)",
+      "已接受限制: 综合顶层仅 ldpc_decoder_top, 编码器无独立综合包络证据",
+      "已接受限制: 器件归一悬案 — XDC 抬头 XCZU67DR 与实综 XC7K325T 不一致 (device.note)",
+      "已接受限制: cdc_tool=na — 单时钟域, 仅结构扫描, 未经具名 CDC 工具",
+      "tready 组合生成按 ADR-001 分级判据合规 (decoder 扇入锥=内部寄存态已实查; encoder 已寄存)"
+    ]
+  },
   "maturity": {
-    "level": "qualification",
-    "evidence_ref": "engineering-assets/var/gates/pg/ldpc_codec/"
+    "level": "certified",
+    "evidence_ref": "engineering-assets/evidence/ldpc_codec/1.0.0/"
   },
   "requirement_ref": "engineering-assets/knowledge/primary/domains/comm/ldpc/algorithm_spec.md",
   "doc_refs": [
@@ -104,12 +115,12 @@
     {
       "path": "rtl/early_term.v",
       "role": "rtl",
-      "sha256": "8ea4d6f2a039127ea1484133fe51adb54f01f0575c179784e7fefb645c55e1e6"
+      "sha256": "0289363bbbd8003d818a600df86a7592dba859a9df3342066498013494e3a29c"
     },
     {
       "path": "rtl/h_matrix_addr.v",
       "role": "rtl",
-      "sha256": "1f8ebbc3146f90d3d37c986183709a807ef75466edc8a595d2261395079b7891"
+      "sha256": "9cfcf8f3ee088b2be51b9789b8bb05202ded955412db8c54f00f41de10745db5"
     },
     {
       "path": "rtl/ldpc_controller.v",
@@ -129,7 +140,7 @@
     {
       "path": "rtl/ldpc_defines.vh",
       "role": "rtl",
-      "sha256": "6ea30520867b8011da0f84e1bf5686d203d0f74c83ff4f103c8ab1dcccf1d8ad"
+      "sha256": "1b0934d054ddb5f5df2ac745947a5ba8cbf225fed65a7a887c673d730c8ced55"
     },
     {
       "path": "rtl/ldpc_encoder_top.v",
@@ -159,62 +170,62 @@
     {
       "path": "tb/tb_ldpc_system.v",
       "role": "tb",
-      "sha256": "cc0d79227312c1fb22723a3618134481cb7d3fdae22a5b8e5d387c5dde9464f0"
+      "sha256": "800bbbb4fb6412c5cc34e534a4292ceb3b75efc6162db38dd8ef824104de2217"
     },
     {
       "path": "tb/uvm/ldpc_agent.sv",
       "role": "tb",
-      "sha256": "3f8ee75b0b8467c3bc56944536fb29c56000d9cd7815b6c7f60a3fc219f27224"
+      "sha256": "9a9db505fb3305fb7b8a6a345158598780969c78f1e84f742646d59fe9bd66ae"
     },
     {
       "path": "tb/uvm/ldpc_base_test.sv",
       "role": "tb",
-      "sha256": "8fbafe5cbff42671c42431c4b9f8a1017db84eee65358635508e82e335d961b3"
+      "sha256": "4fe0a889c1d50e1f8dfd2f0ca579adac0be4683ff0c3c5e5a3b1328e9900c5f0"
     },
     {
       "path": "tb/uvm/ldpc_basic_test.sv",
       "role": "tb",
-      "sha256": "101a73b903e400a321fa3cdeaafd00a741d80c6dabe728bda214dabaf8c0b278"
+      "sha256": "1cb3e44bf0634e597f33f361261ea5d20de6358fe19cd8f935bf2b62d30b02e5"
     },
     {
       "path": "tb/uvm/ldpc_driver.sv",
       "role": "tb",
-      "sha256": "8ec5f9a9a866c313ab1f9025111e1fc9425c22144f78688888d66a8e51dd2c23"
+      "sha256": "31176eecb8a70bae998c8f58bf1aea68a972da332cd3c410faddccd25f200e6d"
     },
     {
       "path": "tb/uvm/ldpc_env.sv",
       "role": "tb",
-      "sha256": "56752d87720d867b4e828d11036efec231d0d31662c6130951075b7c922dd1d7"
+      "sha256": "ecddfd4b002e20a49ee76843ee9915bb77eb7e21ba0076711d442f02486e1dbc"
     },
     {
       "path": "tb/uvm/ldpc_monitor.sv",
       "role": "tb",
-      "sha256": "be5958d9e08c711dad358c0d035ff082bd2f3f0241c0185539cc7ea5098dbf56"
+      "sha256": "f80a0538a616b5e622476a9ade58b8cc715872df2b369d0582e46b4c2ddaa8c0"
     },
     {
       "path": "tb/uvm/ldpc_scoreboard.sv",
       "role": "tb",
-      "sha256": "0cea29da75981821d3e1f2fe33b5179f981f62cfaf84dffbc9b981ef94ed32fc"
+      "sha256": "e9bcd171661592f0ea0f9c6a77c040ae9aa9075ba1de05118079243f2a9a1051"
     },
     {
       "path": "tb/uvm/ldpc_seq_item.sv",
       "role": "tb",
-      "sha256": "ce9954af544a48cd08b8429e486143ccbd78685e682e65973f0fc30f71b40114"
+      "sha256": "b7aa1402897ec2c17a6da1bec1eade62266fd4f4f325f5f3a052db447a44ac33"
     },
     {
       "path": "tb/uvm/ldpc_sequences.sv",
       "role": "tb",
-      "sha256": "78817d332392b5441787ca9d8ae7eeb812c7c7c230f596f2a368ecf6bdf39b3b"
+      "sha256": "61251eccfc4f833b6726cb9ea4e7eae8ac9c3a0af0ad702331984552e0ea36f1"
     },
     {
       "path": "tb/uvm/ldpc_uvm_pkg.sv",
       "role": "tb",
-      "sha256": "2aaaa1b94e0c61bf07378f8a43f4f3960fc07d8a046bdb9ef883df36038889ce"
+      "sha256": "b000547e6e2396eb4b4d86f6ffab4660c65b36c8e8e6809ebbeb6d2ac73e94f5"
     },
     {
       "path": "tb/uvm/tb_ldpc_uvm_top.sv",
       "role": "tb",
-      "sha256": "adbadb591c87a314bc001b68f79fdddb8a6896b0cfb8509947d9a4603255bbaa"
+      "sha256": "a13d808e88b4ff6c35d087bf534c998c6b7707971861a6298aab1017de74c9d4"
     },
     {
       "path": "constraints/ldpc_decoder.xdc",
