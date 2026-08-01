@@ -1,11 +1,13 @@
-<!-- asset-status: certified v0.4.0 -->
+<!-- asset-status: certified v1.0.0 -->
 <!-- 级别横幅（由成熟度派生）: CBB / CERTIFIED — 生产级，可在生产设计中复用 -->
 
 # rrc_polyphase_fir
 
-> `asset_uid: rrc_polyphase_fir` · `version: 0.4.0` · `owner: lihan`
-> 成熟度: **certified** — 18 道 MUST 门全绿，`signoff.by=lihan @ 2026-07-25`
-> 证据目录: `engineering-assets/var/gates/pg/rrc_polyphase_fir/`（生成物，见 §6 复现）
+> `asset_uid: rrc_polyphase_fir` · `version: 1.0.0` · `owner: lihan`
+> 成熟度: **certified** — 18 道 MUST 门全绿，`signoff.by=lihan @ 2026-08-02`
+> （首次签署 2026-07-25 @ 0.4.0；RTL 与功能结论自那时起未变，1.0.0 是版本号转正）
+> 证据: `engineering-assets/evidence/rrc_polyphase_fir/1.0.0/`（哈希锁定快照）
+> 与 `engineering-assets/var/gates/pg/rrc_polyphase_fir/`（实时生成物，见 §6 复现）
 
 RRC（根升余弦）脉冲成形多相 FIR 滤波器核。本包同时是库内 **CBB 参考样板**：
 文档中每个数字都来自实测，全部证据可由 §6 的三条命令重生。
@@ -171,26 +173,25 @@ node tools/gate-runner.cjs cbb/rrc_polyphase_fir --repo-root ..
 
 ## 8. 认证状态
 
-**已认证（certified）**，位于 `cbb/`，18 道 MUST 门全绿。
+**已认证（certified）1.0.0**，位于 `cbb/`，18 道 MUST 门全绿。
 
-签字记录在 `manifest.json`，字段结构由 `schemas/cbb-manifest.schema.json` 约束
-（必填 `by` / `at` / `scope`）：
+签字记录在 `manifest.json`（字段结构由 `schemas/cbb-manifest.schema.json` 约束，
+必填 `by` / `at` / `scope`），当前为 `by=lihan @ 2026-08-02`，8 条 scope。
 
-```json
-"signoff": {
-  "by": "lihan",
-  "at": "2026-07-25",
-  "scope": [
-    "证据已复核: timing-summary.rpt / utilization.rpt / alignment-report.json / reset-sim.json / cdc-report.json / stability/*.json",
-    "已接受限制: DSP 零裕量(24/24)",
-    "已接受限制: 综合级 hold 未收敛(-0.163ns), 上板前须以实现后时序为准",
-    "已接受限制: 仅默认参数经验证",
-    "已接受限制: cdc_tool=na — 单时钟域, 仅结构扫描, 未经具名 CDC 工具"
-  ]
-}
-```
+**不要在此处复制签署原文** —— 0.4.0 时这里贴过一份，随后
+`signoff.scope` 改了而这里没跟上，就成了两份会漂移的清单。
+以 `manifest.json` 的 `signoff` 字段为准。
 
-> 复用前请读 §7 —— 签字所接受的限制，即是复用方需要承担的约束。
+1.0.0 相对 0.4.0 签署内容的实质变化有两处：
+
+1. 改掉一条**被实测证伪**的措辞——原写"已接受限制：综合级 hold 未收敛，
+   上板前须以实现后时序为准"，实测表明它不会自行收敛（WHS 四阶段恒定），
+   已改为如实陈述违例、归因与量化关闭条件。
+2. 补进三条此前只在文档里、没进签署范围的限制：setup 裕量薄、未上板、
+   ModelSim 复现路径当前不可用。
+
+> 复用前请读 [`docs/limitations.md`](docs/limitations.md) —— 签字所接受的限制，
+> 即是复用方需要承担的约束。
 
 ---
 

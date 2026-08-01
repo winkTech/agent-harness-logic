@@ -1,11 +1,13 @@
-# rrc_polyphase_fir — 已知限制（0.4.0）
+# rrc_polyphase_fir — 已知限制（1.0.0）
 
 以下各条来自实测与治理台账，非推测。本文件是本资产已知限制的**权威清单**
 （README §7 指向此处）；签字所接受的限制即复用方需要承担的约束，见
 `manifest.json` 的 `signoff.scope`。
 
-证据位置：`engineering-assets/evidence/rrc_polyphase_fir/0.4.0/`（哈希锁定快照，
-2026-08-02 起）与 `engineering-assets/var/gates/pg/rrc_polyphase_fir/`（实时目录）。
+证据位置：`engineering-assets/evidence/rrc_polyphase_fir/1.0.0/`（哈希锁定快照）
+与 `engineering-assets/var/gates/pg/rrc_polyphase_fir/`（实时目录）。
+1.0.0 是版本号转正，RTL 与全部功能结论自 0.4.0（2026-07-25）起未变，
+故本清单同样适用于 0.4.0。
 
 ---
 
@@ -67,8 +69,9 @@
 6. **（已还清，留记录）无哈希锁定证据快照。** 本资产的 `maturity.evidence_ref`
    曾指向 `var/gates/pg/rrc_polyphase_fir/` —— 一个由工具随时可覆盖重写的实时
    目录，而非哈希锁定快照；库内 certified 资产中只有本资产是这样，
-   `evidence-snapshot --verify-all` 覆盖不到它。2026-08-02 已取 `0.4.0` 快照并把
-   `evidence_ref` 指过去，全库 `--verify-all` 现为 **17 verified**。
+   `evidence-snapshot --verify-all` 覆盖不到它。2026-08-02 已取快照并把
+   `evidence_ref` 指过去（先 `0.4.0`，随版本号转正后为 `1.0.0`，0.4.0 转历史保留），
+   全库 `--verify-all` 现为 **17 verified**。
    同时把混在证据目录里的两份工作产物（`implementation-diagnostic/`、
    `stoploss-validation-20260726-140818/`）挪到 `var/impl/` 下 —— 它们不是证据，
    留在快照源目录里会让快照边界失去意义。
@@ -87,9 +90,10 @@
 
 ## 治理状态
 
-10. **版本号未随认证转正。** 资产已 certified 且 18 门全绿，但 `version` 仍是
-    `0.4.0`（库内其余 certified 资产均已转 1.0.0）。引用方按 `0.4.0` 钉版即可，
-    但不要据版本号推断成熟度 —— 以 `maturity.level` 为准。
+10. **（已还清）版本号未随认证转正。** 资产自 2026-07-25 起就是 certified 且
+    18 门全绿，但 `version` 一直停在 `0.4.0`，与库内其余 certified 资产（均已
+    1.0.0）不一致，引用方按版本号推断成熟度会读错。2026-08-02 由 owner 裁定转正
+    为 **1.0.0**；RTL、约束、TB 与全部功能结论自 0.4.0 起未做任何改动。
 
 11. **（已还清，但结论有变）golden 侧的 `native-matlab-recheck`。**
     2026-08-02 已在本机 MATLAB R2022a 复核并关闭：本资产 bit-true 所锚的

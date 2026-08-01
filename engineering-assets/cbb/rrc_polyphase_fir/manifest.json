@@ -2,11 +2,11 @@
   "schema_version": "1.0",
   "asset_uid": "rrc_polyphase_fir",
   "name": "rrc_polyphase_fir",
-  "version": "0.4.0",
+  "version": "1.0.0",
   "owner": "lihan",
   "maturity": {
     "level": "certified",
-    "evidence_ref": "engineering-assets/evidence/rrc_polyphase_fir/0.4.0/"
+    "evidence_ref": "engineering-assets/evidence/rrc_polyphase_fir/1.0.0/"
   },
   "requirement_ref": "engineering-assets/knowledge/primary/domains/comm/rrc/algorithm_spec.md",
   "doc_refs": [
@@ -162,13 +162,17 @@
   "superseded_by": null,
   "signoff": {
     "by": "lihan",
-    "at": "2026-07-25",
+    "at": "2026-08-02",
     "scope": [
-      "证据已复核: timing-summary.rpt / utilization.rpt / alignment-report.json / reset-sim.json / cdc-report.json / stability/*.json",
+      "1.0.0 转正 (owner 2026-08-02 裁定)。RTL / 约束 / TB 与全部功能结论自 0.4.0 (2026-07-25 首次签署) 起未变; 本次转正基于补齐的布线后时序与哈希锁定证据快照。",
+      "证据已复核: timing-summary.rpt / utilization.rpt / alignment-report.json / reset-sim.json / cdc-report.json / stability/*.json / hold-closure.json / route-timing-summary.rpt / route-utilization.rpt / route-drc.rpt",
       "已接受限制: DSP 零裕量(24/24)",
-      "已接受限制: 综合级 hold 未收敛(-0.163ns), 上板前须以实现后时序为准",
+      "已接受限制: hold 布线后仍未收敛(WHS -0.163ns, 320/2713 端点)。**修正 0.4.0 的措辞** —— 此前写『综合级 hold 为估算值, 上板前须以实现后时序为准』, 实测证明它不会自行收敛: WHS 在 synth/opt/place/route 四阶段恒定。归因已查清: 924 条违例路径全部起于输入端口、内部单元起点 0 条, reg-to-reg 最差 hold +0.094ns (内部已收敛); 唯一失败端口 i_rst -> DSP48E1 RSTM, 由 XDC 自称『显式假设、非实测』的 set_input_delay -min 0.100 支配。量化关闭条件: i_rst 真实最小输入延时 >= 0.263ns。见 hold-closure.json。",
+      "已接受限制: setup 裕量薄 —— 布线后 WNS +0.058ns, place 阶段一度只剩 +0.006ns",
       "已接受限制: 仅默认参数经验证",
-      "已接受限制: cdc_tool=na — 单时钟域, 仅结构扫描, 未经具名 CDC 工具"
+      "已接受限制: cdc_tool=na — 单时钟域, 仅结构扫描, 未经具名 CDC 工具",
+      "已接受限制: 未上板 (registry ITG-0009 的 board-validation 仍为空白)",
+      "已接受限制: 仿真证据由 ModelSim 产出, 本机 ModelSim 回环 RPC 故障, run.do 尚未迁到 xsim, 该条复现路径当前不可用"
     ]
   },
   "params": [

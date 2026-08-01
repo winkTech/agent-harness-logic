@@ -543,7 +543,7 @@
       "asset_uid": "rrc_polyphase_fir",
       "name": "rrc_polyphase_fir",
       "kind": "rtl",
-      "version": "0.4.0",
+      "version": "1.0.0",
       "owner": "lihan",
       "level": "certified",
       "dir": "cbb/rrc_polyphase_fir",
@@ -552,7 +552,7 @@
       "fidelity": "bit_true",
       "device": "xc7k325tffg900-2",
       "target_fmax": "250MHz",
-      "signoff_at": "2026-07-25",
+      "signoff_at": "2026-08-02",
       "waiver_count": 0,
       "used_by": [
         "cbb/rrc_polyphase_fir/tb/tb_rrc_polyphase_fir.sv"
