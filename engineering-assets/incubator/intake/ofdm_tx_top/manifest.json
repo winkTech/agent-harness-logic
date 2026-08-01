@@ -2,7 +2,7 @@
   "schema_version": "1.0",
   "asset_uid": "ofdm_tx_top",
   "name": "ofdm_tx_top",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "owner": "lihan",
   "maturity": {
     "level": "qualification"
@@ -104,7 +104,7 @@
       "lut": 3500,
       "ff": 4000,
       "bram": 4,
-      "dsp": 20
+      "dsp": 12
     }
   },
   "sources": [
@@ -126,7 +126,7 @@
     {
       "path": "rtl/ifft64_sdf.sv",
       "role": "rtl",
-      "sha256": "0959161eda4b7bd5c495b4099eae4cef8328e85c6b3a94152ef01140cda48edc"
+      "sha256": "0929e928d439c7e6bbe369125e68c1b322911fea277be46f6d73969716805cdb"
     },
     {
       "path": "rtl/tx_cp_insert.sv",

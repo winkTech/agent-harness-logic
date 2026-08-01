@@ -14,7 +14,7 @@
 | `rtl/ofdm_tx_top.sv` | 顶层: tx_mapper → tx_pilot_map → ifft64_sdf → tx_cp_insert；含符号信用节流 |
 | `rtl/tx_mapper.sv` | 四调制星座映射 (BPSK/QPSK/16QAM/64QAM)，与 golden `mod_mapper` 逐字对齐，2 拍 |
 | `rtl/tx_pilot_map.sv` | 子载波/导频映射: 48 数据点乒乓收集 → 自然序 64 拍流出；导频极性逐符号交替 |
-| `rtl/ifft64_sdf.sv` | **自研 64 点流水 IFFT** (R2-SDF, DIF, 共轭旋转因子)，输出位反序 + `o_idx` |
+| `rtl/ifft64_sdf.sv` | **自研 64 点流水 IFFT** (R2²SDF, DIF, 共轭旋转因子)，完整复乘仅 2 个，输出位反序 + `o_idx` |
 | `rtl/tx_cp_insert.sv` | CP 插入: 按 `bitrev(o_idx)` 写地址吸收重排（零额外延迟），乒乓，80 拍/符号 |
 | `tb/tb_tx_top.sv` | 定向自检 TB (`tb_ofdm_tx_top`)，TB 内浮点参考比对，不依赖外部向量文件 |
 | `run.do` | ModelSim 入口（构建落 `var/build/`） |
@@ -59,12 +59,11 @@ DFT/8 → CP → Q3.13），不读 RTL 输出、不依赖外部向量文件。
 
 | 指标 | 预算 | 实测 | |
 |:-----|-----:|-----:|:--|
-| WNS @ 10ns | ≥ 0 | **4.318 ns** | 达成 Fmax **176 MHz**，目标 100 MHz 有 76% 裕量 |
-| WHS | ≥ 0 | 0.144 ns | 失败端点 0 |
-| LUT | 3500 | 1264 | 含 336 LUT as Memory（176 DRAM + 160 SRL） |
-| FF | 4000 | 1099 | |
+| WNS @ 10ns | ≥ 0 | **6.323 ns** | 达成 Fmax **272 MHz**，目标 100 MHz 有 172% 裕量 |
+| LUT | 3500 | 1211 | 含 LUT as Memory（分布式 RAM + SRL） |
+| FF | 4000 | 956 | |
 | BRAM | 4 | **0** | 4 组 64×32b 乒乓 RAM 全部映射为分布式 RAM/SRL —— 该容量下属合理选择，非推断失败；如需占 BRAM 须显式加 `ram_style` |
-| DSP48E1 | 20 | **20** | **零裕量**，见 L6 |
+| DSP48E1 | 12 | **10** | R2²SDF 的 2 个完整复乘；预算按 2×4+裕量 事前推导 |
 
 **工具说明**: ModelSim 通路已停用（本机 vish/vsim 回环 RPC 故障：IPv6 `::1` 可 bind
 不可 connect，任何设计都无法加载）。全部仿真证据由 xsim 产出；`vlog` 编译不开 socket
@@ -74,7 +73,7 @@ DFT/8 → CP → Q3.13），不读 RTL 输出、不依赖外部向量文件。
 
 | 编号 | 位置 | 问题 |
 |:-----|:-----|:-----|
-| L6 | `rtl/ifft64_sdf.sv` | **DSP 实测 20 个，正好顶满预算 20，零裕量**。事前按「级 1–4 各 1 个复乘 × 4 实数乘」估为 16，多出的 4 个尚无实证解释（推测复乘后的 36 位加法未被 DSP 后加器吸收，**未验证**）。需先查清归属再决定是抬预算还是改写乘加结构 |
+| ~~L6~~ | — | **已关闭（0.3.0）**：DSP 零裕量的根因是 IFFT 用了基-2 SDF 而非 ADR-004 指定的 R2²SDF，乘法器多一倍。对齐架构后 DSP 20→10 |
 | L2 | 全包 | **无 bit-true cosim 证据**：当前判据是 TB 内浮点参考 ±4 LSB，未与 golden `generate_vectors.m` 做逐位镜像比对（G-B-03 未过，`fidelity` 仍为 `pending`） |
 | L3 | `tx_pilot_map.sv` | 导频极性只按符号序 ±1 交替，与 802.11a 的 127 长 PRBS 导频扰码序列不符（沿用 0.1.0 F6，需算法决策） |
 | L4 | `ofdm_tx_top.sv` | `s_axis_tready` 为寄存输出，反压恢复有 1 拍气泡；如需零气泡须在边界外套 skid buffer（接口架构改动） |
