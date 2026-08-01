@@ -80,4 +80,27 @@ vector_config.txt     EPSILON=0.300000  EPS_EST=0.297556
   CORDIC 角度表整体差 2 倍、复位极性与命名红线), 需按 L3→L4 顺序处理。
   其中 T1 系数表应由本模型导出而非在 RTL 里硬编码。
 - 本记录不影响 `models/comm/ldpc`(已验证 bit-true) 与 `models/comm/rrc`(已认证)。
-- `models/comm/channel_est` 与 `models/comm/ofdm` 仍卡在 L1, 见各自记录。
+- `models/comm/channel_est` 已按 ADR-002 完成改造并 certified;
+  `models/comm/ofdm` 仍卡在 L1, 见各自记录。
+
+## 6. ADR-003 实施记录 (2026-08-01, sync_top 0.2.0 因果化 + cosim 闭环)
+
+- **§4 未决项已裁决** (ADR-003): 向量延长取"加数据符号"——`run_synch_sim`
+  追加 28 个 QPSK-OFDM 数据符号 (CP16+64), 总长 2610; 期望 = 总长 - 延迟
+  384 = **2226 行 >= 2048**, G-B-03 下限满足。
+- `src/generate_vectors.m` 重写为 **sync_top RTL 帧级位真镜像** (整数语义
+  与 rtl/ 逐字对应, 含检测递推/平顶最短 64/S_cfo/CORDIC/NCO ±π回绕/K 预
+  缩放/14 级旋转/符号量化相关 + 后继判别 T2 防错锁/延迟 384); 同时导出
+  T1 符号量化系数表 `t1_sign_coeffs.txt` (§5 "T1 系数表应由本模型导出"
+  已落实, cosim 逐位核对 RTL localparam)。
+- **cosim 实证** (ModelSim 10.6c): sync_top 0.2.0 **2226 样点 0 失配
+  bit-true PASS**, fft_start 对齐镜像 n_fine=242=真值; 镜像自证
+  eps_est=0.3026 (真值 0.3), 平顶 [68,215]。镜像+cosim 联合暴露并修复
+  RTL/镜像协同缺陷 4 处 (爬升段瞬态假平顶/T2 判别器 GI2 混叠余量/
+  校正使能两拍空窗/MATLAB 负索引), 均双侧同步修。
+- **观察 (未改浮点)**: 本模型 `fine_timing` 对 T1/T2 (同波形) 存在
+  ±64 样点峰值模糊 —— 残余 CFO 下噪声破平, 本次延长流实测浮点链
+  n=307 (真值 243, 1-based)。浮点链无防错锁, RTL/镜像用后继幅度判别
+  (`|R(pk+64)|² >= |R(pk)|²/4` ⇒ pk 即 T1)。修浮点属独立决策, 未擅动。
+- `incubator/intake/sync_top` §5 所列 25 条缺陷已随 0.2.0 架构重排整体
+  消灭 (ADR-003, 见该包 CHANGELOG)。

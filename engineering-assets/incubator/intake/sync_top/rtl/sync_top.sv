@@ -1,39 +1,31 @@
 //==============================================================================
 // sync_top — 802.11a OFDM 突发同步顶层 (ADR-003 因果化架构)
-// 功能: 短前导码检测 (sync_detect) -> 粗 CFO 求角 (cordic_cv) -> 因果 NCO
-//       旋转校正 (K 预缩放 + cordic_rot_pipe) -> T1 符号量化互相关精定时
-//       (sync_correlator) -> 延迟线对齐输出。
-// 契约 (ADR-003, 详见 README/limitations):
-//   - m_axis = 因果校正流: 样点序号 >= corr_start 起旋转 e^{-j·θ(n)}, 之前
-//     样点 θ=0 过同一流水 (≈恒等±量化); 相对 s_axis 固定延迟 P_DLY=384 拍;
-//   - corr_start = plat_end_idx + 40 (拍域确定值, 保证 CORDIC 已完成;
-//     位真镜像按同式复现, 不依赖时钟级时序);
-//   - o_fft_start 与 m_axis 上 T1 首样点同拍 (单拍脉冲);
-//   - o_sync_locked 置位保持到复位 (单突发语义);
-//   - 无反压契约: m_axis_tready 被忽略, 稳态运行中必须为高 (F7 裁决)。
+// 功能: 短前导码检测 (sync_detect) -> 粗 CFO 求角 (cordic_cv) -> 因果 NCO 旋转
+//       校正 (K 预缩放 + cordic_rot_pipe) -> T1 精定时/输出 (sync_track_out)。
+// 契约 (ADR-003, 详见 README/limitations): m_axis = 因果校正流, 样点序号
+//   >= corr_start (= plat_end_idx+40, 拍域确定) 起旋转 e^{-j·θ(n)}, 之前样点
+//   θ=0 过同一流水 (≈恒等±量化); 相对 s_axis 固定延迟 P_DLY=384 拍;
+//   o_fft_start 与 m_axis 上 T1 首样点同拍; o_sync_locked 保持到复位 (单突发);
+//   无反压契约 (m_axis_tready 被忽略, 稳态须为高)。
 // 数值链 (与 generate_vectors.m 位真镜像逐字一致): n_peak = start +
-//   (end-start)>>1; CORDIC 输入 = S_cfo>>>18 (s22); θ_inc = -(φ<<4) Q3.21;
-//   θ(n) 累加±π回绕取 (acc+128)>>>8 Q3.13; K 预缩放 (x·9949+8192)>>>14;
-//   旋转输出 sat16; 精定时与 T2 防错锁判据见 sync_track_out 文件头。
-// 复位: 同步高有效, 统一下发; 数据流水少复位 (§1.1); RAM 豁免见子模块
+//   (end-start)>>1; 平顶最短 P_MINPLAT=64; CORDIC 输入 S_cfo>>>18; θ_inc =
+//   -(φ<<4) Q3.21 累加±π回绕取 (acc+128)>>>8; K 预缩放 (x·9949+8192)>>>14;
+//   输出 sat16; 精定时/T2 防错锁见 sync_track_out。复位: 同步高有效 (§1.1)
 //==============================================================================
 module sync_top #(
     parameter int DATA_W = 16
 )(
     input  logic                i_clk,
     input  logic                i_rst,          // 同步复位, 高有效
-
-    // AXI4-Stream slave (input samples)
+    // AXI-S slave (输入样点)
     input  logic                s_axis_tvalid,
     output logic                s_axis_tready,
     input  logic [DATA_W*2-1:0] s_axis_tdata,
-
-    // AXI4-Stream master (CFO-corrected samples, 延迟 P_DLY 拍)
+    // AXI-S master (CFO 校正流, 延迟 P_DLY 拍)
     output logic                m_axis_tvalid,
     input  logic                m_axis_tready,  // 忽略 (ADR-003 无反压契约)
     output logic [DATA_W*2-1:0] m_axis_tdata,
-
-    // Sync indicators
+    // 同步指示
     output logic                o_fft_start,
     output logic                o_sync_locked
 );
@@ -42,6 +34,7 @@ module sync_top #(
     localparam int P_DLY  = 384;                // 对齐延迟线深度 (< 512)
     localparam int P_WIN  = 256;                // 精定时搜索窗宽
     localparam int P_EST_GAP = 40;              // plat_end -> corr_start 拍距
+    localparam int P_MINPLAT = 64;              // 平顶最短长度 (拒斜坡瞬态假平顶)
     localparam logic signed [23:0] P_PI_Q21  = 24'sd6588416;   // pi·2^21
     localparam logic signed [24:0] P_2PI_Q21 = 25'sd13176832;  // 2pi·2^21
 
@@ -124,11 +117,16 @@ module sync_top #(
     logic               w_cd_busy;
     logic               w_search_done;
 
+    // 平顶接受判据 >= P_MINPLAT: 爬升段瞬态假平顶拒绝并重新武装 (镜像同式)
+    logic w_plat_ok;
+    assign w_plat_ok = (w_end_idx - w_start_idx) >= P_IDXW'(P_MINPLAT);
+
     always_comb begin
         w_state_nxt = r_state;
         case (r_state)
             P_IDLE:   if (w_run_hit)     w_state_nxt = P_PLAT;
-            P_PLAT:   if (w_plat_end)    w_state_nxt = P_ASTART;
+            P_PLAT:   if (w_plat_end)    w_state_nxt = w_plat_ok ? P_ASTART
+                                                                 : P_IDLE;
             P_ASTART:                    w_state_nxt = P_AWAIT;
             P_AWAIT:  if (w_cd_done)     w_state_nxt = P_SEARCH;
             P_SEARCH: if (w_search_done) w_state_nxt = P_T2RD;
@@ -144,9 +142,9 @@ module sync_top #(
         else       r_state <= w_state_nxt;
     end
 
-    // 事件锁存 (数据通路, 由 FSM 定拍)
+    // 事件锁存 (数据通路, 由 FSM 定拍; 仅接受合格平顶)
     always_ff @(posedge i_clk) begin
-        if (w_plat_end) begin
+        if (w_plat_end && w_plat_ok) begin
             r_n_peak     <= w_start_idx + ((w_end_idx - w_start_idx) >> 1);
             r_corr_start <= w_end_idx + P_IDXW'(P_EST_GAP);
         end
@@ -182,11 +180,13 @@ module sync_top #(
     logic signed [23:0] r_acc;
     logic signed [15:0] r_theta_d;              // 与 K 缩放级对齐 (滞后 1 拍)
 
-    assign w_corr_on = (r_state == P_SEARCH || r_state == P_TRACK) &&
+    // 校正使能覆盖 SEARCH 后所有态 (T2RD/T2CMP 两拍空窗会致 θ 归零 +
+    // 累加器暂停, cosim 逐位比对实测抓出)
+    assign w_corr_on = (r_state == P_SEARCH || r_state == P_T2RD ||
+                        r_state == P_T2CMP || r_state == P_TRACK) &&
                        (r_in_idx >= r_corr_start);
 
-    // 次态相位: 累加 + ±π 回绕 (组合)
-    logic signed [24:0] w_acc_sum, w_acc_nxt;
+    logic signed [24:0] w_acc_sum, w_acc_nxt;    // 次态相位: 累加 + ±π 回绕
 
     always_comb begin
         w_acc_sum = 25'(r_acc) + 25'(r_tinc);

@@ -3,7 +3,7 @@
   "asset_uid": "model_comm_synch",
   "name": "ofdm_synch_golden",
   "kind": "golden-model",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "owner": "lihan",
   "maturity": {
     "level": "intake"
@@ -29,19 +29,19 @@
       "role": "reference",
       "trait": "普遍性",
       "path": "fine_cfo_est.m",
-      "note": "浮点细 CFO 估计参考 (长前导码 T1/T2 相关)"
+      "note": "浮点细 CFO 估计参考 (长前导码 T1/T2 相关; 不在 RTL 范围, ADR-003)"
     },
     {
       "role": "reference",
       "trait": "普遍性",
       "path": "cfo_correct.m",
-      "note": "浮点 CFO 校正参考 (复指数去旋转)"
+      "note": "浮点 CFO 校正参考 (复指数去旋转, 离线批改语义; RTL 向量语义已按 ADR-003 改因果式)"
     },
     {
       "role": "reference",
       "trait": "普遍性",
       "path": "fine_timing.m",
-      "note": "浮点精定时参考 (长前导码互相关峰值检测)"
+      "note": "浮点精定时参考 (长前导码互相关峰值检测)。已知观察: T1/T2 同波形, 残余 CFO 下峰值 ±64 样点模糊 (本模型无防错锁; RTL/镜像用后继幅度判别, 见 MODEL-STATUS §5)"
     },
     {
       "role": "reference",
@@ -53,12 +53,12 @@
       "role": "fixed_point",
       "trait": "设计特性",
       "path": "src/generate_vectors.m",
-      "note": "唯一定点环节: Q2.14 量化+饱和, {Q[15:0],I[15:0]} 打包导出 expected_sync_out.bin; golden 链路本体为纯浮点, 无定点行为模型"
+      "note": "sync_top RTL 帧级位真镜像 (ADR-003): 检测递推(p/e m<32 清零, 减项 m<48 清零, 判决满窗门控)/9 连平顶(最短 64)/S_cfo/CORDIC 14 迭代求角/NCO Q3.21 ±π回绕/K=9949 预缩放/14 级旋转/sat16/符号量化相关+后继判别 T2 防错锁/延迟 384; 导出激励+0 容差期望+T1 符号表。整数语义与 rtl/ 逐字对应, 单侧改动即 cosim 失配"
     }
   ],
   "vectors": {
-    "config": "802.11a preamble / N=64 / N_cp=16 / fs=20MHz / CFO=0.3 / SNR=20dB / tau=50 (config.m 默认)",
-    "provenance": "仓库内无已导出的 expected/stimulus 向量文件 (src/generate_vectors.m 输出目标 ../vectors/expected_sync_out.bin + vector_config.txt 不存在, 从未生成或未入库)。向量健康度无从抽查; 需 MATLAB 跑 run_synch_sim.m + generate_vectors.m 首次生成。"
+    "config": "802.11a 突发: tau=50 + 前导 320 + 28×QPSK-OFDM 数据符号 (CP16+64) = 2610 样点; CFO=0.3, SNR=20dB, rng(20260726,'twister'); Q2.14",
+    "provenance": "run_synch_sim (MATLAB R2022a, 2026-08-01): sync_stimulus.bin 2610 行 + expected_sync_out.bin 2226 行 (位真镜像期望, =总长-延迟384) + t1_sign_coeffs.txt (T1 符号量化表, 值>0 取 +1 否则 -1)。镜像自证: 平顶 [68,215], eps_est=0.3026 (真值 0.3), n_fine=242=真值。cosim 实证: sync_top 0.2.0 tb_sync_cosim 2226 样点 0 失配 bit-true PASS + fft_start 对齐 + T1 表逐位核对 (alignment-report.json)。"
   },
   "sources": [
     {
@@ -69,12 +69,12 @@
     {
       "path": "packet_detect.m",
       "role": "reference",
-      "sha256": "6fa05b458ca699967bb50f9ffd5dcf7803c52e6e615acae2d8b314ef86ff0d7f"
+      "sha256": "3e34856c1bb4d3b7f2dddbf0e301ddbc5dc4e64e1db47e0b71fedf3df12e9a71"
     },
     {
       "path": "coarse_cfo_est.m",
       "role": "reference",
-      "sha256": "684749e0967e35e583da8b925ec6f3bfe865b9cfcb65dfc49fa0d63ad5803732"
+      "sha256": "796d84a8336d61fba4a0fd998d66ad295c05cc11fe668c7493af1f94c031896e"
     },
     {
       "path": "fine_cfo_est.m",
@@ -89,7 +89,7 @@
     {
       "path": "fine_timing.m",
       "role": "reference",
-      "sha256": "7ee8106d3706024144432be4436d15e7adc787da9f320d6b745cf12080f7c75d"
+      "sha256": "96be3de387e21834719a709b0b63f3be08d275bb2211821034cacdb82de2abf6"
     },
     {
       "path": "generate_preamble.m",
@@ -99,42 +99,42 @@
     {
       "path": "run_synch_sim.m",
       "role": "sim",
-      "sha256": "1938f4e6dec2b72e4b8161a625a45d7e3d34a5f55669d387bb567a0c508079d5"
+      "sha256": "91481945a9d925965900d9d9551fa8d74013dbeff888e230a87c720eec710289"
     },
     {
       "path": "run_all_tests.m",
       "role": "test",
-      "sha256": "8df0e6bd07a45a4e6ca3124db3b77c6aa92ce789facfa7291d0bbb84dfdcd672"
+      "sha256": "49116b76d3076e17a9c7cb2236d2f8549d53d55ff76611bb4a2df2cced79443c"
     },
     {
       "path": "src/generate_vectors.m",
       "role": "fixed_point",
-      "sha256": "07de68ee1f79282bcc3b2865e2d0bf9d56d24e5de52f40b6d3d39674853cd53a"
+      "sha256": "3d5dc40edc7b6113168a2794490878205d344689545224a761675fb672a9a2fd"
     },
     {
       "path": "tests/test_packet_detect.m",
       "role": "test",
-      "sha256": "a39316e6e8129ea7d596f08a294187aa2d7615f8101a2fad3435bc87ab23d071"
+      "sha256": "a885fc2c8ccce7f88e9f8e0f0438d1eeba6f69b3e17df72ff7672811d7948560"
     },
     {
       "path": "tests/test_cfo_est.m",
       "role": "test",
-      "sha256": "5d01213dc0ea1d8e2622ff3ddb2b1dd69e19f6c8c060bde6c2268b4b7b673436"
+      "sha256": "24a00afacfabdb813ca60d44b0a7d00ba67f51627afaa58a3aaebb9a60fea963"
     },
     {
       "path": "tests/test_cfo_range.m",
       "role": "test",
-      "sha256": "0dcde009ae219de3820bfa4f0586f36a1116401af0b1b4e323e141925f99f074"
+      "sha256": "f74f76fb05f33d9588cc1f230ba777cc2d06d94eda57fd6f0004bd58b2355bcd"
     },
     {
       "path": "tests/test_snr_robust.m",
       "role": "test",
-      "sha256": "c5f1b2a1c3fd46a1fd0a8402fa1acfdb38bf982a04972e7dc069387b9f88f948"
+      "sha256": "8435bcf4058a7da695f943ae89407ea399d38a7ecd34ae1fa8e07488e543e3d5"
     },
     {
       "path": "tests/test_timing.m",
       "role": "test",
-      "sha256": "0d9a91f1168b06f11276c58cae5d73c3c96f5badff510d1a760be94087a1b9fe"
+      "sha256": "6d2740689c90a0b4f08616ac8c0ab511387d7b0e6dcea00281d8cae44acb2b17"
     }
   ],
   "waivers": [],

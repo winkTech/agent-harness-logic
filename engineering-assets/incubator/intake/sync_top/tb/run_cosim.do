@@ -1,7 +1,7 @@
 #==============================================================================
-# sync_top 定向自检仿真 (批处理)
-# 用法 (从包根目录): vsim -c -do tb/run_sim.do
-# 根定位: 用 pwd 向上找包根 (勿用 [info script] — ModelSim 10.6 下解析到盘根)
+# sync_top 帧级 cosim (bit-true, G-B-03 证据)
+# 用法 (从包根目录): vsim -c -do tb/run_cosim.do
+# 前置: MATLAB 已跑 run_synch_sim (导出帧向量 + T1 符号表)
 #==============================================================================
 onerror {quit -code 1}
 
@@ -17,8 +17,9 @@ while {[file tail $EA] ne "engineering-assets"} {
     if {$parent eq $EA} { puts "FATAL: 找不到 engineering-assets 根"; quit -code 1 }
     set EA $parent
 }
+set VEC_DIR  [file join $EA models comm synch vectors]/
 set EVID_DIR [file join $EA var gates pg sync_top]/
-file mkdir [file join $EA var gates pg sync_top stability]
+file mkdir [file join $EA var gates pg sync_top]
 
 set BUILD [file join $ROOT var_build]
 file mkdir $BUILD
@@ -34,8 +35,8 @@ vlog -sv $ROOT/rtl/sync_detect.sv
 vlog -sv $ROOT/rtl/sync_correlator.sv
 vlog -sv $ROOT/rtl/sync_track_out.sv
 vlog -sv $ROOT/rtl/sync_top.sv
-vlog -sv $ROOT/tb/tb_sync_top.sv
+vlog -sv $ROOT/tb/tb_sync_cosim.sv
 
-vsim -c -onfinish stop work.tb_sync_top +EVID_DIR=$EVID_DIR
+vsim -c -onfinish stop work.tb_sync_cosim +VEC_DIR=$VEC_DIR +EVID_DIR=$EVID_DIR
 run -all
 quit -code 0

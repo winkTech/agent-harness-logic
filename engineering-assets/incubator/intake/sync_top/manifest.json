@@ -2,10 +2,10 @@
   "schema_version": "1.0",
   "asset_uid": "sync_top",
   "name": "ofdm_sync_top",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "owner": "lihan",
   "maturity": {
-    "level": "intake"
+    "level": "qualification"
   },
   "requirement_ref": "engineering-assets/knowledge/primary/domains/comm/synch/algorithm_spec.md",
   "doc_refs": [
@@ -16,7 +16,7 @@
   ],
   "golden_model_ref": "model_comm_synch",
   "fidelity": {
-    "status": "pending"
+    "status": "bit_true"
   },
   "device": {
     "part": "xc7k325tffg900-2"
@@ -104,7 +104,7 @@
     {
       "path": "rtl/sync_top.sv",
       "role": "rtl",
-      "sha256": "ee3ca8a7c078e02dfcbf81a89c6bb088201a13d3c552edce73eb3bae9e1f202e"
+      "sha256": "7f817e1eacf77349421880dbd5905d03ea8c1fd4e6b55e491825263d98ecff0b"
     },
     {
       "path": "rtl/sync_detect.sv",
@@ -114,7 +114,7 @@
     {
       "path": "rtl/sync_track_out.sv",
       "role": "rtl",
-      "sha256": "5648338b47f572b953073d71b8f82a6afca83a7c69d9659f005fe12d4cf2ac9f"
+      "sha256": "67adc9def8e44523a2cf856774e9011376f6fc53163c299d45228c54e230418e"
     },
     {
       "path": "rtl/sync_correlator.sv",
@@ -139,7 +139,12 @@
     {
       "path": "tb/tb_sync_top.sv",
       "role": "tb",
-      "sha256": "64dd9c22ec07c531ed05bbbbdad8cc39766ccb1fc97da8652dc2bc2db238acf1"
+      "sha256": "b8553e0063303990a92feac7db7df2bb87d738599a5cdcce538149be197b8bf8"
+    },
+    {
+      "path": "tb/tb_sync_cosim.sv",
+      "role": "tb",
+      "sha256": "61859014b7c9f36a5e7b9e86500ecd127ac4a7e8cc7c09e56cd64aec940afd07"
     },
     {
       "path": "tb/uvm/sync_uvm_pkg.sv",

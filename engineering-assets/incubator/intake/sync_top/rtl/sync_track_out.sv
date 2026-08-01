@@ -4,9 +4,13 @@
 //       (2) P_SEARCH 态峰值搜索 (候选 c = 窗尾-63 ∈ [n_peak, n_peak+P_WIN],
 //       同值取先到者) 并把各候选 |R|² 存档;
 //       (3) T2 防错锁 (ADR-003 因果结构性): corr_start 落于 GI2/T1 边界时
-//       T1 前段未校正、相干受损, T2 (=T1+64, 全校正) 峰值更高 — 峰值定格后
-//       回查 pk-64: 若 pk-64 >= n_peak 且 |R(pk-64)|² >= |R(pk)|²>>2,
-//       n_fine = pk-64, 否则 pk;
+//       T1 前段未校正、相干受损, T2 (=T1+64, 全校正) 峰值可能更高。
+//       判别用**后继幅度** (大余量): 真 T1 的 pk+64 处必是全强 T2 (比值 ~1),
+//       而 T2 的 pk+64 处是数据区 (符号相关 ~噪声)。峰值定格后回查 pk+64:
+//       |R(pk+64)|² >= |R(pk)|²>>2 则 n_fine=pk (pk 即 T1); 否则若
+//       pk >= n_peak+64 则 n_fine = pk-64 (pk 是 T2)。
+//       (前代 pk-64 判据的 GI2 循环移位混叠 ~0.25·pk 与 T1 受损 ~0.35 余量
+//       过窄, 镜像流实测误触, 已废弃)
 //       (4) P_DLY 深延迟线对齐: o_fft_start 与 m_axis 上 n_fine 样点同拍,
 //       o_sync_locked 置位保持到复位。
 // 端口: FSM 相位使能 i_search/i_t2rd/i_t2cmp/i_track 由顶层三段式 FSM 译码;
@@ -85,6 +89,7 @@ module sync_track_out #(
         if (i_search && w_r2_v) r_r2mem[w_cand[8:0]] <= w_r2;
     end
 
+    // 峰值窗 [n_peak, n_peak+P_WIN]; 存档/结束延至 +P_WIN+64 (后继判别要读 pk+64)
     always_ff @(posedge i_clk) begin
         if (i_rst) begin
             r_pk_val       <= '0;
@@ -95,7 +100,7 @@ module sync_track_out #(
                     r_pk_val <= w_r2;
                     r_pk_idx <= w_cand;
                 end
-            end else if (w_cand > i_n_peak + P_IDXW'(P_WIN)) begin
+            end else if (w_cand > i_n_peak + P_IDXW'(P_WIN + 64)) begin
                 ro_search_done <= 1'b1;
             end
         end
@@ -103,18 +108,19 @@ module sync_track_out #(
 
     assign o_search_done = ro_search_done;
 
-    // T2 防错锁: 读档 pk-64, 若 >= 峰值/4 且候选合法则取 pk-64 (见文件头)
+    // T2 防错锁 (后继判别, 见文件头): 读档 pk+64
     // [复位豁免] r_r2rd 为 RAM 读数据寄存器, 不复位 (§10.2)
     always_ff @(posedge i_clk) begin
         if (i_t2rd)
-            r_r2rd <= r_r2mem[9'(r_pk_idx - P_IDXW'(64))];
+            r_r2rd <= r_r2mem[9'(r_pk_idx + P_IDXW'(64))];
     end
 
     always_ff @(posedge i_clk) begin
         if (i_t2cmp) begin
-            if ((r_pk_idx >= i_n_peak + P_IDXW'(64)) &&
-                (r_r2rd >= (r_pk_val >> 2)))
-                r_n_fine <= r_pk_idx - P_IDXW'(64);
+            if (r_r2rd >= (r_pk_val >> 2))
+                r_n_fine <= r_pk_idx;                      // 后继强 => pk 即 T1
+            else if (r_pk_idx >= i_n_peak + P_IDXW'(64))
+                r_n_fine <= r_pk_idx - P_IDXW'(64);        // 后继弱 => pk 是 T2
             else
                 r_n_fine <= r_pk_idx;
         end

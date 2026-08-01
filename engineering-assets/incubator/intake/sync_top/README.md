@@ -1,10 +1,10 @@
-<!-- asset-status: intake v0.2.0 -->
-<!-- 级别横幅（由成熟度派生）: INCUBATOR / INTAKE — 未认证，勿在生产设计中直接复用 -->
+<!-- asset-status: qualification v0.2.1 -->
+<!-- 级别横幅（由成熟度派生）: QUALIFICATION — 机器门全绿，certified 待签字 -->
 
 # sync_top — 802.11a OFDM 突发同步顶层
 
-> `asset_uid: sync_top` · `version: 0.2.0` · `owner: lihan`
-> 成熟度: **intake** — 见 `../../../var/gates/pg/sync_top/gate-results.json`
+> `asset_uid: sync_top` · `version: 0.2.1` · `owner: lihan`
+> 成熟度: **qualification** — 见 `../../../var/gates/pg/sync_top/gate-results.json`
 
 ## 用途（0.2.0, ADR-003 因果化架构）
 
@@ -51,8 +51,12 @@ CORDIC）→ 长前导码 T1 **符号量化互相关精定时**（0 DSP 加法�
 - **Vivado 2023.1.1 OOC**（xc7k325t, pg-synth 产物链）：**WNS +4.962 ns
   @10 ns**（≈198 MHz）；**LUT 6763 / FF 4669 / BRAM 1.5 / DSP 16**
   （预算 8000/5500/3/20）；证据见 `var/gates/pg/sync_top/`。
-- **cosim（G-B-03）**：待 golden 侧 `generate_vectors.m` 位真镜像改造 +
-  向量延长 ≥2048（models/ 受保护树，令牌批次）后运行。
+- **cosim（G-B-03, 0.2.1）**：golden `model_comm_synch` 1.1.0 位真镜像向量
+  （2610 样点激励 / 2226 期望），**2226 样点 0 失配 bit-true PASS** +
+  `fft_start` 对齐镜像 `n_fine=242=真值` + T1 符号量化表逐位核对；
+  `fidelity = bit_true`。镜像+cosim 联合修复三缺陷见 CHANGELOG [0.2.1]。
+- **证据链（G-C-04/05）**：`reset-sim.json`（27 个复位控制寄存器帧中
+  再复位逐一比对）+ `stability/{boundary,stress,regression,backpressure}`。
 - `tb/uvm/` 断链维持原状（不在验证面内）。
 
 ## 已知限制 / 认证阻塞

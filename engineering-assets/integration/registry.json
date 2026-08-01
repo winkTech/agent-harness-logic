@@ -143,7 +143,7 @@
    "project": "reference-evidence",
    "project_ref": "models/comm/synch",
    "asset_uid": "model_comm_synch",
-   "version_pinned": "1.0.0",
+   "version_pinned": "1.1.0",
    "config": {},
    "integrated_at": "2026-07-26T00:00:00Z",
    "status": "active",
@@ -152,16 +152,10 @@
    "consumers": [
     "sync_top"
    ],
-   "issues": [
-    "exported-vectors",
-    "cfo-correction"
-   ],
-   "badge_gap": [
-    "exported-vectors",
-    "cfo-correction"
-   ],
-   "deferred_reason": "golden/reference source is retained as correctness evidence",
-   "last_reviewed": "2026-07-26"
+   "issues": [],
+   "badge_gap": [],
+   "deferred_reason": "golden/reference source is retained as correctness evidence; 1.1.0 repin (ADR-003): exported-vectors 已还清 (帧向量 2610/2226 + T1 符号表入库, 位真镜像), cfo-correction 已还清 (消费方 sync_top 0.2.1 因果校正通路落地并 cosim bit-true 2226 点 0 失配)",
+   "last_reviewed": "2026-08-01"
   },
   {
    "id": "ITG-0008",
@@ -223,25 +217,17 @@
    "project": "phy-intake",
    "project_ref": "incubator/intake/sync_top",
    "asset_uid": "sync_top",
-   "version_pinned": "0.1.0",
+   "version_pinned": "0.2.1",
    "config": {},
    "integrated_at": "2026-07-26T00:00:00Z",
    "status": "active",
    "maturity_status": "deferred",
    "owner": "lihan",
    "consumers": [],
-   "issues": [
-    "cfo-correction",
-    "exported-vectors",
-    "vivado-timing"
-   ],
-   "badge_gap": [
-    "cfo-correction",
-    "exported-vectors",
-    "vivado-timing"
-   ],
-   "deferred_reason": "project-specific PHY; keep intake under foundation-first policy",
-   "last_reviewed": "2026-07-26"
+   "issues": [],
+   "badge_gap": [],
+   "deferred_reason": "0.2.1 repin: 三笔债全部还清 — cfo-correction (ADR-003 因果校正通路落地), exported-vectors (cosim bit-true 2226 点 0 失配, G-B-03 pass), vivado-timing (pg-synth 产物链 pass)。qualification 达标, certified 仅剩 G-SIGN-01",
+   "last_reviewed": "2026-08-01"
   },
   {
    "id": "ITG-0011",
