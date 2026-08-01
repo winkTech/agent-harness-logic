@@ -1,0 +1,136 @@
+{
+  "schema_version": "1.0",
+  "asset_uid": "sdp_ram",
+  "name": "sdp_ram",
+  "version": "1.0.0",
+  "signoff": {
+    "by": "lihan",
+    "at": "2026-08-01",
+    "scope": [
+      "证据已复核: tb-selfcheck.json (641 次比对 0 失配, 参考为 TB 内建 golden 阵列独立于 DUT 存储; **read-old 同址语义专项命中 18 次**, TB 强制断言该场景至少命中一次否则 fatal) / reset-sim.json (流中再复位, 7 个输入/输出寄存器逐一比对 0 失配) / stability 四子结果 (regression 133 / boundary 19 / stress 67 / backpressure 403) / timing-summary.rpt / utilization.rpt / envelope-check.json (WNS +2.596ns @250MHz 即达成约 712MHz; LUT 1/40, FF 53/80, **BRAM 0.5/1**, DSP 0/0) / cdc-report.json (单时钟域结构扫描, cdc_tool=na)",
+      "推断核对 (关键): **BRAM 实测 1 片 RAMB18E1 (0.5 tile), 推断成功** —— 512x32=16Kb 恰落在 18Kb 内, 与结构推算一致。本模块的存在目的就是面向 BRAM 推断, 若实测为 0 且 LUT 暴涨即推断失败属缺陷。FF 实测 53 与推算 53 完全吻合 (ri_ 级 52 + ro_rd_valid 1; ro_rd_data 32 位如期被 BRAM 输出寄存器吸收)",
+      "已接受限制: **read-old 同址语义** —— 同一拍写与读命中同一地址时读端得到旧值。该语义由非阻塞赋值保证而非工具默认行为, 已在 TB 中专项断言; 需要 read-new (write-first) 的集成方不能直接使用本模块",
+      "已接受限制: **存储阵列不复位** —— BRAM 内容不可复位 (强行复位会阻止 BRAM 推断), 上电内容为 X; 调用方须遵守「先写后读」契约。复位仅作用于输入/输出寄存级, 该豁免写入 reset-sim.json 的 method 字段",
+      "已接受限制: 单时钟 1 写 1 读 (简单双端口), 不支持真双口或双时钟 —— 原模板的真双口双时钟在 A/B 同址同拍写时为仿真竞态且综合行为不可预测, 已收敛消除该未定义行为",
+      "已接受限制: 读延迟固定 2 拍 (输入寄存 1 + 阵列同步读 1); 无 ready 反压接口, 由 wr_en/rd_en 门控",
+      "已接受限制: 综合与预算按默认 P_DWIDTH=32 / P_AWIDTH=9 (512 深) 评估; 功能侧以 P_AWIDTH=6 全地址遍历取证。其他深度/位宽组合的 BRAM 映射 (是否跨片、是否退化为分布式 RAM) 需重新评估",
+      "工具说明: 本版全部仿真证据由 Vivado xsim 2023.1 产出 (本机 ModelSim 回环 RPC 故障); vlog 编译不受影响, G-A-00 仍由 ModelSim 判读"
+    ]
+  },
+  "owner": "lihan",
+  "kind": "primitive",
+  "maturity": {
+    "level": "certified",
+    "evidence_ref": "engineering-assets/evidence/sdp_ram/1.0.0/"
+  },
+  "requirement_ref": "engineering-assets/docs/comm模块族认证差距清单.md",
+  "doc_refs": [
+    "engineering-assets/docs/governance/CBB-治理与生产级准入规范-V1.0.md"
+  ],
+  "fidelity": {
+    "status": "na"
+  },
+  "top": "sdp_ram",
+  "ports": [
+    {
+      "name": "i_clk",
+      "direction": "input",
+      "width": 1
+    },
+    {
+      "name": "i_rst",
+      "direction": "input",
+      "width": 1
+    },
+    {
+      "name": "i_wr_en",
+      "direction": "input",
+      "width": 1
+    },
+    {
+      "name": "i_wr_addr",
+      "direction": "input",
+      "width": 9
+    },
+    {
+      "name": "i_wr_data",
+      "direction": "input",
+      "width": 32
+    },
+    {
+      "name": "i_rd_en",
+      "direction": "input",
+      "width": 1
+    },
+    {
+      "name": "i_rd_addr",
+      "direction": "input",
+      "width": 9
+    },
+    {
+      "name": "o_rd_data",
+      "direction": "output",
+      "width": 32
+    },
+    {
+      "name": "o_rd_valid",
+      "direction": "output",
+      "width": 1
+    }
+  ],
+  "clock": {
+    "name": "i_clk"
+  },
+  "reset": {
+    "name": "i_rst",
+    "polarity": "active_high",
+    "type": "sync"
+  },
+  "device": {
+    "part": "xc7k325tffg900-2",
+    "family": "kintex7",
+    "note": "与库内其余 CBB 统一器件; OOC 评估"
+  },
+  "params": [
+    {
+      "name": "P_DWIDTH",
+      "value": 32,
+      "rationale": "数据位宽; 综合与预算按此默认值评估"
+    },
+    {
+      "name": "P_AWIDTH",
+      "value": 9,
+      "rationale": "地址位宽, 深度 2^9=512; 512x32=16Kb 恰落在一片 RAMB18E1 (18Kb) 内。TB 另以 P_AWIDTH=6 (64 深) 例化便于全地址遍历"
+    }
+  ],
+  "constraints": {
+    "target": {
+      "fmax": "250MHz",
+      "fmax_mhz": 250,
+      "lut": 40,
+      "ff": 80,
+      "bram": 1,
+      "dsp": 0,
+      "note_budget": "结构推算 (默认 512x32): **BRAM 预期为 1 片 (RAMB18E1, 512x32=16Kb 落在 18Kb 内)** —— 本模块的存在目的就是面向 BRAM 推断, **实测若为 0 且 LUT 暴涨即推断失败, 属缺陷而非优化**。FF: ri_ 级 1+9+32+1+9=52 + ro_rd_valid 1 = 53 (ro_rd_data 32 位预期被 BRAM 输出寄存器吸收), 取 80。LUT 仅零星控制, 取 40。无乘法故 DSP 恒 0。实测见 envelope-check.json。"
+    }
+  },
+  "sources": [
+    {
+      "path": "rtl/sdp_ram.sv",
+      "role": "rtl",
+      "sha256": "2368c39aee4e70a4e4e86f7058623a9ef436b5a7c0e3fdbc45636597e54aff6c"
+    },
+    {
+      "path": "constraints/sdp_ram.xdc",
+      "role": "constraint",
+      "sha256": "c3804ad141f163d8cc19ba612ecbe92646d8a63d1caad8b94369123118a10876"
+    },
+    {
+      "path": "tb/tb_sdp_ram.sv",
+      "role": "tb",
+      "sha256": "453d0b343038496824a08b0e4d3a14784059dc84355a240715b9c4b56254504e"
+    }
+  ],
+  "waivers": [],
+  "superseded_by": null
+}

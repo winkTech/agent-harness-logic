@@ -1,4 +1,13 @@
-# sdp_ram — 简单双端口同步 RAM(1 写 + 1 读、单时钟)
+<!-- asset-status: certified v1.0.0 -->
+# sdp_ram — 简单双端口同步 RAM (1 写 + 1 读、单时钟, certified CBB)
+
+> **综合 (OOC, xc7k325tffg900-2)**: WNS +2.596ns @250MHz 即达成约 **712 MHz**;
+> **BRAM 0.5/1 tile = 1 片 RAMB18E1, 推断成功** (512x32=16Kb 落在 18Kb 内);
+> LUT 1/40, FF 53/80 (与推算完全吻合, ro_rd_data 被 BRAM 输出寄存器吸收), DSP 0/0。
+> **自检**: 641 次比对 0 失配, **read-old 同址语义专项命中 18 次**。
+> **限制**: 见 [`docs/limitations.md`](docs/limitations.md) —— 8 条, 重点是
+> **read-old 语义** (需要 read-new 的不能直接用) 与 **阵列不复位、上电为 X**
+> (须先写后读)。
 
 参数化位宽/深度的存储阵列,面向 BRAM 推断:写口无回读,读口同步读。
 

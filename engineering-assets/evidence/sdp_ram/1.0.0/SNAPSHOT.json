@@ -1,0 +1,333 @@
+{
+  "schema_version": "1.0",
+  "asset_uid": "sdp_ram",
+  "version": "1.0.0",
+  "created_at": "2026-08-01T13:58:28.546Z",
+  "git_head": "76858e16032e03342c71808354e596c15de73897",
+  "manifest_sha256": "0af748285de064221b855441dd3b300a75d03bf832cd47808adb68613f51d95c",
+  "evidence_source": "var/gates/pg/sdp_ram",
+  "files": [
+    {
+      "path": "cdc-report.json",
+      "sha256": "000c0cd760a61a0dc1b286c4006d6ba8dc3470a24e52fd0434d37d440c988895",
+      "bytes": 344
+    },
+    {
+      "path": "clocks.rpt",
+      "sha256": "8961dc30b900f63b561e7dab8297b9645b0973037c9c578dc309a1ba80f5d0cf",
+      "bytes": 1487
+    },
+    {
+      "path": "CS-1.json",
+      "sha256": "f5d82dc282cab7aec0f5f93abab516a112db3a0ed10f4d7dfc4bea61a6b4bf3d",
+      "bytes": 161
+    },
+    {
+      "path": "CS-2.json",
+      "sha256": "31cfa0fe6a8e813b089bab7519f8d7332d6ac49ceb941ac8a253f18192906a78",
+      "bytes": 178
+    },
+    {
+      "path": "envelope-check.json",
+      "sha256": "b66f40588a5029a1fc1b55ff72a740a21717e0b856f17d5dcef2bc203a868727",
+      "bytes": 870
+    },
+    {
+      "path": "G-A-00.json",
+      "sha256": "1553807a32df473c43c1a71fe05ab92b0d178e9a3274c4c5bfdf4ca513662ca4",
+      "bytes": 186
+    },
+    {
+      "path": "G-A-01.json",
+      "sha256": "10dc7da3f0f2a61b6ff64d75dd0c662bf01d372ede45918111b1c9d776adc795",
+      "bytes": 169
+    },
+    {
+      "path": "G-A-02.json",
+      "sha256": "fcbc3b0c6fc9d62236fd1274e7d54c852f33655ff92b71b2bf2c2bd1977d739c",
+      "bytes": 172
+    },
+    {
+      "path": "G-A-04.json",
+      "sha256": "16aedcf88a66d617b89719cd1b342d3090dd0408e4c644975badaf817cac4479",
+      "bytes": 179
+    },
+    {
+      "path": "G-B-01.json",
+      "sha256": "5697de9b5cb2b1390ba3a6a7a825fa958c6592a922e1790f2958890f95b708db",
+      "bytes": 168
+    },
+    {
+      "path": "G-B-02.json",
+      "sha256": "0838ab3efd6db964cd249c988d5d6bbd2fe81042dcc8670abacaf40d9a73d92d",
+      "bytes": 263
+    },
+    {
+      "path": "G-B-03.json",
+      "sha256": "551787445bcdeddcf709283f2a73ace2f3739c2a0341618a8a58b9d7447389b6",
+      "bytes": 213
+    },
+    {
+      "path": "G-C-01.json",
+      "sha256": "c05da71d3f5014c041ec5e1c74e7583cef9aba35b36f99e986101b4f301ebe33",
+      "bytes": 212
+    },
+    {
+      "path": "G-C-02.json",
+      "sha256": "5f584747b7ba0213e51790be255c11053756d736ae0b00d51af13831edf0d350",
+      "bytes": 209
+    },
+    {
+      "path": "G-C-03.json",
+      "sha256": "37d2a9101e1a5e546079e8fe54650a7116364cec05912e9ea5f82883b9fcbf39",
+      "bytes": 167
+    },
+    {
+      "path": "G-C-04.json",
+      "sha256": "c3659407dafa05ebe5954fff24c40f68a2ed85a3fd7ab1d018fe6244a9239ed7",
+      "bytes": 193
+    },
+    {
+      "path": "G-C-05.json",
+      "sha256": "c2d84ded0fe40491ddade009d1081423d0cf446605337eb1d6ff0dfe0db83b71",
+      "bytes": 175
+    },
+    {
+      "path": "G-DOC-01.json",
+      "sha256": "60a755bec0d9cba29dccedf878c212747cf467a1effa268f5a745413874e9cb5",
+      "bytes": 174
+    },
+    {
+      "path": "G-DOC-03.json",
+      "sha256": "449bb27f3d20014caf6f71d546f61136ed7aade327fb8528259efbbece7f5b5e",
+      "bytes": 176
+    },
+    {
+      "path": "G-DOC-04.json",
+      "sha256": "2fdec288ea36ada47f36af0b5f3812c09d822d92f629f108603054de601bd7d5",
+      "bytes": 242
+    },
+    {
+      "path": "G-GATE-01.json",
+      "sha256": "55884ffe480c6de56a254802c8f6fe5b94b269195cdb3184c4f65fe57b6d0802",
+      "bytes": 170
+    },
+    {
+      "path": "G-SIGN-01.json",
+      "sha256": "ddc665f472b8dda79e63862017c16bdddf539a999115795205b5bf4151b8b32f",
+      "bytes": 170
+    },
+    {
+      "path": "gate-results.json",
+      "sha256": "3d9f0b5ab64050c33e078036af7aa9db393d897c0346d1511d5245e1c0bb644c",
+      "bytes": 2918
+    },
+    {
+      "path": "reset-sim.json",
+      "sha256": "349e9acfc5a547a8ed2c2e271be7648a076b7579eec377682447aaad4c281499",
+      "bytes": 1187
+    },
+    {
+      "path": "RL-OUT.json",
+      "sha256": "a61da0e07fc68fb86ff2b921f5b00550259d0d6d9b819ee551e89a10cd1c8b70",
+      "bytes": 188
+    },
+    {
+      "path": "stability/backpressure.json",
+      "sha256": "130fa097036ba075e90a21ea0a9628e10493cc749e3248a4857df566c1e79d35",
+      "bytes": 334
+    },
+    {
+      "path": "stability/boundary.json",
+      "sha256": "37c83b78945554868437bc9e5d8921cd0311c50cc8a5e687c6de972d35eb62fb",
+      "bytes": 463
+    },
+    {
+      "path": "stability/regression.json",
+      "sha256": "96a89cba71740002d668c9cad39ecfd84fba9c0d4b40d33d9540dbf44171e14e",
+      "bytes": 285
+    },
+    {
+      "path": "stability/stress.json",
+      "sha256": "05661de0d47846f6f0da9e151f7ce6f687fbb727c5f145a86045a5460b62aa50",
+      "bytes": 199
+    },
+    {
+      "path": "synth-meta.json",
+      "sha256": "a643605e3e7afde1878d7f238cbf0fa11e88b3d43690a22b9dfd3e2f11b50266",
+      "bytes": 177
+    },
+    {
+      "path": "synthesis-timing-evidence.json",
+      "sha256": "4cb6f43a50b35b838c42d03ee20b55dc1c8dd3cb9718bf5378866683fe0557ae",
+      "bytes": 1228
+    },
+    {
+      "path": "tb-selfcheck.json",
+      "sha256": "b0618dc66bfd68fb01aa28dacbdf02e3a32b4d3fa76be723f0b948156e8725ba",
+      "bytes": 309
+    },
+    {
+      "path": "timing-summary.rpt",
+      "sha256": "8134fd9eb4293b32dc14d87c804fedad0b96841188752bb002f3f4df3707e236",
+      "bytes": 15831
+    },
+    {
+      "path": "utilization.rpt",
+      "sha256": "b52e3dd5e378e47dfd7720ddcd741b67a17528c0705c01cd8efcc3f820ad4249",
+      "bytes": 8161
+    }
+  ],
+  "gate_summary": {
+    "asset_uid": "sdp_ram",
+    "name": "sdp_ram",
+    "declared_level": "certified",
+    "cleared_level": "certified",
+    "blocking_at": null,
+    "gate_count": 20,
+    "generated_by": "gate-runner.cjs v1.1",
+    "redline_contract": "reset-signal-scoped",
+    "gates": [
+      {
+        "id": "CS-1",
+        "level": "intake",
+        "must": true,
+        "status": "pass",
+        "severity": "high"
+      },
+      {
+        "id": "CS-2",
+        "level": "intake",
+        "must": true,
+        "status": "pass",
+        "severity": "high"
+      },
+      {
+        "id": "G-A-00",
+        "level": "intake",
+        "must": true,
+        "status": "pass",
+        "severity": "high"
+      },
+      {
+        "id": "G-A-02",
+        "level": "intake",
+        "must": true,
+        "status": "pass",
+        "severity": "high"
+      },
+      {
+        "id": "G-A-01",
+        "level": "qualification",
+        "must": true,
+        "status": "pass",
+        "severity": "high"
+      },
+      {
+        "id": "RL-OUT",
+        "level": "qualification",
+        "must": true,
+        "status": "pass",
+        "severity": "high"
+      },
+      {
+        "id": "G-C-03",
+        "level": "qualification",
+        "must": true,
+        "status": "pass",
+        "severity": "high"
+      },
+      {
+        "id": "G-A-04",
+        "level": "qualification",
+        "must": true,
+        "status": "pass",
+        "severity": "mid"
+      },
+      {
+        "id": "G-DOC-03",
+        "level": "qualification",
+        "must": true,
+        "status": "pass",
+        "severity": "mid"
+      },
+      {
+        "id": "G-DOC-04",
+        "level": "qualification",
+        "must": true,
+        "status": "pass",
+        "severity": "mid"
+      },
+      {
+        "id": "G-DOC-01",
+        "level": "intake",
+        "must": true,
+        "status": "pass",
+        "severity": "warning"
+      },
+      {
+        "id": "G-B-01",
+        "level": "intake",
+        "must": true,
+        "status": "pass",
+        "severity": "mid"
+      },
+      {
+        "id": "G-B-02",
+        "level": "qualification",
+        "must": true,
+        "status": "pass",
+        "severity": "high"
+      },
+      {
+        "id": "G-B-03",
+        "level": "certified",
+        "must": true,
+        "status": "pass",
+        "severity": "high"
+      },
+      {
+        "id": "G-C-01",
+        "level": "certified",
+        "must": true,
+        "status": "pass",
+        "severity": "high"
+      },
+      {
+        "id": "G-C-02",
+        "level": "certified",
+        "must": true,
+        "status": "pass",
+        "severity": "high"
+      },
+      {
+        "id": "G-C-04",
+        "level": "certified",
+        "must": true,
+        "status": "pass",
+        "severity": "high"
+      },
+      {
+        "id": "G-C-05",
+        "level": "certified",
+        "must": true,
+        "status": "pass",
+        "severity": "high"
+      },
+      {
+        "id": "G-GATE-01",
+        "level": "certified",
+        "must": true,
+        "status": "pass",
+        "severity": "high"
+      },
+      {
+        "id": "G-SIGN-01",
+        "level": "certified",
+        "must": true,
+        "status": "pass",
+        "severity": "high"
+      }
+    ]
+  }
+}
