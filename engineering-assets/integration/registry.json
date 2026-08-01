@@ -379,10 +379,16 @@
   {
    "id": "ITG-0019",
    "project": "(library)",
-   "project_ref": "incubator/intake/ddr_axi4_controller",
+   "project_ref": "cbb/ddr_axi4_controller",
    "asset_uid": "ddr_axi4_controller",
-   "version_pinned": "0.1.0",
-   "config": {},
+   "version_pinned": "1.0.0",
+   "config": {
+    "P_DATA_W": 512,
+    "P_ADDR_W": 32,
+    "P_ID_W": 4,
+    "P_MAX_LEN": 256,
+    "P_TIMEOUT": 4096
+   },
    "integrated_at": "2026-07-31T00:00:00Z",
    "status": "library",
    "owner": "lihan",

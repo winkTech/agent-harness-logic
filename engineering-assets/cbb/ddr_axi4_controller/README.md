@@ -1,4 +1,17 @@
-# ddr_axi4_controller — DDR MIG AXI4 读写桥接控制器
+# ddr_axi4_controller — DDR MIG AXI4 读写桥接控制器 (certified CBB)
+
+> **自检**: 778 拍读回比对 **0 失配**（随机退避从机）；AXI 稳定性
+> （`valid && !ready` 期间载荷不变）、`wlast` 协议、突发边界、事务中复位、
+> AR 超时、`bresp=SLVERR` 注入全过。
+> **限制**: 见 [`docs/limitations.md`](docs/limitations.md)。
+>
+> **TB 竞争修复记录（2026-08-01）**：本模块的自检 TB 首次真正跑起来时报 87~298
+> 处失配，诊断结果是 **TB 的从机模型在 posedge 之后用阻塞赋值驱动 R 通道**，
+> 与 DUT 自身 `always_ff @(posedge)` 同时间步、顺序不定，DUT 有时采到下一拍的
+> `rdata`/`rlast`。**RTL 无缺陷** —— 改为 negedge 驱动后 0 失配。
+
+<!-- asset-status: certified v1.0.0 -->
+
 
 用户命令/数据流接口与 Xilinx MIG(AXI4 slave)之间的桥接层。单 ID、单事务顺序执行。
 

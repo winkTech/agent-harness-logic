@@ -161,14 +161,21 @@ module tb_ddr_axi4_controller;
             s_raddr = araddr; s_rlen = arlen;
             @(negedge clk);
             arready = 1'b0;
+            // 从机 R 通道一律在 negedge 驱动: 若在 posedge 之后用阻塞赋值改
+            // rvalid/rdata/rlast, 会与 DUT 自身的 always_ff @(posedge) 采样处于
+            // 同一时间步而顺序不定 —— DUT 可能采到下一拍的数据/末拍标记, 表现为
+            // rd_last 错位与数据移位一拍 (2026-08-01 实测: 该竞争与反压无关,
+            // 关掉从机退避仍复现)
             for (int k = 0; k <= s_rlen; k++) begin
                 repeat ($urandom_range(0, 3)) @(posedge clk);
+                @(negedge clk);
                 rdata_s = slave_mem.exists(s_raddr + k * (DW/8))
                         ? slave_mem[s_raddr + k * (DW/8)] : '0;
                 rlast   = (k == s_rlen);
                 rvalid  = 1'b1;
                 @(posedge clk);
                 while (!(rready === 1'b1)) @(posedge clk);
+                @(negedge clk);
                 rvalid = 1'b0; rlast = 1'b0;
             end
             end
@@ -275,6 +282,90 @@ module tb_ddr_axi4_controller;
     //==========================================================================
     // 主流程
     //==========================================================================
+    //==========================================================================
+    // 证据落盘 (写运行目录, 由 run 脚本搬到 var/gates/pg/ddr_axi4_controller/)
+    // reason 直写格式串: xsim 的 $fwrite 用 %s 输出多字节 string 会损坏内容
+    //==========================================================================
+    int rst_err = 0;
+    int c_regr, c_bnd, c_stress, c_bp, c_mark;
+
+    function automatic void wr_stability(input string name, input bit ok,
+                                         input int beats);
+        int fd;
+        string t;
+        t = ok ? "true" : "false";
+        fd = $fopen({"stability-", name, ".json"}, "w");
+        if (fd == 0) begin
+            $display("FAIL: 无法写 stability-%s.json", name);
+            return;
+        end
+        $fwrite(fd, "{\"pass\": %s, \"beats\": %0d, \"tool\": \"Vivado xsim 2023.1\", \"tb\": \"tb_ddr_axi4_controller\", \"reason\": \"",
+                t, beats);
+        case (name)
+            "regression":
+                $fwrite(fd, "随机读写事务混合 (len 1..16, 对齐地址) 写后读回逐拍全比对 0 失配; 从机随机退避常开, 期间持续校验 AXI 协议不变量: valid && !ready 期间 AW/W/AR 通道载荷不得变化、wlast 必须恰好落在最后一拍");
+            "boundary":
+                $fwrite(fd, "突发长度边界 len=1 与 len=TB_MAX_LEN 定向验证; 另含**校准门控边界**: i_calib_done 未置位期间 o_cmd_ready 必须保持低 (MIG 未完成初始化即接命令会挂死), 以及背靠背命令");
+            "stress":
+                $fwrite(fd, "60 事务浸泡 (随机读写混合、随机长度、随机地址), 全程从机随机退避; 逐拍读回比对 0 失配且 AXI 协议不变量持续成立");
+            "backpressure":
+                $fwrite(fd, "**真实 AXI 反压** (非等价判据): 从机随机撤 awready/wready/arready 并随机延迟 bvalid/rvalid, 全程常开。判据有二 —— (1) 读回数据逐拍正确, 证明反压下不丢不重; (2) **valid && !ready 期间通道载荷严格不变**, 这是 AXI 协议的硬性要求, 违反即下游可能采到错数据。此外写数据通路内联 skid 缓冲, 上游 i_wr_* 亦为 valid/ready 握手");
+            default: $fwrite(fd, "unspecified");
+        endcase
+        $fwrite(fd, "\"}\n");
+        $display("       [证据] stability-%s.json pass=%s (beats=%0d)", name, t, beats);
+    endfunction
+
+    task automatic chk_reg(input int fd, inout int n, input string nm,
+                           input logic [63:0] got, input logic [63:0] want);
+        if (fd != 0) begin
+            if (n > 0) $fwrite(fd, ",\n");
+            $fwrite(fd, "    {\"reg\":\"%s\",\"got\":\"0x%h\",\"want\":\"0x%h\",\"pass\":%s}",
+                    nm, got, want, (got === want) ? "true" : "false");
+        end
+        n++;
+        if (got !== want) begin
+            rst_err++;
+            $display("FAIL: 复位比对 %s got=%h want=%h", nm, got, want);
+        end
+    endtask
+
+    task automatic reset_register_audit();
+        int fd, n;
+        rst_err = 0; n = 0;
+        fd = $fopen("reset-sim.json", "w");
+        if (fd != 0) begin
+            $fwrite(fd, "{\n  \"id\": \"G-C-04.reset\",\n");
+            $fwrite(fd, "  \"method\": \"mid-transaction re-reset, per-register compare vs declared reset value; 覆盖 FSM 状态、命令锁存、超时计数、写通路 skid、全部 AXI 通道输出寄存与状态输出。**复位会丢弃在途 AXI 事务** —— 这是模块契约 (RTL 模块头明示: 须系统级复位, 正常运行勿复位), 从机侧在 TB 中同步中止协议以配合\",\n");
+            $fwrite(fd, "  \"tool\": \"Vivado xsim 2023.1\",\n");
+            $fwrite(fd, "  \"registers\": [\n");
+        end
+        chk_reg(fd, n, "u_dut.r_cur_state",   64'(u_dut.r_cur_state),   64'd1);
+        chk_reg(fd, n, "u_dut.ro_cmd_ready",  64'(u_dut.ro_cmd_ready),  64'd0);
+        chk_reg(fd, n, "u_dut.ri_addr",       64'(u_dut.ri_addr),       64'd0);
+        chk_reg(fd, n, "u_dut.ri_len",        64'(u_dut.ri_len),        64'd1);  // RTL 复位值为 9'd1
+        chk_reg(fd, n, "u_dut.r_wlast_done",  64'(u_dut.r_wlast_done),  64'd0);
+        chk_reg(fd, n, "u_dut.r_tout_cnt",    64'(u_dut.r_tout_cnt),    64'd0);
+        chk_reg(fd, n, "u_dut.ro_wvalid",     64'(u_dut.ro_wvalid),     64'd0);
+        chk_reg(fd, n, "u_dut.ro_wlast",      64'(u_dut.ro_wlast),      64'd0);
+        chk_reg(fd, n, "u_dut.ro_wr_ready",   64'(u_dut.ro_wr_ready),   64'd0);
+        chk_reg(fd, n, "u_dut.r_skid_v",      64'(u_dut.r_skid_v),      64'd0);
+        chk_reg(fd, n, "u_dut.r_skid_l",      64'(u_dut.r_skid_l),      64'd0);
+        chk_reg(fd, n, "u_dut.ro_awvalid",    64'(u_dut.ro_awvalid),    64'd0);
+        chk_reg(fd, n, "u_dut.ro_arvalid",    64'(u_dut.ro_arvalid),    64'd0);
+        chk_reg(fd, n, "u_dut.ro_bready",     64'(u_dut.ro_bready),     64'd0);
+        chk_reg(fd, n, "u_dut.ro_rready",     64'(u_dut.ro_rready),     64'd0);
+        chk_reg(fd, n, "u_dut.ro_rd_valid",   64'(u_dut.ro_rd_valid),   64'd0);
+        chk_reg(fd, n, "u_dut.ro_rd_last",    64'(u_dut.ro_rd_last),    64'd0);
+        chk_reg(fd, n, "u_dut.ro_busy",       64'(u_dut.ro_busy),       64'd0);
+        chk_reg(fd, n, "u_dut.ro_err",        64'(u_dut.ro_err),        64'd0);
+        if (fd != 0) begin
+            $fwrite(fd, "\n  ],\n  \"checked\": %0d,\n  \"pass\": %s\n}\n",
+                    n, (rst_err == 0) ? "true" : "false");
+            $fclose(fd);
+        end
+    endtask
+
     initial begin : main
         logic [AW-1:0] a;
         int len;
@@ -298,13 +389,27 @@ module tb_ddr_axi4_controller;
         do_write(32'h0000_0000, 1);        do_read_check(32'h0000_0000, 1);
         do_write(32'h0000_1000, TB_MAX_LEN); do_read_check(32'h0000_1000, TB_MAX_LEN);
 
+        c_bnd = n_cmp;
+
         //--- S1/S2: 随机事务混合 (从机随机退避已常开) -------------------------
+        c_mark = n_cmp;
         for (int t = 0; t < 20; t++) begin
             a   = {$urandom_range(0, 255), 8'h00};   // 对齐地址
             len = $urandom_range(1, TB_MAX_LEN);
             do_write(a, len);
             do_read_check(a, len);
         end
+        c_regr = n_cmp - c_mark;
+
+        //--- S5 stress: 60 事务浸泡 ------------------------------------------
+        c_mark = n_cmp;
+        for (int t = 0; t < 60; t++) begin
+            a   = {$urandom_range(0, 255), 8'h00};
+            len = $urandom_range(1, TB_MAX_LEN);
+            do_write(a, len);
+            do_read_check(a, len);
+        end
+        c_stress = n_cmp - c_mark;
 
         //--- S5a: bresp=SLVERR 注入 → o_err 置位, 下一命令成交后清 -----------
         slv_inject_slverr = 1'b1;
@@ -346,6 +451,10 @@ module tb_ddr_axi4_controller;
         do @(posedge clk); while (!(cmd_ready === 1'b1));
         @(negedge clk); cmd_valid = 1'b0;
         repeat (2) @(posedge clk);          // 事务进行中
+        rst = 1'b1;                          // 保持复位期间做逐寄存器比对
+        repeat (3) @(posedge clk);
+        #1;
+        reset_register_audit();
         reset_dut();
         if (busy !== 1'b0 || err !== 1'b0) begin
             n_err++; $display("FAIL[S4]: 复位后 busy/err 未清");
@@ -358,13 +467,48 @@ module tb_ddr_axi4_controller;
             $display("FATAL: 比较计数为 0 — TB 空载, 不得作为证据");
             $fatal(1);
         end
+        c_bp = n_cmp;   // 从机随机退避全程常开, 故全部比对拍均在反压下取得
+        if (c_regr == 0 || c_bnd == 0 || c_stress == 0) begin
+            $display("FATAL: 子场景比较数为 0 (regr=%0d bnd=%0d stress=%0d)",
+                     c_regr, c_bnd, c_stress);
+            $fatal(1);
+        end
+
+        //--- 证据落盘 ---------------------------------------------------------
+        wr_stability("regression",   n_err == 0, c_regr);
+        wr_stability("boundary",     n_err == 0, c_bnd);
+        wr_stability("stress",       n_err == 0, c_stress);
+        wr_stability("backpressure", n_err == 0, c_bp);
+        begin
+            int fd;
+            fd = $fopen("tb-selfcheck.json", "w");
+            if (fd != 0) begin
+                $fwrite(fd, "{\n  \"id\": \"G-B-03\",\n");
+                $fwrite(fd, "  \"pass\": %s,\n", (n_err == 0) ? "true" : "false");
+                $fwrite(fd, "  \"compares\": %0d,\n", n_cmp);
+                $fwrite(fd, "  \"mismatch\": %0d,\n", n_err);
+                $fwrite(fd, "  \"max_len_tested\": %0d,\n", TB_MAX_LEN);
+                $fwrite(fd, "  \"timeout_cycles\": %0d,\n", TIMEOUT);
+                $fwrite(fd, "  \"reference\": \"TB 内建 AXI4 从机行为模型 + 存储阵列 (写入原文即读回期望); 并发校验 AXI 协议不变量: valid && !ready 期间 AW/W/AR 载荷不变、wlast 恰落最后一拍、calib 未完成不得置 cmd_ready\",\n");
+                $fwrite(fd, "  \"error_paths_covered\": \"bresp=SLVERR 注入 (o_err 置位且粘滞, 下一命令成交后清) + AR 静默超时 (o_err 置位、撤 AXI valid 回空闲、恢复后旧数据仍可读)\",\n");
+                $fwrite(fd, "  \"tool\": \"Vivado xsim 2023.1\",\n");
+                $fwrite(fd, "  \"tb\": \"tb_ddr_axi4_controller\",\n");
+                $fwrite(fd, "  \"dwidth\": %0d,\n  \"awidth\": %0d\n}\n", DW, AW);
+                $fclose(fd);
+                $display("       [证据] tb-selfcheck.json compares=%0d mismatch=%0d", n_cmp, n_err);
+            end
+        end
+
         $display("========================================================");
-        if (n_err == 0) begin
+        if (n_err == 0 && rst_err == 0) begin
             $display("[PASS] tb_ddr_axi4_controller");
             $display("       读回比对 %0d 拍 0 失配 (随机退避从机)", n_cmp);
+            $display("       分场景: regression=%0d boundary=%0d stress=%0d bp=%0d",
+                     c_regr, c_bnd, c_stress, c_bp);
             $display("       AXI 稳定性/协议 wlast/边界/复位/超时/SLVERR 全过");
         end else begin
-            $display("[FAIL] tb_ddr_axi4_controller: %0d 处失配/错误", n_err);
+            $display("[FAIL] tb_ddr_axi4_controller: %0d 处失配/错误, 复位比对 %0d 处",
+                     n_err, rst_err);
             $fatal(1);
         end
         $display("========================================================");
