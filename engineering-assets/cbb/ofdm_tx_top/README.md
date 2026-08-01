@@ -1,4 +1,5 @@
-# ofdm_tx_top — OFDM 发射机 (intake 评估性打包)
+<!-- asset-status: certified v1.0.0 -->
+# ofdm_tx_top — 802.11a 风格 OFDM 发射机 (certified CBB)
 
 802.11a 风格 OFDM 发射链: 比特流 → 调制映射 → 导频/子载波映射 → 64 点 IFFT → CP 插入 → AXI-Stream 输出。
 定点: 16bit, Q2.14 (频域) / Q3.13 (时域)。

@@ -1,5 +1,22 @@
 # CHANGELOG — ofdm_tx_top
 
+## [1.0.0] — 2026-08-01 certified 认证
+
+内容与 0.3.0 一致，无代码改动；本条为认证记账：
+
+- G-SIGN-01：owner lihan 具名签署（manifest.signoff，含证据复核清单与
+  6 组已接受限制 + 工具说明）。
+- gate-runner **20/20 全绿，达到 CERTIFIED**；证据快照
+  `evidence/ofdm_tx_top/1.0.0/SNAPSHOT.json`（哈希锁定并 verify 通过）；
+  包迁入 `cbb/`；新增 `docs/limitations.md`。
+- registry ITG-0008 repin 1.0.0，maturity_status → certified，
+  三项 badge_gap（fft-contract / bit-true-vectors / vivado-timing）全部还清。
+- 全流程：0.1.0 编码整改 → 0.2.0 自研 IFFT 架构重排（首次功能贯通，修
+  NBA 左值索引与信用回绕两缺陷）→ 0.3.0 对齐 ADR-004 的 R2²SDF（DSP 20→10，
+  Fmax 176→272 MHz）→ golden 1.2.0 位真镜像 → cosim 2560 样点 0 失配 →
+  证据链 → 签署，全链实跑取证。
+- 库内第 6 个 certified。
+
 ## [0.3.0] — 2026-08-01 IFFT 对齐 ADR-004 的 R2²SDF；缩放调度升格为需求侧决策
 
 0.2.0 的 `ifft64_sdf` 实为**基-2 SDF**，与 ADR-004 明文指定的 **R2²SDF** 不符；

@@ -97,7 +97,7 @@
    "project": "reference-evidence",
    "project_ref": "models/comm/ofdm",
    "asset_uid": "model_comm_ofdm",
-   "version_pinned": "1.1.0",
+   "version_pinned": "1.2.0",
    "config": {},
    "integrated_at": "2026-07-26T00:00:00Z",
    "status": "active",
@@ -160,27 +160,21 @@
   {
    "id": "ITG-0008",
    "project": "phy-intake",
-   "project_ref": "incubator/intake/ofdm_tx_top",
+   "project_ref": "cbb/ofdm_tx_top",
    "asset_uid": "ofdm_tx_top",
-   "version_pinned": "0.1.0",
-   "config": {},
+   "version_pinned": "1.0.0",
+   "config": {
+    "DATA_W": 16
+   },
    "integrated_at": "2026-07-26T00:00:00Z",
    "status": "active",
-   "maturity_status": "deferred",
+   "maturity_status": "certified",
    "owner": "lihan",
    "consumers": [],
-   "issues": [
-    "fft-contract",
-    "bit-true-vectors",
-    "vivado-timing"
-   ],
-   "badge_gap": [
-    "fft-contract",
-    "bit-true-vectors",
-    "vivado-timing"
-   ],
-   "deferred_reason": "project-specific PHY; keep intake under foundation-first policy",
-   "last_reviewed": "2026-07-26"
+   "issues": [],
+   "badge_gap": [],
+   "deferred_reason": "1.0.0 repin (ADR-004): fft-contract 已还清 (自研 R2²SDF 替代 IP 占位, 结构对齐 ADR-004 决策1); bit-true-vectors 已还清 (golden 1.2.0 位真镜像 + cosim 2560 样点 0 容差 0 失配); vivado-timing 已还清 (OOC 综合 WNS +6.323ns @100MHz 即 272MHz, 资源全在包络内)",
+   "last_reviewed": "2026-08-01"
   },
   {
    "id": "ITG-0009",

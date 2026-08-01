@@ -3,12 +3,12 @@
   "summary": {
     "asset_count": 23,
     "by_level": {
-      "certified": 5,
-      "intake": 7,
+      "certified": 8,
+      "intake": 4,
       "qualification": 11
     },
     "red_count": 0,
-    "yellow_count": 3,
+    "yellow_count": 0,
     "unregistered_root_count": 2
   },
   "unregistered_roots": [
@@ -17,26 +17,7 @@
   ],
   "drift": {
     "red": [],
-    "yellow": [
-      {
-        "code": "D3",
-        "asset_uid": "channel_est_top",
-        "dir": "incubator/intake/channel_est_top",
-        "message": "declared level intake is below machine-cleared qualification"
-      },
-      {
-        "code": "D3",
-        "asset_uid": "ofdm_tx_top",
-        "dir": "incubator/intake/ofdm_tx_top",
-        "message": "declared level intake is below machine-cleared qualification"
-      },
-      {
-        "code": "D3",
-        "asset_uid": "sync_top",
-        "dir": "incubator/intake/sync_top",
-        "message": "declared level intake is below machine-cleared qualification"
-      }
-    ]
+    "yellow": []
   },
   "assets": [
     {
@@ -107,39 +88,28 @@
       "asset_uid": "channel_est_top",
       "name": "channel_est_top",
       "kind": "rtl",
-      "version": "0.1.0",
+      "version": "1.0.0",
       "owner": "lihan",
-      "level": "intake",
-      "dir": "incubator/intake/channel_est_top",
+      "level": "certified",
+      "dir": "cbb/channel_est_top",
       "top": "channel_est_top",
       "golden_model_ref": "model_comm_channel_est",
-      "fidelity": "pending",
-      "device": null,
+      "fidelity": "bit_true",
+      "device": "xc7k325tffg900-2",
       "target_fmax": "100MHz",
-      "signoff_at": null,
+      "signoff_at": "2026-08-01",
       "waiver_count": 0,
       "used_by": [],
-      "badge_gap": [
-        "G-B-03",
-        "G-C-01",
-        "G-C-02",
-        "G-C-04",
-        "G-C-05",
-        "G-GATE-01",
-        "G-SIGN-01",
-        "axis-contract",
-        "bit-true-vectors",
-        "vivado-timing"
-      ],
+      "badge_gap": [],
       "documents": {
         "readme": true,
         "changelog": true,
-        "limitations": false
+        "limitations": true
       },
       "gates": {
-        "cleared_level": "qualification",
-        "blocking_at": "certified",
-        "pass_count": 13
+        "cleared_level": "certified",
+        "blocking_at": null,
+        "pass_count": 20
       }
     },
     {
@@ -395,7 +365,7 @@
       "asset_uid": "model_comm_channel_est",
       "name": "ls_channel_est_golden",
       "kind": "golden-model",
-      "version": "1.1.0",
+      "version": "1.2.0",
       "owner": "lihan",
       "level": "intake",
       "dir": "models/comm/channel_est",
@@ -409,9 +379,7 @@
       "used_by": [
         "channel_est_top"
       ],
-      "badge_gap": [
-        "exported-vectors"
-      ],
+      "badge_gap": [],
       "documents": {
         "readme": false,
         "changelog": false,
@@ -459,7 +427,7 @@
       "asset_uid": "model_comm_ofdm",
       "name": "ofdm_tx_golden",
       "kind": "golden-model",
-      "version": "1.0.0",
+      "version": "1.2.0",
       "owner": "lihan",
       "level": "intake",
       "dir": "models/comm/ofdm",
@@ -523,7 +491,7 @@
       "asset_uid": "model_comm_synch",
       "name": "ofdm_synch_golden",
       "kind": "golden-model",
-      "version": "1.0.0",
+      "version": "1.1.0",
       "owner": "lihan",
       "level": "intake",
       "dir": "models/comm/synch",
@@ -537,10 +505,7 @@
       "used_by": [
         "sync_top"
       ],
-      "badge_gap": [
-        "cfo-correction",
-        "exported-vectors"
-      ],
+      "badge_gap": [],
       "documents": {
         "readme": false,
         "changelog": false,
@@ -556,39 +521,28 @@
       "asset_uid": "ofdm_tx_top",
       "name": "ofdm_tx_top",
       "kind": "rtl",
-      "version": "0.1.0",
+      "version": "1.0.0",
       "owner": "lihan",
-      "level": "intake",
-      "dir": "incubator/intake/ofdm_tx_top",
+      "level": "certified",
+      "dir": "cbb/ofdm_tx_top",
       "top": "ofdm_tx_top",
       "golden_model_ref": "model_comm_ofdm",
-      "fidelity": "pending",
-      "device": null,
+      "fidelity": "bit_true",
+      "device": "xc7k325tffg900-2",
       "target_fmax": "100MHz",
-      "signoff_at": null,
+      "signoff_at": "2026-08-01",
       "waiver_count": 0,
       "used_by": [],
-      "badge_gap": [
-        "G-B-03",
-        "G-C-01",
-        "G-C-02",
-        "G-C-04",
-        "G-C-05",
-        "G-GATE-01",
-        "G-SIGN-01",
-        "bit-true-vectors",
-        "fft-contract",
-        "vivado-timing"
-      ],
+      "badge_gap": [],
       "documents": {
         "readme": true,
         "changelog": true,
-        "limitations": false
+        "limitations": true
       },
       "gates": {
-        "cleared_level": "qualification",
-        "blocking_at": "certified",
-        "pass_count": 13
+        "cleared_level": "certified",
+        "blocking_at": null,
+        "pass_count": 20
       }
     },
     {
@@ -785,39 +739,28 @@
       "asset_uid": "sync_top",
       "name": "ofdm_sync_top",
       "kind": "rtl",
-      "version": "0.1.0",
+      "version": "1.0.0",
       "owner": "lihan",
-      "level": "intake",
-      "dir": "incubator/intake/sync_top",
+      "level": "certified",
+      "dir": "cbb/sync_top",
       "top": "sync_top",
       "golden_model_ref": "model_comm_synch",
-      "fidelity": "pending",
-      "device": null,
+      "fidelity": "bit_true",
+      "device": "xc7k325tffg900-2",
       "target_fmax": "100MHz",
-      "signoff_at": null,
+      "signoff_at": "2026-08-01",
       "waiver_count": 0,
       "used_by": [],
-      "badge_gap": [
-        "G-B-03",
-        "G-C-01",
-        "G-C-02",
-        "G-C-04",
-        "G-C-05",
-        "G-GATE-01",
-        "G-SIGN-01",
-        "cfo-correction",
-        "exported-vectors",
-        "vivado-timing"
-      ],
+      "badge_gap": [],
       "documents": {
         "readme": true,
         "changelog": true,
-        "limitations": false
+        "limitations": true
       },
       "gates": {
-        "cleared_level": "qualification",
-        "blocking_at": "certified",
-        "pass_count": 13
+        "cleared_level": "certified",
+        "blocking_at": null,
+        "pass_count": 20
       }
     }
   ]

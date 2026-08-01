@@ -2,17 +2,20 @@
 
 > Generated from manifest.json and gate-results.json. Do not edit by hand.
 
-Assets: 23 · RED: 0 · YELLOW: 3
+Assets: 23 · RED: 0 · YELLOW: 0
 
 ## certified
 
 | UID | Version | Kind | Directory | Machine cleared | Blocking | Used by | Badge gap |
 |---|---:|---|---|---|---|---|---|
 | `axis_skid_buffer` | 1.0.0 | primitive | `cbb/axis_skid_buffer` | certified | — | — | — |
+| `channel_est_top` | 1.0.0 | rtl | `cbb/channel_est_top` | certified | — | — | — |
 | `ldpc_codec` | 1.0.0 | rtl | `cbb/ldpc_codec` | certified | — | — | G-B-03, G-C-03, signoff, vivado-timing |
+| `ofdm_tx_top` | 1.0.0 | rtl | `cbb/ofdm_tx_top` | certified | — | — | — |
 | `pulse_merge` | 0.4.0 | rtl | `cbb/pulse_merge` | certified | — | — | board-validation, upstream-commit-unpinned |
 | `rrc_polyphase_fir` | 0.4.0 | rtl | `cbb/rrc_polyphase_fir` | certified | — | 1 | board-validation, hold-closure |
 | `stream_elastic_pipeline` | 0.4.0 | rtl | `cbb/stream_elastic_pipeline` | certified | — | — | board-validation |
+| `sync_top` | 1.0.0 | rtl | `cbb/sync_top` | certified | — | — | — |
 
 ## qualification
 
@@ -34,13 +37,10 @@ Assets: 23 · RED: 0 · YELLOW: 3
 
 | UID | Version | Kind | Directory | Machine cleared | Blocking | Used by | Badge gap |
 |---|---:|---|---|---|---|---|---|
-| `channel_est_top` | 0.1.0 | rtl | `incubator/intake/channel_est_top` | qualification | certified | — | G-B-03, G-C-01, G-C-02, G-C-04, G-C-05, G-GATE-01, G-SIGN-01, axis-contract, bit-true-vectors, vivado-timing |
-| `model_comm_channel_est` | 1.1.0 | golden-model | `models/comm/channel_est` | — | no gate-results | 1 | exported-vectors |
+| `model_comm_channel_est` | 1.2.0 | golden-model | `models/comm/channel_est` | — | no gate-results | 1 | — |
 | `model_comm_ldpc` | 1.0.0 | golden-model | `models/comm/ldpc` | — | no gate-results | 1 | exported-vectors |
-| `model_comm_ofdm` | 1.0.0 | golden-model | `models/comm/ofdm` | — | no gate-results | 1 | exported-vectors |
-| `model_comm_synch` | 1.0.0 | golden-model | `models/comm/synch` | — | no gate-results | 1 | cfo-correction, exported-vectors |
-| `ofdm_tx_top` | 0.1.0 | rtl | `incubator/intake/ofdm_tx_top` | qualification | certified | — | G-B-03, G-C-01, G-C-02, G-C-04, G-C-05, G-GATE-01, G-SIGN-01, bit-true-vectors, fft-contract, vivado-timing |
-| `sync_top` | 0.1.0 | rtl | `incubator/intake/sync_top` | qualification | certified | — | G-B-03, G-C-01, G-C-02, G-C-04, G-C-05, G-GATE-01, G-SIGN-01, cfo-correction, exported-vectors, vivado-timing |
+| `model_comm_ofdm` | 1.2.0 | golden-model | `models/comm/ofdm` | — | no gate-results | 1 | exported-vectors |
+| `model_comm_synch` | 1.1.0 | golden-model | `models/comm/synch` | — | no gate-results | 1 | — |
 
 ## Unregistered roots
 
