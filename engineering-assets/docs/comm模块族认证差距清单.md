@@ -190,11 +190,25 @@ git 的 blob SHA 是内容的函数，与 `.git` 是否存在无关，内容俱�
 本模块直接来源 `rtl/pulse_merge.v` 单独复核：上游 blob `aafe38a8` = 本地文件
 LF 归一后的 blob。
 
-同法对另外 5 个 vendor 归档：**`axis_udp` 也已钉定**
-（`4e4e0edc0451055e11c909855e9541b226e7e8d6`，20 个文件 0 未解释差异）；
-`async_fifo` / `basic_verilog` / `picorv32` / `r22sdf` **卡在 GitHub 未认证 API
-限流（60 次/小时），不是方法不适用** —— 四份 `_provenance/*.json` 里那句
-"commit SHA 不可复原"已改为如实说明"尚未反查，原因是限流"。
+同法对另外 5 个 vendor 归档（2026-08-02 配额恢复后跑完），结果分三档：
+
+| 归档 | 结果 |
+|:---|:---|
+| `axis_udp` | **完全钉定** `4e4e0edc0451…`，20 个文件 0 未解释差异 |
+| `picorv32` | **强候选 `87c89acc1899`，但不算命中**：本地 246 个文件全部一致（未解释差异 0），只是上游多出 `scripts/yosys/synth_gates.lib` 而本地没有 |
+| `basic_verilog` | **强候选 `2654273b2c4e`，但不算命中**：本地 1997 个文件全部一致，上游多出 44 个大二进制（开发板 `.png`、`inv_sqrt.tbl`） |
+| `async_fifo` | **未匹配**：最接近的 `38c22208d394` 仍有 4 个文件**内容真实不一致**，其中 3 个是 RTL 源（`async_fifo.v` / `rptr_empty.v` / `wptr_full.v`） |
+| `r22sdf` | 未匹配，前 6 个候选内无干净匹配；未深挖（无下游 CBB 依赖它作 provenance 锚） |
+
+**picorv32 / basic_verilog 为什么不按命中处理**：那些"仅上游存在"的文件找不到
+机械解释 —— 逐条查过：**没有 `.gitattributes`**（不存在 `export-ignore`）、
+Windows 绝对路径 109～187 字符（**远低于 260 上限**）、文件名无非法字符、
+无大小写冲突。形态上像是入库时为省空间裁掉了大文件，但**这是猜测，没有证据**。
+所以只记为"内容与该 commit 一致，但归档是其子集"，不按 `verilog_pcie` 的标准判命中。
+
+> **`async_fifo` 的 4 处 RTL 差异要单独当回事**：它意味着本地副本要么来自更早的
+> commit，要么**入库后被改动过**。在查清之前，该归档**不可作为"上游原样副本"引用**。
+> 已写进它的 `_provenance/async_fifo.json`。
 
 > 附带的 schema 演进：`cbb-manifest.schema.json` 的 `provenance` 加了
 > `commit_basis` 字段（沿用已有的 `source_basis` / `retrieved_basis` 约定）——
@@ -234,7 +248,27 @@ LF 归一后的 blob。
 
 **全库共性**：除本次 `rrc_polyphase_fir` 外，其余 certified 资产的时序/资源仍是
 **OOC 综合级口径**（仅 `create_clock`，未做布局布线与 I/O 绑定），集成到完整顶层
-后需重新评估。**板级验证全库为空白。**
+后需重新评估。
+
+#### `board-validation` —— 阻塞在硬件，非遗漏
+
+owner 于 2026-08-02 明确**硬件暂时无法提供**。三条 `board-validation` 已在 registry
+里标成结构化的 `blocked` 记录（`cause: hardware-unavailable` + `declared_at` +
+`unblock_requires`），**不是待办、也不是漏项，而是缺前置条件而无法执行**——
+在硬件到位前不应被当作可关闭项反复重扫。
+
+各自解锁需要什么，已写进 registry 便于将来直接照做：
+
+| 资产 | 器件 | 硬件到位后要做的事 |
+|:---|:---|:---|
+| `rrc_polyphase_fir` | xc7k325t 或等效 Kintex-7 | ① 加 I/O 绑定重跑布线后 STA，用真实 `i_rst` 最小输入延时判 hold（门槛 ≥0.263 ns）；② 出比特流上板，用 `rrc_stimulus.hex` 灌激励对拍 `expected_tx.hex` |
+| `stream_elastic_pipeline` | xc7a35t 或等效 Artix-7 | 出比特流上板，复跑 2600 样点 Golden 对拍（offset=4） |
+| `pulse_merge` | xc7a35t 或等效 Artix-7 | 出比特流上板，复跑 2600 样点 Golden 对拍（offset=0） |
+
+> **`hold-closure` 并不完全依赖硬件。** 它有两条路：一条要板级 `i_rst` 真实输入
+> 延时（依赖硬件），另一条是在核内把 `i_rst` 寄存一拍、让该路径变成 reg-to-reg
+> ——**纯 RTL 改动，不需要硬件**，代价是复位晚一拍（行为契约变更）且要重跑全部
+> bit-true 与 G-C-04/05 取证。是否走第二条待 owner 决定。
 
 ### 3.3 文档与标记补齐【asset-audit A2/A4】—— 2026-08-02 已还清
 

@@ -182,7 +182,17 @@
     "hold-closure"
    ],
    "deferred_reason": "hold-closure 于 2026-08-02 实跑布线后时序推进但**不关闭**: Vivado 2023.1.1 OOC synth->opt->place->route, WHS 四阶段恒为 -0.163ns, 布线后 THS=-20.056ns / 320 个端点失败 —— README 原先『综合级 hold 是估算值、正常在布局布线阶段收敛』的说法已被证伪。归因明确: 对 post_route.dcp 跑 get_timing_paths -delay_type min -slack_lesser_than 0, 924 条违例路径全部从输入端口出发、内部单元起点 0 条, reg-to-reg 最差 hold +0.094ns (内部已收敛); 唯一失败端口是 i_rst (s_axis_tvalid +0.218 / m_axis_tready +0.193 均通过), 路径 i_rst -> addA_i_reg[0]/RSTM (DSP48E1), 差额 0.163ns 由 XDC 自称『显式假设、非实测』的 set_input_delay -min 0.100 支配。量化关闭条件: i_rst 真实最小输入延时 >= 0.263ns 即收敛, 须由集成方以板级实数确认; 或在核内把 i_rst 寄存一拍使该路径变 reg-to-reg (复位晚一拍, 属行为契约变更, 需重跑全部取证, 待 owner 决策)。证据: var/gates/pg/rrc_polyphase_fir/hold-closure.json + route-timing-summary.rpt。另: 本资产原先没有哈希锁定证据快照 (全库 certified 中唯一), 2026-08-02 已取 0.4.0 快照并把 maturity.evidence_ref 指过去, --verify-all 现为 17 verified。board-validation 仍为空白, 需实际硬件。",
-   "last_reviewed": "2026-08-02"
+   "last_reviewed": "2026-08-02",
+   "blocked": {
+    "gap": [
+     "board-validation"
+    ],
+    "cause": "hardware-unavailable",
+    "declared_by": "owner",
+    "declared_at": "2026-08-02",
+    "note": "owner 2026-08-02 明确『硬件暂时无法提供』。本条不是遗漏也不是待办 —— 是缺前置条件而无法执行, 在硬件到位前不应被当作可关闭项反复重扫。",
+    "unblock_requires": "一块 xc7k325t (或等效 Kintex-7) 板卡 + 时钟/复位/AXI-S 引脚绑定的顶层 XDC。到位后需做: (1) 布线后加 I/O 绑定重跑 STA, 用真实 i_rst 最小输入延时判定 hold (量化门槛 >=0.263ns, 见 hold-closure.json); (2) 出比特流上板, 用已入库的 rrc_stimulus.hex 灌激励、抓 expected_tx.hex 对拍。"
+   }
   },
   {
    "id": "ITG-0010",
@@ -222,7 +232,17 @@
     "board-validation"
    ],
    "deferred_reason": "Certified generic-device scope; board/field validation remains open.",
-   "last_reviewed": "2026-07-27"
+   "last_reviewed": "2026-07-27",
+   "blocked": {
+    "gap": [
+     "board-validation"
+    ],
+    "cause": "hardware-unavailable",
+    "declared_by": "owner",
+    "declared_at": "2026-08-02",
+    "note": "owner 2026-08-02 明确『硬件暂时无法提供』。本条不是遗漏也不是待办 —— 是缺前置条件而无法执行, 在硬件到位前不应被当作可关闭项反复重扫。",
+    "unblock_requires": "一块 xc7a35t (或等效 Artix-7) 板卡 + 引脚绑定顶层 XDC。到位后出比特流上板, 复跑 2600 样点 Golden 对拍 (offset=4)。"
+   }
   },
   {
    "id": "ITG-0012",
@@ -265,7 +285,17 @@
     "board-validation"
    ],
    "deferred_reason": "Certified generic-device scope; board/field validation remains open (needs real hardware). upstream-commit-unpinned 于 2026-08-02 关闭: 上游 commit 由内容比对反查确定为 25156a9a162c41c60f11f41590c7d006d015ae5a (2024-04-26, 'Add example design for Alveo U55C')。此前的『归档无 .git 故 SHA 不可复原』是错误结论 —— 无 .git 只丢元数据, git blob SHA 是内容的函数。判据: 对该 commit 的递归树逐路径比对本地归档 633 个文件, 路径集完全一致 (仅本地 0/仅上游 0), blob 分类为 逐字节一致 4 + 仅 CRLF 差异 545 + 上游 symlink 在 Windows 解压落成空文件 84 (上游 symlink 总数正是 84), 未解释的差异 0; 相邻 commit 均不满足 (195be74a 及更早无 AU55C 那批文件)。本模块直接来源 rtl/pulse_merge.v 单独复核: 上游 blob aafe38a8 = 本地 LF 归一后的 blob。同日版本号转正 1.0.0 (owner 裁定), RTL 与功能结论未变。",
-   "last_reviewed": "2026-08-02"
+   "last_reviewed": "2026-08-02",
+   "blocked": {
+    "gap": [
+     "board-validation"
+    ],
+    "cause": "hardware-unavailable",
+    "declared_by": "owner",
+    "declared_at": "2026-08-02",
+    "note": "owner 2026-08-02 明确『硬件暂时无法提供』。本条不是遗漏也不是待办 —— 是缺前置条件而无法执行, 在硬件到位前不应被当作可关闭项反复重扫。",
+    "unblock_requires": "一块 xc7a35t (或等效 Artix-7) 板卡 + 引脚绑定顶层 XDC。到位后出比特流上板, 复跑 2600 样点 Golden 对拍 (offset=0)。"
+   }
   },
   {
    "id": "ITG-0014",
