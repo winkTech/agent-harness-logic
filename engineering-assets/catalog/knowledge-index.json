@@ -4,7 +4,7 @@
   "entries": [
     {
       "asset_uid": "axis_skid_buffer",
-      "level": "qualification",
+      "level": "certified",
       "requirement_ref": "engineering-assets/docs/comm模块族认证差距清单.md",
       "doc_refs": [
         "engineering-assets/docs/governance/CBB-治理与生产级准入规范-V1.0.md"
@@ -13,7 +13,7 @@
     },
     {
       "asset_uid": "cdc_sync",
-      "level": "qualification",
+      "level": "certified",
       "requirement_ref": "engineering-assets/docs/comm模块族认证差距清单.md",
       "doc_refs": [
         "engineering-assets/docs/governance/CBB-治理与生产级准入规范-V1.0.md",
@@ -23,18 +23,19 @@
     },
     {
       "asset_uid": "channel_est_top",
-      "level": "intake",
+      "level": "certified",
       "requirement_ref": "engineering-assets/knowledge/primary/domains/comm/channel_est/algorithm_spec.md",
       "doc_refs": [
         "engineering-assets/knowledge/primary/domains/comm/channel_est/fixed_point_report.md",
         "engineering-assets/knowledge/primary/domains/comm/channel_est/report_channel_est_fpga_implementation.md",
-        "engineering-assets/knowledge/primary/domains/comm/channel_est/resource_estimate.md"
+        "engineering-assets/knowledge/primary/domains/comm/channel_est/resource_estimate.md",
+        "engineering-assets/docs/governance/adr/ADR-002-channel-est-estimation-basis.md"
       ],
       "golden_model_ref": "model_comm_channel_est"
     },
     {
       "asset_uid": "complex_multiplier",
-      "level": "qualification",
+      "level": "certified",
       "requirement_ref": "engineering-assets/docs/comm模块族认证差距清单.md",
       "doc_refs": [
         "engineering-assets/docs/governance/CBB-治理与生产级准入规范-V1.0.md"
@@ -43,7 +44,7 @@
     },
     {
       "asset_uid": "crc32",
-      "level": "qualification",
+      "level": "certified",
       "requirement_ref": "engineering-assets/docs/CBB候选台账-hdl-coding-templates.md",
       "doc_refs": [
         "engineering-assets/docs/governance/CBB-治理与生产级准入规范-V1.0.md"
@@ -52,7 +53,7 @@
     },
     {
       "asset_uid": "ddr_axi4_controller",
-      "level": "qualification",
+      "level": "certified",
       "requirement_ref": "engineering-assets/docs/CBB候选台账-hdl-coding-templates.md",
       "doc_refs": [
         "engineering-assets/docs/governance/CBB-治理与生产级准入规范-V1.0.md"
@@ -61,7 +62,7 @@
     },
     {
       "asset_uid": "delay_line",
-      "level": "qualification",
+      "level": "certified",
       "requirement_ref": "engineering-assets/docs/comm模块族认证差距清单.md",
       "doc_refs": [
         "engineering-assets/docs/governance/CBB-治理与生产级准入规范-V1.0.md",
@@ -71,7 +72,7 @@
     },
     {
       "asset_uid": "frame_sync",
-      "level": "qualification",
+      "level": "certified",
       "requirement_ref": "engineering-assets/docs/CBB候选台账-hdl-coding-templates.md",
       "doc_refs": [
         "engineering-assets/docs/governance/CBB-治理与生产级准入规范-V1.0.md"
@@ -80,7 +81,7 @@
     },
     {
       "asset_uid": "ldpc_codec",
-      "level": "qualification",
+      "level": "certified",
       "requirement_ref": "engineering-assets/knowledge/primary/domains/comm/ldpc/algorithm_spec.md",
       "doc_refs": [
         "engineering-assets/knowledge/primary/domains/comm/ldpc/encoding_spec.md",
@@ -92,7 +93,7 @@
     },
     {
       "asset_uid": "lfsr_gen",
-      "level": "qualification",
+      "level": "certified",
       "requirement_ref": "engineering-assets/docs/comm模块族认证差距清单.md",
       "doc_refs": [
         "engineering-assets/docs/governance/CBB-治理与生产级准入规范-V1.0.md",
@@ -137,7 +138,7 @@
     },
     {
       "asset_uid": "ofdm_tx_top",
-      "level": "intake",
+      "level": "certified",
       "requirement_ref": "engineering-assets/knowledge/primary/domains/comm/ofdm/algorithm_spec.md",
       "doc_refs": [
         "engineering-assets/knowledge/primary/domains/comm/ofdm/rtl_architecture.md",
@@ -178,7 +179,7 @@
     },
     {
       "asset_uid": "sdp_ram",
-      "level": "qualification",
+      "level": "certified",
       "requirement_ref": "engineering-assets/docs/comm模块族认证差距清单.md",
       "doc_refs": [
         "engineering-assets/docs/governance/CBB-治理与生产级准入规范-V1.0.md"
@@ -205,12 +206,13 @@
     },
     {
       "asset_uid": "sync_top",
-      "level": "intake",
+      "level": "certified",
       "requirement_ref": "engineering-assets/knowledge/primary/domains/comm/synch/algorithm_spec.md",
       "doc_refs": [
         "engineering-assets/knowledge/primary/domains/comm/synch/fixed_point_report.md",
         "engineering-assets/knowledge/primary/domains/comm/synch/report_sync_fpga_implementation.md",
-        "engineering-assets/knowledge/primary/domains/comm/synch/resource_estimate.md"
+        "engineering-assets/knowledge/primary/domains/comm/synch/resource_estimate.md",
+        "engineering-assets/docs/governance/adr/ADR-003-sync-top-causal-contract.md"
       ],
       "golden_model_ref": "model_comm_synch"
     }
