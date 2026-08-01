@@ -3812,10 +3812,14 @@ define('ProjectDirectoryGuard', 'uncontracted HDL projects are not forced into t
 
 const FPG = 'engine/scripts/hooks/file-protection-guard.cjs';
 const fpgCall = (file) => JSON.stringify({ tool_name: 'Write', tool_input: { file_path: file } });
-const fpgEnv = (approval, reason) => ({
+const fpgEnv = (approval, reason, basis) => ({
   CLAUDE_NO_DIAGNOSTIC_WRITES: '1',
   CLAUDE_PROTECTED_WRITE_APPROVAL: approval || '',
   CLAUDE_PROTECTED_WRITE_REASON: reason || '',
+  CLAUDE_PROTECTED_WRITE_BASIS: basis || '',
+  // 倒置签名依赖文件系统 mtime, 会随仓库状态漂移; 这些用例只考批准与依据方向,
+  // 把窗口关掉以免测试结果取决于"最近有没有人改过 RTL"。
+  CLAUDE_GOLDEN_INVERSION_WINDOW_MS: '0',
 });
 
 define('FileProtectionGuard', 'golden model 目录内部的文件也受保护', () => {
@@ -3835,24 +3839,62 @@ define('FileProtectionGuard', 'golden model 目录内部的文件也受保护', 
     : { pass: false, detail: `普通文件被误拦, exit=${normal.status}` };
 });
 
-define('FileProtectionGuard', '受保护写入只接受逐文件批准且必须带理由', () => {
+define('FileProtectionGuard', '受保护写入只接受逐文件批准且必须带理由与依据', () => {
   const p = path.join(HOME, FPG);
   const target = 'engineering-assets/knowledge/primary/domains/matlab/README.md';
   const abs = path.join(HOME, target);
+  const SPEC = 'spec|algorithm_spec.md §3.2';
   const cases = [
     ['无批准', fpgEnv(), 2],
-    ['缺理由', fpgEnv(abs), 2],
-    ['通配符批准', fpgEnv('engineering-assets/**', 'x'), 2],
-    ['裸文件名批准', fpgEnv('README.md', 'x'), 2],
-    ['批准了别的文件', fpgEnv('engineering-assets/knowledge/primary/domains/python/README.md', 'x'), 2],
-    ['绝对路径+理由', fpgEnv(abs, '修死链'), 0],
-    ['仓库相对路径+理由', fpgEnv(target, '修死链'), 0],
+    ['缺理由', fpgEnv(abs, '', SPEC), 2],
+    ['通配符批准', fpgEnv('engineering-assets/**', 'x', SPEC), 2],
+    ['裸文件名批准', fpgEnv('README.md', 'x', SPEC), 2],
+    ['批准了别的文件', fpgEnv('engineering-assets/knowledge/primary/domains/python/README.md', 'x', SPEC), 2],
+    // 2026-08-01: 批准从"充分条件"降为"必要条件" —— 还要声明依据方向。
+    ['有批准但缺 basis', fpgEnv(abs, '修死链'), 2],
+    ['basis.kind 非法', fpgEnv(abs, '修死链', 'vibes|随便'), 2],
+    ['basis 缺 ref', fpgEnv(abs, '修死链', 'spec|'), 2],
+    ['绝对路径+理由+依据', fpgEnv(abs, '修死链', 'maintenance|文档死链'), 0],
+    ['仓库相对路径+理由+依据', fpgEnv(target, '修死链', 'maintenance|文档死链'), 0],
   ];
   for (const [name, env, want] of cases) {
     const r = runNode(p, fpgCall(abs), { env });
     if (r.status !== want) return { pass: false, detail: `${name}: exit=${r.status} 期望 ${want}` };
   }
   return { pass: true, detail: `${cases.length} 种批准场景全部符合预期` };
+});
+
+// 门禁要防的不是"改 golden", 而是**因果倒置** —— RTL 调不通就把 golden 改成 RTL 的
+// 样子。路径级权限判不了这件事: 合法修正与本末倒置写出来是同一个动作, 差别只在
+// 依据指向哪一侧。这组用例锁的就是这个判别力。
+define('FileProtectionGuard', 'golden 改动按依据方向判别而非一律禁止', () => {
+  const p = path.join(HOME, FPG);
+  const target = 'engineering-assets/knowledge/primary/domains/matlab/README.md';
+  const abs = path.join(HOME, target);
+  const cases = [
+    // 上游依据 —— golden 贴合需求的正当修正, 放行
+    ['spec 上游依据', '子载波映射与规格不符', 'spec|algorithm_spec.md §3.2', 0],
+    ['standard 上游依据', '导频极性表', 'standard|802.11a §17.3.5.9', 0],
+    ['derivation 上游依据', 'ifft 缩放标定', 'derivation|Parseval 推导', 0],
+    ['maintenance 中性', '更新 sources sha', 'maintenance|manifest 字段约定', 0],
+    // 下游依据 —— 依据来自 RTL 实测行为, 必须挂显式裁决
+    ['rtl-observation 无裁决', 'cosim 失配后镜像跟进', 'rtl-observation|cosim 2226 点失配', 2],
+    ['rtl-observation 有裁决', 'cosim 位真镜像', 'rtl-observation|cosim|ADR-003 位真镜像', 0],
+    // 自由文本泄露的下游话术 —— 声称上游依据但理由指向 RTL
+    ['spec 但理由要对齐 RTL', '把 golden 对齐 RTL 的输出', 'spec|algorithm_spec.md', 2],
+    ['spec 但理由是 RTL 已改', 'RTL 已修改, golden 同步', 'spec|algorithm_spec.md', 2],
+    ['spec 但理由是让 cosim 过', '让 cosim 通过', 'spec|algorithm_spec.md', 2],
+    ['英文 align ... RTL', 'align golden with the RTL output', 'spec|algorithm_spec.md', 2],
+    ['maintenance + 下游话术', '跟随 RTL 更新哈希', 'maintenance|sha', 2],
+    // 裁决级依据可以为"golden 有意跟随 RTL"背书 (位真镜像等合法特例)
+    ['adr 背书下游话术', 'RTL 已同步修改, 镜像逐字跟进', 'adr|ADR-003 §2', 0],
+    ['user-ruling 背书', '以 RTL 为准', 'user-ruling|2026-08-01 用户裁定', 0],
+  ];
+  for (const [name, reason, basis, want] of cases) {
+    const r = runNode(p, fpgCall(abs), { env: fpgEnv(abs, reason, basis) });
+    if (r.status !== want) return { pass: false, detail: `${name}: exit=${r.status} 期望 ${want}` };
+  }
+  return { pass: true, detail: `${cases.length} 种依据方向场景全部符合预期` };
 });
 
 define('ProjectDirectoryContract', 'harness-init emits canonical module/TB directories', () => {

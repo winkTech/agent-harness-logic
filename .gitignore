@@ -33,6 +33,9 @@ var/
 # 会话数据（旧路径兼容）
 session-aliases.json
 
+# skill-evolve 的待审提案暂存区（运行时产物，采纳后手动合入 SKILL.md）
+.skillopt-sleep/
+
 # 临时文件
 *.tmp
 *.log

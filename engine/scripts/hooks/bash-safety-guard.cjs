@@ -15,6 +15,23 @@
 
 'use strict';
 
+// ── 受保护模型路径 ─────────────────────────────────────────────────────────
+//
+// 重定向/tee 写入受保护路径的判据。目标路径必须**紧跟**重定向符。
+//
+// 旧写法 `[>&]{2,}\s*.*golden.*\.(m|py|sh)` 有两处方向相反的缺陷 (2026-08-01 实测):
+//   1. `[>&]{2,}` 本意抓 `>>`/`&>`, 却被命令分隔符 `&&` 命中; 扩展名 `\.(m|py|sh)`
+//      无右边界, `.md` 中的 `.m` 即可凑齐匹配。于是
+//      `cd x && grep -rln "golden" --include=*.md engine/` 这类**只读检索**被判
+//      CRITICAL —— 门禁在惩罚"查证据", 而查证据正是判断 golden 该不该改的前提。
+//   2. 真正危险的单 `>` 覆盖写 (`echo x > golden/gm.m`) 反而放行 —— `{2,}` 要求
+//      两个字符, 只覆盖了 `>>` 追加写。拦读放写, 方向正好反了。
+//
+// 现在按"重定向符 + 紧邻目标路径 + 带右边界的完整扩展名"判定: `.*` 中间层被去掉,
+// 命令分隔符不再能凑匹配; `>{1,2}` 覆盖单次重定向; 前置 `[^\w]` 排除 `2>` 一类
+// fd 重定向 (它们的目标是 fd 或 /dev/null, 不是模型文件)。
+const PROTECTED_MODEL_PATH = String.raw`[^"'\s|;&<>]*(?:matlab|golden|fixed_point)[^"'\s|;&<>]*\.(?:m|py|sh|mat)\b`;
+
 // ── 危险模式定义 ───────────────────────────────────────────────────────────
 
 const DANGEROUS_PATTERNS = [
@@ -40,9 +57,10 @@ const DANGEROUS_PATTERNS = [
       /node.*(?:writeFileSync|writeFile)\([^)]*matlab/i,
       /node.*(?:writeFileSync|writeFile)\([^)]*golden/i,
       /node.*(?:writeFileSync|writeFile)\([^)]*fixed_point/i,
-      // echo/cat > matlab/... (shell redirect)
-      /[>&]{2,}\s*.*matlab\/.*\.m/i,
-      /[>&]{2,}\s*.*golden.*\.(m|py|sh)/i,
+      // echo/cat > matlab/... (shell redirect) —— 判据见 PROTECTED_MODEL_PATH 注释
+      new RegExp(String.raw`(?:^|[^\w])&?>{1,2}\s*["']?` + PROTECTED_MODEL_PATH, 'i'),
+      // tee 是重定向的等价物 (source-write-bypass 侧已因 red-team 补过, 模型侧同样需要)
+      new RegExp(String.raw`\btee\b(?:\s+-\w+)*\s+["']?` + PROTECTED_MODEL_PATH, 'i'),
       // sed -i on protected paths
       /sed\s+-i.*matlab\//i,
       /sed\s+-i.*golden/i,

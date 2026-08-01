@@ -42,7 +42,14 @@ S4 复位异常    S5 吞吐极限
 
 不适用于目标的画像项或场景可标记为 `na`，但必须记录理由；适用项至少有一个可执行场景。验证从单模块开始，按风险扩展到子系统和全链路。
 
-测试和 Golden Model 是验收证据，不是需要迎合的固定答案。不得仅为制造通过而削弱、删除或跳过测试，修改 Golden Model，硬编码固定样例，或绕过检查。测试本身疑似错误时，先记录失败证据、预期契约和影响范围；只有当前任务明确包含测试修正时才修改。
+测试和 Golden Model 是验收证据，不是需要迎合的固定答案。不得仅为制造通过而削弱、删除或跳过测试，硬编码固定样例，或绕过检查。测试本身疑似错误时，先记录失败证据、预期契约和影响范围；只有当前任务明确包含测试修正时才修改。
+
+Golden Model 的约束是**方向**，不是禁止修改。Golden 与需求有出入时就该改——它的职责是贴合需求，不是保持不变。禁止的是因果倒置：RTL 调不通，于是把 Golden 改成 RTL 的样子。判据在依据指向哪一侧：
+
+- **上游依据**（规格条款、标准章节、ADR 裁决、数学推导、用户裁定）——Golden 的正当来源，照常修改。
+- **下游依据**（"对齐 RTL"、"RTL 已改所以同步"、"让 cosim 通过"）——默认不成立。位真镜像一类 Golden 有意跟随 RTL 的合法特例，必须挂一次显式裁决（ADR 号或用户判定）说明为何 RTL 才是正确的一方，不能混在普通修复里。
+
+流程方向也是硬约束：Golden 指导 RTL，不是反过来。同模块 RTL 刚改完就改 Golden，是倒置的时序指纹，此时依据必须升级到裁决级。`file-protection-guard.cjs` 按 `basis{kind,ref[,ruling]}` 判定方向并记入 `var/audit/protected-writes.jsonl`，倒置签名由模型 manifest 的 `implements_for` 与 RTL 文件 mtime 观测，不依赖自述。
 
 退出条件：将结果写入 `var/gates/verification-quality.json`，`status` 为 `completed` 且作用域覆盖目标文件。新测试文件由 `verification-quality-guard.cjs` **提示**（advisory，不阻断）。
 
