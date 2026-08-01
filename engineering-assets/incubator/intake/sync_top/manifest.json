@@ -2,7 +2,7 @@
   "schema_version": "1.0",
   "asset_uid": "sync_top",
   "name": "ofdm_sync_top",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "owner": "lihan",
   "maturity": {
     "level": "intake"
@@ -11,11 +11,15 @@
   "doc_refs": [
     "engineering-assets/knowledge/primary/domains/comm/synch/fixed_point_report.md",
     "engineering-assets/knowledge/primary/domains/comm/synch/report_sync_fpga_implementation.md",
-    "engineering-assets/knowledge/primary/domains/comm/synch/resource_estimate.md"
+    "engineering-assets/knowledge/primary/domains/comm/synch/resource_estimate.md",
+    "engineering-assets/docs/governance/adr/ADR-003-sync-top-causal-contract.md"
   ],
   "golden_model_ref": "model_comm_synch",
   "fidelity": {
     "status": "pending"
+  },
+  "device": {
+    "part": "xc7k325tffg900-2"
   },
   "ports": [
     {
@@ -88,72 +92,104 @@
   "constraints": {
     "target": {
       "fmax": "100MHz",
-      "fmax_mhz": 100
+      "fmax_mhz": 100,
+      "latency": 384,
+      "lut": 8000,
+      "ff": 5500,
+      "bram": 3,
+      "dsp": 20
     }
   },
   "sources": [
     {
-      "path": "rtl/sync_pkg.sv",
-      "role": "rtl",
-      "sha256": "d8228bfc389c9665b2545dc5623ecfb93de9a75d160f1cc12211933d107bf643"
-    },
-    {
-      "path": "rtl/cordic_core.sv",
-      "role": "rtl",
-      "sha256": "d203afb8fad8701dfd5352b4d9fb4064227d148148dcd1e5440cf07a00d94ab7"
-    },
-    {
-      "path": "rtl/packet_detect.sv",
-      "role": "rtl",
-      "sha256": "88efbe1c384a472a105fe89d77d7cad3da0c4d60f9ee230d7183a5c0d2a57d56"
-    },
-    {
-      "path": "rtl/fine_timing.sv",
-      "role": "rtl",
-      "sha256": "66c418d34ced1a783a2002ede4a18b7ccd9048d90d4aff44ff7762e10b963c20"
-    },
-    {
       "path": "rtl/sync_top.sv",
       "role": "rtl",
-      "sha256": "939e107f7e4d77c0081e7d39c3310b4f411a6f07bcb06c82db92336cc6200207"
+      "sha256": "ee3ca8a7c078e02dfcbf81a89c6bb088201a13d3c552edce73eb3bae9e1f202e"
+    },
+    {
+      "path": "rtl/sync_detect.sv",
+      "role": "rtl",
+      "sha256": "986389573858549920d490efc8de5a6596eb81b19feae3a705a11d55b933790a"
+    },
+    {
+      "path": "rtl/sync_track_out.sv",
+      "role": "rtl",
+      "sha256": "5648338b47f572b953073d71b8f82a6afca83a7c69d9659f005fe12d4cf2ac9f"
+    },
+    {
+      "path": "rtl/sync_correlator.sv",
+      "role": "rtl",
+      "sha256": "8860cc7a92ae03c7ef8b8e56fa5f1ea3acab42160e879692beca55a4f93145da"
+    },
+    {
+      "path": "rtl/cordic_rot_pipe.sv",
+      "role": "rtl",
+      "sha256": "7ac51d57edd8b242b64ec33428a052af211f4effcd6069ae6baa81099d1b744b"
+    },
+    {
+      "path": "rtl/cordic_cv.sv",
+      "role": "rtl",
+      "sha256": "caffe4d47fb0179c063248890490846f5fad22f31584af4c16b2ac82338f187c"
+    },
+    {
+      "path": "constraints/sync_top.xdc",
+      "role": "constraint",
+      "sha256": "61948d5115699b2c8f85e97d901399eb8e301cec2ec93798c01c9992f1e47aea"
     },
     {
       "path": "tb/tb_sync_top.sv",
       "role": "tb",
-      "sha256": "adcb565f4efd4d12baea194caecfbeaca2ed6c7308e1ebb29aaa4f8f53cc2729"
+      "sha256": "64dd9c22ec07c531ed05bbbbdad8cc39766ccb1fc97da8652dc2bc2db238acf1"
     },
     {
       "path": "tb/uvm/sync_uvm_pkg.sv",
       "role": "tb",
-      "sha256": "64796bcdf65863d649a45710cb2b26cd4e89792812a3d912654db2f7b9ac92fc"
+      "sha256": "81ef9f981c9bdb76d3d74be607d5132bba30ff36c837f5273e640ced8e727766"
     },
     {
       "path": "tb/uvm/sync_sequences.sv",
       "role": "tb",
-      "sha256": "1afa2bfd6f77537a77da09f43416653f7b444e1f9084507d82cd90c28252d510"
+      "sha256": "070c16835bb8cf875edc6da812b2e029993a5617583127133ed0199c7af95528"
     },
     {
       "path": "tb/uvm/sync_scoreboard.sv",
       "role": "tb",
-      "sha256": "b3a84a58e317d28c5bf22a7e894dd18bd9f940d3e3a92db875099343998d8763"
+      "sha256": "03334bc3856627970877c0a57e919b7f48dc9f45d02277f3f57fd16e7347450f"
     },
     {
       "path": "tb/uvm/sync_base_test.sv",
       "role": "tb",
-      "sha256": "db6f0c778e95afeab0f7e0ac78d3c7a85e610427eb159991238a22211eb223b1"
+      "sha256": "0d81eb94217017b16675bb486e3605dc977a5698e7fb4162131550d6888445d9"
     },
     {
       "path": "tb/uvm/sync_basic_test.sv",
       "role": "tb",
-      "sha256": "6ed65982a9f9f693ca6842f31f9134c1011e71c5fe02c683b9510569b6ae626e"
+      "sha256": "ec7a6546ce4e289f9ab30f0eda7375539631bbed9d244ad84e21ebb2a5cc44e2"
     },
     {
       "path": "tb/uvm/tb_sync_uvm_top.sv",
       "role": "tb",
-      "sha256": "4fb45e1cc0226ec7fa99fcfa2eab6f319811358a154acdb0566bfac6ebdd0b3c"
+      "sha256": "cd7c368a6d2465ee88aee9ad678275a2a85efdd72c63a5bf642bd69c18042166"
     }
   ],
   "waivers": [],
   "superseded_by": null,
-  "top": "sync_top"
+  "top": "sync_top",
+  "params": [
+    {
+      "name": "DATA_W",
+      "value": 16,
+      "rationale": "RTL 顶层参数默认值; I/Q 样点位宽 (Q2.14)"
+    },
+    {
+      "name": "P_DLY",
+      "value": 384,
+      "rationale": "对齐延迟线深度 (设计常量): m_axis 相对 s_axis 固定延迟, 覆盖精定时峰值确认最大滞后, 使 o_fft_start 与 T1 首样点同拍 (ADR-003)"
+    },
+    {
+      "name": "P_EST_GAP",
+      "value": 40,
+      "rationale": "设计常量: corr_start = plat_end_idx + 40 (拍域确定, 保证 CORDIC 求角完成; 位真镜像同式)"
+    }
+  ]
 }

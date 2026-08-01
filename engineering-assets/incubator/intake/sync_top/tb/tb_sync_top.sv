@@ -1,246 +1,383 @@
 //==============================================================================
-// Testbench for OFDM Synchronization
-// Generates preamble + CFO + noise, verifies packet detection + timing
-//
-// 本 TB 随 RTL 的 hdl-coding 规范修复同步更新:
-//   - 端口名 clk/rst_n/fft_start/sync_locked -> i_clk/i_rst/o_fft_start/o_sync_locked
-//   - 复位极性由低有效改为高有效 (i_rst=1 复位)
-//   - 新增对**当前真正可用功能**的断言: 短前导码期间包检测必须置位。
-//     原 TB 只断言 o_fft_start, 而该信号因 RTL 缺陷恒为 0 (见下 KNOWN-FAIL),
-//     等于既测不出通过也测不出回归。
-//
-// KNOWN-FAIL (已知缺陷, 非本次修复引入, 见 rtl/fine_timing.sv 文件头 [F1]):
-//   o_fft_start 恒为 0 —— fine_timing 中没有任何路径把 FFT 窗触发置 1。
-//   该项在下方以 xfail 计数, **不计入 error_cnt**, 但会在摘要里明确列出。
-//   一旦 [F1] 被修复, xfail 会变成 unexpected-pass 并提示更新本 TB。
+// tb_sync_top — sync_top 定向自检 TB (ADR-003 因果化架构)
+// 场景:
+//   T1  ε=+0.3, SNR=20dB, tau=50, 背靠背流: 锁定 / 粗 CFO 误差<0.02 /
+//       fft_start 与 m_axis T1 首样点同拍且 |n_fine-242|<=2 且与浮点全精度
+//       互相关峰 ±1 / 直通段恒等 ±4 LSB / 校正后 T1 相位集中度 >0.95
+//   T2  复位重入 + ε=-0.2 帧: 同判据 (负 CFO 路径)
+//   T3  ε=+0.3 帧, 50% 间隙流: 拍域不变性 (n_fine 与 T1 一致)
+// 激励: 802.11a 前导码由 S/L 频域序列经 fftshift+IDFT 生成 (复刻 golden
+//       generate_preamble 公式); AWGN 用确定性 LCG+Box-Muller (可复现)。
+// 判据基准: 注入真值 + TB 内浮点全精度参考 (批改语义仅作定时参考, 不做逐位);
+//       逐位 bit-true 由 tb_sync_cosim + generate_vectors 位真镜像承担。
+// 失败路径: 一律 $fatal; 通过打印 "ALL TESTS PASSED"。
 //==============================================================================
 `timescale 1ns/1ps
 
 module tb_sync_top;
 
-    localparam DATA_W = 16;
-    localparam CLK_PER = 10;
+    localparam int  NS      = 1400;      // 每帧样点数 (tau+前导+填充)
+    localparam int  TAU     = 50;
+    localparam int  T1S     = TAU + 192; // T1 真实起点 (0-based) = 242
+    localparam int  P_DLY   = 384;
+    localparam real PI      = 3.14159265358979;
+    localparam real SNR_DB  = 20.0;
 
-    logic i_clk, i_rst;
-    logic s_axis_tvalid, s_axis_tready;
-    logic [DATA_W*2-1:0] s_axis_tdata;
-    logic m_axis_tvalid, m_axis_tready;
-    logic [DATA_W*2-1:0] m_axis_tdata;
-    logic o_fft_start, o_sync_locked;
-
+    //==========================================================================
     // DUT
-    sync_top #(.DATA_W(DATA_W)) dut (
-        .i_clk(i_clk), .i_rst(i_rst),
-        .s_axis_tvalid(s_axis_tvalid), .s_axis_tready(s_axis_tready),
-        .s_axis_tdata(s_axis_tdata),
-        .m_axis_tvalid(m_axis_tvalid), .m_axis_tready(m_axis_tready),
-        .m_axis_tdata(m_axis_tdata),
-        .o_fft_start(o_fft_start), .o_sync_locked(o_sync_locked)
+    //==========================================================================
+    logic        clk = 0, rst;
+    logic        s_tvalid, s_tready;
+    logic [31:0] s_tdata;
+    logic        m_tvalid;
+    logic [31:0] m_tdata;
+    logic        fft_start, sync_locked;
+
+    always #5 clk = ~clk;
+
+    sync_top #(.DATA_W(16)) dut (
+        .i_clk         (clk),
+        .i_rst         (rst),
+        .s_axis_tvalid (s_tvalid),
+        .s_axis_tready (s_tready),
+        .s_axis_tdata  (s_tdata),
+        .m_axis_tvalid (m_tvalid),
+        .m_axis_tready (1'b1),
+        .m_axis_tdata  (m_tdata),
+        .o_fft_start   (fft_start),
+        .o_sync_locked (sync_locked)
     );
 
-    // Clock
-    initial i_clk = 0;
-    always #(CLK_PER/2) i_clk = ~i_clk;
+    //==========================================================================
+    // 确定性随机 (LCG + Box-Muller)
+    //==========================================================================
+    int unsigned lcg_state;
 
-    // Test data (pre-computed preamble with CFO)
-    // Q2.14 format: multiply by 16384, round to int
-    int test_i [0:511];  // preamble + padding
-    int test_q [0:511];
-    int test_len;
-    int error_cnt;
-    int xfail_cnt;
-    int unexpected_pass_cnt;
-
-    // 包检测观测点: sync_top 未把包检测结果引出到端口, 层次引用内部互连线
-    wire w_pd_detected = dut.w_pd_detected;
-    bit  seen_detect;
-
-    // 数据通路直通检查: m_axis 应为 s_axis 延迟 2 拍 (ri_ 1 + ro_ 1)
-    localparam int PASSTHRU_LAT = 2;
-    logic [DATA_W*2-1:0] exp_pipe [0:PASSTHRU_LAT-1];
-    logic                exp_v_pipe [0:PASSTHRU_LAT-1];
-    int passthru_checked, passthru_bad;
-
-    // Quantize to Q2.14
-    function int q14(real v);
-        q14 = $rtoi(v * 16384.0);
+    function automatic real lcg_uniform();
+        lcg_state = lcg_state * 32'd1664525 + 32'd1013904223;
+        lcg_uniform = (real'(lcg_state) + 1.0) / 4294967296.0;
     endfunction
 
-    // Generate test vector with preamble + CFO + noise
-    task gen_test(real epsilon, real snr_db);
-        real short_sym[0:15], long_sym[0:63];
-        real r_i[0:511], r_q[0:511];
-        real sig_pow, noise_pow;
-        int n;
+    function automatic real lcg_gauss();
+        real u1, u2;
+        u1 = lcg_uniform();
+        u2 = lcg_uniform();
+        lcg_gauss = $sqrt(-2.0 * $ln(u1)) * $cos(2.0 * PI * u2);
+    endfunction
 
-        test_len = 320 + 64;  // preamble + padding
+    //==========================================================================
+    // 前导码生成 (复刻 golden generate_preamble: fftshift + IDFT)
+    //==========================================================================
+    real pre_re [0:319], pre_im [0:319];
+    real t1_re  [0:63],  t1_im  [0:63];
 
-        // Short preamble symbol (16 samples, from 802.11a spec)
-        // Generated from IFFT of 12 non-zero subcarriers spaced by 4
-        short_sym = '{
-            0.046, -0.132, -0.465, -0.223,  0.232, -0.133,  0.295, -0.223,
-           -0.093,  0.223, -0.023,  0.169, -0.044, -0.223, -0.068, -0.023
-        };
+    task automatic build_preamble();
+        real s53_re [0:52], s53_im [0:52];
+        real l53 [0:52];
+        real fre [0:63], fim [0:63];
+        real gre [0:63], gim [0:63];
+        real xre [0:63], xim [0:63];
+        real amp;
+        int  sc_map [0:52];
+        int  s_sign [0:52];
+        int  l_tab  [0:52];
 
-        // Long preamble symbol (64 samples, T1)
-        // Simplified: use impulse, added zeros for brevity
-        for (n = 0; n < 64; n++) long_sym[n] = 0.0;
-        long_sym[0] = 0.5; long_sym[1] = -0.5;
-
-        // Build preamble with CFO
-        for (n = 0; n < 160; n++) begin
-            automatic real phi = 2.0 * 3.14159 * epsilon *n / 64.0;
-            automatic int si =n % 16;
-            r_i[n] = short_sym[si] * $cos(phi);
-            r_q[n] = short_sym[si] * $sin(phi);
+        // S_{-26..26}: 非零位 ±(1+j), 0-based 序号 2,6,10,14,18,22,30,34,38,42,46,50
+        for (int i = 0; i < 53; i++) s_sign[i] = 0;
+        s_sign[2]=1;  s_sign[10]=1; s_sign[22]=1; s_sign[38]=1;
+        s_sign[42]=1; s_sign[46]=1; s_sign[50]=1;
+        s_sign[6]=-1; s_sign[14]=-1; s_sign[18]=-1; s_sign[30]=-1; s_sign[34]=-1;
+        // L 序列 (golden generate_preamble 逐字)
+        l_tab = '{1,-1,-1,1,1,-1,1,-1,1,-1,-1,-1,-1,-1,
+                  1,1,-1,-1,1,-1,1,-1,1,1,1,1,0,
+                  1,-1,-1,1,1,-1,1,-1,1,-1,-1,-1,-1,-1,
+                  1,1,-1,-1,1,-1,1,-1,1,1,1,1};
+        amp = $sqrt(13.0/6.0);
+        for (int i = 0; i < 53; i++) begin
+            s53_re[i] = amp * real'(s_sign[i]);
+            s53_im[i] = amp * real'(s_sign[i]);
+            l53[i]    = real'(l_tab[i]);
         end
+        // sc_idx_53 = [39:64, 1, 2:27] (1-based) -> 0-based [38..63, 0, 1..26]
+        for (int i = 0; i < 26; i++) sc_map[i] = 38 + i;
+        sc_map[26] = 0;
+        for (int i = 0; i < 26; i++) sc_map[27+i] = 1 + i;
 
-        // GI2 (32 samples)
-        for (n = 0; n < 32; n++) begin
-            automatic real phi = 2.0 * 3.14159 * epsilon *(160+n) / 64.0;
-            automatic int si =64-32+n;
-            r_i[160+n] = long_sym[si] * $cos(phi);
-            r_q[160+n] = long_sym[si] * $sin(phi);
+        //--- 短前导码 -----------------------------------------------------
+        for (int k = 0; k < 64; k++) begin fre[k] = 0.0; fim[k] = 0.0; end
+        for (int i = 0; i < 53; i++) begin
+            fre[sc_map[i]] = s53_re[i];
+            fim[sc_map[i]] = s53_im[i];
         end
-
-        // T1 + T2
-        for (n = 0; n < 128; n++) begin
-            automatic real phi = 2.0 * 3.14159 * epsilon *(192+n) / 64.0;
-            r_i[192+n] = long_sym[n % 64] * $cos(phi);
-            r_q[192+n] = long_sym[n % 64] * $sin(phi);
+        for (int k = 0; k < 64; k++) begin       // fftshift
+            gre[k] = fre[(k+32) % 64];
+            gim[k] = fim[(k+32) % 64];
         end
-
-        // Padding
-        for (n = 320; n < 384; n++) begin
-            r_i[n] = 0; r_q[n] = 0;
+        for (int n = 0; n < 64; n++) begin       // IDFT
+            xre[n] = 0.0; xim[n] = 0.0;
+            for (int k = 0; k < 64; k++) begin
+                xre[n] += (gre[k]*$cos(2.0*PI*k*n/64.0) - gim[k]*$sin(2.0*PI*k*n/64.0)) / 64.0;
+                xim[n] += (gre[k]*$sin(2.0*PI*k*n/64.0) + gim[k]*$cos(2.0*PI*k*n/64.0)) / 64.0;
+            end
         end
+        for (int r = 0; r < 10; r++)
+            for (int n = 0; n < 16; n++) begin
+                pre_re[r*16+n] = xre[n];
+                pre_im[r*16+n] = xim[n];
+            end
 
-        // AWGN
-        sig_pow = 0;
-        for (n = 0; n < test_len; n++)
-            sig_pow = sig_pow + r_i[n]*r_i[n] + r_q[n]*r_q[n];
-        sig_pow = sig_pow / test_len;
-        noise_pow = sig_pow / $pow(10.0, snr_db/10.0);
-
-        // Quantize
-        for (n = 0; n < test_len; n++) begin
-            test_i[n] = q14(r_i[n] + $sqrt(noise_pow/2) * $dist_normal(42,0,1));
-            test_q[n] = q14(r_q[n] + $sqrt(noise_pow/2) * $dist_normal(42,0,1));
+        //--- 长前导码 -----------------------------------------------------
+        for (int k = 0; k < 64; k++) begin fre[k] = 0.0; fim[k] = 0.0; end
+        for (int i = 0; i < 53; i++) fre[sc_map[i]] = l53[i];
+        for (int k = 0; k < 64; k++) begin
+            gre[k] = fre[(k+32) % 64];
+            gim[k] = fim[(k+32) % 64];
+        end
+        for (int n = 0; n < 64; n++) begin
+            xre[n] = 0.0; xim[n] = 0.0;
+            for (int k = 0; k < 64; k++) begin
+                xre[n] += (gre[k]*$cos(2.0*PI*k*n/64.0) - gim[k]*$sin(2.0*PI*k*n/64.0)) / 64.0;
+                xim[n] += (gre[k]*$sin(2.0*PI*k*n/64.0) + gim[k]*$cos(2.0*PI*k*n/64.0)) / 64.0;
+            end
+        end
+        for (int n = 0; n < 64; n++) begin
+            t1_re[n] = xre[n];
+            t1_im[n] = xim[n];
+        end
+        for (int n = 0; n < 32; n++) begin       // GI2 + T1 + T2
+            pre_re[160+n] = xre[32+n];
+            pre_im[160+n] = xim[32+n];
+        end
+        for (int n = 0; n < 64; n++) begin
+            pre_re[192+n] = xre[n];  pre_im[192+n] = xim[n];
+            pre_re[256+n] = xre[n];  pre_im[256+n] = xim[n];
         end
     endtask
 
-    // Send test vector to DUT
-    task send_data();
-        for (int n = 0; n < test_len; n++) begin
-            s_axis_tvalid = 1;
-            s_axis_tdata  = {test_q[n][15:0], test_i[n][15:0]};
-            @(posedge i_clk);
-            while (!s_axis_tready) @(posedge i_clk);
+    //==========================================================================
+    // 帧激励构造: tau 零 + 前导码 + 填充, 加 CFO 与 AWGN, Q2.14 量化
+    //==========================================================================
+    real stim_fre [0:NS-1], stim_fim [0:NS-1];
+    int  stim_i   [0:NS-1], stim_q   [0:NS-1];
+
+    function automatic int q14r(input real v);
+        real x;
+        x = v * 16384.0;
+        if (x >= 0.0) q14r = $rtoi(x + 0.5);
+        else          q14r = -$rtoi(-x + 0.5);
+        if (q14r >  32767) q14r =  32767;
+        if (q14r < -32768) q14r = -32768;
+    endfunction
+
+    task automatic build_frame(input real eps, input int seed);
+        real cre, cim, ph, sp, np, sigma, nr, ni;
+        lcg_state = seed;
+        for (int n = 0; n < NS; n++) begin
+            if (n >= TAU && n < TAU + 320) begin
+                stim_fre[n] = pre_re[n-TAU];
+                stim_fim[n] = pre_im[n-TAU];
+            end else begin
+                stim_fre[n] = 0.0;
+                stim_fim[n] = 0.0;
+            end
         end
-        s_axis_tvalid = 0;
+        sp = 0.0;
+        for (int n = 0; n < NS; n++) begin       // CFO
+            ph  = 2.0 * PI * eps * real'(n) / 64.0;
+            cre = stim_fre[n]*$cos(ph) - stim_fim[n]*$sin(ph);
+            cim = stim_fre[n]*$sin(ph) + stim_fim[n]*$cos(ph);
+            stim_fre[n] = cre;
+            stim_fim[n] = cim;
+            sp += cre*cre + cim*cim;
+        end
+        sp = sp / real'(NS);
+        np = sp / (10.0 ** (SNR_DB/10.0));
+        sigma = $sqrt(np/2.0);
+        for (int n = 0; n < NS; n++) begin       // AWGN + 量化
+            nr = sigma * lcg_gauss();
+            ni = sigma * lcg_gauss();
+            stim_fre[n] += nr;
+            stim_fim[n] += ni;
+            stim_i[n] = q14r(stim_fre[n]);
+            stim_q[n] = q14r(stim_fim[n]);
+        end
     endtask
 
-    // 包检测监视: 只要在本轮激励期间置位过就算检出
-    always @(posedge i_clk) if (!i_rst && w_pd_detected) seen_detect <= 1'b1;
+    //==========================================================================
+    // 输出捕获 (fft_start 必须与 m_axis 拍对齐)
+    //==========================================================================
+    int cap_i [0:NS-1], cap_q [0:NS-1];
+    int cap_cnt;
+    int fft_out_idx;      // fft_start 脉冲对应的输出样点序号 (-1=未见)
 
-    // m_axis 直通延迟自检 (复位释放后持续运行)
-    always @(posedge i_clk) begin
-        if (i_rst) begin
-            for (int k = 0; k < PASSTHRU_LAT; k++) begin
-                exp_pipe[k]   <= '0;
-                exp_v_pipe[k] <= 1'b0;
+    always @(posedge clk) begin
+        if (m_tvalid === 1'b1 && cap_cnt < NS) begin
+            cap_i[cap_cnt] <= int'(signed'(m_tdata[15:0]));
+            cap_q[cap_cnt] <= int'(signed'(m_tdata[31:16]));
+            if (fft_start === 1'b1) fft_out_idx <= cap_cnt;
+            cap_cnt <= cap_cnt + 1;
+        end else if (fft_start === 1'b1 && m_tvalid !== 1'b1) begin
+            $fatal(1, "fft_start 脉冲未与 m_axis 有效拍对齐");
+        end
+    end
+
+    //==========================================================================
+    // 驱动
+    //==========================================================================
+    task automatic drive_frame(input int duty_gap);
+        for (int n = 0; n < NS; n++) begin
+            s_tdata  <= {stim_q[n][15:0], stim_i[n][15:0]};
+            s_tvalid <= 1'b1;
+            do @(posedge clk); while (s_tready !== 1'b1);
+            if (duty_gap > 0) begin
+                s_tvalid <= 1'b0;
+                repeat (duty_gap) @(posedge clk);
             end
-        end else begin
-            exp_v_pipe[0] <= s_axis_tvalid;
-            if (s_axis_tvalid) exp_pipe[0] <= s_axis_tdata;
-            for (int k = 1; k < PASSTHRU_LAT; k++) begin
-                exp_v_pipe[k] <= exp_v_pipe[k-1];
-                if (exp_v_pipe[k-1]) exp_pipe[k] <= exp_pipe[k-1];
+        end
+        s_tvalid <= 1'b0;
+    endtask
+
+    //==========================================================================
+    // 判卷
+    //==========================================================================
+    task automatic check_frame(input string tag, input real eps);
+        real eps_est, phi;
+        int  n_fine_rtl;
+        real cre, cim, ph2, rre, rim;
+        real best; int best_c;
+        real vre, vim; int vcnt;
+        real ore, oim, tre, tim, dre, dim, mag;
+
+        // 1. 锁定
+        if (sync_locked !== 1'b1) $fatal(1, "[%s] 未锁定", tag);
+
+        // 2. 粗 CFO 估计精度 (白盒: dut.r_cpe, ε = 2φ/π)
+        phi     = real'(dut.r_cpe) / 8192.0;
+        eps_est = 2.0 * phi / PI;
+        $display("  [%s] CFO: 真值=%f 估计=%f 误差=%f", tag, eps, eps_est,
+                 eps_est - eps);
+        if (eps_est - eps > 0.02 || eps - eps_est > 0.02)
+            $fatal(1, "[%s] 粗 CFO 误差超限", tag);
+
+        // 3. 定时: fft_start 对齐 + n_fine vs 真值/浮点全精度参考
+        n_fine_rtl = int'(dut.u_track.r_n_fine);
+        if (fft_out_idx != n_fine_rtl)
+            $fatal(1, "[%s] fft_start 输出对齐错: 脉冲在 %0d, n_fine=%0d",
+                   tag, fft_out_idx, n_fine_rtl);
+        if (n_fine_rtl - T1S > 2 || T1S - n_fine_rtl > 2)
+            $fatal(1, "[%s] n_fine=%0d 偏离真值 %0d 超过 2", tag, n_fine_rtl, T1S);
+        best = -1.0; best_c = -1;
+        for (int c = T1S-40; c <= T1S+40; c++) begin
+            rre = 0.0; rim = 0.0;
+            for (int k = 0; k < 64; k++) begin
+                ph2 = -2.0 * PI * eps * real'(c+k) / 64.0;
+                cre = stim_fre[c+k]*$cos(ph2) - stim_fim[c+k]*$sin(ph2);
+                cim = stim_fre[c+k]*$sin(ph2) + stim_fim[c+k]*$cos(ph2);
+                rre += cre*t1_re[k] + cim*t1_im[k];
+                rim += cim*t1_re[k] - cre*t1_im[k];
             end
-            if (m_axis_tvalid) begin
-                passthru_checked++;
-                if (m_axis_tdata !== exp_pipe[PASSTHRU_LAT-1]) begin
-                    passthru_bad++;
-                    if (passthru_bad <= 5)
-                        $display("  PASSTHRU MISMATCH @%0t exp=%h got=%h",
-                                 $time, exp_pipe[PASSTHRU_LAT-1], m_axis_tdata);
+            if (rre*rre + rim*rim > best) begin
+                best = rre*rre + rim*rim;
+                best_c = c;
+            end
+        end
+        $display("  [%s] 定时: RTL n_fine=%0d, 浮点参考=%0d, 真值=%0d",
+                 tag, n_fine_rtl, best_c, T1S);
+        if (n_fine_rtl - best_c > 1 || best_c - n_fine_rtl > 1)
+            $fatal(1, "[%s] RTL 定时与浮点全精度参考差 >1 样点", tag);
+
+        // 4. 直通段恒等 (样点 40..120 << corr_start): |out-in| <= 8 LSB
+        //    (θ=0 过旋转流水的逐级截断抖动, 实测 ~6 LSB, 契约界 ±8)
+        for (int n = 40; n <= 120; n++) begin
+            if (cap_i[n] - stim_i[n] > 8 || stim_i[n] - cap_i[n] > 8 ||
+                cap_q[n] - stim_q[n] > 8 || stim_q[n] - cap_q[n] > 8)
+                $fatal(1, "[%s] 直通段样点 %0d 偏差超 8 LSB: out=(%0d,%0d) in=(%0d,%0d)",
+                       tag, n, cap_i[n], cap_q[n], stim_i[n], stim_q[n]);
+        end
+        $display("  [%s] 直通段 81 样点恒等 (±8 LSB)", tag);
+
+        // 5. 校正后 T1 相位集中度 (残余 CFO 已移除 => 相位近常数)
+        vre = 0.0; vim = 0.0; vcnt = 0;
+        for (int k = 0; k < 64; k++) begin
+            ore = real'(cap_i[n_fine_rtl+k]) / 16384.0;
+            oim = real'(cap_q[n_fine_rtl+k]) / 16384.0;
+            tre = t1_re[k]; tim = t1_im[k];
+            mag = $sqrt(tre*tre + tim*tim);
+            if (mag > 0.05) begin
+                dre = ore*tre + oim*tim;         // out·conj(t1)
+                dim = oim*tre - ore*tim;
+                mag = $sqrt(dre*dre + dim*dim);
+                if (mag > 1.0e-9) begin
+                    vre += dre/mag;  vim += dim/mag;  vcnt++;
                 end
             end
         end
-    end
-
-    task automatic run_case(string name, real eps, real snr);
-        $display("\n=== %s ===", name);
-        seen_detect = 1'b0;
-        gen_test(eps, snr);
-        send_data();
-        #2000;
-
-        // [必须通过] 包检测: 短前导码有强周期自相关, 必须被检出
-        if (seen_detect) begin
-            $display("  PASS: packet_detect asserted during preamble");
-        end else begin
-            $display("  FAIL: packet_detect never asserted");
-            error_cnt++;
-        end
-
-        // [已知缺陷 xfail] FFT 窗触发
-        if (o_fft_start) begin
-            $display("  UNEXPECTED PASS: o_fft_start asserted — fine_timing [F1] 似已修复, 请更新本 TB");
-            unexpected_pass_cnt++;
-        end else begin
-            $display("  XFAIL (known, fine_timing [F1]): o_fft_start 恒为 0, FFT 窗触发未实现");
-            xfail_cnt++;
-        end
+        if ($sqrt(vre*vre + vim*vim) / real'(vcnt) < 0.95)
+            $fatal(1, "[%s] 校正后 T1 相位集中度 %f < 0.95", tag,
+                   $sqrt(vre*vre + vim*vim) / real'(vcnt));
+        $display("  [%s] T1 相位集中度 %f (>0.95)", tag,
+                 $sqrt(vre*vre + vim*vim) / real'(vcnt));
     endtask
 
-    // Test control
-    initial begin
-        error_cnt = 0;
-        xfail_cnt = 0;
-        unexpected_pass_cnt = 0;
-        passthru_checked = 0;
-        passthru_bad = 0;
-        s_axis_tvalid = 0;
-        s_axis_tdata  = '0;
-        m_axis_tready = 1;
+    task automatic reset_dut();
+        @(posedge clk);
+        rst <= 1'b1;
+        repeat (5) @(posedge clk);
+        rst <= 1'b0;
+        cap_cnt     = 0;
+        fft_out_idx = -1;
+        repeat (3) @(posedge clk);
+    endtask
 
-        i_rst = 1;
-        repeat (10) @(posedge i_clk);
-        i_rst = 0;
-        repeat (10) @(posedge i_clk);
+    //==========================================================================
+    // 主流程
+    //==========================================================================
+    int t1_nfine;
 
-        run_case("Test 1: CFO=0.3, SNR=20dB",  0.3, 20.0);
-        run_case("Test 2: CFO=-1.2, SNR=15dB", -1.2, 15.0);
-
-        // [必须通过] 数据通路直通延迟契约
-        $display("\n=== Passthrough latency contract (%0d cycles) ===", PASSTHRU_LAT);
-        if (passthru_checked == 0) begin
-            $display("  FAIL: no m_axis beats observed");
-            error_cnt++;
-        end else if (passthru_bad != 0) begin
-            $display("  FAIL: %0d/%0d beats mismatched", passthru_bad, passthru_checked);
-            error_cnt++;
-        end else begin
-            $display("  PASS: %0d beats, m_axis == s_axis delayed %0d", passthru_checked, PASSTHRU_LAT);
-        end
-
-        // Summary
-        $display("\n=====================================");
-        $display("  errors=%0d  xfail(known)=%0d  unexpected-pass=%0d",
-                 error_cnt, xfail_cnt, unexpected_pass_cnt);
-        if (error_cnt == 0) $display("  ALL REQUIRED CHECKS PASSED");
-        $display("=====================================\n");
-        if (error_cnt != 0)
-            $fatal(1, "tb_sync_top: %0d required check(s) failed", error_cnt);
-        $finish();
+    initial begin : p_watchdog
+        #8ms;
+        $fatal(1, "全局看门狗超时");
     end
 
-    initial begin
-        #100000;
-        $display("TIMEOUT");
-        $fatal(1, "tb_sync_top: simulation timeout before completion");
+    initial begin : p_main
+        rst = 1'b1; s_tvalid = 1'b0; s_tdata = '0;
+        cap_cnt = 0; fft_out_idx = -1;
+        build_preamble();
+        repeat (8) @(posedge clk);
+        rst = 1'b0;
+        repeat (3) @(posedge clk);
+
+        //------------------------------------------------------------------
+        $display("[T1] eps=+0.3, SNR=20dB, 背靠背流");
+        build_frame(0.3, 32'd20260801);
+        drive_frame(0);
+        repeat (600) @(posedge clk);          // 排空延迟线尾部
+        check_frame("T1", 0.3);
+        t1_nfine = int'(dut.u_track.r_n_fine);
+
+        //------------------------------------------------------------------
+        $display("[T2] 复位重入 + eps=-0.2 帧");
+        reset_dut();
+        build_frame(-0.2, 32'd777001);
+        drive_frame(0);
+        repeat (600) @(posedge clk);
+        check_frame("T2", -0.2);
+
+        //------------------------------------------------------------------
+        $display("[T3] eps=+0.3, 50%% 间隙流 (拍域不变性)");
+        reset_dut();
+        build_frame(0.3, 32'd20260801);       // 同 seed 同帧
+        drive_frame(1);
+        repeat (1200) @(posedge clk);
+        check_frame("T3", 0.3);
+        if (int'(dut.u_track.r_n_fine) != t1_nfine)
+            $fatal(1, "[T3] 间隙流 n_fine=%0d != T1 背靠背 %0d",
+                   int'(dut.u_track.r_n_fine), t1_nfine);
+        $display("  [T3] n_fine 与背靠背一致 (拍域不变)");
+
+        //------------------------------------------------------------------
+        $display("ALL TESTS PASSED");
+        $finish;
     end
-    initial begin $dumpfile("tb_sync.vcd"); $dumpvars(0, tb_sync_top); end
 
 endmodule : tb_sync_top

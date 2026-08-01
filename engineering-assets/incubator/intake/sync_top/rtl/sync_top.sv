@@ -1,29 +1,21 @@
 //==============================================================================
-// sync_top — OFDM 突发同步顶层 (802.11a), AXI4-Stream 封装
-// 功能: 集成短前导码包检测 (packet_detect) 与长前导码精定时 (fine_timing),
-//       输出 FFT 窗触发与同步锁定标志; 数据通路当前为直通占位
-// 端口: i_clk/i_rst (同步复位, 高有效); s_axis (ADC 样点 Q2.14);
-//       m_axis (CFO 校正后样点, 当前=直通); o_fft_start; o_sync_locked
-// 主要逻辑: ri_ 输入寄存 -> packet_detect / fine_timing 并联 ->
-//           三段式 FSM (SEARCH/DETECT/TRACK) -> ro_ 寄存输出
-// 延迟: m_axis 相对 s_axis 为 2 拍 (ri_ 1 + ro_ 1)
-// 复位: 同步高有效, 逐级传递给两个子模块
-//
-// 本文件为 hdl-coding 规范修复版。相对修复前 (git 历史) 的行为差异:
-//   (1) 复位由 "异步低有效 negedge rst_n" 改为 "同步高有效 i_rst";
-//   (2) m_axis_tvalid/tdata 原为 s_axis 组合直通 (违红线 2), 现经 ri_/ro_
-//       两级寄存 -> 数据通路延迟 0 拍变 2 拍;
-//   (3) o_sync_locked 原为 `assign = (state==TRACK)` 组合直出, 现 ro_ 寄存 -> +1 拍;
-//   (4) FSM 由二段式补为三段式并补 default 分支 (红线 4)。
-//
-// !! 遗留功能缺陷 (承自原始代码, 本次规范修复**未改其逻辑**, 仅如实标注) !!
-//   [F1] 数据通路是直通占位: CFO 估计与校正**未实现**, cordic_core 虽在包内
-//        但顶层未例化。本模块目前只做检测, 不做校正。
-//   [F2] m_axis_tready 未被使用 —— 下游反压时本模块照发不误, 会丢样点。
-//        接背压需要在数据通路上加 skid buffer 或把 tready 反压回 s_axis。
-//   [F3] 受 fine_timing 的 [F1] 影响 (o_fft_window_start 恒 0), 本 FSM 的
-//        DETECT->TRACK 跳转**永不发生**, o_sync_locked 恒为 0。
-//        修复需先在 fine_timing 里定义 FFT 窗触发判据, 属算法决策。
+// sync_top — 802.11a OFDM 突发同步顶层 (ADR-003 因果化架构)
+// 功能: 短前导码检测 (sync_detect) -> 粗 CFO 求角 (cordic_cv) -> 因果 NCO
+//       旋转校正 (K 预缩放 + cordic_rot_pipe) -> T1 符号量化互相关精定时
+//       (sync_correlator) -> 延迟线对齐输出。
+// 契约 (ADR-003, 详见 README/limitations):
+//   - m_axis = 因果校正流: 样点序号 >= corr_start 起旋转 e^{-j·θ(n)}, 之前
+//     样点 θ=0 过同一流水 (≈恒等±量化); 相对 s_axis 固定延迟 P_DLY=384 拍;
+//   - corr_start = plat_end_idx + 40 (拍域确定值, 保证 CORDIC 已完成;
+//     位真镜像按同式复现, 不依赖时钟级时序);
+//   - o_fft_start 与 m_axis 上 T1 首样点同拍 (单拍脉冲);
+//   - o_sync_locked 置位保持到复位 (单突发语义);
+//   - 无反压契约: m_axis_tready 被忽略, 稳态运行中必须为高 (F7 裁决)。
+// 数值链 (与 generate_vectors.m 位真镜像逐字一致): n_peak = start +
+//   (end-start)>>1; CORDIC 输入 = S_cfo>>>18 (s22); θ_inc = -(φ<<4) Q3.21;
+//   θ(n) 累加±π回绕取 (acc+128)>>>8 Q3.13; K 预缩放 (x·9949+8192)>>>14;
+//   旋转输出 sat16; 精定时与 T2 防错锁判据见 sync_track_out 文件头。
+// 复位: 同步高有效, 统一下发; 数据流水少复位 (§1.1); RAM 豁免见子模块
 //==============================================================================
 module sync_top #(
     parameter int DATA_W = 16
@@ -36,135 +28,272 @@ module sync_top #(
     output logic                s_axis_tready,
     input  logic [DATA_W*2-1:0] s_axis_tdata,
 
-    // AXI4-Stream master (CFO corrected samples)
+    // AXI4-Stream master (CFO-corrected samples, 延迟 P_DLY 拍)
     output logic                m_axis_tvalid,
-    input  logic                m_axis_tready,
+    input  logic                m_axis_tready,  // 忽略 (ADR-003 无反压契约)
     output logic [DATA_W*2-1:0] m_axis_tdata,
 
-    // FFT window start trigger
+    // Sync indicators
     output logic                o_fft_start,
     output logic                o_sync_locked
 );
 
-    //==========================================================================
-    // 状态编码 (红线/命名: 状态用 P_ 前缀)
-    //==========================================================================
-    typedef enum logic [1:0] {P_SEARCH, P_DETECT, P_TRACK} state_t;
-    state_t r_state, w_state_nxt;
+    localparam int P_IDXW = 32;
+    localparam int P_DLY  = 384;                // 对齐延迟线深度 (< 512)
+    localparam int P_WIN  = 256;                // 精定时搜索窗宽
+    localparam int P_EST_GAP = 40;              // plat_end -> corr_start 拍距
+    localparam logic signed [23:0] P_PI_Q21  = 24'sd6588416;   // pi·2^21
+    localparam logic signed [24:0] P_2PI_Q21 = 25'sd13176832;  // 2pi·2^21
 
     //==========================================================================
-    // ri_ 输入寄存 (红线 1) —— 数据通路输入不得直通到输出
+    // s_axis: 恒 ready + ri_ 输入寄存 (红线 1)
     //==========================================================================
-    logic                ri_tvalid;
-    logic [DATA_W*2-1:0] ri_tdata;
+    logic ro_tready;
+
+    always_ff @(posedge i_clk) begin
+        if (i_rst) ro_tready <= 1'b0;
+        else       ro_tready <= 1'b1;
+    end
+
+    assign s_axis_tready = ro_tready;
+
+    logic                     ri_v;
+    logic signed [DATA_W-1:0] ri_di, ri_dq;
+    logic [P_IDXW-1:0]        r_in_idx;         // 当前 ri_ 样点序号 (首样点 0)
+    logic                     r_in_v1;
 
     always_ff @(posedge i_clk) begin
         if (i_rst) begin
-            ri_tvalid <= 1'b0;
-            ri_tdata  <= '0;
+            ri_v     <= 1'b0;
+            r_in_v1  <= 1'b0;
+            r_in_idx <= '0;
         end else begin
-            ri_tvalid <= s_axis_tvalid;
-            if (s_axis_tvalid) ri_tdata <= s_axis_tdata;
+            ri_v <= s_axis_tvalid && ro_tready;
+            if (s_axis_tvalid && ro_tready) begin
+                r_in_v1 <= 1'b1;
+                if (r_in_v1) r_in_idx <= r_in_idx + 1'b1;
+            end
+        end
+    end
+
+    always_ff @(posedge i_clk) begin
+        if (s_axis_tvalid && ro_tready) begin
+            ri_di <= $signed(s_axis_tdata[DATA_W-1:0]);
+            ri_dq <= $signed(s_axis_tdata[DATA_W*2-1:DATA_W]);
         end
     end
 
     //==========================================================================
-    // 子模块互连信号
+    // 包检测 + S_cfo
     //==========================================================================
-    logic              w_pd_detected;
-    logic [DATA_W-1:0] w_pd_metric;
-    logic              w_pd_metric_valid;
-    logic [8:0]        w_ft_offset;
-    logic              w_ft_fft_start;
-    logic              r_ft_enable;
+    logic                w_run_hit, w_plat_end;
+    logic [P_IDXW-1:0]   w_start_idx, w_end_idx;
+    logic signed [41:0]  w_scfo_re, w_scfo_im;
 
-    //==========================================================================
-    // 包检测
-    //==========================================================================
-    packet_detect #(
-        .DATA_W(DATA_W)
-    ) u_pd (
-        .i_clk             (i_clk),
-        .i_rst             (i_rst),
-        .s_axis_tvalid     (s_axis_tvalid),
-        .s_axis_tready     (s_axis_tready),
-        .s_axis_tdata      (s_axis_tdata),
-        .o_packet_detected (w_pd_detected),
-        .o_metric_q15      (w_pd_metric),
-        .o_metric_valid    (w_pd_metric_valid)
+    sync_detect #(
+        .DATA_W (DATA_W),
+        .P_IDXW (P_IDXW)
+    ) u_detect (
+        .i_clk            (i_clk),
+        .i_rst            (i_rst),
+        .i_beat           (ri_v),
+        .i_di             (ri_di),
+        .i_dq             (ri_dq),
+        .o_run_hit        (w_run_hit),
+        .o_plat_end       (w_plat_end),
+        .o_plat_start_idx (w_start_idx),
+        .o_plat_end_idx   (w_end_idx),
+        .o_scfo_re        (w_scfo_re),
+        .o_scfo_im        (w_scfo_im)
     );
 
     //==========================================================================
-    // 精定时使能: 包检测置位后开启, FFT 窗触发后关闭
+    // 同步 FSM (三段式, 红线 4)
     //==========================================================================
-    always_ff @(posedge i_clk) begin
-        if (i_rst)                 r_ft_enable <= 1'b0;
-        else if (w_pd_detected)    r_ft_enable <= 1'b1;
-        else if (w_ft_fft_start)   r_ft_enable <= 1'b0;
-    end
+    typedef enum logic [2:0] {P_IDLE, P_PLAT, P_ASTART, P_AWAIT, P_SEARCH,
+                              P_T2RD, P_T2CMP, P_TRACK} state_t;
+    state_t r_state, w_state_nxt;
 
-    //==========================================================================
-    // 精定时
-    //==========================================================================
-    fine_timing #(
-        .DATA_W(DATA_W)
-    ) u_ft (
-        .i_clk              (i_clk),
-        .i_rst              (i_rst),
-        .i_enable           (r_ft_enable),
-        .s_axis_tvalid      (s_axis_tvalid),
-        .s_axis_tdata       (s_axis_tdata),
-        .o_fft_window_start (w_ft_fft_start),
-        .o_timing_offset    (w_ft_offset)
-    );
+    logic [P_IDXW-1:0]  r_n_peak, r_corr_start;
+    logic signed [15:0] r_cpe;
+    logic signed [23:0] r_tinc;
 
-    //==========================================================================
-    // 三段式状态机 (红线 4)
-    //   段 1: 次态组合逻辑 (含 default, 红线 5)
-    //   段 2: 状态寄存
-    //   段 3: 输出寄存 (见下方 ro_ 段)
-    //==========================================================================
+    logic               w_cd_done;
+    logic signed [21:0] w_cd_ox, w_cd_oy;       // 向量模式只取角, xy 不用
+    logic signed [15:0] w_cd_oz;
+    logic               w_cd_busy;
+    logic               w_search_done;
+
     always_comb begin
-        w_state_nxt = r_state;                       // 默认保持, 杜绝 latch
+        w_state_nxt = r_state;
         case (r_state)
-            P_SEARCH: if (w_pd_detected)                      w_state_nxt = P_DETECT;
-            P_DETECT: if (w_ft_fft_start)                     w_state_nxt = P_TRACK;
-            P_TRACK:  if (!w_pd_detected && r_ft_enable)      w_state_nxt = P_SEARCH;
-            default:                                          w_state_nxt = P_SEARCH;
+            P_IDLE:   if (w_run_hit)     w_state_nxt = P_PLAT;
+            P_PLAT:   if (w_plat_end)    w_state_nxt = P_ASTART;
+            P_ASTART:                    w_state_nxt = P_AWAIT;
+            P_AWAIT:  if (w_cd_done)     w_state_nxt = P_SEARCH;
+            P_SEARCH: if (w_search_done) w_state_nxt = P_T2RD;
+            P_T2RD:                      w_state_nxt = P_T2CMP;
+            P_T2CMP:                     w_state_nxt = P_TRACK;
+            P_TRACK:                     w_state_nxt = P_TRACK;
+            default:                     w_state_nxt = P_IDLE;
         endcase
     end
 
     always_ff @(posedge i_clk) begin
-        if (i_rst) r_state <= P_SEARCH;
+        if (i_rst) r_state <= P_IDLE;
         else       r_state <= w_state_nxt;
     end
 
-    //==========================================================================
-    // ro_ 输出寄存 (红线 2)
-    // 注: m_axis 为直通占位 (见文件头 [F1]), 且未响应 m_axis_tready ([F2])
-    //==========================================================================
-    logic                ro_tvalid;
-    logic [DATA_W*2-1:0] ro_tdata;
-    logic                ro_fft_start;
-    logic                ro_sync_locked;
-
+    // 事件锁存 (数据通路, 由 FSM 定拍)
     always_ff @(posedge i_clk) begin
-        if (i_rst) begin
-            ro_tvalid      <= 1'b0;
-            ro_tdata       <= '0;
-            ro_fft_start   <= 1'b0;
-            ro_sync_locked <= 1'b0;
-        end else begin
-            ro_tvalid      <= ri_tvalid;
-            if (ri_tvalid) ro_tdata <= ri_tdata;
-            ro_fft_start   <= w_ft_fft_start;
-            ro_sync_locked <= (r_state == P_TRACK);
+        if (w_plat_end) begin
+            r_n_peak     <= w_start_idx + ((w_end_idx - w_start_idx) >> 1);
+            r_corr_start <= w_end_idx + P_IDXW'(P_EST_GAP);
+        end
+        if (r_state == P_AWAIT && w_cd_done) begin
+            r_cpe  <= w_cd_oz;
+            r_tinc <= -(24'(w_cd_oz) <<< 4);     // θ_inc = -(φ<<4), Q3.21
         end
     end
 
-    assign m_axis_tvalid = ro_tvalid;
-    assign m_axis_tdata  = ro_tdata;
-    assign o_fft_start   = ro_fft_start;
-    assign o_sync_locked = ro_sync_locked;
+    cordic_cv #(
+        .P_XY_W (22),
+        .P_A_W  (16),
+        .P_ITER (14)
+    ) u_cordic (
+        .i_clk   (i_clk),
+        .i_rst   (i_rst),
+        .i_start (r_state == P_ASTART),
+        .i_mode  (1'b0),                         // 向量模式: 求 S_cfo 相角
+        .i_x     (22'(w_scfo_re >>> 18)),
+        .i_y     (22'(w_scfo_im >>> 18)),
+        .i_z     (16'sd0),
+        .o_busy  (w_cd_busy),
+        .o_done  (w_cd_done),
+        .o_x     (w_cd_ox),
+        .o_y     (w_cd_oy),
+        .o_z     (w_cd_oz)
+    );
+
+    //==========================================================================
+    // NCO 相位累加 (θ 与样点按序号对齐, 校正自 corr_start 起)
+    //==========================================================================
+    logic               w_corr_on;
+    logic signed [23:0] r_acc;
+    logic signed [15:0] r_theta_d;              // 与 K 缩放级对齐 (滞后 1 拍)
+
+    assign w_corr_on = (r_state == P_SEARCH || r_state == P_TRACK) &&
+                       (r_in_idx >= r_corr_start);
+
+    // 次态相位: 累加 + ±π 回绕 (组合)
+    logic signed [24:0] w_acc_sum, w_acc_nxt;
+
+    always_comb begin
+        w_acc_sum = 25'(r_acc) + 25'(r_tinc);
+        if      (w_acc_sum >  25'(P_PI_Q21)) w_acc_nxt = w_acc_sum - P_2PI_Q21;
+        else if (w_acc_sum < -25'(P_PI_Q21)) w_acc_nxt = w_acc_sum + P_2PI_Q21;
+        else                                 w_acc_nxt = w_acc_sum;
+    end
+
+    always_ff @(posedge i_clk) begin
+        if (i_rst) begin
+            r_acc     <= '0;
+            r_theta_d <= '0;
+        end else if (ri_v) begin
+            if (w_corr_on) begin
+                r_theta_d <= 16'((r_acc + 24'sd128) >>> 8);   // 本样点 θ (Q3.13)
+                r_acc     <= 24'(w_acc_nxt);
+            end else begin
+                r_theta_d <= '0;
+            end
+        end
+    end
+
+    //==========================================================================
+    // K 预缩放 (1/A 增益补偿) + 流水线旋转
+    //==========================================================================
+    logic signed [DATA_W-1:0] r_k_di, r_k_dq;
+    logic                     r_k_v;
+
+    always_ff @(posedge i_clk) begin
+        if (i_rst)     r_k_v <= 1'b0;
+        else if (ri_v) r_k_v <= 1'b1;
+    end
+
+    always_ff @(posedge i_clk) begin
+        if (ri_v) begin
+            r_k_di <= 16'((32'(ri_di) * 32'sd9949 + 32'sd8192) >>> 14);
+            r_k_dq <= 16'((32'(ri_dq) * 32'sd9949 + 32'sd8192) >>> 14);
+        end
+    end
+
+    logic               w_rot_v;
+    logic signed [19:0] w_rot_x, w_rot_y;
+
+    cordic_rot_pipe #(
+        .P_XY_W (20),
+        .P_A_W  (16),
+        .P_ITER (14)
+    ) u_rot (
+        .i_clk   (i_clk),
+        .i_rst   (i_rst),
+        .i_ce    (ri_v),
+        .i_valid (r_k_v),
+        .i_x     (20'(r_k_di)),
+        .i_y     (20'(r_k_dq)),
+        .i_phase (r_theta_d),
+        .o_valid (w_rot_v),
+        .o_x     (w_rot_x),
+        .o_y     (w_rot_y)
+    );
+
+    // 饱和到 Q2.14 s16
+    logic signed [DATA_W-1:0] w_c_di, w_c_dq;
+
+    always_comb begin
+        if      (w_rot_x > 20'sd32767)  w_c_di = 16'sd32767;
+        else if (w_rot_x < -20'sd32768) w_c_di = -16'sd32768;
+        else                            w_c_di = 16'(w_rot_x);
+        if      (w_rot_y > 20'sd32767)  w_c_dq = 16'sd32767;
+        else if (w_rot_y < -20'sd32768) w_c_dq = -16'sd32768;
+        else                            w_c_dq = 16'(w_rot_y);
+    end
+
+    logic w_rot_beat;
+    assign w_rot_beat = ri_v && w_rot_v;        // 校正流有效拍
+
+    logic [P_IDXW-1:0] r_rot_idx;               // 当前校正流样点序号
+
+    always_ff @(posedge i_clk) begin
+        if (i_rst)           r_rot_idx <= '0;
+        else if (w_rot_beat) r_rot_idx <= r_rot_idx + 1'b1;
+    end
+
+    //==========================================================================
+    // 精定时 + T2 防错锁 + 对齐输出 (G-A-04 拆分子模块, 内含 sync_correlator)
+    //==========================================================================
+    sync_track_out #(
+        .DATA_W (DATA_W),
+        .P_IDXW (P_IDXW),
+        .P_DLY  (P_DLY),
+        .P_WIN  (P_WIN)
+    ) u_track (
+        .i_clk         (i_clk),
+        .i_rst         (i_rst),
+        .i_search      (r_state == P_SEARCH),
+        .i_t2rd        (r_state == P_T2RD),
+        .i_t2cmp       (r_state == P_T2CMP),
+        .i_track       (r_state == P_TRACK),
+        .i_n_peak      (r_n_peak),
+        .o_search_done (w_search_done),
+        .i_beat        (w_rot_beat),
+        .i_di          (w_c_di),
+        .i_dq          (w_c_dq),
+        .i_idx         (r_rot_idx),
+        .m_axis_tvalid (m_axis_tvalid),
+        .m_axis_tdata  (m_axis_tdata),
+        .o_fft_start   (o_fft_start),
+        .o_sync_locked (o_sync_locked)
+    );
 
 endmodule : sync_top
