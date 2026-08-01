@@ -1,4 +1,16 @@
-# cdc_sync — 跨时钟域同步器(单比特电平 / 多比特 req-ack 握手)
+<!-- asset-status: certified v1.0.0 -->
+# cdc_sync — 跨时钟域同步器 (单比特电平 / 多比特 req-ack 握手, certified CBB)
+
+> **CDC 取证 (本资产核心)**: Vivado `report_cdc` **实跑** —— 10 条跨域路径,
+> **0 Critical**; 2 条 CDC-3 Info (req/ack 各经 2 级 ASYNC_REG 同步链),
+> 8 条 CDC-15 Warning (8 位数据总线的 clock-enable-controlled 结构, 四相握手的
+> 预期形态)。**该 Warning 如实保留、不豁免、不声称 CDC clean** —— 其安全性由
+> 协议而非结构承担, 论证逐条写在 `cdc-report.json`。
+> **综合 (OOC)**: WNS +5.461ns @150MHz (dst); LUT 5/40, FF 24/80 (与推算吻合)。
+> **自检**: 720 次比对 0 失配 (双向异频握手 700 字 + 单比特电平 20 次转变)。
+> **限制**: 见 [`docs/limitations.md`](docs/limitations.md) —— 9 条, **第 1 条最
+> 重要**: 亚稳态无法被仿真或综合报告证明; 另注意两域必须联合复位、高吞吐跨域
+> 请改用异步 FIFO。
 
 库内唯一受治理 CDC 原语(rules/01-hdl 定义了 `_cdc` 命名规范,此前库内无标准实现)。
 

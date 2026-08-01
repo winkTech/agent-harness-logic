@@ -1,0 +1,165 @@
+{
+  "schema_version": "1.0",
+  "asset_uid": "cdc_sync",
+  "name": "cdc_sync",
+  "version": "1.0.0",
+  "signoff": {
+    "by": "lihan",
+    "at": "2026-08-01",
+    "scope": [
+      "证据已复核: tb-selfcheck.json (720 次比对 0 失配; 三路并行验证 —— A 快→慢 500 字 / B 慢→快 200 字 双向异频握手 + C 单比特电平 20 次转变; 计数守恒不丢不重, o_valid_dst 均为单拍脉冲) / **cdc-report.json (Vivado report_cdc 实跑, 非结构扫描降级)** / reset-sim.json (两域联合复位, 12 个跨域寄存器逐一比对 0 失配, 含同步链) / stability 四子结果 (regression 400 / boundary 20 / stress 300 / backpressure 700) / timing-summary.rpt / utilization.rpt / envelope-check.json (WNS +5.461ns @150MHz; LUT 5/40, FF 24/80, BRAM 0/0, DSP 0/0)",
+      "CDC 取证 (本资产的核心): report_cdc 实跑 10 条跨域路径, **0 Critical**; 2 条 CDC-3 Info 为 req/ack 各经 2 级 (*ASYNC_REG*) 同步链 (标准安全结构); 8 条 CDC-15 Warning 为 8 位数据总线的 clock-enable-controlled 结构 —— **该 Warning 如实保留、不做豁免、不声称 clean**, 其安全性由四相握手协议承担 (数据在 req 翻转前锁定, dst 侧只在 req 经同步链到位后捕获, ready 保证在途不改数据), 协议正确性由 720 次比对承担。全部 10 条路径均命中 set_max_delay -datapath_only 例外",
+      "约束决策: 刻意**不用** set_clock_groups -asynchronous —— 那会让工具完全忽略跨域路径, 连数据通路延迟都不再约束; 改用 set_max_delay -datapath_only 双向限界 (6.666 / 10.000 ns), 既解除无意义的建立/保持关系又把走线延迟压在目的域一周期内。两域取异频 (100/150MHz) 是刻意选择, 同频会让跨域路径因偶然对齐而被误判为安全",
+      "已接受限制 (最重要): **亚稳态无法由仿真或综合报告证明**。本 TB 只证协议功能正确; 结构安全性由 (*ASYNC_REG*) 属性 + set_max_delay -datapath_only + P_STAGES>=2 承担。MTBF 定量计算需器件失效率数据, 不在本次取证范围",
+      "已接受限制: **两域必须联合复位后再开始传输** —— 运行中单域复位不在契约内 (req/ack 相位会失配导致永久死锁或重复); 集成方须保证复位序列",
+      "已接受限制: 多比特路径吞吐受握手往返约束 (约 (P_STAGES+1) dst 拍 + (P_STAGES+1) src 拍), 面向低速控制字/状态传递; **高吞吐跨域请用异步 FIFO, 不要用本模块**",
+      "已接受限制: 单比特路径是**电平语义不是脉冲语义** —— 电平必须保持 ≥2×P_STAGES 个目的域拍才保证被观察到; 传脉冲会丢",
+      "已接受限制: 综合与预算按 P_DWIDTH=8 / P_STAGES=2 评估; 更大位宽会线性增加数据寄存器与 CDC-15 条目数, 但不改变结构安全论证",
+      "工具说明: 仿真证据由 Vivado xsim 2023.1 产出 (本机 ModelSim 回环 RPC 故障); CDC 证据由 Vivado 2023.1 report_cdc 产出; vlog 编译不受影响, G-A-00 仍由 ModelSim 判读"
+    ]
+  },
+  "owner": "lihan",
+  "kind": "primitive",
+  "maturity": {
+    "level": "certified",
+    "evidence_ref": "engineering-assets/evidence/cdc_sync/1.0.0/"
+  },
+  "requirement_ref": "engineering-assets/docs/comm模块族认证差距清单.md",
+  "doc_refs": [
+    "engineering-assets/docs/governance/CBB-治理与生产级准入规范-V1.0.md",
+    "engineering-assets/docs/CBB候选台账-hdl-coding-templates.md"
+  ],
+  "fidelity": {
+    "status": "na"
+  },
+  "top": "cdc_sync",
+  "ports": [
+    {
+      "name": "i_clk_src",
+      "direction": "input",
+      "width": 1
+    },
+    {
+      "name": "i_rst_src",
+      "direction": "input",
+      "width": 1
+    },
+    {
+      "name": "i_valid_src",
+      "direction": "input",
+      "width": 1
+    },
+    {
+      "name": "i_data_src",
+      "direction": "input",
+      "width": 8
+    },
+    {
+      "name": "o_ready_src",
+      "direction": "output",
+      "width": 1
+    },
+    {
+      "name": "i_clk_dst",
+      "direction": "input",
+      "width": 1
+    },
+    {
+      "name": "i_rst_dst",
+      "direction": "input",
+      "width": 1
+    },
+    {
+      "name": "o_valid_dst",
+      "direction": "output",
+      "width": 1
+    },
+    {
+      "name": "o_data_dst",
+      "direction": "output",
+      "width": 8
+    }
+  ],
+  "clock": {
+    "name": "i_clk_dst"
+  },
+  "clocks": [
+    {
+      "name": "i_clk_src",
+      "domain": "src",
+      "relationship": "asynchronous"
+    },
+    {
+      "name": "i_clk_dst",
+      "domain": "dst",
+      "relationship": "asynchronous"
+    }
+  ],
+  "reset": {
+    "name": "i_rst_dst",
+    "polarity": "active_high",
+    "type": "sync"
+  },
+  "resets": [
+    {
+      "name": "i_rst_src",
+      "domain": "src",
+      "polarity": "active_high",
+      "type": "sync"
+    },
+    {
+      "name": "i_rst_dst",
+      "domain": "dst",
+      "polarity": "active_high",
+      "type": "sync"
+    }
+  ],
+  "device": {
+    "part": "xc7k325tffg900-2",
+    "family": "kintex7",
+    "note": "与库内其余 CBB 统一器件; OOC 评估"
+  },
+  "params": [
+    {
+      "name": "P_DWIDTH",
+      "value": 8,
+      "rationale": "数据位宽; =1 走单比特电平同步路径, >1 走四相 req/ack 握手路径 (generate 二选一)"
+    },
+    {
+      "name": "P_STAGES",
+      "value": 2,
+      "rationale": "同步链级数, 编译期约束最小为 2; 级数越多 MTBF 越好但延迟越长"
+    }
+  ],
+  "constraints": {
+    "target": {
+      "fmax": "150MHz",
+      "fmax_mhz": 150,
+      "fmax_note": "本模块**双时钟域**, 单一 fmax 字段只能表达一个域: 此处取 manifest.clock 声明的 i_clk_dst = 150MHz (6.666ns); 源域 i_clk_src = 100MHz (10ns)。两域异频是刻意选择 —— 同频会让跨域路径因偶然对齐而被误判为安全。跨域路径不受常规建立/保持约束, 由 set_max_delay -datapath_only 双向限界, 见 cdc-report.json。",
+      "lut": 40,
+      "ff": 80,
+      "bram": 0,
+      "dsp": 0,
+      "note_budget": "结构推算 (默认 P_DWIDTH=8 / P_STAGES=2, 多比特握手路径): src 域 ri_data_src 8 + r_req_src 1 + ro_ready_src 1 + r_ack_sync_cdc 2 = 12; dst 域 r_req_sync_cdc 2 + r_ack_dst 1 + ro_valid_dst 1 + ro_data_dst 8 = 12; 合计 24 FF, 取 80 (留双路径与更大位宽的余量)。LUT 仅为 req/ack 异或比较与 ready 译码, 取 40。无存储与乘法故 BRAM/DSP 恒 0。**注意本模块的时序目标不是单一 fmax** —— 两域异频 (src 100MHz / dst 150MHz), 跨域路径由 set_max_delay -datapath_only 约束而非常规建立/保持, 见 cdc-report.json。"
+    }
+  },
+  "sources": [
+    {
+      "path": "rtl/cdc_sync.sv",
+      "role": "rtl",
+      "sha256": "5e31e38a10e0c076144ac5b067e50e8c2cd8f5aca7c8df233c70e293806d7ac3"
+    },
+    {
+      "path": "constraints/cdc_sync.xdc",
+      "role": "constraint",
+      "sha256": "64b09b36b55b14b0250d62453013a6f0a1859ce41af9d0dff8e2a7642cff758b"
+    },
+    {
+      "path": "tb/tb_cdc_sync.sv",
+      "role": "tb",
+      "sha256": "75f2bdffd884523d8e2e256e55dd7410d1d15986d94456f3a62477dafec4eb1a"
+    }
+  ],
+  "waivers": [],
+  "superseded_by": null
+}

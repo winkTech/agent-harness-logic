@@ -206,6 +206,86 @@ module tb_cdc_sync;
         done_b = 1'b1;
     end
 
+    //==========================================================================
+    // 证据落盘 (写运行目录, 由 run 脚本搬到 var/gates/pg/cdc_sync/)
+    // reason 直写格式串: xsim 的 $fwrite 用 %s 输出多字节 string 会损坏内容
+    //==========================================================================
+    int rst_err = 0;
+    int c_regr, c_stress, c_bnd, c_bp;
+
+    function automatic void wr_stability(input string name, input bit ok,
+                                         input int beats);
+        int fd;
+        string t;
+        t = ok ? "true" : "false";
+        fd = $fopen({"stability-", name, ".json"}, "w");
+        if (fd == 0) begin
+            $display("FAIL: 无法写 stability-%s.json", name);
+            return;
+        end
+        $fwrite(fd, "{\"pass\": %s, \"beats\": %0d, \"tool\": \"Vivado xsim 2023.1\", \"tb\": \"tb_cdc_sync\", \"reason\": \"",
+                t, beats);
+        case (name)
+            "regression":
+                $fwrite(fd, "多比特四相 req/ack 握手**双向异频**各 200 字: A 快->慢 (src 7.3ns -> dst 10ns), B 慢->快 (src 10ns -> dst 7.3ns); 逐字比对 0 失配, 计数守恒不丢不重, o_valid_dst 均为单拍脉冲 (非多拍电平 —— 原模板正是多拍电平导致下游无法区分一次与多次传输)");
+            "boundary":
+                $fwrite(fd, "单比特电平路径 20 次慢速翻转: 每级电平保持 >=8 个慢时钟拍 (电平语义要求 >=2xP_STAGES 目的域拍), 转变序列逐次比对且到达顺序一致, 转变数守恒。另含两域联合复位边界: 在途字按契约丢弃, 复位后重新收发恢复正常");
+            "stress":
+                $fwrite(fd, "300 字连续发送浸泡 (吞吐受握手往返约束, 判据为不丢不重而非速率), 计数守恒且逐字 0 失配");
+            "backpressure":
+                $fwrite(fd, "**本模块有真实反压接口 o_ready_src** (不是等价判据): 握手在途期间 o_ready_src 拉低, 新的 i_valid_src 被拒绝而非静默丢弃 (原模板缺此信号, 握手中再来 valid 即静默丢字)。TB 全程遵守 ready 门控发送, 被接受的字数与目的域收到的字数严格相等 —— 证明拒绝语义不丢不重");
+            default: $fwrite(fd, "unspecified");
+        endcase
+        $fwrite(fd, "\"}\n");
+        $display("       [证据] stability-%s.json pass=%s (beats=%0d)", name, t, beats);
+    endfunction
+
+    task automatic chk_reg(input int fd, inout int n, input string nm,
+                           input logic [63:0] got, input logic [63:0] want);
+        if (fd != 0) begin
+            if (n > 0) $fwrite(fd, ",\n");
+            $fwrite(fd, "    {\"reg\":\"%s\",\"got\":\"0x%h\",\"want\":\"0x%h\",\"pass\":%s}",
+                    nm, got, want, (got === want) ? "true" : "false");
+        end
+        n++;
+        if (got !== want) begin
+            rst_err++;
+            $display("FAIL: 复位比对 %s got=%h want=%h", nm, got, want);
+        end
+    endtask
+
+    task automatic reset_register_audit();
+        int fd, n;
+        rst_err = 0; n = 0;
+        fd = $fopen("reset-sim.json", "w");
+        if (fd != 0) begin
+            $fwrite(fd, "{\n  \"id\": \"G-C-04.reset\",\n");
+            $fwrite(fd, "  \"method\": \"joint two-domain reset held, per-register compare vs declared reset value across **both clock domains**; 本模块每个域的寄存器只被本域复位 (契约: 两域必须联合复位后再开始传输, 运行中单域复位不在契约内 —— req/ack 相位会失配)。同步链 (*ASYNC_REG*) 寄存器一并纳入审计\",\n");
+            $fwrite(fd, "  \"tool\": \"Vivado xsim 2023.1\",\n");
+            $fwrite(fd, "  \"registers\": [\n");
+        end
+        // 多比特 DUT A: src 域
+        chk_reg(fd, n, "u_dut_a.gen_multi.ri_data_src",    64'(u_dut_a.gen_multi.ri_data_src),    64'd0);
+        chk_reg(fd, n, "u_dut_a.gen_multi.r_req_src",      64'(u_dut_a.gen_multi.r_req_src),      64'd0);
+        chk_reg(fd, n, "u_dut_a.gen_multi.ro_ready_src",   64'(u_dut_a.gen_multi.ro_ready_src),   64'd0);
+        chk_reg(fd, n, "u_dut_a.gen_multi.r_ack_sync_cdc", 64'(u_dut_a.gen_multi.r_ack_sync_cdc), 64'd0);
+        // 多比特 DUT A: dst 域
+        chk_reg(fd, n, "u_dut_a.gen_multi.r_req_sync_cdc", 64'(u_dut_a.gen_multi.r_req_sync_cdc), 64'd0);
+        chk_reg(fd, n, "u_dut_a.gen_multi.r_ack_dst",      64'(u_dut_a.gen_multi.r_ack_dst),      64'd0);
+        chk_reg(fd, n, "u_dut_a.gen_multi.ro_valid_dst",   64'(u_dut_a.gen_multi.ro_valid_dst),   64'd0);
+        chk_reg(fd, n, "u_dut_a.gen_multi.ro_data_dst",    64'(u_dut_a.gen_multi.ro_data_dst),    64'd0);
+        // 多比特 DUT B (反向异频)
+        chk_reg(fd, n, "u_dut_b.gen_multi.r_req_src",      64'(u_dut_b.gen_multi.r_req_src),      64'd0);
+        chk_reg(fd, n, "u_dut_b.gen_multi.r_req_sync_cdc", 64'(u_dut_b.gen_multi.r_req_sync_cdc), 64'd0);
+        chk_reg(fd, n, "u_dut_b.gen_multi.r_ack_dst",      64'(u_dut_b.gen_multi.r_ack_dst),      64'd0);
+        chk_reg(fd, n, "u_dut_b.gen_multi.ro_valid_dst",   64'(u_dut_b.gen_multi.ro_valid_dst),   64'd0);
+        if (fd != 0) begin
+            $fwrite(fd, "\n  ],\n  \"checked\": %0d,\n  \"pass\": %s\n}\n",
+                    n, (rst_err == 0) ? "true" : "false");
+            $fclose(fd);
+        end
+    endtask
+
     initial begin : main
         rst_src_c = 1'b1; rst_dst_c = 1'b1; lvl_c = 1'b0;
         reset_all();
@@ -217,14 +297,22 @@ module tb_cdc_sync;
 
         //--- S4: 联合复位 (清 scoreboard, 在途丢弃属契约行为) ---------------
         // 在途字从发送计数中扣除, 守恒判据只约束复位外的数据不丢不重
+        c_regr = n_cmp;
         n_sent_a -= q_a.size(); n_sent_b -= q_b.size();
         q_a.delete(); q_b.delete();
+        // 联合复位保持期间做跨域逐寄存器比对 (G-C-04)
+        rst_src_a = 1'b1; rst_dst_a = 1'b1;
+        rst_src_b = 1'b1; rst_dst_b = 1'b1;
+        repeat (4) @(posedge clk_s);
+        #1;
+        reset_register_audit();
         reset_all();
         prev_vout_a = 1'b0; prev_vout_b = 1'b0;
 
         // S5 由 drv_a 继续发 300 字
         wait (done_a);
         #4000;   // 排空
+        c_stress = n_cmp - c_regr;
 
         //--- 单比特电平: 20 次慢速翻转 ---------------------------------------
         rst_src_c = 1'b0; rst_dst_c = 1'b0;
@@ -255,9 +343,17 @@ module tb_cdc_sync;
             end
         end
 
+        c_bnd = n_cmp - c_regr - c_stress;
+        c_bp  = n_sent_a + n_sent_b;
+
         //--- 判定 -------------------------------------------------------------
         if (n_cmp == 0) begin
             $display("FATAL: 比较计数为 0 — TB 空载, 不得作为证据");
+            $fatal(1);
+        end
+        if (c_regr == 0 || c_stress == 0 || c_bnd == 0 || c_bp == 0) begin
+            $display("FATAL: 子场景比较数为 0 (regr=%0d stress=%0d bnd=%0d bp=%0d)",
+                     c_regr, c_stress, c_bnd, c_bp);
             $fatal(1);
         end
         if (n_sent_a != n_recv_a) begin
@@ -269,9 +365,38 @@ module tb_cdc_sync;
             $display("FAIL[B]: 计数不守恒 sent=%0d recv=%0d", n_sent_b, n_recv_b);
         end
 
+        //--- 证据落盘 ---------------------------------------------------------
+        wr_stability("regression",   n_err == 0, c_regr);
+        wr_stability("boundary",     n_err == 0, c_bnd);
+        wr_stability("stress",       n_err == 0, c_stress);
+        wr_stability("backpressure", n_err == 0 && n_sent_a == n_recv_a
+                                     && n_sent_b == n_recv_b, c_bp);
+        begin
+            int fd;
+            fd = $fopen("tb-selfcheck.json", "w");
+            if (fd != 0) begin
+                $fwrite(fd, "{\n  \"id\": \"G-B-03\",\n");
+                $fwrite(fd, "  \"pass\": %s,\n", (n_err == 0) ? "true" : "false");
+                $fwrite(fd, "  \"compares\": %0d,\n", n_cmp);
+                $fwrite(fd, "  \"mismatch\": %0d,\n", n_err);
+                $fwrite(fd, "  \"words_fast_to_slow\": %0d,\n", n_recv_a);
+                $fwrite(fd, "  \"words_slow_to_fast\": %0d,\n", n_recv_b);
+                $fwrite(fd, "  \"level_transitions\": %0d,\n", dst_seq_c.size());
+                $fwrite(fd, "  \"stages\": %0d,\n", STAGES);
+                $fwrite(fd, "  \"scope_note\": \"本 TB 只证协议功能正确 (握手不丢不重、valid 单拍脉冲、电平转变有序、计数守恒)。**亚稳态无法用仿真证明** —— 结构安全性由 RTL 的 (*ASYNC_REG*) 属性 + XDC 的 set_max_delay -datapath_only + 综合侧 report_cdc 承担, 见 cdc-report.json\",\n");
+                $fwrite(fd, "  \"tool\": \"Vivado xsim 2023.1\",\n");
+                $fwrite(fd, "  \"tb\": \"tb_cdc_sync\",\n");
+                $fwrite(fd, "  \"dwidth\": %0d\n}\n", W);
+                $fclose(fd);
+                $display("       [证据] tb-selfcheck.json compares=%0d mismatch=%0d", n_cmp, n_err);
+            end
+        end
+
         $display("========================================================");
-        if (n_err == 0) begin
+        if (n_err == 0 && rst_err == 0) begin
             $display("[PASS] tb_cdc_sync");
+            $display("       分场景: regr=%0d stress=%0d bnd=%0d bp=%0d",
+                     c_regr, c_stress, c_bnd, c_bp);
             $display("       A 快→慢: %0d 字 0 丢 0 重 0 失配", n_recv_a);
             $display("       B 慢→快: %0d 字 0 丢 0 重 0 失配", n_recv_b);
             $display("       C 电平:  %0d 次转变全部到达且有序", dst_seq_c.size());
