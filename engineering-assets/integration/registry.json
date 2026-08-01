@@ -343,10 +343,13 @@
   {
    "id": "ITG-0017",
    "project": "(library)",
-   "project_ref": "incubator/intake/complex_multiplier",
+   "project_ref": "cbb/complex_multiplier",
    "asset_uid": "complex_multiplier",
-   "version_pinned": "0.1.0",
-   "config": {},
+   "version_pinned": "1.0.0",
+   "config": {
+    "P_A_W": 16,
+    "P_B_W": 16
+   },
    "integrated_at": "2026-07-31T00:00:00Z",
    "status": "library",
    "owner": "lihan",

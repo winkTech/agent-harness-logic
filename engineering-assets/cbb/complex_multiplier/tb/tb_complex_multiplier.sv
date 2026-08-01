@@ -175,6 +175,85 @@ module tb_complex_multiplier;
     localparam logic signed [15:0] C_MAX = 16'sh7FFF;   //  32767
     localparam logic signed [15:0] C_MIN = 16'sh8000;   // -32768
 
+    //==========================================================================
+    // 证据落盘 (写运行目录, 由 run 脚本搬到 var/gates/pg/complex_multiplier/)
+    // reason 直写格式串: xsim 的 $fwrite 用 %s 输出多字节 string 会损坏内容
+    //==========================================================================
+    int rst_err = 0;
+
+    function automatic void wr_stability(input string name, input bit ok,
+                                         input int beats);
+        int fd;
+        string t;
+        t = ok ? "true" : "false";
+        fd = $fopen({"stability-", name, ".json"}, "w");
+        if (fd == 0) begin
+            $display("FAIL: 无法写 stability-%s.json", name);
+            return;
+        end
+        $fwrite(fd, "{\"pass\": %s, \"beats\": %0d, \"tool\": \"Vivado xsim 2023.1\", \"tb\": \"tb_complex_multiplier\", \"reason\": \"",
+                t, beats);
+        case (name)
+            "regression":
+                $fwrite(fd, "随机满流水逐拍对照独立 longint 参考模型 (按复数乘法定义式 re=ac-bd, im=ad+bc 直算, 与 RTL 的四乘积分级实现不同源), 实部虚部与 o_valid 对齐全部逐位相等, 输出无 X/Z");
+            "boundary":
+                $fwrite(fd, "定向极值向量: 全零 / 纯 j / -1 / (C_MAX,C_MAX)^2 / (C_MIN,C_MIN)^2 / C_MIN*C_MIN=2^30 (有符号最负值自乘, 补码边界) / C_MIN 与 C_MAX 交叉组合 / -1-j 自乘, 覆盖 33 位输出的进位与符号边界, 全部逐位相等 —— 全精度输出不截断不饱和, 数学上不可能溢出");
+            "stress":
+                $fwrite(fd, "5000 拍满流水随机浸泡, 逐拍比对 0 失配; 数据通路自由流水 (不由 valid 门控) 的正确性由 valid 链对齐持续校验");
+            "backpressure":
+                $fwrite(fd, "本核为定长 3 拍延迟流水, 不带 tready (约定见 RTL 模块头与 limitations)。等价流控为 i_valid 间断: 随机 valid 图样下 o_valid 与参考模型的期望 valid 链逐拍严格对齐, 无效拍的计算结果被正确屏蔽, 有效拍结果不受相邻无效拍影响");
+            default: $fwrite(fd, "unspecified");
+        endcase
+        $fwrite(fd, "\"}\n");
+        $display("       [证据] stability-%s.json pass=%s (beats=%0d)", name, t, beats);
+    endfunction
+
+    task automatic chk_reg(input int fd, inout int n, input string nm,
+                           input logic [63:0] got, input logic [63:0] want);
+        if (fd != 0) begin
+            if (n > 0) $fwrite(fd, ",\n");
+            $fwrite(fd, "    {\"reg\":\"%s\",\"got\":\"0x%h\",\"want\":\"0x%h\",\"pass\":%s}",
+                    nm, got, want, (got === want) ? "true" : "false");
+        end
+        n++;
+        if (got !== want) begin
+            rst_err++;
+            $display("FAIL: 复位比对 %s got=%h want=%h", nm, got, want);
+        end
+    endtask
+
+    task automatic reset_register_audit();
+        int fd, n;
+        rst_err = 0; n = 0;
+        fd = $fopen("reset-sim.json", "w");
+        if (fd != 0) begin
+            $fwrite(fd, "{\n  \"id\": \"G-C-04.reset\",\n");
+            $fwrite(fd, "  \"method\": \"mid-stream re-reset held 3 clk, per-register compare vs declared reset value; 本模块全部流水寄存器均受复位控制 (含四乘积级), 无少复位豁免项\",\n");
+            $fwrite(fd, "  \"tool\": \"Vivado xsim 2023.1\",\n");
+            $fwrite(fd, "  \"registers\": [\n");
+        end
+        chk_reg(fd, n, "u_dut.ri_valid",  64'(u_dut.ri_valid),  64'd0);
+        chk_reg(fd, n, "u_dut.ri_a_re",   64'(u_dut.ri_a_re),   64'd0);
+        chk_reg(fd, n, "u_dut.ri_a_im",   64'(u_dut.ri_a_im),   64'd0);
+        chk_reg(fd, n, "u_dut.ri_b_re",   64'(u_dut.ri_b_re),   64'd0);
+        chk_reg(fd, n, "u_dut.ri_b_im",   64'(u_dut.ri_b_im),   64'd0);
+        chk_reg(fd, n, "u_dut.r_p_rere",  64'(u_dut.r_p_rere),  64'd0);
+        chk_reg(fd, n, "u_dut.r_p_imim",  64'(u_dut.r_p_imim),  64'd0);
+        chk_reg(fd, n, "u_dut.r_p_reim",  64'(u_dut.r_p_reim),  64'd0);
+        chk_reg(fd, n, "u_dut.r_p_imre",  64'(u_dut.r_p_imre),  64'd0);
+        chk_reg(fd, n, "u_dut.r_valid_m", 64'(u_dut.r_valid_m), 64'd0);
+        chk_reg(fd, n, "u_dut.ro_re",     64'(u_dut.ro_re),     64'd0);
+        chk_reg(fd, n, "u_dut.ro_im",     64'(u_dut.ro_im),     64'd0);
+        chk_reg(fd, n, "u_dut.ro_valid",  64'(u_dut.ro_valid),  64'd0);
+        if (fd != 0) begin
+            $fwrite(fd, "\n  ],\n  \"checked\": %0d,\n  \"pass\": %s\n}\n",
+                    n, (rst_err == 0) ? "true" : "false");
+            $fclose(fd);
+        end
+    endtask
+
+    int v_bnd, v_regr, v_stress, v_bp, v_mark;
+
     initial begin
         // ── 复位 ──
         s_phase = "reset";
@@ -210,24 +289,40 @@ module tb_complex_multiplier;
         drive(1'b1,  C_MAX,      0,      0,  C_MIN);
         drive(1'b1,      0,  C_MIN,  C_MIN,      0);
         repeat (6) drive(1'b0, 0, 0, 0, 0);
+        v_bnd = n_valid;
 
-        // ── C1: 随机满流水 ──
+        // ── C1: 随机满流水 (regression) ──
         s_phase = "C1-random-fullrate";
+        v_mark = n_valid;
         for (int k = 0; k < 2000; k++) begin
             automatic logic [31:0] r0 = next_rand();
             automatic logic [31:0] r1 = next_rand();
             drive(1'b1, r0[15:0], r0[31:16], r1[15:0], r1[31:16]);
         end
         repeat (6) drive(1'b0, 0, 0, 0, 0);
+        v_regr = n_valid - v_mark;
 
-        // ── C4: valid 间断 ──
+        // ── C4: valid 间断 (backpressure 等价判据) ──
         s_phase = "C4-valid-gaps";
+        v_mark = n_valid;
         for (int k = 0; k < 1000; k++) begin
             automatic logic [31:0] r0 = next_rand();
             automatic logic [31:0] r1 = next_rand();
             drive(r0[0] & r0[5], r0[15:0], r0[31:16], r1[15:0], r1[31:16]);
         end
         repeat (6) drive(1'b0, 0, 0, 0, 0);
+        v_bp = n_valid - v_mark;
+
+        // ── C6: 5000 拍满流水浸泡 (stress) ──
+        s_phase = "C6-soak";
+        v_mark = n_valid;
+        for (int k = 0; k < 5000; k++) begin
+            automatic logic [31:0] r0 = next_rand();
+            automatic logic [31:0] r1 = next_rand();
+            drive(1'b1, r0[15:0], r0[31:16], r1[15:0], r1[31:16]);
+        end
+        repeat (6) drive(1'b0, 0, 0, 0, 0);
+        v_stress = n_valid - v_mark;
 
         // ── C5: 运行中再复位 ──
         s_phase  = "C5-rereset";
@@ -240,6 +335,7 @@ module tb_complex_multiplier;
             $display("[FAIL] after re-reset: valid=%b re=%h im=%h", o_valid, o_re, o_im);
             $fatal(1, "C5 re-reset behaviour");
         end
+        reset_register_audit();          // 复位保持期间逐寄存器比对 (G-C-04)
         i_rst = 1'b0;
         @(negedge i_clk);
         b_active = 1'b1;
@@ -263,8 +359,43 @@ module tb_complex_multiplier;
         if (n_mismatch != 0) begin
             $fatal(1, "[FAIL] %0d mismatches", n_mismatch);
         end
+        if (rst_err != 0) begin
+            $fatal(1, "[FAIL] %0d reset-register mismatches", rst_err);
+        end
+        if (v_bnd == 0 || v_regr == 0 || v_stress == 0 || v_bp == 0) begin
+            $fatal(1, "[FAIL] a stability sub-scenario compared zero valid beats (bnd=%0d regr=%0d stress=%0d bp=%0d)",
+                   v_bnd, v_regr, v_stress, v_bp);
+        end
+
+        // ── 证据落盘 ──
+        wr_stability("boundary",     1'b1, v_bnd);
+        wr_stability("regression",   1'b1, v_regr);
+        wr_stability("stress",       1'b1, v_stress);
+        wr_stability("backpressure", 1'b1, v_bp);
+        begin
+            int fd;
+            fd = $fopen("tb-selfcheck.json", "w");
+            if (fd != 0) begin
+                $fwrite(fd, "{\n  \"id\": \"G-B-03\",\n");
+                $fwrite(fd, "  \"pass\": true,\n");
+                $fwrite(fd, "  \"compares\": %0d,\n", n_valid);
+                $fwrite(fd, "  \"mismatch\": %0d,\n", n_mismatch);
+                $fwrite(fd, "  \"cycles_checked\": %0d,\n", n_checks);
+                $fwrite(fd, "  \"latency\": %0d,\n", P_LATENCY);
+                $fwrite(fd, "  \"reference\": \"独立 longint 算术按复数乘法定义式 re=ac-bd / im=ad+bc 直算 + 深度 3 的期望 valid 流水; 与 RTL 的四乘积分级实现不同源\",\n");
+                $fwrite(fd, "  \"tool\": \"Vivado xsim 2023.1\",\n");
+                $fwrite(fd, "  \"tb\": \"tb_complex_multiplier\",\n");
+                $fwrite(fd, "  \"a_width\": %0d,\n  \"b_width\": %0d,\n  \"out_width\": %0d\n}\n",
+                        P_A_W, P_B_W, P_OUT_W);
+                $fclose(fd);
+                $display("       [证据] tb-selfcheck.json compares=%0d mismatch=%0d", n_valid, n_mismatch);
+            end
+        end
+
         $display("========================================================");
         $display("[PASS] tb_complex_multiplier");
+        $display("       sub-scenarios: bnd=%0d regr=%0d stress=%0d bp=%0d",
+                 v_bnd, v_regr, v_stress, v_bp);
         $display("       cycles compared       = %0d", n_checks);
         $display("       valid beats compared  = %0d (0 mismatch)", n_valid);
         $display("       latency               = %0d cycles", P_LATENCY);

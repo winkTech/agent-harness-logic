@@ -2941,6 +2941,60 @@ define('DiffSizeGate', '脚本语法正确', () => {
   return { pass: r.ok, detail: r.ok ? '语法通过' : r.stderr.slice(0, 200) };
 });
 
+// 规模门禁量的是"改了多大", 量不出"改的是不是请求要的"。2026-08-01 实例: 只需追加
+// 3 条用例的改动, 因整文件重写产生 887 行 diff, 规模上只到 warn 档, 而 96% 的行
+// 与请求无关。首版用 `git diff -w` 做判据完全失效 —— 它只忽略行内空白, 看不出
+// "一行拆成七行"。这个用例锁的就是那种形状。
+define('DiffSizeGate', '范围溢出: 行改动量与内容改动量不成比例时点名', () => {
+  const { evaluate } = require(path.join(HOME, 'engine/scripts/hooks/diff-size-gate.js'));
+  const repo = fs.mkdtempSync(path.join(os.tmpdir(), 'scope-gate-'));
+  const git = (...args) => spawnSync('git', args, { cwd: repo, encoding: 'utf8', timeout: 20000 });
+  try {
+    git('init', '-q');
+    git('config', 'user.email', 'probe@test');
+    git('config', 'user.name', 'probe');
+    const rows = [];
+    for (let i = 0; i < 60; i++) {
+      rows.push(`  { "id": "case-${i}", "input": { "cmd": "run ${i}", "cwd": "x" }, "verdict": "pass" }`);
+    }
+    const target = path.join(repo, 'fixtures.json');
+    fs.writeFileSync(target, `[\n${rows.join(',\n')}\n]\n`);
+    fs.writeFileSync(path.join(repo, 'notes.md'), 'baseline\n');
+    git('add', '-A');
+    git('commit', '-qm', 'baseline');
+
+    // 请求是"追加 3 条用例", 但整文件被重排成多行 —— 真实事故的形状
+    const arr = JSON.parse(fs.readFileSync(target, 'utf8'));
+    for (let i = 0; i < 3; i++) arr.push({ id: `new-${i}`, input: { cmd: `new ${i}`, cwd: 'x' }, verdict: 'block' });
+    fs.writeFileSync(target, `${JSON.stringify(arr, null, 2)}\n`);
+    git('add', '-A');
+
+    const run = (cmd) => evaluate({ tool_input: { command: cmd } }, { cwd: repo });
+    const noisy = run('git commit -m "test(fixtures): 追加 3 条用例"');
+    const text = noisy.diagnostics.join('\n');
+    const checks = [
+      ['重排被点名', noisy.decision === 'warn' && /fixtures\.json/.test(text)],
+      ['报出内容变动比例', /内容只变了 \d+%/.test(text)],
+      ['未误报未动的文件', !/notes\.md/.test(text)],
+      ['提交信息注明 style 即跳过', run('git commit -m "style: 统一缩进"').decision === 'allow'],
+      ['--no-verify 不触发', run('git commit --no-verify -m "test: x"').decision === 'allow'],
+      ['非 git 命令不触发', run('ls -la').decision === 'allow'],
+    ];
+    // 保持原风格的纯追加不该报
+    git('reset', '-q', '--hard');
+    fs.writeFileSync(target, `[\n${rows.concat(rows.slice(0, 3)).join(',\n')}\n]\n`);
+    git('add', '-A');
+    checks.push(['保持原风格追加不报', run('git commit -m "test: 追加"').decision === 'allow']);
+
+    const failed = checks.filter(([, ok]) => !ok).map(([name]) => name);
+    return failed.length
+      ? { pass: false, detail: `未通过: ${failed.join(', ')}` }
+      : { pass: true, detail: `${checks.length} 项范围溢出判据符合预期` };
+  } finally {
+    fs.rmSync(repo, { recursive: true, force: true });
+  }
+});
+
 // ── Suite 7: 功能测试 — Resource Budget Gate ──
 
 define('ResourceBudgetGate', '脚本语法正确', () => {

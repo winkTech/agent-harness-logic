@@ -1,4 +1,13 @@
-# complex_multiplier — 复数乘法器(四乘法直算、全精度)
+<!-- asset-status: certified v1.0.0 -->
+# complex_multiplier — 复数乘法器 (四乘法直算、全精度, certified CBB)
+
+> **综合 (OOC, xc7k325tffg900-2)**: WNS +2.51ns @250MHz 即达成约 **671 MHz**;
+> **DSP 4/4** (与四乘法直算的推算一致), LUT 0/120, FF 3/200, BRAM 0/0。
+> LUT 0 / FF 3 是 DSP48E1 完美吸收的结果 —— 输入寄存进 A/B 寄存器、乘积进 M
+> 寄存器、加减输出进后加器与 P 寄存器 (级联), fabric 侧只剩 3 拍 valid 链。
+> **自检**: 7357 有效拍逐拍比对 0 失配 (独立 longint 参考模型)。
+> **限制**: 见 [`docs/limitations.md`](docs/limitations.md) —— 8 条, 重点是
+> **全精度输出不做舍入/饱和, 定标语义交调用方**。
 
 计算 `(i_a_re + j*i_a_im) * (i_b_re + j*i_b_im)`,有符号全精度输出,
 不截断不饱和 —— 定标语义交调用方,避免重蹈库内 4 套互不相同定点语义的覆辙。

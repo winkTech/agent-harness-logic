@@ -146,7 +146,12 @@ function shellSpecs(command) {
     { source: 'verification-gate', failClosed: false, load: () => require('./verification-gate.cjs') },
   ];
   if (gitAction === 'commit') {
-    specs.push({ source: 'resource-budget', failClosed: false, load: () => require('./resource-budget-gate.js') });
+    // diff-size 在 commit 时只跑范围溢出检查 —— 噪声要在进历史之前说, 等到 push
+    // 才提示已经晚了。规模阈值仍只在 push 时按分支累计判定。
+    specs.push(
+      { source: 'diff-size', failClosed: false, load: () => require('./diff-size-gate.js') },
+      { source: 'resource-budget', failClosed: false, load: () => require('./resource-budget-gate.js') },
+    );
   } else if (gitAction === 'push') {
     specs.push(
       { source: 'diff-size', failClosed: false, load: () => require('./diff-size-gate.js') },

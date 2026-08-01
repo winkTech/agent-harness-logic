@@ -10,6 +10,7 @@ Assets: 23 · RED: 0 · YELLOW: 0
 |---|---:|---|---|---|---|---|---|
 | `axis_skid_buffer` | 1.0.0 | primitive | `cbb/axis_skid_buffer` | certified | — | — | — |
 | `channel_est_top` | 1.0.0 | rtl | `cbb/channel_est_top` | certified | — | — | — |
+| `complex_multiplier` | 1.0.0 | primitive | `cbb/complex_multiplier` | certified | — | — | — |
 | `crc32` | 1.0.0 | primitive | `cbb/crc32` | certified | — | — | — |
 | `ldpc_codec` | 1.0.0 | rtl | `cbb/ldpc_codec` | certified | — | — | G-B-03, G-C-03, signoff, vivado-timing |
 | `lfsr_gen` | 1.0.0 | primitive | `cbb/lfsr_gen` | certified | — | — | — |
@@ -24,7 +25,6 @@ Assets: 23 · RED: 0 · YELLOW: 0
 | UID | Version | Kind | Directory | Machine cleared | Blocking | Used by | Badge gap |
 |---|---:|---|---|---|---|---|---|
 | `cdc_sync` | 0.1.0 | primitive | `incubator/intake/cdc_sync` | qualification | certified | — | G-B-03, G-C-01, G-C-02, G-C-04, G-C-05, G-GATE-01, G-SIGN-01 |
-| `complex_multiplier` | 0.1.0 | primitive | `incubator/intake/complex_multiplier` | qualification | certified | — | G-B-03, G-C-01, G-C-02, G-C-04, G-C-05, G-GATE-01, G-SIGN-01 |
 | `ddr_axi4_controller` | 0.1.0 | primitive | `incubator/intake/ddr_axi4_controller` | qualification | certified | — | G-B-03, G-C-01, G-C-02, G-C-04, G-C-05, G-GATE-01, G-SIGN-01 |
 | `delay_line` | 0.1.0 | primitive | `incubator/intake/delay_line` | qualification | certified | — | G-B-03, G-C-01, G-C-02, G-C-04, G-C-05, G-GATE-01, G-SIGN-01 |
 | `frame_sync` | 0.1.0 | primitive | `incubator/intake/frame_sync` | qualification | certified | — | G-B-03, G-C-01, G-C-02, G-C-04, G-C-05, G-GATE-01, G-SIGN-01 |
