@@ -31,8 +31,8 @@ const BLOCK_LINES = Number.parseInt(process.env.DIFF_GATE_BLOCK_LINES || '1000',
 const SCOPE_MIN_LINES = Number.parseInt(process.env.DIFF_GATE_SCOPE_MIN_LINES || '40', 10);
 // 内容变动占比低于此值即判为重排主导。0.15 = 改动行数再多, 内容只动了不到 15%。
 const SCOPE_SEMANTIC_FLOOR = Number.parseFloat(process.env.DIFF_GATE_SCOPE_SEMANTIC_FLOOR || '0.15');
-const SCOPE_MAX_FILES = 40;              // 逐文件取两版内容, 超出即放弃(fail-open)
-const SCOPE_MAX_BYTES = 512 * 1024;
+const SCOPE_MAX_FILES = 40;              // 超出即放弃检测(fail-open), 不拖慢提交
+const SCOPE_MAX_BYTES = 512 * 1024;      // diff 文本上限, 同上
 
 /** 提交信息自称是格式化/重排类改动时跳过 —— 那种提交本来就应该全是 churn。 */
 const FORMAT_INTENT = /\b(?:style|format|formatting|reformat|prettier|lint|whitespace|indent)\b|重排|缩进|格式化/i;
@@ -123,19 +123,36 @@ function tokenDelta(oldTokens, newTokens) {
   return delta;
 }
 
-function showBlob(run, opts, rev, file) {
-  const result = run('git', ['show', `${rev}:${file}`], opts);
-  if (result.status !== 0) return null;
-  const text = String(result.stdout || '');
-  return text.length > SCOPE_MAX_BYTES ? null : text;
+/**
+ * 把 unified diff 拆成 per-file 的增删文本。
+ * 同一侧的行**先拼接再 token 化** —— 否则"一行拆成七行"这种重排在逐行 token 化
+ * 下仍然对不上, 而它正是要抓的形状。
+ */
+function splitDiffByFile(diffText) {
+  const files = new Map();
+  let current = null;
+  for (const line of String(diffText || '').split(/\r?\n/)) {
+    const header = line.match(/^\+\+\+ b\/(.+)$/);
+    if (header) {
+      current = { added: [], removed: [] };
+      files.set(header[1], current);
+      continue;
+    }
+    if (!current || /^(?:diff |index |--- |@@|new file|deleted file|similarity|rename )/.test(line)) continue;
+    if (line.startsWith('+')) current.added.push(line.slice(1));
+    else if (line.startsWith('-')) current.removed.push(line.slice(1));
+  }
+  return files;
 }
 
 /**
- * 逐文件比较"行改动量"与"内容改动量"。
+ * 逐文件比较"改了多少行"与"内容真的变了多少"。
  *
- * @param {{base: string, target: string}} revs base/target 修订; target 为 '' 表示索引区
+ * 分母是**本次改动触及的 token 总量**, 不是文件规模 —— 首版拿整文件 token 数
+ * 当分母, 于是"4000 行的文件里新增 54 行测试"也被算成"内容只变了 2%"而误报
+ * (2026-08-01 在本仓库自身改动上实测到)。改动大小与文件大小无关, 只与改动有关。
  */
-function getScopeStats(runtime = {}, args, revs) {
+function getScopeStats(runtime = {}, args) {
   const run = runtime.exec || exec;
   const opts = runtime.cwd ? { cwd: runtime.cwd } : {};
   const raw = run('git', ['diff', '--numstat', ...args], opts);
@@ -143,17 +160,21 @@ function getScopeStats(runtime = {}, args, revs) {
   const plain = parseNumstat(raw.stdout);
   if (plain.total === 0 || plain.files.size > SCOPE_MAX_FILES) return null;
 
+  const full = run('git', ['diff', '-U0', ...args], opts);
+  if (full.status !== 0 || String(full.stdout || '').length > SCOPE_MAX_BYTES) return null;
+  const perFile = splitDiffByFile(full.stdout);
+
   const offenders = [];
   for (const [file, changed] of plain.files) {
     if (changed < SCOPE_MIN_LINES) continue;
-    const before = showBlob(run, opts, revs.base, file);
-    const after = showBlob(run, opts, revs.target, file);
-    if (before === null || after === null) continue;   // 新增/删除/超大文件: 不判
-    const oldTokens = normalizeTokens(before);
-    const newTokens = normalizeTokens(after);
-    const scale = Math.max(oldTokens.length, newTokens.length);
-    if (!scale) continue;
-    const semanticFraction = tokenDelta(oldTokens, newTokens) / scale;
+    const hunks = perFile.get(file);
+    if (!hunks) continue;
+    const addedTokens = normalizeTokens(hunks.added.join('\n'));
+    const removedTokens = normalizeTokens(hunks.removed.join('\n'));
+    const churn = addedTokens.length + removedTokens.length;
+    if (!churn) continue;
+    // 纯新增(无删除)天然是 100% 内容变动, 不可能是重排
+    const semanticFraction = tokenDelta(removedTokens, addedTokens) / churn;
     if (semanticFraction <= SCOPE_SEMANTIC_FLOOR) {
       offenders.push({ file, changed, semanticFraction });
     }
@@ -163,9 +184,9 @@ function getScopeStats(runtime = {}, args, revs) {
 }
 
 /** 范围溢出诊断; 无可报告内容时返回空数组。 */
-function scopeDiagnostics(runtime, args, command, revs) {
-  if (!revs || FORMAT_INTENT.test(command)) return [];
-  const scope = getScopeStats(runtime, args, revs);
+function scopeDiagnostics(runtime, args, command) {
+  if (FORMAT_INTENT.test(command)) return [];
+  const scope = getScopeStats(runtime, args);
   if (!scope || !scope.offenders.length) return [];
 
   const pct = (value) => `${Math.round(value * 100)}%`;
@@ -180,18 +201,6 @@ function scopeDiagnostics(runtime, args, command, revs) {
     '   若确为格式化改动, 提交信息注明 style/format/重排 即可跳过本检查。',
   );
   return lines;
-}
-
-/** push 侧的 base/target: `origin/main...HEAD` 的 base 是 merge-base, 不是左端本身。 */
-function branchRevs(runtime, ref) {
-  if (!ref) return null;
-  const run = runtime.exec || exec;
-  const opts = runtime.cwd ? { cwd: runtime.cwd } : {};
-  const left = String(ref).split('...')[0];
-  const result = run('git', ['merge-base', left, 'HEAD'], opts);
-  if (result.status !== 0) return null;
-  const base = String(result.stdout || '').trim();
-  return base ? { base, target: 'HEAD' } : null;
 }
 
 function commandFrom(payload) {
@@ -216,7 +225,7 @@ function evaluate(payload, runtime = {}) {
   if (action === 'commit') {
     try {
       // 暂存区比对: base=HEAD, target='' 即 `git show :<file>`(索引区内容)
-      const diagnostics = scopeDiagnostics(runtime, ['--cached'], command, { base: 'HEAD', target: '' });
+      const diagnostics = scopeDiagnostics(runtime, ["--cached"], command);
       return diagnostics.length
         ? { source: 'diff-size-gate', decision: 'warn', diagnostics, legacyExitCode: 0 }
         : { source: 'diff-size-gate', decision: 'allow', diagnostics: [] };
@@ -230,7 +239,7 @@ function evaluate(payload, runtime = {}) {
     if (!stats || (stats.fileCount === 0 && stats.totalChanges === 0)) {
       return { source: 'diff-size-gate', decision: 'allow', diagnostics: [], stats };
     }
-    const scope = scopeDiagnostics(runtime, stats.ref ? [stats.ref] : [], command, branchRevs(runtime, stats.ref));
+    const scope = stats.ref ? scopeDiagnostics(runtime, [stats.ref], command) : [];
     const isBlockThreshold = stats.fileCount >= BLOCK_FILES || stats.totalChanges >= BLOCK_LINES;
     const isWarnThreshold = stats.fileCount >= WARN_FILES || stats.totalChanges >= WARN_LINES;
     if (!isBlockThreshold && !isWarnThreshold) {
