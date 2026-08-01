@@ -141,7 +141,7 @@
     {
       "path": "tb/tb_tx_top.sv",
       "role": "tb",
-      "sha256": "1e1963a265e006be9f96e716e365909c623cdbfb7bd4dafa3bf0f80cc0f9f728"
+      "sha256": "8296de6ec4c08bfd55cb504748a6f7b9c10d239507fa4bc521cf4872cdc98633"
     }
   ],
   "waivers": [],

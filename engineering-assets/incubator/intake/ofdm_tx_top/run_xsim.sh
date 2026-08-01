@@ -33,3 +33,12 @@ xelab --relax -debug typical -s tb_sim work.tb_ofdm_tx_top
 
 echo "=========== XSIM RUN ==========="
 xsim tb_sim -runall
+
+# TB 把证据写在运行目录 (xsim 的 -testplusarg 传不了含盘符的路径), 搬到门禁约定位置
+EVID="$ROOT/var/gates/pg/ofdm_tx_top"
+mkdir -p "$EVID/stability"
+for s in regression boundary backpressure stress; do
+    cp "stability-$s.json" "$EVID/stability/$s.json"
+done
+cp reset-sim.json "$EVID/reset-sim.json"
+echo "=========== 证据落地: $EVID ==========="

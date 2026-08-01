@@ -33,16 +33,25 @@ Golden model: `engineering-assets/models/comm/ofdm/` (asset_uid: `model_comm_ofd
 
 ## 验证现状
 
-`run.do` / `run_xsim.sh` 跑同一个 `tb_ofdm_tx_top`，判据一致：
+```bash
+bash engineering-assets/incubator/intake/ofdm_tx_top/run_xsim.sh
+```
+
+判据 = TB 内浮点参考 ±4 LSB。参考由 TB 独立按算法定义重算（RTL 量化星座 → 网格 →
+DFT/8 → CP → Q3.13），不读 RTL 输出、不依赖外部向量文件。
 
 | 场景 | 内容 | 结果 |
 |:-----|:-----|:-----|
-| T1–T4 | BPSK/QPSK/16QAM/64QAM 各 3 符号，与 TB 内浮点参考（RTL 量化星座 → 网格 → DFT/8 → CP → Q3.13）比对 | 各 240 样点 **±4 LSB 内** |
-| T1–T4 | `m_axis_tlast` 于每符号第 80 拍 | 逐符号对齐 |
-| T5 | QPSK 帧 + 随机 `m_axis_tready` 反压，与无反压基准对比 | 240 样点**逐点一致**（信用节流不丢不重） |
-| 断言 | `tx_pilot_map` 乒乓不变量：收集侧永不写入正在流出的 bank | 全程未触发 |
+| **R** regression | 四调制（BPSK/QPSK/16QAM/64QAM）各 3 符号 | 各 240 样点 ±4 LSB，tlast 逐符号对齐，失配 **0** |
+| **B** boundary | 最小帧 1 符号 / 最大帧 8 符号 / 输入侧随机 0–3 拍空隙流 | 80 + 640 + 240 样点，失配 **0**（空隙流通过即证明各级计数受握手门控） |
+| **P** backpressure | 4 种 `m_axis_tready` 模式：随机 75%、周期 4 低 4 高、每 200 拍长拉低 50、逐拍翻转 | 各 240 样点与无反压基准**逐点一致**，差异 **0** |
+| **S** stress | 12 帧连续满吞吐，帧间轮换四种调制 | 2880 样点，失配 **0** |
+| **X** reset | 帧中复位保持 3 拍 → 39 个受复位寄存器逐个比对声明值 → 复位后重入新帧 | 寄存器失配 **0**，重入失配 **0** |
+| 常驻断言 | `tx_pilot_map` 乒乓不变量：收集侧永不写入正在流出的 bank | 全程未触发 |
 
-证据（2026-08-01，Vivado xsim 2023.1）: `ALL TESTS PASSED`。
+证据（2026-08-01，Vivado xsim 2023.1）: `ALL TESTS PASSED`。JSON 证据由 TB 自身
+`$fwrite` 产出（非人工填写），落 `var/gates/pg/ofdm_tx_top/` 的 `stability/*.json`
+与 `reset-sim.json`，对应门禁 G-C-05 / G-C-04。
 
 ## 综合结论（OOC，xc7k325tffg900-2，Vivado 2023.1）
 
@@ -57,9 +66,9 @@ Golden model: `engineering-assets/models/comm/ofdm/` (asset_uid: `model_comm_ofd
 | BRAM | 4 | **0** | 4 组 64×32b 乒乓 RAM 全部映射为分布式 RAM/SRL —— 该容量下属合理选择，非推断失败；如需占 BRAM 须显式加 `ram_style` |
 | DSP48E1 | 20 | **20** | **零裕量**，见 L6 |
 
-**工具说明**: 0.2.0 的证据由 xsim 产出 —— 当时本机 ModelSim 10.6c 的 vish/vsim 回环 RPC
-故障（IPv6 `::1` 可 bind 不可 connect），任何设计都无法加载；`vlog` 编译侧不受影响，
-G-A-00 仍由 ModelSim 判读。两条通路互为交叉验证。
+**工具说明**: ModelSim 通路已停用（本机 vish/vsim 回环 RPC 故障：IPv6 `::1` 可 bind
+不可 connect，任何设计都无法加载）。全部仿真证据由 xsim 产出；`vlog` 编译不开 socket
+不受影响，G-A-00 仍由 ModelSim 判读。`run.do` 保留但未在本版验证中使用。
 
 ## 遗留缺陷 / 未验证项
 
@@ -69,7 +78,7 @@ G-A-00 仍由 ModelSim 判读。两条通路互为交叉验证。
 | L2 | 全包 | **无 bit-true cosim 证据**：当前判据是 TB 内浮点参考 ±4 LSB，未与 golden `generate_vectors.m` 做逐位镜像比对（G-B-03 未过，`fidelity` 仍为 `pending`） |
 | L3 | `tx_pilot_map.sv` | 导频极性只按符号序 ±1 交替，与 802.11a 的 127 长 PRBS 导频扰码序列不符（沿用 0.1.0 F6，需算法决策） |
 | L4 | `ofdm_tx_top.sv` | `s_axis_tready` 为寄存输出，反压恢复有 1 拍气泡；如需零气泡须在边界外套 skid buffer（接口架构改动） |
-| L5 | `tb/tb_tx_top.sv` | 每帧固定 3 符号、单一 LCG 种子；缺最小/最大帧长、帧间间隙、运行中复位场景（G-C-05 未过） |
+| L5 | `tb/tb_tx_top.sv` | 帧长仅覆盖 1/3/8 符号，激励为单一 LCG 序列；无随机约束/覆盖率收集，最大帧长未探到设计上限 |
 
 ### 已在 0.2.0 修复的 0.1.0 缺陷
 
