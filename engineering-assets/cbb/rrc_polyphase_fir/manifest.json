@@ -6,7 +6,7 @@
   "owner": "lihan",
   "maturity": {
     "level": "certified",
-    "evidence_ref": "engineering-assets/var/gates/pg/rrc_polyphase_fir/"
+    "evidence_ref": "engineering-assets/evidence/rrc_polyphase_fir/0.4.0/"
   },
   "requirement_ref": "engineering-assets/knowledge/primary/domains/comm/rrc/algorithm_spec.md",
   "doc_refs": [

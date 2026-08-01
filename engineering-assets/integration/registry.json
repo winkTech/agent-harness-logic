@@ -181,7 +181,8 @@
     "board-validation",
     "hold-closure"
    ],
-   "last_reviewed": "2026-07-26"
+   "deferred_reason": "hold-closure 于 2026-08-02 实跑布线后时序推进但**不关闭**: Vivado 2023.1.1 OOC synth->opt->place->route, WHS 四阶段恒为 -0.163ns, 布线后 THS=-20.056ns / 320 个端点失败 —— README 原先『综合级 hold 是估算值、正常在布局布线阶段收敛』的说法已被证伪。归因明确: 对 post_route.dcp 跑 get_timing_paths -delay_type min -slack_lesser_than 0, 924 条违例路径全部从输入端口出发、内部单元起点 0 条, reg-to-reg 最差 hold +0.094ns (内部已收敛); 唯一失败端口是 i_rst (s_axis_tvalid +0.218 / m_axis_tready +0.193 均通过), 路径 i_rst -> addA_i_reg[0]/RSTM (DSP48E1), 差额 0.163ns 由 XDC 自称『显式假设、非实测』的 set_input_delay -min 0.100 支配。量化关闭条件: i_rst 真实最小输入延时 >= 0.263ns 即收敛, 须由集成方以板级实数确认; 或在核内把 i_rst 寄存一拍使该路径变 reg-to-reg (复位晚一拍, 属行为契约变更, 需重跑全部取证, 待 owner 决策)。证据: var/gates/pg/rrc_polyphase_fir/hold-closure.json + route-timing-summary.rpt。另: 本资产原先没有哈希锁定证据快照 (全库 certified 中唯一), 2026-08-02 已取 0.4.0 快照并把 maturity.evidence_ref 指过去, --verify-all 现为 17 verified。board-validation 仍为空白, 需实际硬件。",
+   "last_reviewed": "2026-08-02"
   },
   {
    "id": "ITG-0010",

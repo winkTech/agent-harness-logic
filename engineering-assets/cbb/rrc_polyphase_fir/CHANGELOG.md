@@ -2,6 +2,33 @@
 
 > 回填于 2026-07-31（P2 既定任务）：素材 = git 历史 + README §10 修复史。
 
+## [0.4.0] — 2026-08-02 补证据（RTL / 约束零改动，版本号不动）
+
+RTL、约束、TB 与全部功能结论未变；本次只补证据与修正被证伪的文档陈述。
+
+- **补齐布线后时序证据**：实跑 OOC synth→opt→place→route（Vivado 2023.1.1），
+  产出 `hold-closure.json` / `route-timing-summary.rpt` / `route-utilization.rpt` /
+  `route-drc.rpt`。结论：setup 布线后 WNS **+0.058 ns**（0/2713 失败）；
+  hold **WHS 四阶段恒为 −0.163 ns**，布线后 320/2713 端点失败。
+  - **证伪了 README §4 原先的说法**（"综合级 hold 是估算值、正常在布局布线阶段
+    收敛"）。该违例根本不受布局布线影响。
+  - 归因：924 条违例路径**全部从输入端口出发、内部单元起点 0 条**；
+    reg-to-reg 最差 hold **+0.094 ns**，内部时序已收敛。唯一失败端口是 `i_rst`
+    （`i_rst → addA_i_reg[0]/RSTM` 这个 DSP48E1 复位脚，其 hold 需求 0.201 ns
+    远大于普通 FF），由 XDC 那个自称"显式假设、非实测"的
+    `set_input_delay -min 0.100` 支配。量化关闭条件：真实最小输入延时 ≥ 0.263 ns。
+  - registry ITG-0009 的 `hold-closure` **仍不关闭**（确有违例，如实记录不豁免），
+    但状态从"未知"推进到"单一端口、单一成因、有量化关闭条件"。
+- **补齐哈希锁定证据快照**：本资产此前是库内 certified 中**唯一**
+  `maturity.evidence_ref` 指向可再生实时目录 `var/gates/pg/` 的资产，
+  `evidence-snapshot --verify-all` 覆盖不到它。现取 `evidence/rrc_polyphase_fir/0.4.0/`
+  快照并把 `evidence_ref` 指过去，全库 `--verify-all` 从 16 升到 **17 verified**。
+- **清理证据目录边界**：把混在里面的两份工作产物
+  （`implementation-diagnostic/`、`stoploss-validation-20260726-140818/`）
+  挪到 `var/impl/rrc_polyphase_fir/legacy-artifacts/`。它们不是证据，
+  留在快照源目录会让快照边界失去意义（`evidence-snapshot` 也正是因此拒绝取快照）。
+- 新增 `docs/limitations.md`（12 条）；README §7 改为指向该文件只留摘要。
+
 ## [0.4.0] — 2026-07-25 certified（提交 dacefb7）
 
 - **流控修复**：原 `s_axis_tready` 恒 1 且 `m_axis_tready` 不参与节流（两侧无流控，

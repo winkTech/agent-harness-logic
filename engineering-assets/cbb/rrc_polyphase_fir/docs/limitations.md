@@ -4,8 +4,8 @@
 （README §7 指向此处）；签字所接受的限制即复用方需要承担的约束，见
 `manifest.json` 的 `signoff.scope`。
 
-证据位置：`engineering-assets/var/gates/pg/rrc_polyphase_fir/`（见第 6 条：
-本资产的证据目录是**可再生的实时目录，不是哈希锁定快照**）。
+证据位置：`engineering-assets/evidence/rrc_polyphase_fir/0.4.0/`（哈希锁定快照，
+2026-08-02 起）与 `engineering-assets/var/gates/pg/rrc_polyphase_fir/`（实时目录）。
 
 ---
 
@@ -29,16 +29,49 @@
 
 ## 时序与验证边界
 
-5. **hold 未收敛（综合级 −0.163 ns）。** G-C-01 的判据只取 setup WNS，hold 在综合
-   阶段本就是估算值、正常在布局布线阶段收敛 —— 但本资产**从未跑过实现后时序**，
-   所以"会收敛"是预期而非结论。registry ITG-0009 将 `hold-closure` 列为未还清项。
-   **上板前必须以实现后（post-route）时序为准。**
+5. **hold 在布线后仍未收敛，但违例全部落在 I/O 侧，内部时序是干净的。**
+   2026-08-02 实跑 OOC 综合→opt→place→route（Vivado 2023.1.1），证据
+   `hold-closure.json` + `route-timing-summary.rpt`：
 
-6. **无哈希锁定证据快照。** 本资产的 `maturity.evidence_ref` 指向
-   `var/gates/pg/rrc_polyphase_fir/` —— 一个由工具**随时可覆盖重写**的实时目录，
-   而非 `evidence/<asset_uid>/<version>/` 下的哈希锁定快照。库内 16 个 certified
-   资产中，**只有本资产是这样**（`evidence-snapshot --verify-all` 覆盖 15 个，
-   不含本资产）。后果：本包的证据无法被 `--verify-all` 证明未被改动过。
+   | 阶段 | WNS | WHS |
+   |:---|:---|:---|
+   | synth | +0.252 | −0.163 |
+   | opt | +0.252 | −0.163 |
+   | place | +0.006 | −0.163 |
+   | route | **+0.058** | **−0.163** |
+
+   - **原先"综合级 hold 是估算值、会在布局布线阶段收敛"的说法已被证伪** ——
+     WHS 四个阶段一模一样，布线后 THS −20.056 ns、320/2713 端点失败。
+   - **归因是确定的**：对 `post_route.dcp` 跑 `get_timing_paths -delay_type min
+     -slack_lesser_than 0`，**924 条违例路径全部从输入端口出发，内部单元起点 0 条**；
+     **reg-to-reg 最差 hold = +0.094 ns**，即本核内部 hold 已收敛。
+   - 失败的只有 `i_rst` 一个端口（`s_axis_tvalid` +0.218、`m_axis_tready` +0.193
+     都通过）。路径是 `i_rst → addA_i_reg[0]/RSTM (DSP48E1)`：到达
+     0.100（XDC 占位输入延时）+ 0.510（走线）= 0.610，需求 0.537（时钟延时）
+     + 0.035（不确定度）+ **0.201（DSP48E1 RSTM 的 hold 需求，远大于普通 FF）**
+     = 0.773。差 0.163 ns。
+   - **关闭条件（量化）**：`i_rst` 的真实最小输入延时 ≥ **0.263 ns** 即收敛。
+     XDC 里的 0.100 ns 是它自己写明的"显式假设、非实测"占位值。
+     板级上 `i_rst` 若由同域寄存器驱动并走一段线，通常远超该值 ——
+     **但这必须由集成方用真实数值确认，CBB 级给不出结论**。
+   - 若要在核内消除对集成方 I/O 时序的依赖，方向是把 `i_rst` 先在本核寄存一拍
+     再驱动 DSP 复位脚，使该路径变成 reg-to-reg。代价是复位晚一拍，属**行为契约
+     变更**，需重跑全部 bit-true 与 G-C-04/05 —— 未做，留给 owner 决策。
+   - 附带：`place` 阶段 setup 一度只剩 **+0.006 ns**，裕量非常薄；
+     `route-drc.rpt` 无 Critical Warning。布线后资源 LUT 220 / FF 258 / DSP 24。
+
+   registry ITG-0009 的 `hold-closure` **仍不关闭**（布线后确有违例，如实记录、
+   不做豁免），但状态已从"未知"推进到"已定位到单一端口、单一成因，并给出量化
+   关闭条件"。
+
+6. **（已还清，留记录）无哈希锁定证据快照。** 本资产的 `maturity.evidence_ref`
+   曾指向 `var/gates/pg/rrc_polyphase_fir/` —— 一个由工具随时可覆盖重写的实时
+   目录，而非哈希锁定快照；库内 certified 资产中只有本资产是这样，
+   `evidence-snapshot --verify-all` 覆盖不到它。2026-08-02 已取 `0.4.0` 快照并把
+   `evidence_ref` 指过去，全库 `--verify-all` 现为 **17 verified**。
+   同时把混在证据目录里的两份工作产物（`implementation-diagnostic/`、
+   `stoploss-validation-20260726-140818/`）挪到 `var/impl/` 下 —— 它们不是证据，
+   留在快照源目录里会让快照边界失去意义。
 
 7. **未上板。** registry ITG-0009 的 `maturity_status` 仍是 `internal-validation`，
    `badge_gap` 含 `board-validation`。全部时序/资源结论均为 **OOC 综合口径**
@@ -58,9 +91,15 @@
     `0.4.0`（库内其余 certified 资产均已转 1.0.0）。引用方按 `0.4.0` 钉版即可，
     但不要据版本号推断成熟度 —— 以 `maturity.level` 为准。
 
-11. **golden 侧仍挂 `native-matlab-recheck`。** 对标模型 `model_comm_rrc`
-    （registry ITG-0006）尚未在原生 MATLAB 环境复核过。本资产的 bit-true 结论
-    锚在该 golden 上，golden 的这项遗留同样是本资产结论的前提条件。
+11. **（已还清，但结论有变）golden 侧的 `native-matlab-recheck`。**
+    2026-08-02 已在本机 MATLAB R2022a 复核并关闭：本资产 bit-true 所锚的
+    `models/comm/rrc/vectors/expected_tx.hex` **确认正确**，4096 个 int16 与
+    golden 逐位一致，**本资产的 bit-true 结论不受影响、无需重跑**。
+    但同一次复核查出 golden 自身有缺陷（`rrc_pulse_shaping.m` 对复数数组用
+    `min`/`max` 做饱和，会把整条信号塌陷成常量），已随 `model_comm_rrc` 1.1.0 修复。
+    **遗留分歧**：`fixed_point_report.md` §3.3 写的舍入是 convergent rounding
+    （银行家舍入），而 golden、向量再生脚本与本 RTL 三者一致用
+    half-away-from-zero —— 三方自洽且 bit-true，但与该条款字面不符，待 owner 裁定。
 
 12. **仿真证据依赖 ModelSim。** README §6 的复现命令第 2 条是
     `vsim -c -do cbb/rrc_polyphase_fir/run.do`。本机 ModelSim 回环 RPC 自

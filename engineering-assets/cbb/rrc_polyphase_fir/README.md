@@ -79,8 +79,18 @@ RRC（根升余弦）脉冲成形多相 FIR 滤波器核。本包同时是库内
 | BRAM | 1 | 0 | ✅ |
 | DSP | 24 | **24** | ✅ **零裕量**，见 §7 |
 
-> WHS（hold）= −0.163 ns。综合级 hold 为估算值，正常在布局布线阶段收敛；
-> G-C-01 的 MVP 判据只取 setup WNS。上板前须以实现后时序为准。
+> WHS（hold）= −0.163 ns。**2026-08-02 实跑布线后时序，该值一动不动** ——
+> synth / opt / place / route 四个阶段 WHS 全为 −0.163 ns，布线后 320/2713 端点
+> hold 失败。此处原先写的"综合级 hold 是估算值、正常在布局布线阶段收敛"**已被证伪**。
+> 归因明确：924 条违例路径**全部从输入端口出发，内部单元起点 0 条**，
+> reg-to-reg 最差 hold **+0.094 ns**（内部已收敛）；失败的只有 `i_rst` 一个端口，
+> 且由 XDC 里那个自称"显式假设、非实测"的 `set_input_delay -min 0.100` 支配。
+> 详见 [`docs/limitations.md`](docs/limitations.md) 第 5 条与
+> `var/gates/pg/rrc_polyphase_fir/hold-closure.json`。
+>
+> 布线后：WNS **+0.058 ns**（0/2713 失败，setup 收敛）、功耗 0.224 W、
+> LUT 220 / FF 258 / DSP 24、`route-drc.rpt` 无 Critical Warning。
+> 注意 place 阶段 setup 一度只剩 **+0.006 ns**，裕量很薄。
 
 ---
 

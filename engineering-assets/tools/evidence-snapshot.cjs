@@ -10,7 +10,7 @@ const { scanRepository } = require('./catalog-gen.cjs');
 const MAX_BYTES = 1024 * 1024;
 // cdc.rpt / clock-interaction.rpt / clocks-cdc.rpt: 真实多时钟域资产 (如 cdc_sync)
 // 的 report_cdc 原始报告 —— cdc-report.json 是其摘要, 原报告一并锁定才可复核
-const ALLOWED = /^(?:gate-results\.json|RL-OUT\.json|(?:G|CS|RL-OUT)-[A-Z0-9./_-]+\.json|envelope-check\.json|alignment-report\.json|tb-selfcheck\.json|reset-sim\.json|cdc-report\.json|synthesis-timing-evidence\.json|timing-summary\.rpt|utilization\.rpt|clocks\.rpt|cdc\.rpt|clock-interaction\.rpt|clocks-cdc\.rpt|synth-meta\.json|stability[\\/][^\\/]+\.json)$/;
+const ALLOWED = /^(?:gate-results\.json|RL-OUT\.json|(?:G|CS|RL-OUT)-[A-Z0-9./_-]+\.json|envelope-check\.json|alignment-report\.json|tb-selfcheck\.json|reset-sim\.json|cdc-report\.json|synthesis-timing-evidence\.json|timing-summary\.rpt|utilization\.rpt|clocks\.rpt|cdc\.rpt|clock-interaction\.rpt|clocks-cdc\.rpt|synth-meta\.json|stability[\\/][^\\/]+\.json|hold-closure\.json|route-timing-summary\.rpt|route-utilization\.rpt|route-drc\.rpt)$/;
 // trace/ = bit-true 对拍原始数据(hex/txt, MB 级), 性质同波形: 可由 TB+golden 复现,
 // 摘要在 alignment-report.json 里 —— 不入快照
 const EXCLUDED = /(?:^|[\\/])(?:synth\.log|backup|work|waves?|trace|.*\.(?:wlf|vcd|vpd|fsdb))(?=$|[\\/])/i;

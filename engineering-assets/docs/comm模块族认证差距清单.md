@@ -136,14 +136,47 @@ Q2.14 实部/虚部各自对称裁剪 ±32767；实测该裁剪在本激励下**
 
 ### 3.2 板级与时序收敛【registry badge_gap】
 
-| 资产 | 遗留项 |
-|:---|:---|
-| `rrc_polyphase_fir` | `board-validation`、`hold-closure`（maturity_status 仍为 internal-validation） |
-| `stream_elastic_pipeline` | `board-validation` |
-| `pulse_merge` | `board-validation`、`upstream-commit-unpinned` |
+| 资产 | 遗留项 | 2026-08-02 进展 |
+|:---|:---|:---|
+| `rrc_polyphase_fir` | `board-validation`、`hold-closure` | hold **已实跑布线后时序并定位到底**，见下；board 仍空白 |
+| `stream_elastic_pipeline` | `board-validation` | 需实际硬件 |
+| `pulse_merge` | `board-validation`、`upstream-commit-unpinned` | 需实际硬件 / 待钉上游提交 |
 
-**全库共性**：所有 certified 资产的时序/资源均为 **OOC 口径**（仅 `create_clock`，
-未做布局布线与 I/O 绑定），集成到完整顶层后需重新评估。**板级验证全库为空白。**
+#### `rrc_polyphase_fir` 的 hold —— 说法被证伪，成因已查清
+
+实跑 OOC `synth → opt → place → route`（Vivado 2023.1.1），证据
+`var/gates/pg/rrc_polyphase_fir/hold-closure.json`：
+
+| 阶段 | WNS | WHS |
+|:---|:---|:---|
+| synth | +0.252 | −0.163 |
+| opt | +0.252 | −0.163 |
+| place | +0.006 | −0.163 |
+| route | **+0.058** | **−0.163** |
+
+- README 原写"综合级 hold 是估算值、正常在布局布线阶段收敛"——**证伪**。
+  WHS 四阶段一动不动，布线后 THS −20.056 ns、320/2713 端点失败。
+- **但内部时序是干净的**：对 `post_route.dcp` 跑
+  `get_timing_paths -delay_type min -slack_lesser_than 0`，
+  **924 条违例路径全部从输入端口出发，内部单元起点 0 条**；
+  **reg-to-reg 最差 hold = +0.094 ns**。
+- 唯一失败端口是 `i_rst`（`s_axis_tvalid` +0.218、`m_axis_tready` +0.193 都过）。
+  路径 `i_rst → addA_i_reg[0]/RSTM`，目的端是 **DSP48E1 的复位脚，hold 需求
+  0.201 ns 远大于普通 FF** —— 这才是同样 0.100 ns 输入延时下只有它失败的原因。
+- **量化关闭条件**：`i_rst` 真实最小输入延时 ≥ **0.263 ns** 即收敛。XDC 里的
+  0.100 ns 是它自己标注的"显式假设、非实测"占位值。
+- `hold-closure` **不关闭**（确有违例，如实记录、不豁免），但状态从"未知"
+  推进到"单一端口、单一成因、有量化关闭条件"。
+
+> 顺带补掉的一项：`rrc_polyphase_fir` 此前是全库 certified 中**唯一**没有哈希
+> 锁定证据快照的资产。现已取 `evidence/rrc_polyphase_fir/0.4.0/`，
+> `--verify-all` 从 16 升到 **17 verified**。取快照时被工具挡了一次 ——
+> 证据目录里混着两份工作产物（`implementation-diagnostic/`、
+> `stoploss-validation-*/`），已挪到 `var/impl/` 下。这个 fail-closed 设计是对的。
+
+**全库共性**：除本次 `rrc_polyphase_fir` 外，其余 certified 资产的时序/资源仍是
+**OOC 综合级口径**（仅 `create_clock`，未做布局布线与 I/O 绑定），集成到完整顶层
+后需重新评估。**板级验证全库为空白。**
 
 ### 3.3 文档与标记补齐【asset-audit A2/A4】—— 2026-08-02 已还清
 
