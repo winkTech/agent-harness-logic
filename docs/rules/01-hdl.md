@@ -25,6 +25,23 @@ skip: "not HDL"
 
 6. **[MUST]** `initial` **仅允许**初始化 **RAM/ROM 存储器阵列**（可 `$readmemh`/`$readmemb`）；禁止给标量/向量 FF 赋 `initial`（门禁 `G-C-03`）
 7. **[SHOULD]** 纯数据流水寄存器默认不加复位；FSM/valid/指针/计数器必须复位。BRAM/DSP/SRL 内部级见豁免。
+8. **[MUST]** 非阻塞赋值的**左值下标禁止直接写函数调用**；地址先经 `assign` 落到 wire 再索引。
+
+   ```systemverilog
+   // ✗ ModelSim 10.6c 会用 r_cnt 自增后的值 → 整表错位一格
+   always_ff @(posedge i_clk) if (w_en) r_mem[f_addr(r_cnt)] <= w_din;
+
+   // ✓ 可移植写法
+   logic [5:0] w_waddr;
+   assign w_waddr = f_addr(r_cnt);
+   always_ff @(posedge i_clk) if (w_en) r_mem[w_waddr] <= w_din;
+   ```
+
+   IEEE 1800 §10.4.2 要求左值下标在 active 区求值。实测（`ofdm_tx_top` 0.2.0，
+   30 行最小用例）：同一 `always_ff` 内 `mem[f(cnt)]` 逐拍错位、`mem[w_addr]` 全对；
+   ModelSim DE-64 10.6c 错，Vivado xsim 2023.1 对。综合工具按当前值组合出地址，
+   因此该写法在 ModelSim 上表现为**仿真/综合不一致**，属静默数据损坏，lint 不报。
+   同类风险：上游同边沿 NBA 更新的信号（如相邻模块的寄存输出）做下标同样中招。
 
 ---
 

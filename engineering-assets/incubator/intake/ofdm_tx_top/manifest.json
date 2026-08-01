@@ -2,10 +2,10 @@
   "schema_version": "1.0",
   "asset_uid": "ofdm_tx_top",
   "name": "ofdm_tx_top",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "owner": "lihan",
   "maturity": {
-    "level": "intake"
+    "level": "qualification"
   },
   "requirement_ref": "engineering-assets/knowledge/primary/domains/comm/ofdm/algorithm_spec.md",
   "doc_refs": [
@@ -79,16 +79,6 @@
       "bus": "axi-stream"
     },
     {
-      "name": "i_cfg_fft_len",
-      "direction": "input",
-      "width": 32
-    },
-    {
-      "name": "i_cfg_cp_len",
-      "direction": "input",
-      "width": 16
-    },
-    {
       "name": "i_cfg_mod_type",
       "direction": "input",
       "width": 4
@@ -114,37 +104,32 @@
     {
       "path": "rtl/ofdm_tx_top.sv",
       "role": "rtl",
-      "sha256": "0c4694afae5ebb7176cc0704537b404dad8a533e101592ab4daef71d714698ad"
+      "sha256": "88a3be8677de125b9e9653059917fb3cae09d3a3fa5926b29c6f7a355196860d"
     },
     {
-      "path": "rtl/mod_mapper.sv",
+      "path": "rtl/tx_mapper.sv",
       "role": "rtl",
-      "sha256": "9a2caa558fc44015ba83154ebcd5fb5eb8be02ac44419b5e3112de7e2ac6dc57"
+      "sha256": "2495905e312b20ee9b0146436b2da452508fd4aa00951384fb1d7663107ceb5d"
     },
     {
-      "path": "rtl/mapper.sv",
+      "path": "rtl/tx_pilot_map.sv",
       "role": "rtl",
-      "sha256": "302ea7dcd49f8f69f437de3b97e63a78d93c693956d1fcc7a8b9d3e1c367aa4d"
+      "sha256": "bd58a3acfb59b1426e4078fbadd9aae6e716f120d885d4b982fa6a66084cc6a6"
     },
     {
-      "path": "rtl/pilot_insert.sv",
+      "path": "rtl/ifft64_sdf.sv",
       "role": "rtl",
-      "sha256": "e48fe1718e5fbaadb78123521e428d98f2fcb4b509a5b9dc7e88d07a2faa7034"
+      "sha256": "0959161eda4b7bd5c495b4099eae4cef8328e85c6b3a94152ef01140cda48edc"
     },
     {
-      "path": "tb/xfft_64.sv",
-      "role": "tb",
-      "sha256": "9243aa46c6e1cc67d6f32c942ee6e897aa7276e098fffa393267307868374371"
-    },
-    {
-      "path": "rtl/cp_insert.sv",
+      "path": "rtl/tx_cp_insert.sv",
       "role": "rtl",
-      "sha256": "d5cd50d313de803ab1dade3195defe70470f6208d5e6c891cdd8a135875777f0"
+      "sha256": "75c5da8de865824b64c17eb08df6232dfd079f094cf64389fb23b95b2cf078c9"
     },
     {
       "path": "tb/tb_tx_top.sv",
       "role": "tb",
-      "sha256": "bd63b6e8917ff8b926d7b919402aba5d4bb41d12f0bd848d7e066e2c4846a219"
+      "sha256": "1e1963a265e006be9f96e716e365909c623cdbfb7bd4dafa3bf0f80cc0f9f728"
     }
   ],
   "waivers": [],

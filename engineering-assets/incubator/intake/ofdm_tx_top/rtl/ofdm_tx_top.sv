@@ -1,167 +1,164 @@
-// ============================================================================
-// ofdm_tx_top — OFDM 发射机顶层
-// 功能: 输入比特流 → 调制映射 → 导频/子载波映射 → 64 点 IFFT → 加 CP → 输出
-// 端口: i_clk/i_rst (同步复位, 高有效); s_axis (比特流, 最大 6bit/符号);
-//       m_axis_tdata = {I[15:0], Q[15:0]} 打包时域样点; i_cfg_* 运行时配置
-// 主要逻辑: mod_mapper → pilot_insert → xfft_64 → cp_insert 四级串联
-// 定点: 16bit, Q2.14(频域) / Q3.13(时域)
-// 接口: AXI4-Stream
-// 复位: 同步高有效, 统一下发给各级子模块
-//
-// 本文件为 hdl-coding 规范修复版。相对修复前的差异:
-//   (1) 端口 clk/rst_n -> i_clk/i_rst, 复位改同步高有效;
-//   (2) cfg_* -> i_cfg_* (非标准总线, 需前缀);
-//   (3) **位宽修正 (SKILL.md §5)**: m_axis_tdata 由 [DATA_WIDTH-1:0]=16 位
-//       改为 [DATA_WIDTH*2-1:0]=32 位 —— 原声明与 {I,Q} 打包语义矛盾, I 路被
-//       静默截断。cp_insert 与 tb 已同步更新。
-//
-// !! 遗留缺陷 (承自原始代码, 本次**未改**) !!
-//   [F1] i_cfg_fft_len / i_cfg_cp_len / i_cfg_mod_type 三个配置端口
-//        **在本模块内完全没有被使用** —— 运行时配置未实现, FFT 长度/CP 长度/
-//        调制方式实际由 parameter 静态决定。综合时会被优化掉并报未连接。
-//   [F2] xfft_64 是行为级透传占位模型, 不做真实 IFFT (见该文件头), 因此顶层
-//        输出不可能与 golden 的 expected_tx.bin 对齐, fidelity 只能是 pending。
-//   [F3] 下游 cp_insert 的乒乓/符号计数缺陷 (见 cp_insert.sv [F1][F2][F3])
-//        使本链当前无法产出正确的 CP 符号流。
-// ============================================================================
-
-`timescale 1ns / 1ps
-
+//==============================================================================
+// ofdm_tx_top — 802.11a 风格 OFDM 发射机顶层 (ADR-004 架构重排)
+// 功能: 比特流 → 四调制星座映射 (tx_mapper) → 子载波/导频映射
+//       (tx_pilot_map) → 自研 64 点流水 IFFT (ifft64_sdf) → CP 插入
+//       (tx_cp_insert, 位反序写地址吸收重排) → m_axis (80 样点/符号)。
+// 契约 (ADR-004, 详见 README/limitations):
+//   - s_axis_tdata[5:0] = 一个星座符号的比特组 (LSB 对齐: BPSK b0 /
+//     QPSK b0b1 / 16QAM b0..b3 / 64QAM b0..b5, b0=码流首比特, 与 golden
+//     mod_mapper 逐字一致); 每 48 拍构成一个 OFDM 符号; s_axis_tlast 未用;
+//   - i_cfg_mod_type[1:0]: 0 BPSK / 1 QPSK / 2 16QAM / 3 64QAM (帧内须稳定;
+//     高 2 位保留); 0.1.0 的 i_cfg_fft_len/i_cfg_cp_len 从未被消费, 已删除;
+//   - m_axis: {Q3.13_Q[15:0], Q3.13_I[15:0]}, tlast = 每符号第 80 拍;
+//   - 符号信用节流: 在途符号 ≤2 (CP 乒乓深度), 新符号首拍需信用,
+//     符号中途 48 拍保证连续接受;
+//   - 尾部冲刷: 流结束后需再馈 ≥2 个全零符号排空 IFFT 流水 (TB/集成契约)。
+// 定点: 频域 Q2.14 → IFFT 内部 s20 (级 2/4/6 >>>1) → 时域 Q3.13 sat16;
+//       全部整数语义与 generate_vectors.m 位真镜像逐字一致。
+// 复位: 同步高有效, 统一下发; 数据流水少复位 (§1.1)
+//==============================================================================
 module ofdm_tx_top #(
-    parameter FFT_LEN     = 64,
-    parameter CP_LEN      = 16,
-    parameter DATA_WIDTH  = 16,
-    parameter MOD_TYPE    = 2     // 0:BPSK, 1:QPSK, 2:16QAM, 3:64QAM
+    parameter int DATA_W = 16
 )(
-    input  wire                    i_clk,
-    input  wire                    i_rst,        // 同步复位, 高有效
+    input  logic                i_clk,
+    input  logic                i_rst,          // 同步复位, 高有效
 
-    // 数据输入 (AXI4-Stream Slave)
-    input  wire [5:0]              s_axis_tdata,   // 最大6bit(64QAM)
-    input  wire                    s_axis_tvalid,
-    output wire                    s_axis_tready,
-    input  wire                    s_axis_tlast,
+    input  logic [3:0]          i_cfg_mod_type, // [1:0] 有效
 
-    // 数据输出 (AXI4-Stream Master)
-    output wire [DATA_WIDTH*2-1:0] m_axis_tdata,   // {I[15:0], Q[15:0]}
-    output wire                    m_axis_tvalid,
-    input  wire                    m_axis_tready,
-    output wire                    m_axis_tlast,
+    // 比特组输入 (AXI-S slave)
+    input  logic [5:0]          s_axis_tdata,
+    input  logic                s_axis_tvalid,
+    output logic                s_axis_tready,
+    input  logic                s_axis_tlast,   // 未用 (帧语义在外部)
 
-    // 配置接口 (见 [F1]: 当前未实现, 三个端口在模块内无使用)
-    input  wire [31:0]             i_cfg_fft_len,
-    input  wire [15:0]             i_cfg_cp_len,
-    input  wire [3:0]              i_cfg_mod_type
+    // 时域输出 (AXI-S master)
+    output logic [DATA_W*2-1:0] m_axis_tdata,
+    output logic                m_axis_tvalid,
+    input  logic                m_axis_tready,
+    output logic                m_axis_tlast
 );
 
-    // ========================================================================
-    // Internal connections
-    // ========================================================================
+    //==========================================================================
+    // 符号信用节流 + ri_ 输入寄存 (红线 1)
+    // credit 0..2 = CP 乒乓可容纳的在途符号数; 新符号首拍消费 1 信用,
+    // cp o_sym_done 归还; 符号中途 (r_bcnt!=0) 保证连续接受
+    //==========================================================================
+    logic       w_sym_done;
+    logic [1:0] r_credit, w_credit_nxt;
+    logic [5:0] r_bcnt,   w_bcnt_nxt;
+    logic       ro_tready;
+    logic       w_accept;
 
-    // Mod Mapper -> Pilot Insert
-    wire [15:0]  w_mod_i;        // Q2.14
-    wire [15:0]  w_mod_q;        // Q2.14
-    wire         w_mod_valid;
-    wire         w_mod_ready;
-    wire         w_mod_last;
+    assign w_accept = s_axis_tvalid && ro_tready;
 
-    // Pilot Insert -> IFFT (AXI4-Stream)
-    wire [15:0]  w_ifft_in_i;    // Q2.14
-    wire [15:0]  w_ifft_in_q;    // Q2.14
-    wire         w_ifft_in_valid;
-    wire         w_ifft_in_ready;
+    // ro_tready 必须由次态推导: 若用现态, 符号最后一拍 (r_bcnt=47 且信用已
+    // 耗尽) 的 ready 会因 r_bcnt!=0 仍为 1, 下一拍 r_bcnt 已回 0 而 ready
+    // 尚未落下, 多放行一个 beat —— 信用 0-1 回绕成 3, 第三个符号提前开收,
+    // 与 tx_pilot_map 的两级乒乓相撞 (读中的 bank 被覆写)。
+    assign w_bcnt_nxt   = !w_accept          ? r_bcnt
+                        : (r_bcnt == 6'd47)  ? 6'd0
+                                             : (r_bcnt + 6'd1);
+    assign w_credit_nxt = r_credit
+                        - ((w_accept && r_bcnt == 6'd0) ? 2'd1 : 2'd0)
+                        + (w_sym_done ? 2'd1 : 2'd0);
 
-    // IFFT -> CP Insert (AXI4-Stream)
-    wire [15:0]  w_ifft_out_i;   // Q3.13
-    wire [15:0]  w_ifft_out_q;   // Q3.13
-    wire         w_ifft_out_valid;
-    wire         w_ifft_out_ready;
-    wire         w_ifft_out_last;
+    always_ff @(posedge i_clk) begin
+        if (i_rst) begin
+            r_credit <= 2'd2;
+            r_bcnt   <= '0;
+        end else begin
+            r_credit <= w_credit_nxt;
+            r_bcnt   <= w_bcnt_nxt;
+        end
+    end
 
-    // ========================================================================
-    // Stage 1: Mod Mapper
-    // ========================================================================
-    mod_mapper #(
-        .MOD_TYPE (MOD_TYPE)
-    ) u_mod_mapper (
+    always_ff @(posedge i_clk) begin
+        if (i_rst) ro_tready <= 1'b0;
+        else       ro_tready <= (w_credit_nxt != 2'd0) || (w_bcnt_nxt != 6'd0);
+    end
+
+    assign s_axis_tready = ro_tready;
+
+    logic       ri_v;
+    logic [5:0] ri_bits;
+    logic [1:0] ri_mod;
+
+    always_ff @(posedge i_clk) begin
+        if (i_rst) ri_v <= 1'b0;
+        else       ri_v <= w_accept;
+    end
+
+    always_ff @(posedge i_clk) begin
+        ri_bits <= s_axis_tdata;
+        ri_mod  <= i_cfg_mod_type[1:0];
+    end
+
+    //==========================================================================
+    // 映射 → 子载波/导频 → IFFT → CP (全链 i_beat=1, valid 驱动)
+    //==========================================================================
+    logic                     w_map_v;
+    logic signed [DATA_W-1:0] w_map_re, w_map_im;
+
+    tx_mapper #(.DATA_W(DATA_W)) u_mapper (
+        .i_clk     (i_clk),
+        .i_rst     (i_rst),
+        .i_beat    (1'b1),
+        .i_valid   (ri_v),
+        .i_bits    (ri_bits),
+        .i_cfg_mod (ri_mod),
+        .o_valid   (w_map_v),
+        .o_re      (w_map_re),
+        .o_im      (w_map_im)
+    );
+
+    logic                     w_grid_v;
+    logic signed [DATA_W-1:0] w_grid_re, w_grid_im;
+
+    tx_pilot_map #(.DATA_W(DATA_W)) u_pilot_map (
+        .i_clk   (i_clk),
+        .i_rst   (i_rst),
+        .i_beat  (1'b1),
+        .i_valid (w_map_v),
+        .i_re    (w_map_re),
+        .i_im    (w_map_im),
+        .o_valid (w_grid_v),
+        .o_re    (w_grid_re),
+        .o_im    (w_grid_im)
+    );
+
+    logic                     w_ifft_v;
+    logic [5:0]               w_ifft_idx;
+    logic signed [DATA_W-1:0] w_ifft_re, w_ifft_im;
+
+    ifft64_sdf #(.DATA_W(DATA_W)) u_ifft (
+        .i_clk   (i_clk),
+        .i_rst   (i_rst),
+        .i_beat  (1'b1),
+        .i_valid (w_grid_v),
+        .i_re    (w_grid_re),
+        .i_im    (w_grid_im),
+        .o_valid (w_ifft_v),
+        .o_idx   (w_ifft_idx),
+        .o_re    (w_ifft_re),
+        .o_im    (w_ifft_im)
+    );
+
+    logic w_ovf;
+
+    tx_cp_insert #(.DATA_W(DATA_W)) u_cp (
         .i_clk         (i_clk),
         .i_rst         (i_rst),
-        .s_axis_tdata  (s_axis_tdata),
-        .s_axis_tvalid (s_axis_tvalid),
-        .s_axis_tready (s_axis_tready),
-        .s_axis_tlast  (s_axis_tlast),
-        .m_axis_i      (w_mod_i),
-        .m_axis_q      (w_mod_q),
-        .m_axis_tvalid (w_mod_valid),
-        .m_axis_tready (w_mod_ready),
-        .m_axis_tlast  (w_mod_last)
+        .i_beat        (1'b1),
+        .i_valid       (w_ifft_v),
+        .i_idx         (w_ifft_idx),
+        .i_re          (w_ifft_re),
+        .i_im          (w_ifft_im),
+        .m_axis_tvalid (m_axis_tvalid),
+        .m_axis_tready (m_axis_tready),
+        .m_axis_tdata  (m_axis_tdata),
+        .m_axis_tlast  (m_axis_tlast),
+        .o_sym_done    (w_sym_done),
+        .o_ovf         (w_ovf)
     );
 
-    // ========================================================================
-    // Stage 2: Pilot Insert + Subcarrier Mapping
-    // ========================================================================
-    pilot_insert #(
-        .FFT_LEN    (FFT_LEN),
-        .DATA_WIDTH (DATA_WIDTH)
-    ) u_pilot_insert (
-        .i_clk         (i_clk),
-        .i_rst         (i_rst),
-        .s_axis_i      (w_mod_i),
-        .s_axis_q      (w_mod_q),
-        .s_axis_tvalid (w_mod_valid),
-        .s_axis_tready (w_mod_ready),
-        .s_axis_tlast  (w_mod_last),
-        .m_axis_i      (w_ifft_in_i),
-        .m_axis_q      (w_ifft_in_q),
-        .m_axis_tvalid (w_ifft_in_valid),
-        .m_axis_tready (w_ifft_in_ready)
-    );
-
-    // ========================================================================
-    // Stage 3: IFFT (Xilinx FFT IP 占位模型)
-    // 端口名沿用 Xilinx FFT IP 契约 (aclk/aresetn/s_axis_*/m_axis_*/event_*),
-    // 属"标准总线保持协议原名"豁免; aresetn 低有效由本层做极性转换。
-    // ========================================================================
-    xfft_64 u_xfft (
-        .aclk               (i_clk),
-        .aresetn            (~i_rst),           // IP 契约为低有效, 此处转换
-        .s_axis_config_tdata(16'h0001),         // FFT mode, scaling schedule
-        .s_axis_config_tvalid(1'b1),
-        .s_axis_config_tready(),
-        .s_axis_data_tdata ({w_ifft_in_i, w_ifft_in_q}),
-        .s_axis_data_tvalid(w_ifft_in_valid),
-        .s_axis_data_tready(w_ifft_in_ready),
-        .s_axis_data_tlast (1'b0),
-        .m_axis_data_tdata ({w_ifft_out_i, w_ifft_out_q}),
-        .m_axis_data_tvalid(w_ifft_out_valid),
-        .m_axis_data_tready(w_ifft_out_ready),
-        .m_axis_data_tlast (w_ifft_out_last),
-        .event_frame_started(),
-        .event_tlast_unexpected(),
-        .event_tlast_missing(),
-        .event_data_in_channel_halt(),
-        .event_data_out_channel_halt()
-    );
-
-    // ========================================================================
-    // Stage 4: CP Insert + Output
-    // ========================================================================
-    cp_insert #(
-        .FFT_LEN    (FFT_LEN),
-        .CP_LEN     (CP_LEN),
-        .DATA_WIDTH (DATA_WIDTH)
-    ) u_cp_insert (
-        .i_clk          (i_clk),
-        .i_rst          (i_rst),
-        .s_axis_i       (w_ifft_out_i),
-        .s_axis_q       (w_ifft_out_q),
-        .s_axis_tvalid  (w_ifft_out_valid),
-        .s_axis_tready  (w_ifft_out_ready),
-        .s_axis_tlast   (w_ifft_out_last),
-        .m_axis_tdata   (m_axis_tdata),
-        .m_axis_tvalid  (m_axis_tvalid),
-        .m_axis_tready  (m_axis_tready),
-        .m_axis_tlast   (m_axis_tlast)
-    );
-
-endmodule
+endmodule : ofdm_tx_top

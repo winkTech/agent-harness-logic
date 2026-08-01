@@ -30,11 +30,10 @@ vlib work
 
 echo "=========== VLOG LINT ==========="
 vlog -sv -work work \
-    "$PKG/rtl/mod_mapper.sv" \
-    "$PKG/rtl/mapper.sv" \
-    "$PKG/rtl/pilot_insert.sv" \
-    "$PKG/rtl/xfft_64.sv" \
-    "$PKG/rtl/cp_insert.sv" \
+    "$PKG/rtl/tx_mapper.sv" \
+    "$PKG/rtl/tx_pilot_map.sv" \
+    "$PKG/rtl/ifft64_sdf.sv" \
+    "$PKG/rtl/tx_cp_insert.sv" \
     "$PKG/rtl/ofdm_tx_top.sv" \
     "$PKG/tb/tb_tx_top.sv"
 

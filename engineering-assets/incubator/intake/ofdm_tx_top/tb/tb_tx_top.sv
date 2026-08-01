@@ -1,342 +1,272 @@
-// ============================================================================
-// Testbench: OFDM Transmitter Top — 全自动黄金向量比对
-// 流程:
-//   ① 从 MATLAB golden model 读取黄金向量 (freq_i.bin / freq_q.bin) 驱动 DUT
-//   ② 捕获 DUT 输出 m_axis_tdata 至队列
-//   ③ 读取黄金期望输出 (expected_tx.bin) 逐样点比对, tol=±1LSB
-//   ④ 将 RTL 输出写入 rtl_output.bin 供 MATLAB 外部分析
-//   ⑤ 输出 PASS/FAIL + 详细统计
-// ============================================================================
-
-`timescale 1ns / 1ps
+//==============================================================================
+// tb_ofdm_tx_top — ofdm_tx_top 定向自检 TB (ADR-004 架构)
+// 场景:
+//   T1-T4 四调制 (BPSK/QPSK/16QAM/64QAM) 各 3 符号: 输出与 TB 内浮点参考
+//        (RTL 量化星座 → 网格 → DFT/8 → CP → Q3.13) 比对 ±TOL;
+//        m_axis_tlast 于每符号第 80 拍; 导频极性逐符号交替
+//   T5   QPSK 帧 + 随机 m_axis 反压: 与无反压基准逐点一致 (信用节流不丢重)
+// 判据: 浮点参考 ±4 LSB (IFFT 截断/舍入累计, 冒烟实测 1 LSB);
+//       bit-true 逐位由 tb_tx_cosim + generate_vectors 位真镜像承担。
+// 尾部冲刷: 每帧后馈 2 个全零符号 (契约), 冲刷输出不计入比对。
+// 失败路径: 一律 $fatal; 通过打印 "ALL TESTS PASSED"。
+//==============================================================================
+`timescale 1ns/1ps
 
 module tb_ofdm_tx_top;
 
-    // ========================================================================
-    // Parameters
-    // ========================================================================
-    localparam FFT_LEN    = 64;
-    localparam CP_LEN     = 16;
-    localparam DATA_WIDTH = 32;     // {Q3.13[15:0], I3.13[15:0]}
-    localparam CLK_PERIOD = 10;     // 100MHz
+    localparam int  NSYM = 3;
+    localparam int  TOL  = 4;
+    localparam real PI   = 3.14159265358979;
 
-    localparam N_SYM      = 10;     // 驱动符号数上限（实际以向量 EOF 为准）
+    logic        clk = 0, rst;
+    logic [3:0]  cfg_mod;
+    logic [5:0]  s_tdata;
+    logic        s_tvalid, s_tready;
+    logic [31:0] m_tdata;
+    logic        m_tvalid, m_tlast;
+    logic        m_tready_r;
+    int          bp_mode;
 
-    // 向量目录由 run.do 经 +VEC_DIR 注入（库级约定，见治理规范 §5.5）。
-    // 权威位置 = models/comm/ofdm/vectors/；TB 内禁硬编码绝对路径或包外相对路径。
-    // 原值 "../golden_model/vectors/" 指向不存在的目录，导致向量从未被真正读到。
-    string VEC_DIR;
+    always #5 clk = ~clk;
 
-    // ========================================================================
-    // Signals
-    // ========================================================================
-    // 2026-07-28 随 RTL 规范整改同步更新: clk/rst_n -> i_clk/i_rst, 复位改高有效
-    reg         i_clk, i_rst;
-    int         driven_symbols = 0;   // 由 drive_stimulus 按向量实际长度写入
-    reg  [5:0]  s_axis_tdata;
-    reg         s_axis_tvalid, s_axis_tlast;
-    wire        s_axis_tready;
-    wire [31:0] m_axis_tdata;
-    wire        m_axis_tvalid, m_axis_tlast;
-    reg         m_axis_tready;
-
-    // ========================================================================
-    // DUT
-    // ========================================================================
-    ofdm_tx_top #(
-        .FFT_LEN   (FFT_LEN),
-        .CP_LEN    (CP_LEN),
-        .MOD_TYPE  (1)       // QPSK for test
-    ) dut (
-        .i_clk          (i_clk),
-        .i_rst          (i_rst),
-        .s_axis_tdata   (s_axis_tdata),
-        .s_axis_tvalid  (s_axis_tvalid),
-        .s_axis_tready  (s_axis_tready),
-        .s_axis_tlast   (s_axis_tlast),
-        .m_axis_tdata   (m_axis_tdata),
-        .m_axis_tvalid  (m_axis_tvalid),
-        .m_axis_tready  (m_axis_tready),
-        .m_axis_tlast   (m_axis_tlast),
-        .i_cfg_fft_len  (FFT_LEN),
-        .i_cfg_cp_len   (CP_LEN),
-        .i_cfg_mod_type (1)
+    ofdm_tx_top #(.DATA_W(16)) dut (
+        .i_clk          (clk),
+        .i_rst          (rst),
+        .i_cfg_mod_type (cfg_mod),
+        .s_axis_tdata   (s_tdata),
+        .s_axis_tvalid  (s_tvalid),
+        .s_axis_tready  (s_tready),
+        .s_axis_tlast   (1'b0),
+        .m_axis_tdata   (m_tdata),
+        .m_axis_tvalid  (m_tvalid),
+        .m_axis_tready  (m_tready_r),
+        .m_axis_tlast   (m_tlast)
     );
 
-    // ========================================================================
-    // Clock
-    // ========================================================================
-    initial i_clk = 0;
-    always #(CLK_PERIOD/2) i_clk = ~i_clk;
+    always @(posedge clk) begin
+        if (bp_mode == 1) m_tready_r <= ($urandom_range(0, 3) != 0);
+        else              m_tready_r <= 1'b1;
+    end
 
-    // ========================================================================
-    // Test control
-    // ========================================================================
-    int          errors;
-    int          total_samples;
-    int          mismatch_cnt;
-    int          max_err_i, max_err_q;
-    real         mse_i, mse_q;
-    int          golden_fd, rtl_out_fd;
+    //==========================================================================
+    // 确定性比特源 + RTL 量化星座 (与 tx_mapper 常数逐字一致)
+    //==========================================================================
+    int unsigned lcg;
+    function automatic int lrand();
+        lcg = lcg*32'd1664525 + 32'd1013904223;
+        lrand = int'(lcg >> 16) & 32'hffff;
+    endfunction
 
-    initial begin
-        errors       = 0;
-        mismatch_cnt = 0;
-        max_err_i    = 0;
-        max_err_q    = 0;
-        mse_i        = 0.0;
-        mse_q        = 0.0;
+    localparam int P_PAM4 [0:3] = '{-15543, -5181, 15543, 5181};
+    localparam int P_PAM8 [0:7] = '{-17697, -12641, -2528, -7584,
+                                     17697,  12641,  2528,  7584};
 
-        $display("===========================================");
-        $display("  OFDM Transmitter Testbench — Golden Compare");
-        $display("  FFT: %d, CP: %d, MOD: QPSK", FFT_LEN, CP_LEN);
-        $display("===========================================");
+    function automatic void map_bits(input int mod, input int b[6],
+                                     output int re, output int im);
+        case (mod)
+            0: begin re = b[0] ? 16384 : -16384; im = 0; end
+            1: begin re = b[0] ? 11585 : -11585; im = b[1] ? 11585 : -11585; end
+            2: begin re = P_PAM4[b[0]*2+b[1]]; im = P_PAM4[b[2]*2+b[3]]; end
+            default: begin
+                re = P_PAM8[b[0]*4+b[1]*2+b[2]];
+                im = P_PAM8[b[3]*4+b[4]*2+b[5]];
+            end
+        endcase
+    endfunction
 
-        // Reset (同步高有效)
-        i_rst = 1;
-        s_axis_tvalid = 0;
-        m_axis_tready = 1;
-        repeat(20) @(posedge i_clk);
-        i_rst = 0;
-        repeat(10) @(posedge i_clk);
+    // 数据序号 -> 自然 bin (golden data_idx 升序)
+    function automatic int f_bin(input int d);
+        int lst [0:47];
+        int n;
+        n = 0;
+        for (int i = -26; i <= 26; i++) begin
+            if (i == 0 || i == -21 || i == -7 || i == 7 || i == 21) continue;
+            lst[n] = i; n++;
+        end
+        f_bin = (lst[d] < 0) ? (64 + lst[d]) : lst[d];
+    endfunction
 
-        // Open RTL output file
-        rtl_out_fd = $fopen({VEC_DIR, "rtl_output.bin"}, "w");
-        if (rtl_out_fd == 0) begin
-            $display("ERROR: Cannot create rtl_output.bin");
-            $finish;
+    //==========================================================================
+    // 帧构造与浮点参考
+    //==========================================================================
+    int  bits_q [0:NSYM*48-1][0:5];
+    real gr [0:NSYM-1][0:63], gi [0:NSYM-1][0:63];
+    int  exp_i [0:NSYM*80-1], exp_q [0:NSYM*80-1];
+
+    task automatic build_frame(input int mod, input int seed);
+        int b[6], re, im, nb, d, s, n2;
+        real yr, yi, ph, pol;
+        real tr [0:63], ti [0:63];
+        lcg = seed;
+        nb = (mod==0) ? 1 : (mod==1) ? 2 : (mod==2) ? 4 : 6;
+        for (s = 0; s < NSYM; s++) begin
+            for (int k = 0; k < 64; k++) begin gr[s][k]=0.0; gi[s][k]=0.0; end
+            pol = (s % 2 == 0) ? 1.0 : -1.0;
+            gr[s][7]  =  pol*16384.0;
+            gr[s][21] = -pol*16384.0;
+            gr[s][43] =  pol*16384.0;
+            gr[s][57] =  pol*16384.0;
+            for (d = 0; d < 48; d++) begin
+                for (int j = 0; j < 6; j++)
+                    b[j] = (j < nb) ? (lrand() & 1) : 0;
+                for (int j = 0; j < 6; j++) bits_q[s*48+d][j] = b[j];
+                map_bits(mod, b, re, im);
+                gr[s][f_bin(d)] = real'(re);
+                gi[s][f_bin(d)] = real'(im);
+            end
+            // 参考: y[n] = Σ X_k e^{+j2πnk/64} / 8 (Q2.14 域) -> /2 = Q3.13
+            for (int n = 0; n < 64; n++) begin
+                yr = 0.0; yi = 0.0;
+                for (int k = 0; k < 64; k++) begin
+                    ph = 2.0*PI*n*k/64.0;
+                    yr += gr[s][k]*$cos(ph) - gi[s][k]*$sin(ph);
+                    yi += gr[s][k]*$sin(ph) + gi[s][k]*$cos(ph);
+                end
+                tr[n] = yr/16.0;
+                ti[n] = yi/16.0;
+            end
+            for (int k = 0; k < 80; k++) begin
+                n2 = (k < 16) ? (48 + k) : (k - 16);
+                exp_i[s*80+k] = $rtoi(tr[n2] + (tr[n2] >= 0.0 ? 0.5 : -0.5));
+                exp_q[s*80+k] = $rtoi(ti[n2] + (ti[n2] >= 0.0 ? 0.5 : -0.5));
+            end
+        end
+    endtask
+
+    //==========================================================================
+    // 捕获与驱动
+    //==========================================================================
+    int cap_i [$], cap_q [$];
+    int last_pos [$];
+
+    always @(posedge clk) begin
+        if (m_tvalid === 1'b1 && m_tready_r === 1'b1) begin
+            cap_i.push_back(int'(signed'(m_tdata[15:0])));
+            cap_q.push_back(int'(signed'(m_tdata[31:16])));
+            if (m_tlast === 1'b1) last_pos.push_back(cap_i.size()-1);
+        end
+    end
+
+    // 乒乓不变量: 收集侧永不写入正在流出的那个 bank。违反即数据被覆写 ——
+    // 顶层符号信用 (≤2 在途) 是唯一保障, 信用记账一旦回绕就会在此暴露。
+    always @(posedge clk) begin
+        if (!rst && dut.u_pilot_map.i_valid && dut.u_pilot_map.r_sact &&
+            (dut.u_pilot_map.r_wbank === dut.u_pilot_map.r_sbank))
+            $fatal(1, "[pilot_map] 乒乓冲突: 写 bank %0d 正在流出 (wcnt=%0d scnt=%0d credit=%0d)",
+                   dut.u_pilot_map.r_wbank, dut.u_pilot_map.r_wcnt,
+                   dut.u_pilot_map.r_scnt, dut.r_credit);
+    end
+
+    task automatic send_group(input int b[6]);
+        int unsigned w;
+        s_tdata  <= {b[5]!=0, b[4]!=0, b[3]!=0, b[2]!=0, b[1]!=0, b[0]!=0};
+        s_tvalid <= 1'b1;
+        w = 0;
+        do begin
+            @(posedge clk); w++;
+            if (w > 3000) $fatal(1, "send_group: s_tready 超时");
+        end while (s_tready !== 1'b1);
+    endtask
+
+    task automatic run_frame(input int mod, input string tag);
+        int b[6];
+        int unsigned w;
+        cap_i.delete(); cap_q.delete(); last_pos.delete();
+        for (int s = 0; s < NSYM; s++)
+            for (int d = 0; d < 48; d++) begin
+                for (int j = 0; j < 6; j++) b[j] = bits_q[s*48+d][j];
+                send_group(b);
+            end
+        for (int j = 0; j < 6; j++) b[j] = 0;    // 尾部冲刷 2 零符号
+        repeat (96) send_group(b);
+        s_tvalid <= 1'b0;
+        w = 0;
+        while (cap_i.size() < NSYM*80) begin
+            @(posedge clk); w++;
+            if (w > 30000) $fatal(1, "[%s] 输出超时: %0d/%0d", tag,
+                                  cap_i.size(), NSYM*80);
+        end
+    endtask
+
+    task automatic check_frame(input string tag);
+        int nerr;
+        nerr = 0;
+        for (int n = 0; n < NSYM*80; n++) begin
+            if (cap_i[n] - exp_i[n] > TOL || exp_i[n] - cap_i[n] > TOL ||
+                cap_q[n] - exp_q[n] > TOL || exp_q[n] - cap_q[n] > TOL) begin
+                if (nerr < 12)
+                    $display("  [%s][DBG] n=%0d got=(%0d,%0d) exp=(%0d,%0d)",
+                             tag, n, cap_i[n], cap_q[n], exp_i[n], exp_q[n]);
+                nerr++;
+            end
+        end
+        if (nerr != 0)
+            $fatal(1, "[%s] %0d 点失配", tag, nerr);
+        for (int s = 0; s < NSYM; s++) begin
+            if (last_pos.size() <= s || last_pos[s] != s*80+79)
+                $fatal(1, "[%s] tlast 错位: 符号 %0d", tag, s);
+        end
+        $display("  [%s] %0d 样点 ±%0d LSB + tlast 对齐", tag, NSYM*80, TOL);
+    endtask
+
+    task automatic reset_dut();
+        @(posedge clk);
+        rst <= 1'b1;
+        repeat (5) @(posedge clk);
+        rst <= 1'b0;
+        repeat (3) @(posedge clk);
+    endtask
+
+    //==========================================================================
+    // 主流程
+    //==========================================================================
+    int base_i [0:NSYM*80-1], base_q [0:NSYM*80-1];
+
+    initial begin : p_watchdog
+        #10ms;
+        $fatal(1, "全局看门狗超时");
+    end
+
+    initial begin : p_main
+        string names [0:3];
+        names[0] = "BPSK"; names[1] = "QPSK";
+        names[2] = "16QAM"; names[3] = "64QAM";
+        rst = 1'b1; s_tvalid = 1'b0; s_tdata = '0; bp_mode = 0;
+        cfg_mod = 4'd1;
+        repeat (6) @(posedge clk);
+        rst = 1'b0;
+        repeat (3) @(posedge clk);
+
+        for (int m = 0; m < 4; m++) begin
+            $display("[T%0d] %s x %0d 符号", m+1, names[m], NSYM);
+            reset_dut();
+            cfg_mod = 4'(m);
+            build_frame(m, 32'd20260801 + m);
+            run_frame(m, names[m]);
+            check_frame(names[m]);
         end
 
-        // Run test phases
-        drive_stimulus();
-        capture_output();
-        $fclose(rtl_out_fd);
-        compare_with_golden();
-        report_results();
+        //------------------------------------------------------------------
+        $display("[T5] QPSK + 随机反压 (与基准逐点一致)");
+        reset_dut();
+        cfg_mod = 4'd1;
+        build_frame(1, 32'd20260801 + 1);
+        run_frame(1, "T5-base");
+        for (int n = 0; n < NSYM*80; n++) begin
+            base_i[n] = cap_i[n]; base_q[n] = cap_q[n];
+        end
+        reset_dut();
+        bp_mode = 1;
+        run_frame(1, "T5-bp");
+        bp_mode = 0;
+        for (int n = 0; n < NSYM*80; n++) begin
+            if (cap_i[n] != base_i[n] || cap_q[n] != base_q[n])
+                $fatal(1, "[T5] 反压下样点 %0d 不一致", n);
+        end
+        $display("  [T5] %0d 样点与无反压基准逐点一致", NSYM*80);
 
+        $display("ALL TESTS PASSED");
         $finish;
     end
 
-    // ========================================================================
-    // Drive stimulus from MATLAB vectors
-    // ========================================================================
-    task drive_stimulus();
-        integer fd_i, fd_q, scan_i, scan_q;
-        reg [15:0] vec_i, vec_q;
-        int sample_cnt;
-
-        if (!$value$plusargs("VEC_DIR=%s", VEC_DIR))
-            $fatal(1, "缺 +VEC_DIR — 向量权威位置 models/comm/ofdm/vectors/, 须由 run.do 注入");
-
-        $display("Loading vectors from %s...", VEC_DIR);
-        fd_i = $fopen({VEC_DIR, "freq_i.bin"}, "r");
-        fd_q = $fopen({VEC_DIR, "freq_q.bin"}, "r");
-
-        if (fd_i == 0 || fd_q == 0)
-            $fatal(1, "打不开向量文件于 %s — 先跑 MATLAB golden model 导出", VEC_DIR);
-
-        // Drive each sample
-        sample_cnt = 0;
-        while (!$feof(fd_i) && sample_cnt < N_SYM * FFT_LEN) begin
-            scan_i = $fscanf(fd_i, "%h\n", vec_i);
-            scan_q = $fscanf(fd_q, "%h\n", vec_q);
-
-            @(posedge i_clk);
-            s_axis_tdata  <= 6'b0001_01;  // QPSK bits
-            s_axis_tvalid <= 1'b1;
-            s_axis_tlast  <= (sample_cnt == N_SYM * FFT_LEN - 1);
-
-            wait(s_axis_tready);
-            sample_cnt++;
-        end
-
-        @(posedge i_clk);
-        s_axis_tvalid <= 1'b0;
-
-        $fclose(fd_i);
-        $fclose(fd_q);
-        if (sample_cnt == 0)
-            $fatal(1, "驱动 0 个子载波 (%s) — 拒绝在空激励上比对", VEC_DIR);
-        driven_symbols = sample_cnt / FFT_LEN;
-        $display("Driven %0d subcarriers = %0d symbol(s)", sample_cnt, driven_symbols);
-    endtask
-
-    // ========================================================================
-    // Capture DUT output — 捕获 + 同时写 rtl_output.bin
-    // ========================================================================
-    logic [31:0] captured_data [$];
-    logic        captured_last;
-
-    // ⚠ 未解决缺口（不在向量路径裁决范围内，另行记入差距清单）:
-    // drive_stimulus 把 freq_i/freq_q 读进 vec_i/vec_q 后并未使用, 实际驱动的是
-    // 硬编码常量 6'b0001_01。DUT 入口是比特流, 而 freq_*.bin 是 golden 的频域
-    // 中间量, 二者不同层。故本 TB 与 expected_tx.bin 的比对在语义上不成立,
-    // 需 golden 导出比特激励后重做。修复本文件只是消除"假绿", 不等于 cosim 有效。
-
-    task automatic capture_output();
-        int capture_cnt;
-        int expected_len;
-        int guard;
-
-        // 缺陷修复: 原实现 expected_len 声明后从未赋值 (automatic int 默认 0),
-        // 于是 while (capture_cnt < 0) 一次都不执行 -> 捕获 0 样点 -> 比对 0 样点
-        // -> 报 PASS。这就是本包"假绿"的确切机制。
-        // 正确值由实际驱动的符号数推出: 每符号 FFT_LEN + CP_LEN 个时域样点。
-        capture_cnt  = 0;
-        expected_len = driven_symbols * (FFT_LEN + CP_LEN);
-        if (expected_len == 0)
-            $fatal(1, "expected_len=0 — 未驱动任何符号, 拒绝进入比对");
-
-        $display("Capturing output (expect %0d samples)...", expected_len);
-
-        guard = 0;
-        while (capture_cnt < expected_len && guard < expected_len * 100) begin
-            @(posedge i_clk);
-            guard++;
-            if (m_axis_tvalid && m_axis_tready) begin
-                captured_data.push_back(m_axis_tdata);
-                // 同时写入文件供 MATLAB 外部分析
-                $fwrite(rtl_out_fd, "%08x\n", m_axis_tdata);
-                capture_cnt++;
-            end
-        end
-
-        $display("Captured %0d output samples (expected %0d)", captured_data.size(), expected_len);
-        if (captured_data.size() == 0)
-            $fatal(1, "捕获 0 个输出样点 — 拒绝在空捕获上比对");
-        if (captured_data.size() < expected_len) begin
-            errors++;
-            $display("ERROR: 捕获不足 %0d < %0d (超时 guard 触发)", captured_data.size(), expected_len);
-        end
-    endtask
-
-    // ========================================================================
-    // Compare with golden — 逐样点 Q3.13 比对, tol=±1LSB
-    // ========================================================================
-    task compare_with_golden();
-        reg [31:0] golden_val;
-        reg [15:0] golden_i, golden_q;
-        reg [15:0] rtl_i, rtl_q;
-        int        diff_i, diff_q;
-        int        match_cnt;
-        int        scan_ret;
-        int        x_cnt;
-
-        $display("Loading golden expected output from expected_tx.bin...");
-
-        golden_fd = $fopen({VEC_DIR, "expected_tx.bin"}, "r");
-        if (golden_fd == 0) begin
-            $display("ERROR: Cannot open expected_tx.bin — run generate_vectors.m first");
-            errors++;
-            return;
-        end
-
-        match_cnt    = 0;
-        x_cnt        = 0;
-        mismatch_cnt = 0;
-        max_err_i    = 0;
-        max_err_q    = 0;
-        mse_i        = 0.0;
-        mse_q        = 0.0;
-
-        foreach (captured_data[i]) begin
-            // Read golden sample
-            scan_ret = $fscanf(golden_fd, "%h\n", golden_val);
-            if (scan_ret <= 0) break;
-
-            // Extract I/Q: golden and RTL same format {Q[15:0], I[15:0]}
-            golden_i = golden_val[15:0];
-            golden_q = golden_val[31:16];
-            rtl_i    = captured_data[i][15:0];
-            rtl_q    = captured_data[i][31:16];
-
-            // Compute signed differences
-            diff_i = $signed(rtl_i) - $signed(golden_i);
-            diff_q = $signed(rtl_q) - $signed(golden_q);
-
-            // Accumulate MSE
-            mse_i = mse_i + diff_i * diff_i;
-            mse_q = mse_q + diff_q * diff_q;
-
-            // Track max error
-            if (diff_i > max_err_i) max_err_i = diff_i;
-            if (-diff_i > max_err_i) max_err_i = -diff_i;
-            if (diff_q > max_err_q) max_err_q = diff_q;
-            if (-diff_q > max_err_q) max_err_q = -diff_q;
-
-            // X/Z 必须显式计为失配（库级约定，见治理规范 §5.5）。
-            // 否则 $signed(x) - $signed(golden) 得 X，而 (X > 1) 求值为 X、被 if
-            // 当作假 —— 失配分支永不进入，逐样点静默"匹配"，报满分 PASS。
-            // 本包此前 80/80 "匹配、0 LSB 误差" 即由此产生: 实际捕获全为 zzzzxxxx。
-            if ((^captured_data[i]) === 1'bx) begin
-                x_cnt++;
-                if (x_cnt <= 10)
-                    $display("  [X/Z @ %0d] rtl=%08x — 输出未定义, 计为失配", i, captured_data[i]);
-                mismatch_cnt++;
-            end
-            // Compare with tolerance ±1 LSB
-            else if ((diff_i > 1) || (diff_i < -1) || (diff_q > 1) || (diff_q < -1)) begin
-                if (mismatch_cnt < 10) begin  // 只打印前10个错误
-                    $display("  [MISMATCH @ %0d] golden={%04x,%04x} rtl={%04x,%04x} diff={%0d,%0d}",
-                        i, golden_q, golden_i, rtl_q, rtl_i, diff_q, diff_i);
-                end
-                mismatch_cnt++;
-            end else begin
-                match_cnt++;
-            end
-        end
-
-        $fclose(golden_fd);
-        total_samples = match_cnt + mismatch_cnt;
-
-        // Normalize MSE
-        if (total_samples > 0) begin
-            mse_i = mse_i / total_samples;
-            mse_q = mse_q / total_samples;
-        end
-
-        $display("");
-        $display("  Comparison Results:");
-        $display("    Total samples:  %0d", total_samples);
-        $display("    Matched:        %0d", match_cnt);
-        $display("    Mismatched:     %0d", mismatch_cnt);
-        $display("    Max |I error|:  %0d LSB", max_err_i);
-        $display("    Max |Q error|:  %0d LSB", max_err_q);
-        $display("    MSE I:          %0.1f", mse_i);
-        $display("    MSE Q:          %0.1f", mse_q);
-
-        if (mismatch_cnt > 0) errors++;
-    endtask
-
-    // ========================================================================
-    // Report
-    // ========================================================================
-    task report_results();
-        string pass_str;
-
-        $display("");
-        $display("===========================================");
-        if (errors == 0) begin
-            $display("  ⭐ TEST PASSED — Golden match");
-        end else begin
-            $display("  ❌ TEST FAILED — %0d mismatches, %0d total samples",
-                mismatch_cnt, total_samples);
-        end
-        $display("===========================================");
-        $display("  RTL output written to: %srtl_output.bin", VEC_DIR);
-
-        // 失败必须以非零退出码结束 —— 否则失败的 run 在上游读起来和通过一样。
-        if (errors != 0)
-            $fatal(1, "tb_ofdm_tx_top FAILED: errors=%0d mismatches=%0d/%0d",
-                   errors, mismatch_cnt, total_samples);
-    endtask
-
-    // ========================================================================
-    // Waveform dump
-    // ========================================================================
-    initial begin
-        $dumpfile("tb_ofdm_tx_top.vcd");
-        $dumpvars(0, tb_ofdm_tx_top);  // vlog-lint warning OK: 单文件 lint 无法解析层次, 仿真正常
-    end
-
-endmodule
+endmodule : tb_ofdm_tx_top
