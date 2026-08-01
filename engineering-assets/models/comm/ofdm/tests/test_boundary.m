@@ -12,8 +12,11 @@ function pass = test_boundary()
     pass_zero = max(abs(time_zero(:))) < 1e-15;
 
     % 测试2: 单频输入 (仅DC子载波有值) → 时域直流
+    % 修复 (2026-08-01, ADR-004 G2): ifft_chain 契约是自然 IFFT 顺序
+    % (DC 在位置 1, 见其头注释 2026-06-03 修订); 原写 freq_dc(33)=1 是
+    % fftshift 时代残留 — 第 33 位实为 Nyquist bin, 时域输出 ±交替而非直流。
     freq_dc = zeros(N, 1);
-    freq_dc(33) = 1;  % DC在FFT shift后的第33个位置
+    freq_dc(1) = 1;   % DC = 自然序位置 1
     time_dc = ifft_chain(freq_dc, cfg);
     % DC激励产生常数时域输出
     pass_dc = max(abs(diff(time_dc))) < 1e-10;

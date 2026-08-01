@@ -97,7 +97,7 @@
    "project": "reference-evidence",
    "project_ref": "models/comm/ofdm",
    "asset_uid": "model_comm_ofdm",
-   "version_pinned": "1.0.0",
+   "version_pinned": "1.1.0",
    "config": {},
    "integrated_at": "2026-07-26T00:00:00Z",
    "status": "active",

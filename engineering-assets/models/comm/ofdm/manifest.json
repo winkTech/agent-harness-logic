@@ -3,7 +3,7 @@
   "asset_uid": "model_comm_ofdm",
   "name": "ofdm_tx_golden",
   "kind": "golden-model",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "owner": "lihan",
   "maturity": {
     "level": "intake"
@@ -17,31 +17,31 @@
       "role": "reference",
       "trait": "普遍性",
       "path": "src/tx_chain.m",
-      "note": "浮点 OFDM 发射链参考 (mapper→subcarrier_map→IFFT→CP); 802.11a 64点/CP16, 调制类型可配 (BPSK/QPSK/16QAM/64QAM); 配套 src/rx_chain.m + src/mod_demapper.m 提供环回验证"
+      "note": "浮点 OFDM 发射链参考 (mapper→subcarrier_map→IFFT→CP); 802.11a 64点/CP16, 四调制 (BPSK/QPSK/16QAM/64QAM, 阶数由 mod_type 单一事实源推导); 配套 src/rx_chain.m + src/mod_demapper.m 环回验证。1.1.0 修复 G1 (reshape, 整帧只出 1 符号) 与 G1b (mod_order 失一致), 见 MODEL-STATUS §2"
     },
     {
       "role": "reference",
       "trait": "普遍性",
       "path": "src/ifft_chain.m",
-      "note": "浮点 IFFT + add_cp 参考; 与 src/subcarrier_map.m / src/add_cp.m / src/mod_mapper.m 共同构成 tx_chain 的分解模块"
+      "note": "浮点 IFFT + add_cp 参考; 自然序契约 (DC 在位置 1), ifft(x)·sqrt(N) Parseval 标定 — RTL 位真镜像的缩放锚 (ADR-004)"
     },
     {
       "role": "fixed_point",
       "trait": "设计特性",
       "path": "src/generate_vectors.m",
-      "note": "定点向量导出: 频域输入按 int16 hex (标称 Q2.14, 实际乘 32767=Q1.15 尺度, 与注释不一致——如实记录未修改), 时域期望按 Q3.13 打包 {Q[15:0],I[15:0]} uint32 hex; 量化参数取自 config.m cfg.quant (Q2.14 频域 / Q3.13 时域)"
+      "note": "定点向量导出: 频域输入标称 Q2.14 实际乘 32767=Q1.15 尺度 (与注释不一致, 如实记录); 期望为浮点直接量化非位真镜像。待 ADR-004 阶段3 随 ofdm_tx_top RTL 定形重写为位真镜像 (MODEL-STATUS §4)"
     }
   ],
   "vectors": {
-    "config": "QPSK / FFT 64 / CP 16 / vector_config.txt 声明 N_SYM=10 但实际导出仅 1 符号 (freq 64 样点, expected_tx 80 样点)",
-    "provenance": "自 knowledge/primary/domains/comm/ofdm/vectors/ 原样迁入 (2026-07-25), 未修改。健康度抽查: expected_tx.bin 80 行 64 唯一值, tx_i/tx_q 80 行 63-64 唯一值, 无常量轨/全同值损坏; freq_i/freq_q 唯一值 5/3 属 QPSK 星座离散取值的正常表现。注意: RTL TB (tb_tx_top.sv) 的 VEC_DIR 指向 ../golden_model/vectors/, 与源库 vectors/ 实际位置不符, cosim 前需对齐路径。"
+    "config": "QPSK / FFT 64 / CP 16 / N_SYM=10 (声明); 现存文件按修复前单符号 bug 语义生成 (仅 80 样点)",
+    "provenance": "自 knowledge/primary/domains/comm/ofdm/vectors/ 原样迁入 (2026-07-25)。**语义作废待重导** (2026-08-01, MODEL-STATUS §4): N_SAMPLES=80 即 G1 缺陷 (整帧只出 1 符号) 的直接物证; 位真镜像重导排期在 ofdm_tx_top RTL 定形后 (ADR-004 阶段3)。文件与哈希保留作缺陷证据, 不得用于判卷。"
   },
   "sources": [
     {
       "path": "config.m",
       "role": "config",
       "sha256": "e8871b2049ee897075a4089a3e68d4afdee8168336756ef386217d917b76e147",
-      "note": "802.11a 参数 + 定点量化位宽配置 (IFFT in Q2.14 / out Q3.13); RTL 定点契约的单一来源"
+      "note": "802.11a 参数 + 定点量化位宽配置 (IFFT in Q2.14 / out Q3.13); RTL 定点契约的单一来源; cfg.mod_order 字段已冗余 (tx_chain 不再消费, MODEL-STATUS §4)"
     },
     {
       "path": "run_ofdm_sim.m",
@@ -56,7 +56,7 @@
     {
       "path": "src/tx_chain.m",
       "role": "reference",
-      "sha256": "ce698b1dc3022feace39bc673b3cd585065ebe41edcae2ba78b0683e9f7fcf96"
+      "sha256": "f645cb072368dbb982359adce6f632d07f48b6eb30ecb3a6b5e747faa5911e03"
     },
     {
       "path": "src/rx_chain.m",
@@ -96,17 +96,17 @@
     {
       "path": "tests/test_modulations.m",
       "role": "test",
-      "sha256": "3581dc02f8d38100909fab47ecca1b37b823ec71584619f549f04f950b975dbb"
+      "sha256": "8dbf0d37a602f772d44ab313f914864185c1666739c9dedfe905a082af7b1262"
     },
     {
       "path": "tests/test_ber.m",
       "role": "test",
-      "sha256": "5f5d49536d7c9eaa75ea58b805a8a6db38487eb17ee839955cc2b937a52bef3a"
+      "sha256": "64ff89002f68a82ad584f25adfb28b1ac8bd2d0393e86a75b8cfdaccbdb9db77"
     },
     {
       "path": "tests/test_boundary.m",
       "role": "test",
-      "sha256": "632bdfb5ced7c5ec26313abeebf0195657de0c9195330500b2486d0de0bee58b"
+      "sha256": "f3f7d0fbd04fbcb086de5c81c80b2dce65e4f7be03360fa822612f4417bb4005"
     },
     {
       "path": "vectors/freq_i.bin",
