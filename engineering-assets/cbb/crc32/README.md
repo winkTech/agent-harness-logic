@@ -1,4 +1,11 @@
-# crc32 — CRC-32 帧校验和(IEEE 802.3 反射语义、字节流)
+<!-- asset-status: certified v1.0.0 -->
+# crc32 — CRC-32 帧校验和 (IEEE 802.3 反射语义、字节流, certified CBB)
+
+> **综合 (OOC, xc7k325tffg900-2)**: WNS +3.133ns @200MHz 即达成 **535 MHz**;
+> LUT 64/140, FF 75/80 (与结构推算 75 完全吻合), BRAM 0/0, DSP 0/0。
+> **自检**: 244 帧比对 0 失配, 含 IEEE 检验值 `'123456789' → 0xCBF43926` 硬锚。
+> **限制**: 见 [`docs/limitations.md`](docs/limitations.md) —— 8 条, 重点是反射语义
+> 与非反射变体不兼容、无 tready 反压接口、空帧无定义。
 
 逐字节吸收帧数据,`i_last` 收尾后输出最终 FCS(已末尾取反)。
 

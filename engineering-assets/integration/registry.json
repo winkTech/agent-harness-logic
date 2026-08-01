@@ -358,9 +358,9 @@
   {
    "id": "ITG-0018",
    "project": "(library)",
-   "project_ref": "incubator/intake/crc32",
+   "project_ref": "cbb/crc32",
    "asset_uid": "crc32",
-   "version_pinned": "0.1.0",
+   "version_pinned": "1.0.0",
    "config": {},
    "integrated_at": "2026-07-31T00:00:00Z",
    "status": "library",
