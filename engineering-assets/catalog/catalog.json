@@ -3,9 +3,9 @@
   "summary": {
     "asset_count": 23,
     "by_level": {
-      "certified": 8,
+      "certified": 9,
       "intake": 4,
-      "qualification": 11
+      "qualification": 10
     },
     "red_count": 0,
     "yellow_count": 0,
@@ -329,36 +329,28 @@
       "asset_uid": "lfsr_gen",
       "name": "lfsr_gen",
       "kind": "primitive",
-      "version": "0.1.0",
+      "version": "1.0.0",
       "owner": "lihan",
-      "level": "qualification",
-      "dir": "incubator/intake/lfsr_gen",
+      "level": "certified",
+      "dir": "cbb/lfsr_gen",
       "top": "lfsr_gen",
       "golden_model_ref": null,
       "fidelity": "na",
-      "device": null,
-      "target_fmax": null,
-      "signoff_at": null,
+      "device": "xc7k325tffg900-2",
+      "target_fmax": "250MHz",
+      "signoff_at": "2026-08-01",
       "waiver_count": 0,
       "used_by": [],
-      "badge_gap": [
-        "G-B-03",
-        "G-C-01",
-        "G-C-02",
-        "G-C-04",
-        "G-C-05",
-        "G-GATE-01",
-        "G-SIGN-01"
-      ],
+      "badge_gap": [],
       "documents": {
         "readme": true,
         "changelog": true,
-        "limitations": false
+        "limitations": true
       },
       "gates": {
-        "cleared_level": "qualification",
-        "blocking_at": "certified",
-        "pass_count": 13
+        "cleared_level": "certified",
+        "blocking_at": null,
+        "pass_count": 20
       }
     },
     {
