@@ -101,9 +101,16 @@
     golden 逐位一致，**本资产的 bit-true 结论不受影响、无需重跑**。
     但同一次复核查出 golden 自身有缺陷（`rrc_pulse_shaping.m` 对复数数组用
     `min`/`max` 做饱和，会把整条信号塌陷成常量），已随 `model_comm_rrc` 1.1.0 修复。
-    **遗留分歧**：`fixed_point_report.md` §3.3 写的舍入是 convergent rounding
-    （银行家舍入），而 golden、向量再生脚本与本 RTL 三者一致用
-    half-away-from-zero —— 三方自洽且 bit-true，但与该条款字面不符，待 owner 裁定。
+    **（原遗留分歧已于 2026-08-02 统一）**：`fixed_point_report.md` §3.3 原写
+    convergent rounding（银行家舍入），而 golden、向量再生脚本与本 RTL 三者一致用
+    half-away-from-zero。已改文档、不改实现，依据是实测 —— 原条款给的理由
+    （"避免直流偏置"）**无法区分这两种模式**：平局（恰好 .5）在本设计里
+    80 万样点只出现 24 次（3×10⁻⁵，入库的 4096 个 acc 中一次没有），
+    三种模式（含经典有偏的 half-up）的误差 RMS 到小数点后 6 位完全相同、
+    直流偏置都在量化噪声的 0.13% 量级；half-away 与 convergent 仅 11/800000
+    点不同。反向改实现则要把 round-to-even 挂到 `round_clip` 这条已经是瓶颈、
+    布线后 setup 只剩 +0.058 ns 的路径上，并重新取证三方。详见 §3.3 修订说明。
+    **注意该结论依赖"平局稀疏"，不可外推到移位量小或系数含大 2 的幂公因子的滤波器。**
 
 12. **仿真证据依赖 ModelSim。** README §6 的复现命令第 2 条是
     `vsim -c -do cbb/rrc_polyphase_fir/run.do`。本机 ModelSim 回环 RPC 自
