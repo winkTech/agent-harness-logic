@@ -260,12 +260,7 @@
       "signoff_at": "2026-07-31",
       "waiver_count": 0,
       "used_by": [],
-      "badge_gap": [
-        "G-B-03",
-        "G-C-03",
-        "signoff",
-        "vivado-timing"
-      ],
+      "badge_gap": [],
       "documents": {
         "readme": true,
         "changelog": true,

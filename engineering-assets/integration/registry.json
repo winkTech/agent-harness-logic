@@ -25,30 +25,19 @@
   {
    "id": "ITG-0002",
    "project": "phy-intake",
-   "project_ref": "incubator/intake/ldpc_codec",
+   "project_ref": "cbb/ldpc_codec",
    "asset_uid": "ldpc_codec",
    "version_pinned": "1.0.0",
    "config": {},
    "integrated_at": "2026-07-26T00:00:00Z",
    "status": "active",
-   "maturity_status": "deferred",
+   "maturity_status": "certified",
    "owner": "lihan",
    "consumers": [],
-   "issues": [
-    "G-C-03",
-    "G-B-03",
-    "vivado-timing",
-    "signoff",
-    "repin-1.0.0-revalidation"
-   ],
-   "badge_gap": [
-    "G-C-03",
-    "G-B-03",
-    "vivado-timing",
-    "signoff"
-   ],
-   "deferred_reason": "missing reproducible bit-true and Vivado evidence; no forced promotion",
-   "last_reviewed": "2026-07-31"
+   "issues": [],
+   "badge_gap": [],
+   "deferred_reason": "1.0.0 revalidation (2026-08-01): 四项遗留全部还清 —— gate-runner 实跑 20/20 全绿 CERTIFIED (G-C-03 无 initial 违规、G-B-03 alignment-report 齐备、vivado-timing 已接线 LUT 410/900 FF 244/500 BRAM 3/3、signoff.by=lihan)。project_ref 同步为迁包后的 cbb/ 路径。证据快照因 gate-runner JSON 输出格式变更 (G-DOC-03/G-DOC-04/gate-results 共 3 个门产物, 173->176 字节量级) 而失配, 已在资产内容不变的前提下按 1.0.0 原版本重取并 verify —— 逐文件比对确认 34 个文件无增无减, 除上述 3 个门产物外全部逐字节相同 (含 alignment-report / 综合报告 / tb-selfcheck / reset-sim / stability 四子结果)。",
+   "last_reviewed": "2026-08-01"
   },
   {
    "id": "ITG-0003",

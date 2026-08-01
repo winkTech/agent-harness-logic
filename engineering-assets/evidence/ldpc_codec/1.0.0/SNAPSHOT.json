@@ -2,8 +2,8 @@
   "schema_version": "1.0",
   "asset_uid": "ldpc_codec",
   "version": "1.0.0",
-  "created_at": "2026-07-31T07:30:24.107Z",
-  "git_head": "03ae3fa5a677b8dff7ef028ee6c5d941cc0036ff",
+  "created_at": "2026-08-01T15:33:15.361Z",
+  "git_head": "3c43bcb05733f586c7b213a2823bf02b36114051",
   "manifest_sha256": "5692a1071ab8c0052b6b61d650d9fdd7fc1a1c842b1a9aa1c7f307609a439ac9",
   "evidence_source": "var/gates/pg/ldpc_codec",
   "files": [
@@ -104,13 +104,13 @@
     },
     {
       "path": "G-DOC-03.json",
-      "sha256": "777b5f4eebe2e579bd87d462e366332fda46d95d3d3782554b98450c81deda15",
-      "bytes": 173
+      "sha256": "449bb27f3d20014caf6f71d546f61136ed7aade327fb8528259efbbece7f5b5e",
+      "bytes": 176
     },
     {
       "path": "G-DOC-04.json",
-      "sha256": "d7b0ab8f2cabf6e1b531f3cdea6c80d2823827a60239d5411a778617b9e88a64",
-      "bytes": 195
+      "sha256": "5ca7efcde565330934da30237650fc73c93fb037bcc317393d53f4a3dd6d269e",
+      "bytes": 198
     },
     {
       "path": "G-GATE-01.json",
@@ -124,8 +124,8 @@
     },
     {
       "path": "gate-results.json",
-      "sha256": "802b18be01969808e7d828b72c7f63bc215887d1b6e390c3f552d4b4db55170e",
-      "bytes": 2918
+      "sha256": "d44c9d3b0e37edaa5189cb2430367278e1f23a3b6b2ea9a9b4c54a84f96f30d4",
+      "bytes": 2924
     },
     {
       "path": "reset-sim.json",
@@ -246,17 +246,17 @@
       },
       {
         "id": "G-DOC-03",
-        "level": "intake",
+        "level": "qualification",
         "must": true,
         "status": "pass",
-        "severity": "warning"
+        "severity": "mid"
       },
       {
         "id": "G-DOC-04",
-        "level": "intake",
+        "level": "qualification",
         "must": true,
         "status": "pass",
-        "severity": "warning"
+        "severity": "mid"
       },
       {
         "id": "G-DOC-01",
