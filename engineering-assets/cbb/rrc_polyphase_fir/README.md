@@ -1,3 +1,4 @@
+<!-- asset-status: certified v0.4.0 -->
 <!-- 级别横幅（由成熟度派生）: CBB / CERTIFIED — 生产级，可在生产设计中复用 -->
 
 # rrc_polyphase_fir
@@ -140,6 +141,11 @@ node tools/gate-runner.cjs cbb/rrc_polyphase_fir --repo-root ..
 ---
 
 ## 7. 已知限制
+
+> **权威清单在 [`docs/limitations.md`](docs/limitations.md)** —— 12 条，含本节
+> 5 条以及治理侧的 7 条（无哈希锁定证据快照、未上板、版本号未转正、golden
+> 侧 `native-matlab-recheck` 未还清、bit-true 覆盖边界、群延迟偏移易混点、
+> ModelSim 复现路径当前不可用）。此处只留架构与时序侧的摘要，避免两份清单漂移。
 
 1. **DSP 零裕量**（24/24）。架构为 9 抽头/相 × I/Q 双路 = 18 个乘法器，
    另 6 个被综合器用作加法树后加器。若需压缩，方向是实现对称折叠

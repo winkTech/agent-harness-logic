@@ -264,7 +264,7 @@
       "documents": {
         "readme": true,
         "changelog": true,
-        "limitations": false
+        "limitations": true
       },
       "gates": {
         "cleared_level": "certified",
@@ -348,9 +348,7 @@
       "used_by": [
         "ldpc_codec"
       ],
-      "badge_gap": [
-        "exported-vectors"
-      ],
+      "badge_gap": [],
       "documents": {
         "readme": false,
         "changelog": false,
@@ -380,9 +378,7 @@
       "used_by": [
         "ofdm_tx_top"
       ],
-      "badge_gap": [
-        "exported-vectors"
-      ],
+      "badge_gap": [],
       "documents": {
         "readme": false,
         "changelog": false,
@@ -570,7 +566,7 @@
       "documents": {
         "readme": true,
         "changelog": true,
-        "limitations": false
+        "limitations": true
       },
       "gates": {
         "cleared_level": "certified",

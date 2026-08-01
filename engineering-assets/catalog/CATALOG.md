@@ -38,8 +38,8 @@ Assets: 23 · RED: 0 · YELLOW: 0
 | UID | Version | Kind | Directory | Machine cleared | Blocking | Used by | Badge gap |
 |---|---:|---|---|---|---|---|---|
 | `model_comm_channel_est` | 1.2.0 | golden-model | `models/comm/channel_est` | — | no gate-results | 1 | — |
-| `model_comm_ldpc` | 1.0.0 | golden-model | `models/comm/ldpc` | — | no gate-results | 1 | exported-vectors |
-| `model_comm_ofdm` | 1.2.0 | golden-model | `models/comm/ofdm` | — | no gate-results | 1 | exported-vectors |
+| `model_comm_ldpc` | 1.0.0 | golden-model | `models/comm/ldpc` | — | no gate-results | 1 | — |
+| `model_comm_ofdm` | 1.2.0 | golden-model | `models/comm/ofdm` | — | no gate-results | 1 | — |
 | `model_comm_synch` | 1.1.0 | golden-model | `models/comm/synch` | — | no gate-results | 1 | — |
 
 ## Unregistered roots

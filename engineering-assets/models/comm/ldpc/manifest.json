@@ -97,7 +97,7 @@
     {
       "path": "src/ldpc_decoder_ms_fixed.m",
       "role": "fixed_point",
-      "sha256": "4244815cd12b89b8cbf1c853b6dd37b2f74b1f8c0b99dbd3e84e84d156a8d879"
+      "sha256": "6a7660e72c6644126f6998d18547b644447909b4b817180b00130ea3931c7318"
     },
     {
       "path": "src/sim_ldpc_ber.m",
@@ -107,7 +107,7 @@
     {
       "path": "gen_rtl_test_vectors.m",
       "role": "vector_gen",
-      "sha256": "3d1bc794410d295288162493f3687c96496c5e1ff4cee0e8dcfa7a8785875367"
+      "sha256": "2a397a12bc4497b10fb60a1ec104b58f4fa79fad5e9a0a0d61281b7d8d2b452a"
     },
     {
       "path": "compare_fixed_point_v2.m",
@@ -117,12 +117,12 @@
     {
       "path": "run_ldpc_sim.m",
       "role": "test",
-      "sha256": "0d2695a9a906197bdd6214098b0ae1198a4afa8a2f2bddcadfc17dd268b8e826"
+      "sha256": "ca1946c602dbf370c5a5d838b039ba32703673ff9ca687a6c45d89fd821cadce"
     },
     {
       "path": "run_all_tests.m",
       "role": "test",
-      "sha256": "7d7cac5c44dc95a154f494cb87fb928896aa3d50b9ca26ab8f610d3c32fd6a00"
+      "sha256": "20ecf37cf48a0cf486dd879f6a80a30f0031efa592dee5df3b5fe391d128eb01"
     },
     {
       "path": "tests/test_encode_decode.m",
@@ -132,22 +132,22 @@
     {
       "path": "tests/test_ber_awgn.m",
       "role": "test",
-      "sha256": "600827649a22106ca782d320d88ed13aca29dc875c8c1aafd5d2ad09e37f7907"
+      "sha256": "7c8913d3b504bcf9a6e0f52f7a6681a7b600ca021c4e456754e6688aa68ced1b"
     },
     {
       "path": "tests/test_convergence.m",
       "role": "test",
-      "sha256": "2fba4db4b659a66e5fedc03cc6a7172090e535bedd8fe36f193d080003a32f78"
+      "sha256": "76719400f0b4bffba6f67992312b961bed80da42cdd7052e63932ba9f8c0700a"
     },
     {
       "path": "tests/test_min_sum_vs_bp.m",
       "role": "test",
-      "sha256": "7edc9c0bb9b740cf9ff1a325b66ea04b1f27d18ec1920219c843ff641539fde9"
+      "sha256": "89080a398f6b450cc9c45e28cbb82ac27177c377c0c83238533cbba538254d69"
     },
     {
       "path": "tests/test_multiple_blocks.m",
       "role": "test",
-      "sha256": "9c889d2dda3f6dceb2ebd5a31da36722bb6adbc6bd36c3a4839b0f04090d36b0"
+      "sha256": "6446c0312b478d9bf088a63b569b940b28c56a23bcbee696c752c742c77db697"
     }
   ],
   "waivers": [],

@@ -1,6 +1,13 @@
-# ldpc_codec — 802.11n QC-LDPC 编译码器 (intake 评估性打包)
+<!-- asset-status: certified v1.0.0 -->
 
-> 评估性打包: 源 RTL 原样迁入, **未做任何修改**。红线违规与结构缺陷如实记录于下, 不在本包内修复。
+# ldpc_codec — 802.11n QC-LDPC 编译码器
+
+> **certified 1.0.0**（2026-07-31 签署，20 门全绿）。已知限制的权威清单在
+> [`docs/limitations.md`](docs/limitations.md) —— 复用前必读。
+>
+> 本包最初是 intake 评估性打包（源 RTL 原样迁入、不修改，红线如实记录）。
+> 那一阶段的记录保留在下方"红线类违规 — 整改记录"与"修复史"各节，
+> 当前状态以表格的"当前状态"列为准。
 
 ## 概要
 
@@ -8,7 +15,7 @@
 |:---|:---|
 | 码型 | 802.11n QC-LDPC, R=1/2, N=648, K=324, Z=27 |
 | 译码算法 | 归一化 Min-Sum (alpha=0.75=12/16, 移位加法), 分层行串行, max 20 迭代, syndrome 早停 |
-| 编码算法 | 双对角回代 (Dual-Diagonal), 1 bit/cycle AXI-Stream |
+| 编码算法 | **PT 列累加** `parity = PT * info` (GF2), ROM `rtl/pt_columns.hex` 324x324, 1 bit/cycle AXI-Stream。旧双对角回代实现对非全零信息位 H·c≠0, 已于 2026-07-31 废弃 |
 | 定点格式 | LLR Q(10,4) |
 | 顶层 | `ldpc_decoder_top` (主资产, manifest ports 依此登记); `ldpc_encoder_top` 为同包第二顶层 |
 | Golden | `model_comm_ldpc` (engineering-assets/models/comm/ldpc/) |
@@ -18,7 +25,7 @@
 
 ```
 rtl/          9 个综合源 (2 顶层 + 6 子模块 + ldpc_defines.vh)
-tb/           3 个普通 TB (decoder/encoder/system 全链路) + run_sim.do (路径为源库旧布局, 未改)
+tb/           3 个普通 TB (decoder/encoder/system 全链路) + run_sim.do (2026-07-31 已去掉旧 ../01_rtl 假设)
 tb/uvm/       UVM 环境 11 个 .sv + compile.tcl
 constraints/  ldpc_decoder.xdc
 ```
@@ -40,7 +47,7 @@ constraints/  ldpc_decoder.xdc
 | 红线2 组合直出 `s_axis_info_tready`（编码器） | **已修**：改 `ro_tready` 寄存输出 |
 | 红线4/5 编码器次态 case 缺 default | **已修** |
 | `initial` 用于综合源（`ldpc_encoder_top`） | **已修**：两个 `initial` 全部消除，见下 |
-| `initial` 用于综合源（`h_matrix_addr`） | **保留**：纯常量阵列初始化，属 ROM 推断的标准写法；gate-runner G-C-03 对"仅初始化存储器阵列"的 `initial` 明确不判 fail，且该文件已由 Vivado 综合日志证实无 `[Synth 8-6896]` |
+| `initial` 用于综合源（`h_matrix_addr`） | **保留**：纯常量阵列初始化，属 ROM 推断的标准写法；gate-runner G-C-03 对"仅初始化存储器阵列"的 `initial` 明确不判为违规，且该文件已由 Vivado 综合日志证实无 `[Synth 8-6896]`（未被丢弃） |
 | 命名违规（编码器） | **已修**：localparam 加 `P_`，内部信号加 `r_`/`w_` |
 | 隐式 1-bit 线网 `w_h_conn_count` | **已修**：已正确声明为 `[P_CONN_CNT_W-1:0]` |
 | LLR 加载路径断裂 | **已修**：译码器重写后 10 向量 3240 bit 全 0 失配 |
@@ -83,5 +90,11 @@ constraints/  ldpc_decoder.xdc
 
 ## 门禁状态
 
-见 `engineering-assets/var/gates/pg/ldpc_codec/gate-results.json`  
-（`node engineering-assets/tools/gate-runner.cjs engineering-assets/incubator/intake/ldpc_codec`）。
+**20/20 全绿 CERTIFIED**。实时结果见
+`engineering-assets/var/gates/pg/ldpc_codec/gate-results.json`，
+哈希锁定快照见 `engineering-assets/evidence/ldpc_codec/1.0.0/`。
+
+```bash
+cd engineering-assets
+node tools/gate-runner.cjs cbb/ldpc_codec --repo-root ..
+```

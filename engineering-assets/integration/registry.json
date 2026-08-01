@@ -72,14 +72,10 @@
    "consumers": [
     "ldpc_codec"
    ],
-   "issues": [
-    "exported-vectors"
-   ],
-   "badge_gap": [
-    "exported-vectors"
-   ],
-   "deferred_reason": "golden/reference source is retained as correctness evidence",
-   "last_reviewed": "2026-07-26"
+   "issues": [],
+   "badge_gap": [],
+   "deferred_reason": "golden/reference source is retained as correctness evidence. exported-vectors 于 2026-08-02 复核关闭: 该条目建立于 2026-07-26, 但向量早在 2026-07-27 (9ee52f9) 就已导出入库 —— models/comm/ldpc/vectors/ 现有 31 个 .hex (译码 tb_llr_input_1..10 / tb_expected_output_1..10, 编码 tb_enc_info_1..5 / tb_enc_code_1..5, PT ROM pt_columns.hex), cbb/ldpc_codec 的 TB 经 +VEC_DIR 直接读取, ldpc_codec 1.0.0 认证的 G-B-03 即以此取证 (3240 点 0 失配)。属台账滞后, 非向量缺失。",
+   "last_reviewed": "2026-08-02"
   },
   {
    "id": "ITG-0005",
@@ -95,14 +91,10 @@
    "consumers": [
     "ofdm_tx_top"
    ],
-   "issues": [
-    "exported-vectors"
-   ],
-   "badge_gap": [
-    "exported-vectors"
-   ],
-   "deferred_reason": "golden/reference source is retained as correctness evidence",
-   "last_reviewed": "2026-07-26"
+   "issues": [],
+   "badge_gap": [],
+   "deferred_reason": "golden/reference source is retained as correctness evidence. exported-vectors 于 2026-08-02 复核关闭: 1.2.0 已按 ADR-004 阶段3 用 rtl_mirror_tx 位真重导, models/comm/ofdm/vectors/ 现有 tx_bits.hex (比特激励) / expected_tx.hex (0 容差期望) / freq_grid.hex / vector_config.txt, ofdm_tx_top 1.0.0 的 G-B-03 以此取证 (2560 点 0 失配)。同目录另有 6 个旧语义文件 (expected_tx.bin / freq_i.bin / freq_q.bin / tx_i.bin / tx_q.bin / time-domain-iq.txt) 按前版决定保留为 G1 缺陷物证, 不得用于判卷, 见 manifest.vectors.provenance。",
+   "last_reviewed": "2026-08-02"
   },
   {
    "id": "ITG-0006",
