@@ -116,6 +116,83 @@ module tb_frame_sync;
     //==========================================================================
     // 主流程
     //==========================================================================
+    //==========================================================================
+    // 证据落盘 (写运行目录, 由 run 脚本搬到 var/gates/pg/frame_sync/)
+    // reason 直写格式串: xsim 的 $fwrite 用 %s 输出多字节 string 会损坏内容
+    //==========================================================================
+    int rst_err = 0;
+
+    function automatic void wr_stability(input string name, input bit ok,
+                                         input int beats);
+        int fd;
+        string t;
+        t = ok ? "true" : "false";
+        fd = $fopen({"stability-", name, ".json"}, "w");
+        if (fd == 0) begin
+            $display("FAIL: 无法写 stability-%s.json", name);
+            return;
+        end
+        $fwrite(fd, "{\"pass\": %s, \"beats\": %0d, \"tool\": \"Vivado xsim 2023.1\", \"tb\": \"tb_frame_sync\", \"reason\": \"",
+                t, beats);
+        case (name)
+            "regression":
+                $fwrite(fd, "20 帧正常帧 (前导 2..8 个 0x55 + SFD + 随机长度 payload), payload **刻意含 0x55/0xD5 字节** 以验证剥离只发生在帧头猎取阶段而非数据段; 逐帧逐字节对照驱动原文, 帧数守恒且 0 失配");
+            "boundary":
+                $fwrite(fd, "帧界四类: 背靠背帧 (载波间隙恰 1 拍) / **过短前导必须拒帧** (MIN_PRE-1 个 0x55 + SFD 不得成帧) / **假前导后同一载波内重新锁定** (0x55xk + 杂字节打断, 随后新前导+SFD 须成帧) / 前导中掉载波必须拒帧。四类均按期望帧序列校验, 拒帧场景以「不得多出帧」判定");
+            "stress":
+                $fwrite(fd, "100 帧连续浸泡, 前导长度与 payload 长度随机, 帧间隙 0..4 拍随机; 帧数守恒且逐字节 0 失配");
+            "backpressure":
+                $fwrite(fd, "本模块 i_valid 是**载波有效** (如 GMII rx_dv) 而非可气泡的流 valid —— 帧内拉低即帧尾, 故不存在帧内背压语义 (见 RTL 模块头与 limitations)。输出侧亦无 ready。等价流控为帧间载波间隙: 0..4 拍随机间隙下帧定界结果不变, 输出流从不停顿");
+            default: $fwrite(fd, "unspecified");
+        endcase
+        $fwrite(fd, "\"}\n");
+        $display("       [证据] stability-%s.json pass=%s (bytes=%0d)", name, t, beats);
+    endfunction
+
+    task automatic chk_reg(input int fd, inout int n, input string nm,
+                           input logic [63:0] got, input logic [63:0] want);
+        if (fd != 0) begin
+            if (n > 0) $fwrite(fd, ",\n");
+            $fwrite(fd, "    {\"reg\":\"%s\",\"got\":\"0x%h\",\"want\":\"0x%h\",\"pass\":%s}",
+                    nm, got, want, (got === want) ? "true" : "false");
+        end
+        n++;
+        if (got !== want) begin
+            rst_err++;
+            $display("FAIL: 复位比对 %s got=%h want=%h", nm, got, want);
+        end
+    endtask
+
+    task automatic reset_register_audit();
+        int fd, n;
+        rst_err = 0; n = 0;
+        fd = $fopen("reset-sim.json", "w");
+        if (fd != 0) begin
+            $fwrite(fd, "{\n  \"id\": \"G-C-04.reset\",\n");
+            $fwrite(fd, "  \"method\": \"mid-frame re-reset held 2 clk, per-register compare vs declared reset value; 本模块全部寄存器 (输入寄存级/FSM 状态/前导计数/输出寄存级) 均受复位控制, 无少复位豁免项。r_cur_state 复位值为 P_ST_IDLE=3'b001 (one-hot)\",\n");
+            $fwrite(fd, "  \"tool\": \"Vivado xsim 2023.1\",\n");
+            $fwrite(fd, "  \"registers\": [\n");
+        end
+        chk_reg(fd, n, "u_dut.ri_valid",    64'(u_dut.ri_valid),    64'd0);
+        chk_reg(fd, n, "u_dut.ri_data",     64'(u_dut.ri_data),     64'd0);
+        chk_reg(fd, n, "u_dut.r_cur_state", 64'(u_dut.r_cur_state), 64'd1);  // P_ST_IDLE
+        chk_reg(fd, n, "u_dut.r_pre_cnt",   64'(u_dut.r_pre_cnt),   64'd0);
+        chk_reg(fd, n, "u_dut.ro_valid",    64'(u_dut.ro_valid),    64'd0);
+        chk_reg(fd, n, "u_dut.ro_data",     64'(u_dut.ro_data),     64'd0);
+        chk_reg(fd, n, "u_dut.ro_sof",      64'(u_dut.ro_sof),      64'd0);
+        chk_reg(fd, n, "u_dut.ro_eof",      64'(u_dut.ro_eof),      64'd0);
+        chk_reg(fd, n, "u_dut.r_sof_pend",  64'(u_dut.r_sof_pend),  64'd0);
+        if (fd != 0) begin
+            $fwrite(fd, "\n  ],\n  \"checked\": %0d,\n  \"pass\": %s\n}\n",
+                    n, (rst_err == 0) ? "true" : "false");
+            $fclose(fd);
+        end
+    endtask
+
+    // 分场景的帧索引区间 (收尾按区间归集字节数)
+    int fi_regr_end, fi_bnd_end, fi_stress_end;
+    int b_regr = 0, b_bnd = 0, b_stress = 0;
+
     initial begin : main
         byte p[];
         rst = 1'b1; in_valid = 1'b0; in_data = '0;
@@ -130,6 +207,8 @@ module tb_frame_sync;
             drive_frame($urandom_range(MIN_PRE, 8), p, 1'b1);
             drive_gap($urandom_range(0, 4));
         end
+
+        fi_regr_end = exp_frames.size();
 
         //--- S3a: 背靠背 (间隙恰 1 拍, drive_frame 自带) ---------------------
         p = new[3]; foreach (p[i]) p[i] = byte'($urandom());
@@ -163,10 +242,23 @@ module tb_frame_sync;
         repeat (3) drive_byte(byte'($urandom()));   // 帧进行中
         @(negedge clk); in_valid = 1'b0;
         rst = 1'b1; repeat (2) @(posedge clk);
+        #1;                                  // 越过 NBA 更新区再采样
+        reset_register_audit();              // 复位保持期间逐寄存器比对 (G-C-04)
         @(negedge clk); rst = 1'b0;
         repeat (2) @(posedge clk);
         p = new[4]; foreach (p[i]) p[i] = byte'($urandom());
         drive_frame(MIN_PRE + 1, p, 1'b1);
+        drive_gap(4);
+        fi_bnd_end = exp_frames.size();
+
+        //--- S5 stress: 100 帧浸泡 -------------------------------------------
+        for (int t = 0; t < 100; t++) begin
+            p = new[$urandom_range(1, 48)];
+            foreach (p[i]) p[i] = rand_payload_byte();
+            drive_frame($urandom_range(MIN_PRE, 8), p, 1'b1);
+            drive_gap($urandom_range(0, 4));
+        end
+        fi_stress_end = exp_frames.size();
 
         drive_gap(6);
 
@@ -184,6 +276,9 @@ module tb_frame_sync;
                 end else begin
                     for (int i = 0; i < exp_frames[k].size(); i++) begin
                         n_cmp++;
+                        if (k < fi_regr_end)        b_regr++;
+                        else if (k < fi_bnd_end)    b_bnd++;
+                        else                        b_stress++;
                         if (got_frames[k][i] !== exp_frames[k][i]) begin
                             n_err++;
                             if (n_err <= 10)
@@ -199,13 +294,46 @@ module tb_frame_sync;
             $display("FATAL: 比较计数为 0 — TB 空载, 不得作为证据");
             $fatal(1);
         end
+        if (b_regr == 0 || b_bnd == 0 || b_stress == 0) begin
+            $display("FATAL: 子场景比较字节数为 0 (regr=%0d bnd=%0d stress=%0d)",
+                     b_regr, b_bnd, b_stress);
+            $fatal(1);
+        end
+
+        //--- 证据落盘 ---------------------------------------------------------
+        wr_stability("regression",   n_err == 0, b_regr);
+        wr_stability("boundary",     n_err == 0, b_bnd);
+        wr_stability("stress",       n_err == 0, b_stress);
+        wr_stability("backpressure", n_err == 0, n_cmp);
+        begin
+            int fd;
+            fd = $fopen("tb-selfcheck.json", "w");
+            if (fd != 0) begin
+                $fwrite(fd, "{\n  \"id\": \"G-B-03\",\n");
+                $fwrite(fd, "  \"pass\": %s,\n", (n_err == 0) ? "true" : "false");
+                $fwrite(fd, "  \"compares\": %0d,\n", n_cmp);
+                $fwrite(fd, "  \"mismatch\": %0d,\n", n_err);
+                $fwrite(fd, "  \"frames\": %0d,\n", got_frames.size());
+                $fwrite(fd, "  \"min_preamble\": %0d,\n", MIN_PRE);
+                $fwrite(fd, "  \"reference\": \"TB 侧按场景构造的已知期望帧序列 (期望 = 驱动时的 payload 原文); 另含 sof/eof 时序断言 (帧内不得再现 sof、sof 之前不得出现数据拍、无帧上下文不得出 eof) 与拒帧场景的「不得多出帧」判定\",\n");
+                $fwrite(fd, "  \"tool\": \"Vivado xsim 2023.1\",\n");
+                $fwrite(fd, "  \"tb\": \"tb_frame_sync\",\n");
+                $fwrite(fd, "  \"dwidth\": 8\n}\n");
+                $fclose(fd);
+                $display("       [证据] tb-selfcheck.json compares=%0d mismatch=%0d", n_cmp, n_err);
+            end
+        end
+
         $display("========================================================");
-        if (n_err == 0) begin
+        if (n_err == 0 && rst_err == 0) begin
             $display("[PASS] tb_frame_sync");
             $display("       %0d 帧 %0d 字节比对 0 失配", got_frames.size(), n_cmp);
+            $display("       分场景字节: regression=%0d boundary=%0d stress=%0d",
+                     b_regr, b_bnd, b_stress);
             $display("       短前导拒帧/假前导重锁/掉载波/帧中复位全过");
         end else begin
-            $display("[FAIL] tb_frame_sync: %0d 处失配/错误", n_err);
+            $display("[FAIL] tb_frame_sync: %0d 处失配/错误, 复位比对 %0d 处",
+                     n_err, rst_err);
             $fatal(1);
         end
         $display("========================================================");

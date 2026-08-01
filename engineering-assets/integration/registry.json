@@ -409,10 +409,12 @@
   {
    "id": "ITG-0021",
    "project": "(library)",
-   "project_ref": "incubator/intake/frame_sync",
+   "project_ref": "cbb/frame_sync",
    "asset_uid": "frame_sync",
-   "version_pinned": "0.1.0",
-   "config": {},
+   "version_pinned": "1.0.0",
+   "config": {
+    "P_MIN_PREAMBLE": 2
+   },
    "integrated_at": "2026-07-31T00:00:00Z",
    "status": "library",
    "owner": "lihan",

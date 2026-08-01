@@ -1,4 +1,13 @@
-# frame_sync — 以太网风格帧定界器(前导+SFD 检测、数据流透传)
+<!-- asset-status: certified v1.0.0 -->
+# frame_sync — 以太网风格帧定界器 (前导+SFD 检测、数据流透传, certified CBB)
+
+> **综合 (OOC, xc7k325tffg900-2)**: WNS +2.403ns @250MHz 即达成约 **626 MHz**;
+> LUT 19/60, FF 27/40 (与结构推算 27 完全吻合), BRAM 0/0, DSP 0/0。
+> **自检**: 124 帧 2476 字节比对 0 失配; 拒帧能力专项取证 (过短前导/掉载波
+> 不得成帧、假前导后须能重新锁定)。
+> **限制**: 见 [`docs/limitations.md`](docs/limitations.md) —— 8 条, **最易误用
+> 的是第 1 条**: `i_valid` 是载波有效 (GMII rx_dv 语义), 帧内必须连续, 拉低即
+> 帧尾; 直接接带气泡的流 valid 会把帧切碎。
 
 在载波字节流中检测 `≥P_MIN_PREAMBLE` 个 `0x55` + SFD `0xD5`,之后的数据字节
 以对齐的 `o_valid/o_data` 透传,并给出 `o_sof`(与首数据拍同拍)/`o_eof`

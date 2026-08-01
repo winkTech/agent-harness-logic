@@ -13,6 +13,7 @@ Assets: 23 · RED: 0 · YELLOW: 0
 | `complex_multiplier` | 1.0.0 | primitive | `cbb/complex_multiplier` | certified | — | — | — |
 | `crc32` | 1.0.0 | primitive | `cbb/crc32` | certified | — | — | — |
 | `delay_line` | 1.0.0 | primitive | `cbb/delay_line` | certified | — | — | — |
+| `frame_sync` | 1.0.0 | primitive | `cbb/frame_sync` | certified | — | — | — |
 | `ldpc_codec` | 1.0.0 | rtl | `cbb/ldpc_codec` | certified | — | — | G-B-03, G-C-03, signoff, vivado-timing |
 | `lfsr_gen` | 1.0.0 | primitive | `cbb/lfsr_gen` | certified | — | — | — |
 | `ofdm_tx_top` | 1.0.0 | rtl | `cbb/ofdm_tx_top` | certified | — | — | — |
@@ -28,7 +29,6 @@ Assets: 23 · RED: 0 · YELLOW: 0
 |---|---:|---|---|---|---|---|---|
 | `cdc_sync` | 0.1.0 | primitive | `incubator/intake/cdc_sync` | qualification | certified | — | G-B-03, G-C-01, G-C-02, G-C-04, G-C-05, G-GATE-01, G-SIGN-01 |
 | `ddr_axi4_controller` | 0.1.0 | primitive | `incubator/intake/ddr_axi4_controller` | qualification | certified | — | G-B-03, G-C-01, G-C-02, G-C-04, G-C-05, G-GATE-01, G-SIGN-01 |
-| `frame_sync` | 0.1.0 | primitive | `incubator/intake/frame_sync` | qualification | certified | — | G-B-03, G-C-01, G-C-02, G-C-04, G-C-05, G-GATE-01, G-SIGN-01 |
 | `model_comm_rrc` | 1.0.0 | golden-model | `models/comm/rrc` | — | no gate-results | 1 | native-matlab-recheck |
 | `pulse_merge_golden` | 0.1.0 | golden-model | `models/comm/pulse_merge` | — | no gate-results | 1 | — |
 | `stream_elastic_pipeline_golden` | 0.1.0 | golden-model | `models/comm/stream_elastic_pipeline` | — | no gate-results | 1 | — |
