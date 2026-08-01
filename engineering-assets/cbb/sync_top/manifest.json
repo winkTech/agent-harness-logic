@@ -2,10 +2,24 @@
   "schema_version": "1.0",
   "asset_uid": "sync_top",
   "name": "ofdm_sync_top",
-  "version": "0.2.1",
+  "version": "1.0.0",
   "owner": "lihan",
   "maturity": {
-    "level": "qualification"
+    "level": "certified",
+    "evidence_ref": "engineering-assets/evidence/sync_top/1.0.0/"
+  },
+  "signoff": {
+    "by": "lihan",
+    "at": "2026-08-01",
+    "scope": [
+      "证据已复核: alignment-report.json(bit-true cosim 2226 样点 0 失配, 位真镜像 0 容差, fft_start 对齐镜像 n_fine=242=真值, T1 符号量化表逐位核对) / reset-sim.json(帧中再复位 27 个复位控制寄存器逐一比对) / stability 四子结果(boundary/stress/regression/backpressure) / timing-summary.rpt / utilization.rpt / envelope-check.json (WNS +4.962ns @ 100MHz; LUT 6705/8000, FF 4669/5500, BRAM 1.5/3, DSP 16/20) / cdc-report.json(单时钟域结构扫描, cdc_tool=na)",
+      "正确性锚: golden model_comm_synch 1.1.0 (run_all_tests 5/5, ADR-003 因果化位真镜像)",
+      "已接受限制: 无反压契约 (m_axis_tready 忽略, 稳态须恒高; 弹性由下游 axis_skid_buffer 承接)",
+      "已接受限制: 因果校正常数相位偏置留给下游信道估计吸收; 直通段 ≈恒等 ±8 LSB (θ=0 流水量化)",
+      "已接受限制: 单突发语义 (locked 保持到复位); m_axis 固定延迟 384 拍, 流前 384 样点无输出",
+      "已接受限制: T1 前段部分未校正 (因果结构性), T2 防错锁后继判别兜底; 验收包络 AWGN SNR>=10dB 量级, |ε|<=0.5",
+      "已接受限制: 符号量化相关器峰旁比 ~3.5; 粗 CFO 反演范围 |ε|<2; 精 CFO 不在 RTL 范围; UVM 断链 (判卷不依赖)"
+    ]
   },
   "requirement_ref": "engineering-assets/knowledge/primary/domains/comm/synch/algorithm_spec.md",
   "doc_refs": [

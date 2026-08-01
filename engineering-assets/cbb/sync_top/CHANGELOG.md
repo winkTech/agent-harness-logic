@@ -1,5 +1,18 @@
 # CHANGELOG — sync_top
 
+## [1.0.0] — 2026-08-01 certified 认证
+
+内容与 0.2.1 一致，无代码改动；本条为认证记账：
+
+- G-SIGN-01：owner lihan 具名签署（manifest.signoff，含证据复核清单与
+  7 组已接受限制）。
+- gate-runner 20/20 全绿，达到 **CERTIFIED**；证据快照
+  `evidence/sync_top/1.0.0/SNAPSHOT.json`（哈希锁定）；包迁入 `cbb/`。
+- registry ITG-0010 repin 1.0.0，maturity_status → certified。
+- 全流程：ADR-003 三裁决 → 因果化架构重排（25 缺陷整体消灭）→ golden
+  位真镜像 → bit-true cosim 2226 点 0 失配 → 证据链 → 签署，全链实跑取证。
+- 库内第 5 个 certified；RX 前端链 sync_top → channel_est_top 全链认证。
+
 ## [0.2.1] — 2026-08-01 cosim bit-true 闭环 + 镜像联合排障三修
 
 golden 侧 `generate_vectors.m` 改造为全链位真镜像（`run_synch_sim` 追加

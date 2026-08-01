@@ -1,10 +1,12 @@
-<!-- asset-status: qualification v0.2.1 -->
-<!-- 级别横幅（由成熟度派生）: QUALIFICATION — 机器门全绿，certified 待签字 -->
+<!-- asset-status: certified v1.0.0 -->
+<!-- 级别横幅（由成熟度派生）: CERTIFIED — 全门绿 + owner 签署 (2026-08-01) -->
 
 # sync_top — 802.11a OFDM 突发同步顶层
 
-> `asset_uid: sync_top` · `version: 0.2.1` · `owner: lihan`
-> 成熟度: **qualification** — 见 `../../../var/gates/pg/sync_top/gate-results.json`
+> `asset_uid: sync_top` · `version: 1.0.0` · `owner: lihan`
+> 成熟度: **certified** — 签署与证据快照见 manifest.signoff 与
+> `../../evidence/sync_top/1.0.0/`；机器判据见
+> `../../var/gates/pg/sync_top/gate-results.json`（路径基准 `cbb/sync_top/`）
 
 ## 用途（0.2.0, ADR-003 因果化架构）
 
