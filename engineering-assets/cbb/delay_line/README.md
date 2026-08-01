@@ -1,4 +1,12 @@
-# delay_line — 定长流水延迟线(valid 标记、无背压)
+<!-- asset-status: certified v1.0.0 -->
+# delay_line — 定长流水延迟线 (valid 标记、无背压, certified CBB)
+
+> **综合 (OOC, xc7k325tffg900-2)**: WNS +3.352ns @250MHz 即达成约 **1543 MHz**;
+> LUT 1/40, FF 66/80 (与结构推算 66 完全吻合), BRAM 0/0, DSP 0/0。
+> **自检**: 9082 拍逐拍比对 0 失配 (P_DELAY=2 与 7 两个例化并行验证)。
+> **限制**: 见 [`docs/limitations.md`](docs/limitations.md) —— 8 条, 重点是
+> **数据链刻意不复位** (为 SRL 推断) 与 **无 tready 反压接口** (背压由
+> axis_skid_buffer 承担)。
 
 流水对齐的基础原语:`o_valid/o_data` 是 `i_valid/i_data` 精确延迟 `P_DELAY` 拍的副本。
 

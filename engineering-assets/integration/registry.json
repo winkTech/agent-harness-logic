@@ -391,10 +391,13 @@
   {
    "id": "ITG-0020",
    "project": "(library)",
-   "project_ref": "incubator/intake/delay_line",
+   "project_ref": "cbb/delay_line",
    "asset_uid": "delay_line",
-   "version_pinned": "0.1.0",
-   "config": {},
+   "version_pinned": "1.0.0",
+   "config": {
+    "P_DWIDTH": 32,
+    "P_DELAY": 2
+   },
    "integrated_at": "2026-07-31T00:00:00Z",
    "status": "library",
    "owner": "lihan",
