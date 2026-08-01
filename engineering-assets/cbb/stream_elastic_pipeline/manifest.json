@@ -3,11 +3,11 @@
   "asset_uid": "stream_elastic_pipeline",
   "name": "stream_elastic_pipeline",
   "kind": "rtl",
-  "version": "0.4.0",
+  "version": "1.0.0",
   "owner": "lihan",
   "maturity": {
     "level": "certified",
-    "evidence_ref": "engineering-assets/evidence/stream_elastic_pipeline/0.4.0/SNAPSHOT.json"
+    "evidence_ref": "engineering-assets/evidence/stream_elastic_pipeline/1.0.0/SNAPSHOT.json"
   },
   "requirement_ref": "engineering-assets/cbb/stream_elastic_pipeline/docs/requirements.md",
   "doc_refs": [
@@ -229,14 +229,15 @@
   },
   "signoff": {
     "by": "lihan",
-    "at": "2026-07-27",
+    "at": "2026-08-02",
     "scope": [
       "Reviewed and accepted RTL, reusable SVA, ModelSim 10.6c runtime and 2600-sample Golden alignment evidence (mismatch=0, pipeline offset=4).",
       "Reviewed and accepted Vivado 2023.1.1 synthesis, utilization, timing, clocks and post-synthesis checkpoint for xc7a35tcpg236-1.",
-      "Accepted explicit limitation: generic-device synthesis is not board/field validation; routed implementation, bitstream and hardware bring-up remain required for deployment."
+      "Accepted explicit limitation: generic-device synthesis is not board/field validation; routed implementation, bitstream and hardware bring-up remain required for deployment.",
+      "1.0.0 is a version-number promotion (owner ruling 2026-08-02). RTL, constraints, TB and every functional conclusion are unchanged from 0.4.0; the asset had been certified since 2026-07-27 while its version number stayed at 0.4.0."
     ],
     "panel_verdicts_ref": "engineering-assets/var/gates/pg/stream_elastic_pipeline/G-SIGN-01.json"
   },
-  "evidence_snapshot_ref": "evidence/stream_elastic_pipeline/0.4.0/SNAPSHOT.json",
+  "evidence_snapshot_ref": "evidence/stream_elastic_pipeline/1.0.0/SNAPSHOT.json",
   "notes": "Certified foundation CBB admission with generic-device evidence; routed implementation, board and field validation remain outside this admission."
 }

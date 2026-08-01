@@ -19,10 +19,10 @@ Assets: 23 · RED: 0 · YELLOW: 0
 | `ldpc_codec` | 1.0.1 | rtl | `cbb/ldpc_codec` | certified | — | — | — |
 | `lfsr_gen` | 1.0.0 | primitive | `cbb/lfsr_gen` | certified | — | — | — |
 | `ofdm_tx_top` | 1.0.0 | rtl | `cbb/ofdm_tx_top` | certified | — | — | — |
-| `pulse_merge` | 0.4.0 | rtl | `cbb/pulse_merge` | certified | — | — | board-validation, upstream-commit-unpinned |
+| `pulse_merge` | 1.0.0 | rtl | `cbb/pulse_merge` | certified | — | — | board-validation |
 | `rrc_polyphase_fir` | 1.0.0 | rtl | `cbb/rrc_polyphase_fir` | certified | — | 1 | board-validation, hold-closure |
 | `sdp_ram` | 1.0.0 | primitive | `cbb/sdp_ram` | certified | — | — | — |
-| `stream_elastic_pipeline` | 0.4.0 | rtl | `cbb/stream_elastic_pipeline` | certified | — | — | board-validation |
+| `stream_elastic_pipeline` | 1.0.0 | rtl | `cbb/stream_elastic_pipeline` | certified | — | — | board-validation |
 | `sync_top` | 1.0.0 | rtl | `cbb/sync_top` | certified | — | — | — |
 
 ## qualification

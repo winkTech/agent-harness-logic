@@ -482,7 +482,7 @@
       "asset_uid": "pulse_merge",
       "name": "pulse_merge",
       "kind": "rtl",
-      "version": "0.4.0",
+      "version": "1.0.0",
       "owner": "lihan",
       "level": "certified",
       "dir": "cbb/pulse_merge",
@@ -491,12 +491,11 @@
       "fidelity": "bit_true",
       "device": "xc7a35tcpg236-1",
       "target_fmax": "100MHz",
-      "signoff_at": "2026-07-27",
+      "signoff_at": "2026-08-02",
       "waiver_count": 0,
       "used_by": [],
       "badge_gap": [
-        "board-validation",
-        "upstream-commit-unpinned"
+        "board-validation"
       ],
       "documents": {
         "readme": true,
@@ -604,7 +603,7 @@
       "asset_uid": "stream_elastic_pipeline",
       "name": "stream_elastic_pipeline",
       "kind": "rtl",
-      "version": "0.4.0",
+      "version": "1.0.0",
       "owner": "lihan",
       "level": "certified",
       "dir": "cbb/stream_elastic_pipeline",
@@ -613,7 +612,7 @@
       "fidelity": "bit_true",
       "device": "xc7a35tcpg236-1",
       "target_fmax": "100MHz",
-      "signoff_at": "2026-07-27",
+      "signoff_at": "2026-08-02",
       "waiver_count": 0,
       "used_by": [],
       "badge_gap": [

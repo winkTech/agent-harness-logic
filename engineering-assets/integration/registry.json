@@ -205,7 +205,7 @@
    "project": "cbb-foundation",
    "project_ref": "cbb/stream_elastic_pipeline",
    "asset_uid": "stream_elastic_pipeline",
-   "version_pinned": "0.4.0",
+   "version_pinned": "1.0.0",
    "config": {
     "DATA_WIDTH": 32,
     "DEPTH": 2
@@ -248,7 +248,7 @@
    "project": "cbb-foundation",
    "project_ref": "cbb/pulse_merge",
    "asset_uid": "pulse_merge",
-   "version_pinned": "0.4.0",
+   "version_pinned": "1.0.0",
    "config": {
     "INPUT_WIDTH": 4,
     "COUNT_WIDTH": 12
@@ -259,15 +259,13 @@
    "owner": "lihan",
    "consumers": [],
    "issues": [
-    "upstream-commit-unpinned",
     "board-validation"
    ],
    "badge_gap": [
-    "upstream-commit-unpinned",
     "board-validation"
    ],
-   "deferred_reason": "Certified generic-device scope; board/field validation and upstream commit pinning remain open.",
-   "last_reviewed": "2026-07-27"
+   "deferred_reason": "Certified generic-device scope; board/field validation remains open (needs real hardware). upstream-commit-unpinned 于 2026-08-02 关闭: 上游 commit 由内容比对反查确定为 25156a9a162c41c60f11f41590c7d006d015ae5a (2024-04-26, 'Add example design for Alveo U55C')。此前的『归档无 .git 故 SHA 不可复原』是错误结论 —— 无 .git 只丢元数据, git blob SHA 是内容的函数。判据: 对该 commit 的递归树逐路径比对本地归档 633 个文件, 路径集完全一致 (仅本地 0/仅上游 0), blob 分类为 逐字节一致 4 + 仅 CRLF 差异 545 + 上游 symlink 在 Windows 解压落成空文件 84 (上游 symlink 总数正是 84), 未解释的差异 0; 相邻 commit 均不满足 (195be74a 及更早无 AU55C 那批文件)。本模块直接来源 rtl/pulse_merge.v 单独复核: 上游 blob aafe38a8 = 本地 LF 归一后的 blob。同日版本号转正 1.0.0 (owner 裁定), RTL 与功能结论未变。",
+   "last_reviewed": "2026-08-02"
   },
   {
    "id": "ITG-0014",

@@ -48,11 +48,13 @@
 - 资产 **23**：certified **16**、golden-model 7（intake 4 / qualification 3）
 - `catalog-gen`: red=0 yellow=0
 - `asset-audit`: **RED=0 YELLOW=0**（2026-08-02；此前 YELLOW 13，明细与还清见 §3）
-- `manifest-hash-refresh`: mismatches=0
-- `evidence-snapshot --verify-all`: **verified 16 snapshots, historical=1**
-  （`ldpc_codec/1.0.0` 转历史保留，1.0.1 为当前快照，见 §3.3）；
-  `rrc_polyphase_fir` **本就没有快照** —— 它是 16 个 certified 中唯一
-  `evidence_ref` 指向可再生的 `var/gates/pg/` 而非哈希锁定目录的资产
+- `manifest-hash-refresh`: mismatches=0 blocked=0
+- `evidence-snapshot --verify-all`: **verified 20 snapshots, historical=4**
+  —— 每个 certified 资产都有哈希锁定快照（`rrc_polyphase_fir` 此前是唯一例外，
+  已补齐）
+- **16 个 certified 的版本号已全部统一到 1.0.0+**（`ldpc_codec` 1.0.1，其余 1.0.0）。
+  `rrc_polyphase_fir` / `pulse_merge` / `stream_elastic_pipeline` 此前长期停在
+  0.4.0，2026-08-02 由 owner 裁定一并转正；三者的 RTL 与功能结论均未改动
 - `incubator/intake/`: **已清空**
 
 certified 16 = comm 四族 4 + 原语 9（`axis_skid_buffer`、`lfsr_gen`、`crc32`、
@@ -140,7 +142,40 @@ Q2.14 实部/虚部各自对称裁剪 ±32767；实测该裁剪在本激励下**
 |:---|:---|:---|
 | `rrc_polyphase_fir` | `board-validation`、`hold-closure` | hold **已实跑布线后时序并定位到底**，见下；board 仍空白 |
 | `stream_elastic_pipeline` | `board-validation` | 需实际硬件 |
-| `pulse_merge` | `board-validation`、`upstream-commit-unpinned` | 需实际硬件 / 待钉上游提交 |
+| `pulse_merge` | `board-validation`、`upstream-commit-unpinned` | **`upstream-commit-unpinned` 已关闭**，见下；board 仍空白 |
+
+#### `pulse_merge` 的上游 commit —— "不可复原"是错的
+
+`provenance.commit` 一直是 `null`，理由写着"归档为 GitHub 分支 ZIP、无 `.git`
+元数据，commit SHA 不可复原"。这个推理错在把**元数据丢失**当成**内容不可辨识**：
+git 的 blob SHA 是内容的函数，与 `.git` 是否存在无关，内容俱在就能反查。
+
+反查 `reference-assets/vendor/verilog-pcie-master/`（633 个文件）对
+`alexforencich/verilog-pcie` 的历史：
+
+| 判据 | 结果 |
+|:---|:---|
+| 路径集 | **完全一致**（仅本地 0 / 仅上游 0） |
+| 逐字节一致 | 4 |
+| 仅 CRLF 差异 | 545 |
+| 上游 symlink → Windows 解压落成空文件 | 84（上游 symlink 总数**正是 84**） |
+| **未解释的差异** | **0** |
+
+**commit = `25156a9a162c41c60f11f41590c7d006d015ae5a`**（2024-04-26，
+"Add example design for Alveo U55C"），与登记的取回日期 2024-04-27 差一天，吻合。
+排他性：`195be74a` 及更早还没有 AU55C 那批文件，全都不满足。
+本模块直接来源 `rtl/pulse_merge.v` 单独复核：上游 blob `aafe38a8` = 本地文件
+LF 归一后的 blob。
+
+同法对另外 5 个 vendor 归档：**`axis_udp` 也已钉定**
+（`4e4e0edc0451055e11c909855e9541b226e7e8d6`，20 个文件 0 未解释差异）；
+`async_fifo` / `basic_verilog` / `picorv32` / `r22sdf` **卡在 GitHub 未认证 API
+限流（60 次/小时），不是方法不适用** —— 四份 `_provenance/*.json` 里那句
+"commit SHA 不可复原"已改为如实说明"尚未反查，原因是限流"。
+
+> 附带的 schema 演进：`cbb-manifest.schema.json` 的 `provenance` 加了
+> `commit_basis` 字段（沿用已有的 `source_basis` / `retrieved_basis` 约定）——
+> 钉 commit 必须同时留下"怎么确定的"，只给一个 SHA 等于把结论当证据。
 
 #### `rrc_polyphase_fir` 的 hold —— 说法被证伪，成因已查清
 

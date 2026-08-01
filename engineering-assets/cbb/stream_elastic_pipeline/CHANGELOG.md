@@ -1,5 +1,17 @@
 # Changelog
 
+## [1.0.0] - 2026-08-02
+
+**纯版本号转正**（owner 2026-08-02 裁定）。RTL、约束、TB、证据与全部功能结论
+自 0.4.0 起未做任何改动。
+
+资产自 2026-07-27 起就是 certified，但版本号一直停在 0.4.0，与库内其余 certified
+资产不一致 —— 引用方按版本号推断成熟度会读错。`evidence_ref` /
+`evidence_snapshot_ref` 指向 `evidence/stream_elastic_pipeline/1.0.0/`，
+0.4.0 快照原封转为历史。
+
+`board-validation` 仍未还清（需实际硬件）。
+
 ## [0.4.0] - 2026-07-27
 
 - Owner signoff completed and the foundation asset was admitted to `cbb/` with bit-true, ModelSim, Vivado and CDC evidence; board/field validation remains outside the release scope.

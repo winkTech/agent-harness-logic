@@ -347,7 +347,11 @@
         "license": { "type": "string" },
         "retrieved": { "type": "string" },
         "retrieved_basis": { "type": "string" },
-        "commit": { "type": ["string", "null"] }
+        "commit": { "type": ["string", "null"] },
+        "commit_basis": {
+          "type": "string",
+          "description": "commit 的确证依据，与 source_basis / retrieved_basis 同一约定：写清是怎么确定的，而不是只给结论。归档若无 .git，commit 仍可由内容比对反查（git blob SHA 是内容的函数），此时应写明比对了多少路径、blob 命中与未解释差异各多少、以及相邻 commit 为何被排除。"
+        }
       }
     },
     "banner": { "type": "string", "description": "reference 级必需的“未认证”横幅文本" },

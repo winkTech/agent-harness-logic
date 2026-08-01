@@ -12,7 +12,7 @@
     "source": "https://github.com/pConst/basic_verilog",
     "license": "见 license/ 目录",
     "retrieved": "2026-06-10",
-    "retrieved_basis": "目录 mtime 下界；原始归档为 GitHub 分支 ZIP，无 .git，commit SHA 不可复原",
+    "retrieved_basis": "目录 mtime 下界；原始归档为 GitHub 分支 ZIP，无 .git 元数据。**注意：'commit SHA 不可复原' 的旧说法已被证伪** —— 2026-08-02 用内容比对成功反查出 verilog_pcie 与 axis_udp 两个归档的 commit（git blob SHA 是内容的函数，与 .git 是否存在无关）。本归档尚未反查，原因是 GitHub 未认证 API 限流（60 次/小时），不是方法不适用。复查脚本见提交记录。",
     "commit": null
   },
   "content": {

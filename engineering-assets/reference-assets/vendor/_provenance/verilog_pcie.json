@@ -12,8 +12,11 @@
     "source": "https://github.com/alexforencich/verilog-pcie",
     "license": "MIT",
     "retrieved": "2024-04-27",
-    "retrieved_basis": "目录 mtime 下界；原始归档为 GitHub 分支 ZIP，无 .git，commit SHA 不可复原",
-    "commit": null
+    "retrieved_basis": "目录 mtime 下界；原始归档为 GitHub 分支 ZIP，无 .git 元数据",
+    "commit": "25156a9a162c41c60f11f41590c7d006d015ae5a",
+    "commit_date": "2024-04-26T17:15:17Z",
+    "commit_subject": "Add example design for Alveo U55C",
+    "commit_basis": "2026-08-02 内容比对反查。**此前本字段写的『commit SHA 不可复原』是错的** —— 无 .git 只说明元数据丢了，而 git blob SHA 是内容的函数，内容俱在就能反查。方法：对候选 commit 拉递归树，逐路径比对本地 633 个文件的 blob。结果：路径集完全一致（仅本地 0 / 仅上游 0），blob 分类为 逐字节一致 4 + 仅 CRLF 差异 545 + 上游 symlink 在 Windows 解压落成空文件 84（上游 symlink 总数正是 84），**未解释的差异 0**。相邻 commit 均不满足：195be74a 及更早尚无 AU55C 那批文件。CRLF 与 symlink 两类差异是 Windows 解压 ZIP 的已知行为，不是内容差异。"
   },
   "content": {
     "files": 633,

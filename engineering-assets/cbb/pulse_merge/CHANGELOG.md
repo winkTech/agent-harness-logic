@@ -1,5 +1,28 @@
 # Changelog
 
+## [1.0.0] - 2026-08-02
+
+RTL、约束、TB 与全部功能结论自 0.4.0 起未做任何改动。本版做两件事：
+
+- **上游 commit 反查并钉定** —— `provenance.commit` 从 `null` 变为
+  `25156a9a162c41c60f11f41590c7d006d015ae5a`（2024-04-26，"Add example design for
+  Alveo U55C"）。0.4.0 的说法是"归档无 `.git` 元数据，故 commit SHA 不可复原"，
+  **这个说法是错的**：无 `.git` 只说明元数据丢了，而 git blob SHA 是内容的函数，
+  内容俱在就能反查。
+  - 方法：对候选 commit 拉递归树，逐路径比对 `reference-assets/vendor/verilog-pcie-master/`
+    的 633 个文件。
+  - 结果：路径集完全一致（仅本地 0 / 仅上游 0）；blob 分类为**逐字节一致 4 +
+    仅 CRLF 差异 545 + 上游 symlink 在 Windows 解压落成空文件 84**（上游 symlink
+    总数正是 84），**未解释的差异 0**。
+  - 排他性：相邻 commit 均不满足 —— `195be74a` 及更早还没有 AU55C 那批文件。
+  - 本模块直接来源 `rtl/pulse_merge.v` 单独复核：上游 blob `aafe38a8` 等于本地文件
+    LF 归一后的 blob。
+  - registry ITG-0013 的 `upstream-commit-unpinned` 据此关闭。
+- **版本号转正 1.0.0**（owner 2026-08-02 裁定）—— 资产自 2026-07-27 起就是 certified，
+  但版本号一直停在 0.4.0，与库内其余 certified 资产不一致。
+  `evidence_ref` / `evidence_snapshot_ref` 指向 `evidence/pulse_merge/1.0.0/`，
+  0.4.0 快照原封转为历史。
+
 ## [0.4.0] - 2026-07-27
 
 - Owner signoff completed and the foundation asset was admitted to `cbb/` with bit-true, ModelSim, Vivado and CDC evidence; board/field validation and upstream commit pinning remain outside the release scope.
