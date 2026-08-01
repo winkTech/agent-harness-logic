@@ -50,10 +50,26 @@
 故障（IPv6 `::1` 可 bind 不可 connect）使任何设计都无法加载；`vlog` 编译不受影响，
 G-A-00 仍由 ModelSim 判读。
 
+### 综合（同日补齐，G-C-01/G-C-02 转绿）
+
+新增 `constraints/ofdm_tx_top.xdc`（100 MHz `create_clock`）并在 manifest 登记
+`device.part = xc7k325tffg900-2` 与资源预算。预算**事先**按 `resource_estimate.md`
+（2800 LUT / 3200 FF / 3 BRAM）加裕量设定，DSP 由文档的 12（Xilinx FFT IP 方案）
+调到 20（自研 SDF 级 1–4 各一个复乘 = 16 + 裕量），再用实测去对。
+
+`node tools/pg-synth.cjs`（OOC，Vivado 2023.1，0 Errors / 0 Critical Warnings）：
+
+- WNS **4.318 ns** @ 10 ns → 达成 Fmax **176 MHz**，WHS 0.144 ns，失败端点 0
+- LUT 1264/3500，FF 1099/4000，BRAM 0/4，DSP48E1 **20/20**
+- BRAM=0：4 组 64×32b 乒乓 RAM 全部映射为分布式 RAM/SRL（336 LUT as Memory），
+  该容量下属合理映射而非推断失败
+- DSP 顶满预算零裕量，且比事前估算多 4 个，归属未查清 → 新增遗留项 L6
+
 ### 仍未解决
 
-L1 未跑综合（无 Fmax/资源/时序报告）、L2 无 bit-true cosim（`fidelity` 仍 `pending`）、
-L3 导频极性非 802.11a PRBS 扰码、L4 反压恢复 1 拍气泡、L5 TB 场景覆盖不足。详见 README。
+L2 无 bit-true cosim（`fidelity` 仍 `pending`）、L3 导频极性非 802.11a PRBS 扰码、
+L4 反压恢复 1 拍气泡、L5 TB 场景覆盖不足、L6 DSP 用量零裕量且多出 4 个未解释。
+详见 README。
 
 ## [0.1.0] — 2026-07-28 hdl-coding 规范整改
 

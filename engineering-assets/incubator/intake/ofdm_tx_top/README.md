@@ -44,6 +44,19 @@ Golden model: `engineering-assets/models/comm/ofdm/` (asset_uid: `model_comm_ofd
 
 证据（2026-08-01，Vivado xsim 2023.1）: `ALL TESTS PASSED`。
 
+## 综合结论（OOC，xc7k325tffg900-2，Vivado 2023.1）
+
+`node engineering-assets/tools/pg-synth.cjs <包目录>` 产出，0 Errors / 0 Critical Warnings。
+
+| 指标 | 预算 | 实测 | |
+|:-----|-----:|-----:|:--|
+| WNS @ 10ns | ≥ 0 | **4.318 ns** | 达成 Fmax **176 MHz**，目标 100 MHz 有 76% 裕量 |
+| WHS | ≥ 0 | 0.144 ns | 失败端点 0 |
+| LUT | 3500 | 1264 | 含 336 LUT as Memory（176 DRAM + 160 SRL） |
+| FF | 4000 | 1099 | |
+| BRAM | 4 | **0** | 4 组 64×32b 乒乓 RAM 全部映射为分布式 RAM/SRL —— 该容量下属合理选择，非推断失败；如需占 BRAM 须显式加 `ram_style` |
+| DSP48E1 | 20 | **20** | **零裕量**，见 L6 |
+
 **工具说明**: 0.2.0 的证据由 xsim 产出 —— 当时本机 ModelSim 10.6c 的 vish/vsim 回环 RPC
 故障（IPv6 `::1` 可 bind 不可 connect），任何设计都无法加载；`vlog` 编译侧不受影响，
 G-A-00 仍由 ModelSim 判读。两条通路互为交叉验证。
@@ -52,7 +65,7 @@ G-A-00 仍由 ModelSim 判读。两条通路互为交叉验证。
 
 | 编号 | 位置 | 问题 |
 |:-----|:-----|:-----|
-| L1 | 全包 | **未跑 Vivado 综合**：资源 / Fmax / 时序 / 可综合性均无报告支撑（G-C-01/02、G-GATE-01 未过） |
+| L6 | `rtl/ifft64_sdf.sv` | **DSP 实测 20 个，正好顶满预算 20，零裕量**。事前按「级 1–4 各 1 个复乘 × 4 实数乘」估为 16，多出的 4 个尚无实证解释（推测复乘后的 36 位加法未被 DSP 后加器吸收，**未验证**）。需先查清归属再决定是抬预算还是改写乘加结构 |
 | L2 | 全包 | **无 bit-true cosim 证据**：当前判据是 TB 内浮点参考 ±4 LSB，未与 golden `generate_vectors.m` 做逐位镜像比对（G-B-03 未过，`fidelity` 仍为 `pending`） |
 | L3 | `tx_pilot_map.sv` | 导频极性只按符号序 ±1 交替，与 802.11a 的 127 长 PRBS 导频扰码序列不符（沿用 0.1.0 F6，需算法决策） |
 | L4 | `ofdm_tx_top.sv` | `s_axis_tready` 为寄存输出，反压恢复有 1 拍气泡；如需零气泡须在边界外套 skid buffer（接口架构改动） |

@@ -19,6 +19,9 @@
   "fidelity": {
     "status": "pending"
   },
+  "device": {
+    "part": "xc7k325tffg900-2"
+  },
   "ports": [
     {
       "name": "i_clk",
@@ -97,7 +100,11 @@
   "constraints": {
     "target": {
       "fmax": "100MHz",
-      "fmax_mhz": 100
+      "fmax_mhz": 100,
+      "lut": 3500,
+      "ff": 4000,
+      "bram": 4,
+      "dsp": 20
     }
   },
   "sources": [
@@ -125,6 +132,11 @@
       "path": "rtl/tx_cp_insert.sv",
       "role": "rtl",
       "sha256": "75c5da8de865824b64c17eb08df6232dfd079f094cf64389fb23b95b2cf078c9"
+    },
+    {
+      "path": "constraints/ofdm_tx_top.xdc",
+      "role": "constraint",
+      "sha256": "e944683f8493c7cbb31efd5345209b035b7c887063ba263acde2fdff5ef018e4"
     },
     {
       "path": "tb/tb_tx_top.sv",
