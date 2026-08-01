@@ -3,7 +3,7 @@
   "asset_uid": "model_comm_ofdm",
   "name": "ofdm_tx_golden",
   "kind": "golden-model",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "owner": "lihan",
   "maturity": {
     "level": "intake"
@@ -28,13 +28,19 @@
     {
       "role": "fixed_point",
       "trait": "设计特性",
+      "path": "src/rtl_mirror_tx.m",
+      "note": "定点位真镜像 (1.2.0 新增, ADR-004 阶段3): 按需求侧规格实现 —— 结构取 ADR-004 的 R2²SDF (由 DIF 分解推导, 与 ifft_chain 的 ifft(x)·sqrt(N) 标定核对), 缩放/舍入取 fixed_point_report §2.2/§2.4, 星座与子载波取 config.m + mod_mapper/subcarrier_map。**偏离该规格的是 RTL, cosim 失配时修 RTL 而非改本镜像**。实测: 与 ofdm_tx_top 0.3.0 cosim 2560 样点 0 失配"
+    },
+    {
+      "role": "fixed_point",
+      "trait": "设计特性",
       "path": "src/generate_vectors.m",
-      "note": "定点向量导出: 频域输入标称 Q2.14 实际乘 32767=Q1.15 尺度 (与注释不一致, 如实记录); 期望为浮点直接量化非位真镜像。待 ADR-004 阶段3 随 ofdm_tx_top RTL 定形重写为位真镜像 (MODEL-STATUS §4)"
+      "note": "定点向量导出 (1.2.0 重写): 激励改比特层 (对齐 DUT 入口, 原频域中间量与 DUT 不同层, 比对语义不成立), 期望改由 rtl_mirror_tx 位真产出 (0 容差, 替代原浮点直接量化+±1LSB), 频域缩放由 ×32767 修正为 config.m 声明的 Q2.14 ×16384。1.1.0 的两处缺陷已结案, 见 MODEL-STATUS §4"
     }
   ],
   "vectors": {
-    "config": "QPSK / FFT 64 / CP 16 / N_SYM=10 (声明); 现存文件按修复前单符号 bug 语义生成 (仅 80 样点)",
-    "provenance": "自 knowledge/primary/domains/comm/ofdm/vectors/ 原样迁入 (2026-07-25)。**语义作废待重导** (2026-08-01, MODEL-STATUS §4): N_SAMPLES=80 即 G1 缺陷 (整帧只出 1 符号) 的直接物证; 位真镜像重导排期在 ofdm_tx_top RTL 定形后 (ADR-004 阶段3)。文件与哈希保留作缺陷证据, 不得用于判卷。"
+    "config": "QPSK / FFT 64 / CP 16 / N_SYM=10; **800 样点** (10 符号 × 80), 由 1.2.0 的位真镜像重导",
+    "provenance": "2026-08-01 按 ADR-004 阶段3 用 rtl_mirror_tx 位真重导。当前有效文件: tx_bits.hex (比特激励) / expected_tx.hex (0 容差期望) / freq_grid.hex (中间量, 仅定位用) / vector_config.txt。**保留的缺陷物证** (旧语义, 不得用于判卷): expected_tx.bin / freq_i.bin / freq_q.bin / tx_i.bin / tx_q.bin / time-domain-iq.txt —— 其 N_SAMPLES=80 是 G1 缺陷 (整帧只出 1 符号) 的直接物证, 按前版决定保留。"
   },
   "sources": [
     {
@@ -89,9 +95,14 @@
       "sha256": "08a9e8b223625d7bf5b2b0bdf5c9e1275779f67cd795e284004d92adbb7a7782"
     },
     {
+      "path": "src/rtl_mirror_tx.m",
+      "role": "fixed_point",
+      "sha256": "d8897c90b5367d1a999935f0678fc579ee815dc3ca86e8f0ce550da334335f02"
+    },
+    {
       "path": "src/generate_vectors.m",
       "role": "fixed_point",
-      "sha256": "9813c05eeadb97d3b89e9f71377ed9dd1fcd91831bbf297c4e416ef2eb6109df"
+      "sha256": "591c71f95d7a359e7dec26fdc72917aecfe163bd614775d3edb13bbe6e7435d0"
     },
     {
       "path": "tests/test_modulations.m",

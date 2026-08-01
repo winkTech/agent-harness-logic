@@ -17,6 +17,8 @@
 | `rtl/ifft64_sdf.sv` | **自研 64 点流水 IFFT** (R2²SDF, DIF, 共轭旋转因子)，完整复乘仅 2 个，输出位反序 + `o_idx` |
 | `rtl/tx_cp_insert.sv` | CP 插入: 按 `bitrev(o_idx)` 写地址吸收重排（零额外延迟），乒乓，80 拍/符号 |
 | `tb/tb_tx_top.sv` | 定向自检 TB (`tb_ofdm_tx_top`)，TB 内浮点参考比对，不依赖外部向量文件 |
+| `tb/tb_tx_cosim.sv` | **位真 cosim TB**：与 golden 镜像逐位比对，**0 容差**，产出 `alignment-report.json` |
+| `tb/gen_cosim_vectors.m` | cosim 向量组装（调用 golden 的 `rtl_mirror_tx`，本身不含镜像逻辑） |
 | `run.do` | ModelSim 入口（构建落 `var/build/`） |
 | `run_xsim.sh` | Vivado xsim 入口（同一 TB、同一判据） |
 
@@ -53,6 +55,24 @@ DFT/8 → CP → Q3.13），不读 RTL 输出、不依赖外部向量文件。
 `$fwrite` 产出（非人工填写），落 `var/gates/pg/ofdm_tx_top/` 的 `stability/*.json`
 与 `reset-sim.json`，对应门禁 G-C-05 / G-C-04。
 
+### 位真 cosim（G-B-03）
+
+`tb_tx_cosim` 与 golden `models/comm/ofdm/src/rtl_mirror_tx.m` 逐位比对，**0 容差**：
+
+| 帧 | 调制 | 样点 | 逐位失配 |
+|:--|:--|--:|--:|
+| 0 | BPSK | 640 | **0** |
+| 1 | QPSK | 640 | **0** |
+| 2 | 16QAM | 640 | **0** |
+| 3 | 64QAM | 640 | **0** |
+
+合计 2560 样点（门禁下限 2048）。实测流水延迟 195 拍，比对按 valid 握手对齐、
+无人工偏移。`fidelity: bit_true`。
+
+镜像与 RTL 是**各自照 `fixed_point_report` §2.2 的需求侧调度表独立实现**的，
+不是一方照抄另一方 —— 首次运行即逐位相等。该表是单一事实源：RTL 偏离它即为
+RTL 缺陷，cosim 失配应修 RTL，不得改镜像或该表去迁就实现。
+
 ## 综合结论（OOC，xc7k325tffg900-2，Vivado 2023.1）
 
 `node engineering-assets/tools/pg-synth.cjs <包目录>` 产出，0 Errors / 0 Critical Warnings。
@@ -74,7 +94,7 @@ DFT/8 → CP → Q3.13），不读 RTL 输出、不依赖外部向量文件。
 | 编号 | 位置 | 问题 |
 |:-----|:-----|:-----|
 | ~~L6~~ | — | **已关闭（0.3.0）**：DSP 零裕量的根因是 IFFT 用了基-2 SDF 而非 ADR-004 指定的 R2²SDF，乘法器多一倍。对齐架构后 DSP 20→10 |
-| L2 | 全包 | **无 bit-true cosim 证据**：当前判据是 TB 内浮点参考 ±4 LSB，未与 golden `generate_vectors.m` 做逐位镜像比对（G-B-03 未过，`fidelity` 仍为 `pending`） |
+| ~~L2~~ | — | **已关闭（0.3.0）**：与 golden `rtl_mirror_tx` 位真 cosim，2560 样点（4 调制 × 8 符号）**0 容差逐位相等**，`fidelity` 已升为 `bit_true` |
 | L3 | `tx_pilot_map.sv` | 导频极性只按符号序 ±1 交替，与 802.11a 的 127 长 PRBS 导频扰码序列不符（沿用 0.1.0 F6，需算法决策） |
 | L4 | `ofdm_tx_top.sv` | `s_axis_tready` 为寄存输出，反压恢复有 1 拍气泡；如需零气泡须在边界外套 skid buffer（接口架构改动） |
 | L5 | `tb/tb_tx_top.sv` | 帧长仅覆盖 1/3/8 符号，激励为单一 LCG 序列；无随机约束/覆盖率收集，最大帧长未探到设计上限 |

@@ -37,6 +37,22 @@
 实测最大偏差 2 LSB。RTL 首版失配 100%，根因为乘法级数据通路 3 拍而 valid 链只给了
 2 拍 —— 补第三级后全通。
 
+### 位真 cosim（同日补齐，G-B-03 / G-GATE-01 转绿）
+
+- 新增 `tb/tb_tx_cosim.sv`：与 golden `models/comm/ofdm/src/rtl_mirror_tx.m`
+  **逐位比对、0 容差**，产出 `alignment-report.json`
+- 新增 `tb/gen_cosim_vectors.m`：调用 golden 镜像组装四调制向量集（本身不含
+  镜像逻辑，权威在 golden）
+- golden 侧同步升 1.2.0：新增位真镜像 `rtl_mirror_tx.m`；`generate_vectors.m`
+  重写（激励改比特层、期望改位真、频域缩放由 ×32767 修正为 Q2.14 ×16384）；
+  `vectors/` 重导为 800 样点（原 80 样点是 G1 缺陷物证，按前版决定保留）
+
+**结果：2560 样点（4 调制 × 8 符号）逐位失配 0**，`fidelity` 由 `pending` 升为
+`bit_true`。遗留项 L2 关闭。
+
+镜像与 RTL 各自照 `fixed_point_report` §2.2 的需求侧调度表独立实现，首次运行即
+逐位相等 —— 这是两侧都正确实现同一份需求的证据，而非一方迁就另一方。
+
 ## [0.2.0] — 2026-08-01 ADR-004 架构重排：自研 IFFT，全链首次功能贯通
 
 0.1.0 只做了编码规范整改，算法/架构层缺陷（F2/F3/F4 使 `cp_insert` 根本产不出

@@ -40,14 +40,38 @@ RX 侧 (`rx_chain`/`mod_demapper`) 四调制 Gray 映射与硬判决逐一手工
 - IFFT 语义: `ifft_chain` = MATLAB 自然序 `ifft(x)·sqrt(N)`
   (Parseval 功率一致); RTL 位真镜像按此标定逐级缩放。
 
-## 4. 已知问题 (未改, 待 ADR-004 阶段3 镜像改造一并处理)
+## 4. 已知问题
 
-- `src/generate_vectors.m` 频域激励量化用 **×32767** 却注释称 Q2.14 —
-  RTL 契约 Q2.14 应为 ×16384; 期望输出为浮点 golden 直接量化, 非 RTL
-  位真镜像 (±1 LSB 容差判卷, 不满足 G-B-03 0 容差标准)。整体重写排期在
-  `ofdm_tx_top` RTL 定形后。
-- `vectors/` 现存文件按旧 (单符号 bug) 语义生成, **作废待重导**
-  (N_SAMPLES=80 即 G1 缺陷的直接物证)。
+### 4.1 已结案 (2026-08-01, ADR-004 阶段3 执行完毕)
+
+- ~~`src/generate_vectors.m` 频域激励量化用 **×32767** 却注释称 Q2.14~~ —
+  **已修**: 频域改由 `rtl_mirror_tx` 按 config.m 声明的 Q2.14 (×16384) 产出。
+- ~~期望输出为浮点 golden 直接量化, 非位真镜像 (±1 LSB 容差, 不满足 G-B-03)~~ —
+  **已修**: 1.2.0 新增 `src/rtl_mirror_tx.m` 定点位真镜像, 期望值改由其产出,
+  判卷改为 **0 容差**。激励层级同时由频域中间量改为**比特流**, 与 DUT 入口
+  对齐 (原比对两侧不同层, 语义本就不成立)。
+- ~~`vectors/` 按旧单符号语义生成, 作废待重导~~ — **已重导**: 800 样点
+  (10 符号 × 80)。当前有效文件 `tx_bits.hex` / `expected_tx.hex` /
+  `freq_grid.hex` / `vector_config.txt`; 旧 `*.bin` 与 `time-domain-iq.txt`
+  按前版决定**保留作 G1 缺陷物证**, 不得用于判卷。
+
+**实测结论**: `ofdm_tx_top` 0.3.0 与本镜像 cosim, **2560 样点 (4 调制 × 8 符号)
+逐位 0 失配**, 证据 `var/gates/pg/ofdm_tx_top/alignment-report.json`。
+
+镜像的依据方向: 结构取 ADR-004 决策1 的 R2²SDF (由 DIF 分解推导, 与 `ifft_chain`
+的 `ifft(x)·sqrt(N)` 标定核对), 缩放/舍入取 `fixed_point_report` §2.2/§2.4 的
+需求侧调度表 —— **不是照 RTL 写的**。该表同日由 ADR-004 阶段3 升格为需求侧单一
+事实源; 此后 RTL 偏离该表即为 RTL 缺陷, cosim 失配应修 RTL。
+
+### 4.2 未结案
+
+- `run_ofdm_sim.m` 绘图分支 `saveas(...,'results/...')` 在 results/ 目录
+  缺失时会报错 (不影响向量导出主流程)。
+- `run_ofdm_sim.m` 第 11 行 `cfg = config;` —— `config.m` 是脚本非函数,
+  该调用会报「不支持将脚本作为函数执行」。本轮重导改用 `config;` 绕过,
+  原文件未改 (不在 ADR-004 阶段3 授权范围内)。
+- `cfg.mod_order` 字段与 `mod_type` 冗余且易失一致 (G1b 教训), tx_chain
+  已不再消费; 字段保留待 config 清理。
 - `run_ofdm_sim.m` 绘图分支 `saveas(...,'results/...')` 在 results/ 目录
   缺失时会报错 (不影响向量导出主流程)。
 - `cfg.mod_order` 字段与 `mod_type` 冗余且易失一致 (G1b 教训), tx_chain

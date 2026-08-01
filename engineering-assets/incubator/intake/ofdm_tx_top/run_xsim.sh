@@ -41,4 +41,20 @@ for s in regression boundary backpressure stress; do
     cp "stability-$s.json" "$EVID/stability/$s.json"
 done
 cp reset-sim.json "$EVID/reset-sim.json"
+
+# ---- cosim: 与 golden 位真镜像的 0 容差比对 (G-B-03) ----
+# 向量由 tb/gen_cosim_vectors.m 调用 golden 的 rtl_mirror_tx 组装 (需 MATLAB)
+if command -v matlab >/dev/null 2>&1; then
+    echo "=========== 生成 cosim 向量 (MATLAB) ==========="
+    matlab -batch "addpath('$PKG/tb'); gen_cosim_vectors('$BUILD')"
+else
+    echo "[warn] 未找到 matlab, 沿用 $BUILD 下已有的 cosim 向量"
+fi
+
+echo "=========== XSIM COSIM (0 容差) ==========="
+xvlog -sv --relax "$PKG/tb/tb_tx_cosim.sv"
+xelab --relax -debug typical -s cosim_sim work.tb_tx_cosim
+xsim cosim_sim -runall
+cp alignment-report.json "$EVID/alignment-report.json"
+
 echo "=========== 证据落地: $EVID ==========="

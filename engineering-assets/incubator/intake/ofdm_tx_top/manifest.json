@@ -17,7 +17,7 @@
   ],
   "golden_model_ref": "model_comm_ofdm",
   "fidelity": {
-    "status": "pending"
+    "status": "bit_true"
   },
   "device": {
     "part": "xc7k325tffg900-2"
@@ -137,6 +137,16 @@
       "path": "constraints/ofdm_tx_top.xdc",
       "role": "constraint",
       "sha256": "e944683f8493c7cbb31efd5345209b035b7c887063ba263acde2fdff5ef018e4"
+    },
+    {
+      "path": "tb/gen_cosim_vectors.m",
+      "role": "tb",
+      "sha256": "e742a011ec273ce467882fc82eaa1b8098a3e38cea2fa7ec43607ea25fe73833"
+    },
+    {
+      "path": "tb/tb_tx_cosim.sv",
+      "role": "tb",
+      "sha256": "b2bd55c06e3ae348666db75b56bf77b6b39d6dc0dee443eba6f42ad5fafdadcf"
     },
     {
       "path": "tb/tb_tx_top.sv",
