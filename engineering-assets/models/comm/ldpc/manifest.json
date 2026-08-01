@@ -45,8 +45,8 @@
     }
   ],
   "vectors": {
-    "config": "802.11n QC-LDPC R=1/2 N=648 K=324 Z=27 / LLR Q(10,4) / max_iter=20 / alpha=0.75",
-    "provenance": "RTL 对标向量 tb_llr_input_*.hex / tb_expected_output_*.hex 由 gen_rtl_test_vectors.m 生成到 rtl/02_sim/, 但源知识库中从未导出入库 (全树无 .hex) — TB 无法独立复跑, 属向量缺失 (与 rrc 的向量损坏不同类)。二进制 .mat (PT_1_2_648.mat, fixed_point_ber_results.mat) 经 2026-07-25 抽查为合法 MATLAB 5.0 格式且字节分布正常, 非常量轨。golden .m 代码未做任何改动。建议后续用 MATLAB 原生跑 gen_rtl_test_vectors.m 补齐向量并入库。"
+    "config": "802.11n QC-LDPC R=1/2 N=648 K=324 Z=27 / LLR Q(10,4) / max_iter=20 / alpha=0.75; 译码 10 组 x 324 位 = 3240 比对点, 编码 5 组 x 648 位",
+    "provenance": "2026-07-27 (9ee52f9) 已导出入库, vectors/ 现有 31 个 .hex: 译码 tb_llr_input_1..10 / tb_expected_output_1..10 (gen_rtl_test_vectors.m 生成, 含定点可达性筛选 —— 浮点可译但定点 20 迭代不收敛的向量会被重抽, 避免把正确 RTL 也达不到的期望值当成答案), 编码 tb_enc_info_1..5 / tb_enc_code_1..5 (gen_encoder_test_vectors.m, syndrome 自检后导出), 以及 PT ROM 的 pt_columns.hex。cbb/ldpc_codec 的 TB 经 +VEC_DIR 直接读取本目录, 1.0.0 认证的 G-B-03 即以此取证 (3240 点 0 失配, 见 var/gates/pg/ldpc_codec/alignment-report.json)。二进制 .mat (PT_1_2_648.mat, fixed_point_ber_results.mat) 经 2026-07-25 抽查为合法 MATLAB 5.0 格式且字节分布正常, 非常量轨。\n注: 本字段在 2026-08-02 前一直写着『全树无 .hex, TB 无法独立复跑, 属向量缺失』, 该描述自 9ee52f9 起即已失效, 属台账滞后而非向量缺失。"
   },
   "sources": [
     {

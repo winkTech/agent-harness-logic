@@ -1,7 +1,8 @@
-# ldpc_codec — 已知限制（1.0.0）
+# ldpc_codec — 已知限制（1.0.1）
 
-以下各条来自实测与治理台账，非推测。验证证据见
-`engineering-assets/evidence/ldpc_codec/1.0.0/`（哈希锁定快照）与
+以下各条来自实测与治理台账，非推测。1.0.1 相对 1.0.0 只补文档，RTL 与全部
+证据未动，故本清单同样适用于 1.0.0。验证证据见
+`engineering-assets/evidence/ldpc_codec/1.0.1/`（哈希锁定快照）与
 `engineering-assets/var/gates/pg/ldpc_codec/`（实时目录）。
 签字所接受的限制见 `manifest.json` 的 `signoff.scope`。
 

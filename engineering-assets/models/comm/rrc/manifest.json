@@ -3,7 +3,7 @@
   "asset_uid": "model_comm_rrc",
   "name": "rrc_pulse_shaping_golden",
   "kind": "golden-model",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "owner": "lihan",
   "maturity": {
     "level": "qualification"
@@ -28,13 +28,13 @@
   ],
   "vectors": {
     "config": "16qam / alpha=0.5 / sps=4 / span=8 / 512 symbols -> 2048 samples",
-    "provenance": "expected_tx.hex 于 2026-07-25 由 tools/regen-vectors.cjs 按 golden 代码语义(rrc_pulse_shaping.m 定点路径, rrc_coeff.hex Q1.15)忠实复算再生; 原始导出损坏(2048 行全为 00008001 负裁剪轨), 证据保留于 vectors/expected_tx.broken-orig.hex。golden .m 代码未改动。建议后续用 MATLAB 原生重跑 run_rrc_sim.m 复核再生向量。"
+    "provenance": "expected_tx.hex 于 2026-07-25 由 tools/regen-vectors.cjs 按 rrc_pulse_shaping.m 的定点语义与 rrc_coeff.hex (Q1.15) 复算再生。2026-08-02 已由本机 MATLAB R2022a 调用 golden 函数本体独立复核 (native-matlab-recheck 关闭): 系数 rrc_coeff_gen(cfg) 与 rrc_coeff.hex 33/33 逐位一致 0 LSB 偏差; 向量 2048 样点 x I/Q = 4096 个 int16 与 expected_tx.hex 全部逐位一致。\n**该次复核同时推翻了原先的诊断**: vectors/expected_tx.broken-orig.hex (2048 行全为 00008001) 不是『导出损坏』, 而是**未修改的 rrc_pulse_shaping.m 的真实输出** —— 直接调用它得到的结果与该文件 4096/4096 完全相同。根因是原第 42 行对**复数**数组用 min/max 做饱和, 而 MATLAB 的 min/max 对复数按模比较并返回元素本身; 本激励下每个样点 |y| <= 0.92 均小于界 |±1.99994|, 于是整条信号被替换成常量 -1.99994+0i。1.1.0 已改为对 real/imag 分别裁剪 (依据 fixed_point_report §3.1 表与 §3.3)。该文件按缺陷复现物证保留, 文件名中的 broken 指输出损坏这一现象, 不指导出环节。\n遗留分歧 (未在 1.1.0 处理): fixed_point_report §3.3 写的舍入策略是 convergent rounding (银行家舍入), 而 golden 代码、Node 再生脚本与 RTL 三者一致采用 MATLAB round 的 half-away-from-zero。三方自洽且 bit-true, 但与该条款字面不符, 需 owner 裁定改哪一侧。"
   },
   "sources": [
     {
       "path": "rrc_pulse_shaping.m",
       "role": "reference",
-      "sha256": "8cb69aabded19d7f4f95bedef372bbdb7352ea53d6b9bb5734a3c06040289b3b"
+      "sha256": "530feeb3c1c8c03fb4f0080b315af39fa0e7a5a099d13c7051d5968a54760af6"
     },
     {
       "path": "rrc_coeff_gen.m",

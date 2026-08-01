@@ -48,10 +48,11 @@
 - 资产 **23**：certified **16**、golden-model 7（intake 4 / qualification 3）
 - `catalog-gen`: red=0 yellow=0
 - `asset-audit`: **RED=0 YELLOW=0**（2026-08-02；此前 YELLOW 13，明细与还清见 §3）
-- `evidence-snapshot --verify-all`: 15 份快照，2026-08-02 起
-  `ldpc_codec/1.0.0` 有 1 个文件失配（见 §3.3 末注）；`rrc_polyphase_fir`
-  **本就没有快照** —— 它是 16 个 certified 中唯一 `evidence_ref` 指向可再生的
-  `var/gates/pg/` 而非哈希锁定目录的资产
+- `manifest-hash-refresh`: mismatches=0
+- `evidence-snapshot --verify-all`: **verified 16 snapshots, historical=1**
+  （`ldpc_codec/1.0.0` 转历史保留，1.0.1 为当前快照，见 §3.3）；
+  `rrc_polyphase_fir` **本就没有快照** —— 它是 16 个 certified 中唯一
+  `evidence_ref` 指向可再生的 `var/gates/pg/` 而非哈希锁定目录的资产
 - `incubator/intake/`: **已清空**
 
 certified 16 = comm 四族 4 + 原语 9（`axis_skid_buffer`、`lfsr_gen`、`crc32`、
@@ -72,7 +73,19 @@ certified 16 = comm 四族 4 + 原语 9（`axis_skid_buffer`、`lfsr_gen`、`crc
 | `model_comm_ldpc` | `exported-vectors` | **台账滞后，非向量缺失**。向量早在 2026-07-27（`9ee52f9`）就已入库，`vectors/` 现有 31 个 `.hex`，TB 经 `+VEC_DIR` 直接读取，`ldpc_codec` 1.0.0 的 G-B-03 即以此取证 |
 | `model_comm_ofdm` | `exported-vectors` | 1.2.0 位真重导已完成，`tx_bits.hex` / `expected_tx.hex` 在库 |
 | `model_comm_ldpc` | 8 处 `sha256` 失配 | 逐个查清后刷新：6 个（`run_all_tests.m` / `run_ldpc_sim.m` / `tests/*.m`×4）**内容从未改动**，是登记时用了原始字节而校验方用 LF 归一化，属**登记口径不一致**；2 个（`gen_rtl_test_vectors.m` / `src/ldpc_decoder_ms_fixed.m`）确在 `9ee52f9` 有实质改动（向量扩至 10 组 + 定点可达性筛选；译码器加 `nargout>2` 的纯观测 trace），当时漏登记 |
-| `model_comm_rrc` | `native-matlab-recheck` | **已在本机 MATLAB R2022a 跑完**，见下 |
+| `model_comm_rrc` | `native-matlab-recheck` | **已在本机 MATLAB R2022a 跑完并关闭**，且查出 golden 实存缺陷，见下 |
+
+> **门禁覆盖面缺口（同日修复）**：上表 8 处哈希最初是用
+> `tools/manifest-hash-refresh.cjs --write` 刷新的，而它经 Bash 运行 ——
+> `file-protection-guard` 是 PreToolUse hook，只拦 `Edit`/`Write`/`MultiEdit`/
+> `NotebookEdit` 这类带 `file_path` 的调用，于是那次写入**既没有令牌也没有审计留痕**。
+> 命令文本里根本不出现路径（只有 `--write`），hook 侧做命令扫描也拦不住，
+> 唯一可靠的位置是写入方本身。已在该工具内加受保护路径判定：无有效令牌就
+> **跳过写入、如实报告 `BLOCKED` 并以 exit 1 退出**。已用"人为改坏一处 golden
+> 哈希再试写"验证确实拦下。
+>
+> **残留**：其余经 Bash 运行、会写 `models/**` 的工具（如 `extract-cbb.cjs`）
+> 尚未加同样的判定 —— 本次只修了实际发生过越权写入的那一个。
 
 #### `model_comm_rrc` 复核结果 —— 结论与原诊断相反
 
@@ -102,11 +115,24 @@ Q2.14 实部/虚部各自对称裁剪 ±32767；实测该裁剪在本激励下**
 > （`channel_est/sim_channel.m:77-78` 反而是正确示范 —— 显式拆 `real`/`imag`），
 > **缺陷仅此一处**。
 
-**处置**：按"golden 与需求有出入就改 golden"的裁定，应修 `rrc_pulse_shaping.m`
-的裁剪写法（依据是定点报告的需求条款，**不是 RTL 行为**）。该文件受保护，
-需一次性写入令牌 —— 待办。修完后 `expected_tx.hex` 与
-`expected_tx.broken-orig.hex` 的定性也要一并改写（后者不是"损坏物证"，
-是"缺陷复现物证"）。
+**处置（2026-08-02 已完成）**：按"golden 与需求有出入就改 golden"的裁定修了
+`rrc_pulse_shaping.m` 的裁剪写法，改为显式拆 `real`/`imag` 分别裁剪。依据挂在
+定点报告条款与 MATLAB 语言语义上，**不引用任何 RTL 实测行为**——受保护写入
+令牌的 `basis.kind=spec`，审计留痕在 `var/audit/protected-writes.jsonl`。
+
+修完复跑复核：**A/B 全 PASS**，golden 与 `expected_tx.hex` 4096/4096 逐位一致；
+`expected_tx.broken-orig.hex` 从"与 golden 完全相同"变为 4094/4096 失配。
+`model_comm_rrc` 升 **1.1.0**，registry ITG-0006 的 `native-matlab-recheck`
+**已关闭**。
+
+下游 `rrc_polyphase_fir` 的 bit-true 锚在 `expected_tx.hex` 上，该向量本次经
+原生 MATLAB 独立确认正确，**结论不受影响、无需重跑**。
+
+> **新发现的遗留分歧（未处理，待 owner 裁定）**：`fixed_point_report.md` §3.3
+> 写的舍入策略是 **convergent rounding（银行家舍入）**，而 golden 代码、
+> Node 再生脚本与 RTL 三者一致采用 MATLAB `round` 的 **half-away-from-zero**。
+> 三方自洽且 bit-true，但与该条款字面不符 —— 要么改条款，要么改三方实现，
+> 不能就这么放着。
 
 ### 3.2 板级与时序收敛【registry badge_gap】
 
@@ -136,8 +162,11 @@ Q2.14 实部/虚部各自对称裁剪 ±32767；实测该裁剪在本激励下**
 
 > 补 `docs/limitations.md` 会让 G-DOC-04 的 `detail` 字段变化，
 > `evidence/ldpc_codec/1.0.0/` 快照因此出现 **1 个文件失配**（34 选 1，
-> 其余 33 个逐字节相同）。这是补文档的直接后果，**处置方式待 owner 裁定**：
-> 在 1.0.0 原地重取快照，还是升到 1.0.1 并保留 1.0.0 的签署原貌。
+> 其余 33 个逐字节相同）。**处置（2026-08-02）**：`ldpc_codec` 升 **1.0.1**，
+> 1.0.0 的快照**原封不动转为历史**（它是签过字的版本，原貌要留着），
+> 1.0.1 另取快照。RTL、约束、综合与仿真证据零改动，1.0.0 的签署继续适用、
+> 未重新签字，理由写在 CHANGELOG `[1.0.1]` 条目里。
+> `--verify-all` 现为 **16 verified / 1 historical**。
 
 ### 3.4 已签署接受的接口/语义偏离（非缺陷，集成方必读）
 

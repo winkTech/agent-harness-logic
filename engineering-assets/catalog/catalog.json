@@ -248,7 +248,7 @@
       "asset_uid": "ldpc_codec",
       "name": "ldpc_codec",
       "kind": "rtl",
-      "version": "1.0.0",
+      "version": "1.0.1",
       "owner": "lihan",
       "level": "certified",
       "dir": "cbb/ldpc_codec",
@@ -394,7 +394,7 @@
       "asset_uid": "model_comm_rrc",
       "name": "rrc_pulse_shaping_golden",
       "kind": "golden-model",
-      "version": "1.0.0",
+      "version": "1.1.0",
       "owner": "lihan",
       "level": "qualification",
       "dir": "models/comm/rrc",
@@ -408,9 +408,7 @@
       "used_by": [
         "rrc_polyphase_fir"
       ],
-      "badge_gap": [
-        "native-matlab-recheck"
-      ],
+      "badge_gap": [],
       "documents": {
         "readme": false,
         "changelog": false,

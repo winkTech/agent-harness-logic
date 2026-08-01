@@ -2,7 +2,7 @@
   "schema_version": "1.0",
   "asset_uid": "ldpc_codec",
   "name": "ldpc_codec",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "owner": "lihan",
   "signoff": {
     "by": "lihan",
@@ -17,7 +17,7 @@
   },
   "maturity": {
     "level": "certified",
-    "evidence_ref": "engineering-assets/evidence/ldpc_codec/1.0.0/"
+    "evidence_ref": "engineering-assets/evidence/ldpc_codec/1.0.1/"
   },
   "requirement_ref": "engineering-assets/knowledge/primary/domains/comm/ldpc/algorithm_spec.md",
   "doc_refs": [

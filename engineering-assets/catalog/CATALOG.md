@@ -16,7 +16,7 @@ Assets: 23 · RED: 0 · YELLOW: 0
 | `ddr_axi4_controller` | 1.0.0 | primitive | `cbb/ddr_axi4_controller` | certified | — | — | — |
 | `delay_line` | 1.0.0 | primitive | `cbb/delay_line` | certified | — | — | — |
 | `frame_sync` | 1.0.0 | primitive | `cbb/frame_sync` | certified | — | — | — |
-| `ldpc_codec` | 1.0.0 | rtl | `cbb/ldpc_codec` | certified | — | — | — |
+| `ldpc_codec` | 1.0.1 | rtl | `cbb/ldpc_codec` | certified | — | — | — |
 | `lfsr_gen` | 1.0.0 | primitive | `cbb/lfsr_gen` | certified | — | — | — |
 | `ofdm_tx_top` | 1.0.0 | rtl | `cbb/ofdm_tx_top` | certified | — | — | — |
 | `pulse_merge` | 0.4.0 | rtl | `cbb/pulse_merge` | certified | — | — | board-validation, upstream-commit-unpinned |
@@ -29,7 +29,7 @@ Assets: 23 · RED: 0 · YELLOW: 0
 
 | UID | Version | Kind | Directory | Machine cleared | Blocking | Used by | Badge gap |
 |---|---:|---|---|---|---|---|---|
-| `model_comm_rrc` | 1.0.0 | golden-model | `models/comm/rrc` | — | no gate-results | 1 | native-matlab-recheck |
+| `model_comm_rrc` | 1.1.0 | golden-model | `models/comm/rrc` | — | no gate-results | 1 | — |
 | `pulse_merge_golden` | 0.1.0 | golden-model | `models/comm/pulse_merge` | — | no gate-results | 1 | — |
 | `stream_elastic_pipeline_golden` | 0.1.0 | golden-model | `models/comm/stream_elastic_pipeline` | — | no gate-results | 1 | — |
 

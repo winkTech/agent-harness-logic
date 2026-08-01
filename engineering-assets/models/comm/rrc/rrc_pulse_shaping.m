@@ -39,7 +39,18 @@ function [y, y_quant] = rrc_pulse_shaping(x, cfg)
         max_q = 2^(Wt-1) - 1;
 
         y_quant = round(y_quant_f * scale) / scale;
-        y_quant = min(max(y_quant, -max_q/scale), max_q/scale);
+
+        % 饱和必须对实部/虚部分别做。此处曾写成
+        %     y_quant = min(max(y_quant, -max_q/scale), max_q/scale);
+        % 而 y_quant 是复数数组 —— MATLAB 的 min/max 对复数按**模**比较并返回
+        % 元素本身, 不做逐分量裁剪。当每个样点的模都小于界的模时(本模型的典型
+        % 激励下 |y| <= 0.92 << 1.99994), max 对每个元素都返回那个标量, 整条
+        % 信号被替换成常量 -1.99994+0i, 导出即 2048 行全为 (-32767, 0)。
+        % 需求侧(fixed_point_report §3.1 表 / §3.3)要求的是 I/Q 各自按 Q2.14
+        % 对称饱和到 [-2, 2), 故显式拆分。
+        lim = max_q / scale;
+        y_quant = complex(min(max(real(y_quant), -lim), lim), ...
+                          min(max(imag(y_quant), -lim), lim));
 
         % 计算 EVM
         evm_val = calc_evm(y_quant_f, y);

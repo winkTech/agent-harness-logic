@@ -1,5 +1,27 @@
 # CHANGELOG — ldpc_codec
 
+## [1.0.1] — 2026-08-02 文档补齐（RTL / 证据零改动）
+
+**RTL、约束、综合与仿真证据全部未动。** 本版只补文档与修正 README 中与机器事实
+不符的陈述；1.0.0 的签署（`by=lihan @ 2026-07-31`）继续适用，未重新签字。
+
+- 新增 `docs/limitations.md`（17 条），补齐 asset-audit A4 要求的第三份文档。
+  条目全部锚在实测证据或治理台账上：综合顶层只覆盖 `ldpc_decoder_top`、
+  BRAM 零裕量 3/3、器件归一悬案、D1 编码器输入未寄存、`h_matrix_addr` 的
+  `initial` 保留理由与 `ldpc_encoder_top` 上真实发生过的同类坑、G-C-05
+  四子结果的覆盖与未覆盖面、UVM 环境不构成取证、ModelSim 复现路径当前不可用。
+- README 补 `<!-- asset-status: certified v1.0.1 -->` marker。
+- 修正 README 三处与机器事实不符的陈述：
+  - 概要表"编码算法 = 双对角回代" → **PT 列累加**（旧实现对非全零信息位
+    `H·c≠0`，2026-07-31 已废弃，见下方同日条目）
+  - 包结构注"`run_sim.do` 路径为源库旧布局，未改" → 同日已修
+  - 门禁状态段仍指 `incubator/intake/` 旧路径 → 改为 `cbb/`
+- 标题去掉"intake 评估性打包"，改为指向 certified 状态与 limitations。
+
+**为什么是 1.0.1 而不是原地改 1.0.0**：补 `docs/limitations.md` 会让 G-DOC-04
+的 `detail` 字段变化，`evidence/ldpc_codec/1.0.0/` 快照因此 34 选 1 失配。
+1.0.0 是签过字的版本，其快照保留原貌不动；本版另取 `evidence/ldpc_codec/1.0.1/`。
+
 ## [1.0.0] — 2026-07-31 转正 certified
 
 - ADR-001 accepted（方案 A 分级判据）：decoder `s_axis_llr_tready` 组合-自-寄存
