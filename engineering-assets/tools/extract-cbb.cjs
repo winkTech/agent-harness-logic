@@ -8,6 +8,11 @@ const path = require('node:path');
 const crypto = require('node:crypto');
 const cp = require('node:child_process');
 
+// 受保护路径判定 (lib/protected-write.cjs): 本脚本经 Bash 运行, 会写 manifest,
+// 因而绕过只拦 Edit/Write 的 file-protection hook。判定与
+// manifest-hash-refresh.cjs 共用同一份实现, 不各写一份以免漂移。
+const { blockReason } = require('./lib/protected-write.cjs');
+
 const REQUIRED_STAGES = [
   'source_scan_intake',
   'classification',
@@ -69,6 +74,8 @@ function walkFiles(root, current = root, out = []) {
 function readJson(file) { return JSON.parse(fs.readFileSync(file, 'utf8')); }
 
 function writeJson(file, value) {
+  const blocked = blockReason(file);
+  if (blocked) throw new Error(`[protected-write] ${blocked}`);
   fs.mkdirSync(path.dirname(file), { recursive: true });
   fs.writeFileSync(file, `${JSON.stringify(value, null, 2)}\n`, 'utf8');
 }
@@ -549,6 +556,8 @@ function prepareEdaPackage(root, candidate, options = {}) {
     const existing = new Set((updated.sources || []).map((source) => source.path));
     for (const [file, role] of add) if (!existing.has(file)) updated.sources.push({ path: file, role, sha256: sha256(path.join(pkg.abs, file)), note: 'Deterministic external certification recipe; execution evidence is separate.' });
     for (const source of updated.sources) if (fs.existsSync(path.join(pkg.abs, source.path))) source.sha256 = sha256(path.join(pkg.abs, source.path));
+    const blockedManifest = blockReason(manifestFile);
+    if (blockedManifest) throw new Error(`[protected-write] ${blockedManifest}`);
     fs.writeFileSync(manifestFile, `${JSON.stringify(updated, null, 2)}\n`, 'utf8');
   }
   return { package: pkg.rel, files: ['eda/README.md', 'eda/modelsim_sva.do', 'eda/vivado_cert.tcl', 'eda/eda-manifest.json', 'eda/structural-cdc-check.json'], cdc };

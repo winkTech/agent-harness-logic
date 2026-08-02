@@ -48,7 +48,8 @@ xvlog -sv --relax -i "$PKG/rtl" \
     "$PKG/rtl/ldpc_decoder_top.v" \
     "$PKG/rtl/ldpc_encoder_top.v" \
     "$PKG/tb/tb_ldpc_decoder_top.v" \
-    "$PKG/tb/tb_ldpc_encoder_top.v"
+    "$PKG/tb/tb_ldpc_encoder_top.v" \
+    "$PKG/tb/tb_ldpc_system.v"
 
 echo "=========== 译码器 TB (G-B-03 / G-C-04 / G-C-05) ==========="
 xelab --relax -debug typical -s tb_dec work.tb_ldpc_decoder_top
@@ -57,6 +58,12 @@ xsim tb_dec -runall
 echo "=========== 编码器 TB (bit-true 5 组) ==========="
 xelab --relax -debug typical -s tb_enc work.tb_ldpc_encoder_top
 xsim tb_enc -runall
+
+# 第三个 TB: encoder+decoder 全链路。1.0.5 起纳入 —— 此前它从未被任何运行入口
+# 覆盖过, 且与另外两个 TB 一样把失败写成 $finish(errors ? 1 : 0)(失败以 0 退出)。
+echo "=========== 全链路 TB (encoder + decoder) ==========="
+xelab --relax -debug typical -s tb_sys work.tb_ldpc_system
+xsim tb_sys -runall
 
 echo "=========== 产出 ==========="
 ls -1 ./*.json ./stability/*.json 2>/dev/null || true

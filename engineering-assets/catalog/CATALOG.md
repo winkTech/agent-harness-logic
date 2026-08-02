@@ -16,7 +16,7 @@ Assets: 23 · RED: 0 · YELLOW: 0
 | `ddr_axi4_controller` | 1.0.1 | primitive | `cbb/ddr_axi4_controller` | certified | — | — | — |
 | `delay_line` | 1.0.1 | primitive | `cbb/delay_line` | certified | — | — | — |
 | `frame_sync` | 1.0.1 | primitive | `cbb/frame_sync` | certified | — | — | — |
-| `ldpc_codec` | 1.0.4 | rtl | `cbb/ldpc_codec` | certified | — | — | — |
+| `ldpc_codec` | 1.0.5 | rtl | `cbb/ldpc_codec` | certified | — | — | — |
 | `lfsr_gen` | 1.0.1 | primitive | `cbb/lfsr_gen` | certified | — | — | — |
 | `ofdm_tx_top` | 1.0.1 | rtl | `cbb/ofdm_tx_top` | certified | — | — | — |
 | `pulse_merge` | 1.0.2 | rtl | `cbb/pulse_merge` | certified | — | — | board-validation |

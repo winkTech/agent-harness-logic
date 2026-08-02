@@ -73,70 +73,97 @@ module tb_ldpc_system;
     //-----------------------------------------------------------------
     // 发送信息位到编码器
     //-----------------------------------------------------------------
+    // 严格按 AXI4-Stream 握手推进 —— 索引只在 tvalid && tready 成交那一拍自增。
+    //
+    // 原写法是 `for(i..){ @(posedge clk); tdata <= info[i]; while(!tready) @(posedge clk); }`,
+    // i 每轮无条件自增, 不确认本拍是否真的成交。编码器 2026-07-31 修掉"S_IDLE 就拉
+    // ready 吃掉首位"之后 ready 只在 S_LOAD 有效, 这个驱动就与 DUT 失步 —— 实测
+    // 全链路 TB 在第 1/10 个测试即超时。这与 rrc_polyphase_fir 0.4.0 记过的
+    // "固定节拍驱动、不看 tready ⇒ 静默丢符号"是同一类缺陷。
+    // 正确写法照抄同包 tb_ldpc_encoder_top.v 的 drive_info。
     task send_info(input [323:0] info);
         integer i;
     begin
         tx_info = info;
-        s_info_tvalid <= 1;
-        for (i = 0; i < 324; i = i + 1) begin
+        i = 0;
+        s_info_tvalid = 1'b1;
+        s_info_tdata  = info[0];
+        while (i < 324) begin
             @(posedge clk);
-            s_info_tdata <= info[i];
-            while (!s_info_tready) @(posedge clk);
+            if (s_info_tready) begin
+                i = i + 1;
+                #1;
+                s_info_tdata = (i < 324) ? info[i] : 1'b0;
+            end
         end
-        @(posedge clk);
-        s_info_tvalid <= 0;
+        @(negedge clk);
+        s_info_tvalid = 1'b0;
     end
     endtask
 
     //-----------------------------------------------------------------
     // 收集码字
     //-----------------------------------------------------------------
+    // 同 send_info: 只在 tvalid && tready 成交那一拍取样并自增
     task collect_code;
         integer i;
     begin
-        m_code_tready <= 1;
-        for (i = 0; i < 648; i = i + 1) begin
+        i = 0;
+        m_code_tready = 1'b1;
+        while (i < 648) begin
             @(posedge clk);
-            while (!m_code_tvalid) @(posedge clk);
-            tx_code[i] <= m_code_tdata;
+            if (m_code_tvalid) begin
+                tx_code[i] = m_code_tdata;
+                i = i + 1;
+            end
         end
-        @(posedge clk);
-        m_code_tready <= 0;
+        @(negedge clk);
+        m_code_tready = 1'b0;
     end
     endtask
 
     //-----------------------------------------------------------------
     // 无噪声信道: 码字 → LLR (BPSK: 0→+16, 1→-16)
     //-----------------------------------------------------------------
+    // 同 send_info: 只在成交那一拍推进
+    // BPSK: bit=0 → LLR=+511 (强置信度 0), bit=1 → LLR=-511 (强置信度 1)
     task send_to_decoder(input [647:0] code);
         integer i;
     begin
-        s_llr_tvalid <= 1;
-        for (i = 0; i < 648; i = i + 1) begin
+        i = 0;
+        s_llr_tvalid = 1'b1;
+        s_llr_tdata  = code[0] ? -10'sd511 : 10'sd511;
+        while (i < 648) begin
             @(posedge clk);
-            // BPSK: bit=0 → LLR=+511 (强置信度0), bit=1 → LLR=-511 (强置信度1)
-            s_llr_tdata <= code[i] ? -10'sd511 : 10'sd511;
-            while (!s_llr_tready) @(posedge clk);
+            if (s_llr_tready) begin
+                i = i + 1;
+                #1;
+                s_llr_tdata = (i < 648) ? (code[i] ? -10'sd511 : 10'sd511) : 10'sd0;
+            end
         end
-        @(posedge clk);
-        s_llr_tvalid <= 0;
+        @(negedge clk);
+        s_llr_tvalid = 1'b0;
     end
     endtask
 
     //-----------------------------------------------------------------
     // 收集译码结果
     //-----------------------------------------------------------------
+    // 同 collect_code: 只在成交那一拍取样并自增
     task collect_decoded;
         integer i;
     begin
-        m_dec_tready <= 1;
-        for (i = 0; i < 324; i = i + 1) begin
+        i = 0;
+        m_dec_tready = 1'b1;
+        while (i < 324) begin
             @(posedge clk);
-            while (!m_dec_tvalid) @(posedge clk);
-            rx_bits[i] <= m_dec_tdata;
+            if (m_dec_tvalid) begin
+                rx_bits[i] = m_dec_tdata;
+                i = i + 1;
+            end
         end
-        @(posedge clk);
-        m_dec_tready <= 0;
+        @(negedge clk);
+        m_dec_tready = 1'b0;
     end
     endtask
 
@@ -199,12 +226,23 @@ module tb_ldpc_system;
             $display("║  Result: ❌ FAILED                ║");
         $display("╚══════════════════════════════════╝");
 
-        $finish(errors ? 1 : 0);
+        // 原为 $finish(errors ? 1 : 0) —— **失败会被当成通过**。$finish(N) 的 N 是
+        // 诊断详略等级(IEEE 1364/1800), 不是进程退出码。本包 README 早在 2026-07-28
+        // 就点名记过这个写法, 当时只修了编码器 TB; 译码器 TB 于 1.0.2 补修,
+        // 本全链路 TB 到 1.0.5 才跟上 —— 同一个坑在三个 TB 里各躺了一份。
+        if (errors == 0) $finish(0);
+        else             $fatal(1, "LDPC SYSTEM FAIL: %0d errors", errors);
     end
 
-    initial #(CLK_PERIOD * 200000) begin
-        $display("FAIL: Timeout");
-        $finish(1);
+    // 看门狗按 N_TESTS 定额, 不再写死 200000 拍。
+    // 原为固定 200000 拍(2 ms), 而单次编解码实测约 22000 拍 —— 10 次就要约 220000 拍,
+    // 本来就超。修好握手驱动后 9/10 通过、第 10 个撞上这个额度, 暴露出看门狗额度
+    // 从一开始就不够(此前握手缺陷让它在第 1 个测试就超时, 掩盖了这一层)。
+    // 单次 25000 拍已含裕量(实测 ~22000), 再整体留一倍余量。
+    localparam integer P_WDOG_CYCLES = N_TESTS * 25000 * 2;
+    initial #(CLK_PERIOD * P_WDOG_CYCLES) begin
+        // 超时用 $fatal: $finish(1) 会以 0 退出, 上游看不出跑飞了
+        $fatal(1, "FAIL: Timeout (watchdog %0d cycles, N_TESTS=%0d)", P_WDOG_CYCLES, N_TESTS);
     end
 
 endmodule

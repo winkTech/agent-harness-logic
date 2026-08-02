@@ -2,7 +2,7 @@
   "schema_version": "1.0",
   "asset_uid": "ldpc_codec",
   "name": "ldpc_codec",
-  "version": "1.0.4",
+  "version": "1.0.5",
   "owner": "lihan",
   "signoff": {
     "by": "lihan",
@@ -17,7 +17,7 @@
   },
   "maturity": {
     "level": "certified",
-    "evidence_ref": "engineering-assets/evidence/ldpc_codec/1.0.4/"
+    "evidence_ref": "engineering-assets/evidence/ldpc_codec/1.0.5/"
   },
   "requirement_ref": "engineering-assets/knowledge/primary/domains/comm/ldpc/algorithm_spec.md",
   "doc_refs": [
@@ -170,7 +170,7 @@
     {
       "path": "tb/tb_ldpc_system.v",
       "role": "tb",
-      "sha256": "800bbbb4fb6412c5cc34e534a4292ceb3b75efc6162db38dd8ef824104de2217"
+      "sha256": "29aa8c517a3e367a8cbf087e7422248bed21d5a8a210f3867c91c9142dfee20b"
     },
     {
       "path": "tb/uvm/ldpc_agent.sv",

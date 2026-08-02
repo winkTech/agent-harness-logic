@@ -1,8 +1,8 @@
-<!-- asset-status: certified v1.0.4 -->
+<!-- asset-status: certified v1.0.5 -->
 
 # ldpc_codec — 802.11n QC-LDPC 编译码器
 
-> **certified 1.0.4**（RTL 与证据同 1.0.0，2026-07-31 签署，20 门全绿）。已知限制的权威清单在
+> **certified 1.0.5**（RTL 与证据同 1.0.0，2026-07-31 签署，20 门全绿）。已知限制的权威清单在
 > [`docs/limitations.md`](docs/limitations.md) —— 复用前必读。
 >
 > 本包最初是 intake 评估性打包（源 RTL 原样迁入、不修改，红线如实记录）。
