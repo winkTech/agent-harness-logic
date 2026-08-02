@@ -14,7 +14,7 @@
     "retrieved": "2026-02-14",
     "retrieved_basis": "目录 mtime 下界；原始归档为 GitHub 分支 ZIP，无 .git 元数据",
     "commit": null,
-    "commit_lookup": "2026-08-02 反查未成功。对 dpretet/async_fifo 在 2026-02-15 之前的 6 个候选逐一比对，最接近的 38c22208d394 (2026-02-13) 仍有 **4 个文件内容真实不一致**：README.md / rtl/async_fifo.v / rtl/rptr_empty.v / rtl/wptr_full.v —— 注意其中三个是 RTL 源文件，说明本地副本要么来自更早的 commit，要么在入库后被改动过。另有 3 个文件仅上游存在（async_fifo.core / syn/cmos.lib / syn/vsclib013.lib）。**在查清那 4 个 RTL 差异的来源之前，本归档不可作为『上游原样副本』引用。**"
+    "commit_lookup": "2026-08-02 反查未完成钉定，但已定位到强候选 38c22208d3948833f275b917c920e02b1cdadf56 (dpretet/async_fifo, 2026-02-13, 'Remove core file')，与登记的取回日期 2026-02-14 差一天，吻合。本地 28 个文件**全部**与该 commit 一致（仅 CRLF 差异 28，逐字节 0，未解释差异 0，仅本地 0）；唯一出入是上游多出 syn/cmos.lib 与 syn/vsclib013.lib 两个标准单元库文件而本地没有。另经独立复核：4 个曾被误判为『内容不一致』的文件（README.md / rtl/async_fifo.v / rtl/rptr_empty.v / rtl/wptr_full.v）各自与其在上游历史中的最新版本 blob 逐位相同，**不存在本地改动**。\n更正记录：本字段 2026-08-02 首版曾写『最接近的候选仍有 4 个文件内容真实不一致，其中 3 个是 RTL 源，说明本地副本要么来自更早的 commit 要么在入库后被改动过；在查清之前本归档不可作为上游原样副本引用』——**该结论是错的**。成因是当时逐候选比对的输出里，样本明细按候选分段打印，把某个更早候选的差异样本读成了最佳候选的。已按上述实测更正。\n与 picorv32 / basic_verilog 同类：内容与该 commit 一致，但归档是其子集（缺文件形态上像是入库时裁掉了体积较大或无关的文件，无证据可证），故不按 verilog_pcie 的标准判定为完全命中。"
   },
   "content": {
     "files": 28,
