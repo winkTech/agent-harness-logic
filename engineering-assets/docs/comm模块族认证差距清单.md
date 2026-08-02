@@ -49,7 +49,8 @@
 - `catalog-gen`: red=0 yellow=0
 - `asset-audit`: **RED=0 YELLOW=0**（2026-08-02；此前 YELLOW 13，明细与还清见 §3）
 - `manifest-hash-refresh`: mismatches=0 blocked=0
-- `evidence-snapshot --verify-all`: **verified 20 snapshots, historical=4**
+- **证据可复现: 14/16**（普查时 2/16，见 §2.5）
+- `evidence-snapshot --verify-all`: **verified 25 snapshots, historical=9**
   —— 每个 certified 资产都有哈希锁定快照（`rrc_polyphase_fir` 此前是唯一例外，
   已补齐）
 - **16 个 certified 的版本号已全部统一到 1.0.0+**（`ldpc_codec` 1.0.1，其余 1.0.0）。
@@ -61,6 +62,73 @@ certified 16 = comm 四族 4 + 原语 9（`axis_skid_buffer`、`lfsr_gen`、`crc
 `complex_multiplier`、`delay_line`、`sdp_ram`、`frame_sync`、`cdc_sync`、
 `ddr_axi4_controller`）+ 早期三件（`rrc_polyphase_fir`、`pulse_merge`、
 `stream_elastic_pipeline`）。
+
+---
+
+## 2.5 证据可复现性（2026-08-02 普查 + 整改）
+
+普查起因：`rrc_polyphase_fir` 的复现路径被发现是断的（`run.do` 走 ModelSim，
+本机 ModelSim 回环 RPC 故障）。顺手查了全库，发现这不是个例——
+**16 个 certified 里 14 个的证据当时无法被任何人重新生成**：
+
+| 类别 | 普查时 | 现在 |
+|:---|---:|---:|
+| 有可用运行脚本 | 2 | **14** |
+| 只有 ModelSim 脚本（本机跑不通） | 6 | 0 |
+| **完全没有运行脚本** | 8 | 0 |
+| 证据 harness 已丢失 | — | 2（见下） |
+
+第三类当时最严重：8 个原语包里只有 `tb_*.sv`，README 与 docs 里**从未写下**那次
+`xvlog`/`xelab`/`xsim` 的具体调用。**G-DOC/G-GATE 只检查证据文件在不在，
+不检查证据能不能被重做**，所以这个洞可以一路通过认证。
+
+整改后的交叉验证结果（新旧证据比对）：
+
+| 资产 | 结果 |
+|:---|:---|
+| 8 个原语 | **48/48 逐字节相同** |
+| `axis_skid_buffer` | 6/6 逐字节相同 |
+| `channel_est_top` | `alignment`/`reset-sim` 逐字节相同；4 份 stability 内容一致（仅 `tool` 字段不同） |
+| `sync_top` | 6/6 内容一致（仅 `tool` 不同），`reset-sim` 逐字节相同 |
+| `ldpc_codec` | `alignment` 内容一致（3240 bit 0 失配）、4 份 stability **逐字节相同**、编码器 5/5；`reset-sim` 26 选 1 有差异（见 §3.5） |
+
+> **证据本来就是可复现的——缺的只是把复现路径落盘。** 这一点由上面的逐字节
+> 比对证明：不是"重跑得到差不多的结果"，而是同一份字节。
+
+### 途中查出并修掉的缺陷（都不是"补脚本"本身）
+
+1. **`tb_ldpc_decoder_top.v` 的失败会被读作通过。** 失败路径用 `$finish(1)`，
+   而 `$finish(N)` 的 N 是诊断详略等级、**不是退出码**。本包 README 早在
+   2026-07-28 就为**编码器** TB 记过这个坑，译码器 TB 一直没跟着修。
+   改成 `$fatal` 后首跑即报出一处真实差异——换作改之前它会静静以 0 退出。
+2. **`tool` 字段写死 `"ModelSim vsim"` / `"ModelSim 10.6c"`**（`rrc`、8 原语、
+   `channel_est_top`、`sync_top`、`ldpc_codec` 各有），迁到 xsim 后会让证据
+   **声称自己出自一个并没有跑过它的仿真器**。一律改为由运行脚本注入。
+3. **xsim 下多字节 `reason` 变乱码**——`$fdisplay` 输出**作为参数传入**的
+   多字节 string 会被打乱（`%0s` 无效），须直写格式串。`crc32` 早有此注释，
+   `channel_est_top` / `sync_top` 没跟上，产出的 stability 证据数字对但人读不了。
+4. **`axis_skid_buffer` 在 xsim 下跑通却零证据**——`+EVID_DIR` 取不到时
+   `b_evid=0`，整段证据静默不写。
+5. **RTL 输出写进了 golden 权威向量目录**（`channel_est_top`），已挪到证据目录。
+6. **资产包内提交着构建残留**：`sync_top/var_build/`（1.3 MB ModelSim work 库）、
+   `channel_est_top/var_build/`，根源是 `.do` 里 `set BUILD [file join $ROOT var_build]`
+   写死在包内构建。
+7. **4 个 `.do` 的 `$PKG` 指向已清空的 `incubator/intake/`**；
+   `channel_est_top/run.do` 更是列了两个**包里不存在**的 RTL 文件——即使
+   ModelSim 是好的也跑不通。已删该重复入口（正确入口是 `tb/run_cosim.do`）。
+
+### 剩余 2 个：证据 harness 已丢失
+
+`pulse_merge` 与 `stream_elastic_pipeline` 与其余资产不同路——它们的
+`alignment-report.json` 不是 TB 产的，而是一套**"ModelSim 轨迹 vs Python 模型"
+的外部 replay harness** 产的，而那套 harness **在仓库里不存在**。
+证据里记的 golden 路径 `incubator/qualification/<uid>/model/*.py` 也已随
+incubator 清空而失效（模型本身还在，迁到了 `models/comm/<uid>/`）。
+
+两包的 TB 自带独立参考模型、在 xsim 下跑通并 PASS，但不产 JSON。
+让 TB 直接产证据是可行的，**但那是换一套证据基准**：现存证据里的
+`vector_sha256` / `trace_sha256` 两个字段来自那套外部 harness，TB 复现不出来。
+属签署范围内的变更，待 owner 裁定。
 
 ---
 
