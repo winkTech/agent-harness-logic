@@ -280,13 +280,24 @@ function main() {
     // 实测一份 824 行的失败日志里, "❌ 失败" 在第 391 行 —— 距末尾 433 行。而人和
     // CI 界面默认看到的都是尾部, 于是"哪条测试挂了"这个唯一有用的信息永远不在视野里。
     // 实际后果: 同一个 CI 失败连查三轮都只能拿到 `exit=1`, 全靠猜。
-    const failures = String(result.stdout || '')
-      .split(/\r?\n/)
-      .filter((line) => line.includes('❌'))
-      .slice(0, 20);
+    // 失败项 = "❌ 那一行" + 紧随其后的**缩进详情行**。详情里才有断言文案与实际值;
+    // 只复述 ❌ 行的话拿到的仅仅是测试名, 仍然定位不到 —— 实测吃过一次这个亏。
+    const lines = String(result.stdout || '').split(/\r?\n/);
+    const failures = [];
+    for (let i = 0; i < lines.length && failures.length < 60; i += 1) {
+      if (!lines[i].includes('❌')) continue;
+      failures.push(lines[i].trimEnd());
+      // 详情是缩进续行; 遇到下一条测试结果行(含 ✅/❌/⚠)或非缩进行即停。
+      for (let j = i + 1; j < lines.length && j <= i + 12; j += 1) {
+        const next = lines[j];
+        if (!/^\s+\S/.test(next)) break;
+        if (/[✅❌⚠]/.test(next)) break;
+        failures.push(next.trimEnd());
+      }
+    }
     if (failures.length) {
       console.error('[coverage-runner] ── 失败项(复述自上方测试输出) ──');
-      for (const line of failures) console.error(`[coverage-runner]   ${line.trim()}`);
+      for (const line of failures) console.error(`[coverage-runner] ${line}`);
     } else {
       console.error('[coverage-runner] ── 测试输出里没有 ❌ 行: 运行器可能在跑完前就退出了 ──');
       const tail = String(result.stdout || '').trimEnd().split(/\r?\n/).slice(-8);
