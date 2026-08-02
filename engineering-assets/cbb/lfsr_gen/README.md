@@ -1,4 +1,4 @@
-<!-- asset-status: certified v1.0.0 -->
+<!-- asset-status: certified v1.0.1 -->
 # lfsr_gen — 参数化 Fibonacci LFSR 伪随机序列发生器 (certified CBB)
 
 扰码器/PRBS 测试序列/白噪声的库内标准原语。每个 `i_en` 拍产出一个序列字。

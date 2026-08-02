@@ -1,4 +1,4 @@
-<!-- asset-status: certified v1.0.0 -->
+<!-- asset-status: certified v1.0.1 -->
 # cdc_sync — 跨时钟域同步器 (单比特电平 / 多比特 req-ack 握手, certified CBB)
 
 > **CDC 取证 (本资产核心)**: Vivado `report_cdc` **实跑** —— 10 条跨域路径,

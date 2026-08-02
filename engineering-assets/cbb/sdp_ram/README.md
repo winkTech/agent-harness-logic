@@ -1,4 +1,4 @@
-<!-- asset-status: certified v1.0.0 -->
+<!-- asset-status: certified v1.0.1 -->
 # sdp_ram — 简单双端口同步 RAM (1 写 + 1 读、单时钟, certified CBB)
 
 > **综合 (OOC, xc7k325tffg900-2)**: WNS +2.596ns @250MHz 即达成约 **712 MHz**;

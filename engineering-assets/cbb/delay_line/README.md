@@ -1,4 +1,4 @@
-<!-- asset-status: certified v1.0.0 -->
+<!-- asset-status: certified v1.0.1 -->
 # delay_line — 定长流水延迟线 (valid 标记、无背压, certified CBB)
 
 > **综合 (OOC, xc7k325tffg900-2)**: WNS +3.352ns @250MHz 即达成约 **1543 MHz**;

@@ -1,12 +1,12 @@
-<!-- asset-status: certified v1.0.1 -->
+<!-- asset-status: certified v1.0.2 -->
 <!-- 级别横幅（由成熟度派生）: CBB / CERTIFIED — 生产级，可在生产设计中复用 -->
 
 # rrc_polyphase_fir
 
-> `asset_uid: rrc_polyphase_fir` · `version: 1.0.1` · `owner: lihan`
+> `asset_uid: rrc_polyphase_fir` · `version: 1.0.2` · `owner: lihan`
 > 成熟度: **certified** — 18 道 MUST 门全绿，`signoff.by=lihan @ 2026-08-02`
 > （首次签署 2026-07-25 @ 0.4.0；RTL 与功能结论自那时起未变，1.0.0 是版本号转正）
-> 证据: `engineering-assets/evidence/rrc_polyphase_fir/1.0.0/`（哈希锁定快照）
+> 证据: `engineering-assets/evidence/rrc_polyphase_fir/1.0.2/`（哈希锁定快照）
 > 与 `engineering-assets/var/gates/pg/rrc_polyphase_fir/`（实时生成物，见 §6 复现）
 
 RRC（根升余弦）脉冲成形多相 FIR 滤波器核。本包同时是库内 **CBB 参考样板**：

@@ -1,4 +1,4 @@
-<!-- asset-status: certified v1.0.0 -->
+<!-- asset-status: certified v1.0.1 -->
 # frame_sync — 以太网风格帧定界器 (前导+SFD 检测、数据流透传, certified CBB)
 
 > **综合 (OOC, xc7k325tffg900-2)**: WNS +2.403ns @250MHz 即达成约 **626 MHz**;

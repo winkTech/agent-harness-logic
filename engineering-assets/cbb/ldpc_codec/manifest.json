@@ -2,7 +2,7 @@
   "schema_version": "1.0",
   "asset_uid": "ldpc_codec",
   "name": "ldpc_codec",
-  "version": "1.0.2",
+  "version": "1.0.3",
   "owner": "lihan",
   "signoff": {
     "by": "lihan",
@@ -17,7 +17,7 @@
   },
   "maturity": {
     "level": "certified",
-    "evidence_ref": "engineering-assets/evidence/ldpc_codec/1.0.2/"
+    "evidence_ref": "engineering-assets/evidence/ldpc_codec/1.0.3/"
   },
   "requirement_ref": "engineering-assets/knowledge/primary/domains/comm/ldpc/algorithm_spec.md",
   "doc_refs": [
@@ -239,5 +239,11 @@
     }
   ],
   "waivers": [],
-  "superseded_by": null
+  "superseded_by": null,
+  "reproduce": {
+    "sim": "bash cbb/ldpc_codec/run_xsim.sh --install",
+    "synth": "node tools/pg-synth.cjs cbb/ldpc_codec",
+    "gate": "node tools/gate-runner.cjs cbb/ldpc_codec --repo-root ..",
+    "note": "2026-08-02 xsim 复跑: alignment 内容一致(3240 bit 0 失配)、4 份 stability 逐字节相同、编码器 5/5; reset-sim 有 1/26 差异(cn_update.ro_lr 在 xsim 下为 X), 详见 CHANGELOG 1.0.2, 已安装证据仍为 ModelSim 版。"
+  }
 }

@@ -2,7 +2,7 @@
   "schema_version": "1.0",
   "asset_uid": "ddr_axi4_controller",
   "name": "ddr_axi4_controller",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "signoff": {
     "by": "lihan",
     "at": "2026-08-01",
@@ -22,7 +22,7 @@
   "kind": "primitive",
   "maturity": {
     "level": "certified",
-    "evidence_ref": "engineering-assets/evidence/ddr_axi4_controller/1.0.0/"
+    "evidence_ref": "engineering-assets/evidence/ddr_axi4_controller/1.0.1/"
   },
   "requirement_ref": "engineering-assets/docs/CBB候选台账-hdl-coding-templates.md",
   "doc_refs": [
@@ -188,11 +188,31 @@
     "note": "与库内其余 CBB 统一器件; OOC 评估"
   },
   "params": [
-    { "name": "P_DATA_W",  "value": 512, "rationale": "AXI 数据位宽, 对齐典型 MIG 用户接口" },
-    { "name": "P_ADDR_W",  "value": 32,  "rationale": "地址位宽" },
-    { "name": "P_ID_W",    "value": 4,   "rationale": "单 ID 单事务, 位宽仅为接口兼容" },
-    { "name": "P_MAX_LEN", "value": 256, "rationale": "最大突发拍数 (AXI4 上限)" },
-    { "name": "P_TIMEOUT", "value": 4096,"rationale": "单相位无进展看门狗拍数, 用于 MIG 挂死恢复" }
+    {
+      "name": "P_DATA_W",
+      "value": 512,
+      "rationale": "AXI 数据位宽, 对齐典型 MIG 用户接口"
+    },
+    {
+      "name": "P_ADDR_W",
+      "value": 32,
+      "rationale": "地址位宽"
+    },
+    {
+      "name": "P_ID_W",
+      "value": 4,
+      "rationale": "单 ID 单事务, 位宽仅为接口兼容"
+    },
+    {
+      "name": "P_MAX_LEN",
+      "value": 256,
+      "rationale": "最大突发拍数 (AXI4 上限)"
+    },
+    {
+      "name": "P_TIMEOUT",
+      "value": 4096,
+      "rationale": "单相位无进展看门狗拍数, 用于 MIG 挂死恢复"
+    }
   ],
   "constraints": {
     "target": {
@@ -223,5 +243,11 @@
     }
   ],
   "waivers": [],
-  "superseded_by": null
+  "superseded_by": null,
+  "reproduce": {
+    "sim": "bash tools/run-primitive-sim.sh ddr_axi4_controller --install",
+    "synth": "node tools/pg-synth.cjs cbb/ddr_axi4_controller",
+    "gate": "node tools/gate-runner.cjs cbb/ddr_axi4_controller --repo-root ..",
+    "note": "2026-08-02 用该命令复跑, 6 份证据与 certified 时的记录逐字节相同。"
+  }
 }

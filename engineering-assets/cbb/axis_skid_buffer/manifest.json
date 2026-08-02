@@ -2,7 +2,7 @@
   "schema_version": "1.0",
   "asset_uid": "axis_skid_buffer",
   "name": "axis_skid_buffer",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "owner": "lihan",
   "kind": "primitive",
   "signoff": {
@@ -19,7 +19,7 @@
   },
   "maturity": {
     "level": "certified",
-    "evidence_ref": "engineering-assets/evidence/axis_skid_buffer/1.0.1/"
+    "evidence_ref": "engineering-assets/evidence/axis_skid_buffer/1.0.2/"
   },
   "requirement_ref": "engineering-assets/docs/comm模块族认证差距清单.md",
   "doc_refs": [
@@ -132,5 +132,11 @@
     }
   ],
   "waivers": [],
-  "superseded_by": null
+  "superseded_by": null,
+  "reproduce": {
+    "sim": "bash tools/run-primitive-sim.sh axis_skid_buffer --install",
+    "synth": "node tools/pg-synth.cjs cbb/axis_skid_buffer",
+    "gate": "node tools/gate-runner.cjs cbb/axis_skid_buffer --repo-root ..",
+    "note": "2026-08-02 复跑, 6 份证据逐字节相同。ModelSim 通路 tb/run_sim.do 亦保留, 但本机 ModelSim 回环 RPC 故障, 当前跑不通。"
+  }
 }

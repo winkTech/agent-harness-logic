@@ -2,7 +2,7 @@
   "schema_version": "1.0",
   "asset_uid": "complex_multiplier",
   "name": "complex_multiplier",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "signoff": {
     "by": "lihan",
     "at": "2026-08-01",
@@ -21,7 +21,7 @@
   "kind": "primitive",
   "maturity": {
     "level": "certified",
-    "evidence_ref": "engineering-assets/evidence/complex_multiplier/1.0.0/"
+    "evidence_ref": "engineering-assets/evidence/complex_multiplier/1.0.1/"
   },
   "requirement_ref": "engineering-assets/docs/comm模块族认证差距清单.md",
   "doc_refs": [
@@ -137,5 +137,11 @@
     }
   ],
   "waivers": [],
-  "superseded_by": null
+  "superseded_by": null,
+  "reproduce": {
+    "sim": "bash tools/run-primitive-sim.sh complex_multiplier --install",
+    "synth": "node tools/pg-synth.cjs cbb/complex_multiplier",
+    "gate": "node tools/gate-runner.cjs cbb/complex_multiplier --repo-root ..",
+    "note": "2026-08-02 用该命令复跑, 6 份证据与 certified 时的记录逐字节相同。"
+  }
 }

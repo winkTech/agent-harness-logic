@@ -3,11 +3,11 @@
   "asset_uid": "pulse_merge",
   "name": "pulse_merge",
   "kind": "rtl",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "owner": "lihan",
   "maturity": {
     "level": "certified",
-    "evidence_ref": "engineering-assets/evidence/pulse_merge/1.0.0/SNAPSHOT.json"
+    "evidence_ref": "engineering-assets/evidence/pulse_merge/1.0.1/SNAPSHOT.json"
   },
   "requirement_ref": "engineering-assets/cbb/pulse_merge/docs/requirements.md",
   "doc_refs": [
@@ -215,7 +215,7 @@
     ],
     "panel_verdicts_ref": "engineering-assets/var/gates/pg/pulse_merge/G-SIGN-01.json"
   },
-  "evidence_snapshot_ref": "evidence/pulse_merge/1.0.0/SNAPSHOT.json",
+  "evidence_snapshot_ref": "evidence/pulse_merge/1.0.1/SNAPSHOT.json",
   "provenance": {
     "source": "https://github.com/alexforencich/verilog-pcie",
     "license": "MIT",
@@ -223,5 +223,11 @@
     "commit": "25156a9a162c41c60f11f41590c7d006d015ae5a",
     "commit_basis": "commit 日期 2024-04-26T17:15:17Z, 标题 'Add example design for Alveo U55C'。2026-08-02 由内容比对反查确定, 非声明。归档 engineering-assets/reference-assets/vendor/verilog-pcie-master/ 无 .git, 但 git blob SHA 是内容的函数, 故可反查: 对该 commit 的递归树逐路径比对 633 个文件, 路径集完全一致 (仅本地 0 / 仅上游 0), blob 分类为 逐字节一致 4 + 仅 CRLF 差异 545 + 上游 symlink 在 Windows 解压落成空文件 84 (上游 symlink 总数正是 84), 未解释的差异 0。相邻 commit 均不满足: 195be74a 及更早尚无 AU55C 那批文件。本模块直接来源 rtl/pulse_merge.v 单独复核: 上游 blob aafe38a8e7c4ea76b7287b3d7e04342810a82297 = 本地文件 LF 归一后的 blob, 内容一致仅行尾不同。"
   },
-  "notes": "Certified foundation CBB admission with MIT provenance retained. Upstream commit SHA pinned on 2026-08-02 by content matching (see provenance.commit_basis). Routed implementation, board and field validation remain outside this admission."
+  "notes": "Certified foundation CBB admission with MIT provenance retained. Upstream commit SHA pinned on 2026-08-02 by content matching (see provenance.commit_basis). Routed implementation, board and field validation remain outside this admission.",
+  "reproduce": {
+    "sim": "bash tools/run-primitive-sim.sh pulse_merge",
+    "synth": "vivado -mode batch -source cbb/pulse_merge/eda/vivado_cert.tcl",
+    "gate": "node tools/gate-runner.cjs cbb/pulse_merge --repo-root ..",
+    "note": "仅覆盖 TB 自检 (xsim 下跑通并 PASS, TB 自带独立参考模型)。**已安装的 alignment-report.json 等证据不是该 TB 产的** —— 它们出自一套\"ModelSim 轨迹 vs Python 模型\"的外部 replay harness, 而那套 harness 在仓库里不存在, 证据里记的 golden 路径 incubator/qualification/... 也已失效(模型迁到 models/comm/<uid>/)。让 TB 直接产证据可行但属换一套证据基准(现存证据的 vector_sha256/trace_sha256 复现不出来), 待 owner 裁定。"
+  }
 }

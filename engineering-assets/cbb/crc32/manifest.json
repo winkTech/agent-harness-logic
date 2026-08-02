@@ -2,7 +2,7 @@
   "schema_version": "1.0",
   "asset_uid": "crc32",
   "name": "crc32",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "signoff": {
     "by": "lihan",
     "at": "2026-08-01",
@@ -21,7 +21,7 @@
   "kind": "primitive",
   "maturity": {
     "level": "certified",
-    "evidence_ref": "engineering-assets/evidence/crc32/1.0.0/"
+    "evidence_ref": "engineering-assets/evidence/crc32/1.0.1/"
   },
   "requirement_ref": "engineering-assets/docs/CBB候选台账-hdl-coding-templates.md",
   "doc_refs": [
@@ -32,13 +32,41 @@
   },
   "top": "crc32",
   "ports": [
-    { "name": "i_clk", "direction": "input", "width": 1 },
-    { "name": "i_rst", "direction": "input", "width": 1 },
-    { "name": "i_valid", "direction": "input", "width": 1 },
-    { "name": "i_data", "direction": "input", "width": 8 },
-    { "name": "i_last", "direction": "input", "width": 1 },
-    { "name": "o_valid", "direction": "output", "width": 1 },
-    { "name": "o_crc", "direction": "output", "width": 32 }
+    {
+      "name": "i_clk",
+      "direction": "input",
+      "width": 1
+    },
+    {
+      "name": "i_rst",
+      "direction": "input",
+      "width": 1
+    },
+    {
+      "name": "i_valid",
+      "direction": "input",
+      "width": 1
+    },
+    {
+      "name": "i_data",
+      "direction": "input",
+      "width": 8
+    },
+    {
+      "name": "i_last",
+      "direction": "input",
+      "width": 1
+    },
+    {
+      "name": "o_valid",
+      "direction": "output",
+      "width": 1
+    },
+    {
+      "name": "o_crc",
+      "direction": "output",
+      "width": 32
+    }
   ],
   "clock": {
     "name": "i_clk"
@@ -82,5 +110,11 @@
     }
   ],
   "waivers": [],
-  "superseded_by": null
+  "superseded_by": null,
+  "reproduce": {
+    "sim": "bash tools/run-primitive-sim.sh crc32 --install",
+    "synth": "node tools/pg-synth.cjs cbb/crc32",
+    "gate": "node tools/gate-runner.cjs cbb/crc32 --repo-root ..",
+    "note": "2026-08-02 用该命令复跑, 6 份证据与 certified 时的记录逐字节相同。"
+  }
 }

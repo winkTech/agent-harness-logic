@@ -626,6 +626,53 @@ function runGates(pkgDir, manifest, repoRoot) {
         ? `缺产物: ${missingEv.map((r) => `${r.f}(${r.for})`).join(', ')}`
         : `${REQ.length} 项证据产物齐备`,
     });
+
+    // G-GATE-02 证据可复现 —— G-GATE-01 只问"证据在不在", 这道门问"能不能重做"
+    //
+    // 2026-08-02 普查动因: 16 个 certified 里 14 个的证据当时无法被任何人重新生成 ——
+    // 8 个原语包只有 tb_*.sv, 那次 xvlog/xelab/xsim 的具体调用从未落盘; 另外 6 个
+    // 只有 ModelSim 脚本而本机 ModelSim 已故障, 其中 channel_est_top/run.do 甚至列了
+    // 包里根本不存在的 RTL 文件。**这些包全都通过了 G-GATE-01** —— 因为证据文件确实
+    // 都在。证据"在"与证据"可重做"是两件事, 只查前者, 洞就会一直被填满。
+    //
+    // 判据刻意只查两件可机器验证的事, 不试图执行命令:
+    //   1) manifest.reproduce.sim 存在 (复现方式必须是**声明出来的契约**, 不是
+    //      README 里的散文 —— 散文会漂移, 且无法被门禁看见);
+    //   2) 该命令引用的脚本/文件在仓库里真实存在 (直接拦住 incubator/ 那类失效路径,
+    //      以及入口被删/改名后无人更新的情况)。
+    // 不执行命令: 门禁跑一次完整仿真既慢又会与被判定的证据互相污染; 能否跑通由
+    // G-B-03/G-C-04/G-C-05 的实测产物本身承担。
+    const repro = (manifest.reproduce && typeof manifest.reproduce === 'object') ? manifest.reproduce : {};
+    const reproSim = String(repro.sim || '').trim();
+    const SCRIPT_RE = /(?:^|[\s"'=])([A-Za-z0-9_./-]+\.(?:sh|do|tcl|py|m|cjs|js))(?=$|[\s"'])/g;
+    const referenced = [];
+    let mm;
+    while ((mm = SCRIPT_RE.exec(reproSim)) !== null) referenced.push(mm[1]);
+    const resolveRepro = (rel) => [
+      path.resolve(repoRoot, rel),
+      path.resolve(repoRoot, 'engineering-assets', rel),
+      path.join(pkgDir, rel),
+    ].some((p) => fs.existsSync(p));
+    const missingScripts = referenced.filter((r) => !resolveRepro(r));
+
+    let g02status; let g02detail;
+    if (!reproSim) {
+      g02status = 'blocked';
+      g02detail = '缺 manifest.reproduce.sim —— 证据须声明可复现的仿真入口(命令), 否则无人能重做它';
+    } else if (!referenced.length) {
+      g02status = 'blocked';
+      g02detail = `reproduce.sim 未引用任何脚本文件: ${reproSim}`;
+    } else if (missingScripts.length) {
+      g02status = 'blocked';
+      g02detail = `reproduce.sim 引用的入口不存在: ${missingScripts.join(', ')}`;
+    } else {
+      g02status = 'pass';
+      g02detail = `复现入口已声明且存在: ${referenced.join(', ')}`;
+    }
+    add({
+      id: 'G-GATE-02', name: '证据可复现', level: 'certified', must: true,
+      status: g02status, severity: 'high', detail: g02detail,
+    });
   })();
 
   add({ id: 'G-SIGN-01', name: '具名签字+面板', level: 'certified', must: true, status: manifest.signoff ? 'pass' : 'blocked', severity: 'high', detail: manifest.signoff ? `signoff.by=${manifest.signoff.by}` : '无 signoff (认证前置)' });

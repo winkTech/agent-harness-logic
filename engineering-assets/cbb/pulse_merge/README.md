@@ -1,6 +1,6 @@
 # pulse_merge
 
-<!-- asset-status: certified v1.0.0 -->
+<!-- asset-status: certified v1.0.1 -->
 
 Reusable synchronous pulse-credit merger. The local implementation preserves
 the behavior of the MIT vendor reference while making the interface, reset,

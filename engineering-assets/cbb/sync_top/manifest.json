@@ -2,11 +2,11 @@
   "schema_version": "1.0",
   "asset_uid": "sync_top",
   "name": "ofdm_sync_top",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "owner": "lihan",
   "maturity": {
     "level": "certified",
-    "evidence_ref": "engineering-assets/evidence/sync_top/1.0.1/"
+    "evidence_ref": "engineering-assets/evidence/sync_top/1.0.2/"
   },
   "signoff": {
     "by": "lihan",
@@ -210,5 +210,11 @@
       "value": 40,
       "rationale": "设计常量: corr_start = plat_end_idx + 40 (拍域确定, 保证 CORDIC 求角完成; 位真镜像同式)"
     }
-  ]
+  ],
+  "reproduce": {
+    "sim": "bash cbb/sync_top/run_xsim.sh --install",
+    "synth": "node tools/pg-synth.cjs cbb/sync_top",
+    "gate": "node tools/gate-runner.cjs cbb/sync_top --repo-root ..",
+    "note": "2026-08-02 xsim 复跑: 6 份证据内容一致(仅 tool 字段不同), reset-sim 逐字节相同。"
+  }
 }

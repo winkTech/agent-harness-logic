@@ -7,7 +7,7 @@
    "project": "phy-intake",
    "project_ref": "cbb/channel_est_top",
    "asset_uid": "channel_est_top",
-   "version_pinned": "1.0.1",
+   "version_pinned": "1.0.2",
    "config": {
     "DATA_W": 16,
     "N_FFT": 64,
@@ -27,7 +27,7 @@
    "project": "phy-intake",
    "project_ref": "cbb/ldpc_codec",
    "asset_uid": "ldpc_codec",
-   "version_pinned": "1.0.2",
+   "version_pinned": "1.0.3",
    "config": {},
    "integrated_at": "2026-07-26T00:00:00Z",
    "status": "active",
@@ -139,7 +139,7 @@
    "project": "phy-intake",
    "project_ref": "cbb/ofdm_tx_top",
    "asset_uid": "ofdm_tx_top",
-   "version_pinned": "1.0.0",
+   "version_pinned": "1.0.1",
    "config": {
     "DATA_W": 16
    },
@@ -158,7 +158,7 @@
    "project": "cbb-foundation",
    "project_ref": "cbb/rrc_polyphase_fir",
    "asset_uid": "rrc_polyphase_fir",
-   "version_pinned": "1.0.1",
+   "version_pinned": "1.0.2",
    "config": {
     "DATA_W": 16,
     "COEFF_W": 16,
@@ -200,7 +200,7 @@
    "project": "phy-intake",
    "project_ref": "cbb/sync_top",
    "asset_uid": "sync_top",
-   "version_pinned": "1.0.1",
+   "version_pinned": "1.0.2",
    "config": {},
    "integrated_at": "2026-07-26T00:00:00Z",
    "status": "active",
@@ -216,7 +216,7 @@
    "project": "cbb-foundation",
    "project_ref": "cbb/stream_elastic_pipeline",
    "asset_uid": "stream_elastic_pipeline",
-   "version_pinned": "1.0.0",
+   "version_pinned": "1.0.1",
    "config": {
     "DATA_WIDTH": 32,
     "DEPTH": 2
@@ -269,7 +269,7 @@
    "project": "cbb-foundation",
    "project_ref": "cbb/pulse_merge",
    "asset_uid": "pulse_merge",
-   "version_pinned": "1.0.0",
+   "version_pinned": "1.0.1",
    "config": {
     "INPUT_WIDTH": 4,
     "COUNT_WIDTH": 12
@@ -322,7 +322,7 @@
    "project": "(library)",
    "project_ref": "cbb/axis_skid_buffer",
    "asset_uid": "axis_skid_buffer",
-   "version_pinned": "1.0.1",
+   "version_pinned": "1.0.2",
    "config": {},
    "integrated_at": "2026-07-31T00:00:00Z",
    "status": "library",
@@ -337,7 +337,7 @@
    "project": "(library)",
    "project_ref": "cbb/cdc_sync",
    "asset_uid": "cdc_sync",
-   "version_pinned": "1.0.0",
+   "version_pinned": "1.0.1",
    "config": {
     "P_DWIDTH": 8,
     "P_STAGES": 2
@@ -355,7 +355,7 @@
    "project": "(library)",
    "project_ref": "cbb/complex_multiplier",
    "asset_uid": "complex_multiplier",
-   "version_pinned": "1.0.0",
+   "version_pinned": "1.0.1",
    "config": {
     "P_A_W": 16,
     "P_B_W": 16
@@ -373,7 +373,7 @@
    "project": "(library)",
    "project_ref": "cbb/crc32",
    "asset_uid": "crc32",
-   "version_pinned": "1.0.0",
+   "version_pinned": "1.0.1",
    "config": {},
    "integrated_at": "2026-07-31T00:00:00Z",
    "status": "library",
@@ -388,7 +388,7 @@
    "project": "(library)",
    "project_ref": "cbb/ddr_axi4_controller",
    "asset_uid": "ddr_axi4_controller",
-   "version_pinned": "1.0.0",
+   "version_pinned": "1.0.1",
    "config": {
     "P_DATA_W": 512,
     "P_ADDR_W": 32,
@@ -409,7 +409,7 @@
    "project": "(library)",
    "project_ref": "cbb/delay_line",
    "asset_uid": "delay_line",
-   "version_pinned": "1.0.0",
+   "version_pinned": "1.0.1",
    "config": {
     "P_DWIDTH": 32,
     "P_DELAY": 2
@@ -427,7 +427,7 @@
    "project": "(library)",
    "project_ref": "cbb/frame_sync",
    "asset_uid": "frame_sync",
-   "version_pinned": "1.0.0",
+   "version_pinned": "1.0.1",
    "config": {
     "P_MIN_PREAMBLE": 2
    },
@@ -444,7 +444,7 @@
    "project": "(library)",
    "project_ref": "cbb/lfsr_gen",
    "asset_uid": "lfsr_gen",
-   "version_pinned": "1.0.0",
+   "version_pinned": "1.0.1",
    "config": {},
    "integrated_at": "2026-07-31T00:00:00Z",
    "status": "library",
@@ -459,7 +459,7 @@
    "project": "(library)",
    "project_ref": "cbb/sdp_ram",
    "asset_uid": "sdp_ram",
-   "version_pinned": "1.0.0",
+   "version_pinned": "1.0.1",
    "config": {
     "P_DWIDTH": 32,
     "P_AWIDTH": 9

@@ -354,6 +354,17 @@
         }
       }
     },
+    "reproduce": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "证据的复现入口。G-GATE-01 只查证据文件在不在, G-GATE-02 查它能不能被重做 —— 复现方式必须是声明出来的契约, 而不是 README 里的散文(散文会漂移, 且门禁看不见)。命令里引用的脚本须在仓库中真实存在。",
+      "properties": {
+        "sim": { "type": "string", "description": "仿真证据的复现命令 (certified 级必需)" },
+        "synth": { "type": "string", "description": "综合证据的复现命令" },
+        "gate": { "type": "string", "description": "门禁判定的复现命令" },
+        "note": { "type": "string", "description": "复现的前置条件或已知限制 (如某条通路当前不可用)" }
+      }
+    },
     "banner": { "type": "string", "description": "reference 级必需的“未认证”横幅文本" },
     "content": {
       "type": "object",

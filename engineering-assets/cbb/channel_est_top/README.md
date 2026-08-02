@@ -1,11 +1,11 @@
-<!-- asset-status: certified v1.0.1 -->
+<!-- asset-status: certified v1.0.2 -->
 <!-- 级别横幅（由成熟度派生）: CERTIFIED — 全门绿 + owner 签署 (2026-08-01) -->
 
 # channel_est_top
 
-> `asset_uid: channel_est_top` · `version: 1.0.0` · `owner: lihan`
+> `asset_uid: channel_est_top` · `version: 1.0.2` · `owner: lihan`
 > 成熟度: **certified** — 签署与证据快照见 manifest.signoff 与
-> `../../evidence/channel_est_top/1.0.0/`；机器判据见
+> `../../evidence/channel_est_top/1.0.2/`；机器判据见
 > `../../var/gates/pg/channel_est_top/gate-results.json`
 
 ## 用途

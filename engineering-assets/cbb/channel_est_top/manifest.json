@@ -2,11 +2,11 @@
   "schema_version": "1.0",
   "asset_uid": "channel_est_top",
   "name": "channel_est_top",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "owner": "lihan",
   "maturity": {
     "level": "certified",
-    "evidence_ref": "engineering-assets/evidence/channel_est_top/1.0.1/"
+    "evidence_ref": "engineering-assets/evidence/channel_est_top/1.0.2/"
   },
   "signoff": {
     "by": "lihan",
@@ -225,5 +225,11 @@
       "value": 4,
       "rationale": "设计常量(algorithm_spec: 导频 {-21,-7,7,21}); ADR-002 裁决后导频仅用于 CPE 相位跟踪, 初始估计基础为 2×LTS 全用载波 LS"
     }
-  ]
+  ],
+  "reproduce": {
+    "sim": "bash cbb/channel_est_top/run_xsim.sh --install",
+    "synth": "node tools/pg-synth.cjs cbb/channel_est_top",
+    "gate": "node tools/gate-runner.cjs cbb/channel_est_top --repo-root ..",
+    "note": "2026-08-02 xsim 复跑: alignment/reset-sim 逐字节相同, 4 份 stability 内容一致(仅 tool 字段不同)。"
+  }
 }

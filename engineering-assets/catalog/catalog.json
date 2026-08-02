@@ -24,7 +24,7 @@
       "asset_uid": "axis_skid_buffer",
       "name": "axis_skid_buffer",
       "kind": "primitive",
-      "version": "1.0.1",
+      "version": "1.0.2",
       "owner": "lihan",
       "level": "certified",
       "dir": "cbb/axis_skid_buffer",
@@ -45,14 +45,14 @@
       "gates": {
         "cleared_level": "certified",
         "blocking_at": null,
-        "pass_count": 20
+        "pass_count": 21
       }
     },
     {
       "asset_uid": "cdc_sync",
       "name": "cdc_sync",
       "kind": "primitive",
-      "version": "1.0.0",
+      "version": "1.0.1",
       "owner": "lihan",
       "level": "certified",
       "dir": "cbb/cdc_sync",
@@ -73,14 +73,14 @@
       "gates": {
         "cleared_level": "certified",
         "blocking_at": null,
-        "pass_count": 20
+        "pass_count": 21
       }
     },
     {
       "asset_uid": "channel_est_top",
       "name": "channel_est_top",
       "kind": "rtl",
-      "version": "1.0.1",
+      "version": "1.0.2",
       "owner": "lihan",
       "level": "certified",
       "dir": "cbb/channel_est_top",
@@ -101,14 +101,14 @@
       "gates": {
         "cleared_level": "certified",
         "blocking_at": null,
-        "pass_count": 20
+        "pass_count": 21
       }
     },
     {
       "asset_uid": "complex_multiplier",
       "name": "complex_multiplier",
       "kind": "primitive",
-      "version": "1.0.0",
+      "version": "1.0.1",
       "owner": "lihan",
       "level": "certified",
       "dir": "cbb/complex_multiplier",
@@ -129,14 +129,14 @@
       "gates": {
         "cleared_level": "certified",
         "blocking_at": null,
-        "pass_count": 20
+        "pass_count": 21
       }
     },
     {
       "asset_uid": "crc32",
       "name": "crc32",
       "kind": "primitive",
-      "version": "1.0.0",
+      "version": "1.0.1",
       "owner": "lihan",
       "level": "certified",
       "dir": "cbb/crc32",
@@ -157,14 +157,14 @@
       "gates": {
         "cleared_level": "certified",
         "blocking_at": null,
-        "pass_count": 20
+        "pass_count": 21
       }
     },
     {
       "asset_uid": "ddr_axi4_controller",
       "name": "ddr_axi4_controller",
       "kind": "primitive",
-      "version": "1.0.0",
+      "version": "1.0.1",
       "owner": "lihan",
       "level": "certified",
       "dir": "cbb/ddr_axi4_controller",
@@ -185,14 +185,14 @@
       "gates": {
         "cleared_level": "certified",
         "blocking_at": null,
-        "pass_count": 20
+        "pass_count": 21
       }
     },
     {
       "asset_uid": "delay_line",
       "name": "delay_line",
       "kind": "primitive",
-      "version": "1.0.0",
+      "version": "1.0.1",
       "owner": "lihan",
       "level": "certified",
       "dir": "cbb/delay_line",
@@ -213,14 +213,14 @@
       "gates": {
         "cleared_level": "certified",
         "blocking_at": null,
-        "pass_count": 20
+        "pass_count": 21
       }
     },
     {
       "asset_uid": "frame_sync",
       "name": "frame_sync",
       "kind": "primitive",
-      "version": "1.0.0",
+      "version": "1.0.1",
       "owner": "lihan",
       "level": "certified",
       "dir": "cbb/frame_sync",
@@ -241,14 +241,14 @@
       "gates": {
         "cleared_level": "certified",
         "blocking_at": null,
-        "pass_count": 20
+        "pass_count": 21
       }
     },
     {
       "asset_uid": "ldpc_codec",
       "name": "ldpc_codec",
       "kind": "rtl",
-      "version": "1.0.2",
+      "version": "1.0.3",
       "owner": "lihan",
       "level": "certified",
       "dir": "cbb/ldpc_codec",
@@ -269,14 +269,14 @@
       "gates": {
         "cleared_level": "certified",
         "blocking_at": null,
-        "pass_count": 20
+        "pass_count": 21
       }
     },
     {
       "asset_uid": "lfsr_gen",
       "name": "lfsr_gen",
       "kind": "primitive",
-      "version": "1.0.0",
+      "version": "1.0.1",
       "owner": "lihan",
       "level": "certified",
       "dir": "cbb/lfsr_gen",
@@ -297,7 +297,7 @@
       "gates": {
         "cleared_level": "certified",
         "blocking_at": null,
-        "pass_count": 20
+        "pass_count": 21
       }
     },
     {
@@ -454,7 +454,7 @@
       "asset_uid": "ofdm_tx_top",
       "name": "ofdm_tx_top",
       "kind": "rtl",
-      "version": "1.0.0",
+      "version": "1.0.1",
       "owner": "lihan",
       "level": "certified",
       "dir": "cbb/ofdm_tx_top",
@@ -475,14 +475,14 @@
       "gates": {
         "cleared_level": "certified",
         "blocking_at": null,
-        "pass_count": 20
+        "pass_count": 21
       }
     },
     {
       "asset_uid": "pulse_merge",
       "name": "pulse_merge",
       "kind": "rtl",
-      "version": "1.0.0",
+      "version": "1.0.1",
       "owner": "lihan",
       "level": "certified",
       "dir": "cbb/pulse_merge",
@@ -505,7 +505,7 @@
       "gates": {
         "cleared_level": "certified",
         "blocking_at": null,
-        "pass_count": 20
+        "pass_count": 21
       }
     },
     {
@@ -542,7 +542,7 @@
       "asset_uid": "rrc_polyphase_fir",
       "name": "rrc_polyphase_fir",
       "kind": "rtl",
-      "version": "1.0.1",
+      "version": "1.0.2",
       "owner": "lihan",
       "level": "certified",
       "dir": "cbb/rrc_polyphase_fir",
@@ -568,14 +568,14 @@
       "gates": {
         "cleared_level": "certified",
         "blocking_at": null,
-        "pass_count": 20
+        "pass_count": 21
       }
     },
     {
       "asset_uid": "sdp_ram",
       "name": "sdp_ram",
       "kind": "primitive",
-      "version": "1.0.0",
+      "version": "1.0.1",
       "owner": "lihan",
       "level": "certified",
       "dir": "cbb/sdp_ram",
@@ -596,14 +596,14 @@
       "gates": {
         "cleared_level": "certified",
         "blocking_at": null,
-        "pass_count": 20
+        "pass_count": 21
       }
     },
     {
       "asset_uid": "stream_elastic_pipeline",
       "name": "stream_elastic_pipeline",
       "kind": "rtl",
-      "version": "1.0.0",
+      "version": "1.0.1",
       "owner": "lihan",
       "level": "certified",
       "dir": "cbb/stream_elastic_pipeline",
@@ -626,7 +626,7 @@
       "gates": {
         "cleared_level": "certified",
         "blocking_at": null,
-        "pass_count": 20
+        "pass_count": 21
       }
     },
     {
@@ -663,7 +663,7 @@
       "asset_uid": "sync_top",
       "name": "ofdm_sync_top",
       "kind": "rtl",
-      "version": "1.0.1",
+      "version": "1.0.2",
       "owner": "lihan",
       "level": "certified",
       "dir": "cbb/sync_top",
@@ -684,7 +684,7 @@
       "gates": {
         "cleared_level": "certified",
         "blocking_at": null,
-        "pass_count": 20
+        "pass_count": 21
       }
     }
   ]

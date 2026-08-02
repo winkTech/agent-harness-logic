@@ -1,4 +1,4 @@
-<!-- asset-status: certified v1.0.0 -->
+<!-- asset-status: certified v1.0.1 -->
 # complex_multiplier — 复数乘法器 (四乘法直算、全精度, certified CBB)
 
 > **综合 (OOC, xc7k325tffg900-2)**: WNS +2.51ns @250MHz 即达成约 **671 MHz**;

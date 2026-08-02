@@ -2,11 +2,11 @@
   "schema_version": "1.0",
   "asset_uid": "ofdm_tx_top",
   "name": "ofdm_tx_top",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "owner": "lihan",
   "maturity": {
     "level": "certified",
-    "evidence_ref": "engineering-assets/evidence/ofdm_tx_top/1.0.0/"
+    "evidence_ref": "engineering-assets/evidence/ofdm_tx_top/1.0.1/"
   },
   "signoff": {
     "by": "lihan",
@@ -179,5 +179,11 @@
   ],
   "waivers": [],
   "superseded_by": null,
-  "top": "ofdm_tx_top"
+  "top": "ofdm_tx_top",
+  "reproduce": {
+    "sim": "bash cbb/ofdm_tx_top/run_xsim.sh --install",
+    "synth": "node tools/pg-synth.cjs cbb/ofdm_tx_top",
+    "gate": "node tools/gate-runner.cjs cbb/ofdm_tx_top --repo-root ..",
+    "note": "双通路: run_xsim.sh (本机可用) 与 run.do (ModelSim, 本机故障)。"
+  }
 }

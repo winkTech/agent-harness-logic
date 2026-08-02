@@ -2,7 +2,7 @@
   "schema_version": "1.0",
   "asset_uid": "cdc_sync",
   "name": "cdc_sync",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "signoff": {
     "by": "lihan",
     "at": "2026-08-01",
@@ -22,7 +22,7 @@
   "kind": "primitive",
   "maturity": {
     "level": "certified",
-    "evidence_ref": "engineering-assets/evidence/cdc_sync/1.0.0/"
+    "evidence_ref": "engineering-assets/evidence/cdc_sync/1.0.1/"
   },
   "requirement_ref": "engineering-assets/docs/comm模块族认证差距清单.md",
   "doc_refs": [
@@ -161,5 +161,11 @@
     }
   ],
   "waivers": [],
-  "superseded_by": null
+  "superseded_by": null,
+  "reproduce": {
+    "sim": "bash tools/run-primitive-sim.sh cdc_sync --install",
+    "synth": "node tools/pg-synth.cjs cbb/cdc_sync",
+    "gate": "node tools/gate-runner.cjs cbb/cdc_sync --repo-root ..",
+    "note": "2026-08-02 用该命令复跑, 6 份证据与 certified 时的记录逐字节相同。"
+  }
 }

@@ -1,4 +1,4 @@
-<!-- asset-status: certified v1.0.0 -->
+<!-- asset-status: certified v1.0.1 -->
 # crc32 — CRC-32 帧校验和 (IEEE 802.3 反射语义、字节流, certified CBB)
 
 > **综合 (OOC, xc7k325tffg900-2)**: WNS +3.133ns @200MHz 即达成 **535 MHz**;

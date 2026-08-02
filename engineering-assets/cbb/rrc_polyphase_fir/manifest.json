@@ -2,11 +2,11 @@
   "schema_version": "1.0",
   "asset_uid": "rrc_polyphase_fir",
   "name": "rrc_polyphase_fir",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "owner": "lihan",
   "maturity": {
     "level": "certified",
-    "evidence_ref": "engineering-assets/evidence/rrc_polyphase_fir/1.0.1/"
+    "evidence_ref": "engineering-assets/evidence/rrc_polyphase_fir/1.0.2/"
   },
   "requirement_ref": "engineering-assets/knowledge/primary/domains/comm/rrc/algorithm_spec.md",
   "doc_refs": [
@@ -201,5 +201,11 @@
       "value": 9,
       "rationale": "RTL 顶层参数默认值; 每相抽头数(33 taps/4 相零补齐)"
     }
-  ]
+  ],
+  "reproduce": {
+    "sim": "bash cbb/rrc_polyphase_fir/run_xsim.sh --install",
+    "synth": "node tools/pg-synth.cjs cbb/rrc_polyphase_fir",
+    "gate": "node tools/gate-runner.cjs cbb/rrc_polyphase_fir --repo-root ..",
+    "note": "2026-08-02 xsim 复跑, 6 份证据与 ModelSim 时代逐字节相同。ModelSim 通路 run.do 保留但本机故障。"
+  }
 }

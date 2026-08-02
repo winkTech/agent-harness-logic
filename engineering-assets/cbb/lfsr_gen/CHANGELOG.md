@@ -1,5 +1,16 @@
 # CHANGELOG — lfsr_gen
 
+## [1.0.1] — 2026-08-02 声明证据复现入口（G-GATE-02）
+
+manifest 新增 `reproduce` 字段，把"证据怎么重做"从 README 里的散文变成**机器可校验
+的契约**。新门 `G-GATE-02` 校验该命令引用的脚本在仓库中真实存在。
+
+动因：`G-GATE-01` 只查证据文件在不在，普查发现 16 个 certified 里 14 个的证据当时
+无法被任何人重新生成，**却全都通过了 G-GATE-01**。
+
+RTL、约束、TB、证据零改动；升 patch 版仅因 manifest 内容变化会使快照的
+`manifest_sha256` 失配，按库内既定做法升版重取。
+
 ## [1.0.0] — 2026-08-01 certified 认证
 
 RTL 未改动；本条为 certified 转正所补的约束、证据与记账。

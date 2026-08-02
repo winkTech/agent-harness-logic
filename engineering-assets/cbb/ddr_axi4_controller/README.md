@@ -10,7 +10,7 @@
 > 与 DUT 自身 `always_ff @(posedge)` 同时间步、顺序不定，DUT 有时采到下一拍的
 > `rdata`/`rlast`。**RTL 无缺陷** —— 改为 negedge 驱动后 0 失配。
 
-<!-- asset-status: certified v1.0.0 -->
+<!-- asset-status: certified v1.0.1 -->
 
 
 用户命令/数据流接口与 Xilinx MIG(AXI4 slave)之间的桥接层。单 ID、单事务顺序执行。
