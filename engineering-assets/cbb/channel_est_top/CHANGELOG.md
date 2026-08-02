@@ -1,5 +1,33 @@
 # CHANGELOG — channel_est_top
 
+## [1.0.1] — 2026-08-02 补 xsim 复现通路（RTL 零改动）
+
+本机 ModelSim 回环 RPC 自 2026-08-01 起故障，`.do` 那条路跑不通，本资产的
+certified 证据无法复现。现补 `run_xsim.sh`，两条通路共用同一组 TB 与判据。
+
+**交叉验证**：`alignment-report.json`（2048 点 0 失配）与 `reset-sim.json`
+与 ModelSim 时代的记录**逐字节相同**；4 份 `stability/*.json` 内容一致，
+只有 `tool` 字段不同——那正是应该不同的地方。
+
+途中修掉三处 TB 缺陷：
+
+1. **xsim 下 4 份 stability 证据的 `reason` 全是乱码。** 根因是
+   `$fdisplay` 输出**作为参数传入**的多字节 string 会被打乱，换 `%0s` 也不管用
+   （与宽度无关）。改为把文本直写进格式串——`crc32` 的 TB 早有同样的注释与做法，
+   本 TB 当时没跟上。数字侧一直是对的，坏的只是人读的那部分。
+2. **`tool` 字段写死 `"ModelSim 10.6c"`**，迁到 xsim 后会让证据声称自己出自一个
+   并没有跑过它的仿真器。改为由运行脚本经 `sim-tool.txt` 注入。
+3. **cosim TB 把 RTL 输出写进了 golden 的权威向量目录**
+   （`{VEC_DIR, "rtl_chEst_frame_out.hex"}`）。RTL 产物混在期望值旁边迟早会被
+   当成期望值用；实测它也确实以未提交状态在 `models/comm/channel_est/vectors/`
+   躺了很久。改写到证据目录，并清掉了那份残留。
+
+另：`EVID_DIR`/`VEC_DIR` 取不到时不再让证据静默不写，改为回落到运行目录相对
+（同 `axis_skid_buffer` 1.0.1）；包内 `var_build/` 与 `transcript` 已清理，
+根源是 `.do` 里 `set BUILD [file join $ROOT var_build]` 写死在包内构建。
+
+版本 1.0.0 → 1.0.1（TB 属登记源）；RTL、约束与全部功能结论零改动。
+
 ## [1.0.0] — 2026-08-01 certified 认证
 
 内容与 0.2.1 一致，无代码改动；本条为认证记账：

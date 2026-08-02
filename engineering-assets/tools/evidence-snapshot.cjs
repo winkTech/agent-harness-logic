@@ -13,7 +13,10 @@ const MAX_BYTES = 1024 * 1024;
 const ALLOWED = /^(?:gate-results\.json|RL-OUT\.json|(?:G|CS|RL-OUT)-[A-Z0-9./_-]+\.json|envelope-check\.json|alignment-report\.json|tb-selfcheck\.json|reset-sim\.json|cdc-report\.json|synthesis-timing-evidence\.json|timing-summary\.rpt|utilization\.rpt|clocks\.rpt|cdc\.rpt|clock-interaction\.rpt|clocks-cdc\.rpt|synth-meta\.json|stability[\\/][^\\/]+\.json|hold-closure\.json|route-timing-summary\.rpt|route-utilization\.rpt|route-drc\.rpt)$/;
 // trace/ = bit-true 对拍原始数据(hex/txt, MB 级), 性质同波形: 可由 TB+golden 复现,
 // 摘要在 alignment-report.json 里 —— 不入快照
-const EXCLUDED = /(?:^|[\\/])(?:synth\.log|backup|work|waves?|trace|.*\.(?:wlf|vcd|vpd|fsdb))(?=$|[\\/])/i;
+// rtl_*_out.hex = TB 的 RTL 输出转储, 性质同 trace/: 可由 TB+向量复现, 判定摘要在
+// alignment-report.json 里, 不入快照。(channel_est_top 的 tb_chEst_cosim 会产它;
+// 它原先被写进 golden 的权威向量目录, 2026-08-02 改写到证据目录后才撞上白名单。)
+const EXCLUDED = /(?:^|[\\/])(?:synth\.log|backup|work|waves?|trace|rtl_[A-Za-z0-9_]*_out\.hex|.*\.(?:wlf|vcd|vpd|fsdb))(?=$|[\\/])/i;
 
 function canonicalBytes(file) {
   const bytes = fs.readFileSync(file);

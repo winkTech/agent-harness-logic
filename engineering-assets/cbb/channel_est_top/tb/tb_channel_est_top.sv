@@ -254,16 +254,51 @@ module tb_channel_est_top;
     bit    evid_en;
     int    rst_fail;
 
-    task automatic write_stab(input string name, input int beats,
-                              input string reason);
+    // reason 直写格式串, 不作为参数传 —— xsim 实测坑:
+    //   $fdisplay 输出**作为参数传入**的多字节 string 会把内容打乱 (中文 reason 变乱码),
+    //   换 %0s 也不管用, 与宽度无关。只有把文本直接写进格式串才完好。
+    //   crc32 的 TB 早有同样的注释与做法, 本 TB 当时没跟上, 于是 xsim 下产出的
+    //   4 份 stability 证据 reason 全是乱码 —— 数字对但人读不了。
+    // tool 同理不写死: 原为 "ModelSim 10.6c", 迁到 xsim 后会让证据声称自己出自一个
+    //   并没有跑过它的仿真器。改为读运行目录下的 sim-tool.txt。
+    task automatic write_stab(input string name, input int beats);
         int fd;
         if (!evid_en) return;
         fd = $fopen({EVID_DIR, "stability/", name, ".json"}, "w");
         if (fd == 0) $fatal(1, "无法写 %sstability/%s.json", EVID_DIR, name);
-        $fdisplay(fd, "{\"pass\": true, \"beats\": %0d, \"reason\": \"%s\", \"tool\": \"ModelSim 10.6c\", \"tb\": \"tb_channel_est_top\"}",
-                  beats, reason);
+        $fwrite(fd, "{\"pass\": true, \"beats\": %0d, \"reason\": \"", beats);
+        case (name)
+            "regression":
+                $fwrite(fd, "固定场景回归套件: T1 平坦信道 2 符号 + T2 变化复信道逐符号 CPE (+0.3/-0.2 rad) 及数据内容无关性, 256 点解析期望比对全过");
+            "backpressure":
+                $fwrite(fd, "m_axis 随机反压 (约 25%% 拒收) 重跑整帧, 128 点与无反压基准逐点一致, 不丢不重");
+            "boundary":
+                $fwrite(fd, "帧边界: LTS2 半途 (10/64 样点) 重发 i_frame_start, 新帧 (最小结构 2xLTS+1 数据符号) 64/64 全载波正确, 无旧帧串扰");
+            "stress":
+                $fwrite(fd, "压力: 背靠背 (gap=0) 2xLTS+8 数据符号连发, 叠加 m_axis 随机反压, 512 点逐符号 CPE 解析期望比对全过, 无死锁无丢重");
+            default:
+                $fwrite(fd, "unspecified");
+        endcase
+        $fdisplay(fd, "\", \"tool\": \"%0s\", \"tb\": \"tb_channel_est_top\"}", sim_tool());
         $fclose(fd);
     endtask
+
+    // 实际跑本次仿真的工具名。优先 +TOOL (ModelSim 可用), 否则读运行目录的
+    // sim-tool.txt; 都没有就写 unknown-simulator —— 宁可留空, 不给一个看似可信的错名字。
+    function automatic string sim_tool();
+        string t;
+        int    fd;
+        if ($value$plusargs("TOOL=%s", t)) return t;
+        fd = $fopen("sim-tool.txt", "r");
+        if (fd != 0) begin
+            if ($fscanf(fd, "%s", t) == 1 && t.len() > 0) begin
+                $fclose(fd);
+                return t;
+            end
+            $fclose(fd);
+        end
+        return "unknown-simulator";
+    endfunction
 
     // 帧中再复位 (保持 3 拍) 期间逐寄存器比对; want 全 0 (含 P_UNSYNC/P_CIDLE)
     task automatic check_rst(input int fd, input string nm, input int got);
@@ -332,7 +367,11 @@ module tb_channel_est_top;
 
     initial begin : p_main
         rst = 1'b1; fs = 1'b0; s_tvalid = 1'b0; s_tdata = '0;
-        evid_en = $value$plusargs("EVID_DIR=%s", EVID_DIR);
+        // 同 tb_chEst_cosim: ModelSim 走 +EVID_DIR 绝对路径, xsim 传不了路径故回落到
+        // 运行目录相对, 由 run_xsim.sh 搬到 var/gates/pg/<asset_uid>/。
+        // evid_en 不再依赖 plusarg 是否存在 —— 否则 xsim 下会整段证据静默不写。
+        if (!$value$plusargs("EVID_DIR=%s", EVID_DIR)) EVID_DIR = "";
+        evid_en = 1'b1;
         repeat (5) @(posedge clk);
         rst = 1'b0;
         repeat (3) @(posedge clk);
@@ -360,8 +399,7 @@ module tb_channel_est_top;
         check_sym("T2 sym0 (cpe=+0.3)", 0.3);
         check_sym("T2 sym1 (cpe=-0.2)", -0.2);
         expect_idle("T2");
-        write_stab("regression", 4*N,
-            "固定场景回归套件: T1 平坦信道 2 符号 + T2 变化复信道逐符号 CPE (+0.3/-0.2 rad) 及数据内容无关性, 256 点解析期望比对全过");
+        write_stab("regression", 4*N);
 
         //------------------------------------------------------------------
         $display("[T3] m_axis 随机反压重跑 T2 帧 (输出必须逐点一致)");
@@ -391,8 +429,7 @@ module tb_channel_est_top;
         end
         $display("  [T3] 128/128 点与无反压基准逐点一致");
         expect_idle("T3");
-        write_stab("backpressure", 2*N,
-            "m_axis 随机反压 (约 25% 拒收) 重跑整帧, 128 点与无反压基准逐点一致, 不丢不重");
+        write_stab("backpressure", 2*N);
 
         //------------------------------------------------------------------
         $display("[T4] 半帧后 i_frame_start 重启");
@@ -409,8 +446,7 @@ module tb_channel_est_top;
         wait_cap(N, "T4");
         check_sym("T4 sym0 (重启帧)", 0.1);
         expect_idle("T4");
-        write_stab("boundary", N,
-            "帧边界: LTS2 半途 (10/64 样点) 重发 i_frame_start, 新帧 (最小结构 2xLTS+1 数据符号) 64/64 全载波正确, 无旧帧串扰");
+        write_stab("boundary", N);
 
         //------------------------------------------------------------------
         $display("[T5] 帧中复位 -> 重新同步");
@@ -472,8 +508,7 @@ module tb_channel_est_top;
         for (int m = 0; m < 8; m++)
             check_sym($sformatf("T7 sym%0d", m), 0.05 * (m + 1));
         expect_idle("T7");
-        write_stab("stress", 8*N,
-            "压力: 背靠背 (gap=0) 2xLTS+8 数据符号连发, 叠加 m_axis 随机反压, 512 点逐符号 CPE 解析期望比对全过, 无死锁无丢重");
+        write_stab("stress", 8*N);
 
         //------------------------------------------------------------------
         $display("ALL TESTS PASSED");

@@ -136,9 +136,17 @@ module tb_chEst_cosim;
         rst = 1'b0;
         repeat (5) @(posedge clk);
 
-        if (!$value$plusargs("VEC_DIR=%s", VEC_DIR))
-            $fatal(1, "缺 +VEC_DIR — 向量权威位置 models/comm/channel_est/vectors/");
-        evid_en = $value$plusargs("EVID_DIR=%s", EVID_DIR);
+        // 路径注入两条通路, TB 内均不出现硬编码绝对路径:
+        //   ModelSim: run_cosim.do 经 +VEC_DIR / +EVID_DIR 传绝对路径
+        //   xsim    : -testplusarg 在 Windows 上会在 `=` 与盘符处把参数切碎, 传不了
+        //             路径, 故回落到**运行目录相对** —— 由 run_xsim.sh 先把向量拷进
+        //             构建目录、跑完再把证据搬到 var/gates/pg/<asset_uid>/。
+        // 回落的是"相对当前工作目录"而非某个写死的位置, 治理规范禁的是后者。
+        // 注意 evid_en 取不到时若保持 0, 整段证据会静默不写 —— 那正是同类 TB 在
+        // xsim 下"跑通却零证据"的成因 (见 axis_skid_buffer 1.0.1)。
+        if (!$value$plusargs("VEC_DIR=%s", VEC_DIR)) VEC_DIR = "";
+        if (!$value$plusargs("EVID_DIR=%s", EVID_DIR)) EVID_DIR = "";
+        evid_en = 1'b1;
 
         load_file({VEC_DIR, "rx_chEst_frame.hex"},       stim_q);
         load_file({VEC_DIR, "expected_chEst_frame.hex"}, gold_q);
@@ -176,7 +184,11 @@ module tb_chEst_cosim;
             $fatal(1, "输出点数 %0d != 期望 %0d (多余输出)", cap_q.size(), nsym*N_FFT);
 
         // 落盘 + 逐字比对
-        out_fd = $fopen({VEC_DIR, "rtl_chEst_frame_out.hex"}, "w");
+        // 写 EVID_DIR 而不是 VEC_DIR: 这是**RTL 的输出**, 不是 golden 期望值。
+        // 原先写进 models/comm/channel_est/vectors/ —— 那是 golden 向量的权威目录,
+        // 把 RTL 产物混在期望值旁边, 迟早会被谁当成期望值用; 实测它也确实以未提交
+        // 状态在那里躺了很久 (rtl_chEst_frame_out.hex)。证据目录才是它该待的地方。
+        out_fd = $fopen({EVID_DIR, "rtl_chEst_frame_out.hex"}, "w");
         if (out_fd == 0) $fatal(1, "无法创建 rtl_chEst_frame_out.hex");
         for (int i = 0; i < nsym * N_FFT; i++) begin
             got = cap_q[i];

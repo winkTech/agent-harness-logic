@@ -7,7 +7,7 @@
    "project": "phy-intake",
    "project_ref": "cbb/channel_est_top",
    "asset_uid": "channel_est_top",
-   "version_pinned": "1.0.0",
+   "version_pinned": "1.0.1",
    "config": {
     "DATA_W": 16,
     "N_FFT": 64,

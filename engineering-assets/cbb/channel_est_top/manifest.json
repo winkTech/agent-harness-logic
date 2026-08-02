@@ -2,11 +2,11 @@
   "schema_version": "1.0",
   "asset_uid": "channel_est_top",
   "name": "channel_est_top",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "owner": "lihan",
   "maturity": {
     "level": "certified",
-    "evidence_ref": "engineering-assets/evidence/channel_est_top/1.0.0/"
+    "evidence_ref": "engineering-assets/evidence/channel_est_top/1.0.1/"
   },
   "signoff": {
     "by": "lihan",
@@ -143,12 +143,12 @@
     {
       "path": "tb/tb_channel_est_top.sv",
       "role": "tb",
-      "sha256": "920d1c8014ff368eb01b068f73530247d8f19efbe8cde191b4b2dc555931da62"
+      "sha256": "c5aaa57408cbf3cf70e29cff63845c69c8d0ba34feb4bee20ce0c4a06d09fbcc"
     },
     {
       "path": "tb/tb_chEst_cosim.sv",
       "role": "tb",
-      "sha256": "681e589943efafafcb67d57707b4182f46e2e19c601ec371200001b13a993bea"
+      "sha256": "1cfdbef33b6743a7f4922e557bfa50c799cc6364e9fb25231eb32335d3eed144"
     },
     {
       "path": "tb/uvm/chEst_uvm_pkg.sv",

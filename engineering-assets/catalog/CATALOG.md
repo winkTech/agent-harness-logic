@@ -10,7 +10,7 @@ Assets: 23 · RED: 0 · YELLOW: 0
 |---|---:|---|---|---|---|---|---|
 | `axis_skid_buffer` | 1.0.1 | primitive | `cbb/axis_skid_buffer` | certified | — | — | — |
 | `cdc_sync` | 1.0.0 | primitive | `cbb/cdc_sync` | certified | — | — | — |
-| `channel_est_top` | 1.0.0 | rtl | `cbb/channel_est_top` | certified | — | — | — |
+| `channel_est_top` | 1.0.1 | rtl | `cbb/channel_est_top` | certified | — | — | — |
 | `complex_multiplier` | 1.0.0 | primitive | `cbb/complex_multiplier` | certified | — | — | — |
 | `crc32` | 1.0.0 | primitive | `cbb/crc32` | certified | — | — | — |
 | `ddr_axi4_controller` | 1.0.0 | primitive | `cbb/ddr_axi4_controller` | certified | — | — | — |
