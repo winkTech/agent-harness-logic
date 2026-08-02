@@ -1,0 +1,66 @@
+{
+  "schemaVersion": 1,
+  "id": "axis_skid_buffer",
+  "title": "AXI-Stream 寄存切片 (skid buffer)",
+  "difficulty": "D2",
+  "provenance": "经典参考模块;握手契约取自 AMBA AXI-Stream 规范(valid 保持语义);Track C 种子为真实项目常见的多级寄存切片串接过度设计模式",
+  "top": "axis_skid_buffer",
+  "part": "xc7a100tcsg324-2",
+  "clockNs": 2.5,
+  "simulator": "modelsim",
+  "hiddenTb": "hidden/tb_hidden.sv",
+  "tracks": {
+    "A": {
+      "brief": "briefs/spec-track-a.md",
+      "workspace": [
+        "public/tb_smoke.sv -> sim/tb_smoke.sv"
+      ],
+      "deliverable": "rtl/axis_skid_buffer.sv",
+      "qor": {
+        "wnsMin": 0,
+        "ffMax": null,
+        "lutMax": null
+      }
+    },
+    "B": {
+      "brief": "briefs/spec-track-b.md",
+      "workspace": [
+        "ref/axis_skid_buffer.sv -> rtl/axis_skid_buffer.sv"
+      ],
+      "deliverable": "tb/tb_axis_skid_buffer.sv",
+      "tbTop": "tb_axis_skid_buffer",
+      "mutantsDir": "hidden/mutants",
+      "scoreMin": 0.75,
+      "falsePositiveMax": 0
+    },
+    "C": {
+      "brief": "briefs/spec-track-c.md",
+      "workspace": [
+        "seed/axis_skid_buffer.sv -> rtl/axis_skid_buffer.sv",
+        "seed/flow_summary.json -> reports/flow_summary.json"
+      ],
+      "deliverable": "rtl/axis_skid_buffer.sv",
+      "qor": {
+        "wnsMin": 0,
+        "ffMax": 48,
+        "lutMax": 32
+      }
+    }
+  },
+  "locks": {
+    "hidden/mutants/m01_drop_on_stall.sv": "c0edbad164d725edf7b833513fa2ecbfe4f76f2c23f17ecff1da3815b0b46d26",
+    "hidden/mutants/m02_sticky_valid.sv": "43cc53e50d762b32bb6441137cd3601cdac3ea7e9bea332a79c5a76d3b02c360",
+    "hidden/mutants/m03_ready_overrun.sv": "5b99806f17a2359c54d0deb720e3c3f34f4b32fd15e0e4655bedc4d923fabb0f",
+    "hidden/mutants/m04_no_reset_valid.sv": "6334ac61eaac8f42e290950d175ceb92c03d2c359033d1ffaf0d17fb439d6dec",
+    "hidden/mutants/m05_half_rate.sv": "cd7550b3c21fd373840e0b4a43597ae89f3df5da42305d3d7ae66f1602182e42",
+    "hidden/mutants/m06_wrong_unstall_data.sv": "d87111be7982fa9155fd497a84276d871e6c720e811c343734fa596f36e697dc",
+    "hidden/mutants/m07_valid_drop_on_stall.sv": "e89037b32d8b11cc726ff61438d636ee095e6b69c3777879434a349255093838",
+    "hidden/mutants/m08_data_unstable_on_stall.sv": "febd671ac79e7f5e7b8b7cbce65b224d2c9400d9cbb15a1c1cad837c638f9bda",
+    "hidden/tb_hidden.sv": "51cc6962f584e5d534dd8332100dfcc943f813864f28f727f0b957107d55bcef",
+    "public/tb_smoke.sv": "db6b7ee51e3390a049b09660f98f5e76dd290f4573d95f22e5b2b49db50c4f8f",
+    "ref/axis_skid_buffer.sv": "b6d5ee197a27da76d7c6d08b30b6f24d909d388317c2e02887509f59e5b299c3",
+    "seed/axis_skid_buffer.sv": "7edd6bec5d9fc748b0b0cd8ed534737f69e63e61d81b2862fa4f55000204137f",
+    "seed/flow_summary.json": "c4d13a5e94b82257ef422773ae0b0c4ca7198b89ff2c2adae2b2ca9e88844031",
+    "xdc/clocks.xdc": "e5bf6776889f43b51a944fe6727dfa35e92ddd493f030d737d35b9e1028adcb7"
+  }
+}

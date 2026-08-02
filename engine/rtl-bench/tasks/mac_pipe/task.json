@@ -1,0 +1,52 @@
+{
+  "schemaVersion": 1,
+  "id": "mac_pipe",
+  "title": "3 级流水有符号乘累加 (MAC, DSP 推断)",
+  "difficulty": "D2",
+  "provenance": "经典流水线 MAC;16x16→48 位宽与 3 级流水(AREG/MREG/PREG)取自 DSP48E1 原生结构;推断核查规则来自 UG949 Know What You Infer(skills/hdl-coding/references/ug949-rtl-methodology.md §4)",
+  "top": "mac_pipe",
+  "part": "xc7a100tcsg324-2",
+  "clockNs": 4,
+  "simulator": "modelsim",
+  "hiddenTb": "hidden/tb_hidden.sv",
+  "tracks": {
+    "A": {
+      "brief": "briefs/spec-track-a.md",
+      "workspace": [
+        "public/tb_smoke.sv -> sim/tb_smoke.sv"
+      ],
+      "deliverable": "rtl/mac_pipe.sv",
+      "qor": {
+        "wnsMin": 0,
+        "dspMin": 1,
+        "ffMax": null,
+        "lutMax": null
+      }
+    },
+    "B": {
+      "brief": "briefs/spec-track-b.md",
+      "workspace": [
+        "ref/mac_pipe.sv -> rtl/mac_pipe.sv"
+      ],
+      "deliverable": "tb/tb_mac_pipe.sv",
+      "tbTop": "tb_mac_pipe",
+      "mutantsDir": "hidden/mutants",
+      "scoreMin": 0.75,
+      "falsePositiveMax": 0
+    }
+  },
+  "locks": {
+    "hidden/mutants/m01_trunc_product.sv": "1860e5802a11a03b32a7298bf76e4ea049b35fc56ce4f8305cb734f6b8975a88",
+    "hidden/mutants/m02_unsigned_mult.sv": "0d2f0ff14b125717205ae0e9035cdd35ae94c267010f6fd2eb470ca9ddc66e2c",
+    "hidden/mutants/m03_clr_misalign.sv": "8cbbb80a4ea979bc549e54f6ba32169baf680637c73b4632c1349511ea2bc7ce",
+    "hidden/mutants/m04_latency_short.sv": "218a253fbcae23be9216ad2b40e0101bd4c44c4b3e0327fd520ae13969e867d8",
+    "hidden/mutants/m05_acc_no_gate.sv": "bc50bde8a8d2c21a14738b74013a4c88e3c34aef0b894c5725f2c3e3f2dd400f",
+    "hidden/mutants/m06_no_reset_valid.sv": "a1ec22338e6eee281eb63ebb5978bc9f34bf63b28577491af272cdc852aff389",
+    "hidden/mutants/m07_narrow_acc.sv": "6c4fd6c8c440f2daea7f500f2265b0c58fc18d8849fa49a07805911693ba8346",
+    "hidden/mutants/m08_no_reset_acc.sv": "16d89ec7233f78d426cd49033595add015052e11e1ec3ab8c519a292889fdab1",
+    "hidden/tb_hidden.sv": "5eb8a1ad7cfe02c738438962fb5b277a04fd1e94635add4e89a61f28d02842a0",
+    "public/tb_smoke.sv": "0d687cd69519cf48494797a62691daf3d938e23ff5dba80ce286bbf286207aa4",
+    "ref/mac_pipe.sv": "51b7d62061c5fa2b514bd79465bebcdd9f5411d2124b34a6aad58a4547319450",
+    "xdc/clocks.xdc": "2ef18cf3776405ec57d4d351f4253f4b3db82ae0eabe5038ffee7ad017ba51ff"
+  }
+}

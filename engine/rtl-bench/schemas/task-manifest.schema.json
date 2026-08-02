@@ -1,0 +1,80 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://claude-code/schemas/rtl-bench-task-manifest",
+  "title": "RTL Bench Task Manifest",
+  "type": "object",
+  "required": ["schemaVersion", "id", "title", "difficulty", "provenance", "top", "part", "clockNs", "hiddenTb", "tracks"],
+  "additionalProperties": false,
+  "properties": {
+    "schemaVersion": { "type": "integer", "const": 1 },
+    "id": { "type": "string", "minLength": 1 },
+    "title": { "type": "string" },
+    "difficulty": { "type": "string", "enum": ["D1", "D2", "D3", "D4"] },
+    "provenance": { "type": "string", "minLength": 1, "description": "任务来源纪律:真实项目/经典参考/规范条款,禁止凭空杜撰" },
+    "top": { "type": "string", "description": "被测模块顶层名,同时是 OOC 综合顶层" },
+    "part": { "type": "string" },
+    "clockNs": { "type": "number", "exclusiveMinimum": 0 },
+    "simulator": { "type": "string", "enum": ["modelsim"], "default": "modelsim" },
+    "hiddenTb": { "type": "string", "description": "隐藏判卷 TB 相对任务目录路径,顶层模块名须为 tb_hidden" },
+    "tracks": {
+      "type": "object",
+      "minProperties": 1,
+      "additionalProperties": false,
+      "properties": {
+        "A": {
+          "type": "object",
+          "required": ["brief", "deliverable", "qor"],
+          "properties": {
+            "brief": { "type": "string" },
+            "workspace": { "type": "array", "items": { "type": "string" }, "description": "复制进 agent 工作区的文件(源 → 目标 用 ' -> ' 分隔,无箭头则同名)" },
+            "deliverable": { "type": "string" },
+            "qor": { "$ref": "#/definitions/qor" }
+          }
+        },
+        "B": {
+          "type": "object",
+          "required": ["brief", "deliverable", "tbTop", "mutantsDir", "scoreMin"],
+          "properties": {
+            "brief": { "type": "string" },
+            "workspace": { "type": "array", "items": { "type": "string" } },
+            "deliverable": { "type": "string" },
+            "tbTop": { "type": "string", "description": "agent TB 必须使用的顶层模块名(判卷契约)" },
+            "mutantsDir": { "type": "string" },
+            "scoreMin": { "type": "number", "minimum": 0, "maximum": 1 },
+            "falsePositiveMax": { "type": "integer", "const": 0 }
+          }
+        },
+        "C": {
+          "type": "object",
+          "required": ["brief", "deliverable", "qor"],
+          "properties": {
+            "brief": { "type": "string" },
+            "workspace": { "type": "array", "items": { "type": "string" } },
+            "deliverable": { "type": "string" },
+            "qor": { "$ref": "#/definitions/qor" }
+          }
+        }
+      }
+    },
+    "locks": {
+      "type": "object",
+      "description": "判卷资产完整性锁: 相对路径 → sha256。由 graders/lock-task.cjs 生成,判卷前校验",
+      "additionalProperties": { "type": "string", "pattern": "^[0-9a-f]{64}$" }
+    }
+  },
+  "definitions": {
+    "qor": {
+      "type": "object",
+      "properties": {
+        "wnsMin": { "type": "number", "description": "flow_summary.synth.wns 下限,通常 0" },
+        "ffMax": { "type": ["integer", "null"] },
+        "lutMax": { "type": ["integer", "null"] },
+        "bramMax": { "type": ["integer", "null"] },
+        "dspMax": { "type": ["integer", "null"] },
+        "dspMin": { "type": ["integer", "null"], "description": "推断核查下限:乘加类设计 dsp<下限 = 推断静默失败" },
+        "bramMin": { "type": ["integer", "null"], "description": "推断核查下限:存储器类设计 bram<下限 = 推断静默失败" },
+        "srlMin": { "type": ["integer", "null"], "description": "推断核查下限:延时线类设计 srl<下限 = 推断静默失败" }
+      }
+    }
+  }
+}
