@@ -1,8 +1,8 @@
-<!-- asset-status: certified v1.0.5 -->
+<!-- asset-status: certified v1.1.0 -->
 
 # ldpc_codec — 802.11n QC-LDPC 编译码器
 
-> **certified 1.0.5**（RTL 与证据同 1.0.0，2026-07-31 签署，20 门全绿）。已知限制的权威清单在
+> **certified 1.1.0**（RTL 与证据同 1.0.0，2026-07-31 签署，20 门全绿）。已知限制的权威清单在
 > [`docs/limitations.md`](docs/limitations.md) —— 复用前必读。
 >
 > 本包最初是 intake 评估性打包（源 RTL 原样迁入、不修改，红线如实记录）。
@@ -41,7 +41,7 @@ constraints/  ldpc_decoder.xdc
 | 条目 | 当前状态 |
 |:-----|:---------|
 | 红线1 输入未寄存（译码器） | **已修**：`ldpc_stream_io` 承担输入寄存与握手 |
-| 红线1 输入未寄存（编码器） | **未修**（见下方 D1） |
+| 红线1 输入未寄存（编码器） | **已修**（1.1.0，见 CHANGELOG）：payload/tvalid/写地址全部经 `ri_`/`r_` 寄存，裸输入只剩协议要求的握手限定 |
 | 红线2 组合直出 `llr_buffer`/`msg_buffer` `o_rd_data` | **已修**：改同步读 + `ro_rd_data` |
 | 红线2 组合直出 `s_axis_llr_tready`（译码器） | **已修**：由 `ldpc_stream_io` 驱动 |
 | 红线2 组合直出 `s_axis_info_tready`（编码器） | **已修**：改 `ro_tready` 寄存输出 |

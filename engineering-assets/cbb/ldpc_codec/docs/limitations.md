@@ -1,8 +1,7 @@
-# ldpc_codec — 已知限制（1.0.1）
+# ldpc_codec — 已知限制（1.1.0）
 
-以下各条来自实测与治理台账，非推测。1.0.1 相对 1.0.0 只补文档，RTL 与全部
-证据未动，故本清单同样适用于 1.0.0。验证证据见
-`engineering-assets/evidence/ldpc_codec/1.0.1/`（哈希锁定快照）与
+以下各条来自实测与治理台账，非推测。验证证据见
+`engineering-assets/evidence/ldpc_codec/1.1.0/`（哈希锁定快照）与
 `engineering-assets/var/gates/pg/ldpc_codec/`（实时目录）。
 签字所接受的限制见 `manifest.json` 的 `signoff.scope`。
 
@@ -42,9 +41,13 @@
 
 ## 结构与接口
 
-8. **D1：编码器输入未寄存（红线 1 遗留）。** `ldpc_encoder_top` 的
-   `s_axis_info_tvalid/tdata` 仍被直接消费，未经 `ri_` 寄存，加载相位与计数耦合。
-   2026-07-31 起已有 bit-true 基线（5/5），可安全做 `ri_` 重构回归，但**本版未做**。
+8. **（已还清）D1：编码器输入未寄存（红线 1）。** 1.1.0 已按同包 `ldpc_stream_io`
+   的模式改造：payload / tvalid / 写地址全部经寄存，`r_info` 写入用寄存后的三元组。
+   裸输入只剩协议要求的握手限定 `w_load_accept`（AXI 的 ready/valid 判定必须同拍
+   看到 tvalid，无法寄存）。
+   **契约变化**：每帧加载起始晚一拍（`tready` 晚一拍拉高）；tvalid 须保持至被接收，
+   故不丢首位。回归实测与预测精确吻合——编码器 5/5、全链路 10/10，
+   仿真时长各 +1 拍/帧，无其它偏差。综合包络逐项不变（编码器不在认证综合锥内）。
 
 9. **编码器用 PT 列 ROM，面积大于理想双对角。** 这是一次有意的取舍：旧双对角
    回代实现对非全零信息位 `H·c ≠ 0`（全零碰巧通过），已废弃。功能正确性优先于资源。
@@ -82,6 +85,8 @@
 16. **UVM 环境未纳入门禁。** `tb/uvm/` 依赖本机 Vivado UVM 包路径，
     不在 gate-runner 默认路径内 —— 它产出的结论不构成本资产的取证。
 
-17. **仿真证据由 ModelSim 10.6c 产出**（`alignment-report.json` 的 `tool` 字段）。
-    本机 ModelSim 回环 RPC 自 2026-08-01 起故障；库内后续资产已改用 Vivado xsim
-    取证，本包的 TB / `run_sim.do` 尚未做等价迁移，**当前无法按原路径直接复现**。
+17. **（已还清）仿真复现通路。** 1.0.2 补了 `run_xsim.sh`（覆盖译码器 / 编码器 /
+    全链路三个 TB），ModelSim 与 xsim 两条通路共用同一组 TB 与判据；ModelSim 那条
+    因本机回环 RPC 故障当前跑不通，xsim 那条可用。交叉验证：`alignment-report`
+    内容一致（3240 bit 0 失配）、4 份 `stability` 逐字节相同、编码器 5/5。
+    复现命令见 `manifest.reproduce`（G-GATE-02 校验其入口存在）。

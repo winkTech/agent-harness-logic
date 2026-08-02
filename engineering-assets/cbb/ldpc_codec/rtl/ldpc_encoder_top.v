@@ -24,7 +24,8 @@
 //   包内镜像: rtl/pt_columns.hex (与权威同内容，供综合/离线)
 //
 // 接口: AXI4-Stream 1 bit/cycle; 同步高有效 i_rst_sys
-// 遗留 D1: 输入未做 ri_ 寄存 (与加载计数耦合，golden 闭环后再做)
+// D1 (输入未寄存) 已于 1.1.0 还清，见下方"输入寄存级"注释块。
+// 契约变化: 每帧 S_LOAD 晚一拍进入、tready 晚一拍拉高（不丢首位）。
 //-----------------------------------------------------------------
 
 module ldpc_encoder_top (
@@ -62,6 +63,47 @@ module ldpc_encoder_top (
 
     reg ro_data, ro_valid, ro_tready;
 
+    //-----------------------------------------------------------------
+    // 输入寄存级 (红线 1 / 遗留项 D1, 2026-08-02 补)
+    //
+    // 此前 s_axis_info_tvalid / tdata 被直接消费: FSM 次态、r_bit_cnt、r_info 写入
+    // 三处都挂在裸输入上。现按同包 ldpc_stream_io 的既有模式改造 —— payload 无条件
+    // 寄存一拍, 握手成立的事实与写地址各寄一拍, 消费方一律用寄存后的三元组。
+    //
+    // 保留为组合的只有握手限定 w_load_accept 本身: AXI 的 ready/valid 判定必须在
+    // 同一拍看到 tvalid 才能决定是否接收, 这是协议要求, 无法寄存。ldpc_stream_io
+    // 的 w_load_accept 同理。红线 1 要挡的是"裸输入直接驱动数据通路/状态",
+    // 不是"禁止在握手判定里读 tvalid"。
+    //
+    // 时序核对: 末位 (r_bit_cnt==P_K-1) 的写入因寄存而落在**进入 S_ACCUM 的那一拍**,
+    // 而 S_ACCUM 的 r_acc_idx 从 0 起, 要再过 P_K-1 拍才读到 r_info[P_K-1] —— 不冲突;
+    // 且写的是数组不同元素, 与同拍的 r_parity 更新互不影响。
+    //
+    // 帧起始 arming 也改用寄存后的 ri_info_tvalid: 代价是 S_LOAD 晚一拍进入、
+    // tready 晚一拍拉高。AXI 要求 tvalid 在被接收前必须保持, 故不丢首位,
+    // 只是每帧多一拍延迟 —— 已记入 CHANGELOG 的接口契约变化。
+    //-----------------------------------------------------------------
+    reg       ri_info_tdata;      // 输入 payload 寄存
+    reg       ri_info_tvalid;     // 输入 tvalid 寄存 (仅供 IDLE 的 arming)
+    reg       r_info_wr_en;       // 握手成立的寄存副本
+    reg [9:0] r_info_wr_addr;     // 写地址的寄存副本
+
+    wire w_load_accept = (r_state == P_S_LOAD) && s_axis_info_tvalid && ro_tready;
+
+    always @(posedge i_clk_sys) begin
+        if (i_rst_sys) begin
+            ri_info_tdata  <= 1'b0;
+            ri_info_tvalid <= 1'b0;
+            r_info_wr_en   <= 1'b0;
+            r_info_wr_addr <= 10'd0;
+        end else begin
+            ri_info_tdata  <= s_axis_info_tdata;
+            ri_info_tvalid <= s_axis_info_tvalid;
+            r_info_wr_en   <= w_load_accept;
+            r_info_wr_addr <= r_bit_cnt;
+        end
+    end
+
     integer i;
 
     //-----------------------------------------------------------------
@@ -84,9 +126,9 @@ module ldpc_encoder_top (
     always @(*) begin
         w_nxt = r_state;
         case (r_state)
-            P_S_IDLE:   if (s_axis_info_tvalid)            w_nxt = P_S_LOAD;
-            P_S_LOAD:   if (r_bit_cnt == P_K-1 &&
-                            s_axis_info_tvalid && ro_tready)
+            // arming 用寄存后的 tvalid (D1); 末位判定用握手限定 w_load_accept
+            P_S_IDLE:   if (ri_info_tvalid)                w_nxt = P_S_LOAD;
+            P_S_LOAD:   if (r_bit_cnt == P_K-1 && w_load_accept)
                                                        w_nxt = P_S_ACCUM;
             P_S_ACCUM:  if (r_acc_idx == P_K-1)            w_nxt = P_S_OUTPUT;
             P_S_OUTPUT: if (r_bit_cnt == P_N-1 &&
@@ -106,7 +148,7 @@ module ldpc_encoder_top (
         end else begin
             case (r_state)
                 P_S_LOAD: begin
-                    if (s_axis_info_tvalid && ro_tready)
+                    if (w_load_accept)
                         r_bit_cnt <= (r_bit_cnt == P_K-1) ? 10'd0 : (r_bit_cnt + 10'd1);
                 end
                 P_S_ACCUM: begin
@@ -131,8 +173,11 @@ module ldpc_encoder_top (
     always @(posedge i_clk_sys) begin
         if (i_rst_sys) begin
             for (i = 0; i < P_K; i = i + 1) r_info[i] <= 1'b0;
-        end else if (r_state == P_S_LOAD && s_axis_info_tvalid && ro_tready) begin
-            r_info[r_bit_cnt] <= s_axis_info_tdata;
+        // D1: 写入用寄存后的三元组 (使能/地址/数据), 不再挂裸输入。
+        // 地址来自 r_info_wr_addr 这个普通寄存器 —— 不在 NBA 左值下标里调用函数
+        // (hdl 硬约束 8)。
+        end else if (r_info_wr_en) begin
+            r_info[r_info_wr_addr] <= ri_info_tdata;
         end
     end
 

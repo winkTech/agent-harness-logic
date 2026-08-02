@@ -1,5 +1,50 @@
 # CHANGELOG — ldpc_codec
 
+## [1.1.0] — 2026-08-02 D1 还清：编码器输入寄存（红线 1）
+
+**接口契约有变，升 minor 而非 patch。**
+
+### 改了什么
+
+`ldpc_encoder_top` 的 `s_axis_info_tvalid` / `tdata` 此前被**直接消费**——FSM 次态、
+`r_bit_cnt`、`r_info` 写入三处都挂在裸输入上，违反红线 1。这是 2026-07-31 起就记在
+`docs/limitations.md` 的遗留项 D1（"已有 bit-true 基线，可安全做 `ri_` 重构回归"）。
+
+按**同包 `ldpc_stream_io` 的既有模式**改造（不另发明一套）：
+
+- `ri_info_tdata` / `ri_info_tvalid`：payload 与 tvalid 无条件寄存一拍
+- `r_info_wr_en` / `r_info_wr_addr`：握手成立的事实与写地址各寄一拍
+- `r_info` 写入改用寄存后的三元组；FSM 的 IDLE→LOAD arming 改用 `ri_info_tvalid`
+
+改完裸输入只剩一处：握手限定 `w_load_accept`。**这处必须是组合的**——AXI 的
+ready/valid 判定要在同一拍看到 tvalid 才能决定是否接收，是协议要求；
+`ldpc_stream_io` 的 `w_load_accept` 同理。红线 1 要挡的是"裸输入直接驱动数据通路/
+状态"，不是"禁止在握手判定里读 tvalid"。
+
+### 契约变化（集成方必读）
+
+**每帧多一拍**：`S_LOAD` 晚一拍进入、`s_axis_info_tready` 晚一拍拉高。
+AXI 要求 tvalid 在被接收前必须保持，故**不丢首位**，只是加载起始延迟 +1。
+
+实测精确吻合该预测，无其它偏差：
+
+| 回归 | 改动前 | 改动后 |
+|:---|:---|:---|
+| 编码器 bit-true | 5/5，结束 65110 ns | **5/5，结束 65160 ns**（+50 ns = 5 帧 × 1 拍） |
+| 全链路 | 10/10，结束 2182960 ns | **10/10，结束 2183060 ns**（+100 ns = 10 帧 × 1 拍） |
+
+### 时序核对
+
+末位（`r_bit_cnt == P_K-1`）的写入因寄存而落在**进入 `S_ACCUM` 的那一拍**，
+而 `S_ACCUM` 的 `r_acc_idx` 从 0 起、要再过 `P_K-1` 拍才读到 `r_info[P_K-1]`——
+不冲突；且写的是数组不同元素，与同拍的 `r_parity` 更新互不影响。
+
+### 综合
+
+包络**逐项不变**（WNS 4.958 ns / fmax 198.33 MHz / LUT 410 / FF 244 / BRAM 3 / DSP 0）
+——认证综合顶层是 `ldpc_decoder_top`，编码器不在该锥内。编码器自身仍无独立综合
+包络证据，该限制不变。
+
 ## [1.0.5] — 2026-08-02 全链路 TB 首次真正跑通（RTL 零改动）
 
 `tb_ldpc_system.v`（encoder + decoder 全链路）**自入库以来从未被任何运行入口覆盖过**

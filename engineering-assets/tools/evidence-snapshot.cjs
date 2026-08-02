@@ -16,7 +16,10 @@ const ALLOWED = /^(?:gate-results\.json|RL-OUT\.json|(?:G|CS|RL-OUT)-[A-Z0-9./_-
 // rtl_*_out.hex = TB 的 RTL 输出转储, 性质同 trace/: 可由 TB+向量复现, 判定摘要在
 // alignment-report.json 里, 不入快照。(channel_est_top 的 tb_chEst_cosim 会产它;
 // 它原先被写进 golden 的权威向量目录, 2026-08-02 改写到证据目录后才撞上白名单。)
-const EXCLUDED = /(?:^|[\\/])(?:synth\.log|backup|work|waves?|trace|rtl_[A-Za-z0-9_]*_out\.hex|.*\.(?:wlf|vcd|vpd|fsdb))(?=$|[\\/])/i;
+// `synth_<pid>.backup.log` 是 Vivado 自留的综合日志副本, 与已排除的 synth.log 同类
+// (可由 pg-synth 重跑再生, 判定摘要在 envelope-check.json / synthesis-timing-evidence.json)。
+// 原 `backup` 一条只匹配**目录段**, 匹配不到这种文件名, 2026-08-02 补 `*.backup.log`。
+const EXCLUDED = /(?:^|[\\/])(?:synth\.log|[A-Za-z0-9_]*\.backup\.log|backup|work|waves?|trace|rtl_[A-Za-z0-9_]*_out\.hex|.*\.(?:wlf|vcd|vpd|fsdb))(?=$|[\\/])/i;
 
 function canonicalBytes(file) {
   const bytes = fs.readFileSync(file);
