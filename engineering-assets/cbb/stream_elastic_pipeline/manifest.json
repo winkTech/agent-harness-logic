@@ -3,11 +3,11 @@
   "asset_uid": "stream_elastic_pipeline",
   "name": "stream_elastic_pipeline",
   "kind": "rtl",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "owner": "lihan",
   "maturity": {
     "level": "certified",
-    "evidence_ref": "engineering-assets/evidence/stream_elastic_pipeline/1.0.1/SNAPSHOT.json"
+    "evidence_ref": "engineering-assets/evidence/stream_elastic_pipeline/1.0.2/SNAPSHOT.json"
   },
   "requirement_ref": "engineering-assets/cbb/stream_elastic_pipeline/docs/requirements.md",
   "doc_refs": [
@@ -238,12 +238,12 @@
     ],
     "panel_verdicts_ref": "engineering-assets/var/gates/pg/stream_elastic_pipeline/G-SIGN-01.json"
   },
-  "evidence_snapshot_ref": "evidence/stream_elastic_pipeline/1.0.1/SNAPSHOT.json",
+  "evidence_snapshot_ref": "evidence/stream_elastic_pipeline/1.0.2/SNAPSHOT.json",
   "notes": "Certified foundation CBB admission with generic-device evidence; routed implementation, board and field validation remain outside this admission.",
   "reproduce": {
-    "sim": "bash tools/run-primitive-sim.sh stream_elastic_pipeline",
+    "sim": "bash tools/run-model-backed-sim.sh stream_elastic_pipeline --install",
     "synth": "vivado -mode batch -source cbb/stream_elastic_pipeline/eda/vivado_cert.tcl",
     "gate": "node tools/gate-runner.cjs cbb/stream_elastic_pipeline --repo-root ..",
-    "note": "仅覆盖 TB 自检 (xsim 下跑通并 PASS, TB 自带独立参考模型)。**已安装的 alignment-report.json 等证据不是该 TB 产的** —— 它们出自一套\"ModelSim 轨迹 vs Python 模型\"的外部 replay harness, 而那套 harness 在仓库里不存在, 证据里记的 golden 路径 incubator/qualification/... 也已失效(模型迁到 models/comm/<uid>/)。让 TB 直接产证据可行但属换一套证据基准(现存证据的 vector_sha256/trace_sha256 复现不出来), 待 owner 裁定。"
+    "note": "2026-08-02 重建: 同 pulse_merge。参数组 DEPTH=1/2/4 + 2600 拍对标规模, 全部实跑通过。"
   }
 }

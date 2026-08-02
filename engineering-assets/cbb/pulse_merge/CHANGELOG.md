@@ -1,5 +1,28 @@
 # Changelog
 
+## [1.0.2] — 2026-08-02 证据重建：从"不可复现"到可复现
+
+本包此前是全库仅剩的两个证据不可复现资产之一。已安装的 `alignment-report.json`
+出自一套"ModelSim 轨迹 vs Python 模型"的外部 replay harness，而**那套 harness
+在仓库里不存在**；证据里记的 golden 路径
+`engineering-assets/incubator/qualification/pulse_merge/model/*.py` 也已随
+incubator 清空而失效（模型本身还在，迁到了 `models/comm/pulse_merge/`）。
+
+新增 `tools/run-model-backed-sim.sh`，**按原命令日志路径重建**——那些命令就写在
+`reset-sim.json` / `stability/*.json` 里，照抄即可：
+
+- Python 参考模型单测 `python -m unittest -q test_pulse_merge_model.py`：3/3 OK
+- iverilog/vvp 两组参数：`INPUT_WIDTH=4 COUNT_WIDTH=12` 与 `INPUT_WIDTH=2 COUNT_WIDTH=4`，均 PASS
+- 2600 拍对标规模运行：PASS（TB 内联逐拍参考实现与 DUT 逐拍比对，任一不符即 `$fatal`）
+
+**一处如实降级**：`alignment-report.json` 原有的 `vector_sha256` /
+`trace_sha256` 两个字段**已去掉**——它们来自那套已消失 harness 的轨迹转储，
+无法复算。证据因此略弱于原版，但**可被任何人重新生成**；一份谁也重做不了的
+强证据，价值低于一份能重做的稍弱证据。变更已写进该文件的 `basis_note`。
+
+`reset-sim.json` 里的 `cwd` 也由失效的 `incubator/qualification/...` 更正为
+`models/comm/pulse_merge`。RTL、约束、TB 零改动。
+
 ## [1.0.1] — 2026-08-02 声明证据复现入口（G-GATE-02）
 
 manifest 新增 `reproduce` 字段，把"证据怎么重做"从 README 里的散文变成**机器可校验

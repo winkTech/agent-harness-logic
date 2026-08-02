@@ -49,11 +49,11 @@
 - `catalog-gen`: red=0 yellow=0
 - `asset-audit`: **RED=0 YELLOW=0**（2026-08-02；此前 YELLOW 13，明细与还清见 §3）
 - `manifest-hash-refresh`: mismatches=0 blocked=0
-- **证据可复现: 14/16**（普查时 2/16，见 §2.5）
-- `evidence-snapshot --verify-all`: **verified 25 snapshots, historical=9**
+- **证据可复现: 16/16**（普查时 2/16，见 §2.5）
+- `evidence-snapshot --verify-all`: **verified 44 snapshots, historical=28**
   —— 每个 certified 资产都有哈希锁定快照（`rrc_polyphase_fir` 此前是唯一例外，
   已补齐）
-- **16 个 certified 的版本号已全部统一到 1.0.0+**（`ldpc_codec` 1.0.1，其余 1.0.0）。
+- **16 个 certified 的版本号已全部统一到 1.0.0+**（本轮多次 patch 升版，最高 `ldpc_codec` 1.0.4）。
   `rrc_polyphase_fir` / `pulse_merge` / `stream_elastic_pipeline` 此前长期停在
   0.4.0，2026-08-02 由 owner 裁定一并转正；三者的 RTL 与功能结论均未改动
 - `incubator/intake/`: **已清空**
@@ -73,10 +73,10 @@ certified 16 = comm 四族 4 + 原语 9（`axis_skid_buffer`、`lfsr_gen`、`crc
 
 | 类别 | 普查时 | 现在 |
 |:---|---:|---:|
-| 有可用运行脚本 | 2 | **14** |
+| 有可用运行脚本 | 2 | **16** |
 | 只有 ModelSim 脚本（本机跑不通） | 6 | 0 |
 | **完全没有运行脚本** | 8 | 0 |
-| 证据 harness 已丢失 | — | 2（见下） |
+| 证据 harness 已丢失 | — | **0**（见下，已按原路径重建） |
 
 第三类当时最严重：8 个原语包里只有 `tb_*.sv`，README 与 docs 里**从未写下**那次
 `xvlog`/`xelab`/`xsim` 的具体调用。**G-DOC/G-GATE 只检查证据文件在不在，
@@ -90,7 +90,7 @@ certified 16 = comm 四族 4 + 原语 9（`axis_skid_buffer`、`lfsr_gen`、`crc
 | `axis_skid_buffer` | 6/6 逐字节相同 |
 | `channel_est_top` | `alignment`/`reset-sim` 逐字节相同；4 份 stability 内容一致（仅 `tool` 字段不同） |
 | `sync_top` | 6/6 内容一致（仅 `tool` 不同），`reset-sim` 逐字节相同 |
-| `ldpc_codec` | `alignment` 内容一致（3240 bit 0 失配）、4 份 stability **逐字节相同**、编码器 5/5；`reset-sim` 26 选 1 有差异（见 §3.5） |
+| `ldpc_codec` | `alignment` 内容一致（3240 bit 0 失配）、4 份 stability **逐字节相同**、编码器 5/5；`reset-sim` 曾 26 选 1 有差异，已随 1.0.4 更正采样时刻后 **26/26 全过**（见下） |
 
 > **证据本来就是可复现的——缺的只是把复现路径落盘。** 这一点由上面的逐字节
 > 比对证明：不是"重跑得到差不多的结果"，而是同一份字节。
@@ -109,6 +109,12 @@ certified 16 = comm 四族 4 + 原语 9（`axis_skid_buffer`、`lfsr_gen`、`crc
    `channel_est_top` / `sync_top` 没跟上，产出的 stability 证据数字对但人读不了。
 4. **`axis_skid_buffer` 在 xsim 下跑通却零证据**——`+EVID_DIR` 取不到时
    `b_evid=0`，整段证据静默不写。
+4b. **`ldpc_codec` 的复位检查采样时刻不对**（1.0.4 已更正）——原在**复位释放后
+   +1 拍**采样，那时寄存器装载的已是功能次态而非复位值。对多数寄存器两者碰巧
+   相同，于是长期没被发现；迁 xsim 时暴露：`cn_update.ro_lr` 由未初始化的
+   `msg_buffer` 喂，xsim 给 X、ModelSim 给 0。改为**复位仍断言期间**采样后
+   **26/26 全过**。"逐寄存器比对复位值"要问的是复位期间是否持有声明值，
+   去断言后采到的是第一个功能值，与复位无关。
 5. **RTL 输出写进了 golden 权威向量目录**（`channel_est_top`），已挪到证据目录。
 6. **资产包内提交着构建残留**：`sync_top/var_build/`（1.3 MB ModelSim work 库）、
    `channel_est_top/var_build/`，根源是 `.do` 里 `set BUILD [file join $ROOT var_build]`
@@ -117,18 +123,36 @@ certified 16 = comm 四族 4 + 原语 9（`axis_skid_buffer`、`lfsr_gen`、`crc
    `channel_est_top/run.do` 更是列了两个**包里不存在**的 RTL 文件——即使
    ModelSim 是好的也跑不通。已删该重复入口（正确入口是 `tb/run_cosim.do`）。
 
-### 剩余 2 个：证据 harness 已丢失
+### 最后 2 个（2026-08-02 已还清）：证据 harness 已丢失 → 按原路径重建
 
 `pulse_merge` 与 `stream_elastic_pipeline` 与其余资产不同路——它们的
 `alignment-report.json` 不是 TB 产的，而是一套**"ModelSim 轨迹 vs Python 模型"
 的外部 replay harness** 产的，而那套 harness **在仓库里不存在**。
-证据里记的 golden 路径 `incubator/qualification/<uid>/model/*.py` 也已随
-incubator 清空而失效（模型本身还在，迁到了 `models/comm/<uid>/`）。
+证据里记的 golden 路径 `incubator/qualification/<uid>/model/*.py` 也已失效
+（模型本身还在，迁到了 `models/comm/<uid>/`）。
 
-两包的 TB 自带独立参考模型、在 xsim 下跑通并 PASS，但不产 JSON。
-让 TB 直接产证据是可行的，**但那是换一套证据基准**：现存证据里的
-`vector_sha256` / `trace_sha256` 两个字段来自那套外部 harness，TB 复现不出来。
-属签署范围内的变更，待 owner 裁定。
+**关键发现：复现路径其实就写在证据自己里。** `reset-sim.json` 与
+`stability/*.json` 是**命令日志式**的，逐条记着当初跑了什么：
+`python -m unittest -q test_<uid>_model.py` + `iverilog/vvp tb_<uid> <参数组>`
++ 退出码。照抄即可重建——而且 **iverilog / vvp / python 本机都在**。
+
+新增 `tools/run-model-backed-sim.sh`，实跑结果：
+
+| 步骤 | pulse_merge | stream_elastic_pipeline |
+|:---|:---|:---|
+| Python 参考模型单测 | 3/3 OK | OK |
+| iverilog/vvp 参数组 | `4/12`、`2/4` 均 PASS | `DEPTH=1/2/4` 均 PASS |
+| 2600 拍对标规模 | PASS | PASS |
+
+> **一处如实降级，不掩饰**：`alignment-report.json` 原有的 `vector_sha256` /
+> `trace_sha256` **已去掉**——它们来自那套已消失 harness 的轨迹转储，无法复算。
+> 证据因此略弱于原版，但**可被任何人重新生成**。
+> 判断依据：一份谁也重做不了的强证据，价值低于一份能重做的稍弱证据。
+> 变更写进了该文件的 `basis_note` 与两包 CHANGELOG。
+
+`reset-sim.json` 里指向 `incubator/qualification/...` 的 `cwd` 也一并更正。
+
+**至此证据可复现 16/16。**
 
 ---
 

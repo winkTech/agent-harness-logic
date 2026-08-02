@@ -27,7 +27,7 @@
    "project": "phy-intake",
    "project_ref": "cbb/ldpc_codec",
    "asset_uid": "ldpc_codec",
-   "version_pinned": "1.0.3",
+   "version_pinned": "1.0.4",
    "config": {},
    "integrated_at": "2026-07-26T00:00:00Z",
    "status": "active",
@@ -216,7 +216,7 @@
    "project": "cbb-foundation",
    "project_ref": "cbb/stream_elastic_pipeline",
    "asset_uid": "stream_elastic_pipeline",
-   "version_pinned": "1.0.1",
+   "version_pinned": "1.0.2",
    "config": {
     "DATA_WIDTH": 32,
     "DEPTH": 2
@@ -269,7 +269,7 @@
    "project": "cbb-foundation",
    "project_ref": "cbb/pulse_merge",
    "asset_uid": "pulse_merge",
-   "version_pinned": "1.0.1",
+   "version_pinned": "1.0.2",
    "config": {
     "INPUT_WIDTH": 4,
     "COUNT_WIDTH": 12

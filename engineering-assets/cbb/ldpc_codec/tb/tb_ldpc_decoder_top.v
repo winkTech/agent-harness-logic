@@ -205,14 +205,24 @@ module tb_ldpc_decoder_top;
             rst_fd = $fopen(path, "w");
             if (rst_fd == 0) $fatal(1, "FATAL: 无法写 reset-sim.json (%0s)", path);
 
+            // 采样时刻: **复位仍断言时**, 而不是去断言后 +1 拍。
+            //
+            // 原写法是 deassert 后再等一个 posedge 才采样, 那时寄存器已经执行过一次
+            // 非复位分支、装载的是功能次态而非复位值 —— 两者对多数寄存器碰巧相同
+            // (次态也是 0), 于是长期没被发现。2026-08-02 迁 xsim 时暴露:
+            // cn_update.ro_lr 在那一拍装载 w_lr, 而 w_lr 溯源到未初始化的 msg_buffer,
+            // xsim 给 X、ModelSim 给 0, 26 个寄存器里只有它由存储器阵列喂。
+            //
+            // "逐寄存器比对复位值"要问的是"复位断言期间寄存器是否持有其声明的复位值",
+            // 复位仍断言时采样才是这个语义; 去断言后采到的是第一个功能值, 与复位无关。
+            // 复位释放后的行为另有 G-C-05 与 10 组 bit-true 覆盖。
             i_rst_sys = 1'b1;
             repeat (10) @(posedge i_clk_sys);
-            @(posedge i_clk_sys);            // 去断言
-            i_rst_sys = 1'b0;
-            @(posedge i_clk_sys);            // +1 拍后采样
+            #1;                              // 采样点避开时钟沿, 取稳定后的寄存器值
 
             $fwrite(rst_fd, "{\n  \"id\": \"G-C-04.reset\",\n");
-            $fwrite(rst_fd, "  \"method\": \"deassert +1 clk, per-register compare vs declared reset value\",\n");
+            $fwrite(rst_fd, "  \"method\": \"sampled while reset still asserted (10 clk), per-register compare vs declared reset value\",\n");
+            $fwrite(rst_fd, "  \"method_note\": \"1.0.4 起改为复位断言期间采样; 此前是去断言后 +1 拍, 那时寄存器装载的已是功能次态而非复位值 —— 对多数寄存器两者碰巧相同, 但由存储器阵列喂的 cn_update.ro_lr 会读到未初始化值 (xsim 下为 X)。\",\n");
             $fwrite(rst_fd, "  \"registers\": [\n");
 
             check_reg("controller.r_cur_state",   u_dut.u_controller.r_cur_state,   10'b0000000001);
@@ -248,6 +258,12 @@ module tb_ldpc_decoder_top;
             $fclose(rst_fd);
             $display("  [G-C-04] 复位逐寄存器比对: %0d 个, %0d 个不符", rst_total, rst_bad);
             if (rst_bad != 0) n_fatal = n_fatal + 1;
+
+            // 采样完成后再去断言 —— 采样点前移到复位断言期间后, 这一步必须显式补上,
+            // 否则复位永不释放, 后续向量会全部超时(实测: 向量 1 只收到 0/324 位)。
+            @(posedge i_clk_sys);
+            i_rst_sys = 1'b0;
+            @(posedge i_clk_sys);
         end
     endtask
 
