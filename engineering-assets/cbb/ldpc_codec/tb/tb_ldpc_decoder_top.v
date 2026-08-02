@@ -70,6 +70,8 @@ module tb_ldpc_decoder_top;
     //-----------------------------------------------------------------
     reg [8*512-1:0] vec_dir;
     reg [8*512-1:0] evid_dir;
+    reg [8*64-1:0]  sim_tool;   // 实际跑本次仿真的工具名 (见主流程处的注入)
+    integer         tool_fd;
     reg             do_trace;
 
     reg  [9:0]  llr_mem [0:P_N-1];
@@ -118,13 +120,15 @@ module tb_ldpc_decoder_top;
             $sformat(path, "%0s/tb_expected_output_%0d.hex", vec_dir, idx);
             $readmemb(path, exp_mem);
 
+            // 失败路径一律用 $fatal 而非 $finish(1): $finish(N) 的 N 是诊断详略
+            // 等级(IEEE 1364/1800), **不是进程退出码** —— 用它失败 run 照样以 0 退出,
+            // 上游脚本会把失败读成通过。本包 README 早为编码器 TB 记过这个坑,
+            // 译码器 TB 一直没跟着修, 2026-08-02 一并改掉。
             if ((llr_mem[0] === 10'bx) || (llr_mem[P_N-1] === 10'bx)) begin
-                $display("FATAL: LLR 向量 %0d 未装载 (首尾仍为 X) — VEC_DIR=%0s", idx, vec_dir);
-                $finish(1);
+                $fatal(1, "FATAL: LLR 向量 %0d 未装载 (首尾仍为 X) — VEC_DIR=%0s", idx, vec_dir);
             end
             if ((exp_mem[0] === 1'bx) || (exp_mem[P_K-1] === 1'bx)) begin
-                $display("FATAL: 期望向量 %0d 未装载 (首尾仍为 X)", idx);
-                $finish(1);
+                $fatal(1, "FATAL: 期望向量 %0d 未装载 (首尾仍为 X)", idx);
             end
         end
     endtask
@@ -154,8 +158,7 @@ module tb_ldpc_decoder_top;
                 @(posedge i_clk_sys);
                 timeout = timeout + 1;
                 if (timeout > 3000000) begin
-                    $display("FATAL: 向量 %0d 超时 —— 只收到 %0d/%0d 位", idx, k, P_K);
-                    $finish(1);
+                    $fatal(1, "FATAL: 向量 %0d 超时 —— 只收到 %0d/%0d 位", idx, k, P_K);
                 end
                 if (m_axis_data_tvalid && m_axis_data_tready) begin
                     got_mem[k] = m_axis_data_tdata;
@@ -200,7 +203,7 @@ module tb_ldpc_decoder_top;
             rst_bad = 0; rst_total = 0;
             $sformat(path, "%0s/reset-sim.json", evid_dir);
             rst_fd = $fopen(path, "w");
-            if (rst_fd == 0) begin $display("FATAL: 无法写 reset-sim.json"); $finish(1); end
+            if (rst_fd == 0) $fatal(1, "FATAL: 无法写 reset-sim.json (%0s)", path);
 
             i_rst_sys = 1'b1;
             repeat (10) @(posedge i_clk_sys);
@@ -257,8 +260,7 @@ module tb_ldpc_decoder_top;
             $sformat(path, "%0s/stability/%0s.json", evid_dir, name);
             sfd = $fopen(path, "w");
             if (sfd == 0) begin
-                $display("FATAL: 无法写 stability/%0s.json (目录不存在?)", name);
-                $finish(1);
+                $fatal(1, "FATAL: 无法写 stability/%0s.json (目录不存在?)", name);
             end
             $fwrite(sfd, "{\n  \"id\": \"G-C-05.%0s\",\n", name);
             $fwrite(sfd, "  \"pass\": %0s,\n", ok ? "true" : "false");
@@ -273,13 +275,26 @@ module tb_ldpc_decoder_top;
     // 主流程
     //-----------------------------------------------------------------
     initial begin
-        if (!$value$plusargs("VEC_DIR=%s", vec_dir)) begin
-            $display("FATAL: 缺 +VEC_DIR — TB 不得硬编码向量路径");
-            $finish(1);
-        end
-        if (!$value$plusargs("EVID_DIR=%s", evid_dir)) begin
-            $display("FATAL: 缺 +EVID_DIR");
-            $finish(1);
+        // 路径注入两条通路, TB 内均不出现硬编码绝对路径:
+        //   ModelSim: run_sim.do 经 +VEC_DIR / +EVID_DIR 传绝对路径
+        //   xsim    : -testplusarg 在 Windows 上会在 `=` 与盘符处把参数切碎, 传不了
+        //             路径, 故回落到运行目录相对 —— 由 run_xsim.sh 先把向量与 PT ROM
+        //             拷进构建目录、跑完再把证据搬到 var/gates/pg/<asset_uid>/。
+        // 回落值必须是 "." 而非空串: 下面拼路径用 $sformat("%0s/xxx", dir),
+        // 空串会拼成 "/xxx" 即文件系统根, 打不开 (axis_skid_buffer 实测踩过)。
+        if (!$value$plusargs("VEC_DIR=%s",  vec_dir))  vec_dir  = ".";
+        if (!$value$plusargs("EVID_DIR=%s", evid_dir)) evid_dir = ".";
+
+        // 实际跑本次仿真的工具名: 优先 +TOOL, 否则读运行目录的 sim-tool.txt,
+        // 都没有就写 unknown-simulator —— 宁可留空, 不给一个看似可信的错名字。
+        if (!$value$plusargs("TOOL=%s", sim_tool)) begin
+            tool_fd = $fopen("sim-tool.txt", "r");
+            if (tool_fd != 0) begin
+                if ($fscanf(tool_fd, "%s", sim_tool) != 1) sim_tool = "unknown-simulator";
+                $fclose(tool_fd);
+            end else begin
+                sim_tool = "unknown-simulator";
+            end
         end
         do_trace = $test$plusargs("TRACE");
         trace_fd = 0;
@@ -404,12 +419,14 @@ module tb_ldpc_decoder_top;
         $sformat(path, "%0s/alignment-report.json", evid_dir);
         fd = $fopen(path, "w");
         if (fd == 0) begin
-            $display("FATAL: 无法写证据 %0s", path);
-            $finish(1);
+            $fatal(1, "FATAL: 无法写证据 %0s", path);
         end
         $fwrite(fd, "{\n");
         $fwrite(fd, "  \"id\": \"G-B-03\",\n");
-        $fwrite(fd, "  \"tool\": \"ModelSim 10.6c\",\n");
+        // tool 不写死: 原为 "ModelSim 10.6c", 迁到 xsim 后会让证据声称自己出自一个
+        // 并没有跑过它的仿真器。改为读运行目录下的 sim-tool.txt (xsim 的
+        // -testplusarg 在 `=` 处会把参数切碎, 传不了)。
+        $fwrite(fd, "  \"tool\": \"%0s\",\n", sim_tool);
         $fwrite(fd, "  \"golden\": \"models/comm/ldpc/src/ldpc_decoder_ms_fixed.m Q(10,4) alpha=12/16 max_iter=20 internal=10bit\",\n");
         $fwrite(fd, "  \"criterion\": \"324 hard-decision bits x %0d vectors, bitwise !==\",\n", P_NVEC);
         $fwrite(fd, "  \"total\": %0d,\n", total_bits);
@@ -425,8 +442,14 @@ module tb_ldpc_decoder_top;
             $display("=== BIT-TRUE PASS ===");
             $finish(0);
         end else begin
+            // 这里原先是 $finish(1) —— **失败会被当成通过**。$finish(N) 的 N 是
+            // 诊断详略等级 (0/1/2), 不是进程退出码, 失败 run 照样以 0 退出。
+            // 本包 README 早就为编码器 TB 记过这个坑 ("$finish(N) 的 N 是诊断详略
+            // 等级不是退出码, 超时也以 0 退出"), 但译码器 TB 一直没跟着修。
+            // $fatal(1, ...) 才会以非零码终止, 让上游脚本/CI 真正看到失败。
             $display("=== BIT-TRUE FAIL ===");
-            $finish(1);
+            $fatal(1, "BIT-TRUE FAIL: %0d/%0d bit 失配, 其它场景失败 %0d",
+                   total_mismatch, total_bits, n_fatal);
         end
     end
 

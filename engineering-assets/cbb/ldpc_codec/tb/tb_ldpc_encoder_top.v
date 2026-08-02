@@ -175,8 +175,11 @@ module tb_ldpc_encoder_top;
     // 主测试
     //-----------------------------------------------------------------
     initial begin
-        if (!$value$plusargs("VEC_DIR=%s", vec_dir))
-            $fatal(1, "tb_ldpc_encoder_top: 必须提供 +VEC_DIR=.../vectors (先跑 gen_encoder_test_vectors.m)");
+        // ModelSim 经 +VEC_DIR 传绝对路径; xsim 传不了含盘符的路径 (-testplusarg 会在
+        // `=` 与冒号处把参数切碎), 故回落到运行目录相对 —— 由 run_xsim.sh 先把
+        // tb_enc_info_*.hex / tb_enc_code_*.hex 拷进构建目录。
+        // 回落值用 "." 而非空串: 下面拼路径是 $sformat("%0s/xxx", vec_dir)。
+        if (!$value$plusargs("VEC_DIR=%s", vec_dir)) vec_dir = ".";
         if (!$value$plusargs("N_TESTS=%d", n_tests))
             n_tests = P_NTESTS_D;
 

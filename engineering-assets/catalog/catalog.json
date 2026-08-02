@@ -248,7 +248,7 @@
       "asset_uid": "ldpc_codec",
       "name": "ldpc_codec",
       "kind": "rtl",
-      "version": "1.0.1",
+      "version": "1.0.2",
       "owner": "lihan",
       "level": "certified",
       "dir": "cbb/ldpc_codec",

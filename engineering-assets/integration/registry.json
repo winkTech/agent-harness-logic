@@ -27,7 +27,7 @@
    "project": "phy-intake",
    "project_ref": "cbb/ldpc_codec",
    "asset_uid": "ldpc_codec",
-   "version_pinned": "1.0.1",
+   "version_pinned": "1.0.2",
    "config": {},
    "integrated_at": "2026-07-26T00:00:00Z",
    "status": "active",
