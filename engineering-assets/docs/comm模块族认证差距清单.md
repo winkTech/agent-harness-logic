@@ -50,10 +50,10 @@
 - `asset-audit`: **RED=0 YELLOW=0**（2026-08-02；此前 YELLOW 13，明细与还清见 §3）
 - `manifest-hash-refresh`: mismatches=0 blocked=0
 - **证据可复现: 16/16**（普查时 2/16，见 §2.5）
-- `evidence-snapshot --verify-all`: **verified 44 snapshots, historical=28**
+- `evidence-snapshot --verify-all`: **verified 45 snapshots, historical=29**
   —— 每个 certified 资产都有哈希锁定快照（`rrc_polyphase_fir` 此前是唯一例外，
   已补齐）
-- **16 个 certified 的版本号已全部统一到 1.0.0+**（本轮多次 patch 升版，最高 `ldpc_codec` 1.0.4）。
+- **16 个 certified 的版本号已全部统一到 1.0.0+**（本轮多次 patch 升版，最高 `ldpc_codec` 1.0.5）。
   `rrc_polyphase_fir` / `pulse_merge` / `stream_elastic_pipeline` 此前长期停在
   0.4.0，2026-08-02 由 owner 裁定一并转正；三者的 RTL 与功能结论均未改动
 - `incubator/intake/`: **已清空**
@@ -178,8 +178,12 @@ certified 16 = comm 四族 4 + 原语 9（`axis_skid_buffer`、`lfsr_gen`、`crc
 > **跳过写入、如实报告 `BLOCKED` 并以 exit 1 退出**。已用"人为改坏一处 golden
 > 哈希再试写"验证确实拦下。
 >
-> **残留**：其余经 Bash 运行、会写 `models/**` 的工具（如 `extract-cbb.cjs`）
-> 尚未加同样的判定 —— 本次只修了实际发生过越权写入的那一个。
+> **该残留已于同日还清**：判定抽成 `tools/lib/protected-write.cjs` 作唯一真相源，
+> `extract-cbb.cjs` 一并接入（不各写一份——两份副本必然漂移，改了一处忘另一处，
+> 洞就从没改的那处漏）。抽库时还查出一个**真漏判**：原判定只匹配
+> `engineering-assets/models/`，而从 `engineering-assets/` 内部传的相对路径
+> `models/comm/...` 不含该前缀会被静默放行；此前的负例测试碰巧传的是绝对路径
+> 才拦住。已补 `^models/` 一条，6/6 路径形态用例通过并端到端复验。
 
 #### `model_comm_rrc` 复核结果 —— 结论与原诊断相反
 
@@ -282,10 +286,32 @@ git 的 blob SHA 是内容的函数，与 `.git` 是否存在无关，内容俱�
 本模块直接来源 `rtl/pulse_merge.v` 单独复核：上游 blob `aafe38a8` = 本地文件
 LF 归一后的 blob。
 
-同法对另外 5 个 vendor 归档（2026-08-02 配额恢复后跑完），结果分三档：
+同法对另外 5 个 vendor 归档，**6/6 全部钉定**：
 
-| 归档 | 结果 |
-|:---|:---|
+| 归档 | commit | 归档/上游 |
+|:---|:---|:---|
+| `verilog_pcie` | `25156a9a162c…` (2024-04-26) | 633/633，完全一致 |
+| `axis_udp` | `4e4e0edc0451…` (2022-03-15) | 20/20，完全一致 |
+| `picorv32` | `87c89acc1899…` (2024-06-17) | 246/247，缺 1 |
+| `async_fifo` | `38c22208d394…` (2026-02-13) | 28/30，缺 2 |
+| `r22sdf` | `f7dca6e548e1…` (2019-04-14) | 61/64，缺 3 |
+| `basic_verilog` | `2654273b2c4e…` (2026-03-12) | 1997/2041，缺 45 |
+
+后四个归档是对应 commit 的**子集**。判为钉定而非"无法确定"的依据：
+
+- 每一个**存在的**文件都与该 commit 逐一匹配（未解释差异 0、仅本地存在 0）
+- 四档合计缺 **51 个文件，全部是二进制/大文件/构建产物**——图片 42、标准单元库 4、
+  仿真日志 2、6 MB 数据表 1，**无一是源码**；而 2300+ 个源文件全部匹配
+- 已逐条排除其他解释：无 `.gitattributes`（不存在 `export-ignore`）、Windows 绝对
+  路径远低于 260 上限、文件名无非法字符、无大小写冲突
+- `r22sdf` 的 commit 日期与登记的取回日期 **2019-04-14 完全一致**；
+  `async_fifo` 差一天；`verilog_pcie` 差一天
+
+> **边界写清楚**：裁剪动作本身**没有记录**，"入库时按只留源码裁剪"是**推断**。
+> 所以钉定的是"**本归档的全部内容出自该 commit**"，不是"本归档等于该 commit"。
+> 这一区分写进了各 `_provenance/*.json` 的 `commit_basis`。
+
+---|:---|
 | `axis_udp` | **完全钉定** `4e4e0edc0451…`，20 个文件 0 未解释差异 |
 | `picorv32` | **强候选 `87c89acc1899`，但不算命中**：本地 246 个文件全部一致（未解释差异 0），只是上游多出 `scripts/yosys/synth_gates.lib` 而本地没有 |
 | `basic_verilog` | **强候选 `2654273b2c4e`，但不算命中**：本地 1997 个文件全部一致，上游多出 44 个大二进制（开发板 `.png`、`inv_sqrt.tbl`） |
