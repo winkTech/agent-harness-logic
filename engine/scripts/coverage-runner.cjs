@@ -274,6 +274,24 @@ function main() {
   console.log(`  保存至:     ${SUMMARY_FILE}`);
 
   if (result.status !== 0) {
+    // 把失败项复述到日志**末尾**。
+    //
+    // 为什么必须复述: 测试输出走 stdout, 先打; 迁移日志等走 stderr, 后打; 本警告最后。
+    // 实测一份 824 行的失败日志里, "❌ 失败" 在第 391 行 —— 距末尾 433 行。而人和
+    // CI 界面默认看到的都是尾部, 于是"哪条测试挂了"这个唯一有用的信息永远不在视野里。
+    // 实际后果: 同一个 CI 失败连查三轮都只能拿到 `exit=1`, 全靠猜。
+    const failures = String(result.stdout || '')
+      .split(/\r?\n/)
+      .filter((line) => line.includes('❌'))
+      .slice(0, 20);
+    if (failures.length) {
+      console.error('[coverage-runner] ── 失败项(复述自上方测试输出) ──');
+      for (const line of failures) console.error(`[coverage-runner]   ${line.trim()}`);
+    } else {
+      console.error('[coverage-runner] ── 测试输出里没有 ❌ 行: 运行器可能在跑完前就退出了 ──');
+      const tail = String(result.stdout || '').trimEnd().split(/\r?\n/).slice(-8);
+      for (const line of tail) console.error(`[coverage-runner]   ${line}`);
+    }
     console.error(`[coverage-runner] ⚠️ 测试运行 exit=${result.status}`);
   }
 
