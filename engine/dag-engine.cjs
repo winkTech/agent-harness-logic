@@ -89,41 +89,50 @@ function layerize(nodes) {
 
 // ── 全局循环检测状态 ────────────────────────────────────────────────────────
 // 追踪跨节点的重试模式，用于检测"反复死磕同一问题"的 loop
-const _loopTracker = new Map(); // nodeName → { attempts: number, errorPatterns: string[], lastError: string }
+const _loopTracker = new Map(); // nodeName → { attempts, fingerprints: string[], lastSignature }
+
+// 失败判据来自共享库 —— 旧实现用 errorMsg.slice(0, 40) 当指纹, 错误里只要带
+// 绝对路径、行号或耗时, 同一个失败每次都算"新错误", 于是"错误模式相似"这条
+// 分支几乎从不成立, 循环门禁形同虚设。
+const { signature, strategyHint } = require('./scripts/lib/failure-signature.cjs');
 
 function resetLoopTracker() { _loopTracker.clear(); }
 
 /**
  * 检查指定节点是否存在循环重试问题。
- * 检测规则: 同一节点连续重试 >maxLoopRetries 次且错误消息相似。
+ * 检测规则: 同一节点连续重试 >maxLoopRetries 次；建议措辞取决于失败是否收敛到
+ * 同一指纹 (同一个坑 → 换方法; 指纹发散 → 前置条件有问题)。
  * @param {string} nodeName
  * @param {string} errorMsg
  * @param {number} maxLoopRetries
- * @returns {{ loopDetected: boolean, attempts: number, suggestion: string }}
+ * @returns {{ loopDetected: boolean, attempts: number, suggestion?: string, fingerprint?: string, family?: string }}
  */
 function checkLoop(nodeName, errorMsg, maxLoopRetries) {
-  const entry = _loopTracker.get(nodeName) || { attempts: 0, errorPatterns: [], lastError: '' };
+  const entry = _loopTracker.get(nodeName)
+    || { attempts: 0, fingerprints: [], lastSignature: null };
   entry.attempts++;
 
-  // 提取错误模式（取前 40 字符作为指纹）
-  const errorFingerprint = (errorMsg || '').slice(0, 40);
-  if (errorFingerprint && errorFingerprint !== entry.lastError) {
-    entry.errorPatterns.push(errorFingerprint);
-    if (entry.errorPatterns.length > 5) entry.errorPatterns.shift();
+  const sig = signature(errorMsg, { scope: nodeName });
+  if (!sig.empty && sig.fingerprint !== entry.lastSignature?.fingerprint) {
+    entry.fingerprints.push(sig.fingerprint);
+    if (entry.fingerprints.length > 5) entry.fingerprints.shift();
   }
-  entry.lastError = errorFingerprint;
+  entry.lastSignature = sig;
   _loopTracker.set(nodeName, entry);
 
   if (entry.attempts >= maxLoopRetries) {
+    const distinct = new Set(entry.fingerprints).size;
     return {
       loopDetected: true,
       attempts: entry.attempts,
-      suggestion: entry.errorPatterns.length <= 2
-        ? `节点 "${nodeName}" 已重试 ${entry.attempts} 次且错误模式相似，建议切换策略或检查前置依赖`
-        : `节点 "${nodeName}" 已重试 ${entry.attempts} 次且出现 ${entry.errorPatterns.length} 种不同错误，建议前置条件验证`,
+      fingerprint: sig.fingerprint,
+      family: sig.family,
+      suggestion: distinct <= 1
+        ? `节点 "${nodeName}" 已重试 ${entry.attempts} 次且失败指纹一致 (${sig.fingerprint}/${sig.family}) — ${strategyHint(sig.family, entry.attempts)}`
+        : `节点 "${nodeName}" 已重试 ${entry.attempts} 次且出现 ${distinct} 种不同失败指纹，建议先做前置条件验证再重试`,
     };
   }
-  return { loopDetected: false, attempts: entry.attempts };
+  return { loopDetected: false, attempts: entry.attempts, fingerprint: sig.fingerprint };
 }
 
 // ── 带重试与循环检测的执行器 ────────────────────────────────────────────

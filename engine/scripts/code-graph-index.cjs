@@ -208,8 +208,24 @@ function shouldIndex(filePath, stat) {
   return /\.(sv|v|vh|svh|py|js|cjs|ts|mjs|m|tcl|do|c|cpp|h|json|yaml|yml|xml|cfg|hex)$/i.test(ext);
 }
 
+/**
+ * 深度解析的体积兜底上限。
+ *
+ * 解析器全是正则实现, 一旦某条正则有歧义分支就会在大文件上灾难性回溯 —— 实测
+ * xpm_memory.sv (477KB) 曾让解析 >180s 不返回 (根因已在 parsers/sv-codegraph.cjs
+ * 的 instRe 修掉, 现在同一文件 54ms)。这个上限留作**兜底**: 将来再引入类似歧义
+ * 时, 表现是少抽几个大文件的符号, 而不是整个索引调度卡死。
+ * 超限文件仍登记进 cg_files, 跨域边照样挂得上, 只是不抽符号。
+ * 与 shouldIndex 的 500KB 硬上限对齐; 可用 CLAUDE_CG_MAX_PARSE_BYTES 调整。
+ */
+const MAX_PARSE_BYTES = (() => {
+  const raw = Number.parseInt(process.env.CLAUDE_CG_MAX_PARSE_BYTES || '', 10);
+  return Number.isFinite(raw) && raw > 0 ? raw : 512 * 1024;
+})();
+
 /** 判断文件是否应被深度索引（符号提取） */
-function shouldDeepIndex(ext) {
+function shouldDeepIndex(ext, stat) {
+  if (stat && stat.size > MAX_PARSE_BYTES) return false;
   return /\.(sv|v|vh|svh|py|js|cjs|ts|mjs)$/i.test(ext);
 }
 
@@ -245,8 +261,8 @@ function indexFile(db, filePath, projectId, relativePath) {
     VALUES (?, ?, ?, ?, ?, ?, ?, ?)
   `).run(fileId, projectId, relativePath, language, contentHash, stat.size, stat.mtimeMs, Date.now());
 
-  // 深度解析（仅对代码文件）
-  if (shouldDeepIndex(ext)) {
+  // 深度解析（仅对代码文件, 且体积在解析上限之内）
+  if (shouldDeepIndex(ext, stat)) {
     let result;
     if (['.sv', '.v', '.vh', '.svh'].includes(ext)) {
       result = svParser.parse(content, filePath, projectId);
@@ -379,15 +395,30 @@ function parseJSToSQLite(content, filePath, projectId, fileId) {
   return { nodes, edges, unresolvedRefs, errors: [] };
 }
 
+/** 任何层级都跳过的目录 (构建产物、依赖、仿真中间件)。 */
+const SKIP_DIRS = ['node_modules', '.git', '.claude', '.wright', '.codegraph',
+  'build', 'sim_run', '__pycache__', '.venv', 'archive', 'backup',
+  'xsim', 'modelsim', 'vsim', 'questa'];
+
+/**
+ * 仅在项目**根目录**跳过的目录 —— 运行时/派生数据, 不是项目代码。
+ *
+ * 只在根层跳: 深层出现的同名目录 (如 rtl/var/) 可能是真代码, 不应误伤。
+ * 对本 harness 而言这一条砍掉了 ~800 个文件 (var/ 513 + tasks/ 307), 那些是
+ * 会话产物与临时脚本, 进了图只会污染符号搜索。
+ */
+const ROOT_SKIP_DIRS = ['var', 'tasks', 'projects', 'sessions', 'session-data',
+  'session-env', 'shell-snapshots', 'paste-cache', 'file-history', 'backups',
+  'cache', 'telemetry', 'transcript', 'ide'];
+
 /** 扫描项目目录 */
 function walkProject(dir, baseDir, files = []) {
   try {
+    const atRoot = p.resolve(dir) === p.resolve(baseDir);
     for (const entry of f.readdirSync(dir, { withFileTypes: true })) {
       const fullPath = p.join(dir, entry.name);
       if (entry.isDirectory()) {
-        const skipDirs = ['node_modules', '.git', '.claude', '.wright', '.codegraph',
-          'build', 'sim_run', '__pycache__', '.venv', 'archive', 'backup',
-          'xsim', 'modelsim', 'vsim', 'questa'];
+        const skipDirs = atRoot ? [...SKIP_DIRS, ...ROOT_SKIP_DIRS] : SKIP_DIRS;
         if (!skipDirs.includes(entry.name) && !entry.name.startsWith('.')) {
           walkProject(fullPath, baseDir, files);
         }
@@ -406,7 +437,7 @@ function walkProject(dir, baseDir, files = []) {
 }
 
 /** 跨文件引用解析: 将 unresolvedRefs 中的实例→模块引用转为 edges */
-function resolveCrossFileRefs(db, projectId) {
+function resolveCrossFileRefs(db, projectId, opts = {}) {
   const refs = db.prepare(`
     SELECT u.name, u.source_node_id, u.line
     FROM cg_unresolved u
@@ -441,7 +472,7 @@ function resolveCrossFileRefs(db, projectId) {
     }
   }
 
-  if (resolved > 0) {
+  if (resolved > 0 && !opts.quiet) {
     console.error(`   引用解析: ${resolved}/${refs.length} 个实例已匹配到模块定义`);
   }
 }
@@ -464,7 +495,7 @@ function cmdIndexProject(projectPath) {
   // 事务内处理
   let txCount = 0;
   for (const file of files) {
-    if (shouldDeepIndex(p.extname(file.fullPath))) {
+    if (shouldDeepIndex(p.extname(file.fullPath), file.stat)) {
       const result = indexFile(db, file.fullPath, projectId, file.relPath);
       if (result.changed && result.nodes !== undefined) {
         totalChanged++;
@@ -514,37 +545,121 @@ function cmdIndexProject(projectPath) {
   return { projectId, fileCount, nodeCount, edgeCount, elapsed };
 }
 
-function cmdSyncProject(projectPath) {
+function cmdSyncProject(projectPath, opts = {}) {
+  const log = opts.quiet ? () => {} : (msg) => console.error(msg);
   const db = openDb().db;
   const { projectId, rootPath } = resolveProject(projectPath);
-  console.error(`🔄 增量同步: ${rootPath}`);
+  log(`🔄 增量同步: ${rootPath}`);
 
   const startTime = Date.now();
   let changed = 0, skipped = 0;
 
+  // 预算用于 hook 场景: SessionStart 的 hook 超时会直接杀进程, 与其被杀在半路,
+  // 不如自己停下来把统计写完 —— 已索引的文件是持久的, 下一轮从未索引的继续。
+  const deadline = opts.budgetMs > 0 ? startTime + opts.budgetMs : Infinity;
+  let partial = false;
+
   const files = walkProject(rootPath, rootPath);
+
+  // 批量事务: WAL 下每条 INSERT 单独提交都要 fsync, 一个文件约 10 条语句,
+  // 1900 个文件就是两万次落盘 —— 实测全量同步因此跑到 500s+ 被超时杀掉。
+  // 按批提交把落盘次数压到 1/BATCH。
+  const BATCH = 100;
+  let inTx = false;
+  const beginTx = () => { if (!inTx) { try { db.exec('BEGIN'); inTx = true; } catch { /* 已在事务中 */ } } };
+  const commitTx = () => { if (inTx) { try { db.exec('COMMIT'); } catch { /* 提交失败时下一批重开 */ } inTx = false; } };
+
+  let processed = 0;
+  beginTx();
   for (const file of files) {
-    if (shouldDeepIndex(p.extname(file.fullPath))) {
+    if (Date.now() > deadline) { partial = true; break; }
+    if (++processed % BATCH === 0) { commitTx(); beginTx(); }
+    if (shouldDeepIndex(p.extname(file.fullPath), file.stat)) {
       const result = indexFile(db, file.fullPath, projectId, file.relPath);
       if (result.changed) changed++;
       else skipped++;
     } else {
+      // 非深度索引文件 (.m/.tcl/.json/.hex...) 也要进 cg_files。
+      // 否则跨域边只能挂到 RTL/JS 上: 需求 scope 指向 MATLAB Golden Model 时
+      // 一条边都建不起来 —— 而那恰恰是算法/RTL 双轨项目最需要追溯的一环。
+      // (index 全量模式一直是这么做的, sync 之前漏了, 两条路径就此漂移。)
+      const ext = p.extname(file.fullPath).toLowerCase();
+      const fileId = crypto.createHash('sha256')
+        .update(projectId + '::' + file.relPath).digest('hex').slice(0, 16);
+      try {
+        db.prepare(`
+          INSERT OR REPLACE INTO cg_files
+            (id, project_id, relative_path, language, content_hash, size_bytes, modified_at, indexed_at)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        `).run(
+          fileId, projectId, file.relPath, detectLanguage(ext, file.fullPath),
+          fileContentHash(file.fullPath), file.stat.size, file.stat.mtimeMs, Date.now(),
+        );
+      } catch { /* 单个文件登记失败不影响整轮同步 */ }
       skipped++;
     }
   }
+  commitTx();
 
   // 跨文件引用解析
-  resolveCrossFileRefs(db, projectId);
+  resolveCrossFileRefs(db, projectId, { quiet: opts.quiet });
 
   // 更新统计
+  const stats = updateProjectStats(db, projectId);
+
+  const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
+  log(`\n${partial ? '⏱ 同步超预算中断' : '✅ 同步完成'}: ${elapsed}s, 变更: ${changed}, 跳过: ${skipped}, 符号: ${stats.nodeCount}, 关系: ${stats.edgeCount}`);
+  return { projectId, rootPath, changed, skipped, partial, ...stats, elapsedMs: Date.now() - startTime };
+}
+
+/** 重算并写回项目统计。 */
+function updateProjectStats(db, projectId) {
   const nodeCount = db.prepare('SELECT COUNT(*) AS c FROM cg_nodes WHERE project_id = ?').get(projectId).c;
   const edgeCount = db.prepare('SELECT COUNT(*) AS c FROM cg_edges WHERE project_id = ?').get(projectId).c;
   const fileCount = db.prepare('SELECT COUNT(*) AS c FROM cg_files WHERE project_id = ?').get(projectId).c;
   db.prepare('UPDATE cg_projects SET indexed_at = ?, file_count = ?, node_count = ?, edge_count = ? WHERE id = ?')
     .run(Date.now(), fileCount, nodeCount, edgeCount, projectId);
+  return { fileCount, nodeCount, edgeCount };
+}
 
-  const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
-  console.error(`\n✅ 同步完成: ${elapsed}s, 变更: ${changed}, 跳过: ${skipped}, 符号: ${nodeCount}, 关系: ${edgeCount}`);
+/**
+ * 单文件增量索引 —— 供 PostToolUse 钩子在写入后调用。
+ *
+ * 全量 sync 要遍历整个项目树; 一次编辑只脏了一个文件, 走这条路径把开销压到
+ * 单文件解析 + 一次跨文件引用解析。
+ *
+ * @param {string} filePath — 被修改的文件绝对路径
+ * @param {object} [opts]
+ * @param {string} [opts.projectPath] — 项目根, 缺省由 findProjectRoot 推断
+ * @param {boolean} [opts.quiet]
+ * @returns {{ indexed: boolean, reason?: string, projectId?: string, relPath?: string }}
+ */
+function cmdSyncFile(filePath, opts = {}) {
+  const log = opts.quiet ? () => {} : (msg) => console.error(msg);
+  const abs = p.resolve(filePath);
+  let stat;
+  try { stat = f.statSync(abs); } catch { return { indexed: false, reason: 'missing_file' }; }
+  if (!shouldDeepIndex(p.extname(abs), stat)) return { indexed: false, reason: 'not_deep_indexable' };
+  if (!shouldIndex(abs, stat)) return { indexed: false, reason: 'excluded' };
+
+  const { findProjectRoot } = require('./lib/project-scope.cjs');
+  const projectPath = opts.projectPath || findProjectRoot(p.dirname(abs));
+  if (!projectPath) return { indexed: false, reason: 'no_project_root' };
+
+  const { projectId, rootPath } = resolveProject(projectPath);
+  if (!abs.toLowerCase().startsWith(rootPath.toLowerCase())) {
+    return { indexed: false, reason: 'outside_project' };
+  }
+  const relPath = p.relative(rootPath, abs).replace(/\\/g, '/');
+
+  const db = openDb().db;
+  const result = indexFile(db, abs, projectId, relPath);
+  if (!result.changed) return { indexed: false, reason: 'unchanged', projectId, relPath };
+
+  resolveCrossFileRefs(db, projectId, { quiet: true });
+  const stats = updateProjectStats(db, projectId);
+  log(`✅ 单文件索引: ${relPath} (符号 ${result.nodes || 0}, 关系 ${result.edges || 0})`);
+  return { indexed: true, projectId, relPath, ...stats };
 }
 
 function cmdStatus(projectPath) {
@@ -600,6 +715,14 @@ function main() {
   // 新命令: sync /path
   if (cmd === 'sync' && args[1]) {
     cmdSyncProject(args[1]);
+    return;
+  }
+
+  // 新命令: sync-file /path/to/file [--project /root]
+  if (cmd === 'sync-file' && args[1]) {
+    const flags = parseFlags(args.slice(2));
+    const result = cmdSyncFile(args[1], { projectPath: flags.project || undefined });
+    if (!result.indexed) console.error(`跳过: ${result.reason}`);
     return;
   }
 
@@ -674,6 +797,7 @@ function main() {
   node code-graph-index.cjs index                        # 索引 .claude/ (JSON, 旧)
   node code-graph-index.cjs index /path/to/proj           # 索引项目 (SQLite)
   node code-graph-index.cjs sync /path/to/proj            # 增量同步
+  node code-graph-index.cjs sync-file /path/to/file.sv    # 单文件增量索引
   node code-graph-index.cjs status [/path]                # 项目状态
   node code-graph-index.cjs search "查询" [--kind type]   # FTS5 搜索
   node code-graph-index.cjs callers "符号" [--project /p] # 谁调用了它
@@ -687,4 +811,17 @@ if (require.main === module) {
   main();
 }
 
-module.exports = { cmdIndexProject, cmdSyncProject, cmdStatus };
+module.exports = {
+  cmdIndexProject,
+  cmdSyncProject,
+  cmdSyncFile,
+  cmdStatus,
+  updateProjectStats,
+  indexFile,
+  resolveCrossFileRefs,
+  walkProject,
+  shouldIndex,
+  shouldDeepIndex,
+  detectLanguage,
+  fileContentHash,
+};

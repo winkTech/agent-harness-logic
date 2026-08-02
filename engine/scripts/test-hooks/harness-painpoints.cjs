@@ -1716,8 +1716,15 @@ test('local settings do not force context compaction below fifty percent', () =>
   // 已批准的本机模型选择:opus[1m](原基线)与 claude-fable-5[1m](2026-07-29 操作员显式
   // /model 切换,允许两者间 A/B)。出现第三个值仍视为无决策记录的漂移。
   const sanctionedModels = ['opus[1m]', 'claude-fable-5[1m]'];
-  assert(sanctionedModels.includes(base.model) && base.effortLevel === 'max',
-    `model ${base.model} is not a sanctioned choice (${sanctionedModels.join(' / ')}) — record A/B evidence before pinning a new one`);
+  // effortLevel 同理:此前钉死成单值 'max',但上面那段注释自己已经写明"model/effortLevel
+  // 是操作员的本机选择,那里没有正确值可断言"—— 注释与断言互相矛盾,而矛盾的那一侧是
+  // 断言。2026-08-02 实测:操作员切到 xhigh 后本条与 E2E 同时变红,而这是一次合理的
+  // 本机选择。把本机偏好钉进契约,只会训练人忽略红灯。改为与 model 同构的白名单:
+  // 锁的是"没有决策记录的漂移",不是"不许换"。
+  const sanctionedEfforts = ['max', 'xhigh'];
+  assert(sanctionedModels.includes(base.model) && sanctionedEfforts.includes(base.effortLevel),
+    `model/effort ${base.model}/${base.effortLevel} is not a sanctioned choice `
+    + `(${sanctionedModels.join(' / ')} × ${sanctionedEfforts.join(' / ')}) — record A/B evidence before pinning a new one`);
 });
 
 test('local plugins do not inject a second full skill router at SessionStart', () => {

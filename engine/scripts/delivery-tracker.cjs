@@ -112,8 +112,8 @@ function recordDelivery(args, opts = {}) {
   ensureMigration(db);
 
   const stmt = db.prepare(`
-    INSERT INTO delivery_events (workflow_name, phase, status, module_count, retry_count, duration_sec, error_msg, project, session_id)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+    INSERT INTO delivery_events (workflow_name, phase, status, module_count, retry_count, duration_sec, error_msg, project, session_id, timestamp)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, COALESCE(?, datetime('now')))
   `);
 
   const sessionId = args.sessionId || process.env.CLAUDE_SESSION_ID || 'unknown';
@@ -128,8 +128,28 @@ function recordDelivery(args, opts = {}) {
     args.error || null,
     args.project || path.basename(args.cwd || process.cwd()),
     sessionId,
+    normalizeTimestamp(args.timestamp),
   );
   return true;
+}
+
+/**
+ * 归一化可选的 timestamp。不传 → null → 落回列默认值 datetime('now')。
+ *
+ * 这个参数存在的唯一理由是**让测试摆脱墙钟**: 时间窗口类断言若依赖
+ * datetime('now'), 它成不成立就取决于跑测试的那一天。2026-08-02 实测踩过一次 ——
+ * plan-accuracy 的"缺一切客观信号 → inconclusive"用例，前提是一个设在未来的
+ * windowStart 能排除所有行；真实时间跨过那个点之后，墙钟写入的行落进了窗口，
+ * 断言从内部塌掉，而被测代码一行没错。
+ *
+ * 接受 SQLite datetime 字符串 ('YYYY-MM-DD HH:MM:SS') 或毫秒时间戳。
+ */
+function normalizeTimestamp(value) {
+  if (value === null || value === undefined || value === '') return null;
+  if (typeof value === 'number' && Number.isFinite(value)) {
+    return new Date(value).toISOString().replace('T', ' ').slice(0, 19);
+  }
+  return String(value);
 }
 
 // ── 文件后备存储 ────────────────────────────────────────────────────────────

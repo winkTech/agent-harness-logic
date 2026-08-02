@@ -113,12 +113,36 @@ function readEvidenceLedger(filePath) {
   return ledger;
 }
 
+/**
+ * 证据落账后顺手建一条 evidence→file 的跨域边 (影响面查询的输入)。
+ *
+ * 内联在这里而不是起 event consumer, 是为了避开 watermark/心跳/调度那整套注册
+ * 负担 (docs/rules/05-harness.md #3)。代价是它必须绝对安静: 采集器内部已全程
+ * try/catch, 这里再兜一层 —— 账本是权威, 图只是索引, 图写失败不能影响落账。
+ */
+function collectGraphEdges(entry, opts = {}) {
+  if (opts.collectGraph === false) return;
+  if (process.env.CLAUDE_HARNESS_NO_PERSIST === '1'
+    || process.env.CLAUDE_NO_DIAGNOSTIC_WRITES === '1') return;
+  try {
+    const cwd = entry?.cwd || opts.cwd;
+    if (!cwd) return;
+    const { resolveProject } = require('../cg-queries.cjs');
+    const { collectEvidenceEdges } = require('./graph-collectors.cjs');
+    const { findProjectRoot } = require('./project-scope.cjs');
+    const projectRoot = findProjectRoot(cwd, { fallback: cwd });
+    const { projectId } = resolveProject(projectRoot);
+    collectEvidenceEdges(entry, { projectId, gate: opts.gate });
+  } catch { /* 图不可用时静默 */ }
+}
+
 function writeEvidenceLedger(filePath, entry, opts = {}) {
   const configuredMax = Number.parseInt(
     opts.maxEntries ?? process.env.CLAUDE_EVIDENCE_LEDGER_MAX_ENTRIES ?? '500',
     10,
   );
   const maxEntries = Number.isFinite(configuredMax) ? Math.max(10, configuredMax) : 500;
+  collectGraphEdges(entry, opts);
   return updateJsonFileSync(
     filePath,
     () => ({ schemaVersion: 1, entries: [] }),
