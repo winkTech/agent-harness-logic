@@ -29,20 +29,24 @@ Assets: 23 · RED: 0 · YELLOW: 0
 
 | UID | Version | Kind | Directory | Machine cleared | Blocking | Used by | Badge gap |
 |---|---:|---|---|---|---|---|---|
-| `model_comm_rrc` | 1.1.0 | golden-model | `models/comm/rrc` | — | no gate-results | 1 | — |
-| `pulse_merge_golden` | 0.1.0 | golden-model | `models/comm/pulse_merge` | — | no gate-results | 1 | — |
-| `stream_elastic_pipeline_golden` | 0.1.0 | golden-model | `models/comm/stream_elastic_pipeline` | — | no gate-results | 1 | — |
+| `model_comm_rrc` | 1.1.0 | golden-model | `models/comm/rrc` | — | n/a — 非 RTL 门梯适用范围 | 1 | — |
+| `pulse_merge_golden` | 0.1.0 | golden-model | `models/comm/pulse_merge` | — | n/a — 非 RTL 门梯适用范围 | 1 | — |
+| `stream_elastic_pipeline_golden` | 0.1.0 | golden-model | `models/comm/stream_elastic_pipeline` | — | n/a — 非 RTL 门梯适用范围 | 1 | — |
 
 ## intake
 
 | UID | Version | Kind | Directory | Machine cleared | Blocking | Used by | Badge gap |
 |---|---:|---|---|---|---|---|---|
-| `model_comm_channel_est` | 1.2.0 | golden-model | `models/comm/channel_est` | — | no gate-results | 1 | — |
-| `model_comm_ldpc` | 1.0.0 | golden-model | `models/comm/ldpc` | — | no gate-results | 1 | — |
-| `model_comm_ofdm` | 1.2.0 | golden-model | `models/comm/ofdm` | — | no gate-results | 1 | — |
-| `model_comm_synch` | 1.1.0 | golden-model | `models/comm/synch` | — | no gate-results | 1 | — |
+| `model_comm_channel_est` | 1.2.0 | golden-model | `models/comm/channel_est` | — | n/a — 非 RTL 门梯适用范围 | 1 | — |
+| `model_comm_ldpc` | 1.0.0 | golden-model | `models/comm/ldpc` | — | n/a — 非 RTL 门梯适用范围 | 1 | — |
+| `model_comm_ofdm` | 1.2.0 | golden-model | `models/comm/ofdm` | — | n/a — 非 RTL 门梯适用范围 | 1 | — |
+| `model_comm_synch` | 1.1.0 | golden-model | `models/comm/synch` | — | n/a — 非 RTL 门梯适用范围 | 1 | — |
 
-## Unregistered roots
+## 参考资料根目录（非受治理资产）
+
+以下目录按设计**不登记为 CBB**：存放数据手册与 vendor 上游归档，供查阅与溯源，
+不进门梯、不发版本、不取证。**这不是待办项** —— 上方 `RED/YELLOW` 统计不含它们。
+（vendor 归档的上游 commit 已全部钉定，见 `integration/registry.json` 各条 `provenance`。）
 
 - `reference-assets/datasheets`
 - `reference-assets/vendor`

@@ -224,8 +224,14 @@ function renderCatalogJson(scan) {
   return `${JSON.stringify(buildCatalog(scan), null, 2)}\n`;
 }
 
+// gate-runner 是 RTL 门梯 (vlog 编译/复位风格/综合包络/bit-true), 对 golden-model
+// 这类 MATLAB 资产不适用 —— 它们没有 gate-results 是**预期**, 不是阻塞。
+// 此前一律渲染成 'no gate-results', 读起来像 7 个资产卡住了, 而实际阻塞数是 0。
+// 只改人读的 markdown; catalog.json 仍保留原始事实 (gates.cleared_level = null)。
 function blockingText(asset) {
-  if (!asset.gates.cleared_level) return 'no gate-results';
+  if (!asset.gates.cleared_level) {
+    return asset.kind === 'golden-model' ? 'n/a — 非 RTL 门梯适用范围' : 'no gate-results';
+  }
   return asset.gates.blocking_at || '—';
 }
 
@@ -250,7 +256,16 @@ function renderCatalogMarkdown(scan) {
     lines.push('');
   }
   if (catalog.unregistered_roots.length) {
-    lines.push('## Unregistered roots', '');
+    // 这里列的是 reference-assets/ 的下级目录 —— 数据手册与 vendor 上游归档。
+    // 它们**按设计不是受治理 CBB**, 不进门梯、不发版本、不取证。原标题只写
+    // 'Unregistered roots' 且裸列路径, 读起来像两个"还没登记"的待办。
+    lines.push('## 参考资料根目录（非受治理资产）', '');
+    lines.push(
+      '以下目录按设计**不登记为 CBB**：存放数据手册与 vendor 上游归档，供查阅与溯源，',
+      '不进门梯、不发版本、不取证。**这不是待办项** —— 上方 `RED/YELLOW` 统计不含它们。',
+      '（vendor 归档的上游 commit 已全部钉定，见 `integration/registry.json` 各条 `provenance`。）',
+      ''
+    );
     for (const root of catalog.unregistered_roots) lines.push(`- \`${root}\``);
     lines.push('');
   }
