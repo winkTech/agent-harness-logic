@@ -158,7 +158,7 @@
    "project": "cbb-foundation",
    "project_ref": "cbb/rrc_polyphase_fir",
    "asset_uid": "rrc_polyphase_fir",
-   "version_pinned": "1.0.0",
+   "version_pinned": "1.0.1",
    "config": {
     "DATA_W": 16,
     "COEFF_W": 16,
@@ -185,13 +185,14 @@
    "last_reviewed": "2026-08-02",
    "blocked": {
     "gap": [
-     "board-validation"
+     "board-validation",
+     "hold-closure"
     ],
     "cause": "hardware-unavailable",
     "declared_by": "owner",
     "declared_at": "2026-08-02",
-    "note": "owner 2026-08-02 明确『硬件暂时无法提供』。本条不是遗漏也不是待办 —— 是缺前置条件而无法执行, 在硬件到位前不应被当作可关闭项反复重扫。",
-    "unblock_requires": "一块 xc7k325t (或等效 Kintex-7) 板卡 + 时钟/复位/AXI-S 引脚绑定的顶层 XDC。到位后需做: (1) 布线后加 I/O 绑定重跑 STA, 用真实 i_rst 最小输入延时判定 hold (量化门槛 >=0.263ns, 见 hold-closure.json); (2) 出比特流上板, 用已入库的 rrc_stimulus.hex 灌激励、抓 expected_tx.hex 对拍。"
+    "note": "owner 2026-08-02 明确『硬件暂时无法提供』。两项都不是遗漏也不是待办, 而是缺前置条件而无法执行。hold-closure 于同日**确认不可由 RTL 关闭**: 实测试过把 i_rst 寄存一拍使最差路径变 reg-to-reg, WHS 反而从 -0.163ns 劣化到 -0.189ns (新最差路径 s_axis_tdata[5] -> sym_buf_i_reg[0][5]/D 是普通 FDRE, hold 需求 0.227ns > DSP48E1 RSTM 的 0.201ns), 改动已回退。根因是 XDC 的 set_input_delay -min 0.100 占位假设对所有输入过小; 任何输入端口最终都要落进某个触发器, 而 sym_buf_i_reg[0] 本身就是输入寄存级, 故 RTL 侧无杠杆。此前记录的『唯一失败端口是 i_rst』是抽样不全导致的误判 (漏查 s_axis_tdata[*])。",
+    "unblock_requires": "一块 xc7k325t (或等效 Kintex-7) 板卡 + 引脚绑定的顶层 XDC。到位后: (1) 用真实 set_input_delay -min 重跑布线后 STA 判定 hold —— 就 2026-08-02 那次布线而言输入最小延时需 >= 约 0.29ns (0.799-0.510), 但该数值随布局布线变动, 不是固定门槛; (2) 出比特流上板, 用已入库的 rrc_stimulus.hex 灌激励、抓 expected_tx.hex 对拍。"
    }
   },
   {

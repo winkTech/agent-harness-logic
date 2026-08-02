@@ -2,11 +2,11 @@
   "schema_version": "1.0",
   "asset_uid": "rrc_polyphase_fir",
   "name": "rrc_polyphase_fir",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "owner": "lihan",
   "maturity": {
     "level": "certified",
-    "evidence_ref": "engineering-assets/evidence/rrc_polyphase_fir/1.0.0/"
+    "evidence_ref": "engineering-assets/evidence/rrc_polyphase_fir/1.0.1/"
   },
   "requirement_ref": "engineering-assets/knowledge/primary/domains/comm/rrc/algorithm_spec.md",
   "doc_refs": [
@@ -104,12 +104,12 @@
     {
       "path": "rtl/rrc_polyphase_fir.sv",
       "role": "rtl",
-      "sha256": "9632a42a8e8734e57bd9f961ebb4ec74e4165ad1b1d3b3ac75951307cce5abd2"
+      "sha256": "1d99ee1d3e242ac5d271d87fc83ce37278f7f76dd993933cbfe1d11e4c6feffb"
     },
     {
       "path": "tb/tb_rrc_polyphase_fir.sv",
       "role": "tb",
-      "sha256": "93c7763b272274e047a1db55a4fa8e28dd012b8a967824d10a6a446833225068"
+      "sha256": "7d1aa2eaea6b6ba1007f74b7bfd366ea2de44dad328fd2cc1f291c5cf28ff3c4"
     },
     {
       "path": "constraints/rrc_polyphase_fir.xdc",
@@ -167,12 +167,12 @@
       "1.0.0 转正 (owner 2026-08-02 裁定)。RTL / 约束 / TB 与全部功能结论自 0.4.0 (2026-07-25 首次签署) 起未变; 本次转正基于补齐的布线后时序与哈希锁定证据快照。",
       "证据已复核: timing-summary.rpt / utilization.rpt / alignment-report.json / reset-sim.json / cdc-report.json / stability/*.json / hold-closure.json / route-timing-summary.rpt / route-utilization.rpt / route-drc.rpt",
       "已接受限制: DSP 零裕量(24/24)",
-      "已接受限制: hold 布线后仍未收敛(WHS -0.163ns, 320/2713 端点)。**修正 0.4.0 的措辞** —— 此前写『综合级 hold 为估算值, 上板前须以实现后时序为准』, 实测证明它不会自行收敛: WHS 在 synth/opt/place/route 四阶段恒定。归因已查清: 924 条违例路径全部起于输入端口、内部单元起点 0 条, reg-to-reg 最差 hold +0.094ns (内部已收敛); 唯一失败端口 i_rst -> DSP48E1 RSTM, 由 XDC 自称『显式假设、非实测』的 set_input_delay -min 0.100 支配。量化关闭条件: i_rst 真实最小输入延时 >= 0.263ns。见 hold-closure.json。",
+      "已接受限制: hold 布线后仍未收敛(WHS -0.163ns, 320/2713 端点)。**修正 0.4.0 的措辞** —— 此前写『综合级 hold 为估算值, 上板前须以实现后时序为准』, 实测证明它不会自行收敛: WHS 在 synth/opt/place/route 四阶段恒定。归因: 924 条违例路径全部起于输入端口、内部单元起点 0 条, reg-to-reg 最差 hold +0.094ns (内部已收敛), 全部由 XDC 自称『显式假设、非实测』的 set_input_delay -min 0.100 支配。**该项不可由 RTL 关闭**: 已实测试过把 i_rst 寄存一拍 (想让当时最差的 i_rst -> DSP48E1 RSTM 变成 reg-to-reg), 结果 WHS 反而从 -0.163ns 劣化到 -0.189ns —— 新最差路径是 s_axis_tdata[5] -> sym_buf_i_reg[0][5]/D 这个普通 FDRE (hold 需求 0.227ns > DSP RSTM 的 0.201ns), 该改动已回退。任何输入端口最终都要落进某个触发器, 而 sym_buf_i_reg[0] 本身就是输入寄存级, 故 RTL 侧无杠杆, 只能由集成方以引脚绑定后的真实 set_input_delay -min 判定。见 hold-closure.json。",
       "已接受限制: setup 裕量薄 —— 布线后 WNS +0.058ns, place 阶段一度只剩 +0.006ns",
       "已接受限制: 仅默认参数经验证",
       "已接受限制: cdc_tool=na — 单时钟域, 仅结构扫描, 未经具名 CDC 工具",
       "已接受限制: 未上板 (registry ITG-0009 的 board-validation 仍为空白)",
-      "已接受限制: 仿真证据由 ModelSim 产出, 本机 ModelSim 回环 RPC 故障, run.do 尚未迁到 xsim, 该条复现路径当前不可用"
+      "1.0.1 (2026-08-02): 补 run_xsim.sh 双通路。ModelSim 回环 RPC 故障使 run.do 无法复现, 现补 Vivado xsim 2023.1.1 通路, 两条共用同一 TB 与判据; 交叉验证六份证据逐字节相同 (含 stall_cycles=820 / symbols_accepted=516 / achieved=0.200311)。同时修掉证据 tool 字段写死 ModelSim 的错误署名, 改由运行脚本注入。RTL 逻辑未变。"
     ]
   },
   "params": [

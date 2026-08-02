@@ -1,10 +1,10 @@
-# rrc_polyphase_fir — 已知限制（1.0.0）
+# rrc_polyphase_fir — 已知限制（1.0.1）
 
 以下各条来自实测与治理台账，非推测。本文件是本资产已知限制的**权威清单**
 （README §7 指向此处）；签字所接受的限制即复用方需要承担的约束，见
 `manifest.json` 的 `signoff.scope`。
 
-证据位置：`engineering-assets/evidence/rrc_polyphase_fir/1.0.0/`（哈希锁定快照）
+证据位置：`engineering-assets/evidence/rrc_polyphase_fir/1.0.1/`（哈希锁定快照）
 与 `engineering-assets/var/gates/pg/rrc_polyphase_fir/`（实时目录）。
 1.0.0 是版本号转正，RTL 与全部功能结论自 0.4.0（2026-07-25）起未变，
 故本清单同样适用于 0.4.0。
@@ -47,24 +47,34 @@
    - **归因是确定的**：对 `post_route.dcp` 跑 `get_timing_paths -delay_type min
      -slack_lesser_than 0`，**924 条违例路径全部从输入端口出发，内部单元起点 0 条**；
      **reg-to-reg 最差 hold = +0.094 ns**，即本核内部 hold 已收敛。
-   - 失败的只有 `i_rst` 一个端口（`s_axis_tvalid` +0.218、`m_axis_tready` +0.193
-     都通过）。路径是 `i_rst → addA_i_reg[0]/RSTM (DSP48E1)`：到达
+   - 基线运行的最差路径是 `i_rst → addA_i_reg[0]/RSTM (DSP48E1)`：到达
      0.100（XDC 占位输入延时）+ 0.510（走线）= 0.610，需求 0.537（时钟延时）
-     + 0.035（不确定度）+ **0.201（DSP48E1 RSTM 的 hold 需求，远大于普通 FF）**
-     = 0.773。差 0.163 ns。
-   - **关闭条件（量化）**：`i_rst` 的真实最小输入延时 ≥ **0.263 ns** 即收敛。
-     XDC 里的 0.100 ns 是它自己写明的"显式假设、非实测"占位值。
-     板级上 `i_rst` 若由同域寄存器驱动并走一段线，通常远超该值 ——
-     **但这必须由集成方用真实数值确认，CBB 级给不出结论**。
-   - 若要在核内消除对集成方 I/O 时序的依赖，方向是把 `i_rst` 先在本核寄存一拍
-     再驱动 DSP 复位脚，使该路径变成 reg-to-reg。代价是复位晚一拍，属**行为契约
-     变更**，需重跑全部 bit-true 与 G-C-04/05 —— 未做，留给 owner 决策。
+     + 0.035（不确定度）+ 0.201（DSP48E1 RSTM 的 hold 需求）= 0.773，差 0.163 ns。
+   - **已试过并证伪的修法（勿重复尝试）**：把 `i_rst` 先在核内寄存一拍，
+     让该路径变成 reg-to-reg。实测结果——那条路径确实消失了，但
+     **WHS 反而从 −0.163 ns 变成 −0.189 ns**：新的最差路径是
+     `s_axis_tdata[5] → sym_buf_i_reg[0][5]/D`，一个**普通 FDRE**，
+     其 hold 需求 **0.227 ns 比 DSP48E1 RSTM 的 0.201 ns 还大**。
+     功能侧无回归（cosim 0/2048、G-C-04 8/8、G-C-05 四项全过），但收益为零，
+     而代价是"复位晚一拍"的行为契约变更，**故已回退**。
+   - **真正的根因**：问题从来不在 `i_rst`，而在 XDC 的
+     `set_input_delay -min 0.100` 这个占位假设对**所有输入**一视同仁地过小。
+     到达 ≈ 0.100 + 0.51 = 0.61 ns，而任一触发器的 hold 需求要 ≈0.8 ns。
+     **任何输入端口最终都要落进某个触发器**，而 `sym_buf_i_reg[0]` 本身就已经是
+     输入寄存级 —— **没有任何 RTL 变换能消掉输入端口的 hold 路径**，
+     只能把它从一个端口挪到另一个端口。
+   - **因此 `hold-closure` 不是可由 RTL 关闭的项**，它与 `board-validation` 同属
+     依赖集成/板级数据的阻塞项：须由集成方在**引脚绑定后**用真实
+     `set_input_delay -min` 重跑布线后 STA 判定。就本次布线结果而言，输入最小延时
+     需 ≥ 约 0.29 ns 才能覆盖最差那条（0.799 − 0.510）——**该数值随布局布线变动，
+     不是可照搬的固定门槛**。
    - 附带：`place` 阶段 setup 一度只剩 **+0.006 ns**，裕量非常薄；
      `route-drc.rpt` 无 Critical Warning。布线后资源 LUT 220 / FF 258 / DSP 24。
 
-   registry ITG-0009 的 `hold-closure` **仍不关闭**（布线后确有违例，如实记录、
-   不做豁免），但状态已从"未知"推进到"已定位到单一端口、单一成因，并给出量化
-   关闭条件"。
+   > **一处已更正的结论**：本条初版写"失败的只有 `i_rst` 一个端口"并据此提出
+   > 寄存一拍的修法。那是**抽样不全导致的误判** —— 当时只抽查了 `s_axis_tvalid`
+   > （+0.218）与 `m_axis_tready`（+0.193），**没有抽查 `s_axis_tdata[*]`**，
+   > 而后者才是同一约束下更差的一类路径。
 
 6. **（已还清，留记录）无哈希锁定证据快照。** 本资产的 `maturity.evidence_ref`
    曾指向 `var/gates/pg/rrc_polyphase_fir/` —— 一个由工具随时可覆盖重写的实时
@@ -112,7 +122,14 @@
     布线后 setup 只剩 +0.058 ns 的路径上，并重新取证三方。详见 §3.3 修订说明。
     **注意该结论依赖"平局稀疏"，不可外推到移位量小或系数含大 2 的幂公因子的滤波器。**
 
-12. **仿真证据依赖 ModelSim。** README §6 的复现命令第 2 条是
-    `vsim -c -do cbb/rrc_polyphase_fir/run.do`。本机 ModelSim 回环 RPC 自
-    2026-08-01 起故障，该条命令当前**无法直接复现**；库内其余资产已改用
-    Vivado xsim 取证，本资产的 TB/run.do 尚未做等价迁移。
+12. **（已还清）仿真证据曾只有 ModelSim 一条通路。** 本机 ModelSim 回环 RPC 自
+    2026-08-01 起故障，`run.do` 那条复现路径当时是断的。2026-08-02 已补
+    `run_xsim.sh`（Vivado xsim 2023.1.1），**两条通路共用同一份 TB、同一套判据**。
+    交叉验证结果：xsim 与 ModelSim 时代的六份证据
+    （`alignment-report` / `reset-sim` / `stability` 四项）**逐字节相同**，
+    含 `stall_cycles=820`、`symbols_accepted=516`、`achieved=0.200311` 这些
+    带随机性的数字（TB 用固定 seed）。
+    附带修掉一处署名错误：证据里的 `tool` 字段原先**写死** `"ModelSim vsim"`，
+    迁到 xsim 后会让证据声称自己出自一个并没有跑过它的仿真器；
+    现由运行脚本注入（ModelSim 走 `+TOOL` plusarg，xsim 走运行目录下的
+    `sim-tool.txt` —— xsim 的 `-testplusarg` 会在 `=` 处把参数切碎，传不了）。

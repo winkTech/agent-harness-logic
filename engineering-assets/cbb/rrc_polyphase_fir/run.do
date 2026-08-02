@@ -38,6 +38,6 @@ echo "=========== VLOG LINT ==========="
 vlog -sv -work work "$PKG/rtl/rrc_polyphase_fir.sv" "$PKG/tb/tb_rrc_polyphase_fir.sv"
 
 echo "=========== VSIM RUN ==========="
-vsim -c -quiet +VEC_DIR=$VEC +RPT_F=$RPT +EVID_DIR=$EVID/ work.tb_rrc_polyphase_fir
+vsim -c -quiet +VEC_DIR=$VEC +RPT_F=$RPT +EVID_DIR=$EVID/ "+TOOL=ModelSim 10.6c vsim" work.tb_rrc_polyphase_fir
 run -all
 quit -f

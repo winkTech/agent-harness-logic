@@ -236,13 +236,24 @@ LF 归一后的 blob。
   `get_timing_paths -delay_type min -slack_lesser_than 0`，
   **924 条违例路径全部从输入端口出发，内部单元起点 0 条**；
   **reg-to-reg 最差 hold = +0.094 ns**。
-- 唯一失败端口是 `i_rst`（`s_axis_tvalid` +0.218、`m_axis_tready` +0.193 都过）。
-  路径 `i_rst → addA_i_reg[0]/RSTM`，目的端是 **DSP48E1 的复位脚，hold 需求
-  0.201 ns 远大于普通 FF** —— 这才是同样 0.100 ns 输入延时下只有它失败的原因。
-- **量化关闭条件**：`i_rst` 真实最小输入延时 ≥ **0.263 ns** 即收敛。XDC 里的
-  0.100 ns 是它自己标注的"显式假设、非实测"占位值。
-- `hold-closure` **不关闭**（确有违例，如实记录、不豁免），但状态从"未知"
-  推进到"单一端口、单一成因、有量化关闭条件"。
+- 基线的最差路径是 `i_rst → addA_i_reg[0]/RSTM`（DSP48E1 复位脚，hold 需求 0.201 ns）。
+- **试过并证伪的修法**：把 `i_rst` 在核内寄存一拍让它变成 reg-to-reg。实测
+  **WHS 反而从 −0.163 ns 劣化到 −0.189 ns** —— 新最差路径是
+  `s_axis_tdata[5] → sym_buf_i_reg[0][5]/D`，一个**普通 FDRE**，hold 需求
+  **0.227 ns 比 DSP RSTM 的 0.201 ns 还大**。功能无回归但收益为零，
+  代价是"复位晚一拍"的契约变更，**已回退**并在 RTL 留注释防重试。
+- **真正的根因**：不在 `i_rst`，而在 XDC 的 `set_input_delay -min 0.100` 对
+  **所有输入**一视同仁地过小。**任何输入端口最终都要落进某个触发器**，而
+  `sym_buf_i_reg[0]` 本身就是输入寄存级 —— **没有任何 RTL 变换能消掉输入端口的
+  hold 路径**，只能把它从一个端口挪到另一个端口。
+- 因此 `hold-closure` **不是可由 RTL 关闭的项**，已与 `board-validation` 一并
+  归入依赖集成/板级数据的阻塞项。
+
+> **一处已更正的结论**：本节初版写"唯一失败端口是 `i_rst`"并据此提出寄存一拍的
+> 修法。那是**抽样不全导致的误判** —— 当时只抽查了 `s_axis_tvalid`（+0.218）与
+> `m_axis_tready`（+0.193），**没有抽查 `s_axis_tdata[*]`**，而后者才是同一约束下
+> 更差的一类路径。"量化关闭条件 ≥0.263 ns"也随之作废（那只是 `i_rst` 那一条的
+> 数值）；真实门槛随布局布线变动，须由集成方以板级实数判定。
 
 > 顺带补掉的一项：`rrc_polyphase_fir` 此前是全库 certified 中**唯一**没有哈希
 > 锁定证据快照的资产。现已取 `evidence/rrc_polyphase_fir/0.4.0/`，
@@ -269,10 +280,10 @@ owner 于 2026-08-02 明确**硬件暂时无法提供**。三条 `board-validati
 | `stream_elastic_pipeline` | xc7a35t 或等效 Artix-7 | 出比特流上板，复跑 2600 样点 Golden 对拍（offset=4） |
 | `pulse_merge` | xc7a35t 或等效 Artix-7 | 出比特流上板，复跑 2600 样点 Golden 对拍（offset=0） |
 
-> **`hold-closure` 并不完全依赖硬件。** 它有两条路：一条要板级 `i_rst` 真实输入
-> 延时（依赖硬件），另一条是在核内把 `i_rst` 寄存一拍、让该路径变成 reg-to-reg
-> ——**纯 RTL 改动，不需要硬件**，代价是复位晚一拍（行为契约变更）且要重跑全部
-> bit-true 与 G-C-04/05 取证。是否走第二条待 owner 决定。
+> **更正**：此处初版写"`hold-closure` 并不完全依赖硬件，可以在核内把 `i_rst`
+> 寄存一拍来关掉"。**该说法已被实测证伪**（见 §3.2 的 hold 小节）——那条修法
+> 让 WHS 从 −0.163 ns 劣化到 −0.189 ns，已回退。`hold-closure` 与
+> `board-validation` 同属依赖集成/板级数据的阻塞项，**RTL 侧没有杠杆**。
 
 ### 3.3 文档与标记补齐【asset-audit A2/A4】—— 2026-08-02 已还清
 

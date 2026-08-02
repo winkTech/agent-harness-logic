@@ -1,9 +1,9 @@
-<!-- asset-status: certified v1.0.0 -->
+<!-- asset-status: certified v1.0.1 -->
 <!-- 级别横幅（由成熟度派生）: CBB / CERTIFIED — 生产级，可在生产设计中复用 -->
 
 # rrc_polyphase_fir
 
-> `asset_uid: rrc_polyphase_fir` · `version: 1.0.0` · `owner: lihan`
+> `asset_uid: rrc_polyphase_fir` · `version: 1.0.1` · `owner: lihan`
 > 成熟度: **certified** — 18 道 MUST 门全绿，`signoff.by=lihan @ 2026-08-02`
 > （首次签署 2026-07-25 @ 0.4.0；RTL 与功能结论自那时起未变，1.0.0 是版本号转正）
 > 证据: `engineering-assets/evidence/rrc_polyphase_fir/1.0.0/`（哈希锁定快照）
@@ -85,8 +85,14 @@ RRC（根升余弦）脉冲成形多相 FIR 滤波器核。本包同时是库内
 > synth / opt / place / route 四个阶段 WHS 全为 −0.163 ns，布线后 320/2713 端点
 > hold 失败。此处原先写的"综合级 hold 是估算值、正常在布局布线阶段收敛"**已被证伪**。
 > 归因明确：924 条违例路径**全部从输入端口出发，内部单元起点 0 条**，
-> reg-to-reg 最差 hold **+0.094 ns**（内部已收敛）；失败的只有 `i_rst` 一个端口，
-> 且由 XDC 里那个自称"显式假设、非实测"的 `set_input_delay -min 0.100` 支配。
+> reg-to-reg 最差 hold **+0.094 ns**（内部已收敛）；全部由 XDC 里那个自称
+> "显式假设、非实测"的 `set_input_delay -min 0.100` 支配。
+>
+> **该项不可由 RTL 关闭**——1.0.1 实测试过把 `i_rst` 寄存一拍让最差路径变成
+> reg-to-reg，WHS 反而从 −0.163 ns 劣化到 **−0.189 ns**（新最差路径是
+> `s_axis_tdata[5] → sym_buf_i_reg[0][5]/D` 这个普通 FDRE，hold 需求 0.227 ns
+> 比 DSP RSTM 的 0.201 ns 还大），改动已回退。任何输入端口最终都要落进某个
+> 触发器，而 `sym_buf_i_reg[0]` 本身就是输入寄存级。
 > 详见 [`docs/limitations.md`](docs/limitations.md) 第 5 条与
 > `var/gates/pg/rrc_polyphase_fir/hold-closure.json`。
 >
@@ -139,16 +145,25 @@ cd engineering-assets
 node tools/pg-synth.cjs cbb/rrc_polyphase_fir
 
 # 2) 仿真证据 (alignment-report.json / reset-sim.json / stability/*.json)
+#    两条等价通路, 同一份 TB、同一套判据, 任选其一。
+#
+#    2a) Vivado xsim —— 本机当前可用的那条
+bash cbb/rrc_polyphase_fir/run_xsim.sh
+#
+#    2b) ModelSim —— 本机回环 RPC 自 2026-08-01 起故障, 当前跑不通, 保留备查。
 #    -l 显式指定日志: ModelSim 在启动时的 CWD 就建 transcript, 早于 run.do 内的
 #    cd, 不指定会在仓库根留下残桩。日志目录须已存在, 故用 var/ 而非其子目录。
-vsim -c -l var/rrc-cosim.log -do cbb/rrc_polyphase_fir/run.do
+# vsim -c -l var/rrc-cosim.log -do cbb/rrc_polyphase_fir/run.do
 
 # 3) 门禁判定 (逐门 pass/fail/blocked + envelope-check.json + cdc-report.json)
 node tools/gate-runner.cjs cbb/rrc_polyphase_fir --repo-root ..
 ```
 
-向量由 golden 侧生成，权威位置 `models/comm/rrc/vectors/`（治理规范 §5.5），
-经 `+VEC_DIR` 注入 TB；证据目录经 `+EVID_DIR` 注入 —— TB 内不得硬编码路径。
+向量由 golden 侧生成，权威位置 `models/comm/rrc/vectors/`（治理规范 §5.5）。
+路径注入两条通路，**TB 内均不出现硬编码绝对路径**：ModelSim 经
+`+VEC_DIR` / `+RPT_F` / `+EVID_DIR` 传绝对路径；xsim 的 `-testplusarg` 在 Windows 上
+会在 `=` 与盘符处把参数切碎，故改为由 `run_xsim.sh` 先把向量拷进构建目录、
+TB 按**运行目录相对**读写、跑完再把证据搬到门禁约定位置。
 
 ---
 

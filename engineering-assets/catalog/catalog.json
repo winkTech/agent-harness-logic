@@ -542,7 +542,7 @@
       "asset_uid": "rrc_polyphase_fir",
       "name": "rrc_polyphase_fir",
       "kind": "rtl",
-      "version": "1.0.0",
+      "version": "1.0.1",
       "owner": "lihan",
       "level": "certified",
       "dir": "cbb/rrc_polyphase_fir",
