@@ -2221,13 +2221,33 @@ define('E2ETests', '全部 E2E 通过', () => {
   return { pass: passed, detail: passed ? 'exit=0' : `exit=${r.status} signal=${r.signal || 'none'}` };
 });
 
+// 子进程失败时的诊断截断。
+//
+// 为什么头尾都要留: Node 的断言与模块解析错误关键信息在**开头**
+// (`AssertionError: ...` / `Cannot find module 'X'`), 而末尾往往只剩一串
+// internal/modules/cjs/loader 栈帧。原先一律 `.slice(-400)` 只留末尾, 实测导致
+// 一次 CI 失败被误判成模块加载错误, 真实原因(断言文案)恰好被截掉。
+function headTail(text, head = 400, tail = 400) {
+  const s = String(text || '').trim();
+  if (s.length <= head + tail) return s;
+  return `${s.slice(0, head)}\n…[中略 ${s.length - head - tail} 字符]…\n${s.slice(-tail)}`;
+}
+
 define('PainpointRegression', 'harness-painpoints.cjs 全部通过', () => {
   const p = path.join(HOME, 'engine/scripts/test-hooks/harness-painpoints.cjs');
   if (!fs.existsSync(p)) return { pass: false, detail: 'harness-painpoints.cjs 不存在' };
   const r = spawnSync('node', [p], {
     encoding: 'utf8', timeout: 30000, windowsHide: true,
   });
-  return { pass: r.status === 0, detail: `exit=${r.status}` };
+  const passed = r.status === 0 && !r.error && !r.signal;
+  // 原先只报 `exit=${r.status}`, 子进程的 stdout/stderr 全丢 —— 这条失败在 CI 上
+  // 除了一个 exit=1 什么都看不到, 无法定位。painpoints 把失败项打在 stdout。
+  return {
+    pass: passed,
+    detail: passed
+      ? 'exit=0'
+      : `exit=${r.status} signal=${r.signal || 'none'} ${headTail(r.stdout || r.stderr || r.error?.message || '')}`,
+  };
 });
 
 const AUDIT_REMEDIATION_CONTRACTS = [
@@ -2264,16 +2284,6 @@ const AUDIT_REMEDIATION_CONTRACTS = [
   ['ten dimension dashboard', 'ten-dimension-contract.cjs', 180000],
   ['weekly report wiring', 'weekly-report-contract.cjs', 180000],
 ];
-
-// 契约失败时的诊断截断: 原先只留末 400 字符, 而 Node 的模块解析错误
-// (`Cannot find module 'X'` + `Require stack:`) 关键信息全在**开头** —— 末尾只剩
-// 一串 internal/modules/cjs/loader 栈帧, 看不出缺的是哪个模块。实测有一次 CI 失败
-// 就因此无法定位。改为头尾都留: 断言失败读末尾, 加载/启动失败读开头。
-function headTail(text, head = 400, tail = 400) {
-  const s = String(text || '').trim();
-  if (s.length <= head + tail) return s;
-  return `${s.slice(0, head)}\n…[中略 ${s.length - head - tail} 字符]…\n${s.slice(-tail)}`;
-}
 
 for (const [name, relative, timeout, extraArgs = []] of AUDIT_REMEDIATION_CONTRACTS) {
   define('AuditRemediationContracts', name, () => {

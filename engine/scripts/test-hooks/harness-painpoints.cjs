@@ -1504,7 +1504,21 @@ test('local runner enforces one batch deadline and reports structured timeout st
   fs.rmSync(tempDir, { recursive: true, force: true });
 
   assert(result.status !== 0, `batch ignored its total deadline, exit=${result.status}, elapsed=${elapsed}ms`);
-  assert(elapsed < 650, `batch deadline behaved like a per-child timeout, elapsed=${elapsed}ms`);
+
+  // "总预算 vs 每子进程" 用**被杀的是哪个脚本**判定, 不用挂钟。
+  //
+  // 两个子进程各睡 180ms, 总截止 280ms:
+  //   总预算语义   → first 用掉 180ms, second 只剩 100ms → second 被杀
+  //   每子进程语义 → 各给 280ms, 两个都能跑完 → 根本不会超时
+  // 所以 "超时且被杀的是 second" 就唯一地证明了预算是跨子进程累计的。
+  //
+  // 原判据是 `elapsed < 650`, 它把语义判定押在挂钟上, 而 elapsed 含 runner 与两个
+  // 子 node 的冷启动。实测(Linux/WSL): 空载 306~316ms 稳定, 但加 4 个 CPU 占用进程后
+  // 12 次里有 1 次冲到 3010ms —— CI 是 2 核共享 runner, 还叠着 V8 覆盖率插桩跑 439
+  // 条测试, 正好踩中。这是本条在 CI 上间歇变红的原因, 不是 local-runner 有回归。
+  assert(result.stderr.includes('second.cjs'),
+    `total-budget semantics broken: the killed hook should be the second one, got: ${result.stderr}`);
+  assert(elapsed < 5000, `batch appears hung rather than deadline-bounded, elapsed=${elapsed}ms`);
   assert(result.stderr.includes('"timedOut":true'), `structured timeout flag missing: ${result.stderr}`);
   assert(result.stderr.includes('"errorCode":"HOOK_DEADLINE_EXCEEDED"'),
     `structured timeout code missing: ${result.stderr}`);
