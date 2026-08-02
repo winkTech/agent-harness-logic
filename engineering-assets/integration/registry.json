@@ -200,7 +200,7 @@
    "project": "phy-intake",
    "project_ref": "cbb/sync_top",
    "asset_uid": "sync_top",
-   "version_pinned": "1.0.0",
+   "version_pinned": "1.0.1",
    "config": {},
    "integrated_at": "2026-07-26T00:00:00Z",
    "status": "active",

@@ -326,16 +326,48 @@ module tb_sync_top;
     bit    evid_en;
     int    rst_fail;
 
-    task automatic write_stab(input string name, input int beats,
-                              input string reason);
+    // reason 直写格式串, 不作为参数传 —— xsim 实测坑: $fdisplay 输出**作为参数传入**
+    // 的多字节 string 会把内容打乱, 换 %0s 也不管用(与宽度无关), 只有直写格式串才完好。
+    // tool 同理不写死, 由运行脚本经 sim-tool.txt 注入 —— 原为 "ModelSim 10.6c",
+    // 迁到 xsim 后会让证据声称自己出自一个并没有跑过它的仿真器。
+    // 两处与 channel_est_top / crc32 同一套做法。
+    task automatic write_stab(input string name, input int beats);
         int fd;
         if (!evid_en) return;
         fd = $fopen({EVID_DIR, "stability/", name, ".json"}, "w");
         if (fd == 0) $fatal(1, "无法写 %sstability/%s.json", EVID_DIR, name);
-        $fdisplay(fd, "{\"pass\": true, \"beats\": %0d, \"reason\": \"%s\", \"tool\": \"ModelSim 10.6c\", \"tb\": \"tb_sync_top\"}",
-                  beats, reason);
+        $fwrite(fd, "{\"pass\": true, \"beats\": %0d, \"reason\": \"", beats);
+        case (name)
+            "boundary":
+                $fwrite(fd, "直通段/校正段边界: 直通 81 样点恒等 ±8 LSB (θ=0 流水量化界); fft_start 与 m_axis T1 首样点同拍且 n_fine=242=浮点全精度参考=真值; T2 防错锁覆盖 GI2/T1 边界结构");
+            "regression":
+                $fwrite(fd, "固定场景回归套件: T1 (eps=+0.3) + T2 (复位重入, eps=-0.2) 全判据通过 (锁定/CFO<0.02/定时 0 误差/直通段/相位集中度)");
+            "stress":
+                $fwrite(fd, "压力: 50%% 间隙流全帧 (输入节奏减半), 全判据通过且与背靠背逐项一致 (拍域不变性)");
+            "backpressure":
+                $fwrite(fd, "无反压契约 (ADR-003 裁决③, 写入 limitations): m_axis_tready 恒高驱动, tready 忽略语义下 T1-T3 全场景输出完整无丢重; 弹性需求由下游 axis_skid_buffer 承接");
+            default:
+                $fwrite(fd, "unspecified");
+        endcase
+        $fdisplay(fd, "\", \"tool\": \"%0s\", \"tb\": \"tb_sync_top\"}", sim_tool());
         $fclose(fd);
     endtask
+
+    // 实际跑本次仿真的工具名 (同 tb_sync_cosim)
+    function automatic string sim_tool();
+        string t;
+        int    fd;
+        if ($value$plusargs("TOOL=%s", t)) return t;
+        fd = $fopen("sim-tool.txt", "r");
+        if (fd != 0) begin
+            if ($fscanf(fd, "%s", t) == 1 && t.len() > 0) begin
+                $fclose(fd);
+                return t;
+            end
+            $fclose(fd);
+        end
+        return "unknown-simulator";
+    endfunction
 
     task automatic check_rst(input int fd, input string nm, input int got);
         $fdisplay(fd, "    {\"reg\":\"%s\",\"got\":%0d,\"want\":0,\"pass\": %s},",
@@ -416,7 +448,10 @@ module tb_sync_top;
     initial begin : p_main
         rst = 1'b1; s_tvalid = 1'b0; s_tdata = '0;
         cap_cnt = 0; fft_out_idx = -1;
-        evid_en = $value$plusargs("EVID_DIR=%s", EVID_DIR);
+        // 同 tb_sync_cosim: ModelSim 走 +EVID_DIR 绝对路径, xsim 传不了路径故回落到
+        // 运行目录相对; evid_en 不再依赖 plusarg 是否存在, 否则 xsim 下证据静默不写。
+        if (!$value$plusargs("EVID_DIR=%s", EVID_DIR)) EVID_DIR = "";
+        evid_en = 1'b1;
         build_preamble();
         repeat (8) @(posedge clk);
         rst = 1'b0;
@@ -429,8 +464,7 @@ module tb_sync_top;
         repeat (600) @(posedge clk);          // 排空延迟线尾部
         check_frame("T1", 0.3);
         t1_nfine = int'(dut.u_track.r_n_fine);
-        write_stab("boundary", NS,
-            "直通段/校正段边界: 直通 81 样点恒等 ±8 LSB (θ=0 流水量化界); fft_start 与 m_axis T1 首样点同拍且 n_fine=242=浮点全精度参考=真值; T2 防错锁覆盖 GI2/T1 边界结构");
+        write_stab("boundary", NS);
 
         //------------------------------------------------------------------
         $display("[T2] 复位重入 + eps=-0.2 帧");
@@ -439,8 +473,7 @@ module tb_sync_top;
         drive_frame(0);
         repeat (600) @(posedge clk);
         check_frame("T2", -0.2);
-        write_stab("regression", 2*NS,
-            "固定场景回归套件: T1 (eps=+0.3) + T2 (复位重入, eps=-0.2) 全判据通过 (锁定/CFO<0.02/定时 0 误差/直通段/相位集中度)");
+        write_stab("regression", 2*NS);
 
         //------------------------------------------------------------------
         $display("[T3] eps=+0.3, 50%% 间隙流 (拍域不变性)");
@@ -453,10 +486,8 @@ module tb_sync_top;
             $fatal(1, "[T3] 间隙流 n_fine=%0d != T1 背靠背 %0d",
                    int'(dut.u_track.r_n_fine), t1_nfine);
         $display("  [T3] n_fine 与背靠背一致 (拍域不变)");
-        write_stab("stress", NS,
-            "压力: 50% 间隙流全帧 (输入节奏减半), 全判据通过且与背靠背逐项一致 (拍域不变性)");
-        write_stab("backpressure", 3*NS,
-            "无反压契约 (ADR-003 裁决③, 写入 limitations): m_axis_tready 恒高驱动, tready 忽略语义下 T1-T3 全场景输出完整无丢重; 弹性需求由下游 axis_skid_buffer 承接");
+        write_stab("stress", NS);
+        write_stab("backpressure", 3*NS);
 
         //------------------------------------------------------------------
         $display("ALL TESTS PASSED");

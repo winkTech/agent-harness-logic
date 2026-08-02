@@ -663,7 +663,7 @@
       "asset_uid": "sync_top",
       "name": "ofdm_sync_top",
       "kind": "rtl",
-      "version": "1.0.0",
+      "version": "1.0.1",
       "owner": "lihan",
       "level": "certified",
       "dir": "cbb/sync_top",

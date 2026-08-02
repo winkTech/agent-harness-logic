@@ -109,6 +109,23 @@ module tb_sync_cosim;
     //=========================================================================
     // 证据落盘 (G-B-03)
     //=========================================================================
+    // 实际跑本次仿真的工具名。优先 +TOOL (ModelSim 可用), 否则读运行目录的
+    // sim-tool.txt; 都没有就写 unknown-simulator —— 宁可留空, 不给一个看似可信的错名字。
+    function automatic string sim_tool();
+        string t;
+        int    fd;
+        if ($value$plusargs("TOOL=%s", t)) return t;
+        fd = $fopen("sim-tool.txt", "r");
+        if (fd != 0) begin
+            if ($fscanf(fd, "%s", t) == 1 && t.len() > 0) begin
+                $fclose(fd);
+                return t;
+            end
+            $fclose(fd);
+        end
+        return "unknown-simulator";
+    endfunction
+
     task automatic write_evidence(input int total, input int mismatch);
         int fd;
         if (!evid_en) return;
@@ -119,7 +136,10 @@ module tb_sync_cosim;
         $fdisplay(fd, "  \"total\": %0d,", total);
         $fdisplay(fd, "  \"mismatch\": %0d,", mismatch);
         $fdisplay(fd, "  \"pipeline_offset\": %0d,", P_DLY);
-        $fdisplay(fd, "  \"tool\": \"ModelSim 10.6c\",");
+        // tool 不写死: 原为 "ModelSim 10.6c", 迁到 xsim 后会让证据声称自己出自一个
+        // 并没有跑过它的仿真器。改为读运行目录下的 sim-tool.txt (xsim 的
+        // -testplusarg 在 `=` 处会把参数切碎, 传不了短字符串以外的东西, 故用文件)。
+        $fdisplay(fd, "  \"tool\": \"%0s\",", sim_tool());
         $fdisplay(fd, "  \"tb\": \"tb_sync_cosim (帧级, 0 容差, 含 fft_start 对齐与 T1 系数表核对)\",");
         $fdisplay(fd, "  \"vectors\": \"sync_stimulus.bin / expected_sync_out.bin (generate_vectors 位真镜像)\"");
         $fdisplay(fd, "}");
@@ -144,9 +164,16 @@ module tb_sync_cosim;
         rst = 1'b0;
         repeat (5) @(posedge clk);
 
-        if (!$value$plusargs("VEC_DIR=%s", VEC_DIR))
-            $fatal(1, "缺 +VEC_DIR — 向量权威位置 models/comm/synch/vectors/");
-        evid_en = $value$plusargs("EVID_DIR=%s", EVID_DIR);
+        // 路径注入两条通路, TB 内均不出现硬编码绝对路径:
+        //   ModelSim: run_cosim.do 经 +VEC_DIR / +EVID_DIR 传绝对路径
+        //   xsim    : -testplusarg 在 Windows 上会在 `=` 与盘符处把参数切碎, 传不了
+        //             路径, 故回落到运行目录相对 —— 由 run_xsim.sh 先把向量拷进构建
+        //             目录、跑完再把证据搬到 var/gates/pg/<asset_uid>/。
+        // evid_en 不再依赖 plusarg 是否存在: 否则 xsim 下会整段证据静默不写
+        // (见 axis_skid_buffer 1.0.1 的同类缺陷)。
+        if (!$value$plusargs("VEC_DIR=%s", VEC_DIR)) VEC_DIR = "";
+        if (!$value$plusargs("EVID_DIR=%s", EVID_DIR)) EVID_DIR = "";
+        evid_en = 1'b1;
 
         load_file({VEC_DIR, "sync_stimulus.bin"},     stim_q);
         load_file({VEC_DIR, "expected_sync_out.bin"}, gold_q);

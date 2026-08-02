@@ -2,11 +2,11 @@
   "schema_version": "1.0",
   "asset_uid": "sync_top",
   "name": "ofdm_sync_top",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "owner": "lihan",
   "maturity": {
     "level": "certified",
-    "evidence_ref": "engineering-assets/evidence/sync_top/1.0.0/"
+    "evidence_ref": "engineering-assets/evidence/sync_top/1.0.1/"
   },
   "signoff": {
     "by": "lihan",
@@ -153,12 +153,12 @@
     {
       "path": "tb/tb_sync_top.sv",
       "role": "tb",
-      "sha256": "b8553e0063303990a92feac7db7df2bb87d738599a5cdcce538149be197b8bf8"
+      "sha256": "fa758714aa8758e715f4413083404a563c7b189e23da9baec040376221087d85"
     },
     {
       "path": "tb/tb_sync_cosim.sv",
       "role": "tb",
-      "sha256": "61859014b7c9f36a5e7b9e86500ecd127ac4a7e8cc7c09e56cd64aec940afd07"
+      "sha256": "221a84a5fcd4b2bca60458117cf808ed9a7596f289883d1e35b5798f8889c7e3"
     },
     {
       "path": "tb/uvm/sync_uvm_pkg.sv",

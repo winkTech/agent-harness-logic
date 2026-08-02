@@ -1,5 +1,27 @@
 # CHANGELOG — sync_top
 
+## [1.0.1] — 2026-08-02 补 xsim 复现通路（RTL 零改动）
+
+本机 ModelSim 回环 RPC 自 2026-08-01 起故障，`.do` 那条路跑不通，本资产的
+certified 证据无法复现。现补 `run_xsim.sh`，两条通路共用同一组 TB 与判据。
+
+**交叉验证**：6 份证据（`alignment-report` 2226 点 0 失配 / `reset-sim` /
+`stability` 四项）内容全部一致，只有 `tool` 字段不同——那正是应该不同的地方。
+`reset-sim.json` 甚至逐字节相同。
+
+修掉与 `channel_est_top` 1.0.1 同源的两处 TB 缺陷：
+
+1. **`reason` 在 xsim 下会变乱码**——`$fdisplay` 输出作为参数传入的多字节 string
+   会被打乱（换 `%0s` 无效，与宽度无关），改为直写格式串。
+2. **`tool` 字段写死 `"ModelSim 10.6c"`**（两个 TB 各一处），改为由运行脚本经
+   `sim-tool.txt` 注入。
+
+另：`EVID_DIR`/`VEC_DIR` 取不到时不再让证据静默不写，改为回落到运行目录相对；
+包内 `var_build/`（1.3 MB ModelSim work 库 + 4 个临时 debug 脚本）与 `transcript`
+已清理，根源是 `.do` 里 `set BUILD [file join $ROOT var_build]` 写死在包内构建。
+
+版本 1.0.0 → 1.0.1（两个 TB 均属登记源）；RTL、约束与全部功能结论零改动。
+
 ## [1.0.0] — 2026-08-01 certified 认证
 
 内容与 0.2.1 一致，无代码改动；本条为认证记账：
