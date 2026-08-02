@@ -636,9 +636,17 @@ function updateProjectStats(db, projectId) {
  */
 function cmdSyncFile(filePath, opts = {}) {
   const log = opts.quiet ? () => {} : (msg) => console.error(msg);
-  const abs = p.resolve(filePath);
+  let abs = p.resolve(filePath);
   let stat;
   try { stat = f.statSync(abs); } catch { return { indexed: false, reason: 'missing_file' }; }
+  // 与项目根同一套规范化。rootPath 出自 resolveProject → canonicalRootPath →
+  // realpathSync.native, Windows 8.3 短名与符号链接都会被展开; 而 p.resolve 是纯
+  // 字符串运算, 短名原样保留。两边口径不一时, 下面的前缀包含判定与 p.relative
+  // 全部错位 → 误判 outside_project。
+  // 真实事故: GitHub windows-latest 的 runner 用户是 runneradmin (>8 字符),
+  // TEMP=C:\Users\RUNNER~1\... 恒为短名, codegraph-sync-contract 在 CI 上因此
+  // **确定性**失败; 而开发机用户名短、无 8.3 分量, 本地永远复现不出来。
+  try { abs = f.realpathSync.native(abs); } catch { /* stat 已证实存在, 保底用 resolve 结果 */ }
   if (!shouldDeepIndex(p.extname(abs), stat)) return { indexed: false, reason: 'not_deep_indexable' };
   if (!shouldIndex(abs, stat)) return { indexed: false, reason: 'excluded' };
 
