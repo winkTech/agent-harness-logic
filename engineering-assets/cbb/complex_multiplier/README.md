@@ -32,7 +32,7 @@ RTL 模块头。本模块弃用其三乘法结构,改四乘法直算(DSP 映射�
 ## 验证
 
 `tb/tb_complex_multiplier.sv`(自检 TB,参考模型 = TB 内行为级全精度复乘,
-ModelSim):随机激励 + valid 气泡。
+Vivado xsim 2023.1):随机激励 + valid 气泡。
 最近一次:3138 拍比对,2357 个有效拍 0 失配,实测延迟 3 拍,PASS。
 
 ## 限制与验证边界 (limitations)
@@ -40,4 +40,24 @@ ModelSim):随机激励 + valid 气泡。
 - **全精度输出不截断不饱和**,定标语义交调用方;下游位宽收窄须自行负责舍入/饱和。
 - 无 tready 背压;需要背压在输出侧例化 axis_skid_buffer。valid 仅是数据有效标记,非握手协议。
 - 仅默认 16×16 参数实测;DSP 映射未做综合取证。
-- **qualification 级证据边界**:自检 TB 功能验证已实跑,无综合时序/资源取证(certified 转正时按 pg-synth 流程补)。
+- **证据口径**:本包已 certified,综合时序/资源取证由 `pg-synth` 实跑并记入
+  `envelope-check.json`;仿真证据由 **Vivado xsim 2023.1** 产出。全部结论均为
+  **OOC 口径**(仅 `create_clock`,未布局布线、未绑引脚、未上板)。
+
+## 证据复现
+
+```bash
+cd engineering-assets
+
+# 仿真证据 (reset-sim.json / tb-selfcheck.json / stability/*.json)
+bash tools/run-primitive-sim.sh complex_multiplier --install
+
+# 综合证据 (timing-summary.rpt / utilization.rpt)
+node tools/pg-synth.cjs cbb/complex_multiplier
+
+# 门禁判定
+node tools/gate-runner.cjs cbb/complex_multiplier --repo-root ..
+```
+
+不带 `--install` 只跑不写入门禁目录，便于与既有证据比对。
+2026-08-02 用该脚本复跑本包，产出的 6 份证据与 certified 时的记录**逐字节相同**。

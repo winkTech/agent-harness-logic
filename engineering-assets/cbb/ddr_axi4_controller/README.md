@@ -39,8 +39,10 @@ certified 级需上板证据。
 ## 验证
 
 `tb/tb_ddr_axi4_controller.sv`(自检 TB,参考模型 = 行为级 AXI4 从机
-(关联数组存储器)+ 期望镜像,ModelSim):
-随机读写混合(len 1..16)+ 从机随机退避,**198 拍读回 0 失配**;
+(关联数组存储器)+ 期望镜像,Vivado xsim 2023.1):
+随机读写混合(len 1..16)+ 从机随机退避,**778 次比对 0 失配**
+(以 `tb-selfcheck.json` 的 `compares` 为准;此处原写 "198 拍读回",
+单位与证据文件不一致,且未随 TB 扩充更新);
 AXI 三通道 valid&&!ready 载荷稳定性逐拍断言;wlast 协议检查;
 len=1/max 边界;帧中复位恢复;AR 静默超时 → `o_err` 置位并恢复;SLVERR 注入。
 
@@ -49,4 +51,24 @@ len=1/max 边界;帧中复位恢复;AR 静默超时 → `o_err` 置位并恢复;
 - 对测对象为 **TB 内建行为级 AXI4 从机**(按 AXI4 规范时序),未对真实 MIG 硬核实测;上板前须联调。
 - 单 ui_clk 时钟域,跨域由 MIG 侧负责(README 已明示)。
 - 突发长度 1..P_MAX_BURST 边界已覆盖;不支持 outstanding 多事务交织。仅默认参数实测。
-- **qualification 级证据边界**:自检 TB 功能验证已实跑,无综合时序/资源取证(certified 转正时按 pg-synth 流程补)。
+- **证据口径**:本包已 certified,综合时序/资源取证由 `pg-synth` 实跑并记入
+  `envelope-check.json`;仿真证据由 **Vivado xsim 2023.1** 产出。全部结论均为
+  **OOC 口径**(仅 `create_clock`,未布局布线、未绑引脚、未上板)。
+
+## 证据复现
+
+```bash
+cd engineering-assets
+
+# 仿真证据 (reset-sim.json / tb-selfcheck.json / stability/*.json)
+bash tools/run-primitive-sim.sh ddr_axi4_controller --install
+
+# 综合证据 (timing-summary.rpt / utilization.rpt)
+node tools/pg-synth.cjs cbb/ddr_axi4_controller
+
+# 门禁判定
+node tools/gate-runner.cjs cbb/ddr_axi4_controller --repo-root ..
+```
+
+不带 `--install` 只跑不写入门禁目录，便于与既有证据比对。
+2026-08-02 用该脚本复跑本包，产出的 6 份证据与 certified 时的记录**逐字节相同**。

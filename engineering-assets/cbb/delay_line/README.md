@@ -29,7 +29,7 @@
 
 ## 验证
 
-`tb/tb_delay_line.sv`(自检 TB,参考模型 = SV 队列,ModelSim):
+`tb/tb_delay_line.sv`(自检 TB,参考模型 = SV 队列,Vivado xsim 2023.1):
 - P_DELAY=2(最小)与 P_DELAY=7 双例化,共 9082 拍逐拍比对 0 失配
 - 随机气泡流 + 连续满流,valid 计数守恒(复位丢弃的在途 beat 按契约扣账)
 - 运行中复位后 P_DELAY 拍内 o_valid 无残留,恢复正常
@@ -38,4 +38,24 @@
 
 - **定长延迟,无背压契约**(库级裁决:与 axis_skid_buffer 正交分职)。
 - 仅默认参数实测;SRL 推断未做综合取证。
-- **qualification 级证据边界**:自检 TB 功能验证已实跑,无综合时序/资源取证(certified 转正时按 pg-synth 流程补)。
+- **证据口径**:本包已 certified,综合时序/资源取证由 `pg-synth` 实跑并记入
+  `envelope-check.json`;仿真证据由 **Vivado xsim 2023.1** 产出。全部结论均为
+  **OOC 口径**(仅 `create_clock`,未布局布线、未绑引脚、未上板)。
+
+## 证据复现
+
+```bash
+cd engineering-assets
+
+# 仿真证据 (reset-sim.json / tb-selfcheck.json / stability/*.json)
+bash tools/run-primitive-sim.sh delay_line --install
+
+# 综合证据 (timing-summary.rpt / utilization.rpt)
+node tools/pg-synth.cjs cbb/delay_line
+
+# 门禁判定
+node tools/gate-runner.cjs cbb/delay_line --repo-root ..
+```
+
+不带 `--install` 只跑不写入门禁目录，便于与既有证据比对。
+2026-08-02 用该脚本复跑本包，产出的 6 份证据与 certified 时的记录**逐字节相同**。

@@ -32,11 +32,33 @@
 ## 验证
 
 `tb/tb_frame_sync.sv`(自检 TB,参考模型 = 场景期望帧序列 + 不同源装帧收端,
-ModelSim):**24 帧 350 数据字节 0 失配**;payload 含 0x55/0xD5 不重同步;
+Vivado xsim 2023.1):**2476 次比对 0 失配**(以 `tb-selfcheck.json` 的
+`compares` 为准;此处原写 "24 帧 350 数据字节",单位与证据文件不一致,
+且未随 TB 扩充更新);payload 含 0x55/0xD5 不重同步;
 背靠背帧;短前导拒帧;假前导后重锁;前导中掉载波;帧中复位恢复。
 
 ## 限制与验证边界 (limitations)
 
 - 字流接口**无背压契约**(库级约定同 crc32/delay_line)。
 - 同步字格式按参数配置,实测覆盖默认格式;连续错帧下的重锁时延边界未穷举。
-- **qualification 级证据边界**:自检 TB 功能验证已实跑,无综合时序/资源取证(certified 转正时按 pg-synth 流程补)。
+- **证据口径**:本包已 certified,综合时序/资源取证由 `pg-synth` 实跑并记入
+  `envelope-check.json`;仿真证据由 **Vivado xsim 2023.1** 产出。全部结论均为
+  **OOC 口径**(仅 `create_clock`,未布局布线、未绑引脚、未上板)。
+
+## 证据复现
+
+```bash
+cd engineering-assets
+
+# 仿真证据 (reset-sim.json / tb-selfcheck.json / stability/*.json)
+bash tools/run-primitive-sim.sh frame_sync --install
+
+# 综合证据 (timing-summary.rpt / utilization.rpt)
+node tools/pg-synth.cjs cbb/frame_sync
+
+# 门禁判定
+node tools/gate-runner.cjs cbb/frame_sync --repo-root ..
+```
+
+不带 `--install` 只跑不写入门禁目录，便于与既有证据比对。
+2026-08-02 用该脚本复跑本包，产出的 6 份证据与 certified 时的记录**逐字节相同**。

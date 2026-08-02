@@ -27,13 +27,38 @@
 
 ## 验证
 
-`tb/tb_crc32.sv`(自检 TB,参考模型 = 软件式逐位反射 CRC,ModelSim):
-**36 帧 0 失配**,含 IEEE 检验值硬锚、单字节帧、1500 字节长帧、背靠背帧、
-40% valid 气泡与满流一致性、运行中复位后重算一致。
+`tb/tb_crc32.sv`(自检 TB,参考模型 = 软件式逐位反射 CRC,Vivado xsim 2023.1):
+**244 帧 0 失配**(regression 31 / boundary 4 / stress 200 / backpressure 8 + IEEE
+检验值硬锚),含单字节帧、1500 字节长帧、背靠背帧、40% valid 气泡与满流一致性、
+运行中复位后重算一致。
+
+> 数字以 `var/gates/pg/crc32/tb-selfcheck.json` 为准,不在此处另抄一份。
+> 此处原写 "36 帧" —— 那是 stress/backpressure 两个场景加入**之前**的旧数
+> (31+4+1),TB 扩充后没跟着改,属手抄副本漂移。
 
 ## 限制与验证边界 (limitations)
 
 - **语义锚定 IEEE 802.3 反射式 CRC32**;其他多项式/初值/变体不适用本模块。
 - 字节流 valid/last 接口,**无 ready 背压契约**(库级约定:需要背压在外层组合 axis_skid_buffer)。
 - 仅默认参数实测;硬锚覆盖标准检验值,随机帧对照 TB 内建逐位模型。
-- **qualification 级证据边界**:自检 TB 功能验证已实跑,无综合时序/资源取证(certified 转正时按 pg-synth 流程补)。
+- **证据口径**:本包已 certified,综合时序/资源取证由 `pg-synth` 实跑并记入
+  `envelope-check.json`;仿真证据由 **Vivado xsim 2023.1** 产出。全部结论均为
+  **OOC 口径**(仅 `create_clock`,未布局布线、未绑引脚、未上板)。
+
+## 证据复现
+
+```bash
+cd engineering-assets
+
+# 仿真证据 (reset-sim.json / tb-selfcheck.json / stability/*.json)
+bash tools/run-primitive-sim.sh crc32 --install
+
+# 综合证据 (timing-summary.rpt / utilization.rpt)
+node tools/pg-synth.cjs cbb/crc32
+
+# 门禁判定
+node tools/gate-runner.cjs cbb/crc32 --repo-root ..
+```
+
+不带 `--install` 只跑不写入门禁目录，便于与既有证据比对。
+2026-08-02 用该脚本复跑本包，产出的 6 份证据与 certified 时的记录**逐字节相同**。

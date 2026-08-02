@@ -27,7 +27,7 @@ h_matrix_addr 被 Vivado 丢弃属同一类坑)、真双口双时钟同址写竞
 
 ## 验证
 
-`tb/tb_sdp_ram.sv`(自检 TB,参考模型 = TB 内关联数组,ModelSim):
+`tb/tb_sdp_ram.sv`(自检 TB,参考模型 = TB 内关联数组,Vivado xsim 2023.1):
 随机读写 + 定向同址写读碰撞。
 最近一次:643 次读比对 0 失配,其中 read-old 同址碰撞检查 18 次,PASS。
 
@@ -36,4 +36,24 @@ h_matrix_addr 被 Vivado 丢弃属同一类坑)、真双口双时钟同址写竞
 - 同址语义 **read-old**,依赖非阻塞赋值与 BRAM 推断模式的一致性;跨器件族未逐一验证。
 - **阵列不复位**(保 BRAM 推断),上电内容 X,调用方必须先写后读。
 - 单时钟 1 写 1 读;真双口/双时钟场景不适用。仅默认 32×512 实测。
-- **qualification 级证据边界**:自检 TB 功能验证已实跑,无综合时序/资源取证(certified 转正时按 pg-synth 流程补)。
+- **证据口径**:本包已 certified,综合时序/资源取证由 `pg-synth` 实跑并记入
+  `envelope-check.json`;仿真证据由 **Vivado xsim 2023.1** 产出。全部结论均为
+  **OOC 口径**(仅 `create_clock`,未布局布线、未绑引脚、未上板)。
+
+## 证据复现
+
+```bash
+cd engineering-assets
+
+# 仿真证据 (reset-sim.json / tb-selfcheck.json / stability/*.json)
+bash tools/run-primitive-sim.sh sdp_ram --install
+
+# 综合证据 (timing-summary.rpt / utilization.rpt)
+node tools/pg-synth.cjs cbb/sdp_ram
+
+# 门禁判定
+node tools/gate-runner.cjs cbb/sdp_ram --repo-root ..
+```
+
+不带 `--install` 只跑不写入门禁目录，便于与既有证据比对。
+2026-08-02 用该脚本复跑本包，产出的 6 份证据与 certified 时的记录**逐字节相同**。

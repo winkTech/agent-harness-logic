@@ -23,7 +23,7 @@ valid/data 错一拍、`o_valid` 组合直出、死寄存器。缺陷逐条记�
 
 ## 验证
 
-`tb/tb_lfsr_gen.sv`(自检 TB,参考模型 = 软件式逐位异或行为级 LFSR,ModelSim):
+`tb/tb_lfsr_gen.sv`(自检 TB,参考模型 = 软件式逐位异或行为级 LFSR,Vivado xsim 2023.1):
 - 65546 字逐字比对 0 失配(随机使能气泡 + 连续满流)
 - **16-bit 实测周期 65535、7-bit(x^7+x^6+1)实测周期 127**——周期是本原多项式
   的数学性质,直接暴露任何抽头错误(原模板的截位在此必炸)
@@ -46,3 +46,21 @@ valid/data 错一拍、`o_valid` 组合直出、死寄存器。缺陷逐条记�
 
 见 [`docs/limitations.md`](docs/limitations.md) —— 8 条，含参数约束（全 0 种子非法、
 抽头位序约定）、非密码学安全、与旧模板序列不兼容、无反压接口、OOC 综合口径。
+
+## 证据复现
+
+```bash
+cd engineering-assets
+
+# 仿真证据 (reset-sim.json / tb-selfcheck.json / stability/*.json)
+bash tools/run-primitive-sim.sh lfsr_gen --install
+
+# 综合证据 (timing-summary.rpt / utilization.rpt)
+node tools/pg-synth.cjs cbb/lfsr_gen
+
+# 门禁判定
+node tools/gate-runner.cjs cbb/lfsr_gen --repo-root ..
+```
+
+不带 `--install` 只跑不写入门禁目录，便于与既有证据比对。
+2026-08-02 用该脚本复跑本包，产出的 6 份证据与 certified 时的记录**逐字节相同**。

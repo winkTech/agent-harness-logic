@@ -34,7 +34,7 @@
 
 ## 验证
 
-`tb/tb_cdc_sync.sv`(自检 TB,参考模型 = 发端 scoreboard 队列,ModelSim):
+`tb/tb_cdc_sync.sv`(自检 TB,参考模型 = 发端 scoreboard 队列,Vivado xsim 2023.1):
 - 双向异频(7.3ns↔10ns 非整数倍频比):快→慢 500 字 + 慢→快 200 字,
   **0 丢 0 重 0 乱序 0 X**,`o_valid_dst` 均为单拍脉冲
 - 单比特电平:20 次慢速转变全部到达且有序
@@ -45,4 +45,24 @@
 - 适用**单 bit 电平/脉冲跨域**;多 bit 总线跨域不适用(须格雷码或握手方案)。
 - CDC 判定为结构扫描级,未经具名 CDC 工具;亚稳态本质不可仿真,MTBF 未计算。
 - 双向异频实测为有限频比组合(700 字 0 丢 0 重),极端频比未穷举。
-- **qualification 级证据边界**:自检 TB 功能验证已实跑,无综合时序/资源取证(certified 转正时按 pg-synth 流程补)。
+- **证据口径**:本包已 certified,综合时序/资源取证由 `pg-synth` 实跑并记入
+  `envelope-check.json`;仿真证据由 **Vivado xsim 2023.1** 产出。全部结论均为
+  **OOC 口径**(仅 `create_clock`,未布局布线、未绑引脚、未上板)。
+
+## 证据复现
+
+```bash
+cd engineering-assets
+
+# 仿真证据 (reset-sim.json / tb-selfcheck.json / stability/*.json)
+bash tools/run-primitive-sim.sh cdc_sync --install
+
+# 综合证据 (timing-summary.rpt / utilization.rpt)
+node tools/pg-synth.cjs cbb/cdc_sync
+
+# 门禁判定
+node tools/gate-runner.cjs cbb/cdc_sync --repo-root ..
+```
+
+不带 `--install` 只跑不写入门禁目录，便于与既有证据比对。
+2026-08-02 用该脚本复跑本包，产出的 6 份证据与 certified 时的记录**逐字节相同**。
