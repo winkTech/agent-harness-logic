@@ -8,7 +8,7 @@ Assets: 23 · RED: 0 · YELLOW: 0
 
 | UID | Version | Kind | Directory | Machine cleared | Blocking | Used by | Badge gap |
 |---|---:|---|---|---|---|---|---|
-| `axis_skid_buffer` | 1.0.0 | primitive | `cbb/axis_skid_buffer` | certified | — | — | — |
+| `axis_skid_buffer` | 1.0.1 | primitive | `cbb/axis_skid_buffer` | certified | — | — | — |
 | `cdc_sync` | 1.0.0 | primitive | `cbb/cdc_sync` | certified | — | — | — |
 | `channel_est_top` | 1.0.0 | rtl | `cbb/channel_est_top` | certified | — | — | — |
 | `complex_multiplier` | 1.0.0 | primitive | `cbb/complex_multiplier` | certified | — | — | — |

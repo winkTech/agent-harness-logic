@@ -322,7 +322,7 @@
    "project": "(library)",
    "project_ref": "cbb/axis_skid_buffer",
    "asset_uid": "axis_skid_buffer",
-   "version_pinned": "1.0.0",
+   "version_pinned": "1.0.1",
    "config": {},
    "integrated_at": "2026-07-31T00:00:00Z",
    "status": "library",

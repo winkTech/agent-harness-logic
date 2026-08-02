@@ -2,7 +2,7 @@
   "schema_version": "1.0",
   "asset_uid": "axis_skid_buffer",
   "name": "axis_skid_buffer",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "owner": "lihan",
   "kind": "primitive",
   "signoff": {
@@ -19,7 +19,7 @@
   },
   "maturity": {
     "level": "certified",
-    "evidence_ref": "engineering-assets/evidence/axis_skid_buffer/1.0.0/"
+    "evidence_ref": "engineering-assets/evidence/axis_skid_buffer/1.0.1/"
   },
   "requirement_ref": "engineering-assets/docs/comm模块族认证差距清单.md",
   "doc_refs": [
@@ -123,7 +123,7 @@
     {
       "path": "tb/tb_axis_skid_buffer.sv",
       "role": "tb",
-      "sha256": "f57648ac7c7fb8ae58652d996c6f338d9684222e7fbcc219dd6b538f08ab8de5"
+      "sha256": "5b5b52dbd177fad72460c8a31f4796eae205a158f968cd7e476a23648c43baf5"
     },
     {
       "path": "constraints/axis_skid_buffer.xdc",

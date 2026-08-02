@@ -20,7 +20,7 @@ if {[info exists ::env(EA_ROOT)]} {
     quit -code 2 -f
   }
 }
-set PKG   "$ROOT/incubator/intake/axis_skid_buffer"
+set PKG   "$ROOT/cbb/axis_skid_buffer"
 set EVID  "$ROOT/var/gates/pg/axis_skid_buffer"
 set BUILD "$ROOT/var/build/axis_skid_buffer"
 file mkdir $BUILD

@@ -2,7 +2,7 @@
 # LDPC Simulation Script for ModelSim / Questa
 #-----------------------------------------------------------------
 # Usage (from any cwd):
-#   vsim -do engineering-assets/incubator/intake/ldpc_codec/tb/run_sim.do
+#   vsim -do engineering-assets/cbb/ldpc_codec/tb/run_sim.do
 # Or set EA_ROOT then: vsim -do run_sim.do
 #-----------------------------------------------------------------
 
@@ -17,7 +17,7 @@ if {[info exists ::env(EA_ROOT)]} {
     set ROOT [file dirname $ROOT]
   }
 }
-set PKG   "$ROOT/incubator/intake/ldpc_codec"
+set PKG   "$ROOT/cbb/ldpc_codec"
 set VEC   "$ROOT/models/comm/ldpc/vectors"
 set PT    "$PKG/rtl/pt_columns.hex"
 set BUILD "$ROOT/var/build/ldpc_codec"

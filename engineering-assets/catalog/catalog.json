@@ -24,7 +24,7 @@
       "asset_uid": "axis_skid_buffer",
       "name": "axis_skid_buffer",
       "kind": "primitive",
-      "version": "1.0.0",
+      "version": "1.0.1",
       "owner": "lihan",
       "level": "certified",
       "dir": "cbb/axis_skid_buffer",

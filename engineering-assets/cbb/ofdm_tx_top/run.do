@@ -15,7 +15,7 @@ if {[info exists ::env(EA_ROOT)]} {
     set ROOT [file dirname $ROOT]
   }
 }
-set PKG   "$ROOT/incubator/intake/ofdm_tx_top"
+set PKG   "$ROOT/cbb/ofdm_tx_top"
 set BUILD "$ROOT/var/build/ofdm_tx_top"
 set VEC   "$ROOT/models/comm/ofdm/vectors/"
 set EVID  "$ROOT/var/gates/pg/ofdm_tx_top"

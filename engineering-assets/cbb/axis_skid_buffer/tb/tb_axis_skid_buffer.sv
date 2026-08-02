@@ -90,7 +90,22 @@ module tb_axis_skid_buffer;
     string evid_dir;
     bit    b_evid;
     string rst_json = "";
-    initial b_evid = $value$plusargs("EVID_DIR=%s", evid_dir);
+    // 证据目录注入的两条通路, 都不允许 TB 内出现硬编码绝对路径:
+    //   ModelSim: run_sim.do 经 +EVID_DIR 传绝对路径
+    //   xsim    : -testplusarg 在 Windows 上会在 `=` 与盘符处把参数切碎, 传不了路径,
+    //             故回落到**运行目录相对** (evid_dir = ""), 由运行脚本负责把证据
+    //             从构建目录搬到 var/gates/pg/<asset_uid>/。与 rrc / ofdm 同一套做法。
+    // 回落前 b_evid 为 0 会导致整段证据静默不写 —— 那正是本包在 xsim 下"跑通却没有
+    // 任何 JSON 产出"的原因, 也就是它的 certified 证据无法被复现的直接成因。
+    initial begin
+        b_evid = $value$plusargs("EVID_DIR=%s", evid_dir);
+        // 用 "." 而非 "" —— 下面拼路径的写法是 {evid_dir, "/xxx.json"}, 空串会拼成
+        // "/xxx.json" 即文件系统根, 打不开。
+        if (!b_evid) begin
+            evid_dir = ".";
+            b_evid   = 1'b1;
+        end
+    end
 
     //==========================================================================
     // 确定性伪随机 (xorshift32)
