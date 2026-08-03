@@ -12,8 +12,9 @@
     "source": "https://github.com/dpretet/async_fifo",
     "license": "MIT",
     "retrieved": "2026-02-14",
-    "retrieved_basis": "目录 mtime 下界；原始归档为 GitHub 分支 ZIP，无 .git，commit SHA 不可复原",
-    "commit": null
+    "retrieved_basis": "目录 mtime 下界；原始归档为 GitHub 分支 ZIP，无 .git 元数据",
+    "commit": "38c22208d3948833f275b917c920e02b1cdadf56",
+    "commit_basis": "commit 日期 2026-02-13T18:18:25Z, 标题 'Remove core file'。2026-08-02 内容比对反查。**此前『commit SHA 不可复原』的说法是错的** —— 无 .git 只说明元数据丢了, 而 git blob SHA 是内容的函数, 内容俱在就能反查。\n判据: 对候选 commit 拉递归树, 逐路径比对本地 28 个文件 —— 逐字节一致 0 + 仅 CRLF 差异 28, **未解释的差异 0, 仅本地存在 0**。相邻 commit 均不满足。\n归档是该 commit 的**子集**: 缺 2 个文件, 为 syn/cmos.lib (1.3 KB) 与 syn/vsclib013.lib (**5.3 MB**), 均为标准单元库。\n为何仍判为钉定: 四个 vendor 归档合计缺 51 个文件, **全部是二进制/大文件/构建产物(图片 42 / 标准单元库 4 / 仿真日志 2 / 6 MB 数据表 1), 无一为源码**, 而 2300+ 个源文件逐一匹配。四个独立归档呈现同一形态, 指向入库时按『只留源码』裁剪。已逐条排除的其他解释: 无 .gitattributes(不存在 export-ignore)、Windows 绝对路径远低于 260 上限、文件名无非法字符、无大小写冲突。**裁剪动作本身无记录, 属推断而非实证** —— 故此处钉定的是『本归档的全部内容出自该 commit』, 不是『本归档等于该 commit』。\nCRLF 差异是 Windows 解压 ZIP 的已知行为, 不是内容差异。取回日期 2026-02-14 与该 commit 的 2026-02-13 差一天, 吻合。"
   },
   "content": {
     "files": 28,

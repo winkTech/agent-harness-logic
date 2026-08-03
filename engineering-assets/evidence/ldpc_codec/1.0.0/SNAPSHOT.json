@@ -1,0 +1,333 @@
+{
+  "schema_version": "1.0",
+  "asset_uid": "ldpc_codec",
+  "version": "1.0.0",
+  "created_at": "2026-08-01T15:33:15.361Z",
+  "git_head": "3c43bcb05733f586c7b213a2823bf02b36114051",
+  "manifest_sha256": "5692a1071ab8c0052b6b61d650d9fdd7fc1a1c842b1a9aa1c7f307609a439ac9",
+  "evidence_source": "var/gates/pg/ldpc_codec",
+  "files": [
+    {
+      "path": "alignment-report.json",
+      "sha256": "9e017c3929c815dc409f5b8dadea4378ff4e80810dcab18f2e16dd8edc757499",
+      "bytes": 301
+    },
+    {
+      "path": "cdc-report.json",
+      "sha256": "f5e1cb088dc95ac5fe3d24e658b881a1d82ca5ad9cb30a73b6543cda7ac4aa42",
+      "bytes": 352
+    },
+    {
+      "path": "clocks.rpt",
+      "sha256": "d4f7c7d9142920bb4895aefc4aa25eaff6220846cebc743b30e6b2a0251b21d2",
+      "bytes": 1507
+    },
+    {
+      "path": "CS-1.json",
+      "sha256": "f5d82dc282cab7aec0f5f93abab516a112db3a0ed10f4d7dfc4bea61a6b4bf3d",
+      "bytes": 161
+    },
+    {
+      "path": "CS-2.json",
+      "sha256": "31cfa0fe6a8e813b089bab7519f8d7332d6ac49ceb941ac8a253f18192906a78",
+      "bytes": 178
+    },
+    {
+      "path": "envelope-check.json",
+      "sha256": "2cc7a2d8305acfca5b7ade846b822e616385f7f952925373cecd1f156b9f5485",
+      "bytes": 885
+    },
+    {
+      "path": "G-A-00.json",
+      "sha256": "1553807a32df473c43c1a71fe05ab92b0d178e9a3274c4c5bfdf4ca513662ca4",
+      "bytes": 186
+    },
+    {
+      "path": "G-A-01.json",
+      "sha256": "10dc7da3f0f2a61b6ff64d75dd0c662bf01d372ede45918111b1c9d776adc795",
+      "bytes": 169
+    },
+    {
+      "path": "G-A-02.json",
+      "sha256": "fcbc3b0c6fc9d62236fd1274e7d54c852f33655ff92b71b2bf2c2bd1977d739c",
+      "bytes": 172
+    },
+    {
+      "path": "G-A-04.json",
+      "sha256": "16aedcf88a66d617b89719cd1b342d3090dd0408e4c644975badaf817cac4479",
+      "bytes": 179
+    },
+    {
+      "path": "G-B-01.json",
+      "sha256": "5697de9b5cb2b1390ba3a6a7a825fa958c6592a922e1790f2958890f95b708db",
+      "bytes": 168
+    },
+    {
+      "path": "G-B-02.json",
+      "sha256": "9e5e726677e6d0f0d37bdc808da5c5b97f2aa120f66d142ce895c65fc9637bc6",
+      "bytes": 206
+    },
+    {
+      "path": "G-B-03.json",
+      "sha256": "75ebd027f1f5fdcb93a83fa4199e0245b8c4dbcd9fd281bb21336d8f480a1e30",
+      "bytes": 211
+    },
+    {
+      "path": "G-C-01.json",
+      "sha256": "c741d846b6d4e0e1fdc45dbb6c425893b3cad3ac818878aa0091cec560ea7eb7",
+      "bytes": 213
+    },
+    {
+      "path": "G-C-02.json",
+      "sha256": "890e00f78fe4928f541e266ed5f54fe1d38bc39c89bd10bfb3b3f99a0ce2e433",
+      "bytes": 212
+    },
+    {
+      "path": "G-C-03.json",
+      "sha256": "021bf00af325f1d69ec2e3898bebb67c3a8319ecdfe2f651d517b26ae14c401f",
+      "bytes": 286
+    },
+    {
+      "path": "G-C-04.json",
+      "sha256": "c3659407dafa05ebe5954fff24c40f68a2ed85a3fd7ab1d018fe6244a9239ed7",
+      "bytes": 193
+    },
+    {
+      "path": "G-C-05.json",
+      "sha256": "c2d84ded0fe40491ddade009d1081423d0cf446605337eb1d6ff0dfe0db83b71",
+      "bytes": 175
+    },
+    {
+      "path": "G-DOC-01.json",
+      "sha256": "60a755bec0d9cba29dccedf878c212747cf467a1effa268f5a745413874e9cb5",
+      "bytes": 174
+    },
+    {
+      "path": "G-DOC-03.json",
+      "sha256": "449bb27f3d20014caf6f71d546f61136ed7aade327fb8528259efbbece7f5b5e",
+      "bytes": 176
+    },
+    {
+      "path": "G-DOC-04.json",
+      "sha256": "5ca7efcde565330934da30237650fc73c93fb037bcc317393d53f4a3dd6d269e",
+      "bytes": 198
+    },
+    {
+      "path": "G-GATE-01.json",
+      "sha256": "55884ffe480c6de56a254802c8f6fe5b94b269195cdb3184c4f65fe57b6d0802",
+      "bytes": 170
+    },
+    {
+      "path": "G-SIGN-01.json",
+      "sha256": "ddc665f472b8dda79e63862017c16bdddf539a999115795205b5bf4151b8b32f",
+      "bytes": 170
+    },
+    {
+      "path": "gate-results.json",
+      "sha256": "d44c9d3b0e37edaa5189cb2430367278e1f23a3b6b2ea9a9b4c54a84f96f30d4",
+      "bytes": 2924
+    },
+    {
+      "path": "reset-sim.json",
+      "sha256": "50f04fbeb0efb785e973609c248b56c62b0c74aacedc64ecd824fed66a100f35",
+      "bytes": 2007
+    },
+    {
+      "path": "RL-OUT.json",
+      "sha256": "a61da0e07fc68fb86ff2b921f5b00550259d0d6d9b819ee551e89a10cd1c8b70",
+      "bytes": 188
+    },
+    {
+      "path": "stability/backpressure.json",
+      "sha256": "11373011c06e76c4d0545cd26e0e0c10a600d2aef894de110708cccb19ac04ef",
+      "bytes": 137
+    },
+    {
+      "path": "stability/boundary.json",
+      "sha256": "2b70f5bae1c205b75db6760b0fb730072dcb463217846a78d11be8c88b4e8c68",
+      "bytes": 141
+    },
+    {
+      "path": "stability/regression.json",
+      "sha256": "de27fc1ba04099138085628c78825d27d2b3ae0ec41fac059c2fae63784c9d63",
+      "bytes": 147
+    },
+    {
+      "path": "stability/stress.json",
+      "sha256": "024c85168c472250a8b8a743e39292a9afebdff33b827cae406c098b8c6282bf",
+      "bytes": 131
+    },
+    {
+      "path": "synth-meta.json",
+      "sha256": "eae61dd2a7ddc5a68415d9dd137b1d61ec73aba7fce8d1fc3255951d8e68f5db",
+      "bytes": 186
+    },
+    {
+      "path": "synthesis-timing-evidence.json",
+      "sha256": "4e18a98cd99d1d9e7349e31ac4e2b3bc3393a6b8ce10a9d4da4740f8fc21cf09",
+      "bytes": 978
+    },
+    {
+      "path": "timing-summary.rpt",
+      "sha256": "42efa56a51e9f8a5a54fa5bdecd6a68494336834c43bbf35332fb952e1269add",
+      "bytes": 18017
+    },
+    {
+      "path": "utilization.rpt",
+      "sha256": "2692a13d4b7fd72591260a3c0e8e66f746fa19cc80ce6a5452557e4f5281d061",
+      "bytes": 8941
+    }
+  ],
+  "gate_summary": {
+    "asset_uid": "ldpc_codec",
+    "name": "ldpc_codec",
+    "declared_level": "certified",
+    "cleared_level": "certified",
+    "blocking_at": null,
+    "gate_count": 20,
+    "generated_by": "gate-runner.cjs v1.1",
+    "redline_contract": "reset-signal-scoped",
+    "gates": [
+      {
+        "id": "CS-1",
+        "level": "intake",
+        "must": true,
+        "status": "pass",
+        "severity": "high"
+      },
+      {
+        "id": "CS-2",
+        "level": "intake",
+        "must": true,
+        "status": "pass",
+        "severity": "high"
+      },
+      {
+        "id": "G-A-00",
+        "level": "intake",
+        "must": true,
+        "status": "pass",
+        "severity": "high"
+      },
+      {
+        "id": "G-A-02",
+        "level": "intake",
+        "must": true,
+        "status": "pass",
+        "severity": "high"
+      },
+      {
+        "id": "G-A-01",
+        "level": "qualification",
+        "must": true,
+        "status": "pass",
+        "severity": "high"
+      },
+      {
+        "id": "RL-OUT",
+        "level": "qualification",
+        "must": true,
+        "status": "pass",
+        "severity": "high"
+      },
+      {
+        "id": "G-C-03",
+        "level": "qualification",
+        "must": true,
+        "status": "pass",
+        "severity": "high"
+      },
+      {
+        "id": "G-A-04",
+        "level": "qualification",
+        "must": true,
+        "status": "pass",
+        "severity": "mid"
+      },
+      {
+        "id": "G-DOC-03",
+        "level": "qualification",
+        "must": true,
+        "status": "pass",
+        "severity": "mid"
+      },
+      {
+        "id": "G-DOC-04",
+        "level": "qualification",
+        "must": true,
+        "status": "pass",
+        "severity": "mid"
+      },
+      {
+        "id": "G-DOC-01",
+        "level": "intake",
+        "must": true,
+        "status": "pass",
+        "severity": "warning"
+      },
+      {
+        "id": "G-B-01",
+        "level": "intake",
+        "must": true,
+        "status": "pass",
+        "severity": "mid"
+      },
+      {
+        "id": "G-B-02",
+        "level": "qualification",
+        "must": true,
+        "status": "pass",
+        "severity": "high"
+      },
+      {
+        "id": "G-B-03",
+        "level": "certified",
+        "must": true,
+        "status": "pass",
+        "severity": "high"
+      },
+      {
+        "id": "G-C-01",
+        "level": "certified",
+        "must": true,
+        "status": "pass",
+        "severity": "high"
+      },
+      {
+        "id": "G-C-02",
+        "level": "certified",
+        "must": true,
+        "status": "pass",
+        "severity": "high"
+      },
+      {
+        "id": "G-C-04",
+        "level": "certified",
+        "must": true,
+        "status": "pass",
+        "severity": "high"
+      },
+      {
+        "id": "G-C-05",
+        "level": "certified",
+        "must": true,
+        "status": "pass",
+        "severity": "high"
+      },
+      {
+        "id": "G-GATE-01",
+        "level": "certified",
+        "must": true,
+        "status": "pass",
+        "severity": "high"
+      },
+      {
+        "id": "G-SIGN-01",
+        "level": "certified",
+        "must": true,
+        "status": "pass",
+        "severity": "high"
+      }
+    ]
+  }
+}

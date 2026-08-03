@@ -77,6 +77,30 @@ function normalizeResult(record) {
   };
 }
 
+/**
+ * 记忆检索命中 → 建一条 fact→file 的低置信度边 (confidence 0.6)。
+ *
+ * 语义: "改这个文件时, 这条经验曾经相关", 只作提示。它**不是**可核对的事实,
+ * 因此不得进入认证链 —— 影响面查询里也单独归到 relatedFacts, 不混进证据。
+ */
+function linkRecalledFacts(matches, scope, payload) {
+  if (process.env.CLAUDE_HARNESS_NO_PERSIST === '1'
+    || process.env.CLAUDE_NO_DIAGNOSTIC_WRITES === '1') return;
+  try {
+    const filePath = scope?.relativePath || scope?.filePath;
+    if (!filePath) return;
+    const projectRoot = scope?.projectRoot || payload?.cwd;
+    if (!projectRoot) return;
+    const { resolveProject } = require('./cg-queries.cjs');
+    const { collectFactEdges } = require('./lib/graph-collectors.cjs');
+    const { projectId } = resolveProject(projectRoot);
+    collectFactEdges(
+      matches.map((match) => ({ id: match.memoryId, key: match.sourceKey })),
+      { projectId, filePath },
+    );
+  } catch { /* 图不可用时静默: 记忆注入本身不受影响 */ }
+}
+
 function evaluatePayload(payload = {}, deps = {}) {
   if (!isFreshFailure(payload, deps)) return null;
   const query = buildQuery(payload);
@@ -117,6 +141,7 @@ function evaluatePayload(payload = {}, deps = {}) {
       targetPath: scope.relativePath,
       anchorCurrentTool: true,
     }, deps);
+    linkRecalledFacts(matches, scope, payload);
     return output;
   } catch {
     return null;

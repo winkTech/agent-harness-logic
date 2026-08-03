@@ -1,10 +1,13 @@
+<!-- asset-status: certified v1.0.2 -->
 <!-- 级别横幅（由成熟度派生）: CBB / CERTIFIED — 生产级，可在生产设计中复用 -->
 
 # rrc_polyphase_fir
 
-> `asset_uid: rrc_polyphase_fir` · `version: 0.4.0` · `owner: lihan`
-> 成熟度: **certified** — 18 道 MUST 门全绿，`signoff.by=lihan @ 2026-07-25`
-> 证据目录: `engineering-assets/var/gates/pg/rrc_polyphase_fir/`（生成物，见 §6 复现）
+> `asset_uid: rrc_polyphase_fir` · `version: 1.0.2` · `owner: lihan`
+> 成熟度: **certified** — 18 道 MUST 门全绿，`signoff.by=lihan @ 2026-08-02`
+> （首次签署 2026-07-25 @ 0.4.0；RTL 与功能结论自那时起未变，1.0.0 是版本号转正）
+> 证据: `engineering-assets/evidence/rrc_polyphase_fir/1.0.2/`（哈希锁定快照）
+> 与 `engineering-assets/var/gates/pg/rrc_polyphase_fir/`（实时生成物，见 §6 复现）
 
 RRC（根升余弦）脉冲成形多相 FIR 滤波器核。本包同时是库内 **CBB 参考样板**：
 文档中每个数字都来自实测，全部证据可由 §6 的三条命令重生。
@@ -78,8 +81,24 @@ RRC（根升余弦）脉冲成形多相 FIR 滤波器核。本包同时是库内
 | BRAM | 1 | 0 | ✅ |
 | DSP | 24 | **24** | ✅ **零裕量**，见 §7 |
 
-> WHS（hold）= −0.163 ns。综合级 hold 为估算值，正常在布局布线阶段收敛；
-> G-C-01 的 MVP 判据只取 setup WNS。上板前须以实现后时序为准。
+> WHS（hold）= −0.163 ns。**2026-08-02 实跑布线后时序，该值一动不动** ——
+> synth / opt / place / route 四个阶段 WHS 全为 −0.163 ns，布线后 320/2713 端点
+> hold 失败。此处原先写的"综合级 hold 是估算值、正常在布局布线阶段收敛"**已被证伪**。
+> 归因明确：924 条违例路径**全部从输入端口出发，内部单元起点 0 条**，
+> reg-to-reg 最差 hold **+0.094 ns**（内部已收敛）；全部由 XDC 里那个自称
+> "显式假设、非实测"的 `set_input_delay -min 0.100` 支配。
+>
+> **该项不可由 RTL 关闭**——1.0.1 实测试过把 `i_rst` 寄存一拍让最差路径变成
+> reg-to-reg，WHS 反而从 −0.163 ns 劣化到 **−0.189 ns**（新最差路径是
+> `s_axis_tdata[5] → sym_buf_i_reg[0][5]/D` 这个普通 FDRE，hold 需求 0.227 ns
+> 比 DSP RSTM 的 0.201 ns 还大），改动已回退。任何输入端口最终都要落进某个
+> 触发器，而 `sym_buf_i_reg[0]` 本身就是输入寄存级。
+> 详见 [`docs/limitations.md`](docs/limitations.md) 第 5 条与
+> `var/gates/pg/rrc_polyphase_fir/hold-closure.json`。
+>
+> 布线后：WNS **+0.058 ns**（0/2713 失败，setup 收敛）、功耗 0.224 W、
+> LUT 220 / FF 258 / DSP 24、`route-drc.rpt` 无 Critical Warning。
+> 注意 place 阶段 setup 一度只剩 **+0.006 ns**，裕量很薄。
 
 ---
 
@@ -126,20 +145,34 @@ cd engineering-assets
 node tools/pg-synth.cjs cbb/rrc_polyphase_fir
 
 # 2) 仿真证据 (alignment-report.json / reset-sim.json / stability/*.json)
+#    两条等价通路, 同一份 TB、同一套判据, 任选其一。
+#
+#    2a) Vivado xsim —— 本机当前可用的那条
+bash cbb/rrc_polyphase_fir/run_xsim.sh
+#
+#    2b) ModelSim —— 本机回环 RPC 自 2026-08-01 起故障, 当前跑不通, 保留备查。
 #    -l 显式指定日志: ModelSim 在启动时的 CWD 就建 transcript, 早于 run.do 内的
 #    cd, 不指定会在仓库根留下残桩。日志目录须已存在, 故用 var/ 而非其子目录。
-vsim -c -l var/rrc-cosim.log -do cbb/rrc_polyphase_fir/run.do
+# vsim -c -l var/rrc-cosim.log -do cbb/rrc_polyphase_fir/run.do
 
 # 3) 门禁判定 (逐门 pass/fail/blocked + envelope-check.json + cdc-report.json)
 node tools/gate-runner.cjs cbb/rrc_polyphase_fir --repo-root ..
 ```
 
-向量由 golden 侧生成，权威位置 `models/comm/rrc/vectors/`（治理规范 §5.5），
-经 `+VEC_DIR` 注入 TB；证据目录经 `+EVID_DIR` 注入 —— TB 内不得硬编码路径。
+向量由 golden 侧生成，权威位置 `models/comm/rrc/vectors/`（治理规范 §5.5）。
+路径注入两条通路，**TB 内均不出现硬编码绝对路径**：ModelSim 经
+`+VEC_DIR` / `+RPT_F` / `+EVID_DIR` 传绝对路径；xsim 的 `-testplusarg` 在 Windows 上
+会在 `=` 与盘符处把参数切碎，故改为由 `run_xsim.sh` 先把向量拷进构建目录、
+TB 按**运行目录相对**读写、跑完再把证据搬到门禁约定位置。
 
 ---
 
 ## 7. 已知限制
+
+> **权威清单在 [`docs/limitations.md`](docs/limitations.md)** —— 12 条，含本节
+> 5 条以及治理侧的 7 条（无哈希锁定证据快照、未上板、版本号未转正、golden
+> 侧 `native-matlab-recheck` 未还清、bit-true 覆盖边界、群延迟偏移易混点、
+> ModelSim 复现路径当前不可用）。此处只留架构与时序侧的摘要，避免两份清单漂移。
 
 1. **DSP 零裕量**（24/24）。架构为 9 抽头/相 × I/Q 双路 = 18 个乘法器，
    另 6 个被综合器用作加法树后加器。若需压缩，方向是实现对称折叠
@@ -155,26 +188,25 @@ node tools/gate-runner.cjs cbb/rrc_polyphase_fir --repo-root ..
 
 ## 8. 认证状态
 
-**已认证（certified）**，位于 `cbb/`，18 道 MUST 门全绿。
+**已认证（certified）1.0.0**，位于 `cbb/`，18 道 MUST 门全绿。
 
-签字记录在 `manifest.json`，字段结构由 `schemas/cbb-manifest.schema.json` 约束
-（必填 `by` / `at` / `scope`）：
+签字记录在 `manifest.json`（字段结构由 `schemas/cbb-manifest.schema.json` 约束，
+必填 `by` / `at` / `scope`），当前为 `by=lihan @ 2026-08-02`，8 条 scope。
 
-```json
-"signoff": {
-  "by": "lihan",
-  "at": "2026-07-25",
-  "scope": [
-    "证据已复核: timing-summary.rpt / utilization.rpt / alignment-report.json / reset-sim.json / cdc-report.json / stability/*.json",
-    "已接受限制: DSP 零裕量(24/24)",
-    "已接受限制: 综合级 hold 未收敛(-0.163ns), 上板前须以实现后时序为准",
-    "已接受限制: 仅默认参数经验证",
-    "已接受限制: cdc_tool=na — 单时钟域, 仅结构扫描, 未经具名 CDC 工具"
-  ]
-}
-```
+**不要在此处复制签署原文** —— 0.4.0 时这里贴过一份，随后
+`signoff.scope` 改了而这里没跟上，就成了两份会漂移的清单。
+以 `manifest.json` 的 `signoff` 字段为准。
 
-> 复用前请读 §7 —— 签字所接受的限制，即是复用方需要承担的约束。
+1.0.0 相对 0.4.0 签署内容的实质变化有两处：
+
+1. 改掉一条**被实测证伪**的措辞——原写"已接受限制：综合级 hold 未收敛，
+   上板前须以实现后时序为准"，实测表明它不会自行收敛（WHS 四阶段恒定），
+   已改为如实陈述违例、归因与量化关闭条件。
+2. 补进三条此前只在文档里、没进签署范围的限制：setup 裕量薄、未上板、
+   ModelSim 复现路径当前不可用。
+
+> 复用前请读 [`docs/limitations.md`](docs/limitations.md) —— 签字所接受的限制，
+> 即是复用方需要承担的约束。
 
 ---
 

@@ -1,0 +1,253 @@
+{
+  "schema_version": "1.0",
+  "asset_uid": "ddr_axi4_controller",
+  "name": "ddr_axi4_controller",
+  "version": "1.0.1",
+  "signoff": {
+    "by": "lihan",
+    "at": "2026-08-01",
+    "scope": [
+      "证据已复核: tb-selfcheck.json (778 拍读回比对 0 失配, 随机退避从机常开; 参考为 TB 内建 AXI4 从机行为模型 + 存储阵列; 并发校验 AXI 协议不变量 —— valid&&!ready 期间 AW/W/AR 载荷不变、wlast 恰落最后一拍、calib 未完成不得置 cmd_ready) / reset-sim.json (事务中再复位, 19 个寄存器逐一比对 0 失配) / stability 四子结果 (regression 188 / boundary 17 / stress 551 / backpressure 778) / timing-summary.rpt / utilization.rpt / envelope-check.json (WNS +2.274ns @200MHz 即达成约 367MHz; LUT 342/1400, FF 1619/2200, BRAM 0/0, DSP 0/0) / cdc-report.json (单时钟域结构扫描, cdc_tool=na)",
+      "资源核对: FF 实测 1619 与结构推算 1616 相差 3, 基本吻合 (三组 512 位数据寄存 ro_wdata/r_skid_d/ro_rd_data 共 1536 + 命令锁存/FSM/超时计数/各通道控制)",
+      "**TB 竞争缺陷已定位并修复 (本版关键)**: 该模块此前 G-B-03 一直 blocked, 自入库起从未有过实跑证据。本次首跑报 87~298 处失配, 经四步实验定位为 **TB 从机模型在 posedge 之后用阻塞赋值驱动 R 通道**, 与 DUT 的 always_ff @(posedge) 同时间步且顺序不定, DUT 有时采到下一拍的 rdata/rlast。判别依据: 独立最小探针 (negedge 驱动) 下 DUT 完全正确; 关掉从机反压后仍失败 (排除反压相关); 改 negedge 驱动后 0 失配。**RTL 未做任何改动**",
+      "错误路径已覆盖: bresp=SLVERR 注入 (o_err 置位且粘滞, 下一命令成交后清) + AR 静默超时 (o_err 置位、撤 AXI valid 回空闲、恢复后旧数据仍可读)",
+      "已接受限制: **超时时撤回已置位的 AXI valid, 严格 AXI 不允许** —— 仅作 MIG 挂死的恢复路径。接入严格校验的 AXI 检查器或互连时可能被判违规",
+      "已接受限制: 单 ID 单事务顺序执行, 无流水与乱序; o_rd_* 无背压 (需背压在下游例化 axis_skid_buffer)",
+      "已接受限制: 复位会丢弃在途 AXI 事务, 须系统级复位; 正常运行中不得复位 (从机侧看到的是事务被中途放弃)",
+      "已接受限制: 综合与预算按默认 P_DATA_W=512 评估; 功能侧以 DW=64 / TB_MAX_LEN=16 / TIMEOUT=256 取证。**未与真实 MIG 联调**, 仅对 TB 内 AXI4 从机行为模型验证",
+      "工具说明: 本版全部仿真证据由 Vivado xsim 2023.1 产出 (本机 ModelSim 回环 RPC 故障); vlog 编译不受影响, G-A-00 仍由 ModelSim 判读"
+    ]
+  },
+  "owner": "lihan",
+  "kind": "primitive",
+  "maturity": {
+    "level": "certified",
+    "evidence_ref": "engineering-assets/evidence/ddr_axi4_controller/1.0.1/"
+  },
+  "requirement_ref": "engineering-assets/docs/CBB候选台账-hdl-coding-templates.md",
+  "doc_refs": [
+    "engineering-assets/docs/governance/CBB-治理与生产级准入规范-V1.0.md"
+  ],
+  "fidelity": {
+    "status": "na"
+  },
+  "top": "ddr_axi4_controller",
+  "ports": [
+    {
+      "name": "i_clk",
+      "direction": "input",
+      "width": 1
+    },
+    {
+      "name": "i_rst",
+      "direction": "input",
+      "width": 1
+    },
+    {
+      "name": "i_calib_done",
+      "direction": "input",
+      "width": 1
+    },
+    {
+      "name": "i_cmd_valid",
+      "direction": "input",
+      "width": 1
+    },
+    {
+      "name": "o_cmd_ready",
+      "direction": "output",
+      "width": 1
+    },
+    {
+      "name": "i_cmd_write",
+      "direction": "input",
+      "width": 1
+    },
+    {
+      "name": "i_cmd_addr",
+      "direction": "input",
+      "width": 32
+    },
+    {
+      "name": "i_cmd_len",
+      "direction": "input",
+      "width": 9
+    },
+    {
+      "name": "i_wr_valid",
+      "direction": "input",
+      "width": 1
+    },
+    {
+      "name": "o_wr_ready",
+      "direction": "output",
+      "width": 1
+    },
+    {
+      "name": "i_wr_data",
+      "direction": "input",
+      "width": 512
+    },
+    {
+      "name": "o_rd_valid",
+      "direction": "output",
+      "width": 1
+    },
+    {
+      "name": "o_rd_last",
+      "direction": "output",
+      "width": 1
+    },
+    {
+      "name": "o_rd_data",
+      "direction": "output",
+      "width": 512
+    },
+    {
+      "name": "o_busy",
+      "direction": "output",
+      "width": 1
+    },
+    {
+      "name": "o_err",
+      "direction": "output",
+      "width": 1
+    },
+    {
+      "name": "m_axi_awvalid",
+      "direction": "output",
+      "width": 1,
+      "bus": "axi4"
+    },
+    {
+      "name": "m_axi_awready",
+      "direction": "input",
+      "width": 1,
+      "bus": "axi4"
+    },
+    {
+      "name": "m_axi_wvalid",
+      "direction": "output",
+      "width": 1,
+      "bus": "axi4"
+    },
+    {
+      "name": "m_axi_wready",
+      "direction": "input",
+      "width": 1,
+      "bus": "axi4"
+    },
+    {
+      "name": "m_axi_bvalid",
+      "direction": "input",
+      "width": 1,
+      "bus": "axi4"
+    },
+    {
+      "name": "m_axi_bready",
+      "direction": "output",
+      "width": 1,
+      "bus": "axi4"
+    },
+    {
+      "name": "m_axi_arvalid",
+      "direction": "output",
+      "width": 1,
+      "bus": "axi4"
+    },
+    {
+      "name": "m_axi_arready",
+      "direction": "input",
+      "width": 1,
+      "bus": "axi4"
+    },
+    {
+      "name": "m_axi_rvalid",
+      "direction": "input",
+      "width": 1,
+      "bus": "axi4"
+    },
+    {
+      "name": "m_axi_rready",
+      "direction": "output",
+      "width": 1,
+      "bus": "axi4"
+    }
+  ],
+  "clock": {
+    "name": "i_clk"
+  },
+  "reset": {
+    "name": "i_rst",
+    "polarity": "active_high",
+    "type": "sync"
+  },
+  "device": {
+    "part": "xc7k325tffg900-2",
+    "family": "kintex7",
+    "note": "与库内其余 CBB 统一器件; OOC 评估"
+  },
+  "params": [
+    {
+      "name": "P_DATA_W",
+      "value": 512,
+      "rationale": "AXI 数据位宽, 对齐典型 MIG 用户接口"
+    },
+    {
+      "name": "P_ADDR_W",
+      "value": 32,
+      "rationale": "地址位宽"
+    },
+    {
+      "name": "P_ID_W",
+      "value": 4,
+      "rationale": "单 ID 单事务, 位宽仅为接口兼容"
+    },
+    {
+      "name": "P_MAX_LEN",
+      "value": 256,
+      "rationale": "最大突发拍数 (AXI4 上限)"
+    },
+    {
+      "name": "P_TIMEOUT",
+      "value": 4096,
+      "rationale": "单相位无进展看门狗拍数, 用于 MIG 挂死恢复"
+    }
+  ],
+  "constraints": {
+    "target": {
+      "fmax": "200MHz",
+      "fmax_mhz": 200,
+      "lut": 1400,
+      "ff": 2200,
+      "bram": 0,
+      "dsp": 0,
+      "note_budget": "结构推算 (默认 P_DATA_W=512): FF 主要是三组 512 位数据寄存 —— ro_wdata 512 + 写通路 skid r_skid_d 512 + ro_rd_data 512 = 1536, 加 ri_addr 32 + ri_len 9 + FSM 6 + 超时计数 13 + 各通道 valid/ready/last 与状态约 20 = 约 1616, 取 2200。LUT 主要是写通路 skid 的 512 位 2:1 选择 (约 512) + FSM 次态与译码, 取 1400。无存储阵列与乘法故 BRAM/DSP 恒 0。实测见 envelope-check.json。"
+    }
+  },
+  "sources": [
+    {
+      "path": "rtl/ddr_axi4_controller.sv",
+      "role": "rtl",
+      "sha256": "ae6b63f1a9a81a2488542ef57407e27d396ffa3a71bffef0e97d85c475643100"
+    },
+    {
+      "path": "constraints/ddr_axi4_controller.xdc",
+      "role": "constraint",
+      "sha256": "81a7ea7b48b7fb6635de8a78395f9f425564bb23173a0a0c84031ee16b01f007"
+    },
+    {
+      "path": "tb/tb_ddr_axi4_controller.sv",
+      "role": "tb",
+      "sha256": "d55405772d67dc6f6b0717a8d962ac2a61c36d70115fec1f6850efdb7582622e"
+    }
+  ],
+  "waivers": [],
+  "superseded_by": null,
+  "reproduce": {
+    "sim": "bash tools/run-primitive-sim.sh ddr_axi4_controller --install",
+    "synth": "node tools/pg-synth.cjs cbb/ddr_axi4_controller",
+    "gate": "node tools/gate-runner.cjs cbb/ddr_axi4_controller --repo-root ..",
+    "note": "2026-08-02 用该命令复跑, 6 份证据与 certified 时的记录逐字节相同。"
+  }
+}

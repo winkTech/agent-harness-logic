@@ -33,7 +33,14 @@ function main() {
     `guard categories without a single covering case: ${report.uncovered.join(', ')}`);
   assert.equal(report.coverageRate, 1);
   for (const entry of report.perCategory) {
-    assert.ok(entry.patterns > 0, `${entry.category}: pattern count must be counted from the guard source`);
+    // 两种实现都算合法防护: 正则表 (patterns 可数) 与 token 解析器
+    // (protected-branch-push 判 refspec 目标分支, 没有可数条目)。
+    assert.ok(['regex-table', 'parser'].includes(entry.kind), `${entry.category}: unknown kind ${entry.kind}`);
+    if (entry.kind === 'regex-table') {
+      assert.ok(entry.patterns > 0, `${entry.category}: pattern count must be counted from the guard source`);
+    } else {
+      assert.equal(entry.patterns, null, `${entry.category}: parser-based categories must not report a pattern count`);
+    }
     assert.ok(entry.cases > 0, `${entry.category}: needs at least one executed case`);
   }
 

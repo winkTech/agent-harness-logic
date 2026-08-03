@@ -1,8 +1,9 @@
 # models/comm/channel_est —— 参考模型状态记录
 
 > 记录日期: 2026-07-26。结论来自 MATLAB R2022a 实跑, 非推测。
-> **当前状态: 卡在 L1。** `run_all_tests` 1/5 PASS, 且阻塞原因**不是代码缺陷**,
-> 而是规格与测试之间的矛盾, 需 owner 裁决。
+> **当前状态 (2026-07-31 更新): L1 已裁决并实施完成, `run_all_tests` 7/7 PASS。**
+> 裁决与实施记录见 §6; 以下 §1-§5 为裁决前的原始记录, 保留作历史依据。
+> (旧状态: 卡在 L1, 1/5 PASS, 阻塞原因是规格与测试矛盾而非代码缺陷)
 
 ## 1. 实跑结果
 
@@ -74,3 +75,42 @@
 - 另: `ls_channel_est.m:36` 硬编码保护带 `[1:5, N-4:N]`(10 个),
   与 `config.m:19` 的 `[1:6, 60:64]`(11 个) 及 `algorithm_spec.md:88`(11 个)
   三方不一致 —— 这条是明确缺陷, 但影响量级仅 +0.33 dB, 待估计基础定下后一并改。
+
+## 6. 裁决与实施记录 (owner: lihan 裁决 2026-07-31, 同日实施)
+
+**裁决: 采纳方案 1 长训练符号 LS**(ADR-002, 见
+`docs/governance/adr/ADR-002-channel-est-estimation-basis.md`)。
+
+**实施**(MATLAB R2022a 实跑 `run_all_tests` **7/7 PASS**):
+
+- 新增: `lts_seq.m`(802.11a LTS 频域序列) / `lts_channel_est.m`(2×LTS 平均
+  全用载波 LS) / `pilot_phase_track.m`(4 导频 CPE 跟踪) / `sim_frame.m`
+  (帧级激励: 2×LTS + nsym 数据符号, 可注入残余 CFO);
+- 测试改造为 7 项: 默认方案在**原验收信道**(0.8µs)实测 **MSE -20.5 dB**
+  (门限 -10); CPE 跟踪 max 误差 0.044 rad, EVM 27.5%→15.2%; AWGN -33.5 dB
+  (理论 ≈-33); SNR 曲线严格单调; 三调制一致; 插值两测试移入其有效域
+  (线性: 0.1µs 短时延; DFT: 均匀导频网格);
+- 附带修复三处既有缺陷: ① 保护带三方不一致(§5 尾注, [1:5]→[1:6]);
+  ② `interp_dft` 错误的 /sqrt(N/N_pilot) 归一化(全部估计值偏小 4 倍,
+  被旧相对判据掩盖); ③ `interp_dft` 缺均匀网格**偏移补偿**(首导频不在
+  k=1 时时域抽头相位旋转, 实测 -5.7→-13.9 dB);
+- ~~遗留: §5 的 RTL 侧 32 条缺陷待架构重排(接口需接收 LTS 窗口);
+  cosim 向量需按新基础重新导出(generate_vectors.m 改造随 RTL 阶段做)。~~
+  → 已完成, 见下条。
+
+**RTL 侧实施 (2026-07-31/08-01, channel_est_top 0.2.0 架构重排 + cosim 闭环)**:
+
+- `channel_est_top` 按本裁决整体重排: 旧 4 导频 LS+插值通路删除,
+  新 lts_estimator(2×LTS 全用载波 LS) + cpe_tracker(导频 CPE 跟踪) +
+  cordic_cv(14 迭代); 接口新增 i_frame_start 侧带 (帧 = 2×LTS + n 数据符号)。
+  §5 的 RTL 遗留缺陷随旧通路替换整体消灭。
+- `generate_vectors.m` 改造为**帧级 RTL 位真镜像** (LTS 平均舍入/导频积/
+  CORDIC 求角与旋转/round+饱和, 整数语义与 RTL 头注释逐字同步);
+  规范调用 `generate_vectors(struct('nsym',32))`; CPE 镜像 vs 浮点
+  最大偏差 1.8e-4 rad (= CORDIC Q3.13 量化尺度, 镜像自证)。
+- cosim 实证 (ModelSim 10.6c): **2048 样点 0 失配 bit-true PASS**
+  (G-B-03 证据 alignment-report.json); 定向 TB 六场景 ALL TESTS PASSED;
+  Vivado OOC WNS +4.673ns@10ns, DSP 8 (<20 预算)。
+- 勘误: 旧 rx_chEst.bin/expected_chEst.bin 单符号向量**从未入库**
+  (0.1.0 README 已记录), 语义作废无需删除; manifest 1.2.0 provenance
+  中"已删"一词不准确, 以本条为准。

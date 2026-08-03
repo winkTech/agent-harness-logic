@@ -1,0 +1,128 @@
+{
+  "schema_version": "1.0",
+  "asset_uid": "delay_line",
+  "name": "delay_line",
+  "version": "1.0.1",
+  "signoff": {
+    "by": "lihan",
+    "at": "2026-08-01",
+    "scope": [
+      "证据已复核: tb-selfcheck.json (9082 拍逐拍比对 0 失配, 两个例化 P_DELAY=2 与 7 并行验证; 参考为 TB 内建期望队列, 独立于 RTL 的移位链实现; 另检灌满前 o_valid 不得提前置位) / reset-sim.json (流中再复位, 9 个 valid 链寄存器逐一比对 0 失配) / stability 四子结果 (regression 5991 / boundary 1037 / stress 2034 / backpressure 6540) / timing-summary.rpt / utilization.rpt / envelope-check.json (WNS +3.352ns @250MHz 即达成约 1543MHz; LUT 1/40, FF 66/80, BRAM 0/0, DSP 0/0) / cdc-report.json (单时钟域结构扫描, cdc_tool=na)",
+      "资源核对: FF 实测 66 与结构推算 66 完全吻合 (数据 2 级 x 32 + valid 2); SRL 实测 0 与预判一致 —— 默认 P_DELAY=2 时 P_MID=0 无中间移位链, **不能以此判定 SRL 推断失败**; SRL 推断只在 P_DELAY>2 时才有意义, 该情形未单独取综合证据",
+      "已接受限制: **数据链刻意不复位** (ri_data / r_data_pipe / ro_data) —— 显式设计决策, 为省复位扇出并让综合器推断 SRL; 复位后数据链保留旧值, 其无害性由 valid 门控保证。复位审计因此只覆盖 valid 链, 该豁免写入 reset-sim.json 的 method 字段",
+      "已接受限制: 无 tready 反压接口 —— 定长延迟与背压是正交职责 (RTL 模块头裁决), 背压由 axis_skid_buffer 承担; 不提供带 ready 的延迟线。G-C-05 的 backpressure 子结果按「计数守恒 + 延迟恒为 P_DELAY 与气泡图样无关」的等价判据取证",
+      "已接受限制: P_DELAY 最小为 2 (编译期 $error 拦截); 综合与预算按默认 P_DWIDTH=32 / P_DELAY=2 评估, 其他参数组合需重新评估资源与 SRL 映射",
+      "已接受限制: 取代 skills 旧模板 pipe_delay.sv 与 delay_sync.v —— 前者 o_ready 组合直出、全局停顿而非逐级吸收、复位清数据链阻止 SRL 推断; 后者端口无 i_/o_ 前缀且无 valid 语义。逐条记录在 RTL 模块头",
+      "已接受限制: 综合为 OOC 口径 (仅 create_clock, 未做布局布线与 I/O 绑定)",
+      "工具说明: 本版全部仿真证据由 Vivado xsim 2023.1 产出 (本机 ModelSim 回环 RPC 故障); vlog 编译不受影响, G-A-00 仍由 ModelSim 判读"
+    ]
+  },
+  "owner": "lihan",
+  "kind": "primitive",
+  "maturity": {
+    "level": "certified",
+    "evidence_ref": "engineering-assets/evidence/delay_line/1.0.1/"
+  },
+  "requirement_ref": "engineering-assets/docs/comm模块族认证差距清单.md",
+  "doc_refs": [
+    "engineering-assets/docs/governance/CBB-治理与生产级准入规范-V1.0.md",
+    "engineering-assets/docs/CBB候选台账-hdl-coding-templates.md"
+  ],
+  "fidelity": {
+    "status": "na"
+  },
+  "top": "delay_line",
+  "ports": [
+    {
+      "name": "i_clk",
+      "direction": "input",
+      "width": 1
+    },
+    {
+      "name": "i_rst",
+      "direction": "input",
+      "width": 1
+    },
+    {
+      "name": "i_valid",
+      "direction": "input",
+      "width": 1
+    },
+    {
+      "name": "i_data",
+      "direction": "input",
+      "width": 32
+    },
+    {
+      "name": "o_valid",
+      "direction": "output",
+      "width": 1
+    },
+    {
+      "name": "o_data",
+      "direction": "output",
+      "width": 32
+    }
+  ],
+  "clock": {
+    "name": "i_clk"
+  },
+  "reset": {
+    "name": "i_rst",
+    "polarity": "active_high",
+    "type": "sync"
+  },
+  "device": {
+    "part": "xc7k325tffg900-2",
+    "family": "kintex7",
+    "note": "与库内其余 CBB 统一器件; OOC 评估"
+  },
+  "params": [
+    {
+      "name": "P_DWIDTH",
+      "value": 32,
+      "rationale": "默认数据位宽; 综合与预算按此默认值评估"
+    },
+    {
+      "name": "P_DELAY",
+      "value": 2,
+      "rationale": "默认总延迟拍数, 也是模块允许的**最小值** (输入寄存/输出寄存各占一级); TB 另以 P_DELAY=7 例化覆盖含中间链的情形"
+    }
+  ],
+  "constraints": {
+    "target": {
+      "fmax": "250MHz",
+      "fmax_mhz": 250,
+      "lut": 40,
+      "ff": 80,
+      "bram": 0,
+      "dsp": 0,
+      "note_budget": "结构推算 (默认 P_DWIDTH=32 / P_DELAY=2, 此时中间链为空): 数据 2 级 x 32 = 64 FF + valid 2 FF = 66, 取 80。**默认参数下 P_MID=0 无移位链, 故 SRL 预期为 0** —— SRL 推断只在 P_DELAY>2 时才有意义, 不能以默认综合的 srl=0 判定推断失败。无组合运算故 LUT 仅零星, 取 40; 无存储与乘法故 BRAM/DSP 恒 0。实测见 envelope-check.json。"
+    }
+  },
+  "sources": [
+    {
+      "path": "rtl/delay_line.sv",
+      "role": "rtl",
+      "sha256": "8481c02a0f98b486f4c14bcf2e671ef01c877a8a32a01500a5923950bb07e456"
+    },
+    {
+      "path": "constraints/delay_line.xdc",
+      "role": "constraint",
+      "sha256": "b0ffbd7884cae28bdce288e280cf882a4d915cd69b2284fcc7f38105ba107f55"
+    },
+    {
+      "path": "tb/tb_delay_line.sv",
+      "role": "tb",
+      "sha256": "a41ba6fc77fa3a05d35d3b5199d16555ec0c4a036d0a9075368e5d2347f0b86d"
+    }
+  ],
+  "waivers": [],
+  "superseded_by": null,
+  "reproduce": {
+    "sim": "bash tools/run-primitive-sim.sh delay_line --install",
+    "synth": "node tools/pg-synth.cjs cbb/delay_line",
+    "gate": "node tools/gate-runner.cjs cbb/delay_line --repo-root ..",
+    "note": "2026-08-02 用该命令复跑, 6 份证据与 certified 时的记录逐字节相同。"
+  }
+}

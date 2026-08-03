@@ -225,6 +225,14 @@ const CORE_SCRIPTS = [
   'engine/scripts/ten-dimension-dashboard.cjs',
   'engine/scripts/weekly-report.cjs',
   'engine/scripts/lib/verification-markers.cjs',
+  'engine/scripts/lib/failure-signature.cjs',
+  'engine/scripts/lib/loop-criteria.cjs',
+  'engine/scripts/lib/graph-collectors.cjs',
+  'engine/scripts/lib/module-topology.cjs',
+  'engine/scripts/module-order.cjs',
+  'engine/scripts/loop-ctl.cjs',
+  'engine/sqlite/store-loops.cjs',
+  'engine/sqlite/store-graph.cjs',
   'engine/scripts/plan-accuracy.cjs',
   'engine/scripts/hdl-evidence-gate.cjs',
   'engine/scripts/delivery-tracker.cjs',
@@ -264,6 +272,8 @@ const HOOK_SCRIPTS = [
   'engine/scripts/hooks/stop-runner.cjs',
   'engine/scripts/hooks/context-pressure-warn.cjs',
   'engine/scripts/hooks/isolation-check.cjs',
+  'engine/scripts/hooks/codegraph-sync.cjs',
+  'engine/scripts/hooks/loop-controller.cjs',
   'engine/hooks/memory/memory-sqlite-sync.cjs',
   'engine/hooks/learning/signal-collector.cjs',
   'engine/hooks/learning/cost-tracker-hook.cjs',
@@ -2211,13 +2221,33 @@ define('E2ETests', '全部 E2E 通过', () => {
   return { pass: passed, detail: passed ? 'exit=0' : `exit=${r.status} signal=${r.signal || 'none'}` };
 });
 
+// 子进程失败时的诊断截断。
+//
+// 为什么头尾都要留: Node 的断言与模块解析错误关键信息在**开头**
+// (`AssertionError: ...` / `Cannot find module 'X'`), 而末尾往往只剩一串
+// internal/modules/cjs/loader 栈帧。原先一律 `.slice(-400)` 只留末尾, 实测导致
+// 一次 CI 失败被误判成模块加载错误, 真实原因(断言文案)恰好被截掉。
+function headTail(text, head = 400, tail = 400) {
+  const s = String(text || '').trim();
+  if (s.length <= head + tail) return s;
+  return `${s.slice(0, head)}\n…[中略 ${s.length - head - tail} 字符]…\n${s.slice(-tail)}`;
+}
+
 define('PainpointRegression', 'harness-painpoints.cjs 全部通过', () => {
   const p = path.join(HOME, 'engine/scripts/test-hooks/harness-painpoints.cjs');
   if (!fs.existsSync(p)) return { pass: false, detail: 'harness-painpoints.cjs 不存在' };
   const r = spawnSync('node', [p], {
     encoding: 'utf8', timeout: 30000, windowsHide: true,
   });
-  return { pass: r.status === 0, detail: `exit=${r.status}` };
+  const passed = r.status === 0 && !r.error && !r.signal;
+  // 原先只报 `exit=${r.status}`, 子进程的 stdout/stderr 全丢 —— 这条失败在 CI 上
+  // 除了一个 exit=1 什么都看不到, 无法定位。painpoints 把失败项打在 stdout。
+  return {
+    pass: passed,
+    detail: passed
+      ? 'exit=0'
+      : `exit=${r.status} signal=${r.signal || 'none'} ${headTail(r.stdout || r.stderr || r.error?.message || '')}`,
+  };
 });
 
 const AUDIT_REMEDIATION_CONTRACTS = [
@@ -2230,6 +2260,11 @@ const AUDIT_REMEDIATION_CONTRACTS = [
   ['single-process lifecycle routing', 'lifecycle-router-contract.cjs', 30000],
   ['observer process consolidation', 'observer-consolidation-contract.cjs', 30000],
   ['active hook manifest', 'hook-manifest-contract.cjs', 30000],
+  ['code graph index scheduling', 'codegraph-sync-contract.cjs', 60000],
+  ['failure signature judgement', 'failure-signature-contract.cjs', 30000],
+  ['task loop convergence control', 'loop-controller-contract.cjs', 60000],
+  ['graph blast radius', 'graph-blast-radius-contract.cjs', 90000],
+  ['graph-driven module order', 'module-topology-contract.cjs', 90000],
   ['memory consumer and promotion lifecycle', 'memory-consumer-promotion-contract.test.cjs', 60000],
   ['read-only hook side effects', 'read-only-hooks.cjs', 30000],
   ['state concurrency', 'state-concurrency.cjs', 60000],
@@ -2274,7 +2309,7 @@ for (const [name, relative, timeout, extraArgs = []] of AUDIT_REMEDIATION_CONTRA
       pass: passed,
       detail: passed
         ? `exit=0 (${relative})`
-        : `exit=${r.status} signal=${r.signal || 'none'} ${(r.stderr || r.stdout || r.error?.message || '').slice(-400)}`,
+        : `exit=${r.status} signal=${r.signal || 'none'} ${headTail(r.stderr || r.stdout || r.error?.message || '')}`,
     };
   });
 }
@@ -2939,6 +2974,60 @@ define('DiffSizeGate', '脚本语法正确', () => {
   if (!fs.existsSync(p)) return { pass: true, skip: true, detail: '文件不存在' };
   const r = nodeCheck(p);
   return { pass: r.ok, detail: r.ok ? '语法通过' : r.stderr.slice(0, 200) };
+});
+
+// 规模门禁量的是"改了多大", 量不出"改的是不是请求要的"。2026-08-01 实例: 只需追加
+// 3 条用例的改动, 因整文件重写产生 887 行 diff, 规模上只到 warn 档, 而 96% 的行
+// 与请求无关。首版用 `git diff -w` 做判据完全失效 —— 它只忽略行内空白, 看不出
+// "一行拆成七行"。这个用例锁的就是那种形状。
+define('DiffSizeGate', '范围溢出: 行改动量与内容改动量不成比例时点名', () => {
+  const { evaluate } = require(path.join(HOME, 'engine/scripts/hooks/diff-size-gate.js'));
+  const repo = fs.mkdtempSync(path.join(os.tmpdir(), 'scope-gate-'));
+  const git = (...args) => spawnSync('git', args, { cwd: repo, encoding: 'utf8', timeout: 20000 });
+  try {
+    git('init', '-q');
+    git('config', 'user.email', 'probe@test');
+    git('config', 'user.name', 'probe');
+    const rows = [];
+    for (let i = 0; i < 60; i++) {
+      rows.push(`  { "id": "case-${i}", "input": { "cmd": "run ${i}", "cwd": "x" }, "verdict": "pass" }`);
+    }
+    const target = path.join(repo, 'fixtures.json');
+    fs.writeFileSync(target, `[\n${rows.join(',\n')}\n]\n`);
+    fs.writeFileSync(path.join(repo, 'notes.md'), 'baseline\n');
+    git('add', '-A');
+    git('commit', '-qm', 'baseline');
+
+    // 请求是"追加 3 条用例", 但整文件被重排成多行 —— 真实事故的形状
+    const arr = JSON.parse(fs.readFileSync(target, 'utf8'));
+    for (let i = 0; i < 3; i++) arr.push({ id: `new-${i}`, input: { cmd: `new ${i}`, cwd: 'x' }, verdict: 'block' });
+    fs.writeFileSync(target, `${JSON.stringify(arr, null, 2)}\n`);
+    git('add', '-A');
+
+    const run = (cmd) => evaluate({ tool_input: { command: cmd } }, { cwd: repo });
+    const noisy = run('git commit -m "test(fixtures): 追加 3 条用例"');
+    const text = noisy.diagnostics.join('\n');
+    const checks = [
+      ['重排被点名', noisy.decision === 'warn' && /fixtures\.json/.test(text)],
+      ['报出内容变动比例', /内容只变了 \d+%/.test(text)],
+      ['未误报未动的文件', !/notes\.md/.test(text)],
+      ['提交信息注明 style 即跳过', run('git commit -m "style: 统一缩进"').decision === 'allow'],
+      ['--no-verify 不触发', run('git commit --no-verify -m "test: x"').decision === 'allow'],
+      ['非 git 命令不触发', run('ls -la').decision === 'allow'],
+    ];
+    // 保持原风格的纯追加不该报
+    git('reset', '-q', '--hard');
+    fs.writeFileSync(target, `[\n${rows.concat(rows.slice(0, 3)).join(',\n')}\n]\n`);
+    git('add', '-A');
+    checks.push(['保持原风格追加不报', run('git commit -m "test: 追加"').decision === 'allow']);
+
+    const failed = checks.filter(([, ok]) => !ok).map(([name]) => name);
+    return failed.length
+      ? { pass: false, detail: `未通过: ${failed.join(', ')}` }
+      : { pass: true, detail: `${checks.length} 项范围溢出判据符合预期` };
+  } finally {
+    fs.rmSync(repo, { recursive: true, force: true });
+  }
 });
 
 // ── Suite 7: 功能测试 — Resource Budget Gate ──
@@ -3812,10 +3901,14 @@ define('ProjectDirectoryGuard', 'uncontracted HDL projects are not forced into t
 
 const FPG = 'engine/scripts/hooks/file-protection-guard.cjs';
 const fpgCall = (file) => JSON.stringify({ tool_name: 'Write', tool_input: { file_path: file } });
-const fpgEnv = (approval, reason) => ({
+const fpgEnv = (approval, reason, basis) => ({
   CLAUDE_NO_DIAGNOSTIC_WRITES: '1',
   CLAUDE_PROTECTED_WRITE_APPROVAL: approval || '',
   CLAUDE_PROTECTED_WRITE_REASON: reason || '',
+  CLAUDE_PROTECTED_WRITE_BASIS: basis || '',
+  // 倒置签名依赖文件系统 mtime, 会随仓库状态漂移; 这些用例只考批准与依据方向,
+  // 把窗口关掉以免测试结果取决于"最近有没有人改过 RTL"。
+  CLAUDE_GOLDEN_INVERSION_WINDOW_MS: '0',
 });
 
 define('FileProtectionGuard', 'golden model 目录内部的文件也受保护', () => {
@@ -3835,24 +3928,62 @@ define('FileProtectionGuard', 'golden model 目录内部的文件也受保护', 
     : { pass: false, detail: `普通文件被误拦, exit=${normal.status}` };
 });
 
-define('FileProtectionGuard', '受保护写入只接受逐文件批准且必须带理由', () => {
+define('FileProtectionGuard', '受保护写入只接受逐文件批准且必须带理由与依据', () => {
   const p = path.join(HOME, FPG);
   const target = 'engineering-assets/knowledge/primary/domains/matlab/README.md';
   const abs = path.join(HOME, target);
+  const SPEC = 'spec|algorithm_spec.md §3.2';
   const cases = [
     ['无批准', fpgEnv(), 2],
-    ['缺理由', fpgEnv(abs), 2],
-    ['通配符批准', fpgEnv('engineering-assets/**', 'x'), 2],
-    ['裸文件名批准', fpgEnv('README.md', 'x'), 2],
-    ['批准了别的文件', fpgEnv('engineering-assets/knowledge/primary/domains/python/README.md', 'x'), 2],
-    ['绝对路径+理由', fpgEnv(abs, '修死链'), 0],
-    ['仓库相对路径+理由', fpgEnv(target, '修死链'), 0],
+    ['缺理由', fpgEnv(abs, '', SPEC), 2],
+    ['通配符批准', fpgEnv('engineering-assets/**', 'x', SPEC), 2],
+    ['裸文件名批准', fpgEnv('README.md', 'x', SPEC), 2],
+    ['批准了别的文件', fpgEnv('engineering-assets/knowledge/primary/domains/python/README.md', 'x', SPEC), 2],
+    // 2026-08-01: 批准从"充分条件"降为"必要条件" —— 还要声明依据方向。
+    ['有批准但缺 basis', fpgEnv(abs, '修死链'), 2],
+    ['basis.kind 非法', fpgEnv(abs, '修死链', 'vibes|随便'), 2],
+    ['basis 缺 ref', fpgEnv(abs, '修死链', 'spec|'), 2],
+    ['绝对路径+理由+依据', fpgEnv(abs, '修死链', 'maintenance|文档死链'), 0],
+    ['仓库相对路径+理由+依据', fpgEnv(target, '修死链', 'maintenance|文档死链'), 0],
   ];
   for (const [name, env, want] of cases) {
     const r = runNode(p, fpgCall(abs), { env });
     if (r.status !== want) return { pass: false, detail: `${name}: exit=${r.status} 期望 ${want}` };
   }
   return { pass: true, detail: `${cases.length} 种批准场景全部符合预期` };
+});
+
+// 门禁要防的不是"改 golden", 而是**因果倒置** —— RTL 调不通就把 golden 改成 RTL 的
+// 样子。路径级权限判不了这件事: 合法修正与本末倒置写出来是同一个动作, 差别只在
+// 依据指向哪一侧。这组用例锁的就是这个判别力。
+define('FileProtectionGuard', 'golden 改动按依据方向判别而非一律禁止', () => {
+  const p = path.join(HOME, FPG);
+  const target = 'engineering-assets/knowledge/primary/domains/matlab/README.md';
+  const abs = path.join(HOME, target);
+  const cases = [
+    // 上游依据 —— golden 贴合需求的正当修正, 放行
+    ['spec 上游依据', '子载波映射与规格不符', 'spec|algorithm_spec.md §3.2', 0],
+    ['standard 上游依据', '导频极性表', 'standard|802.11a §17.3.5.9', 0],
+    ['derivation 上游依据', 'ifft 缩放标定', 'derivation|Parseval 推导', 0],
+    ['maintenance 中性', '更新 sources sha', 'maintenance|manifest 字段约定', 0],
+    // 下游依据 —— 依据来自 RTL 实测行为, 必须挂显式裁决
+    ['rtl-observation 无裁决', 'cosim 失配后镜像跟进', 'rtl-observation|cosim 2226 点失配', 2],
+    ['rtl-observation 有裁决', 'cosim 位真镜像', 'rtl-observation|cosim|ADR-003 位真镜像', 0],
+    // 自由文本泄露的下游话术 —— 声称上游依据但理由指向 RTL
+    ['spec 但理由要对齐 RTL', '把 golden 对齐 RTL 的输出', 'spec|algorithm_spec.md', 2],
+    ['spec 但理由是 RTL 已改', 'RTL 已修改, golden 同步', 'spec|algorithm_spec.md', 2],
+    ['spec 但理由是让 cosim 过', '让 cosim 通过', 'spec|algorithm_spec.md', 2],
+    ['英文 align ... RTL', 'align golden with the RTL output', 'spec|algorithm_spec.md', 2],
+    ['maintenance + 下游话术', '跟随 RTL 更新哈希', 'maintenance|sha', 2],
+    // 裁决级依据可以为"golden 有意跟随 RTL"背书 (位真镜像等合法特例)
+    ['adr 背书下游话术', 'RTL 已同步修改, 镜像逐字跟进', 'adr|ADR-003 §2', 0],
+    ['user-ruling 背书', '以 RTL 为准', 'user-ruling|2026-08-01 用户裁定', 0],
+  ];
+  for (const [name, reason, basis, want] of cases) {
+    const r = runNode(p, fpgCall(abs), { env: fpgEnv(abs, reason, basis) });
+    if (r.status !== want) return { pass: false, detail: `${name}: exit=${r.status} 期望 ${want}` };
+  }
+  return { pass: true, detail: `${cases.length} 种依据方向场景全部符合预期` };
 });
 
 define('ProjectDirectoryContract', 'harness-init emits canonical module/TB directories', () => {

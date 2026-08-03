@@ -1,0 +1,120 @@
+{
+  "schema_version": "1.0",
+  "asset_uid": "crc32",
+  "name": "crc32",
+  "version": "1.0.1",
+  "signoff": {
+    "by": "lihan",
+    "at": "2026-08-01",
+    "scope": [
+      "证据已复核: tb-selfcheck.json (244 帧比对 0 失配; 参考为 TB 内建软件式反射 CRC-32 逐位实现, 与 RTL 的 8 步移位展开不同源; 并以 IEEE 802.3 标准检验值 '123456789' -> 0xCBF43926 硬锚, 该锚不依赖参考模型) / reset-sim.json (帧中途再复位, 6 个受复位寄存器逐一比对 0 失配, 含 r_crc 复位值 0xFFFFFFFF) / stability 四子结果 (regression 31 帧 / boundary 4 帧 / stress 200 帧 / backpressure 8 组) / timing-summary.rpt / utilization.rpt / envelope-check.json (WNS +3.133ns @200MHz 即达成 535MHz; LUT 64/140, FF 75/80, BRAM 0/0, DSP 0/0) / cdc-report.json (单时钟域结构扫描, cdc_tool=na)",
+      "资源核对: FF 实测 75 与结构推算 75 完全吻合 (状态 32 + ri_data 8 + ri_valid/ri_last 2 + ro_crc 32 + ro_valid 1); LUT 64 在 140 预算内, 为 8 步反射展开后的异或树",
+      "已接受限制: 语义为 IEEE 802.3 反射式 CRC-32 (init 0xFFFFFFFF, LSB-first poly 0xEDB88320, 末尾取反), 与非反射 MSB-first 变体**结果不同**; 与 skills 旧模板不兼容 (原件实现的是非反射变体且无末尾取反, 按声称的以太网场景使用必然校验失败)",
+      "已接受限制: 无 tready 反压接口, 需要背压时在上游例化 axis_skid_buffer; G-C-05 的 backpressure 子结果按「同一帧以满流与 60%% 气泡两种供流方式送入结果逐位相同」的等价判据取证",
+      "已接受限制: 单字节/拍吞吐, 不支持多字节并行; 帧尾 i_last 后 2 拍出 o_valid 单拍脉冲, o_crc 保持到下一帧",
+      "已接受限制: 帧长验证边界为 1..1500 字节 (覆盖以太网 MTU), 更长帧未逐一验证; 空帧 (0 字节) 无定义",
+      "已接受限制: 综合为 OOC 口径 (仅 create_clock, 未做布局布线与 I/O 绑定)",
+      "工具说明: 本版全部仿真证据由 Vivado xsim 2023.1 产出 (本机 ModelSim 回环 RPC 故障); vlog 编译不受影响, G-A-00 仍由 ModelSim 判读"
+    ]
+  },
+  "owner": "lihan",
+  "kind": "primitive",
+  "maturity": {
+    "level": "certified",
+    "evidence_ref": "engineering-assets/evidence/crc32/1.0.1/"
+  },
+  "requirement_ref": "engineering-assets/docs/CBB候选台账-hdl-coding-templates.md",
+  "doc_refs": [
+    "engineering-assets/docs/governance/CBB-治理与生产级准入规范-V1.0.md"
+  ],
+  "fidelity": {
+    "status": "na"
+  },
+  "top": "crc32",
+  "ports": [
+    {
+      "name": "i_clk",
+      "direction": "input",
+      "width": 1
+    },
+    {
+      "name": "i_rst",
+      "direction": "input",
+      "width": 1
+    },
+    {
+      "name": "i_valid",
+      "direction": "input",
+      "width": 1
+    },
+    {
+      "name": "i_data",
+      "direction": "input",
+      "width": 8
+    },
+    {
+      "name": "i_last",
+      "direction": "input",
+      "width": 1
+    },
+    {
+      "name": "o_valid",
+      "direction": "output",
+      "width": 1
+    },
+    {
+      "name": "o_crc",
+      "direction": "output",
+      "width": 32
+    }
+  ],
+  "clock": {
+    "name": "i_clk"
+  },
+  "reset": {
+    "name": "i_rst",
+    "polarity": "active_high",
+    "type": "sync"
+  },
+  "device": {
+    "part": "xc7k325tffg900-2",
+    "family": "kintex7",
+    "note": "与库内 rrc/ldpc/skid/lfsr 统一器件; OOC 评估"
+  },
+  "constraints": {
+    "target": {
+      "fmax": "200MHz",
+      "fmax_mhz": 200,
+      "lut": 140,
+      "ff": 80,
+      "bram": 0,
+      "dsp": 0,
+      "note_budget": "结构推算: 状态 32 FF + ri_data 8 + ri_valid/ri_last 2 + ro_crc 32 + ro_valid 1 = 75 FF, 取 80; 组合部分为单拍内 8 步反射展开, 展开后每个 crc 位是若干输入位的异或 (最深约 9 项), 32 位约需 32 个 LUT6 量级, 留裕量取 140。无存储与乘法故 BRAM/DSP 恒 0。目标频率 200MHz 低于 lfsr_gen 的 250MHz —— 8 步展开的异或树比单次归约深。实测见 envelope-check.json。"
+    }
+  },
+  "sources": [
+    {
+      "path": "rtl/crc32.sv",
+      "role": "rtl",
+      "sha256": "5082e26d0d7732348105174c36b0d77644b02e2ae9d42a09a62e1089ceda8768"
+    },
+    {
+      "path": "constraints/crc32.xdc",
+      "role": "constraint",
+      "sha256": "d2931f1fad668391a04fb9d9cafef4e9abe9cce771bba348b2ff01aff512fcff"
+    },
+    {
+      "path": "tb/tb_crc32.sv",
+      "role": "tb",
+      "sha256": "3520e62772bdf5d64237a300811694908193816a02984fe1e1ead2ca2f42253c"
+    }
+  ],
+  "waivers": [],
+  "superseded_by": null,
+  "reproduce": {
+    "sim": "bash tools/run-primitive-sim.sh crc32 --install",
+    "synth": "node tools/pg-synth.cjs cbb/crc32",
+    "gate": "node tools/gate-runner.cjs cbb/crc32 --repo-root ..",
+    "note": "2026-08-02 用该命令复跑, 6 份证据与 certified 时的记录逐字节相同。"
+  }
+}

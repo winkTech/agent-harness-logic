@@ -12,9 +12,10 @@
     "source": "https://github.com/nanamake/r22sdf",
     "license": "MIT",
     "retrieved": "2019-04-14",
-    "retrieved_basis": "目录 mtime 下界；原始归档为 GitHub 分支 ZIP，无 .git，commit SHA 不可复原",
-    "commit": null,
-    "source_basis": "上游仓库描述与本地 README 逐字一致（pipeline FFT in Verilog HDL, R2^2SDF）；LICENSE 署名 Nanamaru Namake 对应 GitHub 用户 nanamake"
+    "retrieved_basis": "目录 mtime 下界；原始归档为 GitHub 分支 ZIP，无 .git 元数据",
+    "commit": "f7dca6e548e1370b69a09382d30609ee14ba4a57",
+    "source_basis": "上游仓库描述与本地 README 逐字一致（pipeline FFT in Verilog HDL, R2^2SDF）；LICENSE 署名 Nanamaru Namake 对应 GitHub 用户 nanamake",
+    "commit_basis": "commit 日期 2019-04-14T03:33:10Z, 标题 'Rename many ports and nets. No change in logic.'。2026-08-02 内容比对反查。**此前『commit SHA 不可复原』的说法是错的** —— 无 .git 只说明元数据丢了, 而 git blob SHA 是内容的函数, 内容俱在就能反查。\n判据: 对候选 commit 拉递归树, 逐路径比对本地 61 个文件 —— 逐字节一致 25 + 仅 CRLF 差异 36, **未解释的差异 0, 仅本地存在 0**。相邻 commit 均不满足。\n归档是该 commit 的**子集**: 缺 3 个文件, 为 img/fft64_wave.json (波形配置, 465 B) 与 sim/fft_128_tc/vsim.log、sim/fft_64/vsim.log (仿真日志)。\n为何仍判为钉定: 四个 vendor 归档合计缺 51 个文件, **全部是二进制/大文件/构建产物(图片 42 / 标准单元库 4 / 仿真日志 2 / 6 MB 数据表 1), 无一为源码**, 而 2300+ 个源文件逐一匹配。四个独立归档呈现同一形态, 指向入库时按『只留源码』裁剪。已逐条排除的其他解释: 无 .gitattributes(不存在 export-ignore)、Windows 绝对路径远低于 260 上限、文件名无非法字符、无大小写冲突。**裁剪动作本身无记录, 属推断而非实证** —— 故此处钉定的是『本归档的全部内容出自该 commit』, 不是『本归档等于该 commit』。\nCRLF 差异是 Windows 解压 ZIP 的已知行为, 不是内容差异。取回日期 2019-04-14 与该 commit 日期**完全一致**。"
   },
   "content": {
     "files": 61,

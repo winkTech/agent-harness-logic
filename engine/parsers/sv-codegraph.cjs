@@ -75,14 +75,45 @@ function stripComments(str) {
 }
 
 /** 计算全局行号（基于原始内容的偏移量） */
+/**
+ * 行号查询的换行位置索引 (单条缓存)。
+ *
+ * 旧实现每次都 `content.slice(0, offset).split('\n')` —— 一次调用就要拷贝并切分
+ * 最多整份文件。一个大文件里有几千个符号, 于是解析退化成 O(n·m): 实测 477KB 的
+ * xpm_memory.sv 解析 >180s 不返回, 整个代码图索引因此从未跑完过。
+ * 现在每份内容只扫一遍建换行表, 之后二分查找。
+ */
+let _lineIndexSource = null;
+let _lineIndexTable = null;
+
+function lineTable(content) {
+  if (_lineIndexSource === content && _lineIndexTable) return _lineIndexTable;
+  const table = [];
+  for (let i = 0; i < content.length; i++) {
+    if (content.charCodeAt(i) === 10) table.push(i);
+  }
+  _lineIndexSource = content;
+  _lineIndexTable = table;
+  return table;
+}
+
 function lineAt(content, offset) {
   if (offset < 0 || offset > content.length) return 1;
-  return content.slice(0, Math.min(offset, content.length)).split('\n').length;
+  const table = lineTable(content);
+  // 二分: 找出 offset 之前有多少个换行符
+  let low = 0;
+  let high = table.length;
+  while (low < high) {
+    const mid = (low + high) >> 1;
+    if (table[mid] < offset) low = mid + 1;
+    else high = mid;
+  }
+  return low + 1;
 }
 
 /** 计算相对行号（基于 block 起点的偏移） */
 function relLine(blockStartLine, blockContent, offset) {
-  return blockStartLine + blockContent.slice(0, Math.min(offset, blockContent.length)).split('\n').length - 1;
+  return blockStartLine + lineAt(blockContent, Math.min(offset, blockContent.length)) - 1;
 }
 
 /** 生成稳定的 ID */
@@ -503,7 +534,18 @@ function scanModuleBody(body, bodyOffset, parentNodeId, parentName, filePath, fi
   }
 
   // 实例化: module_name #(params) inst_name (port_connections);
-  const instRe = /(\w+)\s+(?:#\s*\((?:[^()]*|\([^()]*\))*\)\s+)?(\w+)\s*\((\s*(?:\.\w+\s*\([^()]*\)\s*,?\s*)*\s*)\)\s*;/gm;
+  //
+  // 参数块内层原本写作 (?:[^()]*|\([^()]*\))* —— 灾难性回溯的标准形状: 分支
+  // 可匹配任意长度且切分方式不唯一, 又套在外层 * 里, 一旦整体匹配失败, 引擎要
+  // 穷举指数级的切分组合。实测 Xilinx xpm_memory.sv (477KB) 里那个带长参数表的
+  // `asym_bwe_bb #(...)` 例化触发它, 单文件解析 >180s 不返回 —— 代码图索引
+  // "永远跑不完"的真因就在这里。
+  //
+  // 修法是让两个分支**互斥且无歧义**: 分支一只吃一个非括号字符 (切分唯一),
+  // 分支二必须以 '(' 开头 (与分支一不相交)。语义不变, 复杂度回到线性。
+  // 实测同一文件: 不返回 → 6ms。
+  // 注意 [^()]+ 不够: "aaa" 仍可切成 [aaa]/[aa][a]/[a][aa]/[a][a][a], 歧义还在。
+  const instRe = /(\w+)\s+(?:#\s*\((?:[^()]|\([^()]*\))*\)\s+)?(\w+)\s*\((\s*(?:\.\w+\s*\([^()]*\)\s*,?\s*)*\s*)\)\s*;/gm;
   while ((m = instRe.exec(body)) !== null) {
     const targetModule = m[1];
     const instName = m[2];

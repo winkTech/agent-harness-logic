@@ -1,0 +1,350 @@
+{
+  "schema_version": "1.0",
+  "asset_uid": "pulse_merge",
+  "version": "1.0.2",
+  "created_at": "2026-08-02T05:30:41.049Z",
+  "git_head": "b98a5224e4deccf77f534b4e862cf26d29e9be4c",
+  "manifest_sha256": "3311419f1355ce5d9481bcecf4e2bbe49f695db162380c4e0e08cd70b3f6ec21",
+  "evidence_source": "var/gates/pg/pulse_merge",
+  "files": [
+    {
+      "path": "alignment-report.json",
+      "sha256": "31b776cd2068c54fb92636e63a503e36ae284619c7c5432d58405155784c7528",
+      "bytes": 1037
+    },
+    {
+      "path": "cdc-report.json",
+      "sha256": "7250ffca8e27c4bb2b09b512632bf307237c4f36ca47e8633fc1305afc585b8c",
+      "bytes": 341
+    },
+    {
+      "path": "clocks.rpt",
+      "sha256": "7a8f39c1a0ad2f003c072bad2214403aba6ef4cc2db8067359be59bb3e67f515",
+      "bytes": 1425
+    },
+    {
+      "path": "CS-1.json",
+      "sha256": "f5d82dc282cab7aec0f5f93abab516a112db3a0ed10f4d7dfc4bea61a6b4bf3d",
+      "bytes": 161
+    },
+    {
+      "path": "CS-2.json",
+      "sha256": "31cfa0fe6a8e813b089bab7519f8d7332d6ac49ceb941ac8a253f18192906a78",
+      "bytes": 178
+    },
+    {
+      "path": "envelope-check.json",
+      "sha256": "56fc036a171fb9a004618b1b49b9cd66fce2a33565509aadf6d9042357d3a593",
+      "bytes": 879
+    },
+    {
+      "path": "G-A-00.json",
+      "sha256": "1553807a32df473c43c1a71fe05ab92b0d178e9a3274c4c5bfdf4ca513662ca4",
+      "bytes": 186
+    },
+    {
+      "path": "G-A-01.json",
+      "sha256": "10dc7da3f0f2a61b6ff64d75dd0c662bf01d372ede45918111b1c9d776adc795",
+      "bytes": 169
+    },
+    {
+      "path": "G-A-02.json",
+      "sha256": "fcbc3b0c6fc9d62236fd1274e7d54c852f33655ff92b71b2bf2c2bd1977d739c",
+      "bytes": 172
+    },
+    {
+      "path": "G-A-04.json",
+      "sha256": "16aedcf88a66d617b89719cd1b342d3090dd0408e4c644975badaf817cac4479",
+      "bytes": 179
+    },
+    {
+      "path": "G-B-01.json",
+      "sha256": "5697de9b5cb2b1390ba3a6a7a825fa958c6592a922e1790f2958890f95b708db",
+      "bytes": 168
+    },
+    {
+      "path": "G-B-02.json",
+      "sha256": "9113a6cca4987f9ec80bdf755096fe15297a6f17766eb6415f632399e4c0fae7",
+      "bytes": 209
+    },
+    {
+      "path": "G-B-03.json",
+      "sha256": "419c0b3008fa6e616de2eee333ca0724c781e5f78d38e539c166459a9e793698",
+      "bytes": 244
+    },
+    {
+      "path": "G-C-01.json",
+      "sha256": "c5fa9f35e656c0c3b623aae22f8fa7f948a84bf6aef55c9b18445c7e3f36954f",
+      "bytes": 213
+    },
+    {
+      "path": "G-C-02.json",
+      "sha256": "511d1e8cb89649ab6a02ba2b0f880aa4213cb5cec9971629899c139bb38aaa0b",
+      "bytes": 208
+    },
+    {
+      "path": "G-C-03.json",
+      "sha256": "37d2a9101e1a5e546079e8fe54650a7116364cec05912e9ea5f82883b9fcbf39",
+      "bytes": 167
+    },
+    {
+      "path": "G-C-04.json",
+      "sha256": "c3659407dafa05ebe5954fff24c40f68a2ed85a3fd7ab1d018fe6244a9239ed7",
+      "bytes": 193
+    },
+    {
+      "path": "G-C-05.json",
+      "sha256": "c2d84ded0fe40491ddade009d1081423d0cf446605337eb1d6ff0dfe0db83b71",
+      "bytes": 175
+    },
+    {
+      "path": "G-DOC-01.json",
+      "sha256": "60a755bec0d9cba29dccedf878c212747cf467a1effa268f5a745413874e9cb5",
+      "bytes": 174
+    },
+    {
+      "path": "G-DOC-03.json",
+      "sha256": "449bb27f3d20014caf6f71d546f61136ed7aade327fb8528259efbbece7f5b5e",
+      "bytes": 176
+    },
+    {
+      "path": "G-DOC-04.json",
+      "sha256": "2fdec288ea36ada47f36af0b5f3812c09d822d92f629f108603054de601bd7d5",
+      "bytes": 242
+    },
+    {
+      "path": "G-EDA-PROBE.json",
+      "sha256": "91324bd8af935920fe68fa8b41b310fac445f136f002eae62339cb62eb3dc242",
+      "bytes": 112465
+    },
+    {
+      "path": "G-GATE-01.json",
+      "sha256": "55884ffe480c6de56a254802c8f6fe5b94b269195cdb3184c4f65fe57b6d0802",
+      "bytes": 170
+    },
+    {
+      "path": "G-GATE-02.json",
+      "sha256": "155e43754d678b49aced543ec58a12c5a018fb64c999c13e00cf759701e58a99",
+      "bytes": 211
+    },
+    {
+      "path": "G-SIGN-01.json",
+      "sha256": "ddc665f472b8dda79e63862017c16bdddf539a999115795205b5bf4151b8b32f",
+      "bytes": 170
+    },
+    {
+      "path": "G-SVA-RUNTIME.json",
+      "sha256": "8a93b2878228af62e65b94cf16bfc21aa1b9f31bb8d116db130d53100d08b620",
+      "bytes": 680
+    },
+    {
+      "path": "gate-results.json",
+      "sha256": "a85bdd4739ca9adde4e7852cb4bba338c2ed9fd20fcd1e3de303c040eded8ee5",
+      "bytes": 3061
+    },
+    {
+      "path": "reset-sim.json",
+      "sha256": "aab7d3b641aa0fd2534e19df58e4454e8efb34a1732bf180a40646a8f512a28e",
+      "bytes": 505
+    },
+    {
+      "path": "RL-OUT.json",
+      "sha256": "a61da0e07fc68fb86ff2b921f5b00550259d0d6d9b819ee551e89a10cd1c8b70",
+      "bytes": 188
+    },
+    {
+      "path": "stability/backpressure.json",
+      "sha256": "b2fd434218c60dc86fe0e0a3670dd8740e9aeaf33b682311710ded574b7af646",
+      "bytes": 298
+    },
+    {
+      "path": "stability/boundary.json",
+      "sha256": "a3bd66de25f0b10d8fed8911785622c960b5d96e719d3bc7c6ae3f1b6f4b3c1f",
+      "bytes": 277
+    },
+    {
+      "path": "stability/regression.json",
+      "sha256": "a2c300ede335902c8c344d086b5a2e0e320c914a63e234d8a29af3d037589ea3",
+      "bytes": 288
+    },
+    {
+      "path": "stability/stress.json",
+      "sha256": "85cae55af8495e4c804a93b3c959bb9b3961326bfd09ff3ba778f485e80b31ec",
+      "bytes": 288
+    },
+    {
+      "path": "synth-meta.json",
+      "sha256": "6b19d98e5a55b208f62fcf41091480a0cdb2f19a8dab940bf083e5ed82ed5952",
+      "bytes": 96
+    },
+    {
+      "path": "timing-summary.rpt",
+      "sha256": "43c8975fbff7b55962c39e3445a907b1defa57bf0175e7d7ff11489ff7ae8f48",
+      "bytes": 17160
+    },
+    {
+      "path": "utilization.rpt",
+      "sha256": "6bc6a3514298eac2c7c855156f12184f4eeaf47ff80e230e116dc9114ba98c9d",
+      "bytes": 7974
+    }
+  ],
+  "gate_summary": {
+    "asset_uid": "pulse_merge",
+    "name": "pulse_merge",
+    "declared_level": "certified",
+    "cleared_level": "certified",
+    "blocking_at": null,
+    "gate_count": 21,
+    "generated_by": "gate-runner.cjs v1.1",
+    "redline_contract": "reset-signal-scoped",
+    "gates": [
+      {
+        "id": "CS-1",
+        "level": "intake",
+        "must": true,
+        "status": "pass",
+        "severity": "high"
+      },
+      {
+        "id": "CS-2",
+        "level": "intake",
+        "must": true,
+        "status": "pass",
+        "severity": "high"
+      },
+      {
+        "id": "G-A-00",
+        "level": "intake",
+        "must": true,
+        "status": "pass",
+        "severity": "high"
+      },
+      {
+        "id": "G-A-02",
+        "level": "intake",
+        "must": true,
+        "status": "pass",
+        "severity": "high"
+      },
+      {
+        "id": "G-A-01",
+        "level": "qualification",
+        "must": true,
+        "status": "pass",
+        "severity": "high"
+      },
+      {
+        "id": "RL-OUT",
+        "level": "qualification",
+        "must": true,
+        "status": "pass",
+        "severity": "high"
+      },
+      {
+        "id": "G-C-03",
+        "level": "qualification",
+        "must": true,
+        "status": "pass",
+        "severity": "high"
+      },
+      {
+        "id": "G-A-04",
+        "level": "qualification",
+        "must": true,
+        "status": "pass",
+        "severity": "mid"
+      },
+      {
+        "id": "G-DOC-03",
+        "level": "qualification",
+        "must": true,
+        "status": "pass",
+        "severity": "mid"
+      },
+      {
+        "id": "G-DOC-04",
+        "level": "qualification",
+        "must": true,
+        "status": "pass",
+        "severity": "mid"
+      },
+      {
+        "id": "G-DOC-01",
+        "level": "intake",
+        "must": true,
+        "status": "pass",
+        "severity": "warning"
+      },
+      {
+        "id": "G-B-01",
+        "level": "intake",
+        "must": true,
+        "status": "pass",
+        "severity": "mid"
+      },
+      {
+        "id": "G-B-02",
+        "level": "qualification",
+        "must": true,
+        "status": "pass",
+        "severity": "high"
+      },
+      {
+        "id": "G-B-03",
+        "level": "certified",
+        "must": true,
+        "status": "pass",
+        "severity": "high"
+      },
+      {
+        "id": "G-C-01",
+        "level": "certified",
+        "must": true,
+        "status": "pass",
+        "severity": "high"
+      },
+      {
+        "id": "G-C-02",
+        "level": "certified",
+        "must": true,
+        "status": "pass",
+        "severity": "high"
+      },
+      {
+        "id": "G-C-04",
+        "level": "certified",
+        "must": true,
+        "status": "pass",
+        "severity": "high"
+      },
+      {
+        "id": "G-C-05",
+        "level": "certified",
+        "must": true,
+        "status": "pass",
+        "severity": "high"
+      },
+      {
+        "id": "G-GATE-01",
+        "level": "certified",
+        "must": true,
+        "status": "pass",
+        "severity": "high"
+      },
+      {
+        "id": "G-GATE-02",
+        "level": "certified",
+        "must": true,
+        "status": "pass",
+        "severity": "high"
+      },
+      {
+        "id": "G-SIGN-01",
+        "level": "certified",
+        "must": true,
+        "status": "pass",
+        "severity": "high"
+      }
+    ]
+  }
+}

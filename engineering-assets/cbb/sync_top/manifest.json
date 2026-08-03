@@ -1,0 +1,220 @@
+{
+  "schema_version": "1.0",
+  "asset_uid": "sync_top",
+  "name": "ofdm_sync_top",
+  "version": "1.0.2",
+  "owner": "lihan",
+  "maturity": {
+    "level": "certified",
+    "evidence_ref": "engineering-assets/evidence/sync_top/1.0.2/"
+  },
+  "signoff": {
+    "by": "lihan",
+    "at": "2026-08-01",
+    "scope": [
+      "证据已复核: alignment-report.json(bit-true cosim 2226 样点 0 失配, 位真镜像 0 容差, fft_start 对齐镜像 n_fine=242=真值, T1 符号量化表逐位核对) / reset-sim.json(帧中再复位 27 个复位控制寄存器逐一比对) / stability 四子结果(boundary/stress/regression/backpressure) / timing-summary.rpt / utilization.rpt / envelope-check.json (WNS +4.962ns @ 100MHz; LUT 6705/8000, FF 4669/5500, BRAM 1.5/3, DSP 16/20) / cdc-report.json(单时钟域结构扫描, cdc_tool=na)",
+      "正确性锚: golden model_comm_synch 1.1.0 (run_all_tests 5/5, ADR-003 因果化位真镜像)",
+      "已接受限制: 无反压契约 (m_axis_tready 忽略, 稳态须恒高; 弹性由下游 axis_skid_buffer 承接)",
+      "已接受限制: 因果校正常数相位偏置留给下游信道估计吸收; 直通段 ≈恒等 ±8 LSB (θ=0 流水量化)",
+      "已接受限制: 单突发语义 (locked 保持到复位); m_axis 固定延迟 384 拍, 流前 384 样点无输出",
+      "已接受限制: T1 前段部分未校正 (因果结构性), T2 防错锁后继判别兜底; 验收包络 AWGN SNR>=10dB 量级, |ε|<=0.5",
+      "已接受限制: 符号量化相关器峰旁比 ~3.5; 粗 CFO 反演范围 |ε|<2; 精 CFO 不在 RTL 范围; UVM 断链 (判卷不依赖)"
+    ]
+  },
+  "requirement_ref": "engineering-assets/knowledge/primary/domains/comm/synch/algorithm_spec.md",
+  "doc_refs": [
+    "engineering-assets/knowledge/primary/domains/comm/synch/fixed_point_report.md",
+    "engineering-assets/knowledge/primary/domains/comm/synch/report_sync_fpga_implementation.md",
+    "engineering-assets/knowledge/primary/domains/comm/synch/resource_estimate.md",
+    "engineering-assets/docs/governance/adr/ADR-003-sync-top-causal-contract.md"
+  ],
+  "golden_model_ref": "model_comm_synch",
+  "fidelity": {
+    "status": "bit_true"
+  },
+  "device": {
+    "part": "xc7k325tffg900-2"
+  },
+  "ports": [
+    {
+      "name": "i_clk",
+      "direction": "input",
+      "width": 1
+    },
+    {
+      "name": "i_rst",
+      "direction": "input",
+      "width": 1
+    },
+    {
+      "name": "s_axis_tvalid",
+      "direction": "input",
+      "width": 1,
+      "bus": "axi-stream"
+    },
+    {
+      "name": "s_axis_tready",
+      "direction": "output",
+      "width": 1,
+      "bus": "axi-stream"
+    },
+    {
+      "name": "s_axis_tdata",
+      "direction": "input",
+      "width": 32,
+      "bus": "axi-stream"
+    },
+    {
+      "name": "m_axis_tvalid",
+      "direction": "output",
+      "width": 1,
+      "bus": "axi-stream"
+    },
+    {
+      "name": "m_axis_tready",
+      "direction": "input",
+      "width": 1,
+      "bus": "axi-stream"
+    },
+    {
+      "name": "m_axis_tdata",
+      "direction": "output",
+      "width": 32,
+      "bus": "axi-stream"
+    },
+    {
+      "name": "o_fft_start",
+      "direction": "output",
+      "width": 1
+    },
+    {
+      "name": "o_sync_locked",
+      "direction": "output",
+      "width": 1
+    }
+  ],
+  "clock": {
+    "name": "i_clk",
+    "period_ns": 10
+  },
+  "reset": {
+    "name": "i_rst",
+    "polarity": "active_high",
+    "type": "sync",
+    "async_release_synchronized": true
+  },
+  "constraints": {
+    "target": {
+      "fmax": "100MHz",
+      "fmax_mhz": 100,
+      "latency": 384,
+      "lut": 8000,
+      "ff": 5500,
+      "bram": 3,
+      "dsp": 20
+    }
+  },
+  "sources": [
+    {
+      "path": "rtl/sync_top.sv",
+      "role": "rtl",
+      "sha256": "7f817e1eacf77349421880dbd5905d03ea8c1fd4e6b55e491825263d98ecff0b"
+    },
+    {
+      "path": "rtl/sync_detect.sv",
+      "role": "rtl",
+      "sha256": "986389573858549920d490efc8de5a6596eb81b19feae3a705a11d55b933790a"
+    },
+    {
+      "path": "rtl/sync_track_out.sv",
+      "role": "rtl",
+      "sha256": "67adc9def8e44523a2cf856774e9011376f6fc53163c299d45228c54e230418e"
+    },
+    {
+      "path": "rtl/sync_correlator.sv",
+      "role": "rtl",
+      "sha256": "8860cc7a92ae03c7ef8b8e56fa5f1ea3acab42160e879692beca55a4f93145da"
+    },
+    {
+      "path": "rtl/cordic_rot_pipe.sv",
+      "role": "rtl",
+      "sha256": "7ac51d57edd8b242b64ec33428a052af211f4effcd6069ae6baa81099d1b744b"
+    },
+    {
+      "path": "rtl/cordic_cv.sv",
+      "role": "rtl",
+      "sha256": "caffe4d47fb0179c063248890490846f5fad22f31584af4c16b2ac82338f187c"
+    },
+    {
+      "path": "constraints/sync_top.xdc",
+      "role": "constraint",
+      "sha256": "61948d5115699b2c8f85e97d901399eb8e301cec2ec93798c01c9992f1e47aea"
+    },
+    {
+      "path": "tb/tb_sync_top.sv",
+      "role": "tb",
+      "sha256": "fa758714aa8758e715f4413083404a563c7b189e23da9baec040376221087d85"
+    },
+    {
+      "path": "tb/tb_sync_cosim.sv",
+      "role": "tb",
+      "sha256": "221a84a5fcd4b2bca60458117cf808ed9a7596f289883d1e35b5798f8889c7e3"
+    },
+    {
+      "path": "tb/uvm/sync_uvm_pkg.sv",
+      "role": "tb",
+      "sha256": "81ef9f981c9bdb76d3d74be607d5132bba30ff36c837f5273e640ced8e727766"
+    },
+    {
+      "path": "tb/uvm/sync_sequences.sv",
+      "role": "tb",
+      "sha256": "070c16835bb8cf875edc6da812b2e029993a5617583127133ed0199c7af95528"
+    },
+    {
+      "path": "tb/uvm/sync_scoreboard.sv",
+      "role": "tb",
+      "sha256": "03334bc3856627970877c0a57e919b7f48dc9f45d02277f3f57fd16e7347450f"
+    },
+    {
+      "path": "tb/uvm/sync_base_test.sv",
+      "role": "tb",
+      "sha256": "0d81eb94217017b16675bb486e3605dc977a5698e7fb4162131550d6888445d9"
+    },
+    {
+      "path": "tb/uvm/sync_basic_test.sv",
+      "role": "tb",
+      "sha256": "ec7a6546ce4e289f9ab30f0eda7375539631bbed9d244ad84e21ebb2a5cc44e2"
+    },
+    {
+      "path": "tb/uvm/tb_sync_uvm_top.sv",
+      "role": "tb",
+      "sha256": "cd7c368a6d2465ee88aee9ad678275a2a85efdd72c63a5bf642bd69c18042166"
+    }
+  ],
+  "waivers": [],
+  "superseded_by": null,
+  "top": "sync_top",
+  "params": [
+    {
+      "name": "DATA_W",
+      "value": 16,
+      "rationale": "RTL 顶层参数默认值; I/Q 样点位宽 (Q2.14)"
+    },
+    {
+      "name": "P_DLY",
+      "value": 384,
+      "rationale": "对齐延迟线深度 (设计常量): m_axis 相对 s_axis 固定延迟, 覆盖精定时峰值确认最大滞后, 使 o_fft_start 与 T1 首样点同拍 (ADR-003)"
+    },
+    {
+      "name": "P_EST_GAP",
+      "value": 40,
+      "rationale": "设计常量: corr_start = plat_end_idx + 40 (拍域确定, 保证 CORDIC 求角完成; 位真镜像同式)"
+    }
+  ],
+  "reproduce": {
+    "sim": "bash cbb/sync_top/run_xsim.sh --install",
+    "synth": "node tools/pg-synth.cjs cbb/sync_top",
+    "gate": "node tools/gate-runner.cjs cbb/sync_top --repo-root ..",
+    "note": "2026-08-02 xsim 复跑: 6 份证据内容一致(仅 tool 字段不同), reset-sim 逐字节相同。"
+  }
+}

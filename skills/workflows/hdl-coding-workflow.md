@@ -4,7 +4,7 @@ description: RTL 开发全流程 — 系统方案→微架构→定点量化→T
 version: 3.7.0
 executable: workflows/hdl-coding-dag-workflow.js
 agents: [algorithm-engineer, logic-engineer, ce-correctness-reviewer, ce-api-contract-reviewer, ce-architecture-strategist, ce-performance-oracle]
-phases: 12
+phases: 13
 triggers:
   - new algorithm module
   - new RTL module
@@ -47,6 +47,7 @@ triggers:
 | **2** 定点量化 | algorithm-engineer | 位宽扫描 + bit-true 定点模型 + DSP/LUT/BRAM 预算表 | 资源在预算内 |
 | **3** TB+向量生成 | logic-engineer (TB) ∥ algorithm-engineer (向量) | 自检 TB + SVA + MATLAB golden 向量 (GM 先自检) | TB 编译通过 |
 | **4** 逐模块RTL+脚本化对比 | logic-engineer (编码/仿真/调试) + ce-correctness-reviewer (独立裁决/终验) | 每模块: RTL → 仿真 → 证据门禁单模块校验 → (FAIL 时 Debugger↔Reviewer 双视角循环, 封顶 5 次) | 每模块 gate_ok + compared_points>0 |
+| **4.4** 层次回查 | 调度层（`engine/scripts/module-order.cjs`） | RTL 落盘后重建代码图，用真实例化层次核对 `moduleOrder`：父模块不得排在它例化的子模块之前 | 无矛盾；有矛盾则自动纠正顺序并告警（Phase 4 的 cascade 结论需人工复核） |
 | **4.5** 证据门禁 | hdl-evidence-gate.cjs (确定性) + ce-correctness-reviewer (高安全模块对抗) | 脚本校验全部模块 JSON 证据；高安全模块追加对抗 agent 读 RTL+golden 找差异 | 全部 PASS → **CP: evidence-review** |
 | **5** 顶层集成+全链仿真 | logic-engineer (集成/修复) + ce-api-contract-reviewer / ce-architecture-strategist / ce-performance-oracle (三路只读分析) | 4 路发散 (接口/数据通路/Golden/时序) → 合成 → 定向修复 | 全链各中间级与 golden 一致 |
 | **6** 回归覆盖率 | logic-engineer | make regress 全量回归 + covergroup 100% | regress 全绿 |

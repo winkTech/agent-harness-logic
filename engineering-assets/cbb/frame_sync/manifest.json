@@ -1,0 +1,133 @@
+{
+  "schema_version": "1.0",
+  "asset_uid": "frame_sync",
+  "name": "frame_sync",
+  "version": "1.0.1",
+  "signoff": {
+    "by": "lihan",
+    "at": "2026-08-01",
+    "scope": [
+      "证据已复核: tb-selfcheck.json (124 帧 2476 字节比对 0 失配; 参考为 TB 侧按场景构造的已知期望帧序列, 期望即驱动原文; 另含 sof/eof 时序断言 —— 帧内不得再现 sof、sof 之前不得出现数据拍、无帧上下文不得出 eof) / reset-sim.json (帧中再复位, 9 个寄存器逐一比对 0 失配, 含 r_cur_state 复位值 P_ST_IDLE=3'b001) / stability 四子结果 (regression 322 字节 / boundary 18 / stress 2136 / backpressure 2476) / timing-summary.rpt / utilization.rpt / envelope-check.json (WNS +2.403ns @250MHz 即达成约 626MHz; LUT 19/60, FF 27/40, BRAM 0/0, DSP 0/0) / cdc-report.json (单时钟域结构扫描, cdc_tool=na)",
+      "资源核对: FF 实测 27 与结构推算 27 完全吻合 (ri_ 9 + 状态 3 one-hot + 前导计数 3 + ro_ 12); LUT 19 在 60 预算内, 为 FSM 次态与输出译码",
+      "拒帧能力已专项取证: 过短前导 (MIN_PRE-1 个 0x55 + SFD) 不得成帧、前导中掉载波不得成帧、假前导后同一载波内须能重新锁定 —— 三类均以「不得多出帧」判定。这正是原模板的致命缺陷所在 (r_preamble_cnt 是死寄存器, 单个 0x55+0xD5 即成帧, 抗噪为零)",
+      "已接受限制: **i_valid 是载波有效 (如 GMII rx_dv) 而非可气泡的流 valid** —— 帧内必须连续, 拉低即帧尾; 需要气泡语义的集成方必须在上游先做流适配。这是接口语义而非缺陷, 误用会把气泡当帧尾",
+      "已接受限制: **FCS 不剥除** —— 定界器不做 store-and-forward; 需要剥 FCS 可组合 delay_line + crc32 实现。前导/SFD 被剥除, 不出现在输出流",
+      "已接受限制: 零长帧 (SFD 后立即掉载波) 只出 eof 不出 sof —— 退化情形, 已文档化; 下游需按此约定处理",
+      "已接受限制: 无 ready 反压接口 (输入为载波流, 输出定长 2 拍延迟); G-C-05 的 backpressure 子结果按「帧间载波间隙 0..4 拍随机变化下帧定界结果不变」的等价判据取证",
+      "已接受限制: 综合与预算按 P_MIN_PREAMBLE=2 评估; 更大阈值会加宽前导计数器与比较逻辑, 需重新评估",
+      "工具说明: 本版全部仿真证据由 Vivado xsim 2023.1 产出 (本机 ModelSim 回环 RPC 故障); vlog 编译不受影响, G-A-00 仍由 ModelSim 判读"
+    ]
+  },
+  "owner": "lihan",
+  "kind": "primitive",
+  "maturity": {
+    "level": "certified",
+    "evidence_ref": "engineering-assets/evidence/frame_sync/1.0.1/"
+  },
+  "requirement_ref": "engineering-assets/docs/CBB候选台账-hdl-coding-templates.md",
+  "doc_refs": [
+    "engineering-assets/docs/governance/CBB-治理与生产级准入规范-V1.0.md"
+  ],
+  "fidelity": {
+    "status": "na"
+  },
+  "top": "frame_sync",
+  "ports": [
+    {
+      "name": "i_clk",
+      "direction": "input",
+      "width": 1
+    },
+    {
+      "name": "i_rst",
+      "direction": "input",
+      "width": 1
+    },
+    {
+      "name": "i_valid",
+      "direction": "input",
+      "width": 1
+    },
+    {
+      "name": "i_data",
+      "direction": "input",
+      "width": 8
+    },
+    {
+      "name": "o_valid",
+      "direction": "output",
+      "width": 1
+    },
+    {
+      "name": "o_data",
+      "direction": "output",
+      "width": 8
+    },
+    {
+      "name": "o_sof",
+      "direction": "output",
+      "width": 1
+    },
+    {
+      "name": "o_eof",
+      "direction": "output",
+      "width": 1
+    }
+  ],
+  "clock": {
+    "name": "i_clk"
+  },
+  "reset": {
+    "name": "i_rst",
+    "polarity": "active_high",
+    "type": "sync"
+  },
+  "device": {
+    "part": "xc7k325tffg900-2",
+    "family": "kintex7",
+    "note": "与库内其余 CBB 统一器件; OOC 评估"
+  },
+  "params": [
+    {
+      "name": "P_MIN_PREAMBLE",
+      "value": 2,
+      "rationale": "SFD 前最少 0x55 字节数 (>=1); 该阈值决定抗噪能力 —— 原模板此计数为死寄存器, 单个 0x55+0xD5 即成帧, 抗噪为零"
+    }
+  ],
+  "constraints": {
+    "target": {
+      "fmax": "250MHz",
+      "fmax_mhz": 250,
+      "lut": 60,
+      "ff": 40,
+      "bram": 0,
+      "dsp": 0,
+      "note_budget": "结构推算 (P_MIN_PREAMBLE=2): FF = ri_valid 1 + ri_data 8 + r_cur_state 3 (one-hot) + r_pre_cnt 3 + ro_valid/sof/eof 3 + ro_data 8 + r_sof_pend 1 = 27, 取 40。LUT 为 FSM 次态 (状态 + 两个 8 位字节比较 + 前导计数比较) 与输出译码, 取 60。无存储与乘法故 BRAM/DSP 恒 0。实测见 envelope-check.json。"
+    }
+  },
+  "sources": [
+    {
+      "path": "rtl/frame_sync.sv",
+      "role": "rtl",
+      "sha256": "233c3a91742bb1a4695225ff6f78e0fd614f5561fb08610087af26f3cb53939f"
+    },
+    {
+      "path": "constraints/frame_sync.xdc",
+      "role": "constraint",
+      "sha256": "6f451596c51f35b8d355b0dcde9641732523bd5cb43795b93e678b794a5ac9f2"
+    },
+    {
+      "path": "tb/tb_frame_sync.sv",
+      "role": "tb",
+      "sha256": "94b595c6bca7d2de42e7beec7ac9273c2155edba2586c6232bc6cd2c2fb7d5bd"
+    }
+  ],
+  "waivers": [],
+  "superseded_by": null,
+  "reproduce": {
+    "sim": "bash tools/run-primitive-sim.sh frame_sync --install",
+    "synth": "node tools/pg-synth.cjs cbb/frame_sync",
+    "gate": "node tools/gate-runner.cjs cbb/frame_sync --repo-root ..",
+    "note": "2026-08-02 用该命令复跑, 6 份证据与 certified 时的记录逐字节相同。"
+  }
+}

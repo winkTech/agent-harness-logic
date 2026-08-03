@@ -20,10 +20,30 @@
         "if": { "properties": { "maturity": { "properties": { "level": { "const": "reference" } }, "required": ["level"] } }, "required": ["maturity"] },
         "then": { "required": ["provenance", "banner"] },
         "else": {
-          "required": [
-            "version", "requirement_ref", "doc_refs", "golden_model_ref",
-            "fidelity", "ports", "clock", "reset", "constraints", "sources", "top"
-          ]
+          "if": { "properties": { "maturity": { "properties": { "level": { "const": "intake" } }, "required": ["level"] } }, "required": ["maturity"] },
+          "then": {
+            "comment": "intake 准入 = schema-valid + 编译干净 + 锚链起点（规范 §3.1 L152-153; f9d123b 原有, 272899f 曾误删）。golden 绑定与资源包络是晋级门, 不是 intake 的形状要求。",
+            "required": [
+              "version", "requirement_ref", "doc_refs",
+              "ports", "clock", "reset", "sources"
+            ]
+          },
+          "else": {
+          "if": { "properties": { "kind": { "const": "primitive" } }, "required": ["kind"] },
+          "then": {
+            "comment": "结构原语 (owner 裁决 2026-07-27, 决策⑦, 272899f 曾误删本分支): golden model 锚的是算法, 不是所有模块。RAM/skid buffer/延迟线/CDC/LFSR 这类结构原语的正确性锚 = 自检 TB (G-B-02/03 按类分锚), 任何成熟度级别都不要求 golden_model_ref/fidelity 对标字段。",
+            "required": [
+              "version", "requirement_ref", "doc_refs",
+              "ports", "clock", "reset", "sources"
+            ]
+          },
+          "else": {
+            "required": [
+              "version", "requirement_ref", "doc_refs", "golden_model_ref",
+              "fidelity", "ports", "clock", "reset", "constraints", "sources", "top"
+            ]
+          }
+          }
         }
       }
     },
@@ -100,7 +120,7 @@
       "additionalProperties": false,
       "required": ["status"],
       "properties": {
-        "status": { "type": "string", "enum": ["bit_true", "tolerance", "pending"] },
+        "status": { "type": "string", "enum": ["bit_true", "tolerance", "pending", "na"], "description": "na 仅限 kind=primitive: 结构原语无 golden 对标概念, 正确性由自检 TB 承担 (决策⑦)" },
         "bit_accurate_against": { "type": "string" },
         "tolerance": {
           "type": "object",
@@ -146,6 +166,39 @@
       "properties": {
         "name": { "type": "string" },
         "period_ns": { "type": "number", "minimum": 0.1 }
+      }
+    },
+    "clocks": {
+      "type": "array",
+      "minItems": 2,
+      "description": "多时钟域资产（如 CDC 原语）的全部时钟。单数 clock 字段仍必填并指主域（约定：数据消费侧/dst 域），本数组补全其余域。单时钟资产不得使用本字段。(f9d123b 原有, 272899f 曾误删)",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["name", "domain"],
+        "properties": {
+          "name": { "type": "string" },
+          "domain": { "type": "string", "description": "域角色标注, 如 src/dst" },
+          "period_ns": { "type": "number", "minimum": 0.1 },
+          "relationship": { "type": "string", "enum": ["asynchronous", "synchronous", "mesochronous"] }
+        }
+      }
+    },
+    "resets": {
+      "type": "array",
+      "minItems": 2,
+      "description": "多时钟域资产的全部复位, 与 clocks 配套。单数 reset 字段仍必填并指主域。(f9d123b 原有, 272899f 曾误删)",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["name", "domain", "polarity", "type"],
+        "properties": {
+          "name": { "type": "string" },
+          "domain": { "type": "string" },
+          "polarity": { "type": "string", "enum": ["active_high", "active_low"] },
+          "type": { "type": "string", "enum": ["sync", "async"] },
+          "async_release_synchronized": { "type": "boolean" }
+        }
       }
     },
     "reset": {
@@ -260,8 +313,8 @@
 
     "kind": {
       "type": "string",
-      "enum": ["rtl", "golden-model", "vendor", "knowledge"],
-      "description": "资产域（规范 §1 三个锚 + vendored）。缺省视为 rtl，保持既有 CBB 包向后兼容。"
+      "enum": ["rtl", "primitive", "golden-model", "vendor", "knowledge"],
+      "description": "资产域（规范 §1 三个锚 + vendored）。缺省视为 rtl，保持既有 CBB 包向后兼容。primitive = 结构原语 (RAM/skid buffer/延迟线/CDC/LFSR 等)：正确性锚 = 自检 TB，不要求 golden model（owner 裁决 2026-07-27 决策⑦；272899f 曾误删）。"
     },
     "implements_for": {
       "type": "array", "items": { "type": "string" },
@@ -294,7 +347,22 @@
         "license": { "type": "string" },
         "retrieved": { "type": "string" },
         "retrieved_basis": { "type": "string" },
-        "commit": { "type": ["string", "null"] }
+        "commit": { "type": ["string", "null"] },
+        "commit_basis": {
+          "type": "string",
+          "description": "commit 的确证依据，与 source_basis / retrieved_basis 同一约定：写清是怎么确定的，而不是只给结论。归档若无 .git，commit 仍可由内容比对反查（git blob SHA 是内容的函数），此时应写明比对了多少路径、blob 命中与未解释差异各多少、以及相邻 commit 为何被排除。"
+        }
+      }
+    },
+    "reproduce": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "证据的复现入口。G-GATE-01 只查证据文件在不在, G-GATE-02 查它能不能被重做 —— 复现方式必须是声明出来的契约, 而不是 README 里的散文(散文会漂移, 且门禁看不见)。命令里引用的脚本须在仓库中真实存在。",
+      "properties": {
+        "sim": { "type": "string", "description": "仿真证据的复现命令 (certified 级必需)" },
+        "synth": { "type": "string", "description": "综合证据的复现命令" },
+        "gate": { "type": "string", "description": "门禁判定的复现命令" },
+        "note": { "type": "string", "description": "复现的前置条件或已知限制 (如某条通路当前不可用)" }
       }
     },
     "banner": { "type": "string", "description": "reference 级必需的“未认证”横幅文本" },

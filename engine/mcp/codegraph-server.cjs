@@ -28,7 +28,9 @@
 'use strict';
 
 const path = require('node:path');
-const { resolveProject, searchNodes, getNode, getCallers, getCallees, getSubgraphByNames } = require('../scripts/cg-queries.cjs');
+const {
+  resolveProject, searchNodes, getNode, getCallers, getCallees, getSubgraphByNames, getBlastRadius,
+} = require('../scripts/cg-queries.cjs');
 
 // ── 工具定义 ────────────────────────────────────────────────────────────────
 
@@ -188,6 +190,38 @@ HDL 场景：找出某模块内部实例化了哪些子模块。`,
       required: ['symbol'],
     },
   },
+  {
+    name: 'harness_cg_blast_radius',
+    description: `改动影响面: 给定一个模块/函数/文件, 返回受影响的下游符号、因此失效的证据、
+需要重跑的门禁、相关的需求与既往经验。
+
+用在动手改之前 (评估波及范围) 与改完之后 (决定重验清单)。
+索引不新鲜时返回 staleIndex 而不给结果 —— 拿过期的图算影响面比不算更危险。`,
+    inputSchema: {
+      type: 'object',
+      properties: {
+        target: {
+          type: 'string',
+          description: '模块名/函数名/相对文件路径',
+        },
+        depth: {
+          type: 'number',
+          description: '反向依赖遍历深度 (默认: 3, 最大: 5)',
+          default: 3,
+        },
+        limit: {
+          type: 'number',
+          description: '最大下游结果数 (默认: 40)',
+          default: 40,
+        },
+        projectPath: {
+          type: 'string',
+          description: '项目根路径',
+        },
+      },
+      required: ['target'],
+    },
+  },
 ];
 
 // ── 工具处理程序 ─────────────────────────────────────────────────────────────
@@ -259,6 +293,16 @@ function handleToolCall(name, args) {
         limit: Math.min(args?.limit || 20, 100),
       });
       return formatCallersCalleesResult(result, 'callees');
+    }
+
+    case 'harness_cg_blast_radius': {
+      const target = (args?.target || '').trim();
+      if (!target) return { isError: true, content: [{ type: 'text', text: '需要提供 target' }] };
+      const result = getBlastRadius(projectId, target, {
+        depth: Math.min(args?.depth || 3, 5),
+        limit: Math.min(args?.limit || 40, 100),
+      });
+      return formatBlastRadiusResult(result, target);
     }
 
     default:
@@ -405,6 +449,57 @@ function formatCallersCalleesResult(result, direction) {
     lines.push('\n无直接关系。');
   }
 
+  return { content: [{ type: 'text', text: lines.join('\n') }] };
+}
+
+function formatBlastRadiusResult(result, target) {
+  if (result.staleIndex) {
+    return {
+      content: [{
+        type: 'text',
+        text: `## 影响面: 索引不可信 (${result.staleReason})\n\n`
+          + '拿过期的图算影响面比不算更危险, 因此不返回结果。\n'
+          + '先重建索引: `node engine/scripts/code-graph-index.cjs sync <项目路径>`',
+      }],
+    };
+  }
+  if (!result.target) {
+    return { content: [{ type: 'text', text: `未在代码图中找到 "${target}"。试试 harness_cg_search。` }] };
+  }
+
+  const lines = [`## 改动影响面: ${result.target.name || target}`];
+  lines.push(`**${result.target.kind}** → ${result.target.file || '(未知文件)'}`);
+
+  lines.push(`\n### 下游受影响符号 (${result.downstream.length})`);
+  if (result.downstream.length === 0) lines.push('- 无 (没有其他符号依赖它)');
+  for (const item of result.downstream.slice(0, 20)) {
+    lines.push(`- L${item.depth} ${item.kind} \`${item.name}\` → ${item.file}:${item.line}`);
+  }
+
+  lines.push(`\n### 因此失效的证据 (${result.staleEvidence.length})`);
+  if (result.staleEvidence.length === 0) lines.push('- 无已登记证据指向这些文件');
+  for (const item of result.staleEvidence.slice(0, 10)) {
+    lines.push(`- \`${item.evidenceSha}\` ${item.command || '(无命令记录)'} → ${item.target}`);
+  }
+
+  if (result.gatesToRerun.length > 0) {
+    lines.push(`\n### 需要重跑的门禁 (${result.gatesToRerun.length})`);
+    for (const gate of result.gatesToRerun) lines.push(`- ${gate}`);
+  }
+  if (result.requirements.length > 0) {
+    lines.push(`\n### 相关需求 (${result.requirements.length})`);
+    for (const item of result.requirements.slice(0, 5)) {
+      lines.push(`- ${item.requirement} → ${item.target}`);
+    }
+  }
+  if (result.relatedFacts.length > 0) {
+    lines.push(`\n### 相关既往经验 (${result.relatedFacts.length}, 低置信度提示)`);
+    for (const item of result.relatedFacts.slice(0, 5)) {
+      lines.push(`- fact:${item.factId} (confidence=${item.confidence})`);
+    }
+  }
+
+  lines.push(`\n受影响文件 (${result.files.length}): ${result.files.slice(0, 12).join(', ')}`);
   return { content: [{ type: 'text', text: lines.join('\n') }] };
 }
 

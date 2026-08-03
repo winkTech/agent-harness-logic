@@ -100,8 +100,12 @@ function main() {
       assert.ok(!scope.files.some((f) => f.includes('git')), 'shell commands must not count as scope');
 
       // ── 4. 对账: 有 delivery 信号时按信号判定 ──
-      delivery.recordDelivery({ workflow: 'verification-gate', phase: 'verification', status: 'pass' }, { db });
-      delivery.recordDelivery({ workflow: 'verification-gate', phase: 'verification', status: 'pass' }, { db });
+      // 时间戳必须显式给。默认走 datetime('now'), 于是"未来 windowStart 排除一切行"
+      // 这个前提会在真实时间跨过该点的当天失效 —— 3b 的 inconclusive 断言 2026-08-02
+      // 就是这么从内部塌掉的, 而 plan-accuracy.cjs 一行没错。
+      const DELIVERED_AT = NOW - 12 * 3600_000;   // 落在 windowStart(NOW-DAY) 之内
+      delivery.recordDelivery({ workflow: 'verification-gate', phase: 'verification', status: 'pass', timestamp: DELIVERED_AT }, { db });
+      delivery.recordDelivery({ workflow: 'verification-gate', phase: 'verification', status: 'pass', timestamp: DELIVERED_AT }, { db });
       const onPlan = planAccuracy.reconcile(snapshot, {
         db, sessionId, now: NOW + DAY, windowStart: NOW - DAY, actualScope: { count: 4, available: true, source: 'test' },
       });

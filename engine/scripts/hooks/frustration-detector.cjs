@@ -29,6 +29,15 @@ const FAILURE_EVIDENCE_TTL_MS = 60 * 60 * 1000;
 const MODES = ['根因分析', '第一性原理', '减法', '搜索优先', '倒推', '证据驱动', '闭环'];
 
 // ── 挫败关键词（中英双语） ──────────────────────────────────────────────
+//
+// 这里只收**用户表达不满**的措辞, 不收技术词汇。
+//
+// 曾经收过 /timeout/i、/failed/i、/exit code \d+/i、/non-zero exit/i, 后果是:
+// 用户只要在提示词里提到 "timeout" 就被记一次失败 —— 实测 runtime-state 的
+// failureHistory 里连续三条 trigger 都是 "timeout", 而那段时间没有任何工具失败,
+// 于是每条后续提示都被注入"已连续失败 3 次, 强制切换到根因分析"。
+// 真实的工具失败证据来自 runtime_events 的 tool_fail (见 realFailureStreak),
+// 不需要也不应该靠在自然语言里猜技术词。
 const FRUSTRATION_PATTERNS = [
   // 中文
   /不对/i, /又错/i, /还是不行/i, /再试试/i, /换一种/i, /卡住/i, /绕圈/i,
@@ -36,10 +45,13 @@ const FRUSTRATION_PATTERNS = [
   /不对呀/i, /还没好/i, /不行啊/i,
   // English
   /not working/i, /still broken/i, /wrong/i, /try again/i, /nope/i,
-  /doesn't work/i, /failed/i, /stuck/i, /useless/i, /same error/i,
-  // Mixed (tool failure signals)
-  /exit code \d+/i, /non-zero exit/i, /timeout/i,
+  /doesn't work/i, /stuck/i, /useless/i, /same error/i,
 ];
+
+/** 真实失败流的回看窗口: 超过此时长的 tool_fail 不再构成"连续失败"。 */
+const FAILURE_STREAK_WINDOW_MS = 30 * 60 * 1000;
+/** 同一失败指纹重复到该次数即触发换方法 (对应 CLAUDE.md 的停止规则)。 */
+const REPEAT_THRESHOLD = 2;
 
 const MODE_SUGGESTIONS = [
   { patterns: [/不对/i, /又错/i, /还是不行/i, /wrong/i, /still broken/i], mode: '根因分析', reason: '检测到结果不符预期，需要 5-Why 追查根因' },
@@ -68,6 +80,9 @@ function shouldThrottleFailureSignal(state, signal, mutateState = updateState) {
       signal.forceModeSwitch ? 'force' : 'suggest',
       signal.deEscalate ? 'deescalate' : 'active',
       current.failureCount || 0,
+      // 指纹进入节流键: 换了一个新的坑就该重新提醒, 不能被上一个坑的节流吞掉
+      signal.streak?.fingerprint || '',
+      signal.streak?.repeats || 0,
     ].join(':');
     const last = current.frustrationDetectorLastSignal || {};
     const lastAt = Date.parse(last.at || '');
@@ -131,7 +146,88 @@ function isFailureEvidenceStale(state, now = Date.now()) {
   return !Number.isFinite(evidenceAt) || now - evidenceAt > FAILURE_EVIDENCE_TTL_MS;
 }
 
-function checkToolFailure(state) {
+/**
+ * 从 runtime_events 的 tool_fail 里算出**真实**失败流。
+ *
+ * 与 state.failureCount 的区别: 这里的每一条都是真的工具失败, 且按共享的失败
+ * 指纹分组 —— "同一个坑重复 N 次"才是换方法的依据, "失败了 N 次但每次都是不同
+ * 的坑"说明在推进, 不该打断。
+ *
+ * @param {object} [opts]
+ * @param {string} [opts.sessionId] — 限定会话; 缺省则不查询 (跨会话计数无意义)
+ * @param {number} [opts.windowMs]
+ * @param {number} [opts.now]
+ * @param {object} [opts.db] — 注入连接 (测试用)
+ * @returns {{ total: number, repeats: number, fingerprint: string|null, family: string|null, tool: string|null }}
+ */
+function realFailureStreak(opts = {}) {
+  const empty = { total: 0, repeats: 0, fingerprint: null, family: null, tool: null };
+  const sessionId = String(opts.sessionId || '').trim();
+  if (!sessionId) return empty;
+
+  const now = opts.now || Date.now();
+  const windowMs = opts.windowMs ?? FAILURE_STREAK_WINDOW_MS;
+  const since = new Date(now - windowMs).toISOString();
+
+  let handle = null;
+  try {
+    let db = opts.db;
+    if (!db) {
+      handle = require('../../sqlite/index.cjs').openDb({ readonly: true });
+      db = handle.db;
+    }
+    const rows = db.prepare(`
+      SELECT payload FROM runtime_events
+      WHERE session_id = ? AND type = 'tool_fail' AND created_at >= ?
+      ORDER BY event_id DESC LIMIT 40
+    `).all(sessionId, since);
+    if (rows.length === 0) return empty;
+
+    const { signature } = require('../lib/failure-signature.cjs');
+    const counts = new Map();
+    let top = null;
+    for (const row of rows) {
+      let payload = {};
+      try { payload = JSON.parse(row.payload); } catch { /* 载荷损坏: 跳过该条 */ }
+      const sig = signature(payload.error || payload.stderr || payload.message, {
+        tool: payload.tool || '',
+      });
+      if (sig.empty) continue;
+      const entry = counts.get(sig.fingerprint) || { count: 0, sig };
+      entry.count++;
+      counts.set(sig.fingerprint, entry);
+      if (!top || entry.count > top.count) top = entry;
+    }
+    if (!top) return { ...empty, total: rows.length };
+    return {
+      total: rows.length,
+      repeats: top.count,
+      fingerprint: top.sig.fingerprint,
+      family: top.sig.family,
+      tool: top.sig.tool || null,
+    };
+  } catch {
+    return empty; // 库不可读时退化为"无真实证据", 不臆造失败
+  } finally {
+    try { handle?.close(); } catch { /* 关闭失败不影响判定 */ }
+  }
+}
+
+function checkToolFailure(state, opts = {}) {
+  // ── 真实失败流优先: 同一指纹重复 ≥2 次 → 按停止规则强制换方法 ────────
+  const streak = opts.streak || realFailureStreak(opts);
+  if (streak.repeats >= REPEAT_THRESHOLD) {
+    const { strategyHint } = require('../lib/failure-signature.cjs');
+    return {
+      mode: '根因分析',
+      reason: `同一失败指纹 ${streak.fingerprint} (${streak.family}${streak.tool ? '/' + streak.tool : ''}) `
+        + `在近期已重复 ${streak.repeats} 次 — ${strategyHint(streak.family, streak.repeats)}`,
+      forceModeSwitch: true,
+      evidence: 'tool_fail-events',
+      streak,
+    };
+  }
+
   if (!state) return null;
 
   // ── 降级检测: 如果最近 5 次工具调用全部成功 → 复位 failureCount ────
@@ -193,7 +289,7 @@ function emitModeSignal(type, payload, deps = {}) {
   }
 }
 
-function evaluateSignal(input, deps = {}) {
+function evaluateSignal(input, deps = {}, context = {}) {
   if (process.env.CLAUDE_BENCH === '1' && deps.allowBench !== true) return null;
   const loadState = deps.readState || readState;
   const mutateState = deps.updateState || updateState;
@@ -218,7 +314,12 @@ function evaluateSignal(input, deps = {}) {
     }
   }
 
-  const failureSignal = checkToolFailure(state);
+  const failureSignal = checkToolFailure(state, {
+    sessionId: context.sessionId,
+    ...(deps.streak ? { streak: deps.streak } : {}),
+    ...(deps.db ? { db: deps.db } : {}),
+    ...(deps.now ? { now: deps.now } : {}),
+  });
   if (failureSignal) {
     if (canPersist && failureSignal.deEscalate) {
       state = mutateState((current) => {
@@ -229,25 +330,32 @@ function evaluateSignal(input, deps = {}) {
     }
     if (canPersist && shouldThrottleFailureSignal(state, failureSignal, mutateState)) return null;
     const isForce = failureSignal.forceModeSwitch === true;
+    const trigger = failureSignal.evidence === 'tool_fail-events'
+      ? 'repeated-failure-signature'
+      : 'failure-count';
+    const count = failureSignal.streak?.repeats ?? state?.failureCount ?? 0;
     emitModeSignal('mode_switch', {
       mode: failureSignal.mode,
-      trigger: 'failure-count',
+      trigger,
       forceModeSwitch: isForce,
       deEscalate: failureSignal.deEscalate || false,
       failureCount: state?.failureCount || 0,
+      ...(failureSignal.streak ? { fingerprint: failureSignal.streak.fingerprint } : {}),
     }, deps);
     return {
       source: 'frustration-detector',
       type: isForce ? 'mode-switch-force' : 'mode-switch-suggest',
       mode: failureSignal.mode,
       reason: failureSignal.reason,
-      trigger: 'failure-count',
-      count: state?.failureCount || 0,
+      trigger,
+      count,
       deEscalate: failureSignal.deEscalate || false,
       forceModeSwitch: isForce,
       suggestReset: failureSignal.suggestReset || false,
       instruction: isForce
-        ? `【强制模式切换】failureCount=${state?.failureCount || 0}。立即切换到 ${failureSignal.mode} 模式。${failureSignal.suggestReset ? '当前 session 上下文可能已污染，建议保存进度后 /compact。' : ''}`
+        ? `【强制模式切换】${failureSignal.streak
+            ? `同一失败重复 ${failureSignal.streak.repeats} 次 (指纹 ${failureSignal.streak.fingerprint})`
+            : `failureCount=${state?.failureCount || 0}`}。立即切换到 ${failureSignal.mode} 模式。${failureSignal.suggestReset ? '当前 session 上下文可能已污染，建议保存进度后 /compact。' : ''}`
         : failureSignal.deEscalate
           ? '【自动降级】检测到连续成功，复位 failureCount 并切回闭环模式。'
           : `【模式切换建议】考虑切换到 ${failureSignal.mode} 模式以适应当前进展。`,
@@ -290,7 +398,9 @@ function evaluateSignal(input, deps = {}) {
 
 function retrieveContext(payload = {}, deps = {}) {
   const input = String(payload.prompt || payload.user_prompt || payload.message || '').slice(0, 2000);
-  const signal = evaluateSignal(input, deps);
+  const signal = evaluateSignal(input, deps, {
+    sessionId: payload.session_id || payload.sessionId || payload.thread_id || '',
+  });
   if (!signal) return null;
   return {
     hookSpecificOutput: {
@@ -328,7 +438,10 @@ if (require.main === module) main();
 module.exports = {
   MODES,
   FAILURE_EVIDENCE_TTL_MS,
+  FAILURE_STREAK_WINDOW_MS,
+  REPEAT_THRESHOLD,
   detect,
+  realFailureStreak,
   checkToolFailure,
   lastFailureEvidenceAt,
   isFailureEvidenceStale,

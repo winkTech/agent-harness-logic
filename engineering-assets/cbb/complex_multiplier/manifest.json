@@ -1,0 +1,147 @@
+{
+  "schema_version": "1.0",
+  "asset_uid": "complex_multiplier",
+  "name": "complex_multiplier",
+  "version": "1.0.1",
+  "signoff": {
+    "by": "lihan",
+    "at": "2026-08-01",
+    "scope": [
+      "证据已复核: tb-selfcheck.json (7357 有效拍逐拍比对 0 失配, 另检 8142 个时钟拍的 o_valid 对齐; 参考为独立 longint 算术按复数乘法定义式 re=ac-bd / im=ad+bc 直算 + 深度 3 期望 valid 流水, 与 RTL 的四乘积分级实现不同源) / reset-sim.json (流中再复位, 13 个流水寄存器逐一比对 0 失配, 无少复位豁免项) / stability 四子结果 (boundary 12 定向极值 / regression 2000 / stress 5000 / backpressure 245) / timing-summary.rpt / utilization.rpt / envelope-check.json (WNS +2.51ns @250MHz 即达成约 671MHz; LUT 0/120, FF 3/200, BRAM 0/0, **DSP 4/4**) / cdc-report.json (单时钟域结构扫描, cdc_tool=na)",
+      "推断核对 (关键): DSP 实测 **4**, 与四乘法直算的结构推算一致 —— 若为 0 即乘法器推断失败, 属缺陷。LUT 0 / FF 3 是 DSP48E1 完美吸收的结果: 输入寄存进 A/B 寄存器、乘积进 M 寄存器、加减输出进后加器与 P 寄存器 (级联), fabric 侧只剩 3 拍 valid 链 (ri_valid/r_valid_m/ro_valid), 与设计意图逐项对应",
+      "已接受限制: **全精度输出不做舍入/饱和** —— 输出 P_A_W+P_B_W+1 位 (16x16 时 33 位), 定标语义交调用方。这是刻意决策, 避免重蹈库内 4 套互不相同定点语义的覆辙; 使用方须自行处理截位与定标",
+      "已接受限制: 无 tready 反压接口, 为定长 3 拍延迟流水; 需要背压时在**输出侧**例化 axis_skid_buffer。G-C-05 的 backpressure 子结果按「随机 valid 图样下 o_valid 与期望 valid 链逐拍严格对齐」的等价判据取证",
+      "已接受限制: 数据通路自由流水 (不由 valid 门控), 无效拍的数据仍被计算但被 valid 屏蔽 —— 与 rrc 一致的约定, 避免使能链成为时序瓶颈; 功耗敏感场景需另行评估",
+      "已接受限制: 采用四乘法直算而非三乘法 (Gauss/Karatsuba)。后者省 1 个 DSP 但引入额外加法器与位宽增长; 在无实测资源压力前不做该优化",
+      "已接受限制: 与 skills 旧模板 cmult.sv 不兼容 —— 原件有 4 条独立功能性错误 (公式写成 re=ac+bd、操作数张冠李戴、死寄存器、跨级错拍), 逐条记录在 RTL 模块头; 综合与预算按默认 16x16 评估, 其他位宽需重新评估 DSP 片数",
+      "工具说明: 本版全部仿真证据由 Vivado xsim 2023.1 产出 (本机 ModelSim 回环 RPC 故障); vlog 编译不受影响, G-A-00 仍由 ModelSim 判读"
+    ]
+  },
+  "owner": "lihan",
+  "kind": "primitive",
+  "maturity": {
+    "level": "certified",
+    "evidence_ref": "engineering-assets/evidence/complex_multiplier/1.0.1/"
+  },
+  "requirement_ref": "engineering-assets/docs/comm模块族认证差距清单.md",
+  "doc_refs": [
+    "engineering-assets/docs/governance/CBB-治理与生产级准入规范-V1.0.md"
+  ],
+  "fidelity": {
+    "status": "na"
+  },
+  "top": "complex_multiplier",
+  "ports": [
+    {
+      "name": "i_clk",
+      "direction": "input",
+      "width": 1
+    },
+    {
+      "name": "i_rst",
+      "direction": "input",
+      "width": 1
+    },
+    {
+      "name": "i_valid",
+      "direction": "input",
+      "width": 1
+    },
+    {
+      "name": "i_a_re",
+      "direction": "input",
+      "width": 16
+    },
+    {
+      "name": "i_a_im",
+      "direction": "input",
+      "width": 16
+    },
+    {
+      "name": "i_b_re",
+      "direction": "input",
+      "width": 16
+    },
+    {
+      "name": "i_b_im",
+      "direction": "input",
+      "width": 16
+    },
+    {
+      "name": "o_valid",
+      "direction": "output",
+      "width": 1
+    },
+    {
+      "name": "o_re",
+      "direction": "output",
+      "width": 33
+    },
+    {
+      "name": "o_im",
+      "direction": "output",
+      "width": 33
+    }
+  ],
+  "clock": {
+    "name": "i_clk"
+  },
+  "reset": {
+    "name": "i_rst",
+    "polarity": "active_high",
+    "type": "sync"
+  },
+  "device": {
+    "part": "xc7k325tffg900-2",
+    "family": "kintex7",
+    "note": "与库内 rrc/ldpc/skid/lfsr/crc32 统一器件; OOC 评估"
+  },
+  "params": [
+    {
+      "name": "P_A_W",
+      "value": 16,
+      "rationale": "输入 a 实/虚部位宽 (有符号); 综合与预算按此默认值评估"
+    },
+    {
+      "name": "P_B_W",
+      "value": 16,
+      "rationale": "输入 b 实/虚部位宽 (有符号); 16x16 落在 DSP48E1 的 25x18 内, 每乘法独占一片"
+    }
+  ],
+  "constraints": {
+    "target": {
+      "fmax": "250MHz",
+      "fmax_mhz": 250,
+      "lut": 120,
+      "ff": 200,
+      "bram": 0,
+      "dsp": 4,
+      "note_budget": "结构推算 (默认 16x16): DSP **必为 4** —— 四乘法直算, 16x16 落在 DSP48E1 的 25x18 内, 每乘法独占一片; **实测若为 0 即乘法器推断失败, 属缺陷而非优化**。FF: ri_ 级 64+1 + 四乘积 4x32=128 + ro_ 级 33x2+1=67, 合计 260; 但乘积级与输出加减级可被 DSP48 内部寄存器与后加器吸收, 故实际落在 fabric 的远少于此, 预算取 200。LUT 为 33 位加减的进位链与零星控制, 取 120。无存储故 BRAM 恒 0。实测见 envelope-check.json。"
+    }
+  },
+  "sources": [
+    {
+      "path": "rtl/complex_multiplier.sv",
+      "role": "rtl",
+      "sha256": "87762c38caadf1c5ef29c4e16f7600f123a35b47a4c00bbfc506a9148a9affbd"
+    },
+    {
+      "path": "constraints/complex_multiplier.xdc",
+      "role": "constraint",
+      "sha256": "428fd73b4c9b3401abdb1dab796a709319366287cba7a3f327c62036bdf8a1a4"
+    },
+    {
+      "path": "tb/tb_complex_multiplier.sv",
+      "role": "tb",
+      "sha256": "d08bdbf3674651f98e5903c68f3654163236f60695e7d636d99c99095c5d89e3"
+    }
+  ],
+  "waivers": [],
+  "superseded_by": null,
+  "reproduce": {
+    "sim": "bash tools/run-primitive-sim.sh complex_multiplier --install",
+    "synth": "node tools/pg-synth.cjs cbb/complex_multiplier",
+    "gate": "node tools/gate-runner.cjs cbb/complex_multiplier --repo-root ..",
+    "note": "2026-08-02 用该命令复跑, 6 份证据与 certified 时的记录逐字节相同。"
+  }
+}

@@ -1,0 +1,235 @@
+{
+  "schema_version": "1.0",
+  "asset_uid": "channel_est_top",
+  "name": "channel_est_top",
+  "version": "1.0.2",
+  "owner": "lihan",
+  "maturity": {
+    "level": "certified",
+    "evidence_ref": "engineering-assets/evidence/channel_est_top/1.0.2/"
+  },
+  "signoff": {
+    "by": "lihan",
+    "at": "2026-08-01",
+    "scope": [
+      "证据已复核: alignment-report.json(bit-true cosim 2048 样点 0 失配, 位真镜像 0 容差) / reset-sim.json(帧中再复位 26 个复位控制寄存器逐一比对) / stability 四子结果(boundary/stress/regression/backpressure, 含 T7 背靠背 8 符号+随机反压 512 点) / timing-summary.rpt / utilization.rpt / envelope-check.json (WNS +4.673ns @ 100MHz, achieved 187.7MHz; LUT 653/900, FF 611/750, BRAM 0.5/2, DSP 8/20) / cdc-report.json(单时钟域结构扫描, cdc_tool=na)",
+      "正确性锚: golden model_comm_channel_est 1.2.0 (run_all_tests 7/7, ADR-002 LTS-LS 基础)",
+      "已接受限制: 导频极性固定 [1,1,-1,1], 802.11a 逐符号扰码未建模 (golden 契约, 升级时同步)",
+      "已接受限制: 定点语义与 generate_vectors.m 位真镜像逐字耦合, 单侧改动即 cosim 失配",
+      "已接受限制: i_frame_start 须领先首个 LTS 样点 ≥1 拍; 符号尾/帧起始存在 tready 节流",
+      "已接受限制: UVM 环境断链 (判卷不依赖); 综合级证据非布线后收敛, 上板以实现后时序为准",
+      "已接受限制: CORDIC 14 迭代, 角度量化 ≈1.2e-4 rad, 更高相位精度场景不适用"
+    ]
+  },
+  "device": {
+    "part": "xc7k325tffg900-2"
+  },
+  "requirement_ref": "engineering-assets/knowledge/primary/domains/comm/channel_est/algorithm_spec.md",
+  "doc_refs": [
+    "engineering-assets/knowledge/primary/domains/comm/channel_est/fixed_point_report.md",
+    "engineering-assets/knowledge/primary/domains/comm/channel_est/report_channel_est_fpga_implementation.md",
+    "engineering-assets/knowledge/primary/domains/comm/channel_est/resource_estimate.md",
+    "engineering-assets/docs/governance/adr/ADR-002-channel-est-estimation-basis.md"
+  ],
+  "golden_model_ref": "model_comm_channel_est",
+  "fidelity": {
+    "status": "bit_true"
+  },
+  "ports": [
+    {
+      "name": "i_clk",
+      "direction": "input",
+      "width": 1
+    },
+    {
+      "name": "i_rst",
+      "direction": "input",
+      "width": 1
+    },
+    {
+      "name": "i_frame_start",
+      "direction": "input",
+      "width": 1
+    },
+    {
+      "name": "s_axis_tvalid",
+      "direction": "input",
+      "width": 1,
+      "bus": "axi-stream"
+    },
+    {
+      "name": "s_axis_tready",
+      "direction": "output",
+      "width": 1,
+      "bus": "axi-stream"
+    },
+    {
+      "name": "s_axis_tdata",
+      "direction": "input",
+      "width": 32,
+      "bus": "axi-stream"
+    },
+    {
+      "name": "m_axis_tvalid",
+      "direction": "output",
+      "width": 1,
+      "bus": "axi-stream"
+    },
+    {
+      "name": "m_axis_tready",
+      "direction": "input",
+      "width": 1,
+      "bus": "axi-stream"
+    },
+    {
+      "name": "m_axis_tdata",
+      "direction": "output",
+      "width": 32,
+      "bus": "axi-stream"
+    }
+  ],
+  "clock": {
+    "name": "i_clk",
+    "period_ns": 10
+  },
+  "reset": {
+    "name": "i_rst",
+    "polarity": "active_high",
+    "type": "sync",
+    "async_release_synchronized": true
+  },
+  "constraints": {
+    "target": {
+      "fmax": "100MHz",
+      "fmax_mhz": 100,
+      "latency": 111,
+      "lut": 900,
+      "ff": 750,
+      "bram": 2,
+      "dsp": 20
+    }
+  },
+  "sources": [
+    {
+      "path": "rtl/channel_est_top.sv",
+      "role": "rtl",
+      "sha256": "7ea1a19fbf8b7a70e9795c7b8635b3fb7d01d454092ec1f214d7c15c799beea5"
+    },
+    {
+      "path": "rtl/lts_estimator.sv",
+      "role": "rtl",
+      "sha256": "47367a53eae34525f4ca19d35d8d50cb460bc17cbed8e707f138be8898d00215"
+    },
+    {
+      "path": "rtl/cpe_tracker.sv",
+      "role": "rtl",
+      "sha256": "ceefd3e177841c3c85651e19c0ce308aa812af49e0f950b00fe81633e2e3bd99"
+    },
+    {
+      "path": "rtl/cpe_rotate_out.sv",
+      "role": "rtl",
+      "sha256": "b8fc7dcf0005b621716808d1e16a25172119199398661b38f62fd6f0266f39d9"
+    },
+    {
+      "path": "rtl/cordic_cv.sv",
+      "role": "rtl",
+      "sha256": "a2b89ba40f7064f73b8b6178095736c2550365b95813a64124a1e7d0b66f500d"
+    },
+    {
+      "path": "constraints/channel_est_top.xdc",
+      "role": "constraint",
+      "sha256": "0d836a38d631070b9a0e3f99cf4178cd51e57ef29602e49f08229889d36cc3f1"
+    },
+    {
+      "path": "tb/tb_channel_est_top.sv",
+      "role": "tb",
+      "sha256": "c5aaa57408cbf3cf70e29cff63845c69c8d0ba34feb4bee20ce0c4a06d09fbcc"
+    },
+    {
+      "path": "tb/tb_chEst_cosim.sv",
+      "role": "tb",
+      "sha256": "1cfdbef33b6743a7f4922e557bfa50c799cc6364e9fb25231eb32335d3eed144"
+    },
+    {
+      "path": "tb/uvm/chEst_uvm_pkg.sv",
+      "role": "tb",
+      "sha256": "b68b57f8ab34bb0ab2d413393463eb04c93f11359bae931b367dd99a99a0130f"
+    },
+    {
+      "path": "tb/uvm/chEst_scoreboard.sv",
+      "role": "tb",
+      "sha256": "0c21a3c751c83abe6fec78801a3603a90a51a4ad4ea160a9b1c802d88d36087e"
+    },
+    {
+      "path": "tb/uvm/chEst_sequences.sv",
+      "role": "tb",
+      "sha256": "dc96d44d0ad94622adddf0cfaa106758927f774208def72a4320d1cf186e76f6"
+    },
+    {
+      "path": "tb/uvm/chEst_base_test.sv",
+      "role": "tb",
+      "sha256": "240d3778900ec64f9ca4bc2c972da7b30ce65a8347970e702b55237645d98831"
+    },
+    {
+      "path": "tb/uvm/chEst_basic_test.sv",
+      "role": "tb",
+      "sha256": "08f8b2b7ba988083d3a92d14e9bdc1116a37a464e7d779d08b9a11368f9743d0"
+    },
+    {
+      "path": "tb/uvm/tb_chEst_uvm_top.sv",
+      "role": "tb",
+      "sha256": "e52d874d2b377b607a0964cc9a3111302245271901c4d8291a2f9dd4c6c26a1d"
+    }
+  ],
+  "generality": {
+    "param_space": [
+      {
+        "name": "DATA_W",
+        "values": [
+          16
+        ],
+        "support": true
+      },
+      {
+        "name": "N_FFT",
+        "values": [
+          64
+        ],
+        "support": true
+      },
+      {
+        "name": "N_PILOT",
+        "values": [
+          4
+        ],
+        "support": true
+      }
+    ]
+  },
+  "waivers": [],
+  "superseded_by": null,
+  "top": "channel_est_top",
+  "params": [
+    {
+      "name": "DATA_W",
+      "value": 16,
+      "rationale": "RTL 顶层参数默认值; I/Q 样点位宽"
+    },
+    {
+      "name": "N_FFT",
+      "value": 64,
+      "rationale": "设计常量(algorithm_spec: 64 点 OFDM), 非顶层参数; 集成登记 config 可审计项"
+    },
+    {
+      "name": "N_PILOT",
+      "value": 4,
+      "rationale": "设计常量(algorithm_spec: 导频 {-21,-7,7,21}); ADR-002 裁决后导频仅用于 CPE 相位跟踪, 初始估计基础为 2×LTS 全用载波 LS"
+    }
+  ],
+  "reproduce": {
+    "sim": "bash cbb/channel_est_top/run_xsim.sh --install",
+    "synth": "node tools/pg-synth.cjs cbb/channel_est_top",
+    "gate": "node tools/gate-runner.cjs cbb/channel_est_top --repo-root ..",
+    "note": "2026-08-02 xsim 复跑: alignment/reset-sim 逐字节相同, 4 份 stability 内容一致(仅 tool 字段不同)。"
+  }
+}

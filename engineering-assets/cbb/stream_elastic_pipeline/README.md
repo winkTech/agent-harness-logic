@@ -1,6 +1,6 @@
 # stream_elastic_pipeline
 
-<!-- asset-status: certified v0.4.0 -->
+<!-- asset-status: certified v1.0.2 -->
 
 Reusable single-clock valid/ready elastic pipeline for opaque data words.
 

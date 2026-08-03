@@ -1,0 +1,129 @@
+{
+  "schema_version": "1.0",
+  "asset_uid": "lfsr_gen",
+  "name": "lfsr_gen",
+  "version": "1.0.1",
+  "signoff": {
+    "by": "lihan",
+    "at": "2026-08-01",
+    "scope": [
+      "证据已复核: tb-selfcheck.json (65554 字逐字比对 0 失配, 参考模型为 TB 内建软件式逐位异或行为级 LFSR, 与 RTL 归约异或实现方式不同; 16bit 实测周期 65535 / 7bit x^7+x^6+1 实测周期 127 —— 周期是本原多项式的数学性质, 独立于实现) / reset-sim.json (运行中再复位, 8 个受复位寄存器逐一比对 0 失配, 无少复位豁免项) / stability 四子结果 (regression 2444 / stress 63097 / boundary 8 / backpressure 65554) / timing-summary.rpt / utilization.rpt / envelope-check.json (WNS +3.178ns @250MHz 即达成约 1216MHz; LUT 2/40, FF 26/60, BRAM 0/0, DSP 0/0) / cdc-report.json (单时钟域结构扫描, cdc_tool=na)",
+      "资源核对: FF 实测 26 低于结构推算 34, 已查明原因 —— ro_data[i] 与 r_lfsr[i+1] 在同一使能下等价可合并, 但需复位值匹配 (ro_data 复位 0); P_SEED=16'hACE1 恰有 8 位满足, 34-8=26 与实测吻合, 非推断异常。LUT 2 = 4 抽头异或树, 与预期一致",
+      "已接受限制: 周期性质仅在 16 位 (16'hB400) 与 7 位 (7'h60) 两组多项式上实测锚定; 其他 P_POLY 配置未逐一验证本原性与周期, 使用方换多项式需自行验证",
+      "已接受限制: 输出为伪随机序列, **非密码学安全**, 不得用于安全场景",
+      "已接受限制: 参数约束 —— 全 0 种子非法 (LFSR 死态); P_POLY[P_WIDTH-1] (x^P_WIDTH 项) 必须为 1; 抽头约定为 P_POLY[e-1]=1 即含 x^e 项",
+      "已接受限制: 与 skills/hdl-coding/templates 旧模板序列**不兼容** (breaking) —— 原模板反馈掩码截掉 x^WIDTH 主抽头, 旧序列本身是错的, 缺陷逐条记录在 RTL 模块头",
+      "已接受限制: 无 ready/valid 反压接口, 流控为 i_en 门控; G-C-05 的 backpressure 子结果按「任意使能图样下计数守恒不丢不重」的等价判据取证, 该映射已写入证据 reason",
+      "已接受限制: 综合为 OOC 口径 (仅 create_clock, 未做布局布线与 I/O 绑定), 按默认参数 P_WIDTH=16 评估",
+      "工具说明: 本版全部仿真证据由 Vivado xsim 2023.1 产出 (本机 ModelSim 回环 RPC 故障); vlog 编译不受影响, G-A-00 仍由 ModelSim 判读"
+    ]
+  },
+  "owner": "lihan",
+  "kind": "primitive",
+  "maturity": {
+    "level": "certified",
+    "evidence_ref": "engineering-assets/evidence/lfsr_gen/1.0.1/"
+  },
+  "requirement_ref": "engineering-assets/docs/comm模块族认证差距清单.md",
+  "doc_refs": [
+    "engineering-assets/docs/governance/CBB-治理与生产级准入规范-V1.0.md",
+    "engineering-assets/docs/CBB候选台账-hdl-coding-templates.md"
+  ],
+  "fidelity": {
+    "status": "na"
+  },
+  "top": "lfsr_gen",
+  "ports": [
+    {
+      "name": "i_clk",
+      "direction": "input",
+      "width": 1
+    },
+    {
+      "name": "i_rst",
+      "direction": "input",
+      "width": 1
+    },
+    {
+      "name": "i_en",
+      "direction": "input",
+      "width": 1
+    },
+    {
+      "name": "o_valid",
+      "direction": "output",
+      "width": 1
+    },
+    {
+      "name": "o_data",
+      "direction": "output",
+      "width": 16
+    }
+  ],
+  "clock": {
+    "name": "i_clk"
+  },
+  "reset": {
+    "name": "i_rst",
+    "polarity": "active_high",
+    "type": "sync"
+  },
+  "device": {
+    "part": "xc7k325tffg900-2",
+    "family": "kintex7",
+    "note": "与库内 rrc/ldpc/skid 统一器件; OOC 评估"
+  },
+  "constraints": {
+    "target": {
+      "fmax": "250MHz",
+      "fmax_mhz": 250,
+      "lut": 40,
+      "ff": 60,
+      "bram": 0,
+      "dsp": 0,
+      "note_budget": "结构推算 (默认 P_WIDTH=16): 状态 16 FF + ri_en 1 FF + ro_data 16 FF + ro_valid 1 FF = 34 FF, 留 ~75% 裕量取 60; LUT 为 16 输入掩码归约异或 (约 4-5 个 LUT6 组成的异或树) + 移位串接, 取 40 含裕量。纯寄存+异或树, 无存储与乘法故 BRAM/DSP 恒 0 —— 若实测非 0 即为推断异常。实测见 envelope-check.json。"
+    }
+  },
+  "params": [
+    {
+      "name": "P_WIDTH",
+      "value": 16,
+      "rationale": "默认序列位宽; 综合与预算均按此默认值评估"
+    },
+    {
+      "name": "P_POLY",
+      "value": 46080,
+      "rationale": "16'hB400 = x^16+x^14+x^13+x^11+1, 本原多项式, 周期 65535 (TB 实测钉死)"
+    },
+    {
+      "name": "P_SEED",
+      "value": 44257,
+      "rationale": "16'hACE1 初始状态; 全 0 非法 (LFSR 死态)"
+    }
+  ],
+  "sources": [
+    {
+      "path": "rtl/lfsr_gen.sv",
+      "role": "rtl",
+      "sha256": "a0a33ece99c4379af8fdc47561b0c8339f0cf0a778bd071e8a2cca8d93a0176a"
+    },
+    {
+      "path": "constraints/lfsr_gen.xdc",
+      "role": "constraint",
+      "sha256": "51047a01becc50c23baa3cb399eb271f2134e9912520ab71e40e7871f060bbe8"
+    },
+    {
+      "path": "tb/tb_lfsr_gen.sv",
+      "role": "tb",
+      "sha256": "642739dbbc3ccaf2115783c3518cd367911f13de5119d5b6f3472d0d888395d5"
+    }
+  ],
+  "waivers": [],
+  "superseded_by": null,
+  "reproduce": {
+    "sim": "bash tools/run-primitive-sim.sh lfsr_gen --install",
+    "synth": "node tools/pg-synth.cjs cbb/lfsr_gen",
+    "gate": "node tools/gate-runner.cjs cbb/lfsr_gen --repo-root ..",
+    "note": "2026-08-02 用该命令复跑, 6 份证据与 certified 时的记录逐字节相同。"
+  }
+}

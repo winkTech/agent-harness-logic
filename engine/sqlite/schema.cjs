@@ -89,7 +89,9 @@ function applyPendingMigrations(db) {
         db.exec(migration.up);
         db.prepare('INSERT INTO _migrations (name) VALUES (?)').run(migrationName);
         db.exec('COMMIT');
-        console.log(`[sqlite/schema] 迁移 ${migrationName} 已应用`);
+        // 必须走 stderr: 迁移会在 hook 进程里首次开库时触发, 而 hook 的 stdout
+        // 被 Claude Code 当作协议输出解析 —— 打到 stdout 会污染 hook 返回值。
+        console.error(`[sqlite/schema] 迁移 ${migrationName} 已应用`);
       } catch (txErr) {
         db.exec('ROLLBACK');
         throw txErr;

@@ -33,7 +33,9 @@ function [H_est, H_interp] = ls_channel_est(Y, X_pilot, pilot_idx, N, method)
     H_interp(dc_idx) = 1;
 
     % 保护子载波: 置 1 (不携带数据)
-    guard = [1:5, N-4:N];
+    % 修复 (2026-07-31, ADR-002 附带): 原 [1:5, N-4:N] 为 10 个, 与 config.m
+    % 的 guard_idx [1:6,60:64] 及 algorithm_spec §2.1 (11 个) 三方不一致
+    guard = [1:6, N-4:N];
     H_interp(guard) = 1;
 end
 
@@ -73,11 +75,24 @@ end
 function H = interp_dft(H_pilot, pilot_idx, N)
     % DFT 插值: 导频 → 时域加窗 → 频域补零 → FFT
     % 将导频视为频域稀疏采样，变换到时域加窗去噪再变换回频域
+    %
+    % 适用前提 (ADR-002 附带修订):
+    %   (1) 导频须为均匀网格 —— ifft 隐含假设均匀采样, 802.11a 的
+    %       {-21,-7,7,21} 非均匀, 对其结果仅为近似;
+    %   (2) 时延扩展 ≤ N_pilot 个抽头 (均匀间隔 N/N_pilot 的频域采样
+    %       对应时域混叠周期 N_pilot 样点)。
 
     N_pilot = length(H_pilot);
 
     % 导频 → 时域 (IDFT)
     h = ifft(H_pilot, N_pilot);
+
+    % 修复 (2026-07-31, ADR-002 附带): 均匀网格首导频不在 k=1 时, 频域采样
+    % 偏移 k0 使时域抽头带 e^{-j2πk0·n/N} 旋转, 重建前须逐抽头补偿 ——
+    % 原实现缺此步, 非零偏移网格下全部抽头相位错误。
+    k0 = pilot_idx(1) - 1;                     % 0-based 网格偏移
+    n_idx = (0:N_pilot-1).';
+    h = h .* exp(1j * 2*pi * k0 * n_idx / N);
 
     % 加窗: 保留前 L 个抽头 (L = 时延扩展对应的样点数)
     L = min(8, N_pilot);  % 假设最大时延 < 8 个样点
@@ -88,6 +103,8 @@ function H = interp_dft(H_pilot, pilot_idx, N)
     h_full(1:L) = h(1:L);
     H = fft(h_full, N);
 
-    % 幅度归一化
-    H = H / sqrt(N/N_pilot);
+    % 修复 (2026-07-31, ADR-002 附带): 删除错误的 /sqrt(N/N_pilot) 归一化。
+    % 均匀网格下 ifft(H_p,Np) 的 1/Np 因子与 fft 在导频点位恰好互逆,
+    % 无需额外缩放 —— 原缩放使全部估计值偏小 4 倍, 被旧测试的
+    % "DFT 仅需优于线性"相对判据掩盖。
 end

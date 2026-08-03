@@ -20,23 +20,146 @@ const fs = require('node:fs');
 
 // ── 项目管理 ────────────────────────────────────────────────────────────────
 
+/** 索引新鲜度窗口: 超过此时长未重新索引即视为陈旧 (默认 7 天)。 */
+const DEFAULT_FRESHNESS_MS = (() => {
+  const raw = Number.parseInt(process.env.CLAUDE_CG_FRESHNESS_MS || '', 10);
+  return Number.isFinite(raw) && raw > 0 ? raw : 7 * 24 * 60 * 60 * 1000;
+})();
+
+/**
+ * 取路径的规范绝对形式。路径不存在时退回 path.resolve()。
+ * @param {string} projectPath
+ * @returns {string}
+ */
+function canonicalRootPath(projectPath) {
+  const resolved = path.resolve(String(projectPath || '.'));
+  try {
+    return fs.realpathSync.native(resolved);
+  } catch {
+    return resolved; // 目录不存在或无权限: 仍可注册, 只是拿不到文件系统规范大小写
+  }
+}
+
+/**
+ * 由根路径计算 projectId。
+ *
+ * win32 文件系统大小写不敏感, 且分隔符可混用: `c:/x` 与 `C:\x` 是同一个目录。
+ * 直接哈希 path.resolve() 结果会把同一项目劈成两个 projectId, 图数据各存一半,
+ * 而 callers/callees 只查其中一半 —— 实测 cg_projects 里出现过仅盘符大小写不同
+ * 的两行。因此 win32 上统一分隔符并小写化后再哈希; POSIX 保持大小写敏感语义。
+ *
+ * @param {string} rootPath — 绝对路径
+ * @returns {string} 16 位十六进制 projectId
+ */
+function projectKey(rootPath) {
+  const raw = String(rootPath || '');
+  const normalized = process.platform === 'win32'
+    ? raw.replace(/\//g, '\\').replace(/\\+$/, '').toLowerCase()
+    : raw.replace(/\/+$/, '');
+  return crypto.createHash('sha256').update(normalized).digest('hex').slice(0, 16);
+}
+
+/**
+ * 删除与 projectId 指向同一目录、但键值过时的项目行。
+ *
+ * 代码图是**派生缓存**, 可由源码完整重建, 所以对齐键值时直接丢弃旧行让下次
+ * 索引重建, 而不是原地改键 —— cg_files/cg_nodes 的 id 都由 project_id 参与
+ * 哈希, 原地改键会留下一批派生 id 与新 project_id 不自洽的行。
+ *
+ * @param {import('node:sqlite').DatabaseSync} db
+ * @param {string} projectId — 规范键
+ * @returns {{ dropped: string[] }}
+ */
+function dropStaleProjectRows(db, projectId) {
+  const dropped = [];
+  let rows = [];
+  try {
+    rows = db.prepare('SELECT id, root_path FROM cg_projects WHERE id != ?').all(projectId);
+  } catch { return { dropped }; }
+
+  for (const row of rows) {
+    if (projectKey(row.root_path) !== projectId) continue;
+    for (const sql of [
+      'DELETE FROM cg_edges WHERE project_id = ?',
+      'DELETE FROM cg_nodes WHERE project_id = ?',
+      'DELETE FROM cg_unresolved WHERE project_id = ?',
+      'DELETE FROM cg_files WHERE project_id = ?',
+      'DELETE FROM cg_projects WHERE id = ?',
+    ]) {
+      try { db.prepare(sql).run(row.id); } catch { /* 表缺失时跳过 */ }
+    }
+    dropped.push(row.id);
+  }
+  return { dropped };
+}
+
 /**
  * 解析项目路径，返回项目 ID。自动注册新项目。
  * @param {string} projectPath — 项目根路径
- * @returns {{ projectId: string, rootPath: string }}
+ * @returns {{ projectId: string, rootPath: string, droppedStaleRows?: string[] }}
  */
 function resolveProject(projectPath) {
-  const rootPath = path.resolve(projectPath);
-  const projectId = crypto.createHash('sha256').update(rootPath).digest('hex').slice(0, 16);
+  const rootPath = canonicalRootPath(projectPath);
+  const projectId = projectKey(rootPath);
   const db = openDb().db;
 
-  const existing = db.prepare('SELECT id FROM cg_projects WHERE id = ?').get(projectId);
-  if (!existing) {
-    db.prepare(
-      'INSERT OR IGNORE INTO cg_projects (id, root_path, name, created_at) VALUES (?, ?, ?, ?)'
-    ).run(projectId, rootPath, path.basename(rootPath), Date.now());
+  const existing = db.prepare('SELECT id, root_path FROM cg_projects WHERE id = ?').get(projectId);
+  if (existing) {
+    // 键值已对, 但存的路径可能是旧的非规范写法 → 更新为规范形式
+    if (existing.root_path !== rootPath) {
+      try {
+        db.prepare('UPDATE cg_projects SET root_path = ? WHERE id = ?').run(rootPath, projectId);
+      } catch { /* root_path UNIQUE 冲突: 说明另有同路径行, 下次 resolve 会清理 */ }
+    }
+    return { projectId, rootPath };
   }
-  return { projectId, rootPath };
+
+  const { dropped } = dropStaleProjectRows(db, projectId);
+  db.prepare(
+    'INSERT OR IGNORE INTO cg_projects (id, root_path, name, created_at) VALUES (?, ?, ?, ?)'
+  ).run(projectId, rootPath, path.basename(rootPath), Date.now());
+
+  return dropped.length
+    ? { projectId, rootPath, droppedStaleRows: dropped }
+    : { projectId, rootPath };
+}
+
+/**
+ * 判定项目索引是否新鲜。
+ *
+ * 与语义检索的纪律一致 (docs/rules/05-harness.md #5): 索引不可信时失败关闭,
+ * 返回 stale 而不是拿旧图给出"可能相关"的答案。
+ *
+ * @param {string} projectId
+ * @param {object} [opts]
+ * @param {number} [opts.freshnessMs] — 新鲜度窗口
+ * @param {number} [opts.now]
+ * @returns {{ fresh: boolean, reason: string, indexedAt: number|null, ageMs: number|null, nodeCount: number }}
+ */
+function indexFreshness(projectId, opts = {}) {
+  const db = openDb().db;
+  const now = opts.now || Date.now();
+  const window = opts.freshnessMs || DEFAULT_FRESHNESS_MS;
+  const base = { indexedAt: null, ageMs: null, nodeCount: 0 };
+
+  let proj;
+  try {
+    proj = db.prepare('SELECT indexed_at, node_count FROM cg_projects WHERE id = ?').get(projectId);
+  } catch {
+    return { ...base, fresh: false, reason: 'no_index_tables' };
+  }
+  if (!proj) return { ...base, fresh: false, reason: 'not_registered' };
+
+  const nodeCount = db.prepare('SELECT COUNT(*) AS c FROM cg_nodes WHERE project_id = ?')
+    .get(projectId).c;
+  const indexedAt = proj.indexed_at || null;
+
+  if (!indexedAt) return { ...base, nodeCount, fresh: false, reason: 'never_indexed' };
+  const ageMs = now - indexedAt;
+  if (nodeCount === 0) return { indexedAt, ageMs, nodeCount, fresh: false, reason: 'empty_index' };
+  if (ageMs > window) return { indexedAt, ageMs, nodeCount, fresh: false, reason: 'stale_age' };
+
+  return { indexedAt, ageMs, nodeCount, fresh: true, reason: 'fresh' };
 }
 
 /**
@@ -645,6 +768,189 @@ function getSubgraphByNames(projectId, symbolNames, opts = {}) {
   };
 }
 
+// ── 影响面查询 ───────────────────────────────────────────────────────────────
+
+/**
+ * 反向影响传播: 从种子节点出发, 沿入边找出所有会被波及的符号。
+ *
+ * 关键在于**穿透实例节点**。SV 解析器建的是三段式关系:
+ *   mid --contains--> u_leaf --instantiates--> leaf
+ * 只走 instantiates/calls 的话, 从 leaf 往回只能走到实例 u_leaf 就断了 ——
+ * 而真正受影响的是持有这个实例的模块 mid。因此反向遍历必须同时吃 contains 边,
+ * 且实例节点不计入逻辑深度 (它是同一层的中转, 不是新一层依赖)。
+ *
+ * @param {import('node:sqlite').DatabaseSync} db
+ * @param {string[]} seedIds
+ * @param {{depth: number, limit: number}} opts
+ * @returns {object[]} 按逻辑深度升序
+ */
+function reverseImpact(db, seedIds, opts = {}) {
+  const depth = opts.depth || 3;
+  const limit = opts.limit || 40;
+  const seen = new Set(seedIds);
+  const out = [];
+  let frontier = seedIds.map(id => ({ id, logical: 0 }));
+
+  // 每一逻辑层最多两跳 (实例中转 + 父模块), 加一跳裕量
+  const maxHops = depth * 2 + 1;
+
+  for (let hop = 0; hop < maxHops && frontier.length > 0 && out.length < limit; hop++) {
+    const ids = frontier.map(item => item.id);
+    const logicalById = new Map(frontier.map(item => [item.id, item.logical]));
+    let rows = [];
+    try {
+      rows = db.prepare(`
+        SELECT e.target_id AS via, e.source_id AS id, n.kind, n.name, n.qualified_name,
+               n.start_line AS line, f.relative_path AS file
+        FROM cg_edges e
+        JOIN cg_nodes n ON n.id = e.source_id
+        LEFT JOIN cg_files f ON f.id = n.file_id
+        WHERE e.target_id IN (${ids.map(() => '?').join(',')})
+          AND e.kind IN ('instantiates', 'calls', 'contains')
+        LIMIT ?
+      `).all(...ids, limit * 4);
+    } catch { break; }
+
+    const next = [];
+    for (const row of rows) {
+      if (seen.has(row.id)) continue;
+      seen.add(row.id);
+      // 实例是中转节点, 不占一层深度
+      const logical = (logicalById.get(row.via) ?? 0) + (row.kind === 'instance' ? 0 : 1);
+      if (logical > depth) continue;
+      next.push({ id: row.id, logical });
+      if (row.kind !== 'instance') {
+        out.push({
+          id: row.id,
+          kind: row.kind,
+          name: row.name,
+          qualified_name: row.qualified_name,
+          file: row.file,
+          line: row.line,
+          depth: logical,
+        });
+      }
+    }
+    frontier = next;
+  }
+
+  return out.sort((a, b) => a.depth - b.depth).slice(0, limit);
+}
+
+/**
+ * 给定一个改动点, 返回它的影响面。
+ *
+ * 这是"代码图 + 跨域图"合起来才能回答的问题, 也是整套 graph engineering 的
+ * 落点: 改一个模块 → 下游哪些模块受影响 → 哪些证据因此失效 → 哪些门禁要重跑。
+ *
+ * 失败关闭: 索引不新鲜时返回 staleIndex=true 且**不给结果**, 与语义检索同一纪律
+ * (docs/rules/05-harness.md #5) —— 拿过期的图算影响面, 比不算更危险。
+ *
+ * @param {string} projectId
+ * @param {string} target — 符号名 / qualified_name / 节点 id / 相对文件路径
+ * @param {object} [opts]
+ * @param {number} [opts.depth=3] — 反向依赖遍历深度
+ * @param {number} [opts.limit=40]
+ * @param {boolean} [opts.allowStale=false] — 显式允许用陈旧索引 (仅诊断用)
+ * @returns {{
+ *   target: object|null, staleIndex: boolean, staleReason: string|null,
+ *   downstream: object[], files: string[], staleEvidence: object[],
+ *   gatesToRerun: string[], requirements: object[], relatedFacts: object[]
+ * }}
+ */
+function getBlastRadius(projectId, target, opts = {}) {
+  const db = openDb().db;
+  const depth = Number.isInteger(opts.depth) && opts.depth > 0 ? opts.depth : 3;
+  const limit = Number.isInteger(opts.limit) && opts.limit > 0 ? opts.limit : 40;
+  const empty = {
+    target: null,
+    staleIndex: false,
+    staleReason: null,
+    downstream: [],
+    files: [],
+    staleEvidence: [],
+    gatesToRerun: [],
+    requirements: [],
+    relatedFacts: [],
+  };
+
+  const freshness = indexFreshness(projectId, opts);
+  if (!freshness.fresh && !opts.allowStale) {
+    return { ...empty, staleIndex: true, staleReason: freshness.reason };
+  }
+
+  // 1. 定位改动点。先当符号查, 再当文件路径查。
+  const node = getNode(projectId, target);
+  let seedFile = null;
+  if (!node) {
+    const normalized = String(target || '').replace(/\\/g, '/');
+    const file = db.prepare(`
+      SELECT id, relative_path FROM cg_files
+      WHERE project_id = ? AND (relative_path = ? OR relative_path LIKE ?)
+      ORDER BY LENGTH(relative_path) LIMIT 1
+    `).get(projectId, normalized, `%${normalized.split('/').pop()}`);
+    if (!file) return { ...empty, staleIndex: false };
+    seedFile = file;
+  }
+
+  // 2. 反向依赖: 谁例化/调用了它 (含传递闭包)
+  const seedNodes = node
+    ? [node]
+    : getNodesInFile(projectId, seedFile.relative_path).filter(n => n.kind === 'module');
+  const downstream = reverseImpact(db, seedNodes.map(n => n.id), { depth, limit });
+
+  // 3. 受影响文件集合 = 改动点自身 + 下游节点所在文件
+  const files = new Set();
+  if (seedFile) files.add(seedFile.relative_path);
+  if (node?.file) files.add(node.file);
+  for (const item of downstream) if (item.file) files.add(item.file);
+
+  // 4. 跨域边: 证据 / 需求 / 记忆
+  const graph = require('../sqlite/store-graph.cjs');
+  const refs = [
+    ...[...files].map(file => ['file', file]),
+    ...downstream.map(item => ['code_node', item.id]),
+    ...(node ? [['code_node', node.id]] : []),
+  ];
+  const edges = refs.length ? graph.neighborsOfMany(refs, { limit: 200 }) : [];
+
+  const staleEvidence = [];
+  const requirements = [];
+  const relatedFacts = [];
+  const gates = new Set();
+
+  for (const edge of edges) {
+    if (edge.rel === 'proves' && edge.src.kind === 'evidence') {
+      staleEvidence.push({
+        evidenceSha: edge.src.id,
+        target: edge.dst.id,
+        command: edge.metadata?.command || null,
+        recordedAt: edge.metadata?.recordedAt || null,
+      });
+      if (edge.metadata?.gate) gates.add(edge.metadata.gate);
+    } else if (edge.rel === 'traces_to' && edge.src.kind === 'requirement') {
+      requirements.push({ requirement: edge.src.id, target: edge.dst.id, gate: edge.metadata?.gate || null });
+      if (edge.metadata?.gate) gates.add(edge.metadata.gate);
+    } else if (edge.rel === 'recalled_for' && edge.src.kind === 'fact') {
+      relatedFacts.push({ factId: edge.src.id, confidence: edge.confidence, target: edge.dst.id });
+    } else if (edge.rel === 'verifies' && edge.dst.kind === 'gate') {
+      gates.add(edge.dst.id);
+    }
+  }
+
+  return {
+    target: node || { kind: 'file', name: seedFile.relative_path, file: seedFile.relative_path },
+    staleIndex: false,
+    staleReason: null,
+    downstream: downstream.slice(0, limit),
+    files: [...files],
+    staleEvidence,
+    gatesToRerun: [...gates],
+    requirements,
+    relatedFacts,
+  };
+}
+
 // ── 工具 ─────────────────────────────────────────────────────────────────────
 
 function tryJSON(str) {
@@ -677,6 +983,9 @@ function main() {
       console.log(JSON.stringify(getSubgraphByNames(projectId, names, { maxDepth: 1 }), null, 2));
       break;
     }
+    case 'blast':
+      console.log(JSON.stringify(getBlastRadius(projectId, query, { depth: 3 }), null, 2));
+      break;
     default:
       console.error('用法: node cg-queries.cjs <search|node|callers|callees|explore> <projectId> [query...]');
   }
@@ -686,6 +995,9 @@ if (require.main === module) main();
 
 module.exports = {
   resolveProject,
+  canonicalRootPath,
+  projectKey,
+  indexFreshness,
   getProjectStats,
   searchNodes,
   getNode,
@@ -696,4 +1008,5 @@ module.exports = {
   getCallers,
   getCallees,
   getSubgraphByNames,
+  getBlastRadius,
 };

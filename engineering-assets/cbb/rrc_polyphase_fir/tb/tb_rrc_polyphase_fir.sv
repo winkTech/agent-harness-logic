@@ -117,6 +117,7 @@ module tb_rrc_polyphase_fir;
     // 向量路径由 run.do 经 +VEC_DIR / +RPT_F 注入（库级约定，见治理规范 §5.5）。
     // 权威位置 = models/comm/<algo>/vectors/；TB 内禁硬编码绝对路径。
     string VEC_DIR, STIM_F, EXP_F, RPT_F;
+    string TOOL;    // 实际跑本次仿真的工具, 由运行脚本经 +TOOL 注入
 
     logic [31:0] stim_mem [0:N_IN-1];
     logic [31:0] exp_mem  [0:N_OUT-1];
@@ -140,11 +141,31 @@ module tb_rrc_polyphase_fir;
         integer first_bad;
         logic [31:0] w;
         begin
-            // 向量目录由 run.do 注入; 缺失即 fail-closed, 不得回落到任何默认路径
-            if (!$value$plusargs("VEC_DIR=%s", VEC_DIR))
-                $fatal(1, "[cosim] 缺 +VEC_DIR — 向量权威位置 models/comm/<algo>/vectors/, 须由 run.do 注入");
-            if (!$value$plusargs("RPT_F=%s", RPT_F))
-                $fatal(1, "[cosim] 缺 +RPT_F — 证据须写入 var/gates/pg/<asset_uid>/");
+            // 路径注入有两条通路, 但**都不允许 TB 内出现硬编码绝对路径**:
+            //   ModelSim: run.do 经 +VEC_DIR / +RPT_F 传入绝对路径
+            //   xsim    : 传不了含盘符的路径 (-testplusarg 在 Windows 上会把
+            //             `C:/...` 的冒号与 `=` 一起切碎), 故回落到**运行目录相对**,
+            //             由 run_xsim.sh 负责先把向量拷进构建目录、跑完再把证据搬到
+            //             var/gates/pg/<asset_uid>/。与 ofdm_tx_top 同一套做法。
+            // 回落的是"相对当前工作目录", 不是某个写死的位置 —— 治理规范禁的是后者。
+            if (!$value$plusargs("VEC_DIR=%s", VEC_DIR)) VEC_DIR = "";
+            if (!$value$plusargs("RPT_F=%s", RPT_F))     RPT_F   = "alignment-report.json";
+            // 工具名的两条注入通路。优先 plusarg (ModelSim 可用); xsim 不行 ——
+            // 它的 -testplusarg 会在 `=` 处把参数切开, 实测报
+            // "Expected a switch but found V", 与传不了含盘符路径是同一个毛病。
+            // 故回落到读运行目录下的 sim-tool.txt (由 run_xsim.sh 写)。
+            // 两条都没有时写 unknown-simulator —— 宁可留空, 不给一个看似可信的错名字。
+            if (!$value$plusargs("TOOL=%s", TOOL)) begin
+                integer fd_t, code_t;
+                string  s_t;
+                TOOL = "unknown-simulator";
+                fd_t = $fopen("sim-tool.txt", "r");
+                if (fd_t != 0) begin
+                    code_t = $fscanf(fd_t, "%s", s_t);
+                    if (code_t == 1 && s_t.len() > 0) TOOL = s_t;
+                    $fclose(fd_t);
+                end
+            end
             STIM_F = {VEC_DIR, "rrc_stimulus.hex"};
             EXP_F  = {VEC_DIR, "expected_tx.hex"};
 
@@ -214,7 +235,11 @@ module tb_rrc_polyphase_fir;
             if (fd_r != 0) begin
                 $fdisplay(fd_r, "{");
                 $fdisplay(fd_r, "  \"id\": \"G-B-03\",");
-                $fdisplay(fd_r, "  \"tool\": \"ModelSim vsim (tb_rrc_polyphase_fir scenario5)\",");
+                // 工具名由运行脚本经 +TOOL 注入 —— 此处原先写死 "ModelSim vsim",
+                // 迁到 xsim 后那行就成了错误署名: 证据会声称自己出自一个并没有跑过
+                // 它的仿真器。缺省值刻意写成 unknown 而不是任一具体工具, 宁可留空
+                // 也不要一个看起来可信的错名字。
+                $fdisplay(fd_r, "  \"tool\": \"%0s (tb_rrc_polyphase_fir scenario5)\",", TOOL);
                 $fdisplay(fd_r, "  \"golden\": \"model_comm_rrc (fixed_point, 16qam alpha=0.5 sps=4)\",");
                 $fdisplay(fd_r, "  \"total\": %0d,", N_OUT);
                 $fdisplay(fd_r, "  \"captured\": %0d,", got_n);
@@ -251,8 +276,9 @@ module tb_rrc_polyphase_fir;
         integer bp_stall_cycles, accept_cnt;
         logic reset_ok, boundary_ok;
         begin
-            if (!$value$plusargs("EVID_DIR=%s", EVID))
-                $fatal(1, "[stability] 缺 +EVID_DIR — 证据须写入 var/gates/pg/<asset_uid>/");
+            // 同 cosim: ModelSim 走 +EVID_DIR 绝对路径, xsim 回落到运行目录相对,
+            // 由 run_xsim.sh 搬到 var/gates/pg/<asset_uid>/。见 run_cosim 处的说明。
+            if (!$value$plusargs("EVID_DIR=%s", EVID)) EVID = "";
 
             //---------------------------------------------------------------
             // 场景6 (G-C-04): 复位后每个可观测输出寄存器 == 复位值, 且复位后

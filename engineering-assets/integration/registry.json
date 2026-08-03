@@ -1,347 +1,476 @@
 {
-  "schema_version": "1.1",
-  "owner": "lihan",
-  "entries": [
-    {
-      "id": "ITG-0001",
-      "project": "phy-intake",
-      "project_ref": "incubator/intake/channel_est_top",
-      "asset_uid": "channel_est_top",
-      "version_pinned": "0.1.0",
-      "config": {
-        "DATA_W": 16,
-        "N_FFT": 64,
-        "N_PILOT": 4
-      },
-      "integrated_at": "2026-07-26T00:00:00Z",
-      "status": "active",
-      "maturity_status": "deferred",
-      "owner": "lihan",
-      "consumers": [],
-      "issues": [
-        "bit-true-vectors",
-        "vivado-timing",
-        "axis-contract"
-      ],
-      "badge_gap": [
-        "bit-true-vectors",
-        "vivado-timing",
-        "axis-contract"
-      ],
-      "deferred_reason": "project-specific PHY; keep intake under foundation-first policy",
-      "last_reviewed": "2026-07-26"
-    },
-    {
-      "id": "ITG-0002",
-      "project": "phy-intake",
-      "project_ref": "incubator/intake/ldpc_codec",
-      "asset_uid": "ldpc_codec",
-      "version_pinned": "0.1.0",
-      "config": {},
-      "integrated_at": "2026-07-26T00:00:00Z",
-      "status": "active",
-      "maturity_status": "deferred",
-      "owner": "lihan",
-      "consumers": [],
-      "issues": [
-        "G-C-03",
-        "G-B-03",
-        "vivado-timing",
-        "signoff"
-      ],
-      "badge_gap": [
-        "G-C-03",
-        "G-B-03",
-        "vivado-timing",
-        "signoff"
-      ],
-      "deferred_reason": "missing reproducible bit-true and Vivado evidence; no forced promotion",
-      "last_reviewed": "2026-07-26"
-    },
-    {
-      "id": "ITG-0003",
-      "project": "reference-evidence",
-      "project_ref": "models/comm/channel_est",
-      "asset_uid": "model_comm_channel_est",
-      "version_pinned": "1.0.0",
-      "config": {},
-      "integrated_at": "2026-07-26T00:00:00Z",
-      "status": "active",
-      "maturity_status": "evidence-only",
-      "owner": "lihan",
-      "consumers": [
-        "channel_est_top"
-      ],
-      "issues": [
-        "exported-vectors"
-      ],
-      "badge_gap": [
-        "exported-vectors"
-      ],
-      "deferred_reason": "golden/reference source is retained as correctness evidence",
-      "last_reviewed": "2026-07-26"
-    },
-    {
-      "id": "ITG-0004",
-      "project": "reference-evidence",
-      "project_ref": "models/comm/ldpc",
-      "asset_uid": "model_comm_ldpc",
-      "version_pinned": "1.0.0",
-      "config": {},
-      "integrated_at": "2026-07-26T00:00:00Z",
-      "status": "active",
-      "maturity_status": "evidence-only",
-      "owner": "lihan",
-      "consumers": [
-        "ldpc_codec"
-      ],
-      "issues": [
-        "exported-vectors"
-      ],
-      "badge_gap": [
-        "exported-vectors"
-      ],
-      "deferred_reason": "golden/reference source is retained as correctness evidence",
-      "last_reviewed": "2026-07-26"
-    },
-    {
-      "id": "ITG-0005",
-      "project": "reference-evidence",
-      "project_ref": "models/comm/ofdm",
-      "asset_uid": "model_comm_ofdm",
-      "version_pinned": "1.0.0",
-      "config": {},
-      "integrated_at": "2026-07-26T00:00:00Z",
-      "status": "active",
-      "maturity_status": "evidence-only",
-      "owner": "lihan",
-      "consumers": [
-        "ofdm_tx_top"
-      ],
-      "issues": [
-        "exported-vectors"
-      ],
-      "badge_gap": [
-        "exported-vectors"
-      ],
-      "deferred_reason": "golden/reference source is retained as correctness evidence",
-      "last_reviewed": "2026-07-26"
-    },
-    {
-      "id": "ITG-0006",
-      "project": "reference-evidence",
-      "project_ref": "models/comm/rrc",
-      "asset_uid": "model_comm_rrc",
-      "version_pinned": "1.0.0",
-      "config": {},
-      "integrated_at": "2026-07-26T00:00:00Z",
-      "status": "active",
-      "maturity_status": "evidence-only",
-      "owner": "lihan",
-      "consumers": [
-        "rrc_polyphase_fir"
-      ],
-      "issues": [
-        "native-matlab-recheck"
-      ],
-      "badge_gap": [
-        "native-matlab-recheck"
-      ],
-      "deferred_reason": "golden/reference source remains a correctness anchor",
-      "last_reviewed": "2026-07-26"
-    },
-    {
-      "id": "ITG-0007",
-      "project": "reference-evidence",
-      "project_ref": "models/comm/synch",
-      "asset_uid": "model_comm_synch",
-      "version_pinned": "1.0.0",
-      "config": {},
-      "integrated_at": "2026-07-26T00:00:00Z",
-      "status": "active",
-      "maturity_status": "evidence-only",
-      "owner": "lihan",
-      "consumers": [
-        "sync_top"
-      ],
-      "issues": [
-        "exported-vectors",
-        "cfo-correction"
-      ],
-      "badge_gap": [
-        "exported-vectors",
-        "cfo-correction"
-      ],
-      "deferred_reason": "golden/reference source is retained as correctness evidence",
-      "last_reviewed": "2026-07-26"
-    },
-    {
-      "id": "ITG-0008",
-      "project": "phy-intake",
-      "project_ref": "incubator/intake/ofdm_tx_top",
-      "asset_uid": "ofdm_tx_top",
-      "version_pinned": "0.1.0",
-      "config": {},
-      "integrated_at": "2026-07-26T00:00:00Z",
-      "status": "active",
-      "maturity_status": "deferred",
-      "owner": "lihan",
-      "consumers": [],
-      "issues": [
-        "fft-contract",
-        "bit-true-vectors",
-        "vivado-timing"
-      ],
-      "badge_gap": [
-        "fft-contract",
-        "bit-true-vectors",
-        "vivado-timing"
-      ],
-      "deferred_reason": "project-specific PHY; keep intake under foundation-first policy",
-      "last_reviewed": "2026-07-26"
-    },
-    {
-      "id": "ITG-0009",
-      "project": "cbb-foundation",
-      "project_ref": "cbb/rrc_polyphase_fir",
-      "asset_uid": "rrc_polyphase_fir",
-      "version_pinned": "0.4.0",
-      "config": {
-        "DATA_W": 16,
-        "COEFF_W": 16,
-        "ACC_W": 38,
-        "SPS": 4,
-        "TAPS_PP": 9
-      },
-      "integrated_at": "2026-07-26T00:00:00Z",
-      "status": "active",
-      "maturity_status": "internal-validation",
-      "owner": "lihan",
-      "consumers": [
-        "cbb/rrc_polyphase_fir/tb/tb_rrc_polyphase_fir.sv"
-      ],
-      "issues": [
-        "board-validation",
-        "hold-closure"
-      ],
-      "badge_gap": [
-        "board-validation",
-        "hold-closure"
-      ],
-      "last_reviewed": "2026-07-26"
-    },
-    {
-      "id": "ITG-0010",
-      "project": "phy-intake",
-      "project_ref": "incubator/intake/sync_top",
-      "asset_uid": "sync_top",
-      "version_pinned": "0.1.0",
-      "config": {},
-      "integrated_at": "2026-07-26T00:00:00Z",
-      "status": "active",
-      "maturity_status": "deferred",
-      "owner": "lihan",
-      "consumers": [],
-      "issues": [
-        "cfo-correction",
-        "exported-vectors",
-        "vivado-timing"
-      ],
-      "badge_gap": [
-        "cfo-correction",
-        "exported-vectors",
-        "vivado-timing"
-      ],
-      "deferred_reason": "project-specific PHY; keep intake under foundation-first policy",
-      "last_reviewed": "2026-07-26"
-    },
-    {
-      "id": "ITG-0011",
-      "project": "cbb-foundation",
-      "project_ref": "cbb/stream_elastic_pipeline",
-      "asset_uid": "stream_elastic_pipeline",
-      "version_pinned": "0.4.0",
-      "config": {
-        "DATA_WIDTH": 32,
-        "DEPTH": 2
-      },
-      "integrated_at": "2026-07-26T00:00:00Z",
-      "status": "active",
-      "maturity_status": "certified",
-      "owner": "lihan",
-      "consumers": [],
-      "issues": [
-        "board-validation"
-      ],
-      "badge_gap": [
-        "board-validation"
-      ],
-      "deferred_reason": "Certified generic-device scope; board/field validation remains open.",
-      "last_reviewed": "2026-07-27"
-    },
-    {
-      "id": "ITG-0012",
-      "project": "cbb-foundation",
-      "project_ref": "models/comm/stream_elastic_pipeline",
-      "asset_uid": "stream_elastic_pipeline_golden",
-      "version_pinned": "0.1.0",
-      "config": {},
-      "integrated_at": "2026-07-26T00:00:00Z",
-      "status": "active",
-      "maturity_status": "evidence-only",
-      "owner": "lihan",
-      "consumers": [
-        "stream_elastic_pipeline"
-      ],
-      "issues": [],
-      "badge_gap": [],
-      "deferred_reason": "independent queue model is retained as evidence; 2600-sample ModelSim trace alignment passed for the consuming RTL",
-      "last_reviewed": "2026-07-27"
-    },
-    {
-      "id": "ITG-0013",
-      "project": "cbb-foundation",
-      "project_ref": "cbb/pulse_merge",
-      "asset_uid": "pulse_merge",
-      "version_pinned": "0.4.0",
-      "config": {
-        "INPUT_WIDTH": 4,
-        "COUNT_WIDTH": 12
-      },
-      "integrated_at": "2026-07-26T00:00:00Z",
-      "status": "active",
-      "maturity_status": "certified",
-      "owner": "lihan",
-      "consumers": [],
-      "issues": [
-        "upstream-commit-unpinned",
-        "board-validation"
-      ],
-      "badge_gap": [
-        "upstream-commit-unpinned",
-        "board-validation"
-      ],
-      "deferred_reason": "Certified generic-device scope; board/field validation and upstream commit pinning remain open.",
-      "last_reviewed": "2026-07-27"
-    },
-    {
-      "id": "ITG-0014",
-      "project": "cbb-foundation",
-      "project_ref": "models/comm/pulse_merge",
-      "asset_uid": "pulse_merge_golden",
-      "version_pinned": "0.1.0",
-      "config": {},
-      "integrated_at": "2026-07-26T00:00:00Z",
-      "status": "active",
-      "maturity_status": "evidence-only",
-      "owner": "lihan",
-      "consumers": [
-        "pulse_merge"
-      ],
-      "issues": [],
-      "badge_gap": [],
-      "deferred_reason": "independent pulse-credit model is retained as evidence; 2600-sample ModelSim trace alignment passed for the consuming RTL",
-      "last_reviewed": "2026-07-27"
-    }
-  ]
+ "schema_version": "1.1",
+ "owner": "lihan",
+ "entries": [
+  {
+   "id": "ITG-0001",
+   "project": "phy-intake",
+   "project_ref": "cbb/channel_est_top",
+   "asset_uid": "channel_est_top",
+   "version_pinned": "1.0.2",
+   "config": {
+    "DATA_W": 16,
+    "N_FFT": 64,
+    "N_PILOT": 4
+   },
+   "integrated_at": "2026-07-26T00:00:00Z",
+   "status": "active",
+   "maturity_status": "certified",
+   "owner": "lihan",
+   "consumers": [],
+   "issues": [],
+   "badge_gap": [],
+   "last_reviewed": "2026-08-01"
+  },
+  {
+   "id": "ITG-0002",
+   "project": "phy-intake",
+   "project_ref": "cbb/ldpc_codec",
+   "asset_uid": "ldpc_codec",
+   "version_pinned": "1.1.0",
+   "config": {},
+   "integrated_at": "2026-07-26T00:00:00Z",
+   "status": "active",
+   "maturity_status": "certified",
+   "owner": "lihan",
+   "consumers": [],
+   "issues": [],
+   "badge_gap": [],
+   "deferred_reason": "1.0.0 revalidation (2026-08-01): 四项遗留全部还清 —— gate-runner 实跑 20/20 全绿 CERTIFIED (G-C-03 无 initial 违规、G-B-03 alignment-report 齐备、vivado-timing 已接线 LUT 410/900 FF 244/500 BRAM 3/3、signoff.by=lihan)。project_ref 同步为迁包后的 cbb/ 路径。证据快照因 gate-runner JSON 输出格式变更 (G-DOC-03/G-DOC-04/gate-results 共 3 个门产物, 173->176 字节量级) 而失配, 已在资产内容不变的前提下按 1.0.0 原版本重取并 verify —— 逐文件比对确认 34 个文件无增无减, 除上述 3 个门产物外全部逐字节相同 (含 alignment-report / 综合报告 / tb-selfcheck / reset-sim / stability 四子结果)。",
+   "last_reviewed": "2026-08-01"
+  },
+  {
+   "id": "ITG-0003",
+   "project": "reference-evidence",
+   "project_ref": "models/comm/channel_est",
+   "asset_uid": "model_comm_channel_est",
+   "version_pinned": "1.2.0",
+   "config": {},
+   "integrated_at": "2026-07-26T00:00:00Z",
+   "status": "active",
+   "maturity_status": "evidence-only",
+   "owner": "lihan",
+   "consumers": [
+    "channel_est_top"
+   ],
+   "issues": [],
+   "badge_gap": [],
+   "deferred_reason": "golden/reference source is retained as correctness evidence; 1.2.0 repin: exported-vectors 已还清 (帧向量入库+位真镜像), adr-002-estimation-basis-revalidation 已还清 (消费方 channel_est_top 0.2.0 按新基础重排并 cosim bit-true PASS)",
+   "last_reviewed": "2026-08-01"
+  },
+  {
+   "id": "ITG-0004",
+   "project": "reference-evidence",
+   "project_ref": "models/comm/ldpc",
+   "asset_uid": "model_comm_ldpc",
+   "version_pinned": "1.0.0",
+   "config": {},
+   "integrated_at": "2026-07-26T00:00:00Z",
+   "status": "active",
+   "maturity_status": "evidence-only",
+   "owner": "lihan",
+   "consumers": [
+    "ldpc_codec"
+   ],
+   "issues": [],
+   "badge_gap": [],
+   "deferred_reason": "golden/reference source is retained as correctness evidence. exported-vectors 于 2026-08-02 复核关闭: 该条目建立于 2026-07-26, 但向量早在 2026-07-27 (9ee52f9) 就已导出入库 —— models/comm/ldpc/vectors/ 现有 31 个 .hex (译码 tb_llr_input_1..10 / tb_expected_output_1..10, 编码 tb_enc_info_1..5 / tb_enc_code_1..5, PT ROM pt_columns.hex), cbb/ldpc_codec 的 TB 经 +VEC_DIR 直接读取, ldpc_codec 1.0.0 认证的 G-B-03 即以此取证 (3240 点 0 失配)。属台账滞后, 非向量缺失。",
+   "last_reviewed": "2026-08-02"
+  },
+  {
+   "id": "ITG-0005",
+   "project": "reference-evidence",
+   "project_ref": "models/comm/ofdm",
+   "asset_uid": "model_comm_ofdm",
+   "version_pinned": "1.2.0",
+   "config": {},
+   "integrated_at": "2026-07-26T00:00:00Z",
+   "status": "active",
+   "maturity_status": "evidence-only",
+   "owner": "lihan",
+   "consumers": [
+    "ofdm_tx_top"
+   ],
+   "issues": [],
+   "badge_gap": [],
+   "deferred_reason": "golden/reference source is retained as correctness evidence. exported-vectors 于 2026-08-02 复核关闭: 1.2.0 已按 ADR-004 阶段3 用 rtl_mirror_tx 位真重导, models/comm/ofdm/vectors/ 现有 tx_bits.hex (比特激励) / expected_tx.hex (0 容差期望) / freq_grid.hex / vector_config.txt, ofdm_tx_top 1.0.0 的 G-B-03 以此取证 (2560 点 0 失配)。同目录另有 6 个旧语义文件 (expected_tx.bin / freq_i.bin / freq_q.bin / tx_i.bin / tx_q.bin / time-domain-iq.txt) 按前版决定保留为 G1 缺陷物证, 不得用于判卷, 见 manifest.vectors.provenance。",
+   "last_reviewed": "2026-08-02"
+  },
+  {
+   "id": "ITG-0006",
+   "project": "reference-evidence",
+   "project_ref": "models/comm/rrc",
+   "asset_uid": "model_comm_rrc",
+   "version_pinned": "1.1.0",
+   "config": {},
+   "integrated_at": "2026-07-26T00:00:00Z",
+   "status": "active",
+   "maturity_status": "evidence-only",
+   "owner": "lihan",
+   "consumers": [
+    "rrc_polyphase_fir"
+   ],
+   "issues": [],
+   "badge_gap": [],
+   "deferred_reason": "golden/reference source remains a correctness anchor. native-matlab-recheck 于 2026-08-02 在本机 MATLAB R2022a (9.12.0.1884302) 上跑完关闭, 判据是调用 golden 函数本体而非再实现一遍: 系数 rrc_coeff_gen(cfg) 与 rrc_coeff.hex 33/33 逐位一致 0 LSB 偏差; 向量 rrc_pulse_shaping() 输出与 expected_tx.hex 2048 样点 x I/Q = 4096 个 int16 全部逐位一致。该次复核同时查出 golden 自身缺陷 —— 原 rrc_pulse_shaping.m:42 对复数数组用 min/max 做饱和 (MATLAB 对复数按模比较并返回元素本身), 把整条信号塌陷成常量 -1.99994+0i, 即此前被判为『导出损坏』的 expected_tx.broken-orig.hex 实为该缺陷的真实输出 (4096/4096 相同)。已按 fixed_point_report §3.1/§3.3 改为 real/imag 分别裁剪, version 1.0.0 -> 1.1.0。下游 rrc_polyphase_fir 的 bit-true 锚在 expected_tx.hex 上, 该向量本次经原生 MATLAB 独立确认正确, 故下游结论不受影响、无需重跑。舍入策略分歧已于 2026-08-02 统一 (owner 裁定): fixed_point_report §3.3 原写 convergent rounding 而 golden/再生脚本/RTL 三者一致用 half-away-from-zero; 裁定结果是改需求文档、不改任何实现。依据是实测 —— 原条款给的理由『避免直流偏置』无法区分这两种模式: 平局在本设计 80 万样点随机激励下仅 24 次 (3e-5), 入库 4096 个 acc 中 0 次; half-up/half-away/convergent 三者误差 RMS 到小数点后 6 位相同, 直流偏置均在量化噪声的 0.13% 量级; half-away 与 convergent 仅 11/800000 点不同各差 1 LSB。反向改实现要把 round-to-even 挂到已是瓶颈、布线后 setup 仅 +0.058ns 的 round_clip 路径上并重新取证三方, 不成立。该结论依赖平局稀疏, 不可外推。",
+   "last_reviewed": "2026-08-02"
+  },
+  {
+   "id": "ITG-0007",
+   "project": "reference-evidence",
+   "project_ref": "models/comm/synch",
+   "asset_uid": "model_comm_synch",
+   "version_pinned": "1.1.0",
+   "config": {},
+   "integrated_at": "2026-07-26T00:00:00Z",
+   "status": "active",
+   "maturity_status": "evidence-only",
+   "owner": "lihan",
+   "consumers": [
+    "sync_top"
+   ],
+   "issues": [],
+   "badge_gap": [],
+   "deferred_reason": "golden/reference source is retained as correctness evidence; 1.1.0 repin (ADR-003): exported-vectors 已还清 (帧向量 2610/2226 + T1 符号表入库, 位真镜像), cfo-correction 已还清 (消费方 sync_top 0.2.1 因果校正通路落地并 cosim bit-true 2226 点 0 失配)",
+   "last_reviewed": "2026-08-01"
+  },
+  {
+   "id": "ITG-0008",
+   "project": "phy-intake",
+   "project_ref": "cbb/ofdm_tx_top",
+   "asset_uid": "ofdm_tx_top",
+   "version_pinned": "1.0.1",
+   "config": {
+    "DATA_W": 16
+   },
+   "integrated_at": "2026-07-26T00:00:00Z",
+   "status": "active",
+   "maturity_status": "certified",
+   "owner": "lihan",
+   "consumers": [],
+   "issues": [],
+   "badge_gap": [],
+   "deferred_reason": "1.0.0 repin (ADR-004): fft-contract 已还清 (自研 R2²SDF 替代 IP 占位, 结构对齐 ADR-004 决策1); bit-true-vectors 已还清 (golden 1.2.0 位真镜像 + cosim 2560 样点 0 容差 0 失配); vivado-timing 已还清 (OOC 综合 WNS +6.323ns @100MHz 即 272MHz, 资源全在包络内)",
+   "last_reviewed": "2026-08-01"
+  },
+  {
+   "id": "ITG-0009",
+   "project": "cbb-foundation",
+   "project_ref": "cbb/rrc_polyphase_fir",
+   "asset_uid": "rrc_polyphase_fir",
+   "version_pinned": "1.0.2",
+   "config": {
+    "DATA_W": 16,
+    "COEFF_W": 16,
+    "ACC_W": 38,
+    "SPS": 4,
+    "TAPS_PP": 9
+   },
+   "integrated_at": "2026-07-26T00:00:00Z",
+   "status": "active",
+   "maturity_status": "internal-validation",
+   "owner": "lihan",
+   "consumers": [
+    "cbb/rrc_polyphase_fir/tb/tb_rrc_polyphase_fir.sv"
+   ],
+   "issues": [
+    "board-validation",
+    "hold-closure"
+   ],
+   "badge_gap": [
+    "board-validation",
+    "hold-closure"
+   ],
+   "deferred_reason": "hold-closure 于 2026-08-02 实跑布线后时序推进但**不关闭**: Vivado 2023.1.1 OOC synth->opt->place->route, WHS 四阶段恒为 -0.163ns, 布线后 THS=-20.056ns / 320 个端点失败 —— README 原先『综合级 hold 是估算值、正常在布局布线阶段收敛』的说法已被证伪。归因明确: 对 post_route.dcp 跑 get_timing_paths -delay_type min -slack_lesser_than 0, 924 条违例路径全部从输入端口出发、内部单元起点 0 条, reg-to-reg 最差 hold +0.094ns (内部已收敛); 唯一失败端口是 i_rst (s_axis_tvalid +0.218 / m_axis_tready +0.193 均通过), 路径 i_rst -> addA_i_reg[0]/RSTM (DSP48E1), 差额 0.163ns 由 XDC 自称『显式假设、非实测』的 set_input_delay -min 0.100 支配。量化关闭条件: i_rst 真实最小输入延时 >= 0.263ns 即收敛, 须由集成方以板级实数确认; 或在核内把 i_rst 寄存一拍使该路径变 reg-to-reg (复位晚一拍, 属行为契约变更, 需重跑全部取证, 待 owner 决策)。证据: var/gates/pg/rrc_polyphase_fir/hold-closure.json + route-timing-summary.rpt。另: 本资产原先没有哈希锁定证据快照 (全库 certified 中唯一), 2026-08-02 已取 0.4.0 快照并把 maturity.evidence_ref 指过去, --verify-all 现为 17 verified。board-validation 仍为空白, 需实际硬件。",
+   "last_reviewed": "2026-08-02",
+   "blocked": {
+    "gap": [
+     "board-validation",
+     "hold-closure"
+    ],
+    "cause": "hardware-unavailable",
+    "declared_by": "owner",
+    "declared_at": "2026-08-02",
+    "note": "owner 2026-08-02 明确『硬件暂时无法提供』。两项都不是遗漏也不是待办, 而是缺前置条件而无法执行。hold-closure 于同日**确认不可由 RTL 关闭**: 实测试过把 i_rst 寄存一拍使最差路径变 reg-to-reg, WHS 反而从 -0.163ns 劣化到 -0.189ns (新最差路径 s_axis_tdata[5] -> sym_buf_i_reg[0][5]/D 是普通 FDRE, hold 需求 0.227ns > DSP48E1 RSTM 的 0.201ns), 改动已回退。根因是 XDC 的 set_input_delay -min 0.100 占位假设对所有输入过小; 任何输入端口最终都要落进某个触发器, 而 sym_buf_i_reg[0] 本身就是输入寄存级, 故 RTL 侧无杠杆。此前记录的『唯一失败端口是 i_rst』是抽样不全导致的误判 (漏查 s_axis_tdata[*])。",
+    "unblock_requires": "一块 xc7k325t (或等效 Kintex-7) 板卡 + 引脚绑定的顶层 XDC。到位后: (1) 用真实 set_input_delay -min 重跑布线后 STA 判定 hold —— 就 2026-08-02 那次布线而言输入最小延时需 >= 约 0.29ns (0.799-0.510), 但该数值随布局布线变动, 不是固定门槛; (2) 出比特流上板, 用已入库的 rrc_stimulus.hex 灌激励、抓 expected_tx.hex 对拍。"
+   }
+  },
+  {
+   "id": "ITG-0010",
+   "project": "phy-intake",
+   "project_ref": "cbb/sync_top",
+   "asset_uid": "sync_top",
+   "version_pinned": "1.0.2",
+   "config": {},
+   "integrated_at": "2026-07-26T00:00:00Z",
+   "status": "active",
+   "maturity_status": "certified",
+   "owner": "lihan",
+   "consumers": [],
+   "issues": [],
+   "badge_gap": [],
+   "last_reviewed": "2026-08-01"
+  },
+  {
+   "id": "ITG-0011",
+   "project": "cbb-foundation",
+   "project_ref": "cbb/stream_elastic_pipeline",
+   "asset_uid": "stream_elastic_pipeline",
+   "version_pinned": "1.0.2",
+   "config": {
+    "DATA_WIDTH": 32,
+    "DEPTH": 2
+   },
+   "integrated_at": "2026-07-26T00:00:00Z",
+   "status": "active",
+   "maturity_status": "certified",
+   "owner": "lihan",
+   "consumers": [],
+   "issues": [
+    "board-validation"
+   ],
+   "badge_gap": [
+    "board-validation"
+   ],
+   "deferred_reason": "Certified generic-device scope; board/field validation remains open.",
+   "last_reviewed": "2026-07-27",
+   "blocked": {
+    "gap": [
+     "board-validation"
+    ],
+    "cause": "hardware-unavailable",
+    "declared_by": "owner",
+    "declared_at": "2026-08-02",
+    "note": "owner 2026-08-02 明确『硬件暂时无法提供』。本条不是遗漏也不是待办 —— 是缺前置条件而无法执行, 在硬件到位前不应被当作可关闭项反复重扫。",
+    "unblock_requires": "一块 xc7a35t (或等效 Artix-7) 板卡 + 引脚绑定顶层 XDC。到位后出比特流上板, 复跑 2600 样点 Golden 对拍 (offset=4)。"
+   }
+  },
+  {
+   "id": "ITG-0012",
+   "project": "cbb-foundation",
+   "project_ref": "models/comm/stream_elastic_pipeline",
+   "asset_uid": "stream_elastic_pipeline_golden",
+   "version_pinned": "0.1.0",
+   "config": {},
+   "integrated_at": "2026-07-26T00:00:00Z",
+   "status": "active",
+   "maturity_status": "evidence-only",
+   "owner": "lihan",
+   "consumers": [
+    "stream_elastic_pipeline"
+   ],
+   "issues": [],
+   "badge_gap": [],
+   "deferred_reason": "independent queue model is retained as evidence; 2600-sample ModelSim trace alignment passed for the consuming RTL",
+   "last_reviewed": "2026-07-27"
+  },
+  {
+   "id": "ITG-0013",
+   "project": "cbb-foundation",
+   "project_ref": "cbb/pulse_merge",
+   "asset_uid": "pulse_merge",
+   "version_pinned": "1.0.2",
+   "config": {
+    "INPUT_WIDTH": 4,
+    "COUNT_WIDTH": 12
+   },
+   "integrated_at": "2026-07-26T00:00:00Z",
+   "status": "active",
+   "maturity_status": "certified",
+   "owner": "lihan",
+   "consumers": [],
+   "issues": [
+    "board-validation"
+   ],
+   "badge_gap": [
+    "board-validation"
+   ],
+   "deferred_reason": "Certified generic-device scope; board/field validation remains open (needs real hardware). upstream-commit-unpinned 于 2026-08-02 关闭: 上游 commit 由内容比对反查确定为 25156a9a162c41c60f11f41590c7d006d015ae5a (2024-04-26, 'Add example design for Alveo U55C')。此前的『归档无 .git 故 SHA 不可复原』是错误结论 —— 无 .git 只丢元数据, git blob SHA 是内容的函数。判据: 对该 commit 的递归树逐路径比对本地归档 633 个文件, 路径集完全一致 (仅本地 0/仅上游 0), blob 分类为 逐字节一致 4 + 仅 CRLF 差异 545 + 上游 symlink 在 Windows 解压落成空文件 84 (上游 symlink 总数正是 84), 未解释的差异 0; 相邻 commit 均不满足 (195be74a 及更早无 AU55C 那批文件)。本模块直接来源 rtl/pulse_merge.v 单独复核: 上游 blob aafe38a8 = 本地 LF 归一后的 blob。同日版本号转正 1.0.0 (owner 裁定), RTL 与功能结论未变。",
+   "last_reviewed": "2026-08-02",
+   "blocked": {
+    "gap": [
+     "board-validation"
+    ],
+    "cause": "hardware-unavailable",
+    "declared_by": "owner",
+    "declared_at": "2026-08-02",
+    "note": "owner 2026-08-02 明确『硬件暂时无法提供』。本条不是遗漏也不是待办 —— 是缺前置条件而无法执行, 在硬件到位前不应被当作可关闭项反复重扫。",
+    "unblock_requires": "一块 xc7a35t (或等效 Artix-7) 板卡 + 引脚绑定顶层 XDC。到位后出比特流上板, 复跑 2600 样点 Golden 对拍 (offset=0)。"
+   }
+  },
+  {
+   "id": "ITG-0014",
+   "project": "cbb-foundation",
+   "project_ref": "models/comm/pulse_merge",
+   "asset_uid": "pulse_merge_golden",
+   "version_pinned": "0.1.0",
+   "config": {},
+   "integrated_at": "2026-07-26T00:00:00Z",
+   "status": "active",
+   "maturity_status": "evidence-only",
+   "owner": "lihan",
+   "consumers": [
+    "pulse_merge"
+   ],
+   "issues": [],
+   "badge_gap": [],
+   "deferred_reason": "independent pulse-credit model is retained as evidence; 2600-sample ModelSim trace alignment passed for the consuming RTL",
+   "last_reviewed": "2026-07-27"
+  },
+  {
+   "id": "ITG-0015",
+   "project": "(library)",
+   "project_ref": "cbb/axis_skid_buffer",
+   "asset_uid": "axis_skid_buffer",
+   "version_pinned": "1.0.2",
+   "config": {},
+   "integrated_at": "2026-07-31T00:00:00Z",
+   "status": "library",
+   "owner": "lihan",
+   "consumers": [],
+   "issues": [],
+   "badge_gap": [],
+   "note": "在库未被任何项目集成(owner 裁决 2026-07-31: 库存类型条目); 首次真实集成时改 active 并 pin 版本+config"
+  },
+  {
+   "id": "ITG-0016",
+   "project": "(library)",
+   "project_ref": "cbb/cdc_sync",
+   "asset_uid": "cdc_sync",
+   "version_pinned": "1.0.1",
+   "config": {
+    "P_DWIDTH": 8,
+    "P_STAGES": 2
+   },
+   "integrated_at": "2026-07-31T00:00:00Z",
+   "status": "library",
+   "owner": "lihan",
+   "consumers": [],
+   "issues": [],
+   "badge_gap": [],
+   "note": "在库未被任何项目集成(owner 裁决 2026-07-31: 库存类型条目); 首次真实集成时改 active 并 pin 版本+config"
+  },
+  {
+   "id": "ITG-0017",
+   "project": "(library)",
+   "project_ref": "cbb/complex_multiplier",
+   "asset_uid": "complex_multiplier",
+   "version_pinned": "1.0.1",
+   "config": {
+    "P_A_W": 16,
+    "P_B_W": 16
+   },
+   "integrated_at": "2026-07-31T00:00:00Z",
+   "status": "library",
+   "owner": "lihan",
+   "consumers": [],
+   "issues": [],
+   "badge_gap": [],
+   "note": "在库未被任何项目集成(owner 裁决 2026-07-31: 库存类型条目); 首次真实集成时改 active 并 pin 版本+config"
+  },
+  {
+   "id": "ITG-0018",
+   "project": "(library)",
+   "project_ref": "cbb/crc32",
+   "asset_uid": "crc32",
+   "version_pinned": "1.0.1",
+   "config": {},
+   "integrated_at": "2026-07-31T00:00:00Z",
+   "status": "library",
+   "owner": "lihan",
+   "consumers": [],
+   "issues": [],
+   "badge_gap": [],
+   "note": "在库未被任何项目集成(owner 裁决 2026-07-31: 库存类型条目); 首次真实集成时改 active 并 pin 版本+config"
+  },
+  {
+   "id": "ITG-0019",
+   "project": "(library)",
+   "project_ref": "cbb/ddr_axi4_controller",
+   "asset_uid": "ddr_axi4_controller",
+   "version_pinned": "1.0.1",
+   "config": {
+    "P_DATA_W": 512,
+    "P_ADDR_W": 32,
+    "P_ID_W": 4,
+    "P_MAX_LEN": 256,
+    "P_TIMEOUT": 4096
+   },
+   "integrated_at": "2026-07-31T00:00:00Z",
+   "status": "library",
+   "owner": "lihan",
+   "consumers": [],
+   "issues": [],
+   "badge_gap": [],
+   "note": "在库未被任何项目集成(owner 裁决 2026-07-31: 库存类型条目); 首次真实集成时改 active 并 pin 版本+config"
+  },
+  {
+   "id": "ITG-0020",
+   "project": "(library)",
+   "project_ref": "cbb/delay_line",
+   "asset_uid": "delay_line",
+   "version_pinned": "1.0.1",
+   "config": {
+    "P_DWIDTH": 32,
+    "P_DELAY": 2
+   },
+   "integrated_at": "2026-07-31T00:00:00Z",
+   "status": "library",
+   "owner": "lihan",
+   "consumers": [],
+   "issues": [],
+   "badge_gap": [],
+   "note": "在库未被任何项目集成(owner 裁决 2026-07-31: 库存类型条目); 首次真实集成时改 active 并 pin 版本+config"
+  },
+  {
+   "id": "ITG-0021",
+   "project": "(library)",
+   "project_ref": "cbb/frame_sync",
+   "asset_uid": "frame_sync",
+   "version_pinned": "1.0.1",
+   "config": {
+    "P_MIN_PREAMBLE": 2
+   },
+   "integrated_at": "2026-07-31T00:00:00Z",
+   "status": "library",
+   "owner": "lihan",
+   "consumers": [],
+   "issues": [],
+   "badge_gap": [],
+   "note": "在库未被任何项目集成(owner 裁决 2026-07-31: 库存类型条目); 首次真实集成时改 active 并 pin 版本+config"
+  },
+  {
+   "id": "ITG-0022",
+   "project": "(library)",
+   "project_ref": "cbb/lfsr_gen",
+   "asset_uid": "lfsr_gen",
+   "version_pinned": "1.0.1",
+   "config": {},
+   "integrated_at": "2026-07-31T00:00:00Z",
+   "status": "library",
+   "owner": "lihan",
+   "consumers": [],
+   "issues": [],
+   "badge_gap": [],
+   "note": "在库未被任何项目集成(owner 裁决 2026-07-31: 库存类型条目); 首次真实集成时改 active 并 pin 版本+config"
+  },
+  {
+   "id": "ITG-0023",
+   "project": "(library)",
+   "project_ref": "cbb/sdp_ram",
+   "asset_uid": "sdp_ram",
+   "version_pinned": "1.0.1",
+   "config": {
+    "P_DWIDTH": 32,
+    "P_AWIDTH": 9
+   },
+   "integrated_at": "2026-07-31T00:00:00Z",
+   "status": "library",
+   "owner": "lihan",
+   "consumers": [],
+   "issues": [],
+   "badge_gap": [],
+   "note": "在库未被任何项目集成(owner 裁决 2026-07-31: 库存类型条目); 首次真实集成时改 active 并 pin 版本+config"
+  }
+ ]
 }

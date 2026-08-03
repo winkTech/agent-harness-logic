@@ -23,8 +23,9 @@ function validate(root) {
     assetIds.add(entry.asset_uid);
     const asset = byUid.get(entry.asset_uid);
     if (!asset) { errors.push(`unknown registry asset_uid: ${entry.asset_uid}`); continue; }
-    if (entry.version_pinned !== asset.version) errors.push(`version drift ${entry.asset_uid}: registry=${entry.version_pinned} manifest=${asset.version}`);
-    if (!['active', 'retired'].includes(entry.status)) errors.push(`invalid lifecycle status ${entry.asset_uid}: ${entry.status}`);
+    // library = 在库未被任何项目集成(owner 裁决 2026-07-31): 无真实 pin 语义, 豁免 drift
+    if (entry.status !== 'library' && entry.version_pinned !== asset.version) errors.push(`version drift ${entry.asset_uid}: registry=${entry.version_pinned} manifest=${asset.version}`);
+    if (!['active', 'retired', 'library'].includes(entry.status)) errors.push(`invalid lifecycle status ${entry.asset_uid}: ${entry.status}`);
     if (Number.isNaN(Date.parse(entry.integrated_at))) errors.push(`invalid integrated_at ${entry.asset_uid}`);
     const paramNames = new Set((asset.manifest.params || []).map((param) => param.name));
     for (const key of Object.keys(entry.config || {})) if (!paramNames.has(key)) errors.push(`config key not declared in manifest.params ${entry.asset_uid}: ${key}`);
@@ -37,7 +38,13 @@ function validate(root) {
 
 function main(argv = process.argv.slice(2)) {
   const index = argv.indexOf('--root'); const root = path.resolve(index >= 0 ? argv[index + 1] : path.resolve(__dirname, '..'));
-  try { const errors = validate(root); if (errors.length) { errors.forEach((e) => console.error(`[integration-registry] ${e}`)); return 1; } console.log('[integration-registry] valid entries=10'); return 0; }
+  try {
+    const errors = validate(root);
+    if (errors.length) { errors.forEach((e) => console.error(`[integration-registry] ${e}`)); return 1; }
+    const registry = JSON.parse(fs.readFileSync(path.join(root, 'integration', 'registry.json'), 'utf8'));
+    console.log(`[integration-registry] valid entries=${(registry.entries || []).length}`);
+    return 0;
+  }
   catch (error) { console.error(`[integration-registry] ${error.message}`); return 2; }
 }
 if (require.main === module) process.exitCode = main();

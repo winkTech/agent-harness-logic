@@ -124,6 +124,67 @@
       "active": true
     },
     {
+      "script": "engine/scripts/hooks/subagent-verdict.cjs",
+      "kind": "observer",
+      "events": [
+        "SubagentStop"
+      ],
+      "tools": [
+        "*"
+      ],
+      "payloadSchema": "claude-hook/subagent-stop-v1",
+      "blocking": false,
+      "sideEffects": [
+        "task-loops"
+      ],
+      "timeoutSeconds": 10,
+      "owner": "harness-loop",
+      "fixture": "engine/scripts/test-hooks/loop-controller-contract.cjs",
+      "active": true
+    },
+    {
+      "script": "engine/scripts/hooks/loop-controller.cjs",
+      "kind": "controller",
+      "events": [
+        "Stop"
+      ],
+      "tools": [
+        "*"
+      ],
+      "payloadSchema": "claude-hook/stop-v1",
+      "blocking": true,
+      "sideEffects": [
+        "task-loops"
+      ],
+      "timeoutSeconds": 40,
+      "owner": "harness-loop",
+      "fixture": "engine/scripts/test-hooks/loop-controller-contract.cjs",
+      "active": true
+    },
+    {
+      "script": "engine/scripts/hooks/codegraph-sync.cjs",
+      "kind": "indexer",
+      "events": [
+        "SessionStart",
+        "PostToolUse"
+      ],
+      "tools": [
+        "Edit",
+        "Write",
+        "MultiEdit"
+      ],
+      "payloadSchema": "claude-hook/postflight-v1",
+      "blocking": false,
+      "sideEffects": [
+        "code-graph",
+        "codegraph-sync-state"
+      ],
+      "timeoutSeconds": 60,
+      "owner": "harness-graph",
+      "fixture": "engine/scripts/test-hooks/codegraph-sync-contract.cjs",
+      "active": true
+    },
+    {
       "script": "engine/scripts/hooks/session-bootstrap.cjs",
       "kind": "router",
       "events": ["SessionStart"],

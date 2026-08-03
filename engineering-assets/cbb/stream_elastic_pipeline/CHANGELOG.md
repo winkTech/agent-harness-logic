@@ -1,5 +1,43 @@
 # Changelog
 
+## [1.0.2] — 2026-08-02 证据重建：从"不可复现"到可复现
+
+同 `pulse_merge` 1.0.2：此前证据出自一套已丢失的外部 replay harness，golden 路径
+指向已清空的 `incubator/qualification/...`。现由 `tools/run-model-backed-sim.sh`
+按原命令日志路径重建：
+
+- Python 参考模型单测：OK
+- iverilog/vvp 三组参数 `DEPTH=1/2/4`：均 PASS
+- 2600 拍对标规模运行：PASS
+
+**同样如实降级**：`alignment-report.json` 的 `vector_sha256` / `trace_sha256`
+已去掉（来自已消失的 harness，无法复算），变更写进该文件 `basis_note`。
+`reset-sim.json` 的 `cwd` 更正为 `models/comm/stream_elastic_pipeline`。
+RTL、约束、TB 零改动。
+
+## [1.0.1] — 2026-08-02 声明证据复现入口（G-GATE-02）
+
+manifest 新增 `reproduce` 字段，把"证据怎么重做"从 README 里的散文变成**机器可校验
+的契约**。新门 `G-GATE-02` 校验该命令引用的脚本在仓库中真实存在。
+
+动因：`G-GATE-01` 只查证据文件在不在，普查发现 16 个 certified 里 14 个的证据当时
+无法被任何人重新生成，**却全都通过了 G-GATE-01**。
+
+RTL、约束、TB、证据零改动；升 patch 版仅因 manifest 内容变化会使快照的
+`manifest_sha256` 失配，按库内既定做法升版重取。
+
+## [1.0.0] - 2026-08-02
+
+**纯版本号转正**（owner 2026-08-02 裁定）。RTL、约束、TB、证据与全部功能结论
+自 0.4.0 起未做任何改动。
+
+资产自 2026-07-27 起就是 certified，但版本号一直停在 0.4.0，与库内其余 certified
+资产不一致 —— 引用方按版本号推断成熟度会读错。`evidence_ref` /
+`evidence_snapshot_ref` 指向 `evidence/stream_elastic_pipeline/1.0.0/`，
+0.4.0 快照原封转为历史。
+
+`board-validation` 仍未还清（需实际硬件）。
+
 ## [0.4.0] - 2026-07-27
 
 - Owner signoff completed and the foundation asset was admitted to `cbb/` with bit-true, ModelSim, Vivado and CDC evidence; board/field validation remains outside the release scope.

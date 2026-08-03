@@ -1,0 +1,189 @@
+{
+  "schema_version": "1.0",
+  "asset_uid": "ofdm_tx_top",
+  "name": "ofdm_tx_top",
+  "version": "1.0.1",
+  "owner": "lihan",
+  "maturity": {
+    "level": "certified",
+    "evidence_ref": "engineering-assets/evidence/ofdm_tx_top/1.0.1/"
+  },
+  "signoff": {
+    "by": "lihan",
+    "at": "2026-08-01",
+    "scope": [
+      "证据已复核: alignment-report.json (位真 cosim 2560 样点 4 调制 × 8 符号 逐位 0 失配, 0 容差, 流水偏移 195 拍按 valid 握手对齐无人工偏移) / reset-sim.json (帧中再复位 39 个受复位控制寄存器逐一比对, 含 r_credit 复位值 2) / stability 四子结果 (regression 四调制 960 样点 / boundary 最小 1 符号+最大 8 符号+输入侧随机空隙 960 样点 / backpressure 4 种 tready 模式 1200 样点与基准逐点一致 / stress 12 帧连续换调制 2880 样点) / timing-summary.rpt / utilization.rpt / envelope-check.json (WNS +6.323ns @ 100MHz 即 272MHz; LUT 1211/3500, FF 956/4000, BRAM 0/4, DSP 10/12) / cdc-report.json (单时钟域结构扫描, cdc_tool=na)",
+      "正确性锚: golden model_comm_ofdm 1.2.0 (run_all_tests 3/3; rtl_mirror_tx 位真镜像按 fixed_point_report §2.2 需求侧调度表实现, 与 RTL 各自独立实现同一规格)",
+      "架构依据: ADR-004 决策1 R2²SDF (由 DIF 分解推导并与 ifft_chain 的 ifft(x)·sqrt(N) 标定核对); 0.2.0 曾误用基-2 SDF 致乘法器翻倍, 0.3.0 已对齐",
+      "已接受限制: 导频极性按符号序 ±1 交替 (首符号 +), 非 802.11a 127 长 PRBS 导频扰码 —— 与 golden subcarrier_map 同约定, 属全族已知简化, 升级时同步 (原 F6/L3)",
+      "已接受限制: s_axis_tready 为寄存输出, 反压恢复有 1 拍气泡; 需零气泡时在边界外套 axis_skid_buffer (L4)",
+      "已接受限制: 接口契约 —— i_cfg_mod_type 帧内须稳定; 每 48 拍构成一个符号, s_axis_tlast 未用 (帧语义在外部); 符号信用节流在途 ≤2; 尾部需再馈 ≥2 个全零符号排空 IFFT 流水",
+      "已接受限制: TB 激励为单一 LCG 确定性序列, 无随机约束与覆盖率收集; 帧长覆盖 1/3/8 符号, 未探设计上限 (L5)",
+      "已接受限制: BRAM=0 —— 4 组 64×32b 乒乓 RAM 映射为分布式 RAM/SRL, 该容量下属合理映射; 如需占 BRAM 须显式加 ram_style",
+      "工具说明: 本版全部仿真证据由 Vivado xsim 2023.1 产出 —— 本机 ModelSim 10.6c 的 vish/vsim 回环 RPC 故障 (IPv6 ::1 可 bind 不可 connect) 使任何设计无法加载; vlog 编译不开 socket 不受影响, G-A-00 仍由 ModelSim 判读"
+    ]
+  },
+  "requirement_ref": "engineering-assets/knowledge/primary/domains/comm/ofdm/algorithm_spec.md",
+  "doc_refs": [
+    "engineering-assets/knowledge/primary/domains/comm/ofdm/rtl_architecture.md",
+    "engineering-assets/knowledge/primary/domains/comm/ofdm/fixed_point_report.md",
+    "engineering-assets/knowledge/primary/domains/comm/ofdm/report_ofdm_fpga_implementation.md",
+    "engineering-assets/knowledge/primary/domains/comm/ofdm/resource_estimate.md",
+    "engineering-assets/knowledge/primary/domains/comm/ofdm/testbench_plan.md"
+  ],
+  "golden_model_ref": "model_comm_ofdm",
+  "fidelity": {
+    "status": "bit_true"
+  },
+  "device": {
+    "part": "xc7k325tffg900-2"
+  },
+  "ports": [
+    {
+      "name": "i_clk",
+      "direction": "input",
+      "width": 1
+    },
+    {
+      "name": "i_rst",
+      "direction": "input",
+      "width": 1
+    },
+    {
+      "name": "s_axis_tdata",
+      "direction": "input",
+      "width": 6,
+      "bus": "axi-stream"
+    },
+    {
+      "name": "s_axis_tvalid",
+      "direction": "input",
+      "width": 1,
+      "bus": "axi-stream"
+    },
+    {
+      "name": "s_axis_tready",
+      "direction": "output",
+      "width": 1,
+      "bus": "axi-stream"
+    },
+    {
+      "name": "s_axis_tlast",
+      "direction": "input",
+      "width": 1,
+      "bus": "axi-stream"
+    },
+    {
+      "name": "m_axis_tdata",
+      "direction": "output",
+      "width": 32,
+      "bus": "axi-stream"
+    },
+    {
+      "name": "m_axis_tvalid",
+      "direction": "output",
+      "width": 1,
+      "bus": "axi-stream"
+    },
+    {
+      "name": "m_axis_tready",
+      "direction": "input",
+      "width": 1,
+      "bus": "axi-stream"
+    },
+    {
+      "name": "m_axis_tlast",
+      "direction": "output",
+      "width": 1,
+      "bus": "axi-stream"
+    },
+    {
+      "name": "i_cfg_mod_type",
+      "direction": "input",
+      "width": 4
+    }
+  ],
+  "params": [
+    {
+      "name": "DATA_W",
+      "value": 16,
+      "rationale": "RTL 顶层参数默认值; I/Q 样点位宽 (频域 Q2.14 / 时域 Q3.13); m_axis_tdata 为 DATA_W*2 打包"
+    }
+  ],
+  "clock": {
+    "name": "i_clk",
+    "period_ns": 10
+  },
+  "reset": {
+    "name": "i_rst",
+    "polarity": "active_high",
+    "type": "sync",
+    "async_release_synchronized": true
+  },
+  "constraints": {
+    "target": {
+      "fmax": "100MHz",
+      "fmax_mhz": 100,
+      "lut": 3500,
+      "ff": 4000,
+      "bram": 4,
+      "dsp": 12
+    }
+  },
+  "sources": [
+    {
+      "path": "rtl/ofdm_tx_top.sv",
+      "role": "rtl",
+      "sha256": "88a3be8677de125b9e9653059917fb3cae09d3a3fa5926b29c6f7a355196860d"
+    },
+    {
+      "path": "rtl/tx_mapper.sv",
+      "role": "rtl",
+      "sha256": "2495905e312b20ee9b0146436b2da452508fd4aa00951384fb1d7663107ceb5d"
+    },
+    {
+      "path": "rtl/tx_pilot_map.sv",
+      "role": "rtl",
+      "sha256": "bd58a3acfb59b1426e4078fbadd9aae6e716f120d885d4b982fa6a66084cc6a6"
+    },
+    {
+      "path": "rtl/ifft64_sdf.sv",
+      "role": "rtl",
+      "sha256": "0929e928d439c7e6bbe369125e68c1b322911fea277be46f6d73969716805cdb"
+    },
+    {
+      "path": "rtl/tx_cp_insert.sv",
+      "role": "rtl",
+      "sha256": "75c5da8de865824b64c17eb08df6232dfd079f094cf64389fb23b95b2cf078c9"
+    },
+    {
+      "path": "constraints/ofdm_tx_top.xdc",
+      "role": "constraint",
+      "sha256": "e944683f8493c7cbb31efd5345209b035b7c887063ba263acde2fdff5ef018e4"
+    },
+    {
+      "path": "tb/gen_cosim_vectors.m",
+      "role": "tb",
+      "sha256": "e742a011ec273ce467882fc82eaa1b8098a3e38cea2fa7ec43607ea25fe73833"
+    },
+    {
+      "path": "tb/tb_tx_cosim.sv",
+      "role": "tb",
+      "sha256": "b2bd55c06e3ae348666db75b56bf77b6b39d6dc0dee443eba6f42ad5fafdadcf"
+    },
+    {
+      "path": "tb/tb_tx_top.sv",
+      "role": "tb",
+      "sha256": "8296de6ec4c08bfd55cb504748a6f7b9c10d239507fa4bc521cf4872cdc98633"
+    }
+  ],
+  "waivers": [],
+  "superseded_by": null,
+  "top": "ofdm_tx_top",
+  "reproduce": {
+    "sim": "bash cbb/ofdm_tx_top/run_xsim.sh --install",
+    "synth": "node tools/pg-synth.cjs cbb/ofdm_tx_top",
+    "gate": "node tools/gate-runner.cjs cbb/ofdm_tx_top --repo-root ..",
+    "note": "双通路: run_xsim.sh (本机可用) 与 run.do (ModelSim, 本机故障)。"
+  }
+}

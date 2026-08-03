@@ -8,8 +8,18 @@ const path = require('node:path');
 const { scanRepository } = require('./catalog-gen.cjs');
 
 const MAX_BYTES = 1024 * 1024;
-const ALLOWED = /^(?:gate-results\.json|RL-OUT\.json|(?:G|CS|RL-OUT)-[A-Z0-9./_-]+\.json|envelope-check\.json|alignment-report\.json|reset-sim\.json|cdc-report\.json|timing-summary\.rpt|utilization\.rpt|clocks\.rpt|synth-meta\.json|stability[\\/][^\\/]+\.json)$/;
-const EXCLUDED = /(?:^|[\\/])(?:synth\.log|backup|work|waves?|.*\.(?:wlf|vcd|vpd|fsdb))(?=$|[\\/])/i;
+// cdc.rpt / clock-interaction.rpt / clocks-cdc.rpt: 真实多时钟域资产 (如 cdc_sync)
+// 的 report_cdc 原始报告 —— cdc-report.json 是其摘要, 原报告一并锁定才可复核
+const ALLOWED = /^(?:gate-results\.json|RL-OUT\.json|(?:G|CS|RL-OUT)-[A-Z0-9./_-]+\.json|envelope-check\.json|alignment-report\.json|tb-selfcheck\.json|reset-sim\.json|cdc-report\.json|synthesis-timing-evidence\.json|timing-summary\.rpt|utilization\.rpt|clocks\.rpt|cdc\.rpt|clock-interaction\.rpt|clocks-cdc\.rpt|synth-meta\.json|stability[\\/][^\\/]+\.json|hold-closure\.json|route-timing-summary\.rpt|route-utilization\.rpt|route-drc\.rpt)$/;
+// trace/ = bit-true 对拍原始数据(hex/txt, MB 级), 性质同波形: 可由 TB+golden 复现,
+// 摘要在 alignment-report.json 里 —— 不入快照
+// rtl_*_out.hex = TB 的 RTL 输出转储, 性质同 trace/: 可由 TB+向量复现, 判定摘要在
+// alignment-report.json 里, 不入快照。(channel_est_top 的 tb_chEst_cosim 会产它;
+// 它原先被写进 golden 的权威向量目录, 2026-08-02 改写到证据目录后才撞上白名单。)
+// `synth_<pid>.backup.log` 是 Vivado 自留的综合日志副本, 与已排除的 synth.log 同类
+// (可由 pg-synth 重跑再生, 判定摘要在 envelope-check.json / synthesis-timing-evidence.json)。
+// 原 `backup` 一条只匹配**目录段**, 匹配不到这种文件名, 2026-08-02 补 `*.backup.log`。
+const EXCLUDED = /(?:^|[\\/])(?:synth\.log|[A-Za-z0-9_]*\.backup\.log|backup|work|waves?|trace|rtl_[A-Za-z0-9_]*_out\.hex|.*\.(?:wlf|vcd|vpd|fsdb))(?=$|[\\/])/i;
 
 function canonicalBytes(file) {
   const bytes = fs.readFileSync(file);

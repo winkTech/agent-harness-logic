@@ -1,77 +1,81 @@
 function generate_vectors(tx_signal, tx_info, cfg)
-%% 导出测试向量供 RTL 仿真使用
-%  功能:  生成 RTL 输入激励 + 黄金期望输出, 支撑自动化 RTL cosim
-%  输出:
-%    RTL 输入:
-%      freq_i.bin/freq_q.bin — 频域 IFFT 输入 (Q2.14, int16 hex)
-%      vector_config.txt     — 仿真参数
-%    RTL 黄金期望输出:
-%      expected_tx.bin       — 时域 CP 后输出 {Q3.13_I[15:0], Q3.13_Q[15:0]}
-%                             (uint32 hex, 匹配 RTL m_axis_tdata 格式)
-%  注意:
-%    期望输出不做幅度归一化, 直接使用 Q3.13 定点量化以匹配 RTL
-%    比对时 RTL TB 使用 ±1 LSB tolerance
+%GENERATE_VECTORS  导出 RTL cosim 向量 (比特层激励 + 位真期望)
+%
+%   支撑 ofdm_tx_top 的 G-B-03 **0 容差** 判卷。
+%
+%   产物 (../vectors/):
+%     tx_bits.hex        激励: 每行一个比特组 (LSB 对齐), 48 组/符号
+%                        —— DUT 入口是比特流, 故激励必须在比特层
+%     expected_tx.hex    期望: 每行一个样点 {Q3.13_Q[15:0], Q3.13_I[15:0]} (uint32)
+%                        —— 由 rtl_mirror_tx 定点位真产出, **非浮点量化**
+%     freq_grid.hex      中间量: 频域整数网格 (Q2.14), 仅供失配定位, 不参与判卷
+%     vector_config.txt  参数
+%
+%   1.2.0 相对 1.1.0 的变更 (ADR-004 阶段3 排期项):
+%     - 期望值由「浮点 golden 直接量化 + ±1 LSB 容差」改为「定点位真镜像 + 0 容差」。
+%       浮点量化与定点逐级舍入存在系统差, 只能做容差判卷, 不满足 G-B-03。
+%     - 频域缩放修正: 原按 x32767 (Q1.15) 导出, 与 config.m 声明的 IFFT 输入
+%       Q2.14 (x16384) 不符 (MODEL-STATUS §4 第一条)。现由镜像按 Q2.14 产出。
+%     - 激励层级由「频域网格」改为「比特流」, 与 DUT 接口对齐 —— 原 freq_*.bin
+%       是 golden 的频域中间量, 与 DUT 入口不同层, 据此比对在语义上不成立。
+%
+%   入参保持 1.1.0 签名以兼容 run_ofdm_sim.m; tx_signal 不再用于产生期望值
+%   (它是浮点结果), 仅用于长度自检。
 
-    out_dir = '../vectors/';
-    if ~exist(out_dir, 'dir')
-        mkdir(out_dir);
+    here    = fileparts(mfilename('fullpath'));
+    out_dir = fullfile(here, '..', 'vectors');
+    if ~exist(out_dir, 'dir'), mkdir(out_dir); end
+
+    % ---- 位真镜像: 由同一比特流产出激励与期望 --------------------------
+    mir = rtl_mirror_tx(tx_info.tx_bits, cfg.mod_type, cfg.N_sym);
+
+    n_exp = cfg.N_sym * (cfg.N + cfg.N_cp);
+    if numel(mir.samples) ~= n_exp
+        error('generate_vectors:len', '镜像样点数 %d 与预期 %d 不符', ...
+              numel(mir.samples), n_exp);
+    end
+    if numel(tx_signal) ~= n_exp
+        warning('generate_vectors:floatLen', ...
+                '浮点链样点数 %d 与镜像 %d 不一致 (仅提示, 判卷以镜像为准)', ...
+                numel(tx_signal), n_exp);
     end
 
-    % =========================================================================
-    % 1. RTL 输入激励: 频域符号 (IFFT输入)
-    % =========================================================================
-    % 用于驱动 RTL IFFT 输入 (匹配 RTL Q2.14 格式)
-    freq = tx_info.freq_grid(:);
-    freq_i = round(real(freq) * 32767);
-    freq_q = round(imag(freq) * 32767);
-    fid_fi = fopen(fullfile(out_dir, 'freq_i.bin'), 'w');
-    fid_fq = fopen(fullfile(out_dir, 'freq_q.bin'), 'w');
-    fprintf(fid_fi, '%04x\n', typecast(int16(freq_i), 'uint16'));
-    fprintf(fid_fq, '%04x\n', typecast(int16(freq_q), 'uint16'));
-    fclose(fid_fi); fclose(fid_fq);
+    % ---- 1. 激励: 比特组 --------------------------------------------------
+    fid = fopen(fullfile(out_dir, 'tx_bits.hex'), 'w');
+    fprintf(fid, '%02x\n', mir.bit_groups);
+    fclose(fid);
 
-    % =========================================================================
-    % 2. 黄金期望输出: 时域 IFFT+CP 后, Q3.13 打包 {Q[15:0], I[15:0]}
-    % =========================================================================
-    % RTL m_axis_tdata = {Q3.13_Q[15:0], Q3.13_I[15:0]}
-    % 黄金模型 tx_signal = IFFT+CP 输出 (复数 double)
-    % 直接量化到 Q3.13 (保留小数 13-bit), 不额外归一化
+    % ---- 2. 期望: {Q, I} 打包 uint32 (匹配 m_axis_tdata) -------------------
+    i16 = int16(real(mir.samples));
+    q16 = int16(imag(mir.samples));
+    u32 = bitor(bitshift(uint32(typecast(q16, 'uint16')), 16), ...
+                 uint32(typecast(i16, 'uint16')));
+    fid = fopen(fullfile(out_dir, 'expected_tx.hex'), 'w');
+    fprintf(fid, '%08x\n', u32);
+    fclose(fid);
 
-    % 时域信号 (CP 已添加, tx_signal 是串行化后的列向量)
-    t_i = real(tx_signal);
-    t_q = imag(tx_signal);
+    % ---- 3. 中间量: 频域网格 (Q2.14), 失配定位用 --------------------------
+    g  = mir.freq_grid(:);
+    gu = bitor(bitshift(uint32(typecast(int16(imag(g)), 'uint16')), 16), ...
+                uint32(typecast(int16(real(g)), 'uint16')));
+    fid = fopen(fullfile(out_dir, 'freq_grid.hex'), 'w');
+    fprintf(fid, '%08x\n', gu);
+    fclose(fid);
 
-    % 量化到 Q3.13: 乘以 2^13 = 8192
-    q13_scale = 8192;
-    t_i_q13 = round(t_i * q13_scale);
-    t_q_q13 = round(t_q * q13_scale);
+    % ---- 4. 参数 ----------------------------------------------------------
+    fid = fopen(fullfile(out_dir, 'vector_config.txt'), 'w');
+    fprintf(fid, 'FFT_N=%d\n',         cfg.N);
+    fprintf(fid, 'CP_LEN=%d\n',        cfg.N_cp);
+    fprintf(fid, 'N_SYM=%d\n',         cfg.N_sym);
+    fprintf(fid, 'N_SAMPLES=%d\n',     n_exp);
+    fprintf(fid, 'N_GROUPS=%d\n',      numel(mir.bit_groups));
+    fprintf(fid, 'MOD=%s\n',           cfg.mod_type);
+    fprintf(fid, 'FREQ_SCALE=%d\n',    16384);    % Q2.14, 见 config.m
+    fprintf(fid, 'TIME_SCALE=%d\n',    8192);     % Q3.13
+    fprintf(fid, 'TOLERANCE_LSB=%d\n', 0);        % 位真, 0 容差
+    fprintf(fid, 'SOURCE=rtl_mirror_tx (bit-true mirror)\n');
+    fclose(fid);
 
-    % Int16 限幅 + 类型转换 (SIMULINK uint16 打包)
-    t_i_s16 = int16(max(-32768, min(32767, t_i_q13)));
-    t_q_s16 = int16(max(-32768, min(32767, t_q_q13)));
-
-    % 打包为 uint32: {Q_s16[15:0], I_s16[15:0]}
-    t_u32 = bitor(bitshift(uint32(typecast(t_q_s16, 'uint16')), 16), ...
-                   uint32(typecast(t_i_s16, 'uint16')));
-
-    % 写入黄金期望文件 (hex, 一行一个样点)
-    fid_exp = fopen(fullfile(out_dir, 'expected_tx.bin'), 'w');
-    fprintf(fid_exp, '%08x\n', t_u32);
-    fclose(fid_exp);
-
-    % =========================================================================
-    % 3. 参数写入
-    % =========================================================================
-    fid_cfg = fopen(fullfile(out_dir, 'vector_config.txt'), 'w');
-    fprintf(fid_cfg, 'FFT_N=%d\n', cfg.N);
-    fprintf(fid_cfg, 'CP_LEN=%d\n', cfg.N_cp);
-    fprintf(fid_cfg, 'N_SYM=%d\n', cfg.N_sym);
-    fprintf(fid_cfg, 'N_SAMPLES=%d\n', length(tx_signal));
-    fprintf(fid_cfg, 'MOD=%s\n', cfg.mod_type);
-    fprintf(fid_cfg, 'Q13_SCALE=%d\n', q13_scale);
-    fclose(fid_cfg);
-
-    fprintf('[generate_vectors] RTL 激励已写入: %s\n', fullfile(out_dir, ''));
-    fprintf('[generate_vectors] 黄金期望输出: expected_tx.bin (%d samples, Q3.13)\n', ...
-        length(tx_signal));
+    fprintf('[generate_vectors] 激励 %d 比特组, 期望 %d 样点 (位真, 0 容差) -> %s\n', ...
+            numel(mir.bit_groups), n_exp, out_dir);
 end

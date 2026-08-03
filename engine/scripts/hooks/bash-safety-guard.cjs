@@ -15,6 +15,23 @@
 
 'use strict';
 
+// ── 受保护模型路径 ─────────────────────────────────────────────────────────
+//
+// 重定向/tee 写入受保护路径的判据。目标路径必须**紧跟**重定向符。
+//
+// 旧写法 `[>&]{2,}\s*.*golden.*\.(m|py|sh)` 有两处方向相反的缺陷 (2026-08-01 实测):
+//   1. `[>&]{2,}` 本意抓 `>>`/`&>`, 却被命令分隔符 `&&` 命中; 扩展名 `\.(m|py|sh)`
+//      无右边界, `.md` 中的 `.m` 即可凑齐匹配。于是
+//      `cd x && grep -rln "golden" --include=*.md engine/` 这类**只读检索**被判
+//      CRITICAL —— 门禁在惩罚"查证据", 而查证据正是判断 golden 该不该改的前提。
+//   2. 真正危险的单 `>` 覆盖写 (`echo x > golden/gm.m`) 反而放行 —— `{2,}` 要求
+//      两个字符, 只覆盖了 `>>` 追加写。拦读放写, 方向正好反了。
+//
+// 现在按"重定向符 + 紧邻目标路径 + 带右边界的完整扩展名"判定: `.*` 中间层被去掉,
+// 命令分隔符不再能凑匹配; `>{1,2}` 覆盖单次重定向; 前置 `[^\w]` 排除 `2>` 一类
+// fd 重定向 (它们的目标是 fd 或 /dev/null, 不是模型文件)。
+const PROTECTED_MODEL_PATH = String.raw`[^"'\s|;&<>]*(?:matlab|golden|fixed_point)[^"'\s|;&<>]*\.(?:m|py|sh|mat)\b`;
+
 // ── 危险模式定义 ───────────────────────────────────────────────────────────
 
 const DANGEROUS_PATTERNS = [
@@ -40,9 +57,10 @@ const DANGEROUS_PATTERNS = [
       /node.*(?:writeFileSync|writeFile)\([^)]*matlab/i,
       /node.*(?:writeFileSync|writeFile)\([^)]*golden/i,
       /node.*(?:writeFileSync|writeFile)\([^)]*fixed_point/i,
-      // echo/cat > matlab/... (shell redirect)
-      /[>&]{2,}\s*.*matlab\/.*\.m/i,
-      /[>&]{2,}\s*.*golden.*\.(m|py|sh)/i,
+      // echo/cat > matlab/... (shell redirect) —— 判据见 PROTECTED_MODEL_PATH 注释
+      new RegExp(String.raw`(?:^|[^\w])&?>{1,2}\s*["']?` + PROTECTED_MODEL_PATH, 'i'),
+      // tee 是重定向的等价物 (source-write-bypass 侧已因 red-team 补过, 模型侧同样需要)
+      new RegExp(String.raw`\btee\b(?:\s+-\w+)*\s+["']?` + PROTECTED_MODEL_PATH, 'i'),
       // sed -i on protected paths
       /sed\s+-i.*matlab\//i,
       /sed\s+-i.*golden/i,
@@ -270,6 +288,56 @@ function blockDiagnostics(info, command) {
   ];
 }
 
+// ── 受保护分支推送 ──────────────────────────────────────────────────────────
+//
+// 策略 (用户 2026-07-30 明确): main/master 不许推, 其他分支都放行。
+//
+// 为什么不靠 settings 的 deny glob: 实测 deny 里的 `Bash(git tag -d:*)` 没有
+// 拦住 `git tag -d <tag>`(裸命令与带管道两种形式都执行了)。glob 匹配对变形
+// (管道、`cd x &&` 前缀、多余旗标) 也天然脆弱, 而枚举 refspec 的各种写法
+// 就是本仓库反复付过代价的"名单漂移"。这里改成**按 token 解析 refspec**,
+// 判定目标分支名本身, 因此 `feat/main-refactor`、`mainline-work` 这类含
+// "main" 子串的分支不会被误拦。
+//
+// 已知边界: 裸 `git push`(依赖当前分支与 upstream)从命令文本无法判定目标,
+// 本检查放行 —— 它需要读 git 状态, 属于 guard 之外的信息。
+const PROTECTED_PUSH_BRANCHES = new Set(['main', 'master']);
+
+function pushSegments(command) {
+  return String(command || '')
+    .split(/\r?\n|&&|\|\||[;|&]/)
+    .map((segment) => segment.trim())
+    .filter((segment) => /^(?:[A-Za-z_][A-Za-z0-9_]*=\S*\s+)*git(?:\.exe)?\s+(?:-\S+\s+)*push\b/i.test(segment));
+}
+
+/** refspec 的目标侧是否为受保护分支。`+src:dst` 取 dst, 剥掉 refs/heads/。 */
+function refspecTargetsProtectedBranch(token) {
+  const spec = String(token || '').replace(/^\+/, '');
+  const destination = spec.includes(':') ? spec.slice(spec.lastIndexOf(':') + 1) : spec;
+  const name = destination.replace(/^refs\/heads\//i, '').replace(/["']/g, '');
+  return PROTECTED_PUSH_BRANCHES.has(name.toLowerCase());
+}
+
+function protectedBranchPush(command) {
+  for (const segment of pushSegments(command)) {
+    // --dry-run 不改远端状态, 放行 (它是排查推送问题的正当手段)
+    if (/--dry-run\b/i.test(segment)) continue;
+    // --all / --mirror 一次推送所有分支, 必然包含 main
+    if (/\s--(?:all|mirror)\b/i.test(segment)) return true;
+    const args = segment.split(/\s+/)
+      .slice(1)
+      .filter((token) => token !== 'push' && !token.startsWith('-'));
+    if (args.some(refspecTargetsProtectedBranch)) return true;
+  }
+  return false;
+}
+
+const PROTECTED_BRANCH_INFO = {
+  category: 'protected-branch-push',
+  severity: 'CRITICAL',
+  message: '受保护分支推送: main/master 只能经 PR 合入, 不接受直接推送',
+};
+
 /**
  * 扫描命令是否匹配任何危险模式。
  * @param {string} command
@@ -278,6 +346,10 @@ function blockDiagnostics(info, command) {
 function scanCommand(command) {
   if (!command || command.length === 0) {
     return { matched: false, info: null };
+  }
+
+  if (protectedBranchPush(command)) {
+    return { matched: true, info: PROTECTED_BRANCH_INFO };
   }
 
   for (const group of DANGEROUS_PATTERNS) {
@@ -344,7 +416,10 @@ async function main() {
 if (require.main === module) main();
 
 module.exports = {
+  PROTECTED_PUSH_BRANCHES,
   commandFrom,
   evaluate,
+  protectedBranchPush,
+  refspecTargetsProtectedBranch,
   scanCommand,
 };

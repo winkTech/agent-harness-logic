@@ -33,7 +33,9 @@
       "Write",
       "Edit",
       "WebFetch",
-      "NotebookEdit"
+      "NotebookEdit",
+      "Bash(git push:*)",
+      "PowerShell(git push:*)"
     ],
     "defaultMode": "acceptEdits",
     "deny": [

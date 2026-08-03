@@ -271,9 +271,37 @@ function extractDirectedPorts(content) {
 // Hook 不得在用户不知情的前提下改写源码。命名问题由 PreToolUse 的
 // checkNamingViolations 提示, 交由人/模型显式修改。
 
+/**
+ * 存储器阵列上电初值的 initial 块 —— 唯一被允许的 initial 形态。
+ *
+ * 依据 (本仓库既有政策, 本函数是把它落到 hook 上):
+ *   - skills/hdl-coding 描述: "initial 仅允许 RAM/ROM 阵列初值"
+ *   - gate-runner 的 G-C-03 对"仅初始化存储器阵列"的 initial 明确不判为违规
+ *   - Xilinx UG901: $readmemb/$readmemh 初始化数组是 ROM/RAM 推断的标准写法
+ *
+ * 此前本 hook 是无条件禁止 initial, **比它自己文档化的规则更严**, 后果是
+ * cbb/ldpc_codec/rtl/ldpc_encoder_top.v (PT ROM 用 $readmemb 初始化, 已随资产
+ * 认证并在 README 记明理由) 这类文件**任何人都无法再编辑** —— 每次编辑都被这条
+ * 假阳性拦下。2026-08-02 修正。
+ *
+ * 判据保持保守: initial 块体内除 $readmemb/$readmemh 调用与 begin/end 外不得有
+ * 其他语句; 只要出现别的东西就仍按违规处理。
+ */
+function stripMemInitBlocks(src) {
+  // initial begin ... end  (块体只含 $readmem*)
+  const blockForm = /\binitial\b\s*begin\b([\s\S]*?)\bend\b/g;
+  let out = src.replace(blockForm, (whole, body) => {
+    const rest = body.replace(/\$readmem[bh]\s*\([^;]*\)\s*;/g, '').trim();
+    return rest === '' ? '' : whole;
+  });
+  // initial $readmem*(...);  (单语句形式)
+  out = out.replace(/\binitial\b\s*\$readmem[bh]\s*\([^;]*\)\s*;/g, '');
+  return out;
+}
+
 function checkSynthesisViolations(content) {
   const violations = [];
-  const scanContent = stripComments(content);
+  const scanContent = stripMemInitBlocks(stripComments(content));
   for (const v of SYNTHESIS_VIOLATIONS) {
     if (v.pattern.test(scanContent)) {
       violations.push(v.message);

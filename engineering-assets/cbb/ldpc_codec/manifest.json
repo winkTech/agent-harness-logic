@@ -1,0 +1,249 @@
+{
+  "schema_version": "1.0",
+  "asset_uid": "ldpc_codec",
+  "name": "ldpc_codec",
+  "version": "1.1.0",
+  "owner": "lihan",
+  "signoff": {
+    "by": "lihan",
+    "at": "2026-07-31",
+    "scope": [
+      "证据已复核: timing-summary.rpt / utilization.rpt / clocks.rpt / alignment-report.json(译码器 bit-true 3240 样点 0 失配) / 编码器 bit-true 5/5 (2026-07-31 实跑) / reset-sim.json / cdc-report.json / envelope-check.json (WNS 4.958ns @ 10ns, LUT 410/900, FF 244/500, BRAM 3/3, DSP 0/0)",
+      "已接受限制: 综合顶层仅 ldpc_decoder_top, 编码器无独立综合包络证据",
+      "已接受限制: 器件归一悬案 — XDC 抬头 XCZU67DR 与实综 XC7K325T 不一致 (device.note)",
+      "已接受限制: cdc_tool=na — 单时钟域, 仅结构扫描, 未经具名 CDC 工具",
+      "tready 组合生成按 ADR-001 分级判据合规 (decoder 扇入锥=内部寄存态已实查; encoder 已寄存)"
+    ]
+  },
+  "maturity": {
+    "level": "certified",
+    "evidence_ref": "engineering-assets/evidence/ldpc_codec/1.1.0/"
+  },
+  "requirement_ref": "engineering-assets/knowledge/primary/domains/comm/ldpc/algorithm_spec.md",
+  "doc_refs": [
+    "engineering-assets/knowledge/primary/domains/comm/ldpc/encoding_spec.md",
+    "engineering-assets/knowledge/primary/domains/comm/ldpc/stage3_fixed_point_report.md",
+    "engineering-assets/knowledge/primary/domains/comm/ldpc/stage4_resource_estimation.md",
+    "engineering-assets/knowledge/primary/domains/comm/ldpc/stage7_fpga_implementation_report.md"
+  ],
+  "golden_model_ref": "model_comm_ldpc",
+  "fidelity": {
+    "status": "bit_true",
+    "bit_accurate_against": "model_comm_ldpc@1.0.0"
+  },
+  "ports": [
+    {
+      "name": "i_clk_sys",
+      "direction": "input",
+      "width": 1
+    },
+    {
+      "name": "i_rst_sys",
+      "direction": "input",
+      "width": 1
+    },
+    {
+      "name": "s_axis_llr_tdata",
+      "direction": "input",
+      "width": 10,
+      "bus": "axi-stream"
+    },
+    {
+      "name": "s_axis_llr_tvalid",
+      "direction": "input",
+      "width": 1,
+      "bus": "axi-stream"
+    },
+    {
+      "name": "s_axis_llr_tready",
+      "direction": "output",
+      "width": 1,
+      "bus": "axi-stream"
+    },
+    {
+      "name": "m_axis_data_tdata",
+      "direction": "output",
+      "width": 1,
+      "bus": "axi-stream"
+    },
+    {
+      "name": "m_axis_data_tvalid",
+      "direction": "output",
+      "width": 1,
+      "bus": "axi-stream"
+    },
+    {
+      "name": "m_axis_data_tready",
+      "direction": "input",
+      "width": 1,
+      "bus": "axi-stream"
+    }
+  ],
+  "top": "ldpc_decoder_top",
+  "device": {
+    "part": "xc7k325tffg900-2",
+    "family": "kintex7",
+    "note": "XDC 抬头写 XCZU67DR 但本地未装该器件, 且项目其余资产统一 XC7K325T; 器件归一待 owner 确认"
+  },
+  "clock": {
+    "name": "i_clk_sys",
+    "period_ns": 10
+  },
+  "reset": {
+    "name": "i_rst_sys",
+    "polarity": "active_high",
+    "type": "sync",
+    "async_release_synchronized": true
+  },
+  "constraints": {
+    "target": {
+      "fmax": "100MHz",
+      "fmax_mhz": 100,
+      "lut": 900,
+      "ff": 500,
+      "bram": 3,
+      "dsp": 0,
+      "note_budget": "取自 stage7_fpga_implementation_report §6 资源利用表的**译码器**一列 (LUT ~900 / FF ~500 / BRAM 3 / DSP48 0); 本包综合顶层为 ldpc_decoder_top, 故不取含编码器的合计列。DSP=0 与 §3.4 '纯移位加法实现 α 缩放, 0 DSP48' 一致。"
+    }
+  },
+  "sources": [
+    {
+      "path": "rtl/cn_update.v",
+      "role": "rtl",
+      "sha256": "c24632b351d227a655d5b98f509e5cb11ce9c60f51979ad8d2d48ac57a14ee2a"
+    },
+    {
+      "path": "rtl/early_term.v",
+      "role": "rtl",
+      "sha256": "0289363bbbd8003d818a600df86a7592dba859a9df3342066498013494e3a29c"
+    },
+    {
+      "path": "rtl/h_matrix_addr.v",
+      "role": "rtl",
+      "sha256": "9cfcf8f3ee088b2be51b9789b8bb05202ded955412db8c54f00f41de10745db5"
+    },
+    {
+      "path": "rtl/ldpc_controller.v",
+      "role": "rtl",
+      "sha256": "c67fe4d0e1e96486a191e9255dccd7a18cbc1c16b087ef164c442f24eea8bba2"
+    },
+    {
+      "path": "rtl/ldpc_decoder_top.v",
+      "role": "rtl",
+      "sha256": "ddfcfcb7bf7dc937fe21fc6331ef6be893d898ec06cabad883dcde7d2d90ca16"
+    },
+    {
+      "path": "rtl/ldpc_stream_io.v",
+      "role": "rtl",
+      "sha256": "025b657a5819950c0274c0781b3bd747188f7fc9994da7cfdf215ea550b17b64"
+    },
+    {
+      "path": "rtl/ldpc_defines.vh",
+      "role": "rtl",
+      "sha256": "1b0934d054ddb5f5df2ac745947a5ba8cbf225fed65a7a887c673d730c8ced55"
+    },
+    {
+      "path": "rtl/ldpc_encoder_top.v",
+      "role": "rtl",
+      "sha256": "630949fdd488de77fdc3c9860e6980f0055d46bd602acf8f6f3aca9a1b3ac3e6"
+    },
+    {
+      "path": "rtl/llr_buffer.v",
+      "role": "rtl",
+      "sha256": "53790da18295d3c16115255c5ec4c910298770ae0e7c070615d3176a8315f994"
+    },
+    {
+      "path": "rtl/msg_buffer.v",
+      "role": "rtl",
+      "sha256": "3fed1989433d80265368bf4356f5048dfff872ba0efc10eafa7780ce896cd8d3"
+    },
+    {
+      "path": "tb/tb_ldpc_decoder_top.v",
+      "role": "tb",
+      "sha256": "4f076e1fc6d3f09b41068d5f84ffcd08fc61fa777168c2fea53ca3c7e9e4b291"
+    },
+    {
+      "path": "tb/tb_ldpc_encoder_top.v",
+      "role": "tb",
+      "sha256": "8b8c95bbe1189d62696f08ebfb3f14a5b707519d14a4545f4e383edd2b7377a0"
+    },
+    {
+      "path": "tb/tb_ldpc_system.v",
+      "role": "tb",
+      "sha256": "29aa8c517a3e367a8cbf087e7422248bed21d5a8a210f3867c91c9142dfee20b"
+    },
+    {
+      "path": "tb/uvm/ldpc_agent.sv",
+      "role": "tb",
+      "sha256": "9a9db505fb3305fb7b8a6a345158598780969c78f1e84f742646d59fe9bd66ae"
+    },
+    {
+      "path": "tb/uvm/ldpc_base_test.sv",
+      "role": "tb",
+      "sha256": "4fe0a889c1d50e1f8dfd2f0ca579adac0be4683ff0c3c5e5a3b1328e9900c5f0"
+    },
+    {
+      "path": "tb/uvm/ldpc_basic_test.sv",
+      "role": "tb",
+      "sha256": "1cb3e44bf0634e597f33f361261ea5d20de6358fe19cd8f935bf2b62d30b02e5"
+    },
+    {
+      "path": "tb/uvm/ldpc_driver.sv",
+      "role": "tb",
+      "sha256": "31176eecb8a70bae998c8f58bf1aea68a972da332cd3c410faddccd25f200e6d"
+    },
+    {
+      "path": "tb/uvm/ldpc_env.sv",
+      "role": "tb",
+      "sha256": "ecddfd4b002e20a49ee76843ee9915bb77eb7e21ba0076711d442f02486e1dbc"
+    },
+    {
+      "path": "tb/uvm/ldpc_monitor.sv",
+      "role": "tb",
+      "sha256": "f80a0538a616b5e622476a9ade58b8cc715872df2b369d0582e46b4c2ddaa8c0"
+    },
+    {
+      "path": "tb/uvm/ldpc_scoreboard.sv",
+      "role": "tb",
+      "sha256": "e9bcd171661592f0ea0f9c6a77c040ae9aa9075ba1de05118079243f2a9a1051"
+    },
+    {
+      "path": "tb/uvm/ldpc_seq_item.sv",
+      "role": "tb",
+      "sha256": "b7aa1402897ec2c17a6da1bec1eade62266fd4f4f325f5f3a052db447a44ac33"
+    },
+    {
+      "path": "tb/uvm/ldpc_sequences.sv",
+      "role": "tb",
+      "sha256": "61251eccfc4f833b6726cb9ea4e7eae8ac9c3a0af0ad702331984552e0ea36f1"
+    },
+    {
+      "path": "tb/uvm/ldpc_uvm_pkg.sv",
+      "role": "tb",
+      "sha256": "b000547e6e2396eb4b4d86f6ffab4660c65b36c8e8e6809ebbeb6d2ac73e94f5"
+    },
+    {
+      "path": "tb/uvm/tb_ldpc_uvm_top.sv",
+      "role": "tb",
+      "sha256": "a13d808e88b4ff6c35d087bf534c998c6b7707971861a6298aab1017de74c9d4"
+    },
+    {
+      "path": "constraints/ldpc_decoder.xdc",
+      "role": "constraint",
+      "sha256": "52c5a09e7ddb0387d636695431719a17a988a913650364bd18cf4a1cf027536e"
+    },
+    {
+      "path": "rtl/pt_columns.hex",
+      "role": "vector",
+      "sha256": "6ddd12d082887278634189bee83ef7e9e5891fb08d4b426ec2cb4ba2c48af00c"
+    }
+  ],
+  "waivers": [],
+  "superseded_by": null,
+  "reproduce": {
+    "sim": "bash cbb/ldpc_codec/run_xsim.sh --install",
+    "synth": "node tools/pg-synth.cjs cbb/ldpc_codec",
+    "gate": "node tools/gate-runner.cjs cbb/ldpc_codec --repo-root ..",
+    "note": "2026-08-02 xsim 复跑: alignment 内容一致(3240 bit 0 失配)、4 份 stability 逐字节相同、编码器 5/5; reset-sim 有 1/26 差异(cn_update.ro_lr 在 xsim 下为 X), 详见 CHANGELOG 1.0.2, 已安装证据仍为 ModelSim 版。"
+  }
+}

@@ -12,8 +12,11 @@
     "source": "https://github.com/alknvl/axis_udp",
     "license": "MIT",
     "retrieved": "2026-06-11",
-    "retrieved_basis": "目录 mtime 下界；原始归档为 GitHub 分支 ZIP，无 .git，commit SHA 不可复原",
-    "commit": null,
+    "retrieved_basis": "目录 mtime 下界；原始归档为 GitHub 分支 ZIP，无 .git 元数据",
+    "commit": "4e4e0edc0451055e11c909855e9541b226e7e8d6",
+    "commit_date": "2022-03-15T13:25:22Z",
+    "commit_subject": "axis2net script refactoring",
+    "commit_basis": "2026-08-02 内容比对反查（方法同 verilog_pcie.json）：本地 20 个文件，路径集完全一致（仅本地 0 / 仅上游 0），逐字节一致 4 + 仅 CRLF 差异 16，**未解释的差异 0**。该 commit 是仓库当前 HEAD，2022-03-15 之后上游无提交 —— 与 2026-06-11 的取回日期不矛盾。",
     "source_basis": "上游仓库描述与本地 README 首段逐字一致（\"simple implementation of UDP/IP stack with 64-bit AXI-Stream interface...\"）"
   },
   "content": {

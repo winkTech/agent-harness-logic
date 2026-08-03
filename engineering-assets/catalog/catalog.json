@@ -3,11 +3,11 @@
   "summary": {
     "asset_count": 23,
     "by_level": {
-      "certified": 3,
-      "intake": 7,
-      "qualification": 13
+      "certified": 16,
+      "intake": 4,
+      "qualification": 3
     },
-    "red_count": 3,
+    "red_count": 0,
     "yellow_count": 0,
     "unregistered_root_count": 2
   },
@@ -16,26 +16,7 @@
     "reference-assets/vendor"
   ],
   "drift": {
-    "red": [
-      {
-        "code": "D3",
-        "asset_uid": "channel_est_top",
-        "dir": "incubator/intake/channel_est_top",
-        "message": "declared level intake exceeds machine-cleared reference"
-      },
-      {
-        "code": "D3",
-        "asset_uid": "ofdm_tx_top",
-        "dir": "incubator/intake/ofdm_tx_top",
-        "message": "declared level intake exceeds machine-cleared reference"
-      },
-      {
-        "code": "D3",
-        "asset_uid": "sync_top",
-        "dir": "incubator/intake/sync_top",
-        "message": "declared level intake exceeds machine-cleared reference"
-      }
-    ],
+    "red": [],
     "yellow": []
   },
   "assets": [
@@ -43,371 +24,287 @@
       "asset_uid": "axis_skid_buffer",
       "name": "axis_skid_buffer",
       "kind": "primitive",
-      "version": "0.1.0",
+      "version": "1.0.2",
       "owner": "lihan",
-      "level": "qualification",
-      "dir": "incubator/intake/axis_skid_buffer",
+      "level": "certified",
+      "dir": "cbb/axis_skid_buffer",
       "top": "axis_skid_buffer",
       "golden_model_ref": null,
       "fidelity": "na",
-      "device": null,
-      "target_fmax": null,
-      "signoff_at": null,
+      "device": "xc7k325tffg900-2",
+      "target_fmax": "250MHz",
+      "signoff_at": "2026-07-31",
       "waiver_count": 0,
       "used_by": [],
-      "badge_gap": [
-        "G-B-03",
-        "G-C-01",
-        "G-C-02",
-        "G-C-04",
-        "G-C-05",
-        "G-GATE-01",
-        "G-SIGN-01"
-      ],
+      "badge_gap": [],
       "documents": {
         "readme": true,
-        "changelog": false,
+        "changelog": true,
         "limitations": false
       },
       "gates": {
-        "cleared_level": "qualification",
-        "blocking_at": "certified",
-        "pass_count": 11
+        "cleared_level": "certified",
+        "blocking_at": null,
+        "pass_count": 21
       }
     },
     {
       "asset_uid": "cdc_sync",
       "name": "cdc_sync",
       "kind": "primitive",
-      "version": "0.1.0",
+      "version": "1.0.1",
       "owner": "lihan",
-      "level": "qualification",
-      "dir": "incubator/intake/cdc_sync",
+      "level": "certified",
+      "dir": "cbb/cdc_sync",
       "top": "cdc_sync",
       "golden_model_ref": null,
       "fidelity": "na",
-      "device": null,
-      "target_fmax": null,
-      "signoff_at": null,
+      "device": "xc7k325tffg900-2",
+      "target_fmax": "150MHz",
+      "signoff_at": "2026-08-01",
       "waiver_count": 0,
       "used_by": [],
-      "badge_gap": [
-        "G-B-03",
-        "G-C-01",
-        "G-C-02",
-        "G-C-04",
-        "G-C-05",
-        "G-GATE-01",
-        "G-SIGN-01"
-      ],
+      "badge_gap": [],
       "documents": {
         "readme": true,
-        "changelog": false,
-        "limitations": false
+        "changelog": true,
+        "limitations": true
       },
       "gates": {
-        "cleared_level": "qualification",
-        "blocking_at": "certified",
-        "pass_count": 11
+        "cleared_level": "certified",
+        "blocking_at": null,
+        "pass_count": 21
       }
     },
     {
       "asset_uid": "channel_est_top",
       "name": "channel_est_top",
       "kind": "rtl",
-      "version": "0.1.0",
+      "version": "1.0.2",
       "owner": "lihan",
-      "level": "intake",
-      "dir": "incubator/intake/channel_est_top",
-      "top": null,
+      "level": "certified",
+      "dir": "cbb/channel_est_top",
+      "top": "channel_est_top",
       "golden_model_ref": "model_comm_channel_est",
-      "fidelity": "pending",
-      "device": null,
+      "fidelity": "bit_true",
+      "device": "xc7k325tffg900-2",
       "target_fmax": "100MHz",
-      "signoff_at": null,
+      "signoff_at": "2026-08-01",
       "waiver_count": 0,
       "used_by": [],
-      "badge_gap": [
-        "G-A-01",
-        "G-A-02",
-        "G-B-03",
-        "G-C-01",
-        "G-C-02",
-        "G-C-04",
-        "G-C-05",
-        "G-GATE-01",
-        "G-SIGN-01",
-        "RL-OUT",
-        "axis-contract",
-        "bit-true-vectors",
-        "vivado-timing"
-      ],
+      "badge_gap": [],
       "documents": {
         "readme": true,
-        "changelog": false,
-        "limitations": false
+        "changelog": true,
+        "limitations": true
       },
       "gates": {
-        "cleared_level": "reference",
-        "blocking_at": "intake",
-        "pass_count": 8
+        "cleared_level": "certified",
+        "blocking_at": null,
+        "pass_count": 21
       }
     },
     {
       "asset_uid": "complex_multiplier",
       "name": "complex_multiplier",
       "kind": "primitive",
-      "version": "0.1.0",
+      "version": "1.0.1",
       "owner": "lihan",
-      "level": "qualification",
-      "dir": "incubator/intake/complex_multiplier",
+      "level": "certified",
+      "dir": "cbb/complex_multiplier",
       "top": "complex_multiplier",
       "golden_model_ref": null,
       "fidelity": "na",
-      "device": null,
-      "target_fmax": null,
-      "signoff_at": null,
+      "device": "xc7k325tffg900-2",
+      "target_fmax": "250MHz",
+      "signoff_at": "2026-08-01",
       "waiver_count": 0,
       "used_by": [],
-      "badge_gap": [
-        "G-B-03",
-        "G-C-01",
-        "G-C-02",
-        "G-C-04",
-        "G-C-05",
-        "G-GATE-01",
-        "G-SIGN-01"
-      ],
+      "badge_gap": [],
       "documents": {
         "readme": true,
-        "changelog": false,
-        "limitations": false
+        "changelog": true,
+        "limitations": true
       },
       "gates": {
-        "cleared_level": "qualification",
-        "blocking_at": "certified",
-        "pass_count": 11
+        "cleared_level": "certified",
+        "blocking_at": null,
+        "pass_count": 21
       }
     },
     {
       "asset_uid": "crc32",
       "name": "crc32",
       "kind": "primitive",
-      "version": "0.1.0",
+      "version": "1.0.1",
       "owner": "lihan",
-      "level": "qualification",
-      "dir": "incubator/intake/crc32",
+      "level": "certified",
+      "dir": "cbb/crc32",
       "top": "crc32",
       "golden_model_ref": null,
       "fidelity": "na",
-      "device": null,
-      "target_fmax": null,
-      "signoff_at": null,
+      "device": "xc7k325tffg900-2",
+      "target_fmax": "200MHz",
+      "signoff_at": "2026-08-01",
       "waiver_count": 0,
       "used_by": [],
-      "badge_gap": [
-        "G-B-03",
-        "G-C-01",
-        "G-C-02",
-        "G-C-04",
-        "G-C-05",
-        "G-GATE-01",
-        "G-SIGN-01"
-      ],
+      "badge_gap": [],
       "documents": {
         "readme": true,
-        "changelog": false,
-        "limitations": false
+        "changelog": true,
+        "limitations": true
       },
       "gates": {
-        "cleared_level": "qualification",
-        "blocking_at": "certified",
-        "pass_count": 11
+        "cleared_level": "certified",
+        "blocking_at": null,
+        "pass_count": 21
       }
     },
     {
       "asset_uid": "ddr_axi4_controller",
       "name": "ddr_axi4_controller",
       "kind": "primitive",
-      "version": "0.1.0",
+      "version": "1.0.1",
       "owner": "lihan",
-      "level": "qualification",
-      "dir": "incubator/intake/ddr_axi4_controller",
+      "level": "certified",
+      "dir": "cbb/ddr_axi4_controller",
       "top": "ddr_axi4_controller",
       "golden_model_ref": null,
       "fidelity": "na",
-      "device": null,
-      "target_fmax": null,
-      "signoff_at": null,
+      "device": "xc7k325tffg900-2",
+      "target_fmax": "200MHz",
+      "signoff_at": "2026-08-01",
       "waiver_count": 0,
       "used_by": [],
-      "badge_gap": [
-        "G-B-03",
-        "G-C-01",
-        "G-C-02",
-        "G-C-04",
-        "G-C-05",
-        "G-GATE-01",
-        "G-SIGN-01"
-      ],
+      "badge_gap": [],
       "documents": {
         "readme": true,
-        "changelog": false,
-        "limitations": false
+        "changelog": true,
+        "limitations": true
       },
       "gates": {
-        "cleared_level": "qualification",
-        "blocking_at": "certified",
-        "pass_count": 11
+        "cleared_level": "certified",
+        "blocking_at": null,
+        "pass_count": 21
       }
     },
     {
       "asset_uid": "delay_line",
       "name": "delay_line",
       "kind": "primitive",
-      "version": "0.1.0",
+      "version": "1.0.1",
       "owner": "lihan",
-      "level": "qualification",
-      "dir": "incubator/intake/delay_line",
+      "level": "certified",
+      "dir": "cbb/delay_line",
       "top": "delay_line",
       "golden_model_ref": null,
       "fidelity": "na",
-      "device": null,
-      "target_fmax": null,
-      "signoff_at": null,
+      "device": "xc7k325tffg900-2",
+      "target_fmax": "250MHz",
+      "signoff_at": "2026-08-01",
       "waiver_count": 0,
       "used_by": [],
-      "badge_gap": [
-        "G-B-03",
-        "G-C-01",
-        "G-C-02",
-        "G-C-04",
-        "G-C-05",
-        "G-GATE-01",
-        "G-SIGN-01"
-      ],
+      "badge_gap": [],
       "documents": {
         "readme": true,
-        "changelog": false,
-        "limitations": false
+        "changelog": true,
+        "limitations": true
       },
       "gates": {
-        "cleared_level": "qualification",
-        "blocking_at": "certified",
-        "pass_count": 11
+        "cleared_level": "certified",
+        "blocking_at": null,
+        "pass_count": 21
       }
     },
     {
       "asset_uid": "frame_sync",
       "name": "frame_sync",
       "kind": "primitive",
-      "version": "0.1.0",
+      "version": "1.0.1",
       "owner": "lihan",
-      "level": "qualification",
-      "dir": "incubator/intake/frame_sync",
+      "level": "certified",
+      "dir": "cbb/frame_sync",
       "top": "frame_sync",
       "golden_model_ref": null,
       "fidelity": "na",
-      "device": null,
-      "target_fmax": null,
-      "signoff_at": null,
+      "device": "xc7k325tffg900-2",
+      "target_fmax": "250MHz",
+      "signoff_at": "2026-08-01",
       "waiver_count": 0,
       "used_by": [],
-      "badge_gap": [
-        "G-B-03",
-        "G-C-01",
-        "G-C-02",
-        "G-C-04",
-        "G-C-05",
-        "G-GATE-01",
-        "G-SIGN-01"
-      ],
+      "badge_gap": [],
       "documents": {
         "readme": true,
-        "changelog": false,
-        "limitations": false
+        "changelog": true,
+        "limitations": true
       },
       "gates": {
-        "cleared_level": "qualification",
-        "blocking_at": "certified",
-        "pass_count": 11
+        "cleared_level": "certified",
+        "blocking_at": null,
+        "pass_count": 21
       }
     },
     {
       "asset_uid": "ldpc_codec",
       "name": "ldpc_codec",
       "kind": "rtl",
-      "version": "0.2.0",
+      "version": "1.1.0",
       "owner": "lihan",
-      "level": "qualification",
-      "dir": "incubator/intake/ldpc_codec",
+      "level": "certified",
+      "dir": "cbb/ldpc_codec",
       "top": "ldpc_decoder_top",
       "golden_model_ref": "model_comm_ldpc",
       "fidelity": "bit_true",
       "device": "xc7k325tffg900-2",
       "target_fmax": "100MHz",
-      "signoff_at": null,
+      "signoff_at": "2026-07-31",
       "waiver_count": 0,
       "used_by": [],
-      "badge_gap": [
-        "G-B-03",
-        "G-C-03",
-        "G-SIGN-01",
-        "signoff",
-        "vivado-timing"
-      ],
+      "badge_gap": [],
       "documents": {
         "readme": true,
-        "changelog": false,
-        "limitations": false
+        "changelog": true,
+        "limitations": true
       },
       "gates": {
-        "cleared_level": "qualification",
-        "blocking_at": "certified",
-        "pass_count": 17
+        "cleared_level": "certified",
+        "blocking_at": null,
+        "pass_count": 21
       }
     },
     {
       "asset_uid": "lfsr_gen",
       "name": "lfsr_gen",
       "kind": "primitive",
-      "version": "0.1.0",
+      "version": "1.0.1",
       "owner": "lihan",
-      "level": "qualification",
-      "dir": "incubator/intake/lfsr_gen",
+      "level": "certified",
+      "dir": "cbb/lfsr_gen",
       "top": "lfsr_gen",
       "golden_model_ref": null,
       "fidelity": "na",
-      "device": null,
-      "target_fmax": null,
-      "signoff_at": null,
+      "device": "xc7k325tffg900-2",
+      "target_fmax": "250MHz",
+      "signoff_at": "2026-08-01",
       "waiver_count": 0,
       "used_by": [],
-      "badge_gap": [
-        "G-B-03",
-        "G-C-01",
-        "G-C-02",
-        "G-C-04",
-        "G-C-05",
-        "G-GATE-01",
-        "G-SIGN-01"
-      ],
+      "badge_gap": [],
       "documents": {
         "readme": true,
-        "changelog": false,
-        "limitations": false
+        "changelog": true,
+        "limitations": true
       },
       "gates": {
-        "cleared_level": "qualification",
-        "blocking_at": "certified",
-        "pass_count": 11
+        "cleared_level": "certified",
+        "blocking_at": null,
+        "pass_count": 21
       }
     },
     {
       "asset_uid": "model_comm_channel_est",
       "name": "ls_channel_est_golden",
       "kind": "golden-model",
-      "version": "1.0.0",
+      "version": "1.2.0",
       "owner": "lihan",
       "level": "intake",
       "dir": "models/comm/channel_est",
@@ -421,9 +318,7 @@
       "used_by": [
         "channel_est_top"
       ],
-      "badge_gap": [
-        "exported-vectors"
-      ],
+      "badge_gap": [],
       "documents": {
         "readme": false,
         "changelog": false,
@@ -453,9 +348,7 @@
       "used_by": [
         "ldpc_codec"
       ],
-      "badge_gap": [
-        "exported-vectors"
-      ],
+      "badge_gap": [],
       "documents": {
         "readme": false,
         "changelog": false,
@@ -471,7 +364,7 @@
       "asset_uid": "model_comm_ofdm",
       "name": "ofdm_tx_golden",
       "kind": "golden-model",
-      "version": "1.0.0",
+      "version": "1.2.0",
       "owner": "lihan",
       "level": "intake",
       "dir": "models/comm/ofdm",
@@ -485,9 +378,7 @@
       "used_by": [
         "ofdm_tx_top"
       ],
-      "badge_gap": [
-        "exported-vectors"
-      ],
+      "badge_gap": [],
       "documents": {
         "readme": false,
         "changelog": false,
@@ -503,7 +394,7 @@
       "asset_uid": "model_comm_rrc",
       "name": "rrc_pulse_shaping_golden",
       "kind": "golden-model",
-      "version": "1.0.0",
+      "version": "1.1.0",
       "owner": "lihan",
       "level": "qualification",
       "dir": "models/comm/rrc",
@@ -517,9 +408,7 @@
       "used_by": [
         "rrc_polyphase_fir"
       ],
-      "badge_gap": [
-        "native-matlab-recheck"
-      ],
+      "badge_gap": [],
       "documents": {
         "readme": false,
         "changelog": false,
@@ -535,7 +424,7 @@
       "asset_uid": "model_comm_synch",
       "name": "ofdm_synch_golden",
       "kind": "golden-model",
-      "version": "1.0.0",
+      "version": "1.1.0",
       "owner": "lihan",
       "level": "intake",
       "dir": "models/comm/synch",
@@ -549,10 +438,7 @@
       "used_by": [
         "sync_top"
       ],
-      "badge_gap": [
-        "cfo-correction",
-        "exported-vectors"
-      ],
+      "badge_gap": [],
       "documents": {
         "readme": false,
         "changelog": false,
@@ -568,48 +454,35 @@
       "asset_uid": "ofdm_tx_top",
       "name": "ofdm_tx_top",
       "kind": "rtl",
-      "version": "0.1.0",
+      "version": "1.0.1",
       "owner": "lihan",
-      "level": "intake",
-      "dir": "incubator/intake/ofdm_tx_top",
-      "top": null,
+      "level": "certified",
+      "dir": "cbb/ofdm_tx_top",
+      "top": "ofdm_tx_top",
       "golden_model_ref": "model_comm_ofdm",
-      "fidelity": "pending",
-      "device": null,
+      "fidelity": "bit_true",
+      "device": "xc7k325tffg900-2",
       "target_fmax": "100MHz",
-      "signoff_at": null,
+      "signoff_at": "2026-08-01",
       "waiver_count": 0,
       "used_by": [],
-      "badge_gap": [
-        "G-A-01",
-        "G-A-02",
-        "G-B-03",
-        "G-C-01",
-        "G-C-02",
-        "G-C-04",
-        "G-C-05",
-        "G-GATE-01",
-        "G-SIGN-01",
-        "bit-true-vectors",
-        "fft-contract",
-        "vivado-timing"
-      ],
+      "badge_gap": [],
       "documents": {
         "readme": true,
-        "changelog": false,
-        "limitations": false
+        "changelog": true,
+        "limitations": true
       },
       "gates": {
-        "cleared_level": "reference",
-        "blocking_at": "intake",
-        "pass_count": 9
+        "cleared_level": "certified",
+        "blocking_at": null,
+        "pass_count": 21
       }
     },
     {
       "asset_uid": "pulse_merge",
       "name": "pulse_merge",
       "kind": "rtl",
-      "version": "0.4.0",
+      "version": "1.0.2",
       "owner": "lihan",
       "level": "certified",
       "dir": "cbb/pulse_merge",
@@ -618,12 +491,11 @@
       "fidelity": "bit_true",
       "device": "xc7a35tcpg236-1",
       "target_fmax": "100MHz",
-      "signoff_at": "2026-07-27",
+      "signoff_at": "2026-08-02",
       "waiver_count": 0,
       "used_by": [],
       "badge_gap": [
-        "board-validation",
-        "upstream-commit-unpinned"
+        "board-validation"
       ],
       "documents": {
         "readme": true,
@@ -633,7 +505,7 @@
       "gates": {
         "cleared_level": "certified",
         "blocking_at": null,
-        "pass_count": 20
+        "pass_count": 21
       }
     },
     {
@@ -670,7 +542,7 @@
       "asset_uid": "rrc_polyphase_fir",
       "name": "rrc_polyphase_fir",
       "kind": "rtl",
-      "version": "0.4.0",
+      "version": "1.0.2",
       "owner": "lihan",
       "level": "certified",
       "dir": "cbb/rrc_polyphase_fir",
@@ -679,7 +551,7 @@
       "fidelity": "bit_true",
       "device": "xc7k325tffg900-2",
       "target_fmax": "250MHz",
-      "signoff_at": "2026-07-25",
+      "signoff_at": "2026-08-02",
       "waiver_count": 0,
       "used_by": [
         "cbb/rrc_polyphase_fir/tb/tb_rrc_polyphase_fir.sv"
@@ -690,56 +562,48 @@
       ],
       "documents": {
         "readme": true,
-        "changelog": false,
-        "limitations": false
+        "changelog": true,
+        "limitations": true
       },
       "gates": {
         "cleared_level": "certified",
         "blocking_at": null,
-        "pass_count": 18
+        "pass_count": 21
       }
     },
     {
       "asset_uid": "sdp_ram",
       "name": "sdp_ram",
       "kind": "primitive",
-      "version": "0.1.0",
+      "version": "1.0.1",
       "owner": "lihan",
-      "level": "qualification",
-      "dir": "incubator/intake/sdp_ram",
+      "level": "certified",
+      "dir": "cbb/sdp_ram",
       "top": "sdp_ram",
       "golden_model_ref": null,
       "fidelity": "na",
-      "device": null,
-      "target_fmax": null,
-      "signoff_at": null,
+      "device": "xc7k325tffg900-2",
+      "target_fmax": "250MHz",
+      "signoff_at": "2026-08-01",
       "waiver_count": 0,
       "used_by": [],
-      "badge_gap": [
-        "G-B-03",
-        "G-C-01",
-        "G-C-02",
-        "G-C-04",
-        "G-C-05",
-        "G-GATE-01",
-        "G-SIGN-01"
-      ],
+      "badge_gap": [],
       "documents": {
         "readme": true,
-        "changelog": false,
-        "limitations": false
+        "changelog": true,
+        "limitations": true
       },
       "gates": {
-        "cleared_level": "qualification",
-        "blocking_at": "certified",
-        "pass_count": 11
+        "cleared_level": "certified",
+        "blocking_at": null,
+        "pass_count": 21
       }
     },
     {
       "asset_uid": "stream_elastic_pipeline",
       "name": "stream_elastic_pipeline",
       "kind": "rtl",
-      "version": "0.4.0",
+      "version": "1.0.2",
       "owner": "lihan",
       "level": "certified",
       "dir": "cbb/stream_elastic_pipeline",
@@ -748,7 +612,7 @@
       "fidelity": "bit_true",
       "device": "xc7a35tcpg236-1",
       "target_fmax": "100MHz",
-      "signoff_at": "2026-07-27",
+      "signoff_at": "2026-08-02",
       "waiver_count": 0,
       "used_by": [],
       "badge_gap": [
@@ -762,7 +626,7 @@
       "gates": {
         "cleared_level": "certified",
         "blocking_at": null,
-        "pass_count": 20
+        "pass_count": 21
       }
     },
     {
@@ -799,41 +663,28 @@
       "asset_uid": "sync_top",
       "name": "ofdm_sync_top",
       "kind": "rtl",
-      "version": "0.1.0",
+      "version": "1.0.2",
       "owner": "lihan",
-      "level": "intake",
-      "dir": "incubator/intake/sync_top",
-      "top": null,
+      "level": "certified",
+      "dir": "cbb/sync_top",
+      "top": "sync_top",
       "golden_model_ref": "model_comm_synch",
-      "fidelity": "pending",
-      "device": null,
+      "fidelity": "bit_true",
+      "device": "xc7k325tffg900-2",
       "target_fmax": "100MHz",
-      "signoff_at": null,
+      "signoff_at": "2026-08-01",
       "waiver_count": 0,
       "used_by": [],
-      "badge_gap": [
-        "G-A-01",
-        "G-A-02",
-        "G-B-03",
-        "G-C-01",
-        "G-C-02",
-        "G-C-04",
-        "G-C-05",
-        "G-GATE-01",
-        "G-SIGN-01",
-        "cfo-correction",
-        "exported-vectors",
-        "vivado-timing"
-      ],
+      "badge_gap": [],
       "documents": {
         "readme": true,
-        "changelog": false,
-        "limitations": false
+        "changelog": true,
+        "limitations": true
       },
       "gates": {
-        "cleared_level": "reference",
-        "blocking_at": "intake",
-        "pass_count": 9
+        "cleared_level": "certified",
+        "blocking_at": null,
+        "pass_count": 21
       }
     }
   ]

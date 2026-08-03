@@ -143,6 +143,94 @@ async function _evidenceGate(flags, label, phaseName) {
   return res;
 }
 
+// ── 模块顺序: 由代码图核对, 而不是信手写的 ─────────────────────────────────
+//
+// moduleOrder 决定 Phase 4 的 cascade 门禁 (上游没过就不调下游)。它一直是调用方
+// 手写的, 写错了没有任何东西会报错 —— 门禁会按错误的上下游关系安静地放行。
+// 代码图里有真实的例化层次, 拿它核对: 父模块不得排在它例化的子模块之前。
+//
+// 工作流跑在受限 JS 沙箱 (没有 require/fs), 所以查询由 CLI 承担, 这里只搬运结果。
+const MODULE_ORDER_SCRIPT = args?.moduleOrderScript || 'engine/scripts/module-order.cjs';
+
+const TOPOLOGY_SCHEMA = {
+  type: 'object',
+  properties: {
+    executed: { type: 'boolean' },
+    ok: { type: 'boolean' },
+    staleIndex: { type: 'boolean' },
+    suggestion: { type: 'array', items: { type: 'string' } },
+    contradictions: { type: 'array', items: { type: 'string' } },
+    unknown: { type: 'array', items: { type: 'string' } },
+    raw: { type: 'string' },
+  },
+  required: ['executed', 'ok'],
+};
+
+/**
+ * 用代码图核对 moduleOrder。
+ * @param {string} label
+ * @param {string} phaseName
+ * @param {boolean} reindex — 先跑一次增量索引 (Phase 4 之后 RTL 才存在)
+ */
+async function _checkModuleOrder(label, phaseName, reindex) {
+  if (modules.length === 0) return { skipped: true, reason: 'no_modules' };
+
+  const syncCmd = reindex
+    ? `node engine/scripts/code-graph-index.cjs sync "${projectRoot}" && `
+    : '';
+  const cmd = `${syncCmd}node ${MODULE_ORDER_SCRIPT} --project "${projectRoot}" `
+    + `--modules ${moduleOrder.join(',')} --check`;
+
+  const res = await agent(
+    `你是**命令搬运者**。执行下面的命令, 把输出原样带回, 不做任何判断。
+
+命令:
+  ${cmd}
+
+说明:
+- 脚本在 Claude harness 根目录 (通常 ~/.claude)。相对路径找不到时改用绝对路径重试一次。
+- 命令输出一个 JSON 对象。顺序有矛盾时退出码为 1, 这**不是**你的错, 照实带回。
+
+结构化返回 (禁止改写脚本输出的任何值):
+- executed: 命令是否真的执行了 (执行不了 → false)
+- ok: JSON 里的 ok 原值
+- staleIndex: JSON 里的 staleIndex 原值 (没有该字段则 false)
+- suggestion: JSON 里的 suggestion 数组原值 (没有则空数组)
+- contradictions: JSON 里 contradictions 每项的 detail 字符串 (没有则空数组)
+- unknown: JSON 里的 unknown 数组原值 (没有则空数组)
+- raw: 完整 JSON 文本`,
+    { label, phase: phaseName, schema: TOPOLOGY_SCHEMA }
+  );
+
+  if (!res || res.executed !== true) {
+    // 拓扑核对是助推器不是门禁: 查不了就照原顺序走, 但必须说出来
+    log(`⚠ [模块顺序] 核对命令未能执行, 沿用调用方给定顺序: ${moduleOrder.join(' → ')}`);
+    return { skipped: true, reason: 'not_executed' };
+  }
+  if (res.staleIndex === true) {
+    log('⚠ [模块顺序] 代码图索引不新鲜, 未做核对 (拿过期的图排验证顺序比手写更危险)');
+    return { skipped: true, reason: 'stale_index' };
+  }
+  if ((res.unknown || []).length > 0) {
+    log(`ℹ [模块顺序] 图中尚无这些模块 (还没编码或名字不符): ${res.unknown.join(', ')}`);
+  }
+  if (res.ok === true) {
+    log(`✅ [模块顺序] 与代码图例化层次一致: ${moduleOrder.join(' → ')}`);
+    return { ok: true, order: moduleOrder.slice() };
+  }
+
+  for (const item of res.contradictions || []) log(`❌ [模块顺序] ${item}`);
+  const suggestion = (res.suggestion || []).filter(name => modules.includes(name));
+  if (suggestion.length === modules.length) {
+    const before = moduleOrder.join(' → ');
+    moduleOrder = suggestion;
+    log(`🔁 [模块顺序] 已按代码图纠正: ${before}  ⇒  ${moduleOrder.join(' → ')}`);
+    return { ok: false, corrected: true, order: moduleOrder.slice() };
+  }
+  log('⚠ [模块顺序] 图给出的建议顺序不完整, 保持原顺序, 但上面的矛盾必须人工确认');
+  return { ok: false, corrected: false, order: moduleOrder.slice() };
+}
+
 // ── DAG 拓扑执行器 ──────────────────────────────────────────────────────────
 // 失败安全版。旧实现的教训: parallel() 的 thunk 抛错会被解析为 null 而不会
 // reject, 失败节点永不进 completed → ready 里反复出现 → 无限重跑。
@@ -209,6 +297,7 @@ export const meta = {
     { title: 'Phase 2 定点量化' },
     { title: 'Phase 3 TB+向量生成' },
     { title: 'Phase 4 RTL编码+脚本化对比' },
+    { title: 'Phase 4.4 层次回查' },
     { title: 'Phase 4.5 证据门禁' },
     { title: 'Phase 5 顶层集成+全链仿真' },
     { title: 'Phase 6 回归覆盖率' },
@@ -254,7 +343,9 @@ export const meta = {
 // ── 主参数 ─────────────────────────────────────────────────────────────────
 
 const modules = args?.modules || [];
-const moduleOrder = args?.moduleOrder || modules;  // Cascade dependency order (input→output)
+// Cascade dependency order。调用方给的是初值, Phase 0 与 Phase 4.4 会用代码图的
+// 例化层次核对并在矛盾时纠正 (见 _checkModuleOrder), 所以这里必须是 let。
+let moduleOrder = args?.moduleOrder || modules;
 const liteMode = args?.lite === true;
 const projectRoot = args?.projectRoot || '.';  // v3.5.1: process.cwd() 不可用
 const fpgaPart = args?.part || args?.device || '';  // v3.7: Phase 6b Vivado 体检的目标器件
@@ -285,6 +376,16 @@ const stdModules = modules.filter(m => !highSecModules.includes(m));
 // ── DAG 节点 ────────────────────────────────────────────────────────────────
 
 const nodes = {};
+
+// ── Phase 0: 模块顺序核对 (无依赖, 与基础设施并行) ──────────────────────────
+//
+// 对全新设计, 此时 RTL 还不存在, 图里查不到模块 → 只会打一行 "图中尚无这些模块",
+// 不产生任何干扰。有价值的是**在既有代码上继续干**的场景: 顺序写反会让 Phase 4
+// 的 cascade 门禁拿子模块的旧结论去放行父模块。
+nodes.p0_topology = {
+  deps: [],
+  run: async () => _checkModuleOrder('p0-module-order', 'Phase 0 基础设施', false),
+};
 
 // ── Phase 0: 基础设施 (无依赖) ──────────────────────────────────────────────
 
@@ -334,7 +435,8 @@ nodes.p0_infra = {
 // ── Phase 1a: 系统级方案设计 (算法工程师) ──────────────────────────────────
 
 nodes.p1a_sys_design = {
-  deps: ['p0_infra'],
+  // 依赖 p0_topology 只是为了保证顺序纠正发生在 Phase 4 读取 moduleOrder 之前
+  deps: ['p0_infra', 'p0_topology'],
   run: async () => {
     const result = await agent(`执行 HDL 工作流 Phase 1a: 系统级方案设计
 
@@ -893,8 +995,27 @@ ${String(debugOut).slice(0, 800)}
 };
 // ═════════════════════════════════════════════════════════════════════════════
 
-nodes.p45_evidence_gate = {
+// ── Phase 4.4: 用真实 RTL 的例化层次回查验证顺序 ─────────────────────────────
+//
+// 这一次才真正有牙: Phase 4 之后 RTL 落盘了, 代码图能看到真实的例化层次。
+// 如果它和 Phase 4 一路用的 moduleOrder 矛盾, 说明 cascade 门禁刚才是按错误的
+// 上下游关系放行的 —— 必须在证据门禁之前把这件事摆出来。
+// 不硬阻断 (工作流对顾问型检查一贯如此), 但纠正后的顺序会传给 Phase 5 集成。
+nodes.p44_topology_recheck = {
   deps: ['p4_rtl'],
+  run: async () => {
+    phase('Phase 4.4 层次回查');
+    const result = await _checkModuleOrder('p44-module-order', 'Phase 4.4 层次回查', true);
+    if (result?.ok === false) {
+      log('⚠️ [层次回查] Phase 4 的 cascade 门禁是按上面这个**错误顺序**执行的 —— '
+        + '受影响模块的上游结论需要人工复核, 不要当作已验证。');
+    }
+    return result;
+  },
+};
+
+nodes.p45_evidence_gate = {
+  deps: ['p4_rtl', 'p44_topology_recheck'],
   run: async (ctx) => {
     phase('Phase 4.5 证据门禁');
 

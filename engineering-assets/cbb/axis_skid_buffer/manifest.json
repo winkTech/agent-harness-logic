@@ -1,0 +1,142 @@
+{
+  "schema_version": "1.0",
+  "asset_uid": "axis_skid_buffer",
+  "name": "axis_skid_buffer",
+  "version": "1.0.2",
+  "owner": "lihan",
+  "kind": "primitive",
+  "signoff": {
+    "by": "lihan",
+    "at": "2026-07-31",
+    "scope": [
+      "证据已复核: tb-selfcheck.json(1966 拍比对 0 失配, 1337 次保持检查) / reset-sim.json(7 寄存器逐一复位比对) / stability 四子结果(boundary/stress/regression/backpressure) / timing-summary.rpt / utilization.rpt / envelope-check.json (WNS +2.605ns @ 250MHz, WHS +0.217ns, LUT 22/80, FF 69/80, BRAM 0, DSP 0)",
+      "已接受限制: 仅 P_DWIDTH=32 实测, 其他位宽未跑",
+      "已接受限制: 综合级证据非布线后收敛, 上板以实现后时序为准",
+      "已接受限制: 无 tkeep/tstrb/tuser 旁带信号",
+      "已接受限制: 复位释放后首拍 s_axis_tready=0 (寄存 tready 固有代价)",
+      "已接受限制: 复位比对读取 7 个内部寄存器名, RTL 改名须同步 TB"
+    ]
+  },
+  "maturity": {
+    "level": "certified",
+    "evidence_ref": "engineering-assets/evidence/axis_skid_buffer/1.0.2/"
+  },
+  "requirement_ref": "engineering-assets/docs/comm模块族认证差距清单.md",
+  "doc_refs": [
+    "engineering-assets/docs/governance/CBB-治理与生产级准入规范-V1.0.md"
+  ],
+  "fidelity": {
+    "status": "na"
+  },
+  "top": "axis_skid_buffer",
+  "ports": [
+    {
+      "name": "i_clk",
+      "direction": "input",
+      "width": 1
+    },
+    {
+      "name": "i_rst",
+      "direction": "input",
+      "width": 1
+    },
+    {
+      "name": "s_axis_tvalid",
+      "direction": "input",
+      "width": 1,
+      "bus": "axi-stream"
+    },
+    {
+      "name": "s_axis_tready",
+      "direction": "output",
+      "width": 1,
+      "bus": "axi-stream"
+    },
+    {
+      "name": "s_axis_tdata",
+      "direction": "input",
+      "width": 32,
+      "bus": "axi-stream"
+    },
+    {
+      "name": "s_axis_tlast",
+      "direction": "input",
+      "width": 1,
+      "bus": "axi-stream"
+    },
+    {
+      "name": "m_axis_tvalid",
+      "direction": "output",
+      "width": 1,
+      "bus": "axi-stream"
+    },
+    {
+      "name": "m_axis_tready",
+      "direction": "input",
+      "width": 1,
+      "bus": "axi-stream"
+    },
+    {
+      "name": "m_axis_tdata",
+      "direction": "output",
+      "width": 32,
+      "bus": "axi-stream"
+    },
+    {
+      "name": "m_axis_tlast",
+      "direction": "output",
+      "width": 1,
+      "bus": "axi-stream"
+    }
+  ],
+  "clock": {
+    "name": "i_clk",
+    "period_ns": 4
+  },
+  "reset": {
+    "name": "i_rst",
+    "polarity": "active_high",
+    "type": "sync"
+  },
+  "device": {
+    "part": "xc7k325tffg900-2",
+    "family": "kintex7",
+    "note": "与库内 rrc/ldpc 统一器件; OOC 评估"
+  },
+  "constraints": {
+    "target": {
+      "fmax": "250MHz",
+      "fmax_mhz": 250,
+      "lut": 80,
+      "ff": 80,
+      "bram": 0,
+      "dsp": 0,
+      "note_budget": "结构推算: 数据主寄存+skid 各 P_DWIDTH+1 位 (2x33) + 控制 3 FF ≈ 69 FF; LUT 为数据 2:1 选择 + ready/装载译码, 预算各留 ~15% 裕量。纯寄存切片, BRAM/DSP 恒 0。实测见 envelope-check.json。"
+    }
+  },
+  "sources": [
+    {
+      "path": "rtl/axis_skid_buffer.sv",
+      "role": "rtl",
+      "sha256": "4e76d7e45ef49ada37eeebc82cc50f964bd022713bbbaea8353437b906a51fda"
+    },
+    {
+      "path": "tb/tb_axis_skid_buffer.sv",
+      "role": "tb",
+      "sha256": "5b5b52dbd177fad72460c8a31f4796eae205a158f968cd7e476a23648c43baf5"
+    },
+    {
+      "path": "constraints/axis_skid_buffer.xdc",
+      "role": "constraint",
+      "sha256": "e11e1a9077300506e1526b97b6d74ad8c7cd842a75dd2fb460cc3916572603a9"
+    }
+  ],
+  "waivers": [],
+  "superseded_by": null,
+  "reproduce": {
+    "sim": "bash tools/run-primitive-sim.sh axis_skid_buffer --install",
+    "synth": "node tools/pg-synth.cjs cbb/axis_skid_buffer",
+    "gate": "node tools/gate-runner.cjs cbb/axis_skid_buffer --repo-root ..",
+    "note": "2026-08-02 复跑, 6 份证据逐字节相同。ModelSim 通路 tb/run_sim.do 亦保留, 但本机 ModelSim 回环 RPC 故障, 当前跑不通。"
+  }
+}
