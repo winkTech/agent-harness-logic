@@ -100,8 +100,15 @@ module tb_channel_est_top;
         is_pilot = (k == 11 || k == 25 || k == 39 || k == 53);
     endfunction
 
+    // 逐符号导频极性: 与 DUT 的 r_pol_neg 同源同相 —— 帧起点归 +1, 每个数据符号翻一次。
+    // TB 若不施加极性, 它与 DUT 又会各说各话 —— 那正是 1.0.3 之前导频值那次的形状:
+    // TB 与 RTL 用同一套约定互相印证, 两边一起错也照样全绿。
+    int tb_pol = 1;
+
     function automatic int pilot_val_at(input int k);
-        pilot_val_at = (k == 39) ? -1 : 1;              // pilot = [1,1,-1,1]
+        // 负号在 k=53 (子载波 +21) —— 802.11a 的 P 序列, 与 models/comm/channel_est
+        // 的 sim_frame / generate_vectors 同源。2026-08-09 由 k=39 (+7) 订正。
+        pilot_val_at = (k == 53) ? -1 : 1;              // pilot = [1,1,1,-1]
     endfunction
 
     //==========================================================================
@@ -162,7 +169,7 @@ module tb_channel_est_top;
                 sym_i[k] = 0; sym_q[k] = 0;
             end else begin
                 if (is_pilot(k)) begin
-                    xr = real'(pilot_val_at(k)); xi = 0.0;
+                    xr = real'(tb_pol * pilot_val_at(k)); xi = 0.0;
                 end else begin
                     xr = (((k + seed) % 2) == 0) ?  0.7 : -0.7;
                     xi = (((k + seed) % 3) == 0) ? -0.7 :  0.7;
@@ -173,6 +180,7 @@ module tb_channel_est_top;
                 sym_q[k] = q14r(yr*s + yi*c);
             end
         end
+        tb_pol = -tb_pol;            // 每个数据符号翻一次, 与 DUT 的 r_pol_neg 同步
     endtask
 
     //==========================================================================
@@ -197,6 +205,7 @@ module tb_channel_est_top;
     endtask
 
     task automatic pulse_fs();
+        tb_pol = 1;                  // 帧重启 -> 首个数据符号极性 +1 (对应 DUT 的 i_abort)
         @(posedge clk);
         fs <= 1'b1;
         @(posedge clk);

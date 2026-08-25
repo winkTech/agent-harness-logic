@@ -1479,49 +1479,101 @@ test('SessionStart routes lifecycle sources precisely and leaves dormant ECC bri
   }
 });
 
+/** node 冷启动实测值(取中位数)。批处理预算的判据必须相对它标定, 不能写死。 */
+function measureNodeStartupMs(samples = 3) {
+  const timings = [];
+  for (let i = 0; i < samples; i += 1) {
+    const at = Date.now();
+    spawnSync(process.execPath, ['-e', '0'], { windowsHide: true, timeout: 10000 });
+    timings.push(Date.now() - at);
+  }
+  timings.sort((a, b) => a - b);
+  return timings[Math.floor(timings.length / 2)];
+}
+
 test('local runner enforces one batch deadline and reports structured timeout state', () => {
-  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'local-runner-deadline-'));
-  const first = path.join(tempDir, 'first.cjs');
-  const second = path.join(tempDir, 'second.cjs');
   const runner = path.join(HOME, 'engine/scripts/hooks/local-runner.cjs');
-  fs.writeFileSync(first, 'setTimeout(() => process.exit(0), 180);\n', 'utf8');
-  fs.writeFileSync(second, 'setTimeout(() => process.exit(0), 180);\n', 'utf8');
 
-  const started = Date.now();
-  const result = spawnSync(process.execPath, [
-    runner,
-    '--batch',
-    `${first},${second}`,
-    '--deadline-ms',
-    '280',
-  ], {
-    input: JSON.stringify({ hook_event_name: 'PreToolUse', tool_name: 'Bash', tool_input: { command: 'git status' } }),
-    encoding: 'utf8',
-    timeout: 3000,
-    windowsHide: true,
-  });
-  const elapsed = Date.now() - started;
-  fs.rmSync(tempDir, { recursive: true, force: true });
-
-  assert(result.status !== 0, `batch ignored its total deadline, exit=${result.status}, elapsed=${elapsed}ms`);
-
-  // "总预算 vs 每子进程" 用**被杀的是哪个脚本**判定, 不用挂钟。
+  // 参数相对冷启动标定, 不写死。
   //
-  // 两个子进程各睡 180ms, 总截止 280ms:
-  //   总预算语义   → first 用掉 180ms, second 只剩 100ms → second 被杀
-  //   每子进程语义 → 各给 280ms, 两个都能跑完 → 根本不会超时
-  // 所以 "超时且被杀的是 second" 就唯一地证明了预算是跨子进程累计的。
+  // 历史教训: 原参数是 sleep=180ms / deadline=280ms, 推算"first 用掉 180ms → second
+  // 只剩 100ms → second 被杀"。这个推算**默默假设子进程启动开销为零** —— 它是在
+  // Linux/WSL(冷启动 30~50ms) 上调的, 那里 50+180=230 < 280 成立。
+  // Windows 实测冷启动中位数 138ms: first 的真实成本 138+180=318ms > 280ms 总预算,
+  // first 根本不可能跑完, 于是被杀的必然是 first —— 这恰恰是总预算语义的正确表现,
+  // 而断言"被杀的必须是 second"在这里是错的。实测空载 20 次只有 1 次符合原期望,
+  // 单跑 painpoints 5 次挂 4 次。CI 矩阵含 windows-latest, 所以这条腿一直是红的。
   //
-  // 原判据是 `elapsed < 650`, 它把语义判定押在挂钟上, 而 elapsed 含 runner 与两个
-  // 子 node 的冷启动。实测(Linux/WSL): 空载 306~316ms 稳定, 但加 4 个 CPU 占用进程后
-  // 12 次里有 1 次冲到 3010ms —— CI 是 2 核共享 runner, 还叠着 V8 覆盖率插桩跑 439
-  // 条测试, 正好踩中。这是本条在 CI 上间歇变红的原因, 不是 local-runner 有回归。
-  assert(result.stderr.includes('second.cjs'),
-    `total-budget semantics broken: the killed hook should be the second one, got: ${result.stderr}`);
-  assert(elapsed < 5000, `batch appears hung rather than deadline-bounded, elapsed=${elapsed}ms`);
+  // 取 C = startup + sleep 为单个 hook 的真实成本, deadline = 1.5C:
+  //   first  成本 C   < 1.5C  → 跑得完
+  //   second 只剩 0.5C < C     → 被杀
+  // 余量 0.5C 随冷启动等比放大, 对稳态开销免疫。
+  // 两个环境变量只为**自测降级路径**存在: 用它们喂回历史上那组必挂的参数
+  // (sleep=180 / deadline=280), 就能验证本条在标定失真时走的是可见 SKIP 而不是 FAIL。
+  // 不设时走实测标定, 与 CI 行为一致。
+  const forcedSleep = Number.parseInt(process.env.CLAUDE_PAINPOINT_SLEEP_MS || '', 10);
+  const forcedDeadline = Number.parseInt(process.env.CLAUDE_PAINPOINT_DEADLINE_MS || '', 10);
+  const startupMs = measureNodeStartupMs();
+  const sleepMs = Number.isFinite(forcedSleep) && forcedSleep > 0
+    ? forcedSleep
+    : Math.max(200, startupMs * 2);
+  const unitMs = startupMs + sleepMs;
+  const deadlineMs = Number.isFinite(forcedDeadline) && forcedDeadline > 0
+    ? forcedDeadline
+    : Math.round(unitMs * 1.5);
+
+  const runBatch = () => {
+    const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'local-runner-deadline-'));
+    const first = path.join(tempDir, 'first.cjs');
+    const second = path.join(tempDir, 'second.cjs');
+    fs.writeFileSync(first, `setTimeout(() => process.exit(0), ${sleepMs});\n`, 'utf8');
+    fs.writeFileSync(second, `setTimeout(() => process.exit(0), ${sleepMs});\n`, 'utf8');
+    const at = Date.now();
+    const r = spawnSync(process.execPath, [
+      runner, '--batch', `${first},${second}`, '--deadline-ms', String(deadlineMs),
+    ], {
+      input: JSON.stringify({ hook_event_name: 'PreToolUse', tool_name: 'Bash', tool_input: { command: 'git status' } }),
+      encoding: 'utf8',
+      timeout: Math.max(10000, unitMs * 8),
+      windowsHide: true,
+    });
+    fs.rmSync(tempDir, { recursive: true, force: true });
+    return { r, elapsed: Date.now() - at };
+  };
+
+  // ── 抗负载的硬断言: 无论谁被杀都必须成立 ──────────────────────────────────
+  //
+  // 每子进程语义下两个 hook 各拿满 deadline(1.5C > C), 都跑得完, 退出 0 且无超时记录。
+  // 所以"非零退出 + 结构化超时记录"本身就唯一地证明了预算是跨子进程累计的,
+  // 完全不依赖谁先谁后, 负载再高也成立。
+  const { r: result, elapsed } = runBatch();
+  const budgetInfo = `startup=${startupMs}ms sleep=${sleepMs}ms deadline=${deadlineMs}ms elapsed=${elapsed}ms`;
+  assert(result.status !== 0,
+    `batch ignored its total deadline, exit=${result.status}, ${budgetInfo}`);
+  assert(elapsed < Math.max(10000, unitMs * 6),
+    `batch appears hung rather than deadline-bounded, ${budgetInfo}`);
   assert(result.stderr.includes('"timedOut":true'), `structured timeout flag missing: ${result.stderr}`);
   assert(result.stderr.includes('"errorCode":"HOOK_DEADLINE_EXCEEDED"'),
     `structured timeout code missing: ${result.stderr}`);
+
+  // ── 严格断言: 只在标定余量真的够时才判 ────────────────────────────────────
+  //
+  // "被杀的是 second" 依赖冷启动在标定与实跑之间保持稳定。负载突变时它会失真,
+  // 此时既不能判失败(不是回归), 也不能悄悄放过 —— 降级为**可见的 SKIP**。
+  // 上面四条硬断言仍然每次都跑, 预算语义本身没有失去保护。
+  const killedSecond = (res) => res.stderr.includes('second.cjs');
+  let strict = killedSecond(result);
+  let lastStderr = result.stderr;
+  for (let attempt = 0; !strict && attempt < 2; attempt += 1) {
+    const retry = runBatch();
+    lastStderr = retry.r.stderr;
+    strict = killedSecond(retry.r);
+  }
+  if (!strict) {
+    skip(`total-budget victim check skipped: calibration did not hold (${budgetInfo}); `
+      + `deadline enforcement itself was verified, only "which hook got killed" is unchecked. `
+      + `last record: ${lastStderr.trim().slice(0, 300)}`);
+  }
 });
 
 test('local runner deadline cancels descendant processes before they outlive the hook', () => {
@@ -1530,31 +1582,46 @@ test('local runner deadline cancels descendant processes before they outlive the
   const marker = path.join(tempDir, 'orphan-marker.txt');
   const hook = path.join(tempDir, 'spawn-child.cjs');
   const runner = path.join(HOME, 'engine/scripts/hooks/local-runner.cjs');
+  // 同样相对冷启动标定, 理由与 batch deadline 那条一致。
+  //
+  // 原参数写死 deadline=600ms, 隐含假设"hook 与孙进程两次 node 冷启动 ≪ 600ms"。
+  // 满载实测冷启动可涨到 800ms 以上, 于是 ready 文件还没写出来 deadline 就到了,
+  // 报的是 "fixture never started its descendant process" —— 夹具没起来, 而不是
+  // 取消语义有问题。判据本身(孙进程有没有活过 hook)是对的, 错的是时间窗写死。
+  //
+  // 令 S = 冷启动: ready 需要 2S(hook 自身 + 孙进程), 取 deadline = max(600, 4S)
+  // 留一倍余量; orphan 定时器 = max(1000, 3S), 于是 marker 最早在 2S+3S=5S 落地,
+  // 晚于 deadline=4S —— 只有取消失败时它才会出现, 判据不会因为"还没到点"而误绿。
+  const startupMs = measureNodeStartupMs();
+  const deadlineMs = Math.max(600, startupMs * 4);
+  const orphanDelayMs = Math.max(1000, startupMs * 3);
   const childCode = [
     `require('node:fs').writeFileSync(${JSON.stringify(ready)}, 'ready');`,
-    `setTimeout(() => require('node:fs').writeFileSync(${JSON.stringify(marker)}, 'orphan'), 1000);`,
+    `setTimeout(() => require('node:fs').writeFileSync(${JSON.stringify(marker)}, 'orphan'), ${orphanDelayMs});`,
   ].join('');
   fs.writeFileSync(hook, [
     "const { spawn } = require('node:child_process');",
     `spawn(process.execPath, ['-e', ${JSON.stringify(childCode)}], { windowsHide: true });`,
-    'setTimeout(() => process.exit(0), 5000);',
+    `setTimeout(() => process.exit(0), ${deadlineMs * 8});`,
     '',
   ].join('\n'), 'utf8');
 
-  const result = spawnSync(process.execPath, [runner, hook, '--deadline-ms', '600'], {
+  const result = spawnSync(process.execPath, [runner, hook, '--deadline-ms', String(deadlineMs)], {
     input: '{}',
     encoding: 'utf8',
-    timeout: 3000,
+    timeout: Math.max(10000, deadlineMs * 4),
     windowsHide: true,
   });
   const childStarted = fs.existsSync(ready);
-  Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 1200);
+  // 等到 marker 的应发时刻之后再看: 孙进程若没被回收, 这段时间足够它写出来。
+  Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, orphanDelayMs + startupMs * 3);
   const orphaned = fs.existsSync(marker);
   fs.rmSync(tempDir, { recursive: true, force: true });
 
-  assert(result.status !== 0, `deadline did not terminate the parent hook, exit=${result.status}`);
-  assert(childStarted, 'process-tree fixture never started its descendant process');
-  assert(!orphaned, 'deadline left a descendant process running after the hook exited');
+  const info = `startup=${startupMs}ms deadline=${deadlineMs}ms orphanDelay=${orphanDelayMs}ms`;
+  assert(result.status !== 0, `deadline did not terminate the parent hook, exit=${result.status}, ${info}`);
+  assert(childStarted, `process-tree fixture never started its descendant process, ${info}`);
+  assert(!orphaned, `deadline left a descendant process running after the hook exited, ${info}`);
 });
 
 test('local-runner remains tested but is retired from active hook paths', () => {

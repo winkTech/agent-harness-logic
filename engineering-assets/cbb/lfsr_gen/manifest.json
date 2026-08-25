@@ -29,6 +29,11 @@
     "engineering-assets/docs/governance/CBB-治理与生产级准入规范-V1.0.md",
     "engineering-assets/docs/CBB候选台账-hdl-coding-templates.md"
   ],
+  "protocol_anchor": {
+    "standard": "none",
+    "baseline_relation": "neutral",
+    "notes": "结构原语: 参数化 LFSR (默认多项式 16'hB400, 16 位 Galois)。**不是** 802.11 扰码器 —— Clause 17 的加扰多项式是 x^7+x^4+1, 位宽与抽头都不同; 计划中的 scrambler_80211 是另一个资产, 不可用本件的默认配置冒充。"
+  },
   "fidelity": {
     "status": "na"
   },

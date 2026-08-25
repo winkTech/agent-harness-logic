@@ -2,13 +2,13 @@
 'use strict';
 
 /**
- * memory-recall-tier-contract.cjs — 两层召回行为契约 (D5 修复)。
+ * memory-recall-tier-contract.cjs — 默认可信召回行为契约。
  *
  * 覆盖:
  *   1. verified 事实优先注入且不带未验证标注
- *   2. candidate 事实 (≥0.6) 在 verified 不足时补位, 注入行显式标注 候选(未验证)
- *   3. 低置信 candidate (<0.6) 不注入
- *   4. verified ≥3 条时不再补位 candidate (上限约束)
+ *   2. candidate 无论置信度高低都不进入默认上下文
+ *   3. verified 数量不足时也不得用 unscoped candidate 补位
+ *   4. verified 结果保持有界
  *   5. 无触发词 → 零注入 (0 token 合同不变)
  */
 
@@ -23,7 +23,30 @@ const ROOT = path.resolve(__dirname, '..', '..', '..');
 const { openDb } = require(path.join(ROOT, 'engine/sqlite/index.cjs'));
 const storeMemory = require(path.join(ROOT, 'engine/sqlite/store-memory.cjs'));
 const retrieveHook = require(path.join(ROOT, 'engine/scripts/memory-retrieve-hook.cjs'));
+const semanticSearch = require(path.join(ROOT, 'engine/scripts/semantic-search.cjs'));
 const { retrieveContext, buildContextQuery } = retrieveHook;
+
+function assertInactiveMemoryIsNotSemanticallyIndexed() {
+  const fixture = fs.mkdtempSync(path.join(os.tmpdir(), 'semantic-memory-lifecycle-'));
+  try {
+    const learningDir = path.join(fixture, 'memory', 'learnings');
+    fs.mkdirSync(learningDir, { recursive: true });
+    fs.mkdirSync(path.join(fixture, 'engineering-assets', 'knowledge', 'primary'), { recursive: true });
+    const active = path.join(learningDir, 'active.md');
+    const superseded = path.join(learningDir, 'superseded.md');
+    const retired = path.join(learningDir, 'retired.md');
+    fs.writeFileSync(active, '---\nstatus: verified\n---\n# Active\nCurrent fact.\n', 'utf8');
+    fs.writeFileSync(superseded, '---\nstatus: superseded\n---\n# Old\nDo not retrieve.\n', 'utf8');
+    fs.writeFileSync(retired, '---\nstatus: retired\n---\n# Retired\nDo not retrieve.\n', 'utf8');
+
+    const eligible = semanticSearch.eligibleFiles(fixture).map((file) => path.basename(file));
+    assert(eligible.includes('active.md'), 'verified memory must remain semantically eligible');
+    assert(!eligible.includes('superseded.md'), 'superseded memory leaked into semantic eligibility');
+    assert(!eligible.includes('retired.md'), 'retired memory leaked into semantic eligibility');
+  } finally {
+    fs.rmSync(fixture, { recursive: true, force: true });
+  }
+}
 
 function seedFact(db, name, confidence, verificationState) {
   const now = Date.now();
@@ -89,6 +112,7 @@ function editTriggers(db, relativeFile) {
 }
 
 function main() {
+  assertInactiveMemoryIsNotSemanticallyIndexed();
   const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'recall-tier-'));
   const handle = openDb({ path: path.join(tmp, 'memory.db') });
   const db = handle.db;
@@ -97,17 +121,16 @@ function main() {
     seedFact(db, 'cand-bravo', 0.7, 'candidate');
     seedFact(db, 'cand-lowconf', 0.4, 'candidate');
 
-    // 1+2+3: verified 优先, candidate 标注补位, 低置信排除
+    // 1+2+3: 默认上下文只接受 verified；candidate/unscoped 不得补位
     const out = retrieve(db, '查一下 FSM 状态机复位的既往经验');
     assert.ok(out, 'trigger message must inject');
     const text = out.hookSpecificOutput.additionalContext;
     assert.ok(text.includes('verified-alpha'), `verified fact missing: ${text}`);
     assert.ok(!new RegExp('候选\\(未验证[^\\n]*verified-alpha').test(text), 'verified fact must not carry candidate tag');
-    assert.ok(text.includes('cand-bravo'), `candidate fact missing: ${text}`);
-    assert.ok(new RegExp('候选\\(未验证[^\\n]*cand-bravo').test(text), `candidate must be tagged: ${text}`);
+    assert.ok(!text.includes('cand-bravo'), `candidate fact leaked into default context: ${text}`);
     assert.ok(!text.includes('cand-lowconf'), `low-confidence candidate must be excluded: ${text}`);
 
-    // 4: verified 满 3 条后不再补位
+    // 4: verified 结果保持有界，candidate 仍不得补位
     seedFact(db, 'verified-beta', 0.8, 'verified');
     seedFact(db, 'verified-gamma', 0.8, 'verified');
     const full = retrieve(db, '搜一下 FSM 状态机复位时序');

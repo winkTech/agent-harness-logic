@@ -3,8 +3,8 @@
   "asset_uid": "sdp_ram",
   "version": "1.0.1",
   "created_at": "2026-08-02T05:05:53.780Z",
-  "git_head": "388c12490991354e83093f1396080c072b5b76a3",
-  "manifest_sha256": "891ccf124a7212d42d11a0232a2ff9de78300cd2ad1cab5c1c80b0f8f74d987d",
+  "git_head": "b7818e1ce6bb73feef9f05ca9bc36e2fb7acac6a",
+  "manifest_sha256": "de735db2ecb90a0abcf404f5708bbfb493f0a67e1a7629fb0b31a676ffaa2a24",
   "evidence_source": "var/gates/pg/sdp_ram",
   "files": [
     {
@@ -68,6 +68,11 @@
       "bytes": 213
     },
     {
+      "path": "G-B-04.json",
+      "sha256": "bc5709270ed51edd06e1a0a4afa31d708cc6f505acfb69122f5cf0bde2daf3e2",
+      "bytes": 184
+    },
+    {
       "path": "G-C-01.json",
       "sha256": "c05da71d3f5014c041ec5e1c74e7583cef9aba35b36f99e986101b4f301ebe33",
       "bytes": 212
@@ -124,8 +129,8 @@
     },
     {
       "path": "gate-results.json",
-      "sha256": "db85bac444c1d047fe4a0976d91ab3b5b8277108944e5be6515dae70094ebc33",
-      "bytes": 3053
+      "sha256": "01d7e66bd039db6120cdce6eaa6ab70f863474ca4a0e61f8e2796c9a56efd0b6",
+      "bytes": 3181
     },
     {
       "path": "reset-sim.json",
@@ -189,7 +194,7 @@
     "declared_level": "certified",
     "cleared_level": "certified",
     "blocking_at": null,
-    "gate_count": 21,
+    "gate_count": 22,
     "generated_by": "gate-runner.cjs v1.1",
     "redline_contract": "reset-signal-scoped",
     "gates": [
@@ -278,6 +283,13 @@
         "severity": "mid"
       },
       {
+        "id": "G-B-04",
+        "level": "intake",
+        "must": true,
+        "status": "pass",
+        "severity": "mid"
+      },
+      {
         "id": "G-B-02",
         "level": "qualification",
         "must": true,
@@ -341,5 +353,17 @@
         "severity": "high"
       }
     ]
-  }
+  },
+  "reseal_history": [
+    {
+      "at": "2026-08-03T01:37:40.587Z",
+      "reason": "治理机制变更, 非资产变更: manifest 新增 protocol_anchor 协议锚点字段 (owner 裁定 2026-08-02, 协议基线 IEEE 802.11-2020 Clause 17), gate-runner 新增 G-B-04 协议锚点门 —— 逐文件比对确认差异只限门禁机器产物 (gate-results.json 21->22 门, 新增 G-B-04.json), 仿真/综合/对拍/时序/资源证据全部逐字节未变, RTL 与功能结论未动。",
+      "prior_manifest_sha256": "891ccf124a7212d42d11a0232a2ff9de78300cd2ad1cab5c1c80b0f8f74d987d",
+      "prior_git_head": "388c12490991354e83093f1396080c072b5b76a3",
+      "changed_evidence": [
+        "+G-B-04.json",
+        "~gate-results.json"
+      ]
+    }
+  ]
 }

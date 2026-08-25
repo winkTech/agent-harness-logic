@@ -374,6 +374,10 @@ module.exports = {
   MAX_MANIFEST_DEPTH,
   discoverManifestPaths,
   evaluateDrift,
+  // 导出纯函数 expectedFiles: guard-coverage-contract 用它枚举本工具的全部输出路径,
+  // 以**实跑校验**"catalog-gen 只写 catalog/ 不落受保护区"这条豁免理由 ——
+  // 豁免理由若只是一句注释, 数据一变它就悄悄失真了。
+  expectedFiles,
   renderCatalogJson,
   renderCatalogMarkdown,
   scanRepository,

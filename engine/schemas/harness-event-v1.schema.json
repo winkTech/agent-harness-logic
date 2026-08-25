@@ -1,0 +1,143 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://local.harness/schemas/harness-event-v1.schema.json",
+  "title": "Harness Event v1",
+  "description": "归一化内部事件契约（harness-event-v1）：所有 transport（claude-code / workbuddy / codex）的原始 payload 由 transport 层归一化为本形状，hook 只消费本形状，不直接解析各工具原始载荷。D1 真实事件语义：status 三值 succeeded|failed|unknown，原始载荷缺 status 时 transport 一律归一化为 unknown（绝不臆测成功/失败）；eventType 是中性事件名（tool.pre/tool.post/...），与结果无关，结果判定只由 status 承载。hook 层（如 progress-watchdog）可再按输出证据把 unknown 细化，但不得在契约层越权判定。",
+  "type": "object",
+  "required": [
+    "schema",
+    "version",
+    "eventId",
+    "eventType",
+    "transport",
+    "occurredAt",
+    "sessionId",
+    "cwd",
+    "status"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "schema": {
+      "const": "harness.event",
+      "description": "固定标识本契约为 harness 内部事件。"
+    },
+    "version": {
+      "const": 1,
+      "description": "契约版本。版本变化时由 transport 层做迁移，hook 不感知。"
+    },
+    "eventId": {
+      "type": "string",
+      "minLength": 8,
+      "maxLength": 128,
+      "description": "事件唯一标识：transport 生成（uuid 或对原始 payload 的确定性派生），供去重、审计、事件关联。"
+    },
+    "eventType": {
+      "type": "string",
+      "enum": [
+        "session.start",
+        "prompt.submit",
+        "tool.pre",
+        "tool.post",
+        "session.stop",
+        "session.precompact",
+        "subagent.stop",
+        "unknown"
+      ],
+      "description": "中性事件类型，不含成功/失败语义（结果由 status 承载）。映射表：SessionStart→session.start；UserPromptSubmit→prompt.submit；PreToolUse→tool.pre；PostToolUse / PostToolUseFailure→tool.post；Stop→session.stop；PreCompact→session.precompact；SubagentStop→subagent.stop；无法识别→unknown。"
+    },
+    "transport": {
+      "type": "string",
+      "enum": ["claude-code", "workbuddy", "codex"],
+      "description": "原始载荷来源工具。hook 需要按来源区分行为时使用；同一事件类型在不同 transport 下的归一化结果必须语义一致。"
+    },
+    "occurredAt": {
+      "type": "string",
+      "format": "date-time",
+      "description": "事件发生时间。原始载荷带时间戳时映射；缺失时取 receivedAt 并保持 inferred 记录在 source（不伪造时间）。"
+    },
+    "receivedAt": {
+      "type": "string",
+      "format": "date-time",
+      "description": "transport 收到载荷的时间（接收侧时钟）。"
+    },
+    "sessionId": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 256,
+      "description": "归一化会话标识：Claude session_id / WorkBuddy session / Codex 输入会话。跨 transport 不要求同源，但同一 transport 内必须稳定，供 watermark/去重/状态隔离使用。"
+    },
+    "cwd": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 1024,
+      "description": "事件发生时的工作目录（绝对路径），供项目作用域/门禁判定。"
+    },
+    "status": {
+      "type": "string",
+      "enum": ["succeeded", "failed", "unknown"],
+      "description": "事件结果判定（D1 核心）。succeeded=原始载荷有明确成功证据；failed=原始载荷有明确失败证据（如 PostToolUseFailure 事件名本身即失败证据）；unknown=原始载荷无 status 信息（如 Claude PostToolUse 通常如此）——hook 层可再按输出证据细化，契约层绝不臆测。"
+    },
+    "toolName": {
+      "type": ["string", "null"],
+      "description": "工具名（工具事件）。非工具事件为 null。Claude: tool_name → toolName。"
+    },
+    "toolInput": {
+      "type": ["object", "null"],
+      "description": "工具输入参数（工具事件）。Claude: tool_input → toolInput。可能包含命令等敏感内容，hook 不得写入日志。"
+    },
+    "toolUseId": {
+      "type": ["string", "null"],
+      "description": "工具调用标识（工具事件），供事件关联。Claude: tool_use_id → toolUseId。"
+    },
+    "actor": {
+      "type": ["object", "null"],
+      "default": null,
+      "description": "发起者信息（可选）。Claude/WorkBuddy 原始载荷无此概念时为 null；Codex 等可携带。",
+      "additionalProperties": false,
+      "properties": {
+        "kind": { "type": "string", "description": "main | subagent | external" },
+        "id": { "type": ["string", "null"] },
+        "type": { "type": ["string", "null"] },
+        "parentId": { "type": ["string", "null"] }
+      }
+    },
+    "source": {
+      "type": "object",
+      "required": ["nativeEventName", "adapter"],
+      "additionalProperties": false,
+      "properties": {
+        "nativeEventName": {
+          "type": "string",
+          "description": "原始工具事件名（如 PreToolUse / pre_tool_use），溯源用。"
+        },
+        "adapter": {
+          "type": "string",
+          "description": "transport 适配器标识（如 claude-hook-v1 / workbuddy-hook-v1 / codex-precommit-v1），对应 engine/scripts/transport/<name>.cjs。"
+        },
+        "statusInferred": {
+          "type": "boolean",
+          "description": "true 表示 status 由 transport 推断（原始载荷缺 status 归为 unknown），审计用。"
+        },
+        "timestampInferred": {
+          "type": "boolean",
+          "description": "true 表示 occurredAt 由 transport 推断（原始载荷缺时间戳），审计用。"
+        },
+        "payloadHash": {
+          "type": ["string", "null"],
+          "description": "原始 payload 的 sha256 指纹（可选，审计/去重用），格式 'sha256:<hex>'。"
+        }
+      }
+    },
+    "raw": {
+      "type": ["object", "null"],
+      "default": null,
+      "description": "原始 payload 保留（默认 null，不持久化）。需要原始字段细节的 hook 显式要求 transport 附带；含敏感内容时 hook 负保密责任。"
+    },
+    "extensions": {
+      "type": "object",
+      "default": {},
+      "additionalProperties": true,
+      "description": "transport / hook 扩展点（不得承载契约级语义）。"
+    }
+  }
+}

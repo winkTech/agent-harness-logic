@@ -47,9 +47,13 @@ Thumbs.db
 config.json
 settings.json
 
+# WorkBuddy 目标渲染产物（含本机绝对路径，与 settings.json 同理，不入库；
+# 由 engine/scripts/render-hook-settings.cjs 从 registrations.json 重建）
+engine/hooks/workbuddy.hooks.json
+
 # 2026-07-27 起：**所有 hook 统一放 settings.json**（见 README「Hook 事件」一节）。
 # 该文件被忽略，因为 hook 命令里含 C:/Users/<name>/... 本机绝对路径
-# （历史教训：改用 $HOME 会导致 hook 静默不触发，见 memory/reference/hooks-fix-2026-06-24.md）。
+# （历史教训：改用 $HOME 会导致 hook 静默不触发）。
 #
 # 2026-07-29 起不再需要手工重建：注册的权威声明入库在 engine/hooks/registrations.json
 # （用 {{HARNESS_ROOT}} 占位保持可移植），换机/新克隆跑
@@ -193,6 +197,9 @@ venv/
 
 # 记忆库运行时状态（自动更新，不应入库）
 memory/.last-active
+
+# WorkBuddy 应用运行时数据（memory/ 等，非 harness 仓库内容）
+.workbuddy/
 
 # 运行时统计缓存（自动生成，无需版本控制）
 stats-cache.json

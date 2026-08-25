@@ -27,6 +27,11 @@
   "doc_refs": [
     "engineering-assets/docs/governance/CBB-治理与生产级准入规范-V1.0.md"
   ],
+  "protocol_anchor": {
+    "standard": "none",
+    "baseline_relation": "neutral",
+    "notes": "结构原语: 定点复数乘法, 纯算术件, 不锚任何通信标准。"
+  },
   "fidelity": {
     "status": "na"
   },

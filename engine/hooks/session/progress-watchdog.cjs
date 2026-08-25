@@ -12,6 +12,8 @@ const {
   withFileLockSync,
 } = require('../../scripts/lib/project-scope.cjs');
 
+const transport = require('../../scripts/transport/index.cjs');
+
 const HOME = HARNESS_ROOT;
 const DEFAULT_STATE_FILE = path.join(HOME, 'var', 'index', 'progress-watchdog-state.json');
 const DEFAULT_ARCHIVE_DIR = path.join(HOME, 'var', 'failures', 'progress-watchdog');
@@ -19,6 +21,7 @@ const DEFAULT_MAX_NO_PROGRESS_TURNS = 8;
 const DEFAULT_MAX_IDLE_MS = 45 * 60 * 1000;
 const DEFAULT_MAX_SESSIONS = 64;
 const DEFAULT_MAX_ARCHIVES = 50;
+const DEFAULT_SCOPE_TTL_MS = 45 * 60 * 1000;
 const HISTORY_LIMIT = 16;
 const BYPASS_AUDIT_LIMIT = 16;
 const MIN_BYPASS_REASON_LENGTH = 12;
@@ -42,10 +45,14 @@ const DIRECT_PROGRESS_TOOLS = new Set([
   'Agent',
   'Workflow',
 ]);
+const LONG_TASK_TOOLS = new Set(['Agent', 'Workflow', 'Task']);
+const NOTIFY_TOOLS = new Set(['AskUserQuestion', 'PushNotification', 'SendMessage', 'TodoWrite', 'ToolSearch']);
 
 const VERIFICATION_COMMAND = /\b(pytest|npm\s+(?:test|run\s+test)|pnpm\s+(?:test|run\s+test)|node\s+.*(?:test-hooks|\.test\.|spec)|ruff\s+check|vlog|vsim|iverilog|verilator|make\s+(?:test|sim|lint|compile|verify)|git\s+commit)\b/i;
 const FPGA_VERIFICATION_COMMAND = /\b(?:vivado(?:\.bat|\.exe)?\s+.*(?:-mode\s+batch|-source\b)|node(?:\.exe)?\s+.*(?:pg-synth|fpga-timing-parser|auto-parse-fpga-reports)\.cjs\b)/i;
 const READ_ONLY_COMMAND = /^\s*(?:pwd|cd\b|ls\b|dir\b|echo\b|cat\b|type\b|Get-Content\b|rg\b|grep\b|findstr\b)/i;
+const LONG_TASK_TEXT = /\b(?:long[- ]?running|monitor|watch|babysit|repair loop|keep going|do not stop)\b|长任务|持续监控|不要停止|修复循环/i;
+const RISK_LEVELS = ['R0', 'R1', 'R2', 'R3'];
 
 function watchdogMode(opts = {}) {
   const cliMode = process.argv.includes('--enforce') ? 'enforce' : '';
@@ -114,6 +121,112 @@ function eventName(payload) {
   return String(payload?.hook_event_name || payload?.event || '').trim();
 }
 
+function normalizeRiskLevel(value) {
+  const level = String(value || 'R0').trim().toUpperCase();
+  return RISK_LEVELS.includes(level) ? level : 'R0';
+}
+
+function payloadDeclaresLongTask(payload) {
+  if (LONG_TASK_TOOLS.has(toolName(payload))) return true;
+  const explicit = payload?.long_running
+    ?? payload?.longRunning
+    ?? payload?.task?.long_running
+    ?? payload?.task?.longRunning
+    ?? payload?.tool_input?.long_running
+    ?? payload?.tool_input?.longRunning;
+  if (explicit === true || String(explicit || '').toLowerCase() === 'true') return true;
+  const taskKind = String(
+    payload?.task_kind || payload?.taskKind || payload?.task?.kind || payload?.tool_input?.task_kind || '',
+  );
+  if (/^(?:long|monitor|watch|repair|workflow)$/i.test(taskKind.trim())) return true;
+  const text = String(
+    payload?.user_message || payload?.userMessage || payload?.prompt || payload?.task?.objective || '',
+  );
+  return LONG_TASK_TEXT.test(text);
+}
+
+/**
+ * D1 transport 归一化入口：把原始 hook payload 经 transport 层归一化为
+ * harness-event-v1 事件对象。归一化层是纯函数、无副作用。
+ *
+ * fail-closed：归一化失败（非法载荷/未知 transport）不抛异常，返回一个
+ * status=unknown 的 fallback 事件，保证 watchdog 不因 transport 故障而
+ * 静默吞事件或误判成败。调用方拿到 event 后用 event.status 作为
+ * D1 失败证据（=== 'failed' ⟺ PostToolUseFailure 或载荷显式 failed）。
+ *
+ * @param {object} payload 原始 hook payload
+ * @param {object} [opts] 选项
+ * @param {string} [opts.transport='claude-code'] 目标 transport
+ * @returns {{event: object, transportError: Error|null}}
+ */
+function normalizePayload(payload, opts = {}) {
+  const transportName = opts.transport || process.env.HARNESS_TRANSPORT || 'claude-code';
+  try {
+    const event = transport.normalize(payload, transportName);
+    return { event, transportError: null };
+  } catch (error) {
+    return {
+      event: {
+        schema: 'harness.event',
+        version: 1,
+        eventId: 'fallback',
+        eventType: 'unknown',
+        transport: transportName,
+        occurredAt: new Date().toISOString(),
+        receivedAt: new Date().toISOString(),
+        sessionId: sessionIdFor(payload),
+        cwd: cwdFor(payload),
+        status: 'unknown',
+        toolName: toolName(payload),
+        toolInput: null,
+        toolUseId: null,
+        actor: null,
+        source: {
+          nativeEventName: eventName(payload) || 'unknown',
+          adapter: 'fallback',
+          statusInferred: true,
+          timestampInferred: true,
+          payloadHash: null,
+        },
+        raw: null,
+        extensions: {},
+      },
+      transportError: error,
+    };
+  }
+}
+
+function shouldTrackProgress(payload, opts = {}) {
+  if (opts.forceTrack === true) return { tracked: true, reason: 'forced' };
+  if (opts.forceTrack === false) return { tracked: false, reason: 'explicitly_disabled' };
+  const existing = opts.existingSession && typeof opts.existingSession === 'object'
+    ? opts.existingSession
+    : null;
+  if (existing?.status === 'frozen') return { tracked: true, reason: 'frozen_session' };
+
+  const riskLevel = normalizeRiskLevel(opts.riskLevel);
+  if (RISK_LEVELS.indexOf(riskLevel) >= RISK_LEVELS.indexOf('R2')) {
+    return { tracked: true, reason: 'elevated_risk', riskLevel };
+  }
+
+  const classification = opts.classification || classifyEvent(payload, opts.event);
+  if (eventName(payload) === 'PostToolUseFailure' || opts.event?.status === 'failed' || classification.kind === 'no_progress') {
+    return { tracked: true, reason: 'repair_loop' };
+  }
+  if (Number(existing?.noProgressTurns || 0) > 0) {
+    return { tracked: true, reason: 'repair_loop' };
+  }
+  if (payloadDeclaresLongTask(payload)) return { tracked: true, reason: 'long_task' };
+
+  const nowMs = Date.parse(opts.now || new Date().toISOString());
+  const scopeExpiryMs = Date.parse(existing?.trackingScope?.expiresAt || '');
+  if (existing?.trackingScope?.kind === 'long_task'
+      && Number.isFinite(nowMs) && Number.isFinite(scopeExpiryMs) && scopeExpiryMs > nowMs) {
+    return { tracked: true, reason: 'long_task' };
+  }
+  return { tracked: false, reason: 'ordinary_low_risk' };
+}
+
 function bypassRequest(opts = {}) {
   const disabled = String(opts.disabled ?? process.env.PROGRESS_WATCHDOG_DISABLED ?? '') === '1';
   const reason = String(opts.bypassReason ?? process.env.PROGRESS_WATCHDOG_BYPASS_REASON ?? '').trim();
@@ -176,9 +289,9 @@ const OUTPUT_FAIL_MARKERS = [
   /\bAssertion error\b/i,
 ];
 
-function verificationOutcome(hookEvent, result) {
+function verificationOutcome(hookEvent, result, event) {
   const combined = `${result.stdout}\n${result.stderr}\n${result.error}`;
-  if (hookEvent === 'PostToolUseFailure') return { verdict: 'failed', why: 'PostToolUseFailure event' };
+  if (hookEvent === 'PostToolUseFailure' || event?.status === 'failed') return { verdict: 'failed', why: event?.status === 'failed' ? 'transport status=failed' : 'PostToolUseFailure event' };
   if (result.interrupted) return { verdict: 'failed', why: 'command interrupted' };
   if (result.exitCode !== null && result.exitCode !== 0) return { verdict: 'failed', why: `exit=${result.exitCode}` };
   if (OUTPUT_FAIL_MARKERS.some((re) => re.test(combined))) return { verdict: 'failed', why: 'failure marker in output' };
@@ -190,7 +303,7 @@ function cwdFor(payload) {
   return payload?.cwd || payload?.workspace?.current_dir || process.cwd();
 }
 
-function classifyEvent(payload) {
+function classifyEvent(payload, event) {
   const name = toolName(payload);
   const command = commandText(payload);
   const explicit = String(payload?.progress_status || payload?.progressStatus || '').toLowerCase();
@@ -209,9 +322,9 @@ function classifyEvent(payload) {
       return { kind: 'activity', evidence: `read-only shell exploration: ${command.slice(0, 160)}` };
     }
     if (VERIFICATION_COMMAND.test(command) || FPGA_VERIFICATION_COMMAND.test(command)) {
-      if (hookEvent === 'PostToolUse' || hookEvent === 'PostToolUseFailure') {
+      if (hookEvent === 'PostToolUse' || hookEvent === 'PostToolUseFailure' || (event && event.eventType === 'tool.post')) {
         const result = resultFromPayload(payload);
-        const outcome = verificationOutcome(hookEvent, result);
+        const outcome = verificationOutcome(hookEvent, result, event);
         if (outcome.verdict === 'inconclusive') {
           // 真实载荷缺退出码且输出无结论 → 不能臆断成败, 也绝不能记失败
           // (那正是误冻结事故的根因); 按 activity 处理。
@@ -272,6 +385,23 @@ function isReadOnlyAction(payload) {
   const name = toolName(payload);
   if (READ_ONLY_TOOLS.has(name)) return true;
   return (name === 'Bash' || name === 'PowerShell') && READ_ONLY_COMMAND.test(commandText(payload));
+}
+
+function frozenActionAccess(payload) {
+  const name = toolName(payload);
+  const command = commandText(payload);
+  const hookEvent = eventName(payload);
+  const isAuditReset = /(?:progress-watchdog\.cjs|verification-gate\.cjs)\s+(?:--)?reset\b/.test(command);
+  const isReadOnly = READ_ONLY_TOOLS.has(name)
+    || ((name === 'Bash' || name === 'PowerShell') && READ_ONLY_COMMAND.test(command));
+  const allowed = isAuditReset || isReadOnly || NOTIFY_TOOLS.has(name) || hookEvent === 'Stop';
+  return {
+    allowed,
+    evidence: isAuditReset ? 'audited reset'
+      : isReadOnly ? 'read-only'
+        : hookEvent === 'Stop' ? 'stop checkpoint'
+          : NOTIFY_TOOLS.has(name) ? 'notification' : 'blocked',
+  };
 }
 
 function pruneSessions(state, maxSessions = DEFAULT_MAX_SESSIONS) {
@@ -397,7 +527,40 @@ function updateProgressUnlocked(payload, opts = {}) {
   const cwd = cwdFor(payload);
   const sessionId = sessionIdFor(payload);
   const objectiveHash = objectiveHashFor(payload);
-  const { key, session } = sessionRecord(state, cwd, sessionId, objectiveHash);
+  const key = stableSessionKey(cwd, sessionId);
+  const existingSession = state.sessions[key] || null;
+  const { event } = normalizePayload(payload, opts);
+  const classification = classifyEvent(payload, event);
+  const scope = shouldTrackProgress(payload, {
+    ...opts,
+    now,
+    existingSession,
+    classification,
+    event,
+  });
+  if (!scope.tracked) {
+    return {
+      status: 'not_tracked',
+      classification: { kind: 'not_tracked', evidence: scope.reason },
+      sessionKey: key,
+      stateFile,
+      archiveFile: existingSession?.archiveFile || null,
+      session: existingSession || { status: 'untracked', noProgressTurns: 0, history: [] },
+      mode,
+      scope,
+      thresholds: { maxNoProgressTurns, maxIdleMs },
+    };
+  }
+  const { session } = sessionRecord(state, cwd, sessionId, objectiveHash);
+  const scopeTtlMs = Number.parseInt(opts.scopeTtlMs || DEFAULT_SCOPE_TTL_MS, 10);
+  session.trackingScope = {
+    kind: scope.reason,
+    riskLevel: scope.riskLevel || normalizeRiskLevel(opts.riskLevel),
+    updatedAt: now,
+    expiresAt: scope.reason === 'long_task' && Number.isFinite(scopeTtlMs) && scopeTtlMs > 0
+      ? new Date(Date.parse(now) + scopeTtlMs).toISOString()
+      : null,
+  };
   const bypass = bypassRequest(opts);
   if (bypass.requested) {
     if (!bypass.valid) {
@@ -444,13 +607,9 @@ function updateProgressUnlocked(payload, opts = {}) {
     // 2026-07-27 事故: 旧实现无差别拦截一切 (连 AskUserQuestion/Read 都拒),
     // 与验证门禁互锁成死锁, 会话只能靠人工删状态救回。
     const frozenTool = toolName(payload);
-    const frozenCommand = commandText(payload);
     const frozenEvent = eventName(payload);
-    const NOTIFY_TOOLS = new Set(['AskUserQuestion', 'PushNotification', 'SendMessage', 'TodoWrite', 'ToolSearch']);
-    const isAuditReset = /(?:progress-watchdog\.cjs|verification-gate\.cjs)\s+(?:--)?reset\b/.test(frozenCommand);
-    const isReadOnly = READ_ONLY_TOOLS.has(frozenTool)
-      || ((frozenTool === 'Bash' || frozenTool === 'PowerShell') && READ_ONLY_COMMAND.test(frozenCommand));
-    const allowed = isAuditReset || isReadOnly || NOTIFY_TOOLS.has(frozenTool) || frozenEvent === 'Stop';
+    const access = frozenActionAccess(payload);
+    const allowed = access.allowed;
     session.lastEventAt = now;
     appendHistory(session, {
       at: now,
@@ -458,7 +617,7 @@ function updateProgressUnlocked(payload, opts = {}) {
       tool: frozenTool || 'unknown',
       kind: allowed ? 'frozen_allowed' : 'blocked_frozen',
       evidence: allowed
-        ? `frozen but allowed (${isAuditReset ? 'audited reset' : isReadOnly ? 'read-only' : frozenEvent === 'Stop' ? 'stop checkpoint' : 'notification'})`
+        ? `frozen but allowed (${access.evidence})`
         : `repair loop frozen: ${session.freezeReason || 'repair_budget_exhausted'}`,
       objectiveHash,
     });
@@ -477,7 +636,6 @@ function updateProgressUnlocked(payload, opts = {}) {
       thresholds: { maxNoProgressTurns, maxIdleMs },
     };
   }
-  const classification = classifyEvent(payload);
   const historyItem = {
     at: now,
     event: eventName(payload) || 'unknown',
@@ -495,6 +653,10 @@ function updateProgressUnlocked(payload, opts = {}) {
     session.lastProgressAt = now;
     session.archivedAt = null;
     delete session.archiveFile;
+    if (session.trackingScope?.kind === 'repair_loop') {
+      session.trackingScope.completedAt = now;
+      session.trackingScope.expiresAt = now;
+    }
   } else if (classification.kind === 'no_progress') {
     session.noProgressTurns = (session.noProgressTurns || 0) + 1;
   }
@@ -536,6 +698,80 @@ function updateProgressUnlocked(payload, opts = {}) {
     session,
     mode,
     thresholds: { maxNoProgressTurns, maxIdleMs },
+  };
+}
+
+function inspectProgress(payload, opts = {}) {
+  const stateFile = opts.stateFile || process.env.PROGRESS_WATCHDOG_STATE_FILE || DEFAULT_STATE_FILE;
+  const mode = watchdogMode(opts);
+  const maxNoProgressTurns = Number.parseInt(
+    opts.maxNoProgressTurns || process.env.PROGRESS_WATCHDOG_MAX_NO_PROGRESS_TURNS || DEFAULT_MAX_NO_PROGRESS_TURNS,
+    10,
+  );
+  const maxIdleMs = Number.parseInt(
+    opts.maxIdleMs || process.env.PROGRESS_WATCHDOG_MAX_IDLE_MS || DEFAULT_MAX_IDLE_MS,
+    10,
+  );
+  const state = readJson(stateFile, defaultState());
+  const key = stableSessionKey(cwdFor(payload), sessionIdFor(payload));
+  const existingSession = state?.sessions?.[key] || null;
+  const session = existingSession || {
+    status: 'active',
+    noProgressTurns: 0,
+    history: [],
+  };
+  const common = {
+    sessionKey: key,
+    stateFile,
+    archiveFile: session.archiveFile || null,
+    session,
+    mode,
+    thresholds: { maxNoProgressTurns, maxIdleMs },
+  };
+  const { event } = normalizePayload(payload, opts);
+  const scope = shouldTrackProgress(payload, { ...opts, existingSession, event });
+  if (!scope.tracked) {
+    return {
+      ...common,
+      status: 'not_tracked',
+      scope,
+      classification: { kind: 'not_tracked', evidence: scope.reason },
+    };
+  }
+  const bypass = bypassRequest(opts);
+  if (bypass.requested) {
+    if (!bypass.valid) {
+      return {
+        ...common,
+        status: 'bypass_reason_required',
+        classification: { kind: 'blocked_bypass', evidence: 'emergency bypass requires an auditable reason' },
+      };
+    }
+    return {
+      ...common,
+      status: 'bypassed',
+      classification: { kind: 'bypass', evidence: bypass.reason },
+      bypass: {
+        actor: bypass.actor,
+        reason: bypass.reason,
+      },
+    };
+  }
+  if (session.status === 'frozen') {
+    const access = frozenActionAccess(payload);
+    return {
+      ...common,
+      status: access.allowed ? 'frozen_notice' : 'frozen_escalation_required',
+      classification: {
+        kind: access.allowed ? 'frozen_allowed' : 'blocked_frozen',
+        evidence: session.freezeReason || 'repair_budget_exhausted',
+      },
+    };
+  }
+  return {
+    ...common,
+    status: 'active',
+    classification: { kind: 'precheck', evidence: 'watchdog state permits action' },
   };
 }
 
@@ -692,9 +928,11 @@ if (require.main === module) main();
 
 module.exports = {
   classifyEvent,
+  inspectProgress,
   isReadOnlyAction,
   objectiveHashFor,
   sessionIdFor,
+  shouldTrackProgress,
   updateProgress,
   stableSessionKey,
   watchdogMode,

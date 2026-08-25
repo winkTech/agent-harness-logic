@@ -113,6 +113,12 @@ function manifestProtection(filePath, cwd = process.cwd()) {
 //   neutral    非语义维护(版本号/哈希/provenance/文档) —— 放行, 但不足以支撑倒置
 //   downstream 依据来自 RTL 实测行为 —— 默认拒绝; 位真镜像一类"golden 有意跟随
 //              RTL"的合法特例必须显式挂裁决 (basis.ruling), 不能混在普通修复里
+//
+// 补充（用户 2026-08-03 裁定）：上面这段与下方 inspectFileApproval 的"批准仍是必要
+// 条件"曾读起来互相矛盾 —— 实现取的是后者。这带来一个与本门用意不符的后果: **basis
+// 装在令牌里**, 没令牌就取不到 basis, 方向判据根本跑不起来, 于是连"新建一个尚不存在
+// 的 golden"这种结构上无从倒置的写入也被拦。现按 creationExemption 开一个窄口, 判据
+// 全是硬事实(文件存不存在 / 消费方 RTL 近期是否被动过); 改动**既有** golden 仍一律要批准。
 const BASIS_DIRECTION = {
   spec: 'upstream',              // 需求/算法规格条款
   standard: 'upstream',          // 外部标准章节 (802.11a 等)
@@ -121,6 +127,7 @@ const BASIS_DIRECTION = {
   'user-ruling': 'upstream',     // 用户当场裁定
   maintenance: 'neutral',        // 版本/哈希/provenance/文档, 不改算法语义
   'rtl-observation': 'downstream', // 依据来自 RTL 实测行为
+  'creation-exempt': 'upstream',   // 门禁自身签发(见 creationExemption); 即使经令牌传入也只与 spec 等价, 不额外放宽
 };
 
 /** 能为"golden 跟随 RTL"背书的依据种类 —— 必须是一次显式裁决。 */
@@ -274,6 +281,41 @@ function inversionSignal(filePath, cwd, nowMs = Date.now()) {
   } catch {
     return null; // 检测本身失败绝不改变放行判定
   }
+}
+
+/**
+ * 新建豁免 —— 用户 2026-08-03 裁定。
+ *
+ * 倒置的形状是"把**既有** golden 改成 RTL 的样子"。文件尚不存在时没有可被改写的
+ * 对象, 该风险在结构上不成立。豁免只在能评估风险时才给, 三条判据全是硬事实,
+ * 不依赖任何自述:
+ *   1. 目标文件确实不存在 —— 改动既有 golden 一律仍要批准
+ *   2. 所属 golden 目录已有 manifest.implements_for —— 否则倒置检测无从运行, fail-closed
+ *   3. 倒置信号未触发 —— 消费方 RTL 近期未被动过
+ * 另: 若已存在一份不合格的批准(令牌写错), 不走豁免 —— 应把那个错误暴露出来, 而不是绕过去。
+ */
+function creationExemption(filePath, approval, inversion) {
+  if (approval) return { ok: false, why: approval.why || '已有批准但不合格 —— 不走新建豁免' };
+  if (fs.existsSync(filePath)) {
+    return { ok: false, why: '受保护文件已存在 —— 改动既有 golden 必须有批准' };
+  }
+  const model = findModelDir(filePath);
+  const modules = model?.manifest?.implements_for;
+  if (!Array.isArray(modules) || !modules.length) {
+    return { ok: false, why: '新建文件所属 golden 目录无 manifest.implements_for —— 倒置无从评估, fail-closed' };
+  }
+  if (inversion) {
+    return {
+      ok: false,
+      why: `消费方 ${inversion.module} 的 RTL 约 ${Math.round(inversion.ageMs / 60000)} 分钟前刚被改过 —— 此时新建 golden 同样需要批准`,
+    };
+  }
+  return {
+    ok: true,
+    kind: 'creation-exempt',
+    reason: `新建豁免: 文件此前不存在, 消费方 [${modules.join(', ')}] 的 RTL 近期未改动`,
+    basis: { kind: 'creation-exempt', ref: model.dir },
+  };
 }
 
 /**
@@ -432,6 +474,122 @@ function consumeFileApproval(normalizedPath) {
   return { ok: true, reason: String(token.reason) };
 }
 
+/**
+ * 消费时点：预留 → 结算。
+ *
+ * 原实现在 PreToolUse 的 commit 阶段直接扣次数。但 PreToolUse 跑完，工具还没跑 ——
+ * 权限分类器否决、用户在确认框点拒绝、工具自身报错，全都发生在那之后，于是
+ * **一个字节都没写进去，授权次数却已经烧掉了**。2026-08-04 实测: 一张 remainingWrites=2
+ * 的裁决级令牌被一次分类器否决的 Edit 扣成 1，目标文件毫发未动。
+ *
+ * 改法: PreToolUse 只**预留** —— 记下目标文件的写前指纹与这次批准的身份，不扣次数、
+ * 不入账。真正的消费与审计留到看得见结果时:
+ *   - PostToolUse / PostToolUseFailure 定向结算 (postflight-router 调 settlePendingWrites)
+ *   - 下一次受保护写入前顺手清算 (Post 钩子没触发时的兜底)
+ *
+ * 判据是**文件字节有没有变**，不是"钩子有没有被调用" —— 后者取决于我们控制不了的上游
+ * 行为(分类器否决时 Post 是否触发无从保证)，前者是硬事实。变了就消费+入账，没变就释放。
+ * 副作用: 写出与原内容逐字节相同的编辑会被判为"没写"而释放令牌 —— 方向保守，可接受。
+ */
+const PENDING_FILE = 'var/audit/protected-write-pending.json';
+const PENDING_RELEASE_GRACE_MS = 5 * 60 * 1000;
+
+function pendingFilePath() {
+  return require('node:path').join(__dirname, '..', '..', '..', PENDING_FILE);
+}
+
+/** 内容指纹；文件不存在记 null，这样"新建"也能被识别为发生过写入。 */
+function fingerprint(filePath) {
+  try {
+    return require('node:crypto').createHash('sha256').update(fs.readFileSync(filePath)).digest('hex');
+  } catch (_e) { return null; }
+}
+
+function readPending() {
+  try {
+    const p = pendingFilePath();
+    if (!fs.existsSync(p)) return [];
+    const value = JSON.parse(fs.readFileSync(p, 'utf8'));
+    return Array.isArray(value) ? value : [];
+  } catch (_e) { return []; }
+}
+
+function writePending(list) {
+  const path = require('node:path');
+  const p = pendingFilePath();
+  try {
+    if (!list.length) { if (fs.existsSync(p)) fs.unlinkSync(p); return true; }
+    fs.mkdirSync(path.dirname(p), { recursive: true });
+    fs.writeFileSync(p, JSON.stringify(list, null, 1));
+    return true;
+  } catch (_e) { return false; }
+}
+
+function sameTarget(a, b) {
+  const norm = (v) => String(v || '').replace(/\\/g, '/').toLowerCase();
+  return norm(a) === norm(b);
+}
+
+/**
+ * 结算预留。字节变了才消费令牌并入账；没变则释放，令牌分毫不动。
+ *
+ * @param {{filePath?: string}} options 给定 filePath 时该条按"定向结算"处理 ——
+ *        工具已经跑完，不必再等宽限期。其余条目只有超过宽限期才释放，避免误伤在途写入。
+ */
+function settlePendingWrites(options = {}) {
+  const list = readPending();
+  if (!list.length) return { settled: [], released: [], notes: [] };
+
+  const now = Date.now();
+  const keep = [];
+  const settled = [];
+  const released = [];
+  const notes = [];
+
+  for (const entry of list) {
+    if (!entry || typeof entry.filePath !== 'string') continue;
+    const targeted = Boolean(options.filePath) && sameTarget(options.filePath, entry.filePath);
+
+    if (fingerprint(entry.filePath) === (entry.before ?? null)) {
+      const stale = now - Date.parse(entry.ts || 0) > PENDING_RELEASE_GRACE_MS;
+      if (targeted || stale) released.push(entry.filePath);
+      else keep.push(entry);
+      continue;
+    }
+
+    if (entry.kind === 'token') {
+      const consumed = consumeFileApproval(entry.normalizedPath);
+      if (!consumed?.ok) notes.push(`${entry.filePath}: ${consumed?.why || '令牌在结算时已不可用'}`);
+    }
+    auditApprovedWrite(entry.filePath, entry.pattern, entry.reason, entry.basis, entry.inversion);
+    settled.push(entry.filePath);
+  }
+
+  if (keep.length !== list.length) writePending(keep);
+  return { settled, released, notes };
+}
+
+/**
+ * 登记一次预留。同一文件的旧预留一律先就地结算 —— 对同一文件的新一次写入意味着
+ * 上一次已有结果，留着它会让两条预留在同一次真实写入上各消费一次。
+ *
+ * 预留文件写不下去时**退回原来的即时消费**而不是放行不计数: 后者等于把令牌变成
+ * 无限次开关，方向错得比多烧一次严重得多。
+ */
+function reservePendingWrite(entry) {
+  settlePendingWrites({ filePath: entry.filePath });
+  const list = readPending().filter((item) => !sameTarget(item?.filePath, entry.filePath));
+  list.push({ ...entry, ts: new Date().toISOString(), before: fingerprint(entry.filePath) });
+  if (writePending(list)) return { ok: true, deferred: true };
+
+  if (entry.kind === 'token') {
+    const consumed = consumeFileApproval(entry.normalizedPath);
+    if (!consumed?.ok) return { ok: false, why: consumed?.why || 'approval token was no longer available' };
+  }
+  auditApprovedWrite(entry.filePath, entry.pattern, entry.reason, entry.basis, entry.inversion);
+  return { ok: true, deferred: false };
+}
+
 function evaluate(payload, runtime = {}) {
   const source = GATE_ID;
   if (evaluateGuardBypass({ gateId: GATE_ID, payload, context: runtime.context }).allowed) {
@@ -455,45 +613,58 @@ function evaluate(payload, runtime = {}) {
   let inversion = null;
 
   if (matchedPattern) {
+    inversion = inversionSignal(filePath, cwd);          // 提前: 新建豁免也要用它
     approval = inspectFileApproval(normalizedPath, env);
     if (!approval?.ok) {
-      return {
-        source,
-        decision: 'block',
-        diagnostics: [{
-          code: 'protected-file',
-          message: approval?.why || 'file is protected and requires explicit per-file approval',
-          filePath,
-          pattern: matchedPattern,
-        }],
-      };
-    }
-
-    // 批准是必要条件, 不是充分条件: 还要看这次改动的依据指向上游(需求)还是下游(RTL)。
-    inversion = inversionSignal(filePath, cwd);
-    const verdict = basisVerdict(approval.basis, approval.reason, inversion);
-    if (!verdict.ok) {
-      return {
-        source,
-        decision: 'block',
-        diagnostics: [{
-          code: 'protected-file-basis',
-          message: verdict.why,
-          filePath,
-          pattern: matchedPattern,
-          ...(inversion ? { inversion } : {}),
-        }],
-      };
+      // 新建豁免 —— 判据见 creationExemption。不满足则照旧拦。
+      const exempt = creationExemption(filePath, approval, inversion);
+      if (!exempt.ok) {
+        return {
+          source,
+          decision: 'block',
+          diagnostics: [{
+            code: 'protected-file',
+            message: exempt.why,
+            filePath,
+            pattern: matchedPattern,
+            ...(inversion ? { inversion } : {}),
+          }],
+        };
+      }
+      approval = exempt;   // 走与令牌相同的审计/commit 路径; kind 非 'token' 故不消费令牌
+    } else {
+      // 批准是必要条件, 不是充分条件: 还要看这次改动的依据指向上游(需求)还是下游(RTL)。
+      const verdict = basisVerdict(approval.basis, approval.reason, inversion);
+      if (!verdict.ok) {
+        return {
+          source,
+          decision: 'block',
+          diagnostics: [{
+            code: 'protected-file-basis',
+            message: verdict.why,
+            filePath,
+            pattern: matchedPattern,
+            ...(inversion ? { inversion } : {}),
+          }],
+        };
+      }
     }
   }
 
+  // 备份必须留在写入**之前** —— 它要的正是原内容。消费与审计则相反, 见 settlePendingWrites。
   const commit = (needsBackup || matchedPattern) ? () => {
-    if (approval?.kind === 'token') {
-      const consumed = consumeFileApproval(normalizedPath);
-      if (!consumed?.ok) throw new Error(consumed?.why || 'approval token was no longer available');
-    }
     if (needsBackup && fs.existsSync(filePath)) fs.copyFileSync(filePath, `${filePath}.bak`);
-    if (matchedPattern) auditApprovedWrite(filePath, matchedPattern, approval.reason, approval.basis, inversion);
+    if (!matchedPattern) return { ok: true };
+    const reserved = reservePendingWrite({
+      filePath,
+      normalizedPath,
+      kind: approval.kind,
+      pattern: matchedPattern,
+      reason: approval.reason,
+      basis: approval.basis,
+      ...(inversion ? { inversion } : {}),
+    });
+    if (!reserved.ok) throw new Error(reserved.why);
     return { ok: true };
   } : undefined;
 
@@ -654,4 +825,5 @@ module.exports = {
   matchesPattern,
   normalizeBasis,
   scopeHits,
+  settlePendingWrites,
 };

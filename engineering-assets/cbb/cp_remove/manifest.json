@@ -1,0 +1,243 @@
+{
+  "schema_version": "1.1",
+  "asset_uid": "cp_remove",
+  "name": "cp_remove",
+  "version": "1.1.1",
+  "owner": "lihan",
+  "kind": "rtl",
+  "maturity": {
+    "level": "certified",
+    "evidence_ref": "engineering-assets/evidence/cp_remove/1.1.1/"
+  },
+  "requirement_ref": "engineering-assets/knowledge/primary/domains/comm/ofdm/algorithm_spec.md",
+  "doc_refs": [
+    "engineering-assets/knowledge/primary/domains/comm/synch/algorithm_spec.md",
+    "engineering-assets/docs/governance/adr/ADR-003-sync-top-causal-contract.md"
+  ],
+  "golden_model_ref": "model_comm_ofdm",
+  "protocol_anchor": {
+    "standard": "IEEE 802.11-2020",
+    "baseline_relation": "baseline",
+    "clause": "17",
+    "profile": "11a/g OFDM 20MHz",
+    "scope": "长前导 (T1/T2) 与数据符号的切窗: 从 T1 首样点起 T1(64)->T2(64)->{跳 CP16 取 64}xN。**不含** STS 检测与定时 (sync_top)、GI2 跳过 (由 sync_top 的 o_fft_start 已对齐 T1)、SIGNAL 解码与帧长解析 (决策⑧ 范围外)、以及 FFT 本体 (fft64_sdf)。",
+    "parameters": {
+      "bw_mhz": 20,
+      "n_fft": 64,
+      "cp_len": 16,
+      "data_symbol_len": 80,
+      "lts_symbols": 2,
+      "lts_len": 64,
+      "gi2_len": 32,
+      "gi2_consumed_upstream": true,
+      "sts_len": 160
+    },
+    "deviations": [],
+    "anchor_basis": "standard/clause/profile 取自库基线 catalog/protocol-baseline.json, 未经标准原文核对。帧结构参数逐项取自 models/comm/synch/config.m 与 generate_preamble.m (该 golden 引 IEEE 802.11a-1999 Section 17.3.3), 非凭记忆。gi2_consumed_upstream 由 sync_top 的 README/ADR-003 佐证 (o_fft_start 与 m_axis 上 T1 首样点同拍)。下游期望的 [LTS1, LTS2, 数据符号...] 序列由 channel_est_top 模块头注释佐证。"
+  },
+  "fidelity": {
+    "status": "bit_true",
+    "bit_accurate_against": "model_comm_ofdm / src/rx_cp_window.m"
+  },
+  "ports": [
+    {
+      "name": "i_clk",
+      "direction": "input",
+      "width": 1
+    },
+    {
+      "name": "i_rst",
+      "direction": "input",
+      "width": 1
+    },
+    {
+      "name": "i_fft_start",
+      "direction": "input",
+      "width": 1
+    },
+    {
+      "name": "i_cfg_n_sym",
+      "direction": "input",
+      "width": 8
+    },
+    {
+      "name": "s_axis_tvalid",
+      "direction": "input",
+      "width": 1,
+      "bus": "axi-stream"
+    },
+    {
+      "name": "s_axis_tdata",
+      "direction": "input",
+      "width": 32,
+      "bus": "axi-stream"
+    },
+    {
+      "name": "o_valid",
+      "direction": "output",
+      "width": 1
+    },
+    {
+      "name": "o_re",
+      "direction": "output",
+      "width": 16
+    },
+    {
+      "name": "o_im",
+      "direction": "output",
+      "width": 16
+    },
+    {
+      "name": "o_sb",
+      "direction": "output",
+      "width": 1
+    }
+  ],
+  "device": {
+    "part": "xc7k325tffg900-2",
+    "family": "kintex7",
+    "note": "与上下游同域资产一致"
+  },
+  "clock": {
+    "name": "i_clk",
+    "period_ns": 10
+  },
+  "reset": {
+    "name": "i_rst",
+    "polarity": "active_high",
+    "type": "sync",
+    "async_release_synchronized": true
+  },
+  "top": "cp_remove",
+  "params": [
+    {
+      "name": "DATA_W",
+      "value": 16,
+      "rationale": "I/Q 样点位宽 (Q2.14); s_axis_tdata = {Q, I} 共 32 位"
+    }
+  ],
+  "sources": [
+    {
+      "path": "rtl/cp_remove.sv",
+      "role": "rtl",
+      "sha256": "39ece7ecac73035602abb130525d7abfe089262250489de012e551041c8a8efe",
+      "note": "切窗 FSM: 纯选通与计数, 无算术无存储"
+    },
+    {
+      "path": "constraints/cp_remove.xdc",
+      "role": "constraint",
+      "sha256": "34d681610d0cde221cbff512a5dd1f11853bf21b3385cc5593e90c21a22e935e",
+      "note": "OOC 综合约束 100MHz"
+    },
+    {
+      "path": "tb/tb_cp_remove.sv",
+      "role": "tb",
+      "sha256": "45bd5a01a4971020f1b6249001f9638dea685a351f34551f5d6dcc276d1f0ba9",
+      "note": "合成流 (样点值=输入下标): 切窗序列/帧尾/侧带/复位重入"
+    },
+    {
+      "path": "tb/tb_cp_remove_cosim.sv",
+      "role": "tb",
+      "sha256": "246373cb2b4b00f7a2776ad14b60bfbed6a40e848ccffd0958a48047f5ebbb12",
+      "note": "**bit-true 判据**: 对治理 golden 0 容差, 2176 点"
+    },
+    {
+      "path": "tb/tb_cp_remove_reset.sv",
+      "role": "tb",
+      "sha256": "61bed0a70b0fd5994917737ce9e05a00251322cfa64f9a5f5d1407ea1a819ba6",
+      "note": "G-C-04: 帧中途复位后逐寄存器比对 + 数据通路免复位断言"
+    },
+    {
+      "path": "tb/tb_cp_remove_stability.sv",
+      "role": "tb",
+      "sha256": "801d7632bfff2dc96c029f85c9ef714be254cbca78e2a1b9cba262fec6452ae9",
+      "note": "G-C-05: boundary / stress / backpressure 三个子结果"
+    },
+    {
+      "path": "tb/tb_cp_remove_gap.sv",
+      "role": "tb",
+      "sha256": "39ea36c90035befe0b452c5ac2a4a9ebeee3f78864452d9a33d308f76cb33d03",
+      "note": "测量 TB: 帧间最小间隔逐值测出 (非判据)"
+    },
+    {
+      "path": "run_sim.cjs",
+      "role": "harness",
+      "sha256": "88f055fe62a8e1d354b6f67bdfbb6ca5b6779c1a80fb305e371855219fe78124",
+      "note": "可复现仿真入口 (G-GATE-02); --install 由实跑结果落证据, 不构造 pass"
+    },
+    {
+      "path": "vectors/cp_in.hex",
+      "role": "vector",
+      "sha256": "dbabea6c0430af88fa804ecdd44d1f98607486904dd08811296764e38d583dbf",
+      "note": "输入流: [STS 160][GI2 32][T1 64][T2 64][数据 32x80], AGC 缩到刚好不削 Q2.14"
+    },
+    {
+      "path": "vectors/cp_expected.hex",
+      "role": "vector",
+      "sha256": "b989fa56e933590c8abcea0530b201a6b6d7728c434d1859d7fd8a64d6f1c6e6",
+      "note": "期望: 34 符号 x 64 点, 由治理 golden rx_cp_window 产出"
+    },
+    {
+      "path": "vectors/cp_config.txt",
+      "role": "config",
+      "sha256": "cc02da1c4c5226c291cd97624bb940dea407f0cbd61f562a647c7d7eb2d752ab",
+      "note": "向量参数: N_IN / FFT_START0 / N_SYM / N_OUT"
+    },
+    {
+      "path": "CHANGELOG.md",
+      "role": "doc",
+      "sha256": "5d2ca4f62d1102bc387360ae27d65755450546ddbab87126e1bea7e39c89460f"
+    },
+    {
+      "path": "docs/limitations.md",
+      "role": "doc",
+      "sha256": "40b2cc61b29309fd1f19cf42ce1d6a1acc947777b06336942b6f08bb55dccc66"
+    },
+    {
+      "path": "docs/frame-gap-measurement.json",
+      "role": "doc",
+      "sha256": "0c021df203ea23d51cdc89d9c92776977aa91921bab49269e22f6cf24dee9e83",
+      "note": "帧间最小间隔逐值测量数据 (由 run_sim.cjs 落盘, 受 CS-2 哈希管)"
+    }
+  ],
+  "constraints": {
+    "target": {
+      "fmax": "100MHz",
+      "fmax_mhz": 100,
+      "lut": 60,
+      "ff": 120,
+      "bram": 1,
+      "dsp": 0
+    }
+  },
+  "alignment": {
+    "compare_mode": "cycle_accurate"
+  },
+  "reproduce": {
+    "sim": "node engineering-assets/cbb/cp_remove/run_sim.cjs --install",
+    "synth": "node engineering-assets/tools/pg-synth.cjs cbb/cp_remove",
+    "gate": "node engineering-assets/tools/gate-runner.cjs cbb/cp_remove --repo-root .",
+    "note": "run_sim.cjs 跑全部 5 个 TB (4 判据 + 1 测量), --install 由实跑结果写 reset-sim.json 与 stability/*.json; 任一 TB 不过即整体失败且不写任何证据。仿真器用 iverilog —— 本机 ModelSim 回环 RPC 自 2026-08-01 起故障。"
+  },
+  "signoff": {
+    "by": "lihan",
+    "at": "2026-08-04",
+    "scope": [
+      "证据已复核 (全部由 run_sim.cjs --install 实跑落盘, 仿真器 Icarus Verilog 12.0): alignment-report.json (对治理 golden models/comm/ofdm 1.4.1 的 src/rx_cp_window.m, 2176 样点 0 失配, 0 容差, 实测流水偏移 2 拍) / reset-sim.json (帧中途复位保持 3 拍, 8 个受复位寄存器逐项比对全过; 3 个数据通路寄存器按设计免复位, 已断言复位期间仍跟随输入) / stability 四子结果 (boundary 21064 拍 / stress 6024 拍 / backpressure 736 拍 / regression 27824 拍) / timing-summary.rpt + utilization.rpt + envelope-check.json (OOC @xc7k325tffg900-2: WNS +7.704ns @10ns 即 435.5MHz, WHS +0.189ns, 0 失败端点; LUT 30/60, FF 86/120, BRAM 0/1, DSP 0/0) / cdc-report.json (单时钟域 i_clk 结构扫描, cdc_tool=na —— 无具名 CDC 工具, 按规范降级且不声称 clean)",
+      "正确性锚: golden model_comm_ofdm 1.4.1 (run_all_tests 6/6), 位真判据出自治理资产而非暂存副本",
+      "协议锚点: IEEE 802.11-2020 Clause 17 / 11a/g OFDM 20MHz, baseline; 帧结构参数逐项取自 models/comm/synch 的 config.m 与 generate_preamble.m (引 802.11a-1999 §17.3.3), 未经标准原文核对 —— 该口径已记入 protocol_anchor.anchor_basis",
+      "**1.1.0 行为契约变更, 本次为重新签字** (1.0.x 的签字不适用): 帧尾自动冲刷 —— 数满 i_cfg_n_sym 后自驱吐 64 拍 o_valid 高、数据恒零的样点再回 UNSYNC。输出长度由 (2+n_sym)*64 变为 (2+n_sym)*64 + 64, **集成方必须按新长度收**。起因: M1 实链每帧稳定丢最后一个数据符号 (fft64 流水不自排空, 帧后无人补冲刷; xsim 实测 TAIL_STUCK 64)。效果实测: 切窗样点 1280 -> 实际吐出 fft64 1280 (修复前 1216), 永久卡死的切窗样点由 64 变 0。64 这个数由 cbb/fft64_sdf 的 tb_fft64_tail 双向实测钉定。冲刷自限 (推出真符号的同时自己成为新的卡住者), 故下游不多收符号 —— 这一条要紧, 因 channel_est_top 的相位 FSM 是 P_DATA 自环、无帧长概念。",
+      "已接受限制: i_cfg_n_sym 必须 >=1 —— n_sym=0 时 RTL 仍吐 1 个数据符号 (实测 192 点), 而 golden 只出 2 个 LTS (128 点)。定为接口契约而非改 FSM (帧尾语义经需求门禁裁定)",
+      "已接受限制: 帧间必须至少隔 1 个样点 —— 零间隔时 i_fft_start 与 S_DATA->S_UNSYNC 同拍到达被吞, 整帧丢失 (逐值实测 gap=0 出 0 点 / gap>=1 出 256 点)。集成中不触发 (sync_top 单突发, 帧间必有复位), stability 的 stress 段已用断言锁住该行为",
+      "已接受限制: i_cfg_n_sym 配错没有兜底 —— 配少截断有效数据, 配多把帧尾之后的噪声当符号吐给下游",
+      "已接受限制: 无反压契约 —— 不提供 tready, 不得停顿输入。上游 sync_top 的 m_axis_tready 被忽略, 下游 fft64_sdf 亦无 ready。1.0.0 签字时曾据此写下\"fft64_sdf 与 channel_est_top 之间必须有弹性缓冲, 是 M1 硬依赖\"; **1.0.1 实链测量推翻该推断** (xsim, 两帧背靠背, 中间置理想无限深 FIFO): 反压 0 拍、峰值占用 1 —— 本模块每符号只占 64 拍留出的 16 拍 CP 空档, 就是下游需要的全部弹性。结论依赖 CP 间隙存在; 去掉间隙的对抗场景实测上界 23 个条目。",
+      "已接受限制: GI2 由上游 sync_top 消化 (ADR-003: o_fft_start 与 T1 首样点同拍)。若上游换成不满足该契约的实现, 本模块会从错误位置起窗且**不会报错**",
+      "已接受限制: i_fft_start 在帧进行中的脉冲被忽略 (仅 UNSYNC 段响应)。若 sync_top 的单突发语义改变, 本条须重新裁定",
+      "第二仿真器交叉验证 (1.0.1 还清): 全部判据 TB 在 Vivado xsim 2023.1 上用**同一份 TB、同一套判据**再跑一遍, 结果与 iverilog 一致 —— bit-true 那条由两个独立仿真器各自确认。复现: run_sim.cjs 加 --xsim。本机 ModelSim 回环 RPC 自 2026-08-01 起故障, 那条路仍不通。",
+      "未覆盖: 板级验证。"
+    ]
+  },
+  "waivers": [],
+  "superseded_by": null,
+  "notes": "五个 TB 全绿 (4 判据 + 1 测量), 其中 tb_cp_remove_cosim 对 **治理 golden** (models/comm/ofdm 的 src/rx_cp_window.m) **2176 点 0 失配** —— 非暂存副本, 无 fft64_sdf 那类欠账。对拍长度由初版 640 点 (8 符号) 延长到 2176 点 (32 符号): G-B-03 的 total 下限是 2048, 640 点过不去 —— 曾在 docs/limitations.md §5 记为待办, 现已补齐, 证据在 var/gates/pg/cp_remove/alignment-report.json。综合取证已做 (OOC @xc7k325tffg900-2): WNS +7.704ns @10ns (即约 432MHz), WHS +0.189ns, LUT 30 / FF 86 / BRAM 0 / DSP 0 —— 纯选通逻辑, 资源与预期一致。包络按实测加余量声明。0.1.2 补齐 G-C-04 (8 个受复位寄存器逐项比对 + 3 个数据通路寄存器免复位断言) 与 G-C-05 (boundary/stress/backpressure 实跑, regression 由判据 TB 结果合成)。**过程中刻画出两条此前未知的接口约束** (schema 无 interface_contract 字段, 故记于此与 docs/limitations.md): (1) i_cfg_n_sym 须 >=1 —— n_sym=0 时 RTL 仍吐 1 个数据符号 (实测 192 点), 而 golden rx_cp_window 在 n_sym=0 时只出 2 个 LTS (128 点); (2) 帧间须至少隔 1 个样点 —— 零间隔时 fft_start 与 S_DATA->S_UNSYNC 同拍到达被吞, 整帧丢失 (gap=0 出 0 点, gap>=1 出 256 点, 逐值实测见 docs/frame-gap-measurement.json)。两条在集成中都不会触发 (sync_top 单突发, 帧间必有复位), 但契约必须写明。"
+}

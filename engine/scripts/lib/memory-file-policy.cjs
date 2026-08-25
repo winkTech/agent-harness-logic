@@ -1,5 +1,6 @@
 'use strict';
 
+const fs = require('node:fs');
 const path = require('node:path');
 
 const MEMORY_INDEX_FILES = new Set(['MEMORY.md', 'MEMORY_RULES.md', 'links.md']);
@@ -46,7 +47,7 @@ function isMemoryTemplateFile(filePath) {
 function isInactiveMemoryContent(content) {
   const frontmatter = String(content || '').match(/^---\r?\n([\s\S]*?)\r?\n---/);
   if (!frontmatter) return false;
-  return /^\s*status\s*:\s*(?:obsolete|deprecated|superseded|tombstone|template|placeholder)\s*$/im
+  return /^\s*status\s*:\s*(?:obsolete|deprecated|retired|superseded|tombstone|template|placeholder)\s*$/im
     .test(frontmatter[1]) || /^\s*active\s*:\s*false\s*$/im.test(frontmatter[1]);
 }
 
@@ -102,7 +103,11 @@ function shouldIndexSemanticFile(filePath, opts = {}) {
   if (memoryDir) {
     const memAbs = path.resolve(memoryDir);
     if (abs === memAbs || abs.startsWith(memAbs + path.sep)) {
-      return shouldIndexMemoryFile(abs, { memoryDir: memAbs });
+      let content = opts.content;
+      if (content === undefined) {
+        try { content = fs.readFileSync(abs, 'utf8'); } catch { /* missing files are handled by path policy */ }
+      }
+      return shouldIndexMemoryFile(abs, { memoryDir: memAbs, content });
     }
   }
 

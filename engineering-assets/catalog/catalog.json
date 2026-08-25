@@ -1,9 +1,9 @@
 {
   "schema_version": "1.0",
   "summary": {
-    "asset_count": 23,
+    "asset_count": 28,
     "by_level": {
-      "certified": 16,
+      "certified": 21,
       "intake": 4,
       "qualification": 3
     },
@@ -45,7 +45,7 @@
       "gates": {
         "cleared_level": "certified",
         "blocking_at": null,
-        "pass_count": 21
+        "pass_count": 22
       }
     },
     {
@@ -73,14 +73,14 @@
       "gates": {
         "cleared_level": "certified",
         "blocking_at": null,
-        "pass_count": 21
+        "pass_count": 22
       }
     },
     {
       "asset_uid": "channel_est_top",
       "name": "channel_est_top",
       "kind": "rtl",
-      "version": "1.0.2",
+      "version": "1.0.4",
       "owner": "lihan",
       "level": "certified",
       "dir": "cbb/channel_est_top",
@@ -101,7 +101,7 @@
       "gates": {
         "cleared_level": "certified",
         "blocking_at": null,
-        "pass_count": 21
+        "pass_count": 22
       }
     },
     {
@@ -129,7 +129,35 @@
       "gates": {
         "cleared_level": "certified",
         "blocking_at": null,
-        "pass_count": 21
+        "pass_count": 22
+      }
+    },
+    {
+      "asset_uid": "cp_remove",
+      "name": "cp_remove",
+      "kind": "rtl",
+      "version": "1.1.1",
+      "owner": "lihan",
+      "level": "certified",
+      "dir": "cbb/cp_remove",
+      "top": "cp_remove",
+      "golden_model_ref": "model_comm_ofdm",
+      "fidelity": "bit_true",
+      "device": "xc7k325tffg900-2",
+      "target_fmax": "100MHz",
+      "signoff_at": "2026-08-04",
+      "waiver_count": 0,
+      "used_by": [],
+      "badge_gap": [],
+      "documents": {
+        "readme": true,
+        "changelog": true,
+        "limitations": true
+      },
+      "gates": {
+        "cleared_level": "certified",
+        "blocking_at": null,
+        "pass_count": 22
       }
     },
     {
@@ -157,7 +185,7 @@
       "gates": {
         "cleared_level": "certified",
         "blocking_at": null,
-        "pass_count": 21
+        "pass_count": 22
       }
     },
     {
@@ -185,7 +213,7 @@
       "gates": {
         "cleared_level": "certified",
         "blocking_at": null,
-        "pass_count": 21
+        "pass_count": 22
       }
     },
     {
@@ -213,7 +241,63 @@
       "gates": {
         "cleared_level": "certified",
         "blocking_at": null,
-        "pass_count": 21
+        "pass_count": 22
+      }
+    },
+    {
+      "asset_uid": "eq_zf",
+      "name": "eq_zf",
+      "kind": "primitive",
+      "version": "1.1.1",
+      "owner": "lihan",
+      "level": "certified",
+      "dir": "cbb/eq_zf",
+      "top": "eq_zf",
+      "golden_model_ref": null,
+      "fidelity": "bit_true",
+      "device": "xc7k325tffg900-2",
+      "target_fmax": "100MHz",
+      "signoff_at": "2026-08-05",
+      "waiver_count": 0,
+      "used_by": [],
+      "badge_gap": [],
+      "documents": {
+        "readme": true,
+        "changelog": true,
+        "limitations": false
+      },
+      "gates": {
+        "cleared_level": "certified",
+        "blocking_at": null,
+        "pass_count": 22
+      }
+    },
+    {
+      "asset_uid": "fft64_sdf",
+      "name": "fft64_sdf",
+      "kind": "rtl",
+      "version": "1.0.2",
+      "owner": "lihan",
+      "level": "certified",
+      "dir": "cbb/fft64_sdf",
+      "top": "fft64_sdf",
+      "golden_model_ref": "model_comm_ofdm",
+      "fidelity": "bit_true",
+      "device": "xc7k325tffg900-2",
+      "target_fmax": "100MHz",
+      "signoff_at": "2026-08-04",
+      "waiver_count": 0,
+      "used_by": [],
+      "badge_gap": [],
+      "documents": {
+        "readme": true,
+        "changelog": true,
+        "limitations": true
+      },
+      "gates": {
+        "cleared_level": "certified",
+        "blocking_at": null,
+        "pass_count": 22
       }
     },
     {
@@ -241,7 +325,7 @@
       "gates": {
         "cleared_level": "certified",
         "blocking_at": null,
-        "pass_count": 21
+        "pass_count": 22
       }
     },
     {
@@ -269,7 +353,7 @@
       "gates": {
         "cleared_level": "certified",
         "blocking_at": null,
-        "pass_count": 21
+        "pass_count": 22
       }
     },
     {
@@ -297,14 +381,44 @@
       "gates": {
         "cleared_level": "certified",
         "blocking_at": null,
-        "pass_count": 21
+        "pass_count": 22
+      }
+    },
+    {
+      "asset_uid": "mod_demapper",
+      "name": "mod_demapper",
+      "kind": "primitive",
+      "version": "1.0.1",
+      "owner": "lihan",
+      "level": "certified",
+      "dir": "cbb/mod_demapper",
+      "top": "mod_demapper",
+      "golden_model_ref": null,
+      "fidelity": "bit_true",
+      "device": "xc7k325tffg900-2",
+      "target_fmax": "100MHz",
+      "signoff_at": "2026-08-09",
+      "waiver_count": 0,
+      "used_by": [],
+      "badge_gap": [
+        "board-validation"
+      ],
+      "documents": {
+        "readme": true,
+        "changelog": true,
+        "limitations": false
+      },
+      "gates": {
+        "cleared_level": "certified",
+        "blocking_at": null,
+        "pass_count": 22
       }
     },
     {
       "asset_uid": "model_comm_channel_est",
       "name": "ls_channel_est_golden",
       "kind": "golden-model",
-      "version": "1.2.0",
+      "version": "1.4.0",
       "owner": "lihan",
       "level": "intake",
       "dir": "models/comm/channel_est",
@@ -364,7 +478,7 @@
       "asset_uid": "model_comm_ofdm",
       "name": "ofdm_tx_golden",
       "kind": "golden-model",
-      "version": "1.2.0",
+      "version": "1.8.0",
       "owner": "lihan",
       "level": "intake",
       "dir": "models/comm/ofdm",
@@ -376,6 +490,8 @@
       "signoff_at": null,
       "waiver_count": 0,
       "used_by": [
+        "cp_remove",
+        "fft64_sdf",
         "ofdm_tx_top"
       ],
       "badge_gap": [],
@@ -475,7 +591,7 @@
       "gates": {
         "cleared_level": "certified",
         "blocking_at": null,
-        "pass_count": 21
+        "pass_count": 22
       }
     },
     {
@@ -505,7 +621,7 @@
       "gates": {
         "cleared_level": "certified",
         "blocking_at": null,
-        "pass_count": 21
+        "pass_count": 22
       }
     },
     {
@@ -568,7 +684,35 @@
       "gates": {
         "cleared_level": "certified",
         "blocking_at": null,
-        "pass_count": 21
+        "pass_count": 22
+      }
+    },
+    {
+      "asset_uid": "sb_align",
+      "name": "sb_align",
+      "kind": "primitive",
+      "version": "1.0.0",
+      "owner": "lihan",
+      "level": "certified",
+      "dir": "cbb/sb_align",
+      "top": "sb_align",
+      "golden_model_ref": null,
+      "fidelity": "na",
+      "device": "xc7k325tffg900-2",
+      "target_fmax": "100MHz",
+      "signoff_at": "2026-08-04",
+      "waiver_count": 0,
+      "used_by": [],
+      "badge_gap": [],
+      "documents": {
+        "readme": true,
+        "changelog": true,
+        "limitations": true
+      },
+      "gates": {
+        "cleared_level": "certified",
+        "blocking_at": null,
+        "pass_count": 22
       }
     },
     {
@@ -596,7 +740,7 @@
       "gates": {
         "cleared_level": "certified",
         "blocking_at": null,
-        "pass_count": 21
+        "pass_count": 22
       }
     },
     {
@@ -626,7 +770,7 @@
       "gates": {
         "cleared_level": "certified",
         "blocking_at": null,
-        "pass_count": 21
+        "pass_count": 22
       }
     },
     {
@@ -684,7 +828,7 @@
       "gates": {
         "cleared_level": "certified",
         "blocking_at": null,
-        "pass_count": 21
+        "pass_count": 22
       }
     }
   ]

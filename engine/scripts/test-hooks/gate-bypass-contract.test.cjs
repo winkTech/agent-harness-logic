@@ -88,6 +88,56 @@ test('complete short-lived bypass is exact-target/session bound and audited with
   assert.match(audit.sessionHash, /^[a-f0-9]{64}$/);
 });
 
+test('risk downgrade is exact-action bound, expiring, and consumed once', (t) => {
+  const { evaluateGateBypass } = require(BYPASS_MODULE);
+  const auditPath = makeAudit(t);
+  const sessionId = 'risk-action-session';
+  const issuedAt = Date.parse('2026-08-20T04:00:00.000Z');
+  const actionHash = 'a'.repeat(64);
+  const nonce = 'risk-once-20260820-0001';
+  const env = {
+    CLAUDE_GATES_DISABLED: '1',
+    CLAUDE_GATES_DISABLE_REASON: 'approved one-shot risk downgrade for this exact action',
+    CLAUDE_GATES_DISABLE_ACTOR: 'operator-lihan',
+    CLAUDE_GATES_DISABLE_TARGET: 'risk-policy.cjs',
+    CLAUDE_GATES_DISABLE_SESSION: sessionId,
+    CLAUDE_GATES_DISABLE_ISSUED_AT: String(issuedAt),
+    CLAUDE_GATES_DISABLE_TTL_MS: '60000',
+    CLAUDE_GATES_DISABLE_ACTION_SHA256: actionHash,
+    CLAUDE_GATES_DISABLE_NONCE: nonce,
+  };
+  const options = {
+    gateId: 'risk-policy.cjs',
+    sessionId,
+    now: issuedAt + 1_000,
+    auditPath,
+    env,
+    actionHash,
+    requireActionBinding: true,
+    oneShot: true,
+  };
+
+  const first = evaluateGateBypass(options);
+  assert.equal(first.allowed, true, first.errors.join(', '));
+  const second = evaluateGateBypass({ ...options, now: issuedAt + 2_000 });
+  assert.equal(second.allowed, false, 'one-shot authorization was reusable');
+  assert(second.errors.includes('authorization_consumed'));
+  const mismatch = evaluateGateBypass({
+    ...options,
+    now: issuedAt + 3_000,
+    actionHash: 'b'.repeat(64),
+  });
+  assert.equal(mismatch.allowed, false);
+  assert(mismatch.errors.includes('action_mismatch'));
+
+  const raw = fs.readFileSync(auditPath, 'utf8');
+  assert(!raw.includes(nonce), 'audit leaked the one-shot nonce');
+  const records = raw.trim().split(/\r?\n/).map(line => JSON.parse(line));
+  assert.equal(records.filter(record => record.decision === 'allowed').length, 1);
+  assert(records.every(record => /^[a-f0-9]{64}$/.test(record.nonceHash)));
+  assert(records.every(record => /^[a-f0-9]{64}$/.test(record.authorizationHash)));
+});
+
 test('a real blocking guard fails closed when only the legacy global switch is set', (t) => {
   const projectRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'gate-bypass-project-'));
   t.after(() => fs.rmSync(projectRoot, { recursive: true, force: true }));
@@ -304,9 +354,21 @@ test('file protection uses explicit project paths while retaining known model di
     'an exact manifest protected path was not blocked');
   assert.equal(run(path.join(projectRoot, 'models', 'bittrue', 'coefficients.json')).status, 2,
     'a child of a manifest protected directory was not blocked');
-  assert.equal(run(path.join(ROOT, 'engineering-assets', 'models', 'comm', 'ofdm', 'manifest.json')).status, 2,
-    'the governed engineering-assets/models boundary was not protected');
-  assert.equal(run(path.join(
+  // 仓库内既有路径改用模块判定, 不再看 CLI 退出码。这两条断言的是"边界还认得出",
+  // 而退出码同时受**当前是否存在有效批准令牌**影响 —— 用户放一张合法令牌, 边界照旧
+  // 成立但退出码变 0, 断言会无故翻红。更糟的是 spawn 走的是完整放行路径, 测试因此
+  // 会去动真实的授权状态。判定用 decision: 无批准 block / 有批准 warn, 两者都不是 allow。
+  const guardModule = require(path.join(ROOT, 'engine', 'scripts', 'hooks', 'file-protection-guard.cjs'));
+  function boundaryDecision(filePath) {
+    return guardModule.evaluate(
+      { tool_name: 'Write', tool_input: { file_path: filePath } },
+      { cwd: projectRoot, env: {} },
+    ).decision;
+  }
+
+  assert.notEqual(boundaryDecision(path.join(ROOT, 'engineering-assets', 'models', 'comm', 'ofdm', 'manifest.json')),
+    'allow', 'the governed engineering-assets/models boundary was not protected');
+  assert.notEqual(boundaryDecision(path.join(
     ROOT,
     'engineering-assets',
     'knowledge',
@@ -314,5 +376,5 @@ test('file protection uses explicit project paths while retaining known model di
     'templates',
     'golden_model_template',
     'config.m',
-  )).status, 2, 'the known golden-model directory boundary was not protected');
+  )), 'allow', 'the known golden-model directory boundary was not protected');
 });

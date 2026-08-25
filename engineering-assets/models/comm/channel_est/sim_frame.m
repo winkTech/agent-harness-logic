@@ -47,7 +47,18 @@ function fr = sim_frame(cfg)
         X = zeros(N, 1);
         X(cfg.data_idx) = qammod(randi(cfg.M, cfg.N_data, 1)-1, cfg.M, 'gray', ...
             'UnitAveragePower', true);
-        X(cfg.pilot_idx) = [1; 1; -1; 1];   % 802.11a 导频序列
+        % 802.11a 的 P 序列: (-21,-7,7,21) -> (+1,+1,+1,-1), **负号在 +21**。
+        % 订正见 sim_channel.m 同处注释 (owner 2026-08-09 裁定)。
+        %
+        % **逐符号极性** (owner 2026-08-11 裁定, 方案 A): 与 models/comm/ofdm 的
+        % subcarrier_map 同规则 —— 按符号序 ±1 交替, 首符号 +1。
+        % 本包此前完全不建模极性, 而 TX 侧一直在翻 —— 两侧串起来时每隔一个符号
+        % CPE 差 pi。这与"导频值放错位置"是**两个独立缺陷**, 订正导频值不能解决它;
+        % integration/contracts/chain_pilot_contract.m 的隔离诊断实跑证实过。
+        % 注: 标准用 127 长 PRBS 而非交替 (cbb/ofdm_tx_top 已登记为偏差 L3);
+        %     方案 A 选择与 TX 现状一致, 不在本次顺带改标准合规性。
+        pol = 1 - 2*mod(m-1, 2);
+        X(cfg.pilot_idx) = pol * [1; 1; 1; -1];
         Y_ch = H .* X * exp(1j * cpe_true(m));
         sigma2 = mean(abs(Y_ch).^2) / snr_lin;
         n = sqrt(sigma2/2) * (randn(N, 1) + 1j*randn(N, 1));

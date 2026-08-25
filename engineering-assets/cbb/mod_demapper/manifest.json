@@ -1,0 +1,378 @@
+{
+  "schema_version": "1.1",
+  "asset_uid": "mod_demapper",
+  "name": "mod_demapper",
+  "version": "1.0.1",
+  "owner": "lihan",
+  "kind": "primitive",
+  "maturity": {
+    "level": "certified",
+    "evidence_ref": "engineering-assets/evidence/mod_demapper/1.0.1/"
+  },
+  "requirement_ref": "engineering-assets/knowledge/primary/domains/comm/ofdm/algorithm_spec.md",
+  "doc_refs": [
+    "engineering-assets/cbb/mod_demapper/analysis/fixed-point-study.md"
+  ],
+  "protocol_anchor": {
+    "standard": "IEEE 802.11-2020",
+    "baseline_relation": "baseline",
+    "clause": "17",
+    "profile": "11a/g OFDM 20MHz",
+    "scope": "均衡后符号 -> 软判决 LLR (max-log), Q(10,4) 串行输出, 逐载波按 |H|^2 加权。**不含**: 星座映射本体 (mod_mapper 在发端)、硬判决解调 (models 侧 mod_demapper.m 仍保留, 供 rx_chain/test_ber)、解交织与译码 (下游 ldpc_codec)、噪声方差估计 (全链路无估计器, 裁定①; 标度 K 改由端到端 BER 定档)。",
+    "parameters": {
+      "bw_mhz": 20,
+      "n_data_subcarriers": 48,
+      "modulations": [
+        "QPSK",
+        "16QAM",
+        "64QAM"
+      ],
+      "in_fmt": "Q4.12 {im,re}",
+      "conf_fmt": "12 位 {sh[5:0], man[5:0]}, |H|^2 = (man 补足的 wman/2^16)*2^(sh-30)",
+      "out_fmt": "Q(10,4) 有符号, 每符号 bps 个, b0 在前",
+      "llr_sign": "正 LLR = 该比特更可能是 0 (随下游 ldpc_codec 的 s=1-2c 约定)",
+      "llr_scale_k": {
+        "QPSK": 2,
+        "16QAM": 16,
+        "64QAM": 32
+      }
+    },
+    "deviations": [
+      {
+        "id": "D-DEMAP-01",
+        "summary": "**不支持 BPSK, 显式报错而非静默近似**。802.11a 的 6/9 Mbps 速率用 BPSK, 故这是对 Clause 17 的真实覆盖缺口。原因是标度 K 只对 QPSK/16QAM/64QAM 做过端到端 BER 实测; 不凭'跟 QPSK 差不多'填一个数 —— 错的标度在链路上只表现为 'BER 略差', 不会被任何一条判据抓住。补齐需一轮端到端 BER 实测 + owner 裁定。",
+        "ref": "engineering-assets/cbb/mod_demapper/analysis/fixed-point-study.md"
+      }
+    ],
+    "anchor_basis": "clause/profile 与上游 eq_zf 一致; 标度 K 与 conf 位宽由 analysis/ 的实测定案, 非标准条款"
+  },
+  "fidelity": {
+    "status": "bit_true",
+    "bit_accurate_against": "engineering-assets/models/comm/ofdm/src/rtl_mirror_demap.m",
+    "tolerance": {
+      "value": 0,
+      "rationale": "镜像与 RTL 走同一条整数路径, 差异只可能是缺陷不可能是噪声, 故不设容差窗口。三档各 2304 点 >= G-B-03 的 2048 门限, 合计 27648 个 LLR。浮点锚 mod_demapper_llr 的角色在上一层 —— 它锁镜像本身 (test_rtl_mirror_demap 的 T1, 差须落在 Q(10,4) 的 1 LSB 量化地板内), 不参与判卷。**1.0.1 起由第二仿真器独立复跑**: Vivado xsim 2023.1 下三档合计 27648 个 LLR 同样 0 失配, 且 T8 吞吐拍数与 iverilog **逐拍相同** (16122/16124/16126)。1.0.0 认证时只有 iverilog 一件 —— 不是因为 xsim 判出了不同结果, 而是 --xsim 开关在 Windows 上根本没跑起来 (见 CHANGELOG 1.0.1)。",
+      "set_at": "2026-08-09"
+    }
+  },
+  "top": "mod_demapper",
+  "device": {
+    "part": "xc7k325tffg900-2",
+    "family": "kintex7",
+    "note": "与上下游同域资产一致 (eq_zf / ldpc_codec)"
+  },
+  "clock": {
+    "name": "i_clk",
+    "period_ns": 10
+  },
+  "ports": [
+    {
+      "name": "i_clk",
+      "direction": "input",
+      "width": 1
+    },
+    {
+      "name": "i_rst",
+      "direction": "input",
+      "width": 1
+    },
+    {
+      "name": "i_mod",
+      "direction": "input",
+      "width": 2
+    },
+    {
+      "name": "s_axis_tvalid",
+      "direction": "input",
+      "width": 1,
+      "bus": "axi-stream"
+    },
+    {
+      "name": "s_axis_tready",
+      "direction": "output",
+      "width": 1,
+      "bus": "axi-stream"
+    },
+    {
+      "name": "s_axis_tdata",
+      "direction": "input",
+      "width": 32,
+      "bus": "axi-stream"
+    },
+    {
+      "name": "i_conf",
+      "direction": "input",
+      "width": 12
+    },
+    {
+      "name": "i_erasure",
+      "direction": "input",
+      "width": 1
+    },
+    {
+      "name": "m_axis_tvalid",
+      "direction": "output",
+      "width": 1,
+      "bus": "axi-stream"
+    },
+    {
+      "name": "m_axis_tready",
+      "direction": "input",
+      "width": 1,
+      "bus": "axi-stream"
+    },
+    {
+      "name": "m_axis_tdata",
+      "direction": "output",
+      "width": 10,
+      "bus": "axi-stream"
+    },
+    {
+      "name": "m_axis_tlast",
+      "direction": "output",
+      "width": 1,
+      "bus": "axi-stream"
+    }
+  ],
+  "reset": {
+    "name": "i_rst",
+    "polarity": "active_high",
+    "type": "sync",
+    "async_release_synchronized": true
+  },
+  "params": [
+    {
+      "name": "P_DATA_W",
+      "value": 16,
+      "rationale": "每轴 Q4.12 位宽; s_axis_tdata = {im,re}, 与 eq_zf 的 m_axis 同字序"
+    },
+    {
+      "name": "P_LLR_W",
+      "value": 10,
+      "rationale": "Q(10,4), 值域 [-512, 511] —— 下游 ldpc_codec 的归一化 Min-Sum 定点格式"
+    },
+    {
+      "name": "P_CONF_W",
+      "value": 12,
+      "rationale": "6 位尾数 + 6 位指数。实测 LLR 相对误差 0.0027, 已在 Q(10,4) 自身量化误差 0.005 的一半以下, 再加位买不到东西"
+    }
+  ],
+  "constraints": {
+    "target": {
+      "fmax": "100MHz",
+      "fmax_mhz": 100,
+      "lut": 2400,
+      "ff": 1150,
+      "bram": 0,
+      "dsp": 20,
+      "note": "**100 MHz 是接口形状的前提, 不是余量选择**: OFDM 符号 = 80 样点 @20MHz = 400 拍, 64QAM 每符号 48x6=288 个 LLR 必须串行出完 (实测 6.9 拍/点, 预算 8.33)。若按 20MHz 算 288 > 80, 串行输出根本不成立, 必须改成并出 bps 个。包络按 OOC 实测定 (LUT 2220 / FF 1044 / BRAM 0 / DSP 18; WNS +4.508ns @10ns 即约 181MHz, WHS +0.123ns, 0 失败端点), 留约 8% 余量。**DSP 18 恰好等于 16 个 metric 平方器 (两轴各 8) + 末级 33x16 乘法的 2 个** —— 这是数据通路少复位换来的: 给 r2_sq / r1_prod 加复位会挡住 DSP 内部寄存器吸收, 把乘法赶到 LUT 上。"
+    }
+  },
+  "alignment": {
+    "compare_mode": "cycle_accurate"
+  },
+  "reproduce": {
+    "sim": "node engineering-assets/cbb/mod_demapper/run_sim.cjs --install",
+    "synth": "node engineering-assets/tools/pg-synth.cjs engineering-assets/cbb/mod_demapper",
+    "gate": "node engineering-assets/tools/gate-runner.cjs engineering-assets/cbb/mod_demapper --repo-root .",
+    "note": "第二仿真器加 --xsim (Vivado xsim 2023.1)。顶层 TB **按调制跑三遍** (向量目录/bps/mod 由 plusarg 传入) —— K 分档、每轴电平数不同、sh' 值域也逐档不同, 只跑一档等于只验三分之一。证据由脚本解析实跑输出产出, 非人工填。判卷向量重生成: matlab -batch \"addpath(<pkg>/analysis); gen_demap_vectors('16QAM')\" —— 期望值走治理侧镜像 rtl_mirror_demap, 生成器对非治理侧路径直接报错。reset-sim.json 的数字全部来自 tb_demap_reset 的真实输出 (REGS/BAD/KEEP/NOTCLR), 抠不到即判 fail。"
+  },
+  "sources": [
+    {
+      "path": "rtl/mod_demapper.sv",
+      "role": "rtl",
+      "note": "顶层: conf 解码 + 两轴 metric + 串行化 FSM + 末级复用 + 出侧 FIFO/信用。**metric 流水与串行化重叠** —— '算完再串行'是 5+bps=11 拍/点, 48 点需 528 拍 > 400, 持续速率不够且加输入 FIFO 也救不了",
+      "sha256": "8a237cd766889a1d7191ccfec8e38d4a883c704b3974212fd5f7954cb7f1ae57"
+    },
+    {
+      "path": "rtl/demap_metric.sv",
+      "role": "rtl",
+      "note": "单轴 max-log metric, 延迟 5。8 槽位统一化: QPSK 每电平复制 4 份、16QAM 复制 2 份, 换来**比特掩码与调制无关** (Gray 标号在三档间嵌套, 查出来的不是凑的); 推论是 QPSK 的 m1/m2 与 16QAM 的 m2 恒为 0, 上层无须屏蔽",
+      "sha256": "8634ee8c814148689c39d95fb6fb05e61791096a04cf036ff0eff78dd3f6c8eb"
+    },
+    {
+      "path": "rtl/demap_scale.sv",
+      "role": "rtl",
+      "note": "加权/移位/饱和末级, 延迟 5。sh'>=48 直接给 0 是**可证**的 (|积| <= 8.99e13 < 2^46.4 < 2^(sh'-1)), 省掉一个 67 位加法器与同宽移位器; 捷径由 tb_demap_scale 的 96 位全精度参考逐值扫 28..66 验证, 不是被相信",
+      "sha256": "0fcd75f412060a9af3a321aeff4ce2398e8fe171365df690ee52b7226eefca56"
+    },
+    {
+      "path": "constraints/mod_demapper.xdc",
+      "role": "constraint",
+      "note": "100 MHz 单时钟域",
+      "sha256": "7be88ad9f9164266af18558a7832db04d55ee366ec6815074fca7a841ae49089"
+    },
+    {
+      "path": "tb/tb_mod_demapper.sv",
+      "role": "tb",
+      "note": "顶层判卷 12 条: 逐 LLR 0 容差 / tlast 位置 / 出入守恒 / 三种出侧反压与基准**逐点相同** / 上游断续 / erasure 单独判 / 中途复位 / **T8 吞吐**",
+      "sha256": "950f96fb9a944ccb651ad3c7135b27cb3e8fdd7b65cf67449a50cf22576b726a"
+    },
+    {
+      "path": "tb/tb_demap_metric.sv",
+      "role": "tb",
+      "note": "参考模型刻意用**循环式** min (DUT 是硬连的 4 路树) —— 结构不同才谈得上互证",
+      "sha256": "c3870b5052df81a6a8007b27e44bbebaa531d660777fa02beeab9a765f5fc228"
+    },
+    {
+      "path": "tb/tb_demap_scale.sv",
+      "role": "tb",
+      "note": "参考模型走 **96 位**全精度且不走捷径。首版用 64 位, sh'=66 时半量 2^65 溢出成负数, 参考给 -1 而 DUT 给 0 —— 参考模型必须有足够余量才配当参考",
+      "sha256": "eedd548c5f8c0f40114d0530a3114c03533c285c8147c05f2531bda49fd2ea81"
+    },
+    {
+      "path": "tb/tb_demap_reset.sv",
+      "role": "tb",
+      "note": "逐寄存器复位比对。立项时抓出两个功能 TB 全绿也没发现的真问题: 复位期 s_axis_tready 恒 1 致数据静默丢失; 数据通路全带复位会挡住 DSP 吸收",
+      "sha256": "1ab502d0f31f13a55f76525e13ad25a76e8520f5e528ac30c54047aaf2ab657a"
+    },
+    {
+      "path": "run_sim.cjs",
+      "role": "harness",
+      "note": "六次实跑 (3 子模块 + 顶层三档), 证据全部解析真实输出",
+      "sha256": "65ad36516fa2248ac4c41a361262eca863b32b37b477f599f9b046be9b0c7f35"
+    },
+    {
+      "path": "analysis/gen_demap_vectors.m",
+      "role": "vector_gen",
+      "note": "边界符号逐条给出**为什么它危险**; 覆盖自查硬断言 (饱和点>0 / sh' 须含 >=48 那一支 / erasure 全 0), 任一不满足直接报错不产出向量",
+      "sha256": "6bc1532bf25600365fe53f945e836d726c0b937453da5d89e805ed920469c35b"
+    },
+    {
+      "path": "analysis/demap_axis_check.m",
+      "role": "reference",
+      "note": "两轴可分性判定 —— 前提'比特标号也按轴划分'是查出来的, 不是'方形 QAM 一般都这样'",
+      "sha256": "94a399ff1532b45c299baa07750cc5541a24a0acb1fcecb78679d264d150fce4"
+    },
+    {
+      "path": "analysis/demap_e2e_ber.m",
+      "role": "reference",
+      "note": "标度 K 的判据: **端到端 BER** 穿过真实 LDPC 译码器。代理指标 (量化为 0 比例 / 饱和率) 定不了 K, 两者代价不对等",
+      "sha256": "d2ae2ae57b5f74d0dd9ece7517e053ca71d3bf09a6eb6ca4cba45c50ff8ce44c"
+    },
+    {
+      "path": "analysis/demap_fixed_point_study.m",
+      "role": "reference",
+      "note": "o_conf 位宽; 参照系是 LLR 自身 Q(10,4) 的量化相对误差",
+      "sha256": "d19bc432643be1e9782eea3b514ac308539788dc7fe371523e77cb5b7fa13c6e"
+    },
+    {
+      "path": "analysis/demap_fp_proto.m",
+      "role": "reference",
+      "note": "整数通路原型: 位宽上界与定标常数 67 的推导与实测",
+      "sha256": "c54ede33516a6fa9252b73a34a616241976af4d37c92641e4025945682e49ce2"
+    },
+    {
+      "path": "analysis/fixed-point-study.md",
+      "role": "doc",
+      "sha256": "0a02bd9369631c5547dd161f1a332b07e55fc877e0c6430c6b80067da54f51b3"
+    },
+    {
+      "path": "vectors/qpsk/x.hex",
+      "role": "vector",
+      "sha256": "bb2d8ec5ba7f29c669fb8574d345222eb57db7fa2e44b87369152e632e3d1058"
+    },
+    {
+      "path": "vectors/qpsk/conf.hex",
+      "role": "vector",
+      "sha256": "4fffe7fb44b54f5637bf2639d703a6856151519bbd2bcddf5cb6dc5a0995a474"
+    },
+    {
+      "path": "vectors/qpsk/er.hex",
+      "role": "vector",
+      "sha256": "e9056cfa4f7f29b19054ac76cc04700d3f50f4189b77a7003b7c540dbfa56e51"
+    },
+    {
+      "path": "vectors/qpsk/llr_exp.hex",
+      "role": "vector",
+      "sha256": "6df5aa30545adbf943d29d64401404bcddb48a49144c5fcc757f78828701d17e"
+    },
+    {
+      "path": "vectors/qpsk/lev.hex",
+      "role": "vector",
+      "note": "RTL 的电平 ROM 内容就取这个文件",
+      "sha256": "be76d7ea00af4fd3e4c5467342602ac7c0a90ef7feea0dd86d839b4c4c7c8f97"
+    },
+    {
+      "path": "vectors/qpsk/vec_config.txt",
+      "role": "vector",
+      "sha256": "ed8ea9522fca1fff3961ca1547e2e41fc58f8ca0801095baa08c3a24dfe39c25"
+    },
+    {
+      "path": "vectors/16qam/x.hex",
+      "role": "vector",
+      "sha256": "f4c4286b21dadaa0eeaee2d173a12e290e02b15ab652b88b3b0e61256242e852"
+    },
+    {
+      "path": "vectors/16qam/conf.hex",
+      "role": "vector",
+      "sha256": "4fffe7fb44b54f5637bf2639d703a6856151519bbd2bcddf5cb6dc5a0995a474"
+    },
+    {
+      "path": "vectors/16qam/er.hex",
+      "role": "vector",
+      "sha256": "e9056cfa4f7f29b19054ac76cc04700d3f50f4189b77a7003b7c540dbfa56e51"
+    },
+    {
+      "path": "vectors/16qam/llr_exp.hex",
+      "role": "vector",
+      "sha256": "84f8c3609fcc15ba185dab049c7588fa23fe62a023f9728163839bdb4448eee6"
+    },
+    {
+      "path": "vectors/16qam/lev.hex",
+      "role": "vector",
+      "sha256": "68d08d2b6fdfa7bcb341b80d61b20d94a42f948a9f5a5bff14ecda5c0379ae5d"
+    },
+    {
+      "path": "vectors/16qam/vec_config.txt",
+      "role": "vector",
+      "sha256": "57836ce08a0e5982c091a2829d10ad759ab30b7e350e9cd7c8873f4fbe1e96a8"
+    },
+    {
+      "path": "vectors/64qam/x.hex",
+      "role": "vector",
+      "sha256": "3375a71386100d90bf38a72b1afb61caf9a9e264b9fe14ba49936ea863eda629"
+    },
+    {
+      "path": "vectors/64qam/conf.hex",
+      "role": "vector",
+      "sha256": "4fffe7fb44b54f5637bf2639d703a6856151519bbd2bcddf5cb6dc5a0995a474"
+    },
+    {
+      "path": "vectors/64qam/er.hex",
+      "role": "vector",
+      "sha256": "e9056cfa4f7f29b19054ac76cc04700d3f50f4189b77a7003b7c540dbfa56e51"
+    },
+    {
+      "path": "vectors/64qam/llr_exp.hex",
+      "role": "vector",
+      "sha256": "bc0caae52f2dd50333c5af5257fd8be6eddfdc0786f54b6cca733579696272de"
+    },
+    {
+      "path": "vectors/64qam/lev.hex",
+      "role": "vector",
+      "sha256": "7a6ef388d12192ef7c39f4feaf45df6ca073a839fa7cc7bb3fc40b72646ad367"
+    },
+    {
+      "path": "vectors/64qam/vec_config.txt",
+      "role": "vector",
+      "sha256": "169d8569bd3e5ddeb83ef3256b89c4d23b37e7898f14927151e3eca8207f15a0"
+    }
+  ],
+  "waivers": [],
+  "notes": "",
+  "signoff": {
+    "by": "lihan",
+    "at": "2026-08-09",
+    "scope": [
+      "证据已复核 (全部由 run_sim.cjs 实跑落盘, 仿真器 Icarus Verilog 12.0): 判卷 0 容差, 期望值取自治理侧定点镜像 models/comm/ofdm 1.8.0 的 src/rtl_mirror_demap.m —— 镜像与 RTL 走同一条整数路径, 任何差异都是缺陷而非噪声。三档实测 QPSK 4608 / 16QAM 9216 / 64QAM 13824 个 LLR, 失配均为 0, 合计 30749 次比对。浮点锚 mod_demapper_llr 不参与判卷, 只锁镜像本身 (test_rtl_mirror_demap 的 T1, 差落在 Q(10,4) 的 1 LSB 量化地板内)。",
+      "接受限制① 不支持 BPSK, 显式报错 (D-DEMAP-01)。802.11a 的 6/9 Mbps 用 BPSK, 故这是对 Clause 17 的真实覆盖缺口, 不是暂未实现 —— 标度 K 只对 QPSK/16QAM/64QAM 三档做过端到端 BER 实测, 不凭推断补第四档。复用方若需 6/9 Mbps 速率, 本件不可用, 补齐需一轮端到端 BER + owner 裁定。",
+      "接受限制② i_mod 必须在符号边界稳定。它按点采样进 ri_mod, 中途改会让同一符号的 I/Q 两轴用不同电平表。本件不含符号边界检测, 由上游落实。",
+      "接受限制③ i_conf 的契约区是 sh∈[3,34] 加 conf=0 哨兵。超出该区落到 sh'≥48 那一支输出 0, 是安全侧退化而非乱数, 但上游给错 conf 本件不会报出来。",
+      "接受限制④ 输出无 OFDM 符号边界标记。m_axis_tlast 只标一个子载波的最后一个比特 (上游 eq_zf 亦不提供), 下游需按 48 载波自行成帧。",
+      "接受限制⑤ 验证边界: 综合为 Vivado 2023.1.1 OOC synth_design, 非实现/布线/时序收敛 —— synthesis-timing-evidence.json 的 fullEdaClosure=false 如实记着这一点。实测 WNS +4.508ns @10ns (≈181MHz) / WHS +0.123ns / 失败端点 0 / LUT 2220 of 2400 / FF 1044 of 1150 / DSP 18 of 20 均为 OOC 口径。板级验证与整链回环未做, 按 badge gap 记录而非阻塞门。",
+      "接受设计约定: 数据通路 r2_sq / r1_prod 有意少复位以让 DSP 吸收乘法 (DSP 18 = 两轴 16 个 metric 平方器 + 末级 33x16 的 2 个); tb_demap_reset 的 T3 反向锁住这一点, 日后顺手补复位会失败, 这是刻意的。",
+      "签字依据 owner 于 2026-08-09 的明确指示记录; 门梯实跑 21 条 MUST 全过, 唯一阻塞门为本条 G-SIGN-01。scope 各条逐项取自 README §3/§5/§6 与门禁证据, 未作推断性扩写。"
+    ]
+  }
+}

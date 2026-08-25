@@ -29,7 +29,7 @@ D4 算法路径    D5 微架构      D6 风险未知
 
 只有仍会实质改变实现或验收结果的未知项才询问用户；证据充分时直接记录假设并继续。
 
-退出条件：将结果写入 `var/gates/requirements-gate.json`，`status` 为 `completed` 且作用域覆盖目标文件。新代码文件由 `requirements-gate-guard.cjs` **提示**（advisory，不阻断——见本文末「门禁的执行力」）。
+退出条件：将结果按下文“状态合同 v2”写入 `var/gates/requirements-gate.json`，且 `dimensions` 记录本任务的六项结论。新代码文件由 `requirements-gate-guard.cjs` **提示**（advisory，不阻断——见本文末「门禁的执行力」）。
 
 ## 门禁二：验证质量
 
@@ -53,21 +53,45 @@ Golden Model 的约束是**方向**，不是禁止修改。Golden 与需求有�
 
 流程方向也是硬约束：Golden 指导 RTL，不是反过来。同模块 RTL 刚改完就改 Golden，是倒置的时序指纹，此时依据必须升级到裁决级。`file-protection-guard.cjs` 按 `basis{kind,ref[,ruling]}` 判定方向并记入 `var/audit/protected-writes.jsonl`，倒置签名由模型 manifest 的 `implements_for` 与 RTL 文件 mtime 观测，不依赖自述。
 
-退出条件：将结果写入 `var/gates/verification-quality.json`，`status` 为 `completed` 且作用域覆盖目标文件。新测试文件由 `verification-quality-guard.cjs` **提示**（advisory，不阻断）。
+退出条件：将结果按下文“状态合同 v2”写入 `var/gates/verification-quality.json`，且 `env_profile` 与 `scenarios` 只记录本任务适用项。新测试文件由 `verification-quality-guard.cjs` **提示**（advisory，不阻断）。
+
+## 状态合同 v2
+
+状态是**当前任务的短期收据**，不是项目级永久通行证。两个门禁共用以下作用域字段：
+
+```json
+{
+  "version": 2,
+  "status": "completed",
+  "taskId": "issue-or-session-scoped-id",
+  "projectRoot": "C:/absolute/project/root",
+  "targets": ["src/exact_file.py", "rtl/feature/**"],
+  "contractHash": "64-lowercase-hex-characters",
+  "validUntil": "2026-08-20T12:00:00.000Z"
+}
+```
+
+- `targets` 必须非空，只接受项目内的精确相对路径或末尾 `/**` 的目录范围；不得写 `.`、项目根或越界路径。
+- `contractHash` 是本次已确认门禁内容的 SHA-256，用于识别合同是否被换成另一项任务；它不是正确性的证明。
+- `validUntil` 必须是未来的 ISO 时间。任务或合同变化时立即替换，不靠延长旧状态继续工作。
+- 仅有 `status: "completed"` 或 `projectRoot` 的 v1/旧状态无效；它不能覆盖未来新文件。
+- 热状态文件只保留当前任务。普通任务直接原子替换；只有确有事故审计需要时，才把旧状态复制到 `var/gates/history/`。
 
 ## 门禁的执行力
 
 这两道门禁是 **advisory**：未完成时输出提示，但不会 `exit 2` 阻断写入。
 
-这是刻意的。放行的唯一条件是模型自己往状态 JSON 里写 `status: "completed"`，而那份
-JSON 无 schema 校验、无有效期、无写保护。在这种结构下硬阻断不会带来更强的约束，
-只会训练模型伪造门禁记录，对临时脚本还会大量误报。
+这是刻意的。v2 guard 会校验任务标识、目标范围、哈希形状与有效期，解决旧状态误覆盖
+未来文件的问题；但这些字段仍由执行者记录，不能独立证明内容真实。把这种自述状态做成
+硬阻断只会训练模型伪造记录，对临时脚本还会大量误报。
 
 所以**不要把"门禁没拦住"当成放行的理由**——它的约束力来自这份规则本身，不来自退出码。
 真正有牙齿的硬门禁建立在可独立复核的产物上，例见
 `workflows/hdl-coding-dag-workflow.js` 的 Phase 4.5（校验 `check_results/<mod>.json`
 真实存在且 `status === PASS`）。
 
+运行时阻断由 `docs/rules/05-harness.md` 的风险自适应策略统一决定：普通 R0/R1 写入不因画像表单硬阻断；R2 按影响范围要求比例验证；R3 在动作前要求精确授权，并在交付边界要求新鲜签核证据。需求门禁和验证质量门禁是风险分类输入，不是额外的同步审批层。
+
 ## 门禁异常
 
-不要直接删除状态文件。状态疑似过期或损坏时，报告原因并走经过审计的 reset/repair 路径。用户明确要求跳过时，记录 `status: "bypassed"`、原因和作用域；是否放行由 Hook 的当前策略决定。
+不要把过期、损坏或旧版状态继续当作证据。说明原因后，用当前任务的 v2 状态原子替换；确有事故审计价值时才归档旧状态。用户明确要求跳过时，记录 `status: "bypassed"`、原因和目标范围；是否放行由 Hook 的当前策略决定。

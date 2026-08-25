@@ -1,5 +1,93 @@
 # CHANGELOG — channel_est_top
 
+## [1.0.4] — 2026-08-11 施加逐符号导频极性（功能修复，owner 裁定方案 A）
+
+1.0.3 修的是"导频值放错位置"。**极性是独立于它的第二个缺陷**，会存活过那次修复——
+`chain_pilot_contract` 的隔离诊断当时就实跑证实：把导频值对齐后，符号 2/4/6 仍差正好 π。
+
+TX 侧（`subcarrier_map` / `tx_pilot_map`）逐符号把四个导频整体 ±1 翻转，本件此前
+**完全不建模极性**，于是每隔一个符号 CPE 差 π。
+
+### 改动
+
+`cpe_tracker` 增数据符号计数器 `r_pol_neg`（帧起点归 +1，符号尾翻转，`i_abort` 清零），
+**在锁存 S 时整体取负**——极性对四个导频相同，`S` 是四项之和，负 S 与负每一项等价
+且比逐个翻转便宜。TB 同步加 `tb_pol`（`pulse_fs` 归 +1，每个数据符号翻一次）。
+
+golden 侧 `models/comm/channel_est` 1.4.0 同步：`sim_frame` 施加极性、
+`generate_vectors` 的镜像与浮点自证各乘 `pol`、`test_phase_track` 改为**直接取
+`fr.X_syms(pilot_idx,m)` 实际发送值**而不再复写常量。
+
+### 为什么测试改成取真值
+
+这条测试在本轮踩了两次：原先硬编码 `[1;1;-1;1]`，与 `sim_frame` 用同一个错值，
+于是它**本可以更早抓到约定不一致却没抓到**；随后加极性时，硬编码常量又会第二次失配。
+**测试里复写一份"应该是什么"，等于把被测对象抄了一遍。**
+
+### 实测
+
+| 判据 | 结果 |
+|---|---|
+| `channel_est` golden `run_all_tests` | **7/7** |
+| 定向 TB（xsim） | **ALL TESTS PASSED**（T7 背靠背 8 符号跨 4 次极性翻转） |
+| 帧级 cosim | **2048 点 0 失配 bit-true** |
+| `chain_pilot_contract` | 6 符号 CPE 恢复误差**全部 0.0000 rad** |
+| 同上·反证段 | 人为去掉极性 → 立刻 **3.1416 rad**，证明机制承重 |
+
+### 仍未解决：与标准的极性序列不符（不是本次范围）
+
+Clause 17 用 127 长 PRBS（x⁷+x⁴+1，全 1 初始），本链路两侧都用 ±1 交替。
+方案 A 只保证**库内 TX↔RX 自洽**，不解决互通。`cbb/ofdm_tx_top` 已登记为偏差 **L3**；
+改 PRBS 要两侧同动且两件都重新认证，属另立一项。
+
+### 一处未动的记录
+
+`manifest.signoff.scope` 里"已接受限制: 导频极性固定 [1,1,-1,1]…"是 2026-08-01 签字时
+的原话，描述的是 1.0.3 之前的状态，现已不准确。**我没有改它**——签字块是 owner 的记录，
+不应由我代笔。若要让它与现状一致，需要一次新的签字。
+
+## [1.0.3] — 2026-08-09 导频值订正：负号从 +7 移到 +21（功能修复）
+
+**这不是"未建模"，是两个已认证件互相矛盾。**
+
+`cpe_tracker` 假设导频 `[1,1,-1,1]`（负号在子载波 **+7**），而 `models/comm/ofdm`
+的 `cfg.pilot_val`、`cbb/ofdm_tx_top` 的 `tx_pilot_map` 都用 `[1,1,1,-1]`（负号在
+**+21**，802.11a 的 P 序列）。两件串到同一条链上时，CPE 估计的四项符号变成
+`(+,+,−,−)`——**平坦信道下恰好抵消为 0**，`angle(0)` 无定义。
+
+### 为什么长期没被发现
+
+本件的 TB 与本件的 RTL 用**同一套错约定互相印证**（`tb_channel_est_top` 的
+`pilot_val_at` 同样把负号放在 k=39），而 TX→RX 之间**从来没有一条判据** —— 现有
+integration TB 只测深度/对齐，不测 CPE 正确性。
+
+更要紧的是：错值的源头 `models/comm/channel_est/src/generate_vectors.m` 的注释写着
+`% cpe_tracker: 仅 k=39 取负` —— **golden 是跟着 RTL 写的**，正是治理要防的本末倒置。
+它没被门禁拦住，因为那次写入不在 file-protection 的路径上（经 Bash 跑的 MATLAB）。
+
+### 改了什么
+
+  rtl/cpe_tracker.sv          w_p_neg 由 P_PILOT_POS[2] 改为 [3]
+  tb/tb_channel_est_top.sv    pilot_val_at 由 k==39 改为 k==53
+  README.md / docs/limitations.md  把"导频值"与"导频极性"拆开（原文混为一谈）
+  models/comm/channel_est/    sim_channel / sim_frame / pilot_phase_track /
+                              src/generate_vectors / tests/test_phase_track 五处
+                              （owner 令牌批准，逐次入审计）
+
+### 实测
+
+  channel_est golden run_all_tests   **7/7**（订正前 [2/7] CPE 误差恰好 π）
+  channel_est_top xsim 帧级 cosim    **2048 点 0 失配, bit-true**
+  integration/contracts/chain_pilot_contract.m
+      订正前: 6 个符号 3 个 ±π / 3 个 0
+      订正后: **奇数符号误差 0.0000**（极性 +1 的那些）—— ① 已消
+
+### 仍未解决：② 逐符号极性（独立缺陷）
+
+链路判据的**偶数符号仍差正好 π**。TX 侧逐符号翻转导频极性，本件不带符号计数器、
+不施加极性。这与①是两回事，**订正导频值不能解决它**；判据内置的隔离诊断已实跑
+证实（把导频值对齐后符号 2/4/6 仍差 π）。处置待 owner 裁定，见 docs/limitations.md 第 2 条。
+
 ## [1.0.2] — 2026-08-02 声明证据复现入口（G-GATE-02）
 
 manifest 新增 `reproduce` 字段，把"证据怎么重做"从 README 里的散文变成**机器可校验

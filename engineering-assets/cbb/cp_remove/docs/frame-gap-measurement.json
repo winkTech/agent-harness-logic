@@ -1,0 +1,34 @@
+{
+  "id": "measurement.frame_gap",
+  "tool": "Icarus Verilog (iverilog -g2012 / vvp)",
+  "tb": "tb_cp_remove_gap",
+  "note": "帧间间隔逐值测量 (非门禁产物, 供 docs/limitations.md 6 引用)。points = 第二帧输出点数, 期望 256。",
+  "measurements": [
+    {
+      "gap": 0,
+      "points": 0,
+      "first": -1
+    },
+    {
+      "gap": 1,
+      "points": 256,
+      "first": 3000
+    },
+    {
+      "gap": 2,
+      "points": 256,
+      "first": 3000
+    },
+    {
+      "gap": 3,
+      "points": 256,
+      "first": 3000
+    },
+    {
+      "gap": 4,
+      "points": 256,
+      "first": 3000
+    }
+  ],
+  "min_usable_gap": 1
+}

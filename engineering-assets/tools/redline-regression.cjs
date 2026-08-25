@@ -7,12 +7,22 @@ const { scanRepository } = require('./catalog-gen.cjs');
 const { scanAsset, stripAnsi } = require('./lib/redline-scan.cjs');
 
 const ASSETS = ['rrc_polyphase_fir', 'ldpc_codec', 'channel_est_top', 'ofdm_tx_top', 'sync_top'];
+// 2026-08-08 重新基线。旧基线点名的多数文件**已经不存在**了 —— 四件资产在走向
+// certified 的改造里重命名并合并了子模块 (mapper.sv→tx_mapper.sv, cp_insert.sv→
+// tx_cp_insert.sv, pilot_insert.sv→tx_pilot_map.sv, xfft_64.sv→ifft64_sdf.sv,
+// ldpc_decoder_top.v 的 llr 通路移入 ldpc_stream_io.v)，基线没跟着走，于是本条从那时起
+// 必挂。它一直没被发现，是因为 test-catalog-audit 更早的 ENOENT 硬崩把整个套件掀了。
+//
+// 重新基线**不是把红灯改绿**，依据是权威门梯而非本表: 五件的 RL-OUT 门今天实跑全部
+// ✅「输出均由寄存/常量驱动」，且四件 rtl 资产 gate-runner 判定仍是 CERTIFIED。
+// 本表的作用是钉住"观察到的集合"，让下次无声变化能冒出来，不是断言集合为空 ——
+// 残留的 <top>.sv|s_axis_tready 属 ADR-001 允许的组合 tready 直通，门梯已认。
 const EXPECTED_REDLIST = {
-  channel_est_top: ['rtl/channel_interpolator.sv|m_axis_tdata', 'rtl/channel_interpolator.sv|m_axis_tvalid', 'rtl/ls_estimator.sv|s_axis_tready'],
-  ldpc_codec: ['rtl/ldpc_decoder_top.v|s_axis_llr_tready', 'rtl/ldpc_encoder_top.v|s_axis_info_tready'],
-  ofdm_tx_top: ['rtl/cp_insert.sv|m_axis_tdata', 'rtl/cp_insert.sv|m_axis_tlast', 'rtl/cp_insert.sv|m_axis_tvalid', 'rtl/cp_insert.sv|s_axis_tready', 'rtl/mapper.sv|s_axis_tready', 'rtl/pilot_insert.sv|s_axis_tready', 'rtl/xfft_64.sv|s_axis_config_tready', 'rtl/xfft_64.sv|s_axis_data_tready'],
+  channel_est_top: ['rtl/channel_est_top.sv|s_axis_tready'],
+  ldpc_codec: ['rtl/ldpc_encoder_top.v|s_axis_info_tready', 'rtl/ldpc_stream_io.v|s_axis_llr_tready'],
+  ofdm_tx_top: ['rtl/ofdm_tx_top.sv|s_axis_tready'],
   rrc_polyphase_fir: ['rtl/rrc_polyphase_fir.sv|s_axis_tready'],
-  sync_top: ['rtl/packet_detect.sv|s_axis_tready', 'rtl/sync_top.sv|m_axis_tdata', 'rtl/sync_top.sv|m_axis_tvalid'],
+  sync_top: ['rtl/sync_top.sv|s_axis_tready'],
 };
 
 function expectedFor(uid) { return [...EXPECTED_REDLIST[uid]].sort(); }

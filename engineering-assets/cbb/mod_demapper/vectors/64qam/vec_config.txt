@@ -1,0 +1,13 @@
+MOD=64QAM
+BPS=6
+K=32
+ND=48
+NSYM=48
+NLEV=8
+SHIFT_MIN=28
+SHIFT_MAX=62
+N_SAT=728
+N_ERASURE=48
+SPEC=d2 u32 | metric s33 | wman u16 (<=65024) | metric*wman s49 | >>> (67-sh-log2(32)) | sat10
+WORD_ORDER={im,re}
+LLR_ORDER=b0_first

@@ -153,7 +153,9 @@ function runCoverage() {
   return spawnSync(process.execPath, [script, '--ci', HARNESS_ROOT], {
     cwd: HARNESS_ROOT,
     encoding: 'utf8',
-    timeout: 180000,
+    // 外层预算必须 > coverage-runner 的 RUNNER_TIMEOUT_MS (420 s) + 覆盖率解析开销,
+    // 否则调大内层毫无意义 —— 原值 180000 比套件本身的 max 192.8 s 还小, 是先被砍的那一层。
+    timeout: 600000,
     windowsHide: true,
     env: {
       ...process.env,

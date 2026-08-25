@@ -32,6 +32,35 @@
     "engineering-assets/knowledge/primary/domains/comm/ofdm/testbench_plan.md"
   ],
   "golden_model_ref": "model_comm_ofdm",
+  "protocol_anchor": {
+    "standard": "IEEE 802.11-2020",
+    "baseline_relation": "baseline",
+    "clause": "17",
+    "profile": "11a/g OFDM 20MHz",
+    "scope": "DATA 场发射通路: 星座映射 -> 导频/子载波映射 -> 64 点 IFFT -> CP 插入。不含 PLCP 前导生成、不含 SIGNAL 场、不含扰码/交织/FEC (这些在库内尚未成件)。",
+    "parameters": {
+      "bw_mhz": 20,
+      "n_fft": 64,
+      "n_data_sc": 48,
+      "n_pilot_sc": 4,
+      "cp_len": 16,
+      "symbol_len_samples": 80,
+      "modulations": [
+        "BPSK",
+        "QPSK",
+        "16QAM",
+        "64QAM"
+      ]
+    },
+    "deviations": [
+      {
+        "id": "L3",
+        "summary": "导频极性只按符号序 ±1 交替, 与 Clause 17 规定的 127 长 PRBS 导频扰码序列不符 (沿用 0.1.0 F6, 待算法决策)。影响: 与真实 11a 接收机互通时导频相位参考不一致; 库内自闭环 cosim 不受影响。",
+        "ref": "engineering-assets/cbb/ofdm_tx_top/README.md"
+      }
+    ],
+    "anchor_basis": "standard/clause/profile 取自库基线, 未经标准原文核对。parameters 来自包内实据: 48 数据点/64 拍自然序由 rtl/tx_pilot_map.sv 描述佐证, 80 拍/符号由 rtl/tx_cp_insert.sv 描述佐证 (故 cp_len=80-64=16), 四调制由 i_cfg_mod_type[1:0] 与四调制回归取证佐证; 0.1.0 的 i_cfg_fft_len/i_cfg_cp_len 已删除, 故 64/16 是硬固定值而非可配。偏差 L3 直接摘自 README 已登记的 L3 条目。"
+  },
   "fidelity": {
     "status": "bit_true"
   },

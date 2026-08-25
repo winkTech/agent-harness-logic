@@ -114,3 +114,87 @@
 - 勘误: 旧 rx_chEst.bin/expected_chEst.bin 单符号向量**从未入库**
   (0.1.0 README 已记录), 语义作废无需删除; manifest 1.2.0 provenance
   中"已删"一词不准确, 以本条为准。
+
+## 7. 导频值订正 (2026-08-09, 1.3.0, owner 裁定)
+
+本包的导频值一直是 **[1;1;-1;1]**（负号在子载波 **+7**），而 `models/comm/ofdm` 的
+`cfg.pilot_val` 与 `cbb/ofdm_tx_top` 的 `tx_pilot_map` 都用 **[1;1;1;-1]**（负号在
+**+21**，802.11a 的 P 序列）。**两侧约定相反。**
+
+### 后果不是"略差"
+
+CPE 估计量 `S = Σ Y[p]·conj(H[p])·pilot_assumed[p]`，每项带因子
+`pilot_true·pilot_assumed`。两侧串起来时该因子为 `(+,+,−,−)`：
+
+```
+S = pol·e^{jθ}·( |H₋₂₁|² + |H₋₇|² − |H₊₇|² − |H₊₂₁|² )
+```
+
+**平坦信道下恰好抵消为 0**，`angle(0)` 无定义；频选信道下是个符号乱跳的残差。
+
+### 为什么本包一直是绿的
+
+`tests/test_phase_track.m` 自己也硬编码了同一个错值，与 `sim_frame.m` 互相印证。
+订正 `sim_frame` 之后它**立刻**报 CPE 误差 3.141 rad —— 它本可以更早抓到这件事，
+没抓到只是因为两边用了同一个错值。
+
+更要紧的一条：`src/generate_vectors.m` 的注释原文是
+`% cpe_tracker: 仅 k=39 取负` —— **golden 是跟着 RTL 写的**，正是治理要防的本末倒置。
+它没被 file-protection 拦住，因为那次写入经 Bash 跑 MATLAB，不在该门的路径上。
+而 `sim_frame.m` / `sim_channel.m` 把同一个错值标成"802.11a 导频序列"。
+**同一个错值，一处冒称标准，一处自述跟随 RTL，两种说法都不对。**
+
+### 改动与实测
+
+| 文件 | 改动 |
+|---|---|
+| `sim_channel.m` / `sim_frame.m` | `[1;1;-1;1]` → `[1;1;1;-1]` |
+| `pilot_phase_track.m` | 文档串订正 |
+| `src/generate_vectors.m` | `pil_val` 订正，向量以 nsym=32 重生成 |
+| `tests/test_phase_track.m` | `pilot_val` 订正 |
+
+- `run_all_tests` **7/7**（订正前 [2/7] 恰好 π）
+- `cbb/channel_est_top` 1.0.3 xsim 帧级 cosim **2048 点 0 失配 bit-true**，22 门 CERTIFIED
+- `integration/contracts/chain_pilot_contract.m`：订正后**奇数符号误差 0.0000**
+
+### 逐符号极性（独立缺陷）—— 已于 §8 解决
+
+订正导频值**不能**解决它：判据内置的隔离诊断当时实跑证实，把导频值对齐后符号 2/4/6
+仍差正好 π。处置见下节。
+
+## 8. 逐符号导频极性 (2026-08-11, 1.4.0, owner 裁定方案 A)
+
+本包此前**完全不建模导频极性**，而 TX 侧（`models/comm/ofdm` 的 `subcarrier_map`）
+逐符号把四个导频整体 ±1 翻转。两侧串起来时每隔一个符号 CPE 差 π。
+
+owner 2026-08-11 裁定**方案 A**：RX 跟随 TX 的 ±1 交替，不在本次顺带改标准合规性
+（方案 B 是两侧一并改成 Clause 17 的 127 长 PRBS，要动 `ofdm_tx_top` 与
+`channel_est_top` 两个已认证件，属另立一项）。
+
+### 改动
+
+| 文件 | 改动 |
+|---|---|
+| `sim_frame.m` | 数据符号循环施加 `pol = 1-2*mod(m-1,2)`，首符号 +1 |
+| `src/generate_vectors.m` | 位真镜像的 S 累加与浮点自证各乘 `pol`（自证漏了 pol 会与镜像差 π，把"精度自证"变成噪声源） |
+| `pilot_phase_track.m` | 文档：`pilot_val` 是**该符号实际发送值、含极性**，不是常量 P 序列 |
+| `tests/test_phase_track.m` | 改为直接取 `fr.X_syms(pilot_idx,m)` |
+
+### 测试为什么改成取真值
+
+这条测试在本轮**踩了两次**：原先硬编码 `[1;1;-1;1]`，与 `sim_frame` 用同一个错值，
+于是它本可以更早抓到约定不一致却没抓到（§7）；随后加极性时，硬编码常量又会第二次失配。
+**测试里复写一份"应该是什么"，等于把被测对象抄了一遍，测的就成了抄得对不对。**
+
+### 实测
+
+- `run_all_tests` **7/7**
+- `cbb/channel_est_top` 1.0.4：定向 TB **ALL TESTS PASSED**（T7 背靠背 8 符号跨 4 次
+  极性翻转）；帧级 cosim **2048 点 0 失配 bit-true**
+- `integration/contracts/chain_pilot_contract.m`：6 个符号 CPE 恢复误差**全部 0.0000 rad**；
+  其反证段人为去掉 RX 极性后立刻差 **3.1416 rad** —— 证明该机制承重、判据不是空转
+
+### 仍与标准不符（已知，非本次范围）
+
+Clause 17 的极性来自 127 长 PRBS（x⁷+x⁴+1，全 1 初始），本链路两侧都用 ±1 交替。
+方案 A 只保证**库内 TX↔RX 自洽**，不解决互通性；`cbb/ofdm_tx_top` 已登记为偏差 L3。

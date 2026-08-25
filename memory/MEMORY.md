@@ -25,7 +25,7 @@
 | [[hdl-golden-model-philosophy]] | Golden Model 绝对权威 + RTL↔MATLAB 严格对标原则 |
 | [[file-organization-discipline]] | 文件分类纪律 — 仿真/测试/文档必须归入对应目录 |
 | [[agent-context-budget-integration]] | Agent 上下文预算系统集成 — 宪法段保护 |
-| [[instruction-compliance]] | ⛔ 指令绝对优先 — 已多次违反，零容忍，行动前强制匹配检查 |
+| [[instruction-compliance]] | 已退役：正常动作由账本记录，仅偏差/阻断/扩权时报告；由 AGENTS.md:16 替代 |
 | [[agent-workflow-refinement]] | Agent+Workflow 优化 — 架构拆解缺失/验证归属/不透明 三项修复 |
 | [[project-directory-cleanup-discipline]] | 项目目录标准化 + 仿真 transient 清理纪律 |
 | [[fix-in-place-discipline]] | Fix-in-Place 纪律 — 禁止文件变体，agent 必须原地修改 |
@@ -64,8 +64,6 @@
 
 [[cross-project-experience-ref]] — 新 FPGA 项目启动模板
 [[memory-link-graph]] — 记忆关联图
-
-[hooks-fix-2026-06-24](reference/hooks-fix-2026-06-24.md) — 三大闸门修复：路径格式是根因，settings.json 绝对路径后全部生效
 
 ## 反馈 (feedback/)
 

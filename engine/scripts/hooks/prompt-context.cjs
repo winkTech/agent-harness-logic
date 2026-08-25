@@ -3,6 +3,9 @@
 
 const fs = require('node:fs');
 
+const DEFAULT_CONTEXT_MAX_CHARS = 600;
+const CONTEXT_TRUNCATION_MARKER = '\n...(context truncated)';
+
 function readStdinRaw() {
   try {
     if (process.stdin.isTTY) return '';
@@ -24,6 +27,25 @@ function parsePayload(raw) {
 function additionalContext(output) {
   const value = output?.hookSpecificOutput?.additionalContext;
   return typeof value === 'string' && value.trim() ? value.trim() : '';
+}
+
+function mergeContextBlocks(blocks, requestedMaxChars) {
+  const configured = Number.parseInt(
+    requestedMaxChars ?? process.env.CLAUDE_PROMPT_CONTEXT_MAX_CHARS
+      ?? DEFAULT_CONTEXT_MAX_CHARS,
+    10,
+  );
+  const maxChars = Number.isFinite(configured) && configured > 0
+    ? configured
+    : DEFAULT_CONTEXT_MAX_CHARS;
+  const unique = [...new Set(blocks.map((block) => String(block || '').trim()).filter(Boolean))];
+  const merged = unique.join('\n\n');
+  if (merged.length <= maxChars) return merged;
+  if (maxChars <= CONTEXT_TRUNCATION_MARKER.length) {
+    return CONTEXT_TRUNCATION_MARKER.slice(0, maxChars);
+  }
+  return `${merged.slice(0, maxChars - CONTEXT_TRUNCATION_MARKER.length).trimEnd()}`
+    + CONTEXT_TRUNCATION_MARKER;
 }
 
 function combinePromptContext(payload = {}, deps = {}) {
@@ -64,11 +86,12 @@ function combinePromptContext(payload = {}, deps = {}) {
     }
   }
 
-  if (blocks.length === 0) return null;
+  const mergedContext = mergeContextBlocks(blocks, deps.maxContextChars);
+  if (!mergedContext) return null;
   return {
     hookSpecificOutput: {
       hookEventName: payload.hook_event_name || 'UserPromptSubmit',
-      additionalContext: blocks.join('\n\n'),
+      additionalContext: mergedContext,
     },
   };
 }
@@ -89,6 +112,7 @@ module.exports = {
   readStdinRaw,
   parsePayload,
   additionalContext,
+  mergeContextBlocks,
   combinePromptContext,
   main,
 };

@@ -7,7 +7,7 @@
    "project": "phy-intake",
    "project_ref": "cbb/channel_est_top",
    "asset_uid": "channel_est_top",
-   "version_pinned": "1.0.2",
+   "version_pinned": "1.0.4",
    "config": {
     "DATA_W": 16,
     "N_FFT": 64,
@@ -20,7 +20,8 @@
    "consumers": [],
    "issues": [],
    "badge_gap": [],
-   "last_reviewed": "2026-08-01"
+   "last_reviewed": "2026-08-01",
+   "deferred_reason": " 1.0.3 repin (2026-08-09, 导频值订正): cpe_tracker 原假设导频 [1,1,-1,1] (负号在子载波 +7), 而 models/comm/ofdm 与 cbb/ofdm_tx_top 都用 [1,1,1,-1] (负号在 +21, 802.11a 的 P 序列) —— **两个已认证件在同一条链上约定相反**, 串起来 CPE 估计的四项 会抵消 (平坦信道下恰好为 0)。各自都绿是因为各自的 TB 与自己用同一套约定互相印证, 而 TX->RX 之间从来没有判据。owner 2026-08-09 裁定本侧错并订正; xsim 帧级 cosim 2048 点 0 失配 bit-true, 22 门 CERTIFIED, evidence 1.0.3 已封存。 **仍未解决**: 逐符号导频极性未施加 (独立缺陷, 会存活过本次修复), 链路判据的偶数符号仍差 pi; owner 已选方案 A (RX 跟随 TX 的 ±1 交替), 待实施。 1.0.4 repin (2026-08-11, 逐符号导频极性, owner 裁定方案 A): 1.0.3 修的是\"导频值放错位置\"; **极性是独立于它的第二个缺陷**, 会存活过那次修复 (chain_pilot_contract 的隔离诊断当时实跑证实: 导频值对齐后符号 2/4/6 仍差正好 pi)。 cpe_tracker 增数据符号计数器 r_pol_neg, 锁存 S 时整体取负 (极性对四个导频相同, 负 S 与负每一项等价且更省)。实测: 定向 TB ALL TESTS PASSED (T7 背靠背 8 符号跨 4 次极性翻转) / 帧级 cosim 2048 点 0 失配 bit-true / 22 门 CERTIFIED / chain_pilot_contract 6 符号误差全部 0.0000 rad, 其反证段人为去掉极性即差 3.1416 rad。 **仍与 Clause 17 不符**: 标准用 127 长 PRBS 而非 ±1 交替 (ofdm_tx_top 偏差 L3); 方案 A 只保证库内 TX<->RX 自洽, 不解决互通, 改 PRBS 需两侧同动且两件都重新认证。"
   },
   {
    "id": "ITG-0002",
@@ -44,7 +45,7 @@
    "project": "reference-evidence",
    "project_ref": "models/comm/channel_est",
    "asset_uid": "model_comm_channel_est",
-   "version_pinned": "1.2.0",
+   "version_pinned": "1.4.0",
    "config": {},
    "integrated_at": "2026-07-26T00:00:00Z",
    "status": "active",
@@ -55,7 +56,7 @@
    ],
    "issues": [],
    "badge_gap": [],
-   "deferred_reason": "golden/reference source is retained as correctness evidence; 1.2.0 repin: exported-vectors 已还清 (帧向量入库+位真镜像), adr-002-estimation-basis-revalidation 已还清 (消费方 channel_est_top 0.2.0 按新基础重排并 cosim bit-true PASS)",
+   "deferred_reason": "golden/reference source is retained as correctness evidence; 1.2.0 repin: exported-vectors 已还清 (帧向量入库+位真镜像), adr-002-estimation-basis-revalidation 已还清 (消费方 channel_est_top 0.2.0 按新基础重排并 cosim bit-true PASS) 1.3.0 repin (2026-08-09, 导频值订正): sim_channel / sim_frame / pilot_phase_track / src/generate_vectors / tests/test_phase_track 五处 [1;1;-1;1] 改为 [1;1;1;-1]。错值的源头在本包: sim_frame 把它标成\"802.11a 导频序列\", 而 generate_vectors 的注释写着 \"cpe_tracker: 仅 k=39 取负\" —— **golden 跟着 RTL 写**, 正是治理要防的本末倒置; 它没被 file-protection 拦住, 因为那次写入经 Bash 跑 MATLAB。 run_all_tests 7/7 (订正前 [2/7] CPE 误差恰好 pi —— 该测试自己也用了同一个错值, 所以本可以更早抓到却没抓到)。详见 MODEL-STATUS §7。 1.4.0 repin (2026-08-11, 逐符号导频极性): sim_frame 施加 pol=1-2*mod(m-1,2); generate_vectors 的位真镜像与浮点自证各乘 pol (自证漏 pol 会与 镜像差 pi, 把\"精度自证\"变成噪声源); pilot_phase_track 文档改为\"pilot_val 是该符号 **实际发送值、含极性**\"; tests/test_phase_track 改为直接取 fr.X_syms(pilot_idx,m)。 后者值得记一笔: 该测试本轮**踩了两次** —— 原先硬编码错值与 sim_frame 互相印证, 本可更早抓到约定不一致却没抓到; 加极性时硬编码常量又会第二次失配。 测试里复写一份\"应该是什么\"等于把被测对象抄了一遍。run_all_tests 7/7, 详见 MODEL-STATUS §8。",
    "last_reviewed": "2026-08-01"
   },
   {
@@ -82,7 +83,7 @@
    "project": "reference-evidence",
    "project_ref": "models/comm/ofdm",
    "asset_uid": "model_comm_ofdm",
-   "version_pinned": "1.2.0",
+   "version_pinned": "1.8.0",
    "config": {},
    "integrated_at": "2026-07-26T00:00:00Z",
    "status": "active",
@@ -93,8 +94,8 @@
    ],
    "issues": [],
    "badge_gap": [],
-   "deferred_reason": "golden/reference source is retained as correctness evidence. exported-vectors 于 2026-08-02 复核关闭: 1.2.0 已按 ADR-004 阶段3 用 rtl_mirror_tx 位真重导, models/comm/ofdm/vectors/ 现有 tx_bits.hex (比特激励) / expected_tx.hex (0 容差期望) / freq_grid.hex / vector_config.txt, ofdm_tx_top 1.0.0 的 G-B-03 以此取证 (2560 点 0 失配)。同目录另有 6 个旧语义文件 (expected_tx.bin / freq_i.bin / freq_q.bin / tx_i.bin / tx_q.bin / time-domain-iq.txt) 按前版决定保留为 G1 缺陷物证, 不得用于判卷, 见 manifest.vectors.provenance。",
-   "last_reviewed": "2026-08-02"
+   "deferred_reason": "golden/reference source is retained as correctness evidence. exported-vectors 于 2026-08-02 复核关闭: 1.2.0 已按 ADR-004 阶段3 用 rtl_mirror_tx 位真重导, models/comm/ofdm/vectors/ 现有 tx_bits.hex (比特激励) / expected_tx.hex (0 容差期望) / freq_grid.hex / vector_config.txt, ofdm_tx_top 1.0.0 的 G-B-03 以此取证 (2560 点 0 失配)。同目录另有 6 个旧语义文件 (expected_tx.bin / freq_i.bin / freq_q.bin / tx_i.bin / tx_q.bin / time-domain-iq.txt) 按前版决定保留为 G1 缺陷物证, 不得用于判卷, 见 manifest.vectors.provenance。 1.3.0 repin (2026-08-03, fft64_sdf 需求门禁): 新增正向分支 src/fft_chain.m (浮点参考) 与 src/rtl_mirror_fft64.m (定点位真镜像), implements_for 增 fft64_sdf; 镜像在 ifft/P_W=20 下与已认证 rtl_mirror_tx 四调制各 512 样点 0 失配, run_all_tests 由 3/3 增至 5/5。 1.4.0 repin (2026-08-03, cp_remove 需求门禁): 新增 src/rx_cp_window.m (802.11a 帧结构切窗参考, cp_remove 正确性锚), implements_for 增 cp_remove; 该件独立于 rx_chain 新起而非改写 —— rx_chain 按 sym_len=80 均匀切窗不建模长前导, 其既有行为未动。 1.4.1 repin (2026-08-04, 正向镜像方向修正): rtl_mirror_fft64 此前只翻非平凡旋转因子表、漏翻 BF2II 的平凡 ±j, 正向输出错到比信号还大 (判据 C 46725 LSB vs 信号幅度 17800 LSB); 补翻后降至 3.5 LSB。三判据全过 (A 反向对已认证 rtl_mirror_tx 0 失配 / B 末级移位前峰值 40.710 < s21 的 64 / C 如上)。fft64_sdf 的 G-B-03 以此取证并通过, 重推期望向量与该模块 0.1.0 提交内容逐字节相同。 1.5.0 repin (2026-08-04, 均衡器需求门禁): 新增 src/eq_zf.m (ZF 频域均衡 + 数据子载波提取, 均衡器正确性锚) 与 tests/test_eq_zf.m, implements_for 增 eq_zf。算法由 owner 三项裁定确定 —— 知识库对均衡是真空的 (algorithm_spec 只有框图方块, rx_chain 建的是理想信道链无均衡级)。六判据实跑全过, 最强的 T2 端到端还原最大误差 4.965e-16。 1.6.0/1.7.0/1.8.0 repin (2026-08-08, 补记): 此前三次版本推进未回填本条, registry 停在 1.7.0 而 manifest 已到 1.8.0, integration-registry --check 报 version drift。1.6.0 新增 src/rtl_mirror_eq.m (eq_zf 定点位真镜像, 同时是均衡器 RTL 的需求侧单一事实源, 见 manifest.models 该条 note); 1.7.0 登记软判决解调锚 mod_demapper_llr, 补上 ldpc_codec 与 RX 链路之间的契约缺口; 1.8.0 新增 src/rtl_mirror_demap.m 与 tests/test_rtl_mirror_demap.m, run_all_tests 10/10。注意 implements_for 仍为 [ofdm_tx_top, fft64_sdf, cp_remove, eq_zf], 未含 mod_demapper —— 该件是 primitive, 其 G-B-02/03 按结构原语分锚到自检 TB 而非 golden, 故此处不是阻塞项, 但声明与实际服务对象存在落差, 待 owner 裁定是否补录。",
+   "last_reviewed": "2026-08-04"
   },
   {
    "id": "ITG-0006",
@@ -471,6 +472,103 @@
    "issues": [],
    "badge_gap": [],
    "note": "在库未被任何项目集成(owner 裁决 2026-07-31: 库存类型条目); 首次真实集成时改 active 并 pin 版本+config"
+  },
+  {
+   "id": "ITG-0024",
+   "project": "phy-intake",
+   "project_ref": "cbb/fft64_sdf",
+   "asset_uid": "fft64_sdf",
+   "version_pinned": "1.0.2",
+   "config": {
+    "DATA_W": 16,
+    "P_W": 21,
+    "P_DIR": 0,
+    "P_NATURAL_OUT": 1
+   },
+   "integrated_at": "2026-08-03T00:00:00Z",
+   "status": "active",
+   "maturity_status": "certified",
+   "owner": "lihan",
+   "consumers": [],
+   "issues": [],
+   "badge_gap": [],
+   "deferred_reason": "M1 关键路径首件, 2026-08-03 入库。门禁实跑达 QUALIFICATION (intake 与 qualification 两级全过)。三项未还清: (1) governed-golden-cosim —— tb_fft64_cosim 对 golden 镜像 2560 样点 0 失配为实测, 但向量出自暂存中已验证的修正版镜像而非 models/comm/ofdm 的治理资产 (后者尚有方向缺陷: 只翻非平凡旋转因子表、漏翻 BF2II 平凡 ±j, 修正包已验证待拷入), 作为 G-B-03 证据前须用治理资产复跑 —— **已于 0.1.2 还清**: models/comm/ofdm 升 1.4.1 后用治理资产重推期望向量并复跑 tb_fft64_cosim, 2560 点 0 失配, G-B-03 通过; 重推结果与 0.1.0 提交内容逐字节相同 (DELTA 0.0 LSB), 即当初的欠账是出处不合规而非数值有误, RTL 与向量一个字节未改; (2) signoff。0.1.3 (2026-08-04): G-C-04 / G-C-05 / G-GATE-02 全部补齐 —— 41 个受复位寄存器逐项比对 (core 的 6 个 SDF 级 + 2 个复乘 + 75 拍侧带延迟线 + 输出级, reorder 的写/读/输出三段); boundary 给出 s21 不回绕的**实测**支撑 (满幅 Q2.14 直流下 bin0 饱和到 +32767 而非回绕成负数, 此前只有对抗构造的解析上界 40.71<64); backpressure 判据是 i_beat 按 0~3 拍花样拉低时 768 个输出点逐点与恒高参考跑相同, 且冻结期间输入线换满幅毒值未被采样; run_sim.cjs 作为可复现入口由实跑结果落证据, 任一 TB 不过即不写。**本包现仅剩 signoff。** 0.1.1 (2026-08-04): synthesis-evidence 已还清 —— OOC @xc7k325tffg900-2 实测 WNS +6.323ns @10ns / WHS +0.158ns, LUT 2251 / FF 5033 / BRAM 0 / DSP 10, G-C-01 与 G-C-02 均过; DSP 数与 s20 的 ifft64_sdf 相同, 实测确认 s21 加宽未把复乘挤出 DSP48E1。资源包络按先测量后声明的顺序填。综合取证到位后声明级由 intake 提到 qualification (与机器判级一致, A1 YELLOW 消除); 未提到 certified 是因 G-B-03 等 certified 级门未过。 **1.0.0 (2026-08-04): owner 签署, 22/22 全绿 CERTIFIED**, 包由 incubator/intake/ 毕业到 cbb/。signoff.scope 逐条记了复核过的证据数值、正确性锚与已接受限制; 两条未覆盖项已明记: 板级验证, 以及仿真器只有 iverilog 一条路径 (本机 ModelSim 回环 RPC 自 2026-08-01 起故障) 故无第二仿真器交叉验证。 **1.0.1 (2026-08-04)**: 实链测量 (xsim, cp_remove->fft64_sdf->channel_est_top 两帧背靠背, 中间置理想无限深 FIFO) 推翻了 1.0.0 写下的\"两者之间必须有弹性缓冲, 是 M1 硬依赖\" —— 真实链路反压 0 拍、缓冲峰值占用 1, 802.11a 每符号 16 拍 CP 空档就是下游需要的全部弹性; 去掉间隙的对抗场景实测上界 23 个条目。按 owner 裁定, 缓冲件降为已识别风险 + 实测上界, 不现在造。同时第二仿真器交叉验证还清: 全部判据 TB 在 Vivado xsim 2023.1 上用同一份 TB 同一套判据复跑全过 (run_sim.cjs --xsim), bit-true 由两个独立仿真器各自确认。 另新增 tb_fft64_tail 钉住 M1 链路的一个功能洞: 帧尾撤 i_valid 后恰好卡住 1 个符号 (每帧稳定丢最后一个数据符号), 补 64 拍有效零样点即全部排空 —— 冲刷责任方待需求门禁裁定。 **实测风险已收敛到具名承接点** (2026-08-04): \"上游节奏变化时需深度 23 的缓冲\"这条不再指向假想的将来模块 —— 链路里紧接的 cbb/sb_align 1.0.0 本就带深度可配的缓冲, 届时把 P_DEPTH 调到 32 即可, 不必新起件。",
+   "last_reviewed": "2026-08-04"
+  },
+  {
+   "id": "ITG-0025",
+   "project": "phy-intake",
+   "project_ref": "cbb/cp_remove",
+   "asset_uid": "cp_remove",
+   "version_pinned": "1.1.1",
+   "config": {
+    "DATA_W": 16
+   },
+   "integrated_at": "2026-08-04T00:00:00Z",
+   "status": "active",
+   "maturity_status": "certified",
+   "owner": "lihan",
+   "consumers": [],
+   "issues": [],
+   "badge_gap": [],
+   "deferred_reason": "M1 关键路径第二件, 2026-08-04 入库, 门禁实跑达 QUALIFICATION。位真证据出自**治理资产** (models/comm/ofdm 的 src/rx_cp_window.m) —— 无 fft64_sdf 那类用暂存副本的欠账。0.1.1 (2026-08-04) 还清两项: (1) 对拍由 640 点延长到 2176 点 (数据符号 8->32), 越过 G-B-03 的 total>=2048 下限, 对治理 golden 0 失配, 实测流水偏移 2 拍, G-B-03 已过; (2) synthesis-evidence —— OOC @xc7k325tffg900-2 实测 WNS +7.704ns @10ns / WHS +0.189ns, LUT 30 / FF 86 / BRAM 0 / DSP 0, G-C-01 与 G-C-02 均过, 包络按先测量后声明的顺序填。余 signoff 未还。声明级由 intake 提到 qualification (与机器判级一致, A1 YELLOW 消除)。0.1.2 (2026-08-04): G-C-04 / G-C-05 / G-GATE-02 全部补齐 —— 8 个受复位寄存器逐项比对 + 3 个数据通路寄存器的免复位断言 (断言复位期间它们仍跟随输入, 防有人加了复位却不更新比对表); boundary/stress/backpressure 实跑, regression 由判据 TB 结果合成; run_sim.cjs 作为可复现入口。**过程中刻画出两条此前未知的接口约束**: (1) 帧间须至少隔 1 个样点 —— 零间隔时 fft_start 与 S_DATA->S_UNSYNC 同拍被吞, 整帧丢失 (逐值实测 gap=0 出 0 点 / gap>=1 出 256 点); (2) i_cfg_n_sym 须 >=1 —— n_sym=0 时 RTL 仍吐 1 个数据符号而 golden 只出 LTS。两条集成中都不会触发 (sync_top 单突发), 但已写进 limitations 并由 stress 段断言锁住; 未为此改 FSM —— 帧尾与起窗语义经需求门禁裁定, 改它须走门禁。**本包现仅剩 signoff。** **1.0.0 (2026-08-04): owner 签署, 22/22 全绿 CERTIFIED**, 包由 incubator/intake/ 毕业到 cbb/。signoff.scope 逐条记了复核过的证据数值、正确性锚与已接受限制; 两条未覆盖项已明记: 板级验证, 以及仿真器只有 iverilog 一条路径 (本机 ModelSim 回环 RPC 自 2026-08-01 起故障) 故无第二仿真器交叉验证。 **1.0.1 (2026-08-04)**: 实链测量 (xsim, cp_remove->fft64_sdf->channel_est_top 两帧背靠背, 中间置理想无限深 FIFO) 推翻了 1.0.0 写下的\"两者之间必须有弹性缓冲, 是 M1 硬依赖\" —— 真实链路反压 0 拍、缓冲峰值占用 1, 802.11a 每符号 16 拍 CP 空档就是下游需要的全部弹性; 去掉间隙的对抗场景实测上界 23 个条目。按 owner 裁定, 缓冲件降为已识别风险 + 实测上界, 不现在造。同时第二仿真器交叉验证还清: 全部判据 TB 在 Vivado xsim 2023.1 上用同一份 TB 同一套判据复跑全过 (run_sim.cjs --xsim), bit-true 由两个独立仿真器各自确认。 **1.1.0 (2026-08-04, 行为契约变更 + 重新签字)**: 帧尾自动冲刷 —— 数满后自驱吐 64 拍零样点再回 UNSYNC, 输出长度由 (2+n_sym)*64 变为 +64。补的是 M1 链路每帧丢最后一个数据符号的功能洞 (fft64 流水不自排空, 帧后无人补冲刷)。实测: 切窗样点 1280 -> 实际吐出 fft64 1280 (修复前 1216), 永久卡死的切窗样点由 64 变 0。走了需求门禁 (六维全 confirmed); 综合已复跑 (资源/时序不变, FSM 被 Vivado 重编码为 one-hot 后额外状态被余量吸收); iverilog 与 xsim 双路 5/5。 **实测风险已收敛到具名承接点** (2026-08-04): \"上游节奏变化时需深度 23 的缓冲\"这条不再指向假想的将来模块 —— 链路里紧接的 cbb/sb_align 1.0.0 本就带深度可配的缓冲, 届时把 P_DEPTH 调到 32 即可, 不必新起件。",
+   "last_reviewed": "2026-08-04"
+  },
+  {
+   "id": "ITG-0026",
+   "project": "phy-intake",
+   "project_ref": "cbb/sb_align",
+   "asset_uid": "sb_align",
+   "version_pinned": "1.0.0",
+   "config": {
+    "DATA_W": 16,
+    "P_DEPTH": 4
+   },
+   "integrated_at": "2026-08-04T00:00:00Z",
+   "status": "active",
+   "maturity_status": "certified",
+   "owner": "lihan",
+   "consumers": [],
+   "issues": [],
+   "badge_gap": [],
+   "deferred_reason": "M1 链路最后一个已知开口的解法, 2026-08-04 入库, 门禁实跑达 QUALIFICATION。fft64_sdf 的 o_sb 与本符号首个输出同拍, 而 channel_est_top 要求 i_frame_start 领先 >=1 拍 —— 两个已认证包的时序契约互相冲突且都是明文。直连**不报错但静默出错**: 同一激励下 H 输出点数同为 384 而 372/384 点数值不同 (tb_ce_fslead 实测)。owner 裁定新起本件在两者之间解, 不动任何一边。链路级判据 tb_ce_aligned 实测: 经本件后差异 372 -> **0**, 且未溢出。综合取证已做 (OOC @xc7k325tffg900-2): WNS +8.100ns @10ns (约 526MHz), WHS +0.090ns, LUT 37/80, FF 42/90, BRAM 0, DSP 0。**结构性限制需集成方注意**: 上游 fft64 不可停顿 + 下游 channel_est 可反压 = 持续反压必然溢出, 任何有限深度都挡不住; 故 o_overflow 粘滞, **集成方必须把它接出去看** —— 不看它丢样点就是静默的。P_DEPTH=4 只吸收瞬态; M1 实测下游零反压故绰绰有余, 上游节奏若变实测上界 23, 调到 32 即可。三项未还清: reset-cdc-evidence (G-C-04)、stability-evidence (G-C-05)、signoff。 **1.0.0 (2026-08-04): owner 签署, 22/22 全绿 CERTIFIED**, 毕业到 cbb/。G-C-04 (7 个受复位寄存器逐项比对 + 存储阵列免复位断言) 与 G-C-05 (boundary 含吸收能力**逐拍实测** 5 拍 = P_DEPTH(4)+1 级输出寄存 / stress 64 符号 / backpressure 分档 1-3 拍无损且超限如实报溢出 / regression) 均已补齐; 第二仿真器交叉验证从一开始就还清 (xsim 3/3), 未重蹈前两包的短板。signoff.scope 里最要紧一条: **o_overflow 必须被集成方接出去看** —— 不看它丢样点就是静默的。",
+   "last_reviewed": "2026-08-04"
+  },
+  {
+   "id": "ITG-0027",
+   "project": "ofdm-rx",
+   "project_ref": "cbb/eq_zf",
+   "asset_uid": "eq_zf",
+   "version_pinned": "1.1.1",
+   "config": {
+    "P_YDEPTH": 256
+   },
+   "integrated_at": "2026-08-05T00:00:00Z",
+   "status": "active",
+   "maturity_status": "certified",
+   "owner": "lihan",
+   "consumers": [],
+   "issues": [],
+   "badge_gap": [],
+   "deferred_reason": "RX 链路均衡级, 1.1.0 已认证 (22/22 门)。位真 2304 点 0 容差 (X/erasure/o_conf 三者逐点) + OOC WNS +3.861ns/0 失败端点 + 逐寄存器复位 27 项 0 失配。1.1.0 按裁定⑤ 增出 o_conf 供下游 mod_demapper 给 LLR 加权。下游未建, consumers 暂空。 1.1.1 repin (2026-08-09, harness 修复): run_sim.cjs 增\"未产出任何判据行即拒绝落盘\"守卫 —— judgements===0 是工具链故障 (编译失败/向量路径错) 而非合法判定结果, 照旧带 pass:false 落盘会覆盖已封存的好证据, 而\"工具坏了\"与\"RTL 回归了\"在证据文件里长得一模一样。库内 cp_remove/fft64_sdf/sb_align 三件本就这么做, 本件与 mod_demapper 是仅有的两个漏掉的。**RTL/向量/判卷数字一字未改**, owner 批准按 patch 处理不重签; 22/22 门复跑通过, evidence/eq_zf/1.1.1/ 已封存。"
+  },
+  {
+   "id": "ITG-0028",
+   "project": "ofdm-rx",
+   "project_ref": "cbb/mod_demapper",
+   "asset_uid": "mod_demapper",
+   "version_pinned": "1.0.1",
+   "config": {},
+   "integrated_at": "2026-08-08T00:00:00Z",
+   "status": "active",
+   "maturity_status": "certified",
+   "owner": "lihan",
+   "consumers": [],
+   "issues": [],
+   "badge_gap": [
+    "board-validation"
+   ],
+   "deferred_reason": "RX 链软判决解调级, 1.0.0 于 2026-08-09 由 owner 签字认证 (22/22 门), 由 incubator/intake 迁入 cbb/。判卷 0 容差: 对治理侧定点镜像 models/comm/ofdm 1.8.0 的 src/rtl_mirror_demap.m, 三档 QPSK/16QAM/64QAM 各 2304 点合计 30749 次比对 0 失配。OOC 综合 WNS +4.508ns @10ns / WHS +0.123ns / 0 失败端点 / DSP 18 of 20。它补上了 eq_zf(o_conf 加权) 与 ldpc_codec 之间的软判决契约缺口。已知缺口: 不支持 BPSK (D-DEMAP-01, 802.11a 6/9Mbps 真实覆盖缺口); 板级验证与整链回环未做, 记 badge_gap 而非阻塞门。上游 eq_zf 的 consumers 待整链集成时回填。 1.0.1 repin (2026-08-09, harness 修复 + 补第二仿真器): ① --xsim 在 Windows 上整档跑不起来 —— xsim 是批处理包装器, 转发 -testplusarg NAME=VALUE 时吞掉 \"=\", 三档顶层 TB 被记成 pass:false/judgements:0; 改用 xsim 的 -f 选项文件传参。1.0.0 认证时只有 iverilog 一件证据正是因为这个, **不是 xsim 判出了不同结果**。② 同 eq_zf 的落盘守卫。修复后 xsim 独立复跑: 三档 27648 个 LLR 同样 0 失配, T8 吞吐拍数与 iverilog 逐拍相同 (16122/16124/16126) —— 至此本件与 eq_zf 同为双仿真器背书。**RTL/向量/判卷数字一字未改**, owner 批准按 patch 处理不重签; 22/22 门复跑通过, evidence/mod_demapper/1.0.1/ 已封存。"
   }
  ]
 }

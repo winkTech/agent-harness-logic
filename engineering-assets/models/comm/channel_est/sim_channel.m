@@ -22,7 +22,13 @@ function [H, Y, X, noise] = sim_channel(cfg)
     X(data_idx) = data;
 
     % 导频子载波: BPSK (±1)
-    X(pilot_idx) = [1; 1; -1; 1];  % 802.11a 导频序列
+    % 802.11a 的 P 序列: 子载波 (-21,-7,7,21) -> (+1,+1,+1,-1), **负号在 +21**。
+    % 原为 [1;1;-1;1] (负号落在 +7), 与 models/comm/ofdm 的 cfg.pilot_val 及
+    % cbb/ofdm_tx_top 的 tx_pilot_map 相反 —— owner 2026-08-09 裁定本侧错并订正。
+    % 该错值曾自称"802.11a 导频序列", 谁都没去核; 现在由
+    % integration/contracts/chain_pilot_contract.m 实跑把关 (TX golden 造帧 +
+    % 注入已知公共相位 -> 本侧必须原样恢复), 而不是靠注释自证。
+    X(pilot_idx) = [1; 1; 1; -1];
 
     %% 2. 生成信道
     switch lower(cfg.channel_type)

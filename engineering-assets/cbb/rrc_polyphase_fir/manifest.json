@@ -14,6 +14,11 @@
     "engineering-assets/knowledge/primary/domains/comm/rrc/report_rrc_fpga_implementation.md"
   ],
   "golden_model_ref": "model_comm_rrc",
+  "protocol_anchor": {
+    "standard": "none",
+    "baseline_relation": "neutral",
+    "notes": "通用件: 根升余弦多相插值滤波 (alpha=0.5, sps=4, span=8, 33 抽头)。**与库基线 Clause 17 无合规关系** —— 11a/g 的发射频谱成形靠时域加窗与频谱模板, 标准并不规定 RRC 脉冲成形; 本件挂在 OFDM TX 下游是设计选择, 不是标准要求。requirement_ref (knowledge/.../comm/rrc/algorithm_spec.md) 亦按通用数字通信脉冲成形立论, 未引任何 802.11 条款。"
+  },
   "fidelity": {
     "status": "bit_true",
     "bit_accurate_against": "model_comm_rrc@1.0.0"

@@ -120,3 +120,35 @@ node engineering-assets/tools/gate-runner.cjs engineering-assets/incubator/intak
 ```
 
 结果见 gate-runner 输出与 `engineering-assets/var/gates/pg/ofdm_tx_top/` 留档。
+
+<!-- BEGIN:MANIFEST:PORTS -->
+<!-- Generated from manifest.json; do not edit this block. -->
+| Name | Dir | Width | Bus |
+|---|---|---:|---|
+| `i_clk` | input | 1 | — |
+| `i_rst` | input | 1 | — |
+| `s_axis_tdata` | input | 6 | axi-stream |
+| `s_axis_tvalid` | input | 1 | axi-stream |
+| `s_axis_tready` | output | 1 | axi-stream |
+| `s_axis_tlast` | input | 1 | axi-stream |
+| `m_axis_tdata` | output | 32 | axi-stream |
+| `m_axis_tvalid` | output | 1 | axi-stream |
+| `m_axis_tready` | input | 1 | axi-stream |
+| `m_axis_tlast` | output | 1 | axi-stream |
+| `i_cfg_mod_type` | input | 4 | — |
+<!-- END:MANIFEST:PORTS -->
+
+<!-- BEGIN:MANIFEST:PARAMS -->
+<!-- Generated from manifest.json; do not edit this block. -->
+| Name | Values | Support |
+|---|---|---|
+| `DATA_W` | — | yes |
+<!-- END:MANIFEST:PARAMS -->
+
+<!-- BEGIN:MANIFEST:CLOCKRESET -->
+<!-- Generated from manifest.json; do not edit this block. -->
+| Field | Value |
+|---|---|
+| Clock | `i_clk` (10 ns) |
+| Reset | `i_rst` / active_high / sync |
+<!-- END:MANIFEST:CLOCKRESET -->

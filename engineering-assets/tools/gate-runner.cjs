@@ -346,6 +346,73 @@ function runGates(pkgDir, manifest, repoRoot) {
     add({ id: 'G-B-01', name: '需求/文档锚绑定', level: 'intake', must: true, status: v.length ? 'fail' : 'pass', severity: 'mid', detail: v.length ? v : '锚链起点已连' });
   })();
 
+  // G-B-04 协议锚点声明 — 需求↔资产的版本匹配依据 (owner 裁定 2026-08-02)。
+  //   缺字段与"协议中立"是两回事: 中立必须显式声明 standard=none, 未声明判 fail。
+  //   跨版资产合法 (11n LDPC 挂在 11a 基线链路上是已裁定的演示闭环), 但必须自己
+  //   声明 cross_version —— 声明值与按 catalog/protocol-baseline.json 实算值不符
+  //   即静默版本漂移, 判 fail。这正是本门要拦的那类失效: 库内 11a 前端 + 11n LDPC
+  //   混版此前无处可查。
+  (() => {
+    if (manifest.kind === 'golden-model') return;              // golden 锚算法不锚协议版次
+    if ((manifest.maturity || {}).level === 'reference') return; // vendored 归档不做协议声明
+    const pa = manifest.protocol_anchor;
+    if (!pa) {
+      add({ id: 'G-B-04', name: '协议锚点声明', level: 'intake', must: true, status: 'fail', severity: 'mid', detail: 'protocol_anchor 缺失 — 协议中立资产也须显式声明 (standard=none / baseline_relation=neutral)' });
+      return;
+    }
+    const v = [];
+    const std = typeof pa.standard === 'string' ? pa.standard.trim() : '';
+    const rel = pa.baseline_relation;
+    const neutral = std.toLowerCase() === 'none';
+    if (!std) v.push('protocol_anchor.standard 为空');
+    if (neutral) {
+      if (rel !== 'neutral') v.push(`standard=none 但 baseline_relation=${rel} (应为 neutral)`);
+      for (const k of ['clause', 'sections', 'parameters', 'deviations']) {
+        if (pa[k] !== undefined) v.push(`协议中立资产不应声明 ${k} — 中立与"锚在某版某段"自相矛盾`);
+      }
+    } else if (std) {
+      if (!['baseline', 'cross_version'].includes(rel)) v.push(`standard=${std} 但 baseline_relation=${rel} (应为 baseline 或 cross_version)`);
+      if (!pa.profile) v.push('非中立锚缺 profile');
+      if (!pa.scope) v.push('非中立锚缺 scope — 不写覆盖范围, 标准名会被过度解读');
+      if (!pa.anchor_basis) v.push('非中立锚缺 anchor_basis — 锚点如何确证必须可查');
+      if (!pa.parameters || Object.keys(pa.parameters).length === 0) v.push('非中立锚缺 parameters — 机械匹配依据不能只有人读 profile');
+      // 基线文件按多候选解析: engineRoot 的启发式在 --repo-root 指向 ~/.claude
+      // (该处也有 var/) 时会指偏, 而 pkgDir 恒为 <engineering-assets>/cbb/<uid>,
+      // 故以包目录上溯两级为准, 其余候选兜底。
+      let baseline = null;
+      const blCandidates = [
+        path.resolve(pkgDir, '..', '..', 'catalog', 'protocol-baseline.json'),
+        path.join(engineRoot, 'catalog', 'protocol-baseline.json'),
+        path.join(repoRoot, 'engineering-assets', 'catalog', 'protocol-baseline.json'),
+      ];
+      for (const blPath of blCandidates) {
+        try { baseline = JSON.parse(fs.readFileSync(blPath, 'utf8')).baseline; if (baseline) break; } catch {}
+      }
+      if (!baseline || !baseline.standard) {
+        v.push('catalog/protocol-baseline.json 缺失或非法 — 无基线则无从判定跨版 (fail-closed)');
+      } else {
+        const clauseSame = !pa.clause || !baseline.clause || pa.clause === baseline.clause;
+        const computed = (std === baseline.standard && clauseSame) ? 'baseline' : 'cross_version';
+        if (rel !== computed) v.push(`baseline_relation 声明 ${rel}, 按基线 (${baseline.standard}${baseline.clause ? ' Clause ' + baseline.clause : ''}) 实算为 ${computed}`);
+        if (computed === 'cross_version' && !String(pa.notes || '').trim()) v.push('跨版资产须在 notes 说明为何与基线不同版');
+      }
+    }
+    for (const d of pa.deviations || []) {
+      const ref = d && d.ref;
+      if (ref && /[\/\\]|\.md$/.test(ref) && !fs.existsSync(path.resolve(repoRoot, ref)) && !fs.existsSync(path.join(pkgDir, ref))) {
+        v.push(`偏差 ${d.id} 出处断链: ${ref}`);
+      }
+    }
+    const devN = (pa.deviations || []).length;
+    add({
+      id: 'G-B-04', name: '协议锚点声明', level: 'intake', must: true,
+      status: v.length ? 'fail' : 'pass', severity: 'mid',
+      detail: v.length ? v : (neutral
+        ? '协议中立 (显式声明, 非缺省)'
+        : `${std}${pa.clause ? ' Clause ' + pa.clause : ''} / ${pa.profile} [${rel}]${devN ? `; 已登记偏差 ${devN} 项` : '; 无已登记偏差'}`),
+    });
+  })();
+
   // G-B-02 正确性锚 — 按资产类分锚 (owner 裁决 2026-07-27, 决策⑦; 272899f 曾误删):
   //   算法资产 (kind 缺省/rtl): 锚 = golden model, golden_model_ref 必须解析;
   //   结构原语 (kind=primitive): golden 锚的是算法, 不是所有模块 —— 原语的

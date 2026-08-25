@@ -45,19 +45,28 @@ function generate_vectors(cfg)
 
     % 2.3 逐数据符号: 导频积 -> CORDIC CPE -> 旋转 -> round/sat 输出
     pil_idx = [11, 25, 39, 53] + 1;           % 0-based -> MATLAB 1-based
-    pil_val = [1, 1, -1, 1];                  % cpe_tracker: 仅 k=39 取负
+    % 802.11a 的 P 序列: (-21,-7,7,21) -> (+1,+1,+1,-1), **负号在 +21** (即 k=53)。
+    % 原为 [1,1,-1,1] 且注释写着 "cpe_tracker: 仅 k=39 取负" —— **golden 跟着 RTL 写**,
+    % 正是治理要防的本末倒置; 它没被拦住是因为这次写入不在 file-protection 的路径上。
+    % owner 2026-08-09 裁定订正, 改由 cpe_tracker 跟随本文件。
+    pil_val = [1, 1, 1, -1];                  % 负号在 k=53 (+21)
     exp_i = zeros(N, nsym);  exp_q = zeros(N, nsym);
     cpe_mirror = zeros(nsym, 1);
 
     for m = 1:nsym
+        % **逐符号极性** (owner 2026-08-11 裁定, 方案 A): 与 sim_frame 及
+        % models/comm/ofdm 的 subcarrier_map 同规则, 按符号序 ±1 交替、首符号 +1。
+        % 镜像必须与 RTL 逐位相同 —— cpe_tracker 用数据符号计数器产生同一序列,
+        % 在锁存 S 时按极性取负 (极性对四个导频相同, 负一次 S 比逐个翻转便宜)。
+        pol = 1 - 2*mod(m-1, 2);
         S_re = 0; S_im = 0;
         for p = 1:4
             yi = Ysym_i(pil_idx(p), m); yq = Ysym_q(pil_idx(p), m);
             hi = Hfx_i(pil_idx(p));     hq = Hfx_q(pil_idx(p));
             t_re = yi*hi + yq*hq;                 % Y·conj(H) 实部
             t_im = yq*hi - yi*hq;                 % Y·conj(H) 虚部
-            S_re = S_re + pil_val(p)*t_re;
-            S_im = S_im + pil_val(p)*t_im;
+            S_re = S_re + pol*pil_val(p)*t_re;
+            S_im = S_im + pol*pil_val(p)*t_im;
         end
         cpe = cordic_vec(floor(S_re/2^14), floor(S_im/2^14));   % Q3.13
         [c, s] = cordic_rot(9949, 0, cpe);                      % ≈Q2.14
@@ -74,8 +83,9 @@ function generate_vectors(cfg)
     % 镜像精度自证 (仅报告, 不参与判卷): CPE 镜像 vs 浮点 angle
     cpe_float = zeros(nsym, 1);
     for m = 1:nsym
+        % 极性同上 —— 这条自证若漏了 pol, 它会与镜像差 pi 而把"精度自证"变成噪声源
         Sf = sum((Ysym_i(pil_idx,m) + 1j*Ysym_q(pil_idx,m)) ...
-            .* conj(Hfx_i(pil_idx) + 1j*Hfx_q(pil_idx)) .* pil_val(:));
+            .* conj(Hfx_i(pil_idx) + 1j*Hfx_q(pil_idx)) .* ((1 - 2*mod(m-1,2)) * pil_val(:)));
         cpe_float(m) = angle(Sf);
     end
     cpe_err = max(abs(wrap_pi(cpe_mirror - cpe_float)));

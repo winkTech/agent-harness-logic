@@ -3,8 +3,8 @@
   "asset_uid": "ddr_axi4_controller",
   "version": "1.0.1",
   "created_at": "2026-08-02T05:05:50.769Z",
-  "git_head": "388c12490991354e83093f1396080c072b5b76a3",
-  "manifest_sha256": "59c328f2867f6b8537d2aca2d738c2037f7fe1e21ee418fc538dd328e1be00c4",
+  "git_head": "b7818e1ce6bb73feef9f05ca9bc36e2fb7acac6a",
+  "manifest_sha256": "e6cc4d2c9faffdede0a485e6625e9834b0d7659ea4c5290caddbf22e3e4ad0a0",
   "evidence_source": "var/gates/pg/ddr_axi4_controller",
   "files": [
     {
@@ -68,6 +68,11 @@
       "bytes": 213
     },
     {
+      "path": "G-B-04.json",
+      "sha256": "bc5709270ed51edd06e1a0a4afa31d708cc6f505acfb69122f5cf0bde2daf3e2",
+      "bytes": 184
+    },
+    {
       "path": "G-C-01.json",
       "sha256": "f445ea7add857cba582c53e43437fd9e78f84dfab3071890d5c1ce09380f327a",
       "bytes": 212
@@ -124,8 +129,8 @@
     },
     {
       "path": "gate-results.json",
-      "sha256": "1330151214e4fd769cdb284550bdf16e9857c203a341e9e6cb6943e84cd1ec72",
-      "bytes": 3077
+      "sha256": "ae02d043c442c62fef03cf2eaffa0e068caa4cb39de83f5bacd756ca0c9b8b82",
+      "bytes": 3205
     },
     {
       "path": "reset-sim.json",
@@ -189,7 +194,7 @@
     "declared_level": "certified",
     "cleared_level": "certified",
     "blocking_at": null,
-    "gate_count": 21,
+    "gate_count": 22,
     "generated_by": "gate-runner.cjs v1.1",
     "redline_contract": "reset-signal-scoped",
     "gates": [
@@ -278,6 +283,13 @@
         "severity": "mid"
       },
       {
+        "id": "G-B-04",
+        "level": "intake",
+        "must": true,
+        "status": "pass",
+        "severity": "mid"
+      },
+      {
         "id": "G-B-02",
         "level": "qualification",
         "must": true,
@@ -341,5 +353,17 @@
         "severity": "high"
       }
     ]
-  }
+  },
+  "reseal_history": [
+    {
+      "at": "2026-08-03T01:37:38.793Z",
+      "reason": "治理机制变更, 非资产变更: manifest 新增 protocol_anchor 协议锚点字段 (owner 裁定 2026-08-02, 协议基线 IEEE 802.11-2020 Clause 17), gate-runner 新增 G-B-04 协议锚点门 —— 逐文件比对确认差异只限门禁机器产物 (gate-results.json 21->22 门, 新增 G-B-04.json), 仿真/综合/对拍/时序/资源证据全部逐字节未变, RTL 与功能结论未动。",
+      "prior_manifest_sha256": "59c328f2867f6b8537d2aca2d738c2037f7fe1e21ee418fc538dd328e1be00c4",
+      "prior_git_head": "388c12490991354e83093f1396080c072b5b76a3",
+      "changed_evidence": [
+        "+G-B-04.json",
+        "~gate-results.json"
+      ]
+    }
+  ]
 }

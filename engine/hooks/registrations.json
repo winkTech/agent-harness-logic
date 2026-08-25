@@ -1,10 +1,9 @@
 {
-  "$schema": "./registrations.schema.json",
   "version": 1,
   "$comment": [
     "Hook 注册的**唯一权威声明**，入版本库。",
     "settings.json 本身被 .gitignore 忽略（hook 命令必须写本机绝对路径，改用 $HOME 会导致",
-    "hook 静默不触发，见 memory/reference/hooks-fix-2026-06-24.md），所以新克隆和 CI 都拿不到",
+    "hook 静默不触发），所以新克隆和 CI 都拿不到",
     "任何 hook 注册 —— engine/hooks/manifest.json 声称 active 的条目会全部核对不上。",
     "本文件用 {{HARNESS_ROOT}} 占位符保持可移植，由 engine/scripts/render-hook-settings.cjs",
     "渲染成带绝对路径的 settings.json。改 hook 注册请改这里，然后跑渲染器。"
@@ -126,13 +125,8 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node {{HARNESS_ROOT}}/engine/scripts/hooks/loop-controller.cjs",
-            "timeout": 40
-          },
-          {
-            "type": "command",
             "command": "node {{HARNESS_ROOT}}/engine/scripts/hooks/stop-summary.cjs",
-            "timeout": 8
+            "timeout": 40
           },
           {
             "type": "command",

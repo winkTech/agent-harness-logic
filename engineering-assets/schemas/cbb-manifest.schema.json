@@ -2,7 +2,7 @@
   "$schema": "http://json-schema.org/draft-07/schema#",
   "$id": "engineering-assets/schemas/cbb-manifest.schema.json",
   "title": "CBB Manifest (v1.1)",
-  "description": "生产级 CBB 资产 manifest。单一真相源。v1.1 仅增加可选证据快照与维护元数据，保持 v1.0 向后兼容。",
+  "description": "生产级 CBB 资产 manifest。单一真相源。v1.1 仅增加可选证据快照与维护元数据，保持 v1.0 向后兼容。2026-08-03 增加 protocol_anchor（owner 裁定，协议基线 = IEEE 802.11-2020 Clause 17）：这是本 schema 首个**必填**字段增补，对 golden-model 与 reference 级之外的资产生效，schema_version 未随之上抬——库内 16 份 CBB manifest 已全部回填、7 份 golden-model 按 kind 豁免，v1.0/v1.1 的既有语义不变。",
   "type": "object",
   "additionalProperties": false,
   "comment_levels": "required 按 maturity.level 条件化（规范 §3.1）。reference 级只要求 asset_uid + provenance + owner + 未认证横幅，不得强制 RTL 形状字段（ports/clock/reset/golden_model_ref）——否则 vendored 上游工程与 knowledge 文档资产无法纳入治理。intake 及以上要求完整锚链与 RTL 契约。",
@@ -25,7 +25,7 @@
             "comment": "intake 准入 = schema-valid + 编译干净 + 锚链起点（规范 §3.1 L152-153; f9d123b 原有, 272899f 曾误删）。golden 绑定与资源包络是晋级门, 不是 intake 的形状要求。",
             "required": [
               "version", "requirement_ref", "doc_refs",
-              "ports", "clock", "reset", "sources"
+              "ports", "clock", "reset", "sources", "protocol_anchor"
             ]
           },
           "else": {
@@ -34,13 +34,14 @@
             "comment": "结构原语 (owner 裁决 2026-07-27, 决策⑦, 272899f 曾误删本分支): golden model 锚的是算法, 不是所有模块。RAM/skid buffer/延迟线/CDC/LFSR 这类结构原语的正确性锚 = 自检 TB (G-B-02/03 按类分锚), 任何成熟度级别都不要求 golden_model_ref/fidelity 对标字段。",
             "required": [
               "version", "requirement_ref", "doc_refs",
-              "ports", "clock", "reset", "sources"
+              "ports", "clock", "reset", "sources", "protocol_anchor"
             ]
           },
           "else": {
             "required": [
               "version", "requirement_ref", "doc_refs", "golden_model_ref",
-              "fidelity", "ports", "clock", "reset", "constraints", "sources", "top"
+              "fidelity", "ports", "clock", "reset", "constraints", "sources", "top",
+              "protocol_anchor"
             ]
           }
           }
@@ -90,6 +91,41 @@
     "requirement_ref": { "type": "string", "description": "锚链起点：需求条目 id/URI" },
     "doc_refs": { "type": "array", "items": { "type": "string" }, "minItems": 1, "description": "方向锚：设计前期文档/ADR" },
     "golden_model_ref": { "type": "string", "description": "正确性锚：配对 golden 资产 asset_uid" },
+    "protocol_anchor": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["standard", "baseline_relation"],
+      "description": "协议锚点：本资产实现的是哪一版通信标准 (PHY/链路) 的哪一段。缺字段与『协议中立』不是一回事——中立必须显式声明 standard=none + baseline_relation=neutral，未声明由 G-B-04 判 fail。存在的理由：库内已出现过跨版组合（11a 前端 + 11n LDPC）而无处可查，需求↔资产的版本匹配退化成人工审查。**总线协议 (AXI / AXI-Stream / Wishbone) 不在本字段范围**，那由 ports[].bus 记录；总线用 AXI4 不影响 standard=none。golden-model 与 reference 级资产不适用。",
+      "properties": {
+        "standard": { "type": "string", "description": "标准标识，如 'IEEE 802.11-2020' / 'IEEE 802.11n-2009'；协议中立资产填 'none'" },
+        "baseline_relation": {
+          "type": "string",
+          "enum": ["baseline", "cross_version", "neutral"],
+          "description": "与库基线 (catalog/protocol-baseline.json) 的关系。G-B-04 校验声明值与按基线实算值一致：跨版资产合法，但必须自己声明；静默漂移判 fail。"
+        },
+        "clause": { "type": "string", "description": "条款号，如 '17'。可选——条款号随版次变动（OFDM PHY 在 802.11a-1999 为 Clause 17、802.11-2012 为 Clause 18），未经标准原文核对时应留空并在 anchor_basis 写明，不得臆造。" },
+        "profile": { "type": "string", "description": "人读参数档，如 '11a/g OFDM 20MHz'" },
+        "scope": { "type": "string", "description": "本资产覆盖协议的哪一段，如 'DATA 场调制通路，不含 PLCP 前导与 SIGNAL'。用于防止『802.11a PHY』这类标签被过度解读。" },
+        "sections": { "type": "array", "items": { "type": "string" }, "description": "规范性小节引用，如 '17.3.5.8'。可选，理由同 clause 的版次不稳定性。" },
+        "parameters": { "type": "object", "additionalProperties": true, "description": "决定互通性的协议参数子集（如 bw_mhz / n_fft / n_data_sc / n_pilot_sc / cp_len / modulations / code_rate）。这是需求↔资产机械匹配的依据，profile 只是它的人读摘要。" },
+        "deviations": {
+          "type": "array",
+          "description": "与所锚标准的已知偏差。空数组 = 已声明『无已知偏差』，与不写该字段同义但更明确。",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["id", "summary"],
+            "properties": {
+              "id": { "type": "string", "description": "包内偏差编号，与 README/limitations 的编号一致" },
+              "summary": { "type": "string" },
+              "ref": { "type": "string", "description": "偏差的文档出处；写成仓库路径时 G-B-04 校验其可解析" }
+            }
+          }
+        },
+        "anchor_basis": { "type": "string", "description": "锚点的确证依据，与 provenance.source_basis 同一约定：写清标准/条款/参数是怎么定下来的，哪些经核对、哪些未核对。非中立锚必填。" },
+        "notes": { "type": "string", "description": "跨版资产须在此说明为何与基线不同版 (G-B-04 校验非空)" }
+      }
+    },
     "params": {
       "type": "array",
       "description": "v1.1 可审计参数空间",

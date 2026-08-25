@@ -1,0 +1,331 @@
+{
+  "schema_version": "1.1",
+  "asset_uid": "eq_zf",
+  "name": "eq_zf",
+  "version": "1.1.1",
+  "owner": "lihan",
+  "kind": "primitive",
+  "maturity": {
+    "level": "certified",
+    "evidence_ref": "engineering-assets/evidence/eq_zf/1.1.1/"
+  },
+  "requirement_ref": "engineering-assets/knowledge/primary/domains/comm/ofdm/algorithm_spec.md",
+  "doc_refs": [
+    "engineering-assets/cbb/eq_zf/analysis/fixed-point-study.md"
+  ],
+  "protocol_anchor": {
+    "standard": "IEEE 802.11-2020",
+    "baseline_relation": "baseline",
+    "clause": "17",
+    "profile": "11a/g OFDM 20MHz",
+    "scope": "ZF 频域均衡 X = Y·conj(H)·(1/|H|²) + 64->48 数据子载波提取与排序。**不含**: 信道估计本体 (channel_est_top)、噪声方差估计 (ZF 不需要, 裁定①)、导频相位跟踪 (已在 channel_est_top 的 CPE 链内)、解调与星座判决 (下游 mod_demapper)。",
+    "parameters": {
+      "bw_mhz": 20,
+      "n_fft": 64,
+      "n_data_subcarriers": 48,
+      "n_pilot": 4,
+      "dc_null": true,
+      "used_subcarriers": 52,
+      "data_out_order": "cfg.data_idx (signed -26..-1,1..26)",
+      "reorder_rotation": 24,
+      "in_fmt": "Q2.14",
+      "out_fmt": "Q4.12"
+    },
+    "deviations": [],
+    "anchor_basis": "standard/clause/profile 取自库基线 catalog/protocol-baseline.json, 与同链路的 cp_remove/channel_est_top 一致。载波集与输出序**非凭记忆**: 逐项取自 models/comm/ofdm/config.m 的 cfg.data_idx, 并由 rx_chain.m 第 3 步 (按 cfg.data_idx(d) 取 bin 后喂 mod_demapper) 与 subcarrier_map (发端同序放数据) 双向佐证 —— 该序定义比特与子载波的对应关系。reorder_rotation=24 是该载波集在自然 bin 序与 cfg.data_idx 序之间的实算轮转量, 由 tb_eq_reorder 的闭式判据锁住。定点格式取自 analysis/fixed-point-study.md 的实测结论 (输出 Q4.12 + 饱和, SNR=20 饱和率 0.0117%)。"
+  },
+  "fidelity": {
+    "status": "bit_true",
+    "bit_accurate_against": "engineering-assets/models/comm/ofdm/src/rtl_mirror_eq.m",
+    "tolerance": {
+      "value": 0,
+      "rationale": "镜像与 RTL 走同一条整数路径, 差异只可能是缺陷不可能是噪声, 故不设容差窗口。2304 点 >= G-B-03 的 2048 门限; iverilog 与 Vivado xsim 2023.1 各自复跑。",
+      "set_at": "2026-08-05"
+    }
+  },
+  "top": "eq_zf",
+  "device": {
+    "part": "xc7k325tffg900-2",
+    "family": "kintex7",
+    "note": "与上下游同域资产一致"
+  },
+  "clock": {
+    "name": "i_clk",
+    "period_ns": 10
+  },
+  "reset": {
+    "name": "i_rst",
+    "polarity": "active_high",
+    "type": "sync",
+    "async_release_synchronized": true
+  },
+  "params": [
+    {
+      "name": "DATA_W",
+      "value": 16,
+      "rationale": "I/Q 位宽; 入 Q2.14, 出 Q4.12, tdata={im,re}"
+    },
+    {
+      "name": "P_YDEPTH",
+      "value": 256,
+      "rationale": "Y 路 FIFO。tb_y_depth 实测最小帧间距下峰值占用 158, 取 256 留裕量。**必须是 2 的幂** —— 指针按 2^YAW 回绕, 非 2 的幂会越界读出 X (首版取 192 即如此)"
+    }
+  ],
+  "sources": [
+    {
+      "path": "rtl/eq_zf.sv",
+      "role": "rtl",
+      "sha256": "150d717c52d2477fd7452d33f3b2532cd9a417321a9558e3590a2bd4b4ed0496",
+      "note": "顶层: Y 路 FIFO + 64->48 选择 + 共轭乘 + 定标饱和 + erasure"
+    },
+    {
+      "path": "rtl/eq_recip.sv",
+      "role": "rtl",
+      "sha256": "61cd60d4db0eb1fb4a759859d04f8966ca8147fcc13a39cb4f17d32e99050c40",
+      "note": "倒数核: 归一化 + 256 项闭式 ROM + 一次 Newton, 固定 6 拍"
+    },
+    {
+      "path": "rtl/eq_reorder.sv",
+      "role": "rtl",
+      "sha256": "d8b3d4806df380b97136f3ea48fdcac0d88f222768dcad65ab5f643eb7fb9519",
+      "note": "子载波序重排: 自然 bin 升序 -> golden 序 (左旋 24), 双 bank 乒乓"
+    },
+    {
+      "path": "constraints/eq_zf.xdc",
+      "role": "constraint",
+      "sha256": "17a553f4ae89277d837522642dfb52e67ae29d2d08a0ef33ac04724a6d1b35bd",
+      "note": "OOC 综合约束 100MHz"
+    },
+    {
+      "path": "tb/tb_eq_zf.sv",
+      "role": "tb",
+      "sha256": "7e59c2acfe1b1c7be593707d533d073bf68bb95bddc03990a5b844a0184f6fc9",
+      "note": "顶层判据: 2304 点 0 容差位真 + 反压/复位/包络外溢出可见"
+    },
+    {
+      "path": "tb/tb_eq_recip.sv",
+      "role": "tb",
+      "sha256": "accfbf7640fd797b40461adf774ebc6962957b76138d05006115b5316da02ff2",
+      "note": "倒数核判据: ROM==镜像hex / 标定 / 独立 SV 参考逐位 / 归一化两端"
+    },
+    {
+      "path": "tb/tb_eq_reorder.sv",
+      "role": "tb",
+      "sha256": "cf7ad894ca9ec44dc6250e0c3d57dd1e0612be984353e0a730ae7075dcd14e9a",
+      "note": "重排判据: 闭式 出[p]==入[(p+24)%48] / 不串符号 / 反压 / 复位"
+    },
+    {
+      "path": "vectors/y.hex",
+      "role": "vector",
+      "sha256": "5f9ef998d2145e75b848f183b90ff917e3e096ba26e20d27de46410c650f5922",
+      "note": "Y 激励 (2 LTS + 48 数据符号) x 64"
+    },
+    {
+      "path": "vectors/h.hex",
+      "role": "vector",
+      "sha256": "feca9af9927ab6f501521fe23135a8660d3f30ed64cae93ff968bc46ee0ee9af",
+      "note": "H 激励 48 x 64"
+    },
+    {
+      "path": "vectors/x_exp.hex",
+      "role": "vector",
+      "sha256": "d1174410872ddebff29d4a7b3424b62d3312070fe9ebf5ef9f7ba8fce1b9cbff",
+      "note": "X 期望 Q4.12, 由 rtl_mirror_eq 导出, 0 容差判卷"
+    },
+    {
+      "path": "vectors/er_exp.hex",
+      "role": "vector",
+      "sha256": "d879b49feef57e3d50866e8fca208b319325166d406be3f138b1dc452b60ffbf",
+      "note": "erasure 期望"
+    },
+    {
+      "path": "vectors/vec_config.txt",
+      "role": "config",
+      "sha256": "3c6414d003e9bcd218aee22c0f77278b5970d2a0945b26e99a042bd1e8f74a58",
+      "note": "向量参数与出处"
+    },
+    {
+      "path": "rtl/eq_recip_lut.hex",
+      "role": "vector",
+      "sha256": "50b7ba522da7db2202a246febe478066252da60deb1c9efed9ac378af5aaaa7c",
+      "note": "镜像 info.lut 的权威导出; RTL 用闭式生成 ROM, 由 TB 断言两者逐项相同"
+    },
+    {
+      "path": "analysis/gen_eq_vectors.m",
+      "role": "vector_gen",
+      "sha256": "d28c73ff9d58a777733287f908c65ddc8e271965c3443484231ed13b8e50c999",
+      "note": "向量生成器 (调治理侧镜像)"
+    },
+    {
+      "path": "analysis/eq_fixed_point_study.m",
+      "role": "reference",
+      "sha256": "199582db4302296b3b52419dc8db31e0076d8dd22d3cee79218e732816a94648",
+      "note": "定点分析: |H|² 分布 / 倒数误差 / 输出格式"
+    },
+    {
+      "path": "analysis/fixed-point-study.md",
+      "role": "doc",
+      "sha256": "35bc7e91a5e07a5a27ff59f542fbce72b166579a948774e0675f9f015fbdea88",
+      "note": "定点分析报告"
+    },
+    {
+      "path": "README.md",
+      "role": "doc",
+      "sha256": "32114959bed6612846af0d77e2508cdb107daaa1377ef00eca46f901f03ba1c8",
+      "note": "包说明: 接口/结构/正确性依据/已知边界/综合实测/复现"
+    },
+    {
+      "path": "CHANGELOG.md",
+      "role": "doc",
+      "sha256": "d45bfba41957157b7815005ad1d77d86f2d8537da03b085483aec2ab7584f5eb",
+      "note": "0.1.0 立件依据/四项实测收敛/实测数字/过程中抓出的缺陷"
+    },
+    {
+      "path": "run_sim.cjs",
+      "role": "harness",
+      "sha256": "8971ef7776991f9d355f6afd552a6930e90a95de6073e000c832270d8045be52",
+      "note": "判据 TB 实跑入口; 由解析真实输出产出 tb-selfcheck / stability 四子结果"
+    },
+    {
+      "path": "tb/tb_eq_reset.sv",
+      "role": "tb",
+      "sha256": "0de54a35ea0f8ff4644be94f951ba49608100e81461ad946bace639c8dc395fc",
+      "note": "逐寄存器复位比对 (27 项) + 少复位存储阵列未被清零 (4 项) + 复位后整帧重入"
+    },
+    {
+      "path": "tb/integration/tb_y_depth.sv",
+      "role": "tb",
+      "sha256": "4904dd706424858abe2734621f087a85082aa66edd6bbe5eee55d94720d097de",
+      "note": "链路级测量 TB: 在真实链路上实测 Y 路缓冲深度 (须 xsim, iverilog 编译不了 channel_est_top)"
+    },
+    {
+      "path": "vectors/conf_exp.hex",
+      "role": "vector",
+      "sha256": "55d9910ab770ce4748c8b428284b6252ca2586bdcd255675f6514fb8f2136b4d",
+      "note": "逐载波可靠度期望 o_conf={sh[5:0],m16[14:9]}, 由 rtl_mirror_eq 的 info.m16/info.sh 导出"
+    }
+  ],
+  "constraints": {
+    "target": {
+      "fmax": "100MHz",
+      "fmax_mhz": 100,
+      "lut": 1000,
+      "ff": 340,
+      "bram": 2,
+      "dsp": 14,
+      "note": "1.1.0 按 OOC 实测重定 (o_conf 流水使 LUT 由 872 增至 928): LUT 928 / FF 302 / BRAM 1.5 / DSP 12; WNS +3.861ns @10ns, WHS +0.100ns, 0 失败端点。包络留约 8% 余量。"
+    }
+  },
+  "alignment": {
+    "compare_mode": "cycle_accurate"
+  },
+  "reproduce": {
+    "sim": "node engineering-assets/cbb/eq_zf/run_sim.cjs --install",
+    "synth": "node engineering-assets/tools/pg-synth.cjs engineering-assets/cbb/eq_zf",
+    "gate": "node engineering-assets/tools/gate-runner.cjs engineering-assets/cbb/eq_zf --repo-root .",
+    "note": "第二仿真器加 --xsim (Vivado xsim 2023.1)。证据由脚本解析实跑输出产出, 非人工填。判卷向量重生成: matlab -batch \"addpath(<pkg>/analysis); gen_eq_vectors\" —— 期望值走治理侧镜像 rtl_mirror_eq。reset-sim.json 的数字全部来自 tb_eq_reset 的真实输出 (REGS/BAD/KEEP/CLEARED), 抠不到即判 fail。"
+  },
+  "waivers": [],
+  "notes": "(0) 1.1.0 按 owner 裁定⑤ 增出逐载波可靠度侧带 o_conf[11:0] = {sh[5:0], m16[14:9]}: |H|² = (m16/2^16)·2^(sh-30)。二者均为 eq_recip 归一化时已有的中间量, **无新增运算**。位宽由端到端 BER 实测定 (6 位尾数使 LLR 相对误差 0.0027, 已在 Q(10,4) 自身量化地板 ~0.005 的一半以下)。erasure 点的 conf 置零, 与镜像一致 —— 不置零则前导零哨兵会算出 0x080, 那是实现副产物而非规格。\n(1) 停在 qualification 的理由: RTL + 判据 TB + 位真向量齐备且双仿真器全绿, OOC 综合证据已产出 (WNS +3.861ns / 0 失败端点, 资源全在包络内)。距 certified 差 tb-selfcheck.json / reset-sim.json / stability 子结果与 owner 签字。\n(2) ROM 内容按闭式在综合期生成而非 readmemh: pg-synth 让 Vivado 跑在 var/gates/pg/<uid>/ 而非包目录, 相对路径的 hex 找不到。rtl/eq_recip_lut.hex 仍作镜像的权威导出保留, 由 tb_eq_recip 的 T0 断言闭式与它逐项相同。\n(3) **已知边界**: Y 侧上游 fft64_sdf 无 ready 不可停顿, 故下游平均接受率必须 >= Y 的占空 64/80 = 80%。低于此值 Y 只能堆积, 加深 FIFO 只是推迟不是解决。此工况下本件拉起 o_y_overflow 而非静默丢点, 集成方必须把它接出去看。\n(4) 子载波输出序为 golden 序 (cfg.data_idx 序), 由内部 eq_reorder 从自然 bin 升序左旋 24 得到。依据: rx_chain.m 第 3 步与 subcarrier_map 用同一序定义比特-载波对应, 换序等于打乱比特。",
+  "ports": [
+    {
+      "name": "i_clk",
+      "direction": "input",
+      "width": 1
+    },
+    {
+      "name": "i_rst",
+      "direction": "input",
+      "width": 1
+    },
+    {
+      "name": "i_y_valid",
+      "direction": "input",
+      "width": 1
+    },
+    {
+      "name": "i_y_re",
+      "direction": "input",
+      "width": 16
+    },
+    {
+      "name": "i_y_im",
+      "direction": "input",
+      "width": 16
+    },
+    {
+      "name": "i_y_idx",
+      "direction": "input",
+      "width": 6
+    },
+    {
+      "name": "i_y_sb",
+      "direction": "input",
+      "width": 1
+    },
+    {
+      "name": "s_axis_h_tvalid",
+      "direction": "input",
+      "width": 1,
+      "bus": "axi-stream"
+    },
+    {
+      "name": "s_axis_h_tready",
+      "direction": "output",
+      "width": 1,
+      "bus": "axi-stream"
+    },
+    {
+      "name": "s_axis_h_tdata",
+      "direction": "input",
+      "width": 32,
+      "bus": "axi-stream"
+    },
+    {
+      "name": "m_axis_tvalid",
+      "direction": "output",
+      "width": 1,
+      "bus": "axi-stream"
+    },
+    {
+      "name": "m_axis_tready",
+      "direction": "input",
+      "width": 1,
+      "bus": "axi-stream"
+    },
+    {
+      "name": "m_axis_tdata",
+      "direction": "output",
+      "width": 32,
+      "bus": "axi-stream"
+    },
+    {
+      "name": "o_conf",
+      "direction": "output",
+      "width": 12
+    },
+    {
+      "name": "o_erasure",
+      "direction": "output",
+      "width": 1
+    },
+    {
+      "name": "o_y_overflow",
+      "direction": "output",
+      "width": 1
+    }
+  ],
+  "signoff": {
+    "by": "lihan",
+    "at": "2026-08-05",
+    "scope": [
+      "证据已复核 (全部由 run_sim.cjs --install 实跑落盘, 双仿真器 Icarus Verilog 12.0 与 Vivado xsim 2023.1 各自复跑): tb-selfcheck.json (**4370 次比对**; 位真 2304 点对治理侧镜像 rtl_mirror_eq **0 容差**, 且本版起 X / erasure / o_conf **三者逐点全查**) / reset-sim.json (27 个受复位寄存器逐项 0 失配 + 4 个少复位存储阵列未被清零; 注入复位前已先断言状态是脏的) / stability 四子结果均 pass / timing-summary.rpt + utilization.rpt (OOC @xc7k325tffg900-2: WNS +3.861ns @10ns, WHS +0.100ns, **0 失败端点**; LUT 928/1000, FF 308/340, BRAM 2/2, DSP 12/14) / cdc-report.json (单时钟域)",
+      "**1.1.0 的变更**: 按裁定⑤ 增出逐载波可靠度侧带 o_conf[11:0] = {sh[5:0], m16[14:9]}, |H|² = (m16/2^16)·2^(sh-30)。二者均为 eq_recip 归一化时已有的中间量, **无新增运算**; 时序未受影响 (WNS 与 1.0.0 完全相同, conf 不进关键路径), 代价为 LUT +56 / FF +18。位宽由端到端 BER 实测定 (6 位尾数使 LLR 相对误差 0.0027, 在 Q(10,4) 自身量化地板 ~0.005 的一半以下, 再加位无收益)。",
+      "**erasure 点的 conf 定为 0 —— 修的是 RTL 不是镜像**。首跑 conf 只错在那 7 个 erasure 点: RTL 给 0x080, 那是前导零哨兵的副产物 (h2=0 -> lz=32 -> sh=2), 不是规格。位真判据不允许隐式 don-t-care, 故按治理规则修 RTL。",
+      "包络按 OOC 实测重定 (LUT 900->1000): **先综合再填**, 非为让门通过而调 —— 与 1.0.0 同一做法。",
+      "**已接受限制 (集成方必须落实)**: (a) 下游平均接受率必须 >= Y 的占空 64/80 = 80%; 低于此值 Y 只能堆积, 加深 FIFO 只是推迟不是解决, 此工况下本件拉起 o_y_overflow 而非静默丢点, **该标志必须接出去看**。(b) P_YDEPTH 必须是 2 的幂 (指针按 2^YAW 回绕)。",
+      "子载波输出序为 golden 序 (cfg.data_idx 序), o_conf 与 X **同行同列**地过 eq_reorder —— 由 tb_eq_reorder 单独判据锁住: 若 conf 未跟着旋转, 数据判据仍会全绿而权重已配到别的载波, 在链路上只表现为 BER 略差。",
+      "1.0.0 的签字**未顺延**: 那份 scope 逐条列的是 1.0.0 的实测数字, 本版证据为全新一份; evidence/eq_zf/1.0.0/ 快照仍封存可对照。"
+    ]
+  }
+}

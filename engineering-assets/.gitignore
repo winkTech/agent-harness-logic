@@ -1,1 +1,5 @@
 var/
+
+# 仿真编译产物 (iverilog 的 .vvp)。9ff5653 曾误收 incubator 两包的 7 个 .vvp ——
+# 它们是每次跑 TB 都重新生成的二进制, 不是源。复现入口在各包 README 的运行章节。
+**/sim/*.vvp

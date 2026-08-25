@@ -119,6 +119,24 @@ function assertFailOpenIsolation() {
   assert.equal(empty, null, 'both failed sources must fail open without malformed hook output');
 }
 
+function assertAggregateBudgetAndDeduplication() {
+  const router = require(routerPath);
+  const duplicate = `[rule-loader] ${'R'.repeat(110)}`;
+  const output = router.combinePromptContext(promptPayload(), {
+    ruleContext() { return context(duplicate); },
+    memoryContext() { return context(duplicate); },
+    frustrationContext() { return context(`[frustration-detector] ${'F'.repeat(110)}`); },
+    promptObserver() { return { ok: true, actions: [] }; },
+    maxContextChars: 180,
+  });
+  const text = output?.hookSpecificOutput?.additionalContext || '';
+  assert.ok(text.length <= 180, `aggregate prompt context exceeded budget: ${text.length}`);
+  assert.equal(text.split('[rule-loader]').length - 1, 1,
+    'identical provider context must be emitted only once');
+  assert.match(text, /context truncated/,
+    'budget truncation must be explicit instead of silently cutting context');
+}
+
 function assertFrustrationContextIsRequireSafeAndReadOnly() {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'prompt-frustration-readonly-'));
   const stateFile = path.join(root, 'runtime-state.json');
@@ -323,6 +341,7 @@ function assertRuleContextIsRequireSafeAndReadOnly() {
 try {
   assertSingleParseAndMergedOutput();
   assertFailOpenIsolation();
+  assertAggregateBudgetAndDeduplication();
   assertRuleContextIsRequireSafeAndReadOnly();
   assertFrustrationContextIsRequireSafeAndReadOnly();
   assertStaleFailureEvidenceFailsClosed();

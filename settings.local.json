@@ -5,29 +5,14 @@
     "SPAWN_PROMPT_BUDGET_LOG": "on",
     "SPAWN_ASSEMBLY_CACHE": "on",
     "SPAWN_ASSEMBLY_CACHE_TTL_MS": "300000",
-    "AGENT_TYPED_MEMORY_INJECTION": "on",
     "CLAUDE_RULE_CAPSULE_MAX_CHARS": "900",
     "CLAUDE_RULE_SIGNAL_DISABLED": "1",
     "PROGRESS_WATCHDOG_MODE": "observe",
     "CLAUDE_TOOL_ACTION_CONTRACT_MODE": "high-risk",
     "CLAUDE_CONTEXT_MONITOR_AUTO_CHECKPOINT": "0"
   },
-  "enabledPlugins": {
-    "andrej-karpathy-skills@karpathy-skills": true,
-    "github@claude-plugins-official": true,
-    "superpowers@claude-plugins-official": false,
-    "skill-creator@claude-plugins-official": true
-  },
   "includeCoAuthoredBy": false,
   "permissions": {
-    "ask": [
-      "Bash(git push:*)",
-      "Bash(gh pr merge:*)",
-      "Bash(git commit:*)",
-      "PowerShell(git push:*)",
-      "PowerShell(gh pr merge:*)",
-      "PowerShell(git commit:*)"
-    ],
     "allow": [
       "Read",
       "Write",
@@ -37,7 +22,6 @@
       "Bash(git push:*)",
       "PowerShell(git push:*)"
     ],
-    "defaultMode": "acceptEdits",
     "deny": [
       "Bash(git push origin main)",
       "Bash(git push origin master)",
@@ -69,6 +53,26 @@
       "PowerShell(git commit --amend:*)",
       "PowerShell(Remove-Item -Recurse -Force /:*)",
       "PowerShell(Remove-Item -Recurse -Force ~:*)"
-    ]
-  }
+    ],
+    "ask": [
+      "Bash(git push:*)",
+      "Bash(gh pr merge:*)",
+      "Bash(git commit:*)",
+      "PowerShell(git push:*)",
+      "PowerShell(gh pr merge:*)",
+      "PowerShell(git commit:*)"
+    ],
+    "defaultMode": "acceptEdits"
+  },
+  "enabledPlugins": {
+    "andrej-karpathy-skills@karpathy-skills": true,
+    "github@claude-plugins-official": true,
+    "superpowers@claude-plugins-official": false,
+    "skill-creator@claude-plugins-official": true
+  },
+  "disabledMcpjsonServers": [
+    "memory",
+    "context7",
+    "playwright"
+  ]
 }

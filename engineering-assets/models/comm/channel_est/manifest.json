@@ -3,7 +3,7 @@
   "asset_uid": "model_comm_channel_est",
   "name": "ls_channel_est_golden",
   "kind": "golden-model",
-  "version": "1.2.0",
+  "version": "1.4.0",
   "owner": "lihan",
   "maturity": {
     "level": "intake"
@@ -62,12 +62,12 @@
     {
       "path": "pilot_phase_track.m",
       "role": "reference",
-      "sha256": "0bce6954d91aa0c578ab5b7a03ef0a50b4d6dafc825f610f7436879a3b9065d1"
+      "sha256": "bf91e4c792bf9019bd8409b5c0cb895a6d02e03b45c80c4b7c58f9a07c13207c"
     },
     {
       "path": "sim_frame.m",
       "role": "reference",
-      "sha256": "5008cd84ede75e1d6e95f6097fb0ba154bf02c18c6acbe782c09758ce43c618e"
+      "sha256": "d408d04d190b08795eb0c2de956325b863d15c7634e151a2196d4dd31c965183"
     },
     {
       "path": "ls_channel_est.m",
@@ -77,7 +77,7 @@
     {
       "path": "sim_channel.m",
       "role": "reference",
-      "sha256": "ab5411542d7ed2c23af4e1384b11f1c2795b0ddc254fd95589bd0e18cc22a7f4"
+      "sha256": "1ab722d1c321ba07715dde66950835bb89e6629f8378969646fd6715fc8632c4"
     },
     {
       "path": "config.m",
@@ -97,7 +97,7 @@
     {
       "path": "src/generate_vectors.m",
       "role": "fixed_point",
-      "sha256": "af41425b59fe3a4e9f9aa8d8c7e2a48bbc748149bc6a85bd95a25994edc6aed8"
+      "sha256": "1af10547aab052e6ccd9ebc18f2b4dbadcac3a5b325187566cbce58c01f4c90f"
     },
     {
       "path": "tests/test_lts_ls.m",
@@ -107,7 +107,7 @@
     {
       "path": "tests/test_phase_track.m",
       "role": "test",
-      "sha256": "673447cb145020c7b75518c560820a6fafc5417d01aee1c962cb374a50fba525"
+      "sha256": "f2bb3a89a0c49a19dab31487687cf18bbe01efbbd0b7e9591122f8acd6ca636f"
     },
     {
       "path": "tests/test_ls_linear.m",

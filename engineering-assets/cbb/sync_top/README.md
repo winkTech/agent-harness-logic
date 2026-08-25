@@ -66,3 +66,36 @@ CORDIC）→ 长前导码 T1 **符号量化互相关精定时**（0 DSP 加法�
 见 `docs/limitations.md`（10 条，含无反压契约、常数相位偏置、直通段
 ±8 LSB、T1 前段部分未校正与防错锁包络、单突发语义）。certified 阻塞：
 G-B-03 位真向量、G-C-04/05 证据 dump、G-SIGN-01 签字。
+
+<!-- BEGIN:MANIFEST:PORTS -->
+<!-- Generated from manifest.json; do not edit this block. -->
+| Name | Dir | Width | Bus |
+|---|---|---:|---|
+| `i_clk` | input | 1 | — |
+| `i_rst` | input | 1 | — |
+| `s_axis_tvalid` | input | 1 | axi-stream |
+| `s_axis_tready` | output | 1 | axi-stream |
+| `s_axis_tdata` | input | 32 | axi-stream |
+| `m_axis_tvalid` | output | 1 | axi-stream |
+| `m_axis_tready` | input | 1 | axi-stream |
+| `m_axis_tdata` | output | 32 | axi-stream |
+| `o_fft_start` | output | 1 | — |
+| `o_sync_locked` | output | 1 | — |
+<!-- END:MANIFEST:PORTS -->
+
+<!-- BEGIN:MANIFEST:PARAMS -->
+<!-- Generated from manifest.json; do not edit this block. -->
+| Name | Values | Support |
+|---|---|---|
+| `DATA_W` | — | yes |
+| `P_DLY` | — | yes |
+| `P_EST_GAP` | — | yes |
+<!-- END:MANIFEST:PARAMS -->
+
+<!-- BEGIN:MANIFEST:CLOCKRESET -->
+<!-- Generated from manifest.json; do not edit this block. -->
+| Field | Value |
+|---|---|
+| Clock | `i_clk` (10 ns) |
+| Reset | `i_rst` / active_high / sync |
+<!-- END:MANIFEST:CLOCKRESET -->

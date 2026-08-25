@@ -1,8 +1,17 @@
 function bits = mod_demapper(symbols, mod_type)
-%% 解调映射 (软判决)
+%% 解调映射 (**硬判决**)
 %  输入: symbols  - 接收符号 [N x 1]
 %        mod_type - 'BPSK'|'QPSK'|'16QAM'|'64QAM'
-%  输出: bits - 解调比特
+%  输出: bits - 解调比特 (0/1)
+%
+%  注释修正 (2026-08-05, owner 裁定⑥): 原头注释写"软判决"与实现不符 —— 本函数逐比特
+%  取阈值判决后返回 0/1, 是**硬判决**。**行为未改**, rx_chain / test_ber 继续依赖它。
+%  需要软信息的下游 (cbb/ldpc_codec 吃 LLR Q(10,4) + 归一化 Min-Sum) 请用同目录的
+%  src/mod_demapper_llr.m —— 硬比特喂不进软译码器。
+%
+%  符号约定 (与 mod_mapper 一致): s = 2b - 1, 即 y >= 0 判为 **bit 1**。
+%  注意 models/comm/ldpc 侧用的是相反约定 (s = 1 - 2c, 正 LLR = bit 0),
+%  mod_demapper_llr 已按下游需要翻号, 详见其头注释。
 
     switch mod_type
         case 'BPSK'

@@ -29,6 +29,11 @@
     "engineering-assets/docs/governance/CBB-治理与生产级准入规范-V1.0.md",
     "engineering-assets/docs/CBB候选台账-hdl-coding-templates.md"
   ],
+  "protocol_anchor": {
+    "standard": "none",
+    "baseline_relation": "neutral",
+    "notes": "结构原语: 多级触发器电平/数据字跨时钟同步, 与承载的数据语义无关。"
+  },
   "fidelity": {
     "status": "na"
   },

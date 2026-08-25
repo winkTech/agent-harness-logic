@@ -23,12 +23,21 @@ function main() {
     'hook manifest must declare active consumers');
 
   const requiredFields = [
-    'script', 'kind', 'events', 'tools', 'payloadSchema', 'blocking',
+    'script', 'kind', 'events', 'tools', 'payloadSchema', 'transports', 'blocking',
     'sideEffects', 'timeoutSeconds', 'owner', 'fixture', 'active',
   ];
+  const ALLOWED_TRANSPORTS = new Set(['claude-code', 'workbuddy', 'codex']);
   for (const entry of manifest.entries) {
     for (const field of requiredFields) {
       assert.ok(Object.hasOwn(entry, field), `${entry.script || '<unknown>'} missing ${field}`);
+    }
+    assert.equal(entry.payloadSchema, 'harness-event-v1',
+      `${entry.script} payloadSchema must be the harness-event-v1 contract (not claude-hook/*-v1)`);
+    assert.ok(Array.isArray(entry.transports) && entry.transports.length > 0,
+      `${entry.script} transports must be a non-empty array`);
+    for (const transport of entry.transports) {
+      assert.ok(ALLOWED_TRANSPORTS.has(transport),
+        `${entry.script} transports contains unknown value '${transport}'`);
     }
     assert.ok(Array.isArray(entry.events) && entry.events.length > 0,
       `${entry.script} must support at least one event`);

@@ -40,7 +40,7 @@ const path = require('path');
 const { evaluateGuardBypass } = require('../lib/gate-bypass.cjs');
 
 const GATE_ID = 'verification-quality-guard.cjs';
-const { findProjectRoot, stateHasScopeForFile } = require('../lib/project-scope.cjs');
+const { findProjectRoot, stateHasTaskTargetForFile } = require('../lib/project-scope.cjs');
 const { HARNESS_ROOT } = require('../lib/harness-root.cjs');
 
 const HOME_GATES_DIR = path.join(HARNESS_ROOT, 'var', 'gates');
@@ -133,18 +133,8 @@ function isInsidePath(child, parent) {
   return childPath === parentPath || childPath.startsWith(parentPath + path.sep);
 }
 
-function getScopeRoots(state) {
-  const roots = [];
-  if (!state || typeof state !== 'object') return roots;
-  if (typeof state.projectRoot === 'string') roots.push(state.projectRoot);
-  if (Array.isArray(state.projectRoots)) roots.push(...state.projectRoots);
-  if (state.scope && typeof state.scope.projectRoot === 'string') roots.push(state.scope.projectRoot);
-  if (state.scope && Array.isArray(state.scope.projectRoots)) roots.push(...state.scope.projectRoots);
-  return roots.filter(Boolean);
-}
-
 function hasValidScopeForFile(state, filePath) {
-  return stateHasScopeForFile(state, filePath);
+  return stateHasTaskTargetForFile(state, filePath);
 }
 
 function isGateCompletedForFile(state, filePath) {

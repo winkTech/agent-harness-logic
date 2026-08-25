@@ -52,28 +52,33 @@ node tools/gate-runner.cjs <asset-package-dir> --repo-root ..
 | 资产 | 声明级别 | 机器达到级别 | 阻塞门 |
 |---|---|---|---|
 | `axis_skid_buffer` | certified | certified | — |
-| `cdc_sync` | qualification | qualification | certified |
-| `channel_est_top` | intake | qualification | certified |
-| `complex_multiplier` | qualification | qualification | certified |
-| `crc32` | qualification | qualification | certified |
-| `ddr_axi4_controller` | qualification | qualification | certified |
-| `delay_line` | qualification | qualification | certified |
-| `frame_sync` | qualification | qualification | certified |
+| `cdc_sync` | certified | certified | — |
+| `channel_est_top` | certified | certified | — |
+| `complex_multiplier` | certified | certified | — |
+| `cp_remove` | certified | certified | — |
+| `crc32` | certified | certified | — |
+| `ddr_axi4_controller` | certified | certified | — |
+| `delay_line` | certified | certified | — |
+| `eq_zf` | certified | certified | — |
+| `fft64_sdf` | certified | certified | — |
+| `frame_sync` | certified | certified | — |
 | `ldpc_codec` | certified | certified | — |
-| `lfsr_gen` | qualification | qualification | certified |
-| `model_comm_channel_est` | intake | — | no gate-results |
-| `model_comm_ldpc` | intake | — | no gate-results |
-| `model_comm_ofdm` | intake | — | no gate-results |
-| `model_comm_rrc` | qualification | — | no gate-results |
-| `model_comm_synch` | intake | — | no gate-results |
-| `ofdm_tx_top` | intake | qualification | certified |
+| `lfsr_gen` | certified | certified | — |
+| `mod_demapper` | certified | certified | — |
+| `model_comm_channel_est` | intake | — | n/a — 非 RTL 门梯适用范围 |
+| `model_comm_ldpc` | intake | — | n/a — 非 RTL 门梯适用范围 |
+| `model_comm_ofdm` | intake | — | n/a — 非 RTL 门梯适用范围 |
+| `model_comm_rrc` | qualification | — | n/a — 非 RTL 门梯适用范围 |
+| `model_comm_synch` | intake | — | n/a — 非 RTL 门梯适用范围 |
+| `ofdm_tx_top` | certified | certified | — |
 | `pulse_merge` | certified | certified | — |
-| `pulse_merge_golden` | qualification | — | no gate-results |
+| `pulse_merge_golden` | qualification | — | n/a — 非 RTL 门梯适用范围 |
 | `rrc_polyphase_fir` | certified | certified | — |
-| `sdp_ram` | qualification | qualification | certified |
+| `sb_align` | certified | certified | — |
+| `sdp_ram` | certified | certified | — |
 | `stream_elastic_pipeline` | certified | certified | — |
-| `stream_elastic_pipeline_golden` | qualification | — | no gate-results |
-| `sync_top` | intake | qualification | certified |
+| `stream_elastic_pipeline_golden` | qualification | — | n/a — 非 RTL 门梯适用范围 |
+| `sync_top` | certified | certified | — |
 <!-- END:CATALOG:STATUS -->
 
 > 2026-07-28：以上四个包完成 hdl-coding 五条红线整改，**红线类门（`G-A-00`

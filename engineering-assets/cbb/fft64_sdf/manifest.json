@@ -1,0 +1,307 @@
+{
+  "schema_version": "1.1",
+  "asset_uid": "fft64_sdf",
+  "name": "fft64_sdf",
+  "version": "1.0.2",
+  "owner": "lihan",
+  "kind": "rtl",
+  "maturity": {
+    "level": "certified",
+    "evidence_ref": "engineering-assets/evidence/fft64_sdf/1.0.2/"
+  },
+  "requirement_ref": "engineering-assets/knowledge/primary/domains/comm/ofdm/algorithm_spec.md",
+  "doc_refs": [
+    "engineering-assets/knowledge/primary/domains/comm/ofdm/fixed_point_report.md",
+    "engineering-assets/knowledge/primary/domains/comm/ofdm/rtl_architecture.md",
+    "engineering-assets/docs/governance/adr/ADR-004-ofdm-tx-ifft-and-scope.md"
+  ],
+  "golden_model_ref": "model_comm_ofdm",
+  "protocol_anchor": {
+    "standard": "IEEE 802.11-2020",
+    "baseline_relation": "baseline",
+    "clause": "17",
+    "profile": "11a/g OFDM 20MHz",
+    "scope": "64 点变换本体 (FFT/IFFT 可参数化) 与位反序->自然序重排。点数、输入 Q2.14 格式与 sum(...)/8 标定均对齐 Clause 17 的 numerology; **不含**子载波映射、导频、CP 插入/去除、PLCP 前导与 SIGNAL —— 那些分别在 ofdm_tx_top / cp_remove 中。",
+    "parameters": {
+      "n_fft": 64,
+      "bw_mhz": 20,
+      "input_format": "Q2.14",
+      "output_format_fft": "Q2.14",
+      "output_format_ifft": "Q3.13",
+      "internal_width": 21,
+      "scaling": "sum(...)/8 (ifft*sqrt(64) 与 fft/sqrt(64) 同值), 级 2/4/6 后各 (x+1)>>>1"
+    },
+    "deviations": [],
+    "anchor_basis": "standard/clause/profile 取自库基线 catalog/protocol-baseline.json, 未经标准原文核对。parameters 来自需求门禁 (var/gates/requirements-gate.json 的 fft64_sdf 记录) 与 golden 实测: n_fft=64 与标定式由 src/ifft_chain.m / src/fft_chain.m 佐证; 输出格式由 channel_est_top 已认证的 Q2.14 输入契约倒推; internal_width=21 由对抗构造搜索实测定案 (s20 在满幅输入下回绕)。"
+  },
+  "fidelity": {
+    "status": "bit_true",
+    "bit_accurate_against": "model_comm_ofdm / src/rtl_mirror_fft64.m"
+  },
+  "ports": [
+    {
+      "name": "i_clk",
+      "direction": "input",
+      "width": 1
+    },
+    {
+      "name": "i_rst",
+      "direction": "input",
+      "width": 1
+    },
+    {
+      "name": "i_beat",
+      "direction": "input",
+      "width": 1
+    },
+    {
+      "name": "i_valid",
+      "direction": "input",
+      "width": 1
+    },
+    {
+      "name": "i_re",
+      "direction": "input",
+      "width": 16
+    },
+    {
+      "name": "i_im",
+      "direction": "input",
+      "width": 16
+    },
+    {
+      "name": "i_sb",
+      "direction": "input",
+      "width": 1
+    },
+    {
+      "name": "o_valid",
+      "direction": "output",
+      "width": 1
+    },
+    {
+      "name": "o_idx",
+      "direction": "output",
+      "width": 6
+    },
+    {
+      "name": "o_re",
+      "direction": "output",
+      "width": 16
+    },
+    {
+      "name": "o_im",
+      "direction": "output",
+      "width": 16
+    },
+    {
+      "name": "o_sb",
+      "direction": "output",
+      "width": 1
+    }
+  ],
+  "device": {
+    "part": "xc7k325tffg900-2",
+    "family": "kintex7",
+    "note": "与库内同域 comm 资产一致 (sync_top/channel_est_top/ofdm_tx_top)"
+  },
+  "clock": {
+    "name": "i_clk",
+    "period_ns": 10
+  },
+  "reset": {
+    "name": "i_rst",
+    "polarity": "active_high",
+    "type": "sync",
+    "async_release_synchronized": true
+  },
+  "top": "fft64_sdf",
+  "params": [
+    {
+      "name": "DATA_W",
+      "value": 16,
+      "rationale": "I/Q 样点位宽 (输入 Q2.14)"
+    },
+    {
+      "name": "P_W",
+      "value": 21,
+      "rationale": "内部位宽。s20 在满幅 Q2.14 输入下会回绕 —— 对抗构造实测最坏 40.71 超出 s20 的 ±32; s21 的 ±64 覆盖可证上界 45.25, 裕量 1.41x。真实 OFDM 信号峰值仅 3.6~4.7, 加宽针对满幅 CW 干扰一类工况"
+    },
+    {
+      "name": "P_DIR",
+      "value": 0,
+      "rationale": "0=FFT(正向) / 1=IFFT。方向切换须同时翻转非平凡旋转因子表与 BF2II 的平凡 ±j, 缺一不可"
+    },
+    {
+      "name": "P_NATURAL_OUT",
+      "value": 1,
+      "rationale": "1=自然序输出(RX 默认, 因 FFT 输出要扇出给已认证且无索引口的 channel_est_top) / 0=位反序+o_idx(TX 复用, 下游乒乓 RAM 零代价吸收)"
+    }
+  ],
+  "sources": [
+    {
+      "path": "rtl/fft64_sdf.sv",
+      "role": "rtl",
+      "sha256": "08209e0cff345c6ca4f820febad32a21c02e0f967ca5cecc1da8fd30bd129baf",
+      "note": "顶层: 按 P_NATURAL_OUT 组合 core 与 reorder, 纯接线"
+    },
+    {
+      "path": "rtl/fft64_sdf_core.sv",
+      "role": "rtl",
+      "sha256": "c0bbe1a4dc5927f6212bc494a8e0b42dcddb34ad42a0a65cb4af1a6da358448e",
+      "note": "R2²SDF 核, 恒位反序输出 + 侧带透传"
+    },
+    {
+      "path": "rtl/fft64_reorder.sv",
+      "role": "rtl",
+      "sha256": "45df30d7ca285c090d7e2be98655843b71ec7eaafe38229de59ae1a304d2e09e",
+      "note": "位反序->自然序乒乓重排"
+    },
+    {
+      "path": "rtl/fft64_twiddle.svh",
+      "role": "rtl",
+      "sha256": "b49a6cc79a4cc7513749cadebe98af36b8f08e747ff98317141e7557b87a929f",
+      "note": "旋转因子表 (打包常量, 由 core 包含)"
+    },
+    {
+      "path": "constraints/fft64_sdf.xdc",
+      "role": "constraint",
+      "sha256": "f54df48241e6fcc0004faf20a0bbbd0589b88ffe29cc31874cad6d28373eba6f",
+      "note": "OOC 综合约束 100MHz"
+    },
+    {
+      "path": "tb/tb_fft64_sdf_core.sv",
+      "role": "tb",
+      "sha256": "19863fea736e02c8833fa1f84d8e29671c39c07496c1ef1ec6388fdcec40b6e5",
+      "note": "核: 冲激/直流/Nyquist/侧带/复位 (解析判据)"
+    },
+    {
+      "path": "tb/tb_fft64_reorder.sv",
+      "role": "tb",
+      "sha256": "7bbbbfa891265c74fb6eec015e0413289a89443f339a03ce30581073eb292498",
+      "note": "重排: 自然序还原/乒乓/侧带"
+    },
+    {
+      "path": "tb/tb_fft64_direction.sv",
+      "role": "tb",
+      "sha256": "92e7f84731259d576f9c72bb2b2bf217d655e680a110eafebb3c299070219050",
+      "note": "方向可分辨性: 复数单音 FFT->bin1 / IFFT->bin63"
+    },
+    {
+      "path": "tb/tb_fft64_sdf.sv",
+      "role": "tb",
+      "sha256": "a1c840de5a5920ff2ba0621d830d6005dfb731cf16ec3de54d76929b8190e43c",
+      "note": "顶层集成: 两种输出序配置的接线与输出序"
+    },
+    {
+      "path": "tb/tb_fft64_cosim.sv",
+      "role": "tb",
+      "sha256": "717bc603123a2133f8d56a17c72660d8eadf93abbdc776d4c9824323ca204752",
+      "note": "**bit-true 判据**: 对治理 golden 镜像 0 容差, 2560 样点"
+    },
+    {
+      "path": "tb/tb_fft64_reset.sv",
+      "role": "tb",
+      "sha256": "eb0ff15a3951b0a523c383305c78dc77ca042c0cd7072ce2fcb02a3a5c95072e",
+      "note": "G-C-04: 流水跑满后复位, 41 个受复位寄存器逐项比对"
+    },
+    {
+      "path": "tb/tb_fft64_stability.sv",
+      "role": "tb",
+      "sha256": "c08b3d0fc68697fe1239b2a5c94891653f4285c1de193548382789d78933766a",
+      "note": "G-C-05: boundary / stress / backpressure 三个子结果"
+    },
+    {
+      "path": "tb/tb_fft64_tail.sv",
+      "role": "tb",
+      "sha256": "08983c926910b4f49767a9795d381f141ce3f286f786456c6fbf0ed1bb8709f4",
+      "note": "锁定尾部不冲刷即丢符号, 及\"补 1 个符号就够\"这个契约数"
+    },
+    {
+      "path": "tb/integration/tb_chain_depth.sv",
+      "role": "tb",
+      "sha256": "f5aac3aedd8cb335d783588d5d14188ce82c9c2c7ddb8b702e672921c248a781",
+      "note": "**链路级测量 TB** (需 xsim —— iverilog 编译不了 channel_est_top): cp_remove->fft64_sdf->channel_est_top 实链, 中间置理想无限深 FIFO 观测反压与峰值占用"
+    },
+    {
+      "path": "tb/integration/tb_chain_nogap.sv",
+      "role": "tb",
+      "sha256": "3081b444ca008c8541b6fd06686161516968f9dd965e68ed3a78e4b3248418b8",
+      "note": "**对抗测量 TB**: 去掉 CP 间隙的连续流, 给出缓冲深度上界 23"
+    },
+    {
+      "path": "run_sim.cjs",
+      "role": "harness",
+      "sha256": "f3b93a0e5ec8663c776f0835250d7f25ef24b16219726dccb42f6fc491cca1f9",
+      "note": "可复现仿真入口 (G-GATE-02); --install 由实跑结果落证据, 不构造 pass"
+    },
+    {
+      "path": "vectors/fft_in.hex",
+      "role": "vector",
+      "sha256": "1bd5640320df1b063279237cf4545e78e9f62368a00084bcb3552bfb622be939",
+      "note": "激励: 40 个真实 OFDM 符号, AGC 缩到刚好不削 Q2.14"
+    },
+    {
+      "path": "vectors/fft_expected_natural.hex",
+      "role": "vector",
+      "sha256": "4784fec6affcc4c5ec6d29f52f770de7bc80d179f91a8055761b1a15675b8087",
+      "note": "期望 (自然序), 由 rtl_mirror_fft64 位真产出"
+    },
+    {
+      "path": "vectors/fft_expected_bitrev.hex",
+      "role": "vector",
+      "sha256": "05e6b04a041adc027995a8109413abd467735aed1e85d6d12b7de01805ad4c7c",
+      "note": "期望 (位反序配置)"
+    },
+    {
+      "path": "CHANGELOG.md",
+      "role": "doc",
+      "sha256": "4c2720ca9da7fa504babb95e53ff3dfdb3a6d000050f2afd150f06d582d6d2ce"
+    },
+    {
+      "path": "docs/limitations.md",
+      "role": "doc",
+      "sha256": "e9227dbcbc6b339b7fa4c4fa57f899d68026b9d08f5d197726d12d256a57d571"
+    }
+  ],
+  "constraints": {
+    "target": {
+      "fmax": "100MHz",
+      "fmax_mhz": 100,
+      "lut": 2800,
+      "ff": 6000,
+      "bram": 2,
+      "dsp": 12
+    }
+  },
+  "alignment": {
+    "compare_mode": "cycle_accurate"
+  },
+  "reproduce": {
+    "sim": "node engineering-assets/cbb/fft64_sdf/run_sim.cjs --install",
+    "synth": "node engineering-assets/tools/pg-synth.cjs cbb/fft64_sdf",
+    "gate": "node engineering-assets/tools/gate-runner.cjs cbb/fft64_sdf --repo-root .",
+    "note": "run_sim.cjs 跑全部 8 个 TB, --install 由实跑结果写 reset-sim.json 与 stability/*.json; 任一 TB 不过即整体失败且不写任何证据。仿真器用 iverilog —— 本机 ModelSim 回环 RPC 自 2026-08-01 起故障。**不含向量重生成**: 那是 golden 侧动作, 入口在 models/comm/ofdm 的 run_all_tests, 不该混进 RTL 侧回归。"
+  },
+  "signoff": {
+    "by": "lihan",
+    "at": "2026-08-04",
+    "scope": [
+      "证据已复核 (全部由 run_sim.cjs --install 实跑落盘, 仿真器 Icarus Verilog 12.0): alignment-report.json (对治理 golden models/comm/ofdm 1.4.1 的 src/rtl_mirror_fft64.m, 2560 样点 0 失配, 0 容差, 预热 64 点后逐点比对) / reset-sim.json (6 个符号灌满流水后复位保持 3 拍, 41 个受复位寄存器逐项比对全过: core 的 6 个 SDF 级 + 2 个复乘 + 75 拍侧带延迟线 + 输出级, reorder 的写/读/输出三段) / stability 四子结果 (boundary 768 拍 / stress 4416 拍 / backpressure 2783 拍 / regression 7967 拍) / timing-summary.rpt + utilization.rpt + envelope-check.json (OOC @xc7k325tffg900-2: WNS +6.323ns @10ns 即 272.0MHz, WHS +0.158ns, 0 失败端点; LUT 2251/2800, FF 5033/6000, BRAM 0/2, DSP 10/12) / cdc-report.json (单时钟域 i_clk 结构扫描, cdc_tool=na —— 无具名 CDC 工具, 按规范降级且不声称 clean)",
+      "正确性锚: golden model_comm_ofdm 1.4.1 (run_all_tests 6/6)。该镜像自身经三判据: A 反向对已认证 rtl_mirror_tx 0 失配 / B 末级移位前峰值 40.710 < s21 的 64 / C 正向对浮点 fft_chain 最大 3.5 LSB (信号幅度 17800 LSB)",
+      "协议锚点: IEEE 802.11-2020 Clause 17 / 11a/g OFDM 20MHz, baseline; n_fft/标定式由 golden 的 ifft_chain/fft_chain 佐证, internal_width=21 由对抗构造实测定案; standard/clause 取自库基线未经标准原文核对 —— 口径已记入 protocol_anchor.anchor_basis",
+      "内部位宽 s21 的依据已由解析上界升级为实测: 对抗构造最坏 40.71 < 64 (可证上界 45.25, 裕量 1.41x), 并经 boundary 子结果直接观测 —— 满幅 Q2.14 直流下 bin0 理论值 8x 远超 s16, 实测饱和到 +32767 而非回绕成负数",
+      "已接受限制: P_DIR=1 (IFFT) 配置**没有该方向的 bit-true 对拍** —— 现有向量是正向的, 仅由方向专项 TB 与解析判据覆盖。若要把本核回切给 ofdm_tx_top 复用, 须先补 IFFT 方向的 0 容差对拍",
+      "已接受限制: 输入必须已被 AGC 缩到不削 Q2.14 (理想 OFDM 时域峰值 2.64 > ±2), 该假设不由本模块检查。M3 phy_loopback 若直接接 ofdm_tx_top 的 Q3.13 输出, **必须显式插入 Q3.13->Q2.14 定标级**",
+      "已接受限制: 无反压契约, 不可停顿。1.0.0 签字时曾据\"下游会拉低 tready\"写下\"两者之间必须有弹性缓冲, 是 M1 硬依赖\"; **1.0.1 实测修正该条** —— 在 cp_remove->fft64_sdf->channel_est_top 真实链路上 (xsim, 两帧背靠背, 中间置理想无限深 FIFO 观测) 反压 0 拍、缓冲峰值占用 1: 802.11a 每符号 16 拍 CP 空档就是下游需要的全部弹性。结论依赖 CP 间隙存在; 去掉间隙的对抗场景实测上界 23 个条目 (库内 axis_skid_buffer 与 stream_elastic_pipeline 的 DEPTH=2 在那种情况下不够)。",
+      "已接受限制 (1.0.1 新增, M1 链路功能洞): 撤 i_valid 不排空流水, 恰好卡住 **1 个符号** —— 帧结束后 cp_remove 转 UNSYNC 静默, fft64 收不到有效拍, 每帧稳定丢最后一个数据符号。tb_fft64_tail 已把它双向钉住 (不补冲刷必须丢 1 个; 补 64 拍有效零样点必须全排空)。**冲刷责任方尚未裁定** —— 该条待需求门禁, 在此之前集成方必须自行补 64 拍。",
+      "已接受限制: 数据通路与各级 FIFO 按设计不复位 (利于 BRAM/SRL 宏吸收), 复位后第一个符号带出未初始化值, **必须预热一个符号**; 尾部冲刷须继续馈有效拍且长度为 64 的整数倍",
+      "已接受限制: o_sb 仅 1 bit, 只保证与本符号首个输出同拍, 不承载帧内容",
+      "第二仿真器交叉验证 (1.0.1 还清): 全部判据 TB 在 Vivado xsim 2023.1 上用**同一份 TB、同一套判据**再跑一遍, 结果与 iverilog 一致 —— bit-true 那条由两个独立仿真器各自确认。复现: run_sim.cjs 加 --xsim。本机 ModelSim 回环 RPC 自 2026-08-01 起故障, 那条路仍不通。",
+      "未覆盖: 板级验证。"
+    ]
+  },
+  "waivers": [],
+  "superseded_by": null,
+  "notes": "八个 TB 全绿, 其中 tb_fft64_cosim 对 **治理 golden** (models/comm/ofdm 1.4.1 的 src/rtl_mirror_fft64.m) 2560 样点 0 失配, G-B-03 已过。0.1.0/0.1.1 时该证据出自暂存修正版镜像, 属出处欠账; 1.4.1 拷入后用治理资产重推期望向量, 结果与原向量**逐字节相同** (DELTA 0.0 LSB) —— 欠的是出处合规性, 不是数值, RTL 与向量未改一字节。重推脚本对 which(rtl_mirror_fft64) 做硬断言, 防 scratchpad 旧副本遮蔽。综合取证 (OOC @xc7k325tffg900-2): WNS +6.323ns @10ns (约 272MHz), WHS +0.158ns, LUT 2251 / FF 5033 / BRAM 0 / DSP 10 —— DSP 数与 s20 的 ifft64_sdf 相同, 实测确认 s21 加宽未把复乘挤出 DSP48E1。包络按先测量后声明的顺序填。向量字序为 {re, im}, 与 cp_remove 的 {im, re} 相反 (见 docs/limitations.md §3)。0.1.3 补齐 G-C-04 (41 个受复位寄存器逐项比对: core 的 6 个 SDF 级 + 2 个复乘 + 75 拍侧带延迟线 + 输出级, reorder 的写/读/输出三段) 与 G-C-05。**boundary 给出了 s21 不回绕的第一份实测证据**: 满幅 Q2.14 直流下 bin0 理论值 8x 远超 s16, 实测饱和到 +32767 而非回绕成负数; 满幅 Nyquist 交替同理落在 bin32。此前该结论只有解析论证。backpressure 判据是 i_beat (CE) 按 0~3 拍花样拉低时, 768 个输出点逐点与 i_beat 恒高的参考跑相同, 且冻结期间输入线换成满幅毒值也未被采样。"
+}

@@ -98,3 +98,31 @@ constraints/  ldpc_decoder.xdc
 cd engineering-assets
 node tools/gate-runner.cjs cbb/ldpc_codec --repo-root ..
 ```
+
+<!-- BEGIN:MANIFEST:PORTS -->
+<!-- Generated from manifest.json; do not edit this block. -->
+| Name | Dir | Width | Bus |
+|---|---|---:|---|
+| `i_clk_sys` | input | 1 | — |
+| `i_rst_sys` | input | 1 | — |
+| `s_axis_llr_tdata` | input | 10 | axi-stream |
+| `s_axis_llr_tvalid` | input | 1 | axi-stream |
+| `s_axis_llr_tready` | output | 1 | axi-stream |
+| `m_axis_data_tdata` | output | 1 | axi-stream |
+| `m_axis_data_tvalid` | output | 1 | axi-stream |
+| `m_axis_data_tready` | input | 1 | axi-stream |
+<!-- END:MANIFEST:PORTS -->
+
+<!-- BEGIN:MANIFEST:PARAMS -->
+<!-- Generated from manifest.json; do not edit this block. -->
+| Name | Values | Support |
+|---|---|---|
+<!-- END:MANIFEST:PARAMS -->
+
+<!-- BEGIN:MANIFEST:CLOCKRESET -->
+<!-- Generated from manifest.json; do not edit this block. -->
+| Field | Value |
+|---|---|
+| Clock | `i_clk_sys` (10 ns) |
+| Reset | `i_rst_sys` / active_high / sync |
+<!-- END:MANIFEST:CLOCKRESET -->

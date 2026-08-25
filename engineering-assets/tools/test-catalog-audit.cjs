@@ -292,13 +292,18 @@ const limitations = fs.readFileSync(
 assert(limitations.split(/\r?\n/).filter((line) => line.trim()).length >= 10);
 assert((limitations.match(/^##\s+/gm) || []).length >= 2);
 
-const roadmap = fs.readFileSync(
-  path.join(engineeringRoot, 'docs', 'governance', 'CBB-库成熟化路线图-V1.0.md'),
-  'utf8',
-);
-for (const section of ['目的', '现状基线', '两线模型', '分期计划', '缺口处置总表', '证据方案', '勘误清单', '变更记录']) {
-  assert(roadmap.includes(section), `roadmap must include ${section}`);
-}
+// 三份治理文档已废止 (2026-08-08 裁定)。
+//
+// 成熟化路线图 V1.0 / 其勘误 / ADR-001-foundation-first 三份文档, 随 272899f (2026-07-28)
+// 的断言一起入库而文档本身从未入库 —— 那个提交自述"上一轮遗留的未提交改动, 未经本会话
+// 复核"。原写法直接 readFileSync, ENOENT 把整个进程掀掉, ok 7~12 共 6 条检查一条都跑不到,
+// 静默 11 天。实际在用的治理载体是 CBB-治理与生产级准入规范-V1.0.md + adr/ 系列 +
+// new-asset-intake-SOP.md, 三者齐备且被本套件其余部分覆盖; 这三份从未存在过的文档不构成
+// 现行要求, 故删除对应断言而非补写不存在的决策内容。
+// 注意: 库内现有的 ADR-001 是 adr/ADR-001-axis-tready-and-output-registration.md,
+// 与被废止的 foundation-first 是两份不同决策, 编号被复用过, 不可混为一谈。
+// 若日后确需这三份文档, 应连同文档本身一并加回断言。
+
 const topReadme = fs.readFileSync(path.join(engineeringRoot, 'README.md'), 'utf8');
 assert(topReadme.includes('<!-- BEGIN:CATALOG:STATUS -->'));
 assert(topReadme.includes('<!-- END:CATALOG:STATUS -->'));
@@ -310,7 +315,14 @@ const deletionManifest = JSON.parse(fs.readFileSync(deletionManifestPath, 'utf8'
 assert.equal(deletionManifest.schema_version, '1.0');
 assert.equal(deletionManifest.baseline.git_head, 'dacefb7f8816c739723eaccc97ca04c99c4120f9');
 assert.equal(deletionManifest.dependency_recheck.tracked_files, 4100);
-assert.equal(deletionManifest.dependency_recheck.manifest_assets, scan.assets.length);
+// 与相邻三项一样对着**冻结基线**判, 不能跟活扫描比。
+//
+// deletion-manifest.json 是钉在 baseline.git_head=dacefb7 的一次性 stage-2 审计记录,
+// tracked_files/hdl_files/duplicate_hdl_groups 都是那一刻的常量; 唯独 manifest_assets
+// 原先与 scan.assets.length 比, 于是每新增一件资产它就必挂 —— 资产数已由当时的 14
+// 长到今天的 28。这条从 272899f 起就注定失败, 只是被前面路线图的 ENOENT 硬崩挡住,
+// 一直没跑到。
+assert.equal(deletionManifest.dependency_recheck.manifest_assets, 14);
 assert.equal(deletionManifest.dependency_recheck.hdl_files, 1239);
 assert.equal(deletionManifest.dependency_recheck.duplicate_hdl_groups, 46);
 assert.equal(deletionManifest.deletion_summary.permanent_delete_candidates, 0);
@@ -325,12 +337,8 @@ for (const candidate of deletionManifest.rejected_candidates) {
 }
 console.log('ok 8 - exact zero-deletion manifest and dependency recheck');
 
-const adrPath = path.join(engineeringRoot, 'docs', 'governance', 'ADR-001-foundation-first.md');
-assert(fs.existsSync(adrPath), 'ADR-001 must record the foundation-first decision');
-const adr = fs.readFileSync(adrPath, 'utf8');
-for (const term of ['ADR-001', 'Accepted', 'foundation-first', 'no forced promotion']) {
-  assert(adr.includes(term), `ADR-001 must include ${term}`);
-}
+// 注意: 库内现有的 ADR-001 是 adr/ADR-001-axis-tready-and-output-registration.md,
+// 与本条要找的 foundation-first 是**两份不同的决策**, 编号被复用了。不可拿前者顶替。
 assert(manifestSchema.properties.schema_version.enum.includes('1.1'), 'manifest schema must accept v1.1');
 assert(manifestSchema.properties.evidence_snapshot_ref, 'v1.1 must expose evidence_snapshot_ref');
 assert.equal(manifestSchema.properties.evidence_snapshot_ref.pattern, '^evidence/[a-z0-9_]+/[0-9]+\\.[0-9]+\\.[0-9]+/SNAPSHOT\\.json$', 'evidence_snapshot_ref must require versioned SNAPSHOT.json');
@@ -340,8 +348,15 @@ const goldenMissingVectors = { schema_version: '1.1', asset_uid: 'golden_probe',
 assert(gateValidate(manifestSchema, goldenMissingVectors).some((error) => /vectors/.test(error)), 'golden model without vectors must be RED');
 const certifiedGoldenMissingSignoff = { ...goldenMissingVectors, maturity: { level: 'certified' }, vectors: {} };
 assert(gateValidate(manifestSchema, certifiedGoldenMissingSignoff).some((error) => /signoff/.test(error)), 'certified golden without signoff must be RED');
-const intakeMissingTop = { schema_version: '1.1', asset_uid: 'rtl_probe', name: 'rtl_probe', owner: 'lihan', maturity: { level: 'intake' }, version: '0.1.0', requirement_ref: 'req', doc_refs: ['doc'], golden_model_ref: 'golden', fidelity: { status: 'pending' }, ports: [], clock: { name: 'i_clk' }, reset: { name: 'i_rst', polarity: 'active_high', type: 'sync' }, constraints: { target: { fmax: '100MHz' } }, sources: [] };
-assert(gateValidate(manifestSchema, intakeMissingTop).some((error) => /top/.test(error)), 'non-golden intake without top must be RED');
+// 本条原为 "non-golden intake without top must be RED", 与 schema 已经对不上了。
+// schema 的 intake 分支自述 "intake 准入 = schema-valid + 编译干净 + 锚链起点"
+// (引 规范 §3.1 L152-153, 且注明 272899f 曾误删本分支): intake 要的是 protocol_anchor,
+// **不要 top**; top 是非 primitive 在 qualification+ 才强制。测试停在旧契约上, 而它
+// 前面的 ENOENT 硬崩让这条从未被执行, 所以漂移一直没暴露。按现行 schema 分两条判。
+const intakeProbe = { schema_version: '1.1', asset_uid: 'rtl_probe', name: 'rtl_probe', owner: 'lihan', maturity: { level: 'intake' }, version: '0.1.0', requirement_ref: 'req', doc_refs: ['doc'], golden_model_ref: 'golden', fidelity: { status: 'pending' }, ports: [], clock: { name: 'i_clk' }, reset: { name: 'i_rst', polarity: 'active_high', type: 'sync' }, constraints: { target: { fmax: '100MHz' } }, sources: [] };
+assert(gateValidate(manifestSchema, intakeProbe).some((error) => /protocol_anchor/.test(error)), 'non-golden intake without protocol_anchor must be RED');
+const qualificationMissingTop = { ...intakeProbe, maturity: { level: 'qualification' }, protocol_anchor: {} };
+assert(gateValidate(manifestSchema, qualificationMissingTop).some((error) => /top/.test(error)), 'non-primitive qualification without top must be RED');
 
 function runP2(tool, args = []) {
   return cp.spawnSync(process.execPath, [path.join(engineeringRoot, 'tools', tool), '--root', engineeringRoot, ...args], {
@@ -365,7 +380,6 @@ for (const file of [
   'catalog/waiver-ledger.json',
   'catalog/knowledge-index.json',
   'catalog/KNOWLEDGE-INDEX.md',
-  'docs/governance/CBB-库成熟化路线图-勘误.md',
 ]) {
   assert(fs.existsSync(path.join(engineeringRoot, file)), `${file} must be generated or documented`);
 }
@@ -397,11 +411,6 @@ for (const args of [['--verify', 'rrc_polyphase_fir@0.4.0'], ['--verify-all']]) 
 const snapshotOriginal = fs.readFileSync(rrcSnapshot, 'utf8');
 const snapshotDir = path.dirname(rrcSnapshot);
 try {
-  const tampered = JSON.parse(snapshotOriginal);
-  tampered.files[0].sha256 = '0'.repeat(64);
-  fs.writeFileSync(rrcSnapshot, `${JSON.stringify(tampered, null, 2)}\n`, 'utf8');
-  const tamperResult = cp.spawnSync(process.execPath, [path.join(engineeringRoot, 'tools', 'evidence-snapshot.cjs'), '--root', engineeringRoot, '--verify', 'rrc_polyphase_fir@0.4.0'], { cwd: engineeringRoot, encoding: 'utf8' });
-  assert.notEqual(tamperResult.status, 0, 'snapshot hash tamper must be RED');
   const duplicate = JSON.parse(snapshotOriginal);
   duplicate.files.push({ ...duplicate.files[0] });
   fs.writeFileSync(rrcSnapshot, `${JSON.stringify(duplicate, null, 2)}\n`, 'utf8');
@@ -418,6 +427,27 @@ try {
 }
 const restoredVerify = cp.spawnSync(process.execPath, [path.join(engineeringRoot, 'tools', 'evidence-snapshot.cjs'), '--root', engineeringRoot, '--verify', 'rrc_polyphase_fir@0.4.0'], { cwd: engineeringRoot, encoding: 'utf8' });
 assert.equal(restoredVerify.status, 0, 'snapshot must return GREEN after tamper fixtures restore');
+
+// 哈希篡改必须打在**当前版本**快照上, 且版本要从 manifest 现算, 不能写死。
+//
+// 原先这条打在 rrc@0.4.0 上。写它的时候 rrc 就是 0.4.0(当前), 走的是校验哈希的分支;
+// 后来 rrc 升到 1.0.2, 0.4.0 变成 historical —— evidence-snapshot 对 historical 只查
+// 封套(重复路径/多余文件)就 return, 根本不比哈希(见其 §"A versioned snapshot is
+// immutable" 那段)。于是这条断言从某次版本推进起就永远失败, 只是被前面的 ENOENT
+// 硬崩挡着没跑到。写死版本号必然重蹈覆辙, 故从 manifest 现取。
+const rrcCurrentVersion = JSON.parse(fs.readFileSync(path.join(engineeringRoot, 'cbb', 'rrc_polyphase_fir', 'manifest.json'), 'utf8')).version;
+const currentSnapshotPath = path.join(engineeringRoot, 'evidence', 'rrc_polyphase_fir', rrcCurrentVersion, 'SNAPSHOT.json');
+assert(fs.existsSync(currentSnapshotPath), `current-version snapshot must exist: ${rrcCurrentVersion}`);
+const currentOriginal = fs.readFileSync(currentSnapshotPath, 'utf8');
+try {
+  const tampered = JSON.parse(currentOriginal);
+  tampered.files[0].sha256 = '0'.repeat(64);
+  fs.writeFileSync(currentSnapshotPath, `${JSON.stringify(tampered, null, 2)}\n`, 'utf8');
+  const tamperResult = cp.spawnSync(process.execPath, [path.join(engineeringRoot, 'tools', 'evidence-snapshot.cjs'), '--root', engineeringRoot, '--verify', `rrc_polyphase_fir@${rrcCurrentVersion}`], { cwd: engineeringRoot, encoding: 'utf8' });
+  assert.notEqual(tamperResult.status, 0, 'snapshot hash tamper must be RED on the current-version snapshot');
+} finally {
+  fs.writeFileSync(currentSnapshotPath, currentOriginal, 'utf8');
+}
 
 const rrcReadme = fs.readFileSync(path.join(engineeringRoot, 'cbb', 'rrc_polyphase_fir', 'README.md'), 'utf8');
 for (const section of ['PORTS', 'PARAMS', 'CLOCKRESET']) {
@@ -501,17 +531,28 @@ try {
   fs.rmSync(lineageScratch, { recursive: true, force: true });
 }
 
+// 判"有按版本归档的快照", 不判某个具体版本号。
+//
+// 原先写死 rrc@0.4.0 与 ldpc@0.1.0; ldpc 现存最早快照是 1.0.0, 0.1.0 从来不在树里,
+// 这条注定失败, 同样被更早的 ENOENT 硬崩挡着从未跑到。写死版本号必随版本推进而腐坏,
+// 而本条要守的契约是"快照按版本归档且被跟踪", 与具体版本无关。逐份内容的校验由
+// 紧随其后的 --verify-all 负责。
 for (const assetUid of ['rrc_polyphase_fir', 'ldpc_codec']) {
-  const snapshotPath = path.join(engineeringRoot, 'evidence', assetUid, assetUid === 'rrc_polyphase_fir' ? '0.4.0' : '0.1.0', 'SNAPSHOT.json');
-  assert(fs.existsSync(snapshotPath), `authoritative ${assetUid} snapshot must be versioned and tracked`);
+  const assetEvidenceDir = path.join(engineeringRoot, 'evidence', assetUid);
+  assert(fs.existsSync(assetEvidenceDir), `authoritative ${assetUid} evidence directory must exist`);
+  const versioned = fs.readdirSync(assetEvidenceDir, { withFileTypes: true })
+    .filter((entry) => entry.isDirectory() && /^[0-9]+\.[0-9]+\.[0-9]+$/.test(entry.name))
+    .filter((entry) => fs.existsSync(path.join(assetEvidenceDir, entry.name, 'SNAPSHOT.json')));
+  assert(versioned.length > 0, `authoritative ${assetUid} snapshot must be versioned and tracked`);
 }
 const allSnapshots = cp.spawnSync(process.execPath, [path.join(engineeringRoot, 'tools', 'evidence-snapshot.cjs'), '--root', engineeringRoot, '--verify-all'], { cwd: engineeringRoot, encoding: 'utf8' });
 assert.equal(allSnapshots.status, 0, `all authoritative snapshots must verify: ${allSnapshots.stderr || allSnapshots.stdout}`);
+// docs/plans/F-1-synch-cfo.md 与 F-2-ofdm-fft.md 已随三份治理文档一并废止:
+// 整个 docs/plans/ 目录从未入库(git 全历史无记录), 与它们同批的断言出自 272899f
+// 那次未经复核的遗留落盘。判定同 05430ce —— 不补写不存在的计划文档, 删断言。
 for (const file of [
   'tools/lib/default_nettype_none.vh',
   'tools/lib/default_nettype_wire.vh',
-  'docs/plans/F-1-synch-cfo.md',
-  'docs/plans/F-2-ofdm-fft.md',
   'docs/governance/new-asset-intake-SOP.md',
 ]) assert(fs.existsSync(path.join(engineeringRoot, file)), `${file} must be tracked as P3 support evidence`);
 assert(fs.readFileSync(path.join(engineeringRoot, 'tools/lib/default_nettype_none.vh'), 'utf8').includes('`default_nettype none'));

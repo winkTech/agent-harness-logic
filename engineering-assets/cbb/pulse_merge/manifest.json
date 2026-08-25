@@ -16,6 +16,11 @@
     "engineering-assets/cbb/pulse_merge/docs/provenance.json"
   ],
   "golden_model_ref": "pulse_merge_golden",
+  "protocol_anchor": {
+    "standard": "none",
+    "baseline_relation": "neutral",
+    "notes": "通用件: 脉冲计数合流, 与承载的数据语义无关。"
+  },
   "params": [
     {
       "name": "INPUT_WIDTH",

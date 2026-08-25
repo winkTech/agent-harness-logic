@@ -2,11 +2,11 @@
   "schema_version": "1.0",
   "asset_uid": "channel_est_top",
   "name": "channel_est_top",
-  "version": "1.0.2",
+  "version": "1.0.4",
   "owner": "lihan",
   "maturity": {
     "level": "certified",
-    "evidence_ref": "engineering-assets/evidence/channel_est_top/1.0.2/"
+    "evidence_ref": "engineering-assets/evidence/channel_est_top/1.0.4/"
   },
   "signoff": {
     "by": "lihan",
@@ -32,6 +32,22 @@
     "engineering-assets/docs/governance/adr/ADR-002-channel-est-estimation-basis.md"
   ],
   "golden_model_ref": "model_comm_channel_est",
+  "protocol_anchor": {
+    "standard": "IEEE 802.11-2020",
+    "baseline_relation": "baseline",
+    "clause": "17",
+    "profile": "11a/g OFDM 20MHz",
+    "scope": "DATA 场信道估计: 2xLTS 全用载波 LS + 数据符号 4 导频公共相位 (CPE) 跟踪, 输出 H(m) 供均衡器消费。不含均衡器本体、不含 SIGNAL、不含噪声方差估计 (故下游只能做 ZF 不能做 MMSE)。",
+    "parameters": {
+      "bw_mhz": 20,
+      "n_fft": 64,
+      "n_pilot_sc": 4,
+      "ltf_symbols": 2,
+      "data_format": "Q2.14 {Q,I} 16bit"
+    },
+    "deviations": [],
+    "anchor_basis": "standard/clause/profile 取自库基线, 未经标准原文核对。parameters 来自 rtl/channel_est_top.sv 头注释与 localparam (N_FFT=64, 4 导频, 2xLTS, 每符号 64 点 Q2.14) 及 integration/registry.json ITG-0001 的 pin 值 (N_FFT=64/N_PILOT=4); bw_mhz 来自基线 profile。"
+  },
   "fidelity": {
     "status": "bit_true"
   },
@@ -123,7 +139,7 @@
     {
       "path": "rtl/cpe_tracker.sv",
       "role": "rtl",
-      "sha256": "ceefd3e177841c3c85651e19c0ce308aa812af49e0f950b00fe81633e2e3bd99"
+      "sha256": "ca97a16753e8ba0d398c34110f14ed4e5183225c85268dd0b4a39751cd09dc72"
     },
     {
       "path": "rtl/cpe_rotate_out.sv",
@@ -143,7 +159,7 @@
     {
       "path": "tb/tb_channel_est_top.sv",
       "role": "tb",
-      "sha256": "c5aaa57408cbf3cf70e29cff63845c69c8d0ba34feb4bee20ce0c4a06d09fbcc"
+      "sha256": "784836f88f65ec23e43101c60dd2ee6d25bf8682a59b2381effa4e10c6d06ff3"
     },
     {
       "path": "tb/tb_chEst_cosim.sv",

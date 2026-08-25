@@ -28,6 +28,11 @@
   "doc_refs": [
     "engineering-assets/docs/governance/CBB-治理与生产级准入规范-V1.0.md"
   ],
+  "protocol_anchor": {
+    "standard": "none",
+    "baseline_relation": "neutral",
+    "notes": "通用件: AXI4 主接口的 DDR 访问控制。AXI4 是总线协议, 由 ports[].bus 记录, 不在本字段范围; 包内未声明任何 JEDEC DDR 版次。"
+  },
   "fidelity": {
     "status": "na"
   },

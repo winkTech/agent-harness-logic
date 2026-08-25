@@ -96,6 +96,7 @@ if (mode === 'counter') {
     stateFile: target,
     archiveDir: process.argv[7],
     lockTimeoutMs: Number(process.argv[8] || 5000),
+    forceTrack: true,
   });
 } else {
   throw new Error('unknown worker mode');
@@ -211,7 +212,7 @@ if (mode === 'counter') {
       tool_name: 'Read',
       cwd: projectRoot,
       session_id: `retention-session-${index}`,
-    }, { stateFile: watchdogFile, archiveDir: watchdogArchive });
+    }, { stateFile: watchdogFile, archiveDir: watchdogArchive, forceTrack: true });
   }
   const retainedWatchdog = JSON.parse(fs.readFileSync(watchdogFile, 'utf8'));
   assert.equal(Object.keys(retainedWatchdog.sessions || {}).length, 64);

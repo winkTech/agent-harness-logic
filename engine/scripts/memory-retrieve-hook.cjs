@@ -257,10 +257,6 @@ function relevantResult(query, result) {
   return overlap >= required;
 }
 
-/** 候选层补位阈值: 低于 verified 的 0.7, 但把 0.3/0.4 的噪声挡在外面。 */
-const CANDIDATE_MIN_CONFIDENCE = 0.6;
-const CANDIDATE_SLOTS = 2;
-
 function toMatch(r) {
   return {
     memoryId: r.id || r.memory_id || null,
@@ -277,11 +273,8 @@ function toMatch(r) {
 }
 
 /**
- * 两层检索 (D5 召回修复, 2026-07-29):
- *   层A: verified 事实 (原路径, 完整信任链) — 优先注入;
- *   层B: verified 不足 3 条时, candidate 事实 (≥0.6) 补位, 注入时显式标注未验证。
- * 依据: 51 条活跃事实中仅 2 条 verified, 默认信任门禁使其余 49 条结构性不可达;
- * 候选注入是摘要级 hint, 由 exposure→outcome 归因数据回头校准或退役。
+ * 默认召回只接受 verified 事实。candidate 与 unscoped 事实属于审计素材，
+ * 不得因为 verified 数量不足就进入普通 Agent 上下文。
  */
 function doMemoryQuery(query, label, deps = {}) {
   let wDb;
@@ -295,24 +288,7 @@ function doMemoryQuery(query, label, deps = {}) {
       scope: deps.scope,
     }).filter(r => relevantResult(query, r)).slice(0, 3);
 
-    const matches = verified.map(toMatch);
-    if (matches.length < 3) {
-      const seen = new Set(matches.map(m => m.memoryId));
-      // 候选层放开 unscoped: 存量事实多为未迁移 scope 的 legacy 条目
-      // (实测 49/51 为 scope_kind='unscoped'), 严格 scope 会把候选层整体清零。
-      const candidates = retrieveMemorySummary(query, {
-        db: wDb.db, limit: 5, maxChars: 200, minConfidence: CANDIDATE_MIN_CONFIDENCE,
-        trackHit: false, includeCandidates: true,
-        scope: { ...(deps.scope || {}), includeGlobal: true, allowUnscoped: true },
-      })
-        .filter(r => relevantResult(query, r))
-        .filter(r => r.verification_state !== 'verified')
-        .filter(r => !seen.has(r.id || r.memory_id || null))
-        .slice(0, CANDIDATE_SLOTS)
-        .map(toMatch);
-      matches.push(...candidates);
-    }
-    return matches;
+    return verified.map(toMatch);
   } catch { /* 静默 */ }
   finally {
     try { wDb?.close(); } catch { /* readonly cleanup */ }

@@ -167,6 +167,7 @@ const CORE_SCRIPTS = [
   'engine/scripts/lib/hook-registry.cjs',
   'engine/scripts/lib/project-scope.cjs',
   'engine/scripts/lib/verification-state.cjs',
+  'engine/scripts/lib/risk-policy.cjs',
   'engine/scripts/lib/memory-file-policy.cjs',
   'engine/scripts/lib/workflow-runtime.cjs',
   'engine/scripts/lib/project-directory-contract.cjs',
@@ -201,6 +202,8 @@ const CORE_SCRIPTS = [
   'engine/scripts/test-hooks/workflow-scenario-eval.cjs',
   'engine/scripts/test-hooks/dag-cancellation.cjs',
   'engine/scripts/test-hooks/gate-bypass-contract.test.cjs',
+  'engine/scripts/test-hooks/risk-policy-contract.cjs',
+  'engine/scripts/test-hooks/golden-protection-contract.test.cjs',
   'engine/scripts/test-hooks/git-ci-repro-contract.test.cjs',
   'engine/scripts/test-hooks/preflight-router-contract.cjs',
   'engine/scripts/test-hooks/prompt-context-contract.cjs',
@@ -212,6 +215,7 @@ const CORE_SCRIPTS = [
   'engine/scripts/test-hooks/state-concurrency.cjs',
   'engine/scripts/test-hooks/statusline-contract.cjs',
   'engine/scripts/test-hooks/transparency-retention.cjs',
+  'engine/scripts/test-hooks/render-workbuddy-contract.test.cjs',
   'engine/scripts/test-hooks/memory-outcome-loop-contract.cjs',
   'engine/scripts/test-hooks/memory-retirement-contract.cjs',
   'engine/scripts/test-hooks/evidence-status-basis-contract.cjs',
@@ -236,6 +240,11 @@ const CORE_SCRIPTS = [
   'engine/scripts/plan-accuracy.cjs',
   'engine/scripts/hdl-evidence-gate.cjs',
   'engine/scripts/delivery-tracker.cjs',
+  'engine/scripts/render-hook-settings.cjs',
+  'engine/scripts/transport/index.cjs',
+  'engine/scripts/transport/claude-code.cjs',
+  'engine/scripts/transport/workbuddy.cjs',
+  'engine/scripts/transport/codex.cjs',
 ];
 
 for (const script of CORE_SCRIPTS) {
@@ -1139,7 +1148,7 @@ define('HookRegistry', 'high-frequency and Stop hooks have bounded timeout contr
       && preflight?.isAsync === false,
     postflight: postflight.length === 2
       && postflight.every((entry) => entry.raw?.timeout <= 12 && entry.isAsync === false),
-    stopSummary: stopSummary?.raw?.timeout === 8 && stopSummary?.isAsync === false,
+    stopSummary: stopSummary?.raw?.timeout === 40 && stopSummary?.isAsync === false,
     stopObserver: stopObserver?.raw?.timeout === 30 && stopObserver?.isAsync === true,
     internalHooksRetired: !memory && !pressure && !watchdog,
     lintRetired: !lint,
@@ -1558,6 +1567,7 @@ define('ProgressWatchdog', '不含 status 的真实 PostToolUse 载荷按输出�
   const mk = (stdout) => JSON.stringify({
     hook_event_name: 'PostToolUse',
     tool_name: 'Bash',
+    task_kind: 'repair',
     cwd: tmp,
     session_id: 'real-payload-session',
     tool_input: { command: 'vsim -c -do run_sim.do' },
@@ -1653,7 +1663,7 @@ define('VerificationGate', '不含 status 的真实 PostToolUse 载荷可清除�
   };
 });
 
-define('ProgressWatchdog', '只读探索不会累计无进展或触发阻断', () => {
+define('ProgressWatchdog', '普通只读探索不创建 watchdog 状态', () => {
   const p = path.join(HOME, 'engine/hooks/session/progress-watchdog.cjs');
   const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'progress-watchdog-readonly-'));
   const env = {
@@ -1665,15 +1675,13 @@ define('ProgressWatchdog', '只读探索不会累计无进展或触发阻断', (
   const payload = JSON.stringify({ hook_event_name: 'PreToolUse', tool_name: 'Read', cwd: tmp });
   const first = runNode(p, payload, { cwd: tmp, env });
   const second = runNode(p, payload, { cwd: tmp, env });
-  const state = JSON.parse(fs.readFileSync(env.PROGRESS_WATCHDOG_STATE_FILE, 'utf8'));
-  const session = Object.values(state.sessions)[0];
+  const stateExists = fs.existsSync(env.PROGRESS_WATCHDOG_STATE_FILE);
   const archiveExists = fs.existsSync(env.PROGRESS_WATCHDOG_ARCHIVE_DIR);
   const pass = first.status === 0
     && second.status === 0
-    && session.noProgressTurns === 0
-    && session.history.every((item) => item.kind === 'activity')
+    && !stateExists
     && !archiveExists;
-  return { pass, detail: `first=${first.status} second=${second.status} turns=${session.noProgressTurns}` };
+  return { pass, detail: `first=${first.status} second=${second.status} state=${stateExists}` };
 });
 
 define('ProgressWatchdog', '默认观察模式只警告不归档或阻断', () => {
@@ -1727,6 +1735,65 @@ define('ProgressWatchdog', '相同项目中的不同 session 使用独立进度�
   return {
     pass,
     detail: `first=${first.status} second=${second.status} sessions=${JSON.stringify(sessions)}`,
+  };
+});
+
+define('ProgressWatchdog', 'WorkBuddy transport: 显式 status:failed 的 PostToolUse 经归一化触发修复循环', () => {
+  // D1 双 transport 验证：同一 payload 经 claude-code transport 归一化后
+  // event.status=unknown（adapter 不读 payload.status 字段），不触发
+  // repair_loop；经 workbuddy transport 归一化后 event.status=failed
+  // （adapter 读 payload.status），触发 repair_loop。这证明 transport
+  // 归一化层在 progress-watchdog 中正确接入且语义有实质区别。
+  const p = path.join(HOME, 'engine/hooks/session/progress-watchdog.cjs');
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'progress-watchdog-wb-transport-'));
+  const watchdog = require(p);
+
+  // 输出无 PASS/FAIL 标记、无退出码 —— 唯一的失败证据是 payload.status:'failed'
+  const payload = {
+    hook_event_name: 'PostToolUse',
+    tool_name: 'Bash',
+    cwd: tmp,
+    session_id: 'wb-transport-session',
+    tool_input: { command: 'python -m pytest -q' },
+    tool_response: { stdout: 'collected 3 items\nno markers in output', stderr: '' },
+    status: 'failed',
+  };
+
+  // --- claude-code transport: adapter 忽略 payload.status → event.status=unknown ---
+  const ccStateFile = path.join(tmp, 'cc-state.json');
+  const ccResult = watchdog.updateProgress(payload, {
+    stateFile: ccStateFile,
+    archiveDir: path.join(tmp, 'cc-archive'),
+    transport: 'claude-code',
+    maxNoProgressTurns: 4,
+    mode: 'enforce',
+  });
+  // CC: 无失败证据 → inconclusive → activity → not_tracked
+  const ccStateExists = fs.existsSync(ccStateFile);
+
+  // --- workbuddy transport: adapter 读取 payload.status → event.status=failed ---
+  const wbStateFile = path.join(tmp, 'wb-state.json');
+  const wbResult = watchdog.updateProgress(payload, {
+    stateFile: wbStateFile,
+    archiveDir: path.join(tmp, 'wb-archive'),
+    transport: 'workbuddy',
+    maxNoProgressTurns: 4,
+    mode: 'enforce',
+  });
+  // WB: event.status=failed → repair_loop + no_progress
+  const wbState = JSON.parse(fs.readFileSync(wbStateFile, 'utf8'));
+  const wbSession = Object.values(wbState.sessions)[0];
+
+  const pass = ccResult.status === 'not_tracked'
+    && !ccStateExists
+    && wbResult.status === 'no_progress'
+    && wbResult.classification?.kind === 'no_progress'
+    && wbSession.noProgressTurns === 1
+    && wbSession.lastVerification?.status === 'failed';
+
+  return {
+    pass,
+    detail: `cc=${ccResult.status}/${ccStateExists} wb=${wbResult.status}/${wbSession.noProgressTurns} verification=${JSON.stringify(wbSession.lastVerification)}`,
   };
 });
 
@@ -2218,7 +2285,14 @@ define('E2ETests', '全部 E2E 通过', () => {
     encoding: 'utf8', timeout: 30000, windowsHide: true,
   });
   const passed = r.status === 0 && !r.error && !r.signal;
-  return { pass: passed, detail: passed ? 'exit=0' : `exit=${r.status} signal=${r.signal || 'none'}` };
+  // 原先只报 exit/signal, 子进程说了什么全丢 —— 与 painpoints 同一个毛病。
+  return {
+    pass: passed,
+    notice: passed ? childSkipNotice(r.stdout) : null,
+    detail: passed
+      ? 'exit=0'
+      : `exit=${r.status} signal=${r.signal || 'none'} ${failingLines(r.stdout || r.stderr || r.error?.message || '')}`,
+  };
 });
 
 // 子进程失败时的诊断截断。
@@ -2233,6 +2307,85 @@ function headTail(text, head = 400, tail = 400) {
   return `${s.slice(0, head)}\n…[中略 ${s.length - head - tail} 字符]…\n${s.slice(-tail)}`;
 }
 
+// 子进程输出里**按内容**摘失败项, 不按位置切。
+//
+// headTail 在这里必然失手: 被测脚本会把 50+ 行结果全打出来, 失败项在**中间**。
+// 实测 painpoints 挂掉时, headTail 保住的是开头几条 PASS 和结尾的
+// "Summary: 53/54 passed, 1 failed" —— 唯独没有挂掉的那条叫什么, 更没有断言文案。
+// 能定位的最小信息是"失败行 + 紧随其后的缩进详情行"(详情里才有期望值与实际值)。
+//
+// 格式约定 (两个子套件一致): 失败行含 FAIL 或 ❌ 且自带测试名, 详情是缩进续行。
+// 摘不到就退回 headTail —— 子进程崩在打印之前时, 栈帧仍在 stdout/stderr 里。
+function failingLines(text, maxLines = 40, maxChars = 1500) {
+  const lines = String(text || '').replace(/\x1b\[[0-9;]*m/g, '').split(/\r?\n/);
+  const picked = [];
+  for (let i = 0; i < lines.length && picked.length < maxLines; i += 1) {
+    if (!/FAIL|❌|✖/.test(lines[i])) continue;
+    picked.push(lines[i].trim());
+    // 详情是缩进续行; 遇到下一条结果行或非缩进行即停。
+    for (let j = i + 1; j < lines.length && j <= i + 8 && picked.length < maxLines; j += 1) {
+      if (!/^\s+\S/.test(lines[j])) break;
+      if (/PASS|SKIP|FAIL|[✅❌]/.test(lines[j])) break;
+      picked.push(lines[j].trim());
+    }
+  }
+  return picked.length ? headTail(picked.join('\n'), maxChars, 0) : headTail(text);
+}
+
+// 子套件自报的跳过数, 提取成 notice 冒泡给报告器。
+//
+// 子套件跳过判据后照样 exit 0, 父层拿到的只有退出码, 于是"少验了一条"这个事实
+// 在门禁层面消失。这里读它自报的 "N skipped" 与 SKIP 行, 让降级在 CI 上留痕。
+function childSkipNotice(stdout) {
+  const text = String(stdout || '').replace(/\x1b\[[0-9;]*m/g, '');
+  const summary = text.match(/(\d+)\s+skipped/);
+  if (!summary || Number(summary[1]) === 0) return null;
+  const lines = text.split(/\r?\n/);
+  const picked = [];
+  for (let i = 0; i < lines.length && picked.length < 12; i += 1) {
+    if (!/\bSKIP\b/.test(lines[i])) continue;
+    picked.push(lines[i].trim());
+    for (let j = i + 1; j < lines.length && j <= i + 4; j += 1) {
+      if (!/^\s+\S/.test(lines[j])) break;
+      if (/\b(PASS|FAIL|SKIP)\b/.test(lines[j])) break;
+      picked.push(lines[j].trim());
+    }
+  }
+  return `⚠ 子套件跳过 ${summary[1]} 条判据, 门禁未验证:\n${picked.join('\n')}`;
+}
+
+// ── 资产库自测接入门禁 ─────────────────────────────────────────────────────
+//
+// engineering-assets/tools/test-*.cjs 此前**完全没有**被任何门禁调用: engine/scripts
+// 与 .github/workflows 里都搜不到它们。后果是 test-catalog-audit 从 2026-07-28 起一直
+// 硬崩(readFileSync 一份从未入库的治理文档), 而 harness-ci 442/442 全绿, 没有任何
+// 迹象。整整 11 天里它掩埋了 6 个真问题 —— 陈旧派生视图、失效的快照防篡改断言、
+// 与 schema 对不上的契约判据等。接进来才谈得上"门禁覆盖资产库"。
+const ASSET_TEST_SUITES = [
+  ['catalog/audit 契约', 'test-catalog-audit.cjs'],
+  ['抽取流水线契约', 'test-extraction-pipeline.cjs'],
+  ['协议锚点契约', 'test-protocol-anchor.cjs'],
+  // 跨包判据: 每个包的 TB 与自己的 RTL 用同一套约定互相印证, 两边一起错也照样全绿。
+  // 2026-08-09 实测抓到两例 (TX/RX 导频值相反、RX 不施加逐符号极性), 两件已认证资产
+  // 串起来 CPE 直接失效而各自 22 门全过。MATLAB 缺席时显式 SKIP 计数, 不当成通过。
+  ['跨包链路判据', 'test-chain-contracts.cjs'],
+];
+for (const [label, script] of ASSET_TEST_SUITES) {
+  define('EngineeringAssets', label, () => {
+    const p = path.join(HOME, 'engineering-assets/tools', script);
+    if (!fs.existsSync(p)) return { pass: true, skip: true, detail: `${script} 不存在` };
+    const r = spawnSync('node', [p], { encoding: 'utf8', timeout: 120000, windowsHide: true });
+    const passed = r.status === 0 && !r.error && !r.signal;
+    return {
+      pass: passed,
+      notice: passed ? childSkipNotice(r.stdout) : null,
+      detail: passed
+        ? 'exit=0'
+        : `exit=${r.status} signal=${r.signal || 'none'} ${failingLines(r.stdout || r.stderr || r.error?.message || '')}`,
+    };
+  });
+}
+
 define('PainpointRegression', 'harness-painpoints.cjs 全部通过', () => {
   const p = path.join(HOME, 'engine/scripts/test-hooks/harness-painpoints.cjs');
   if (!fs.existsSync(p)) return { pass: false, detail: 'harness-painpoints.cjs 不存在' };
@@ -2244,15 +2397,18 @@ define('PainpointRegression', 'harness-painpoints.cjs 全部通过', () => {
   // 除了一个 exit=1 什么都看不到, 无法定位。painpoints 把失败项打在 stdout。
   return {
     pass: passed,
+    notice: passed ? childSkipNotice(r.stdout) : null,
     detail: passed
       ? 'exit=0'
-      : `exit=${r.status} signal=${r.signal || 'none'} ${headTail(r.stdout || r.stderr || r.error?.message || '')}`,
+      : `exit=${r.status} signal=${r.signal || 'none'} ${failingLines(r.stdout || r.stderr || r.error?.message || '')}`,
   };
 });
 
 const AUDIT_REMEDIATION_CONTRACTS = [
   ['DAG cancellation', 'dag-cancellation.cjs', 30000],
   ['controlled gate bypass', 'gate-bypass-contract.test.cjs', 30000],
+  ['risk-adaptive policy', 'risk-policy-contract.cjs', 30000],
+  ['golden protection contract', 'golden-protection-contract.test.cjs', 30000],
   ['Git and CI reproducibility', 'git-ci-repro-contract.test.cjs', 30000],
   ['single-process preflight router', 'preflight-router-contract.cjs', 30000],
   ['single-process prompt context', 'prompt-context-contract.cjs', 30000],
@@ -2283,6 +2439,8 @@ const AUDIT_REMEDIATION_CONTRACTS = [
   ['guard pattern coverage', 'guard-coverage-contract.cjs', 60000],
   ['ten dimension dashboard', 'ten-dimension-contract.cjs', 180000],
   ['weekly report wiring', 'weekly-report-contract.cjs', 180000],
+  ['transport normalization contract', 'transport-contract.test.cjs', 30000],
+  ['workbuddy render target', 'render-workbuddy-contract.test.cjs', 30000],
 ];
 
 for (const [name, relative, timeout, extraArgs = []] of AUDIT_REMEDIATION_CONTRACTS) {
@@ -4407,6 +4565,9 @@ function runSuite() {
   let passed = 0, failed = 0, skipped = 0;
   const skipManifest = loadSkipManifest();
   const unknownSkips = [];
+  // 子套件内部的跳过不能计进 skipped —— 那三个计数是父层自己的测试数, 混进子套件的
+  // 会让"总计"与实际测试数对不上。改为单独记名字, 在汇总旁另起一行告警。
+  const childSkipNotices = [];
   const harnessCases = [];
 
   for (const [suiteName, suiteTests] of Object.entries(bySuite)) {
@@ -4431,16 +4592,26 @@ function runSuite() {
             skipped++;
           } else {
             console.log(fail('未知跳过'));
-            console.log(`    ${C.dim}${result.detail?.slice(0, 200)}${C.reset}`);
+            console.log(`    ${C.dim}${headTail(result.detail)}${C.reset}`);
             unknownSkips.push(t.id);
             failed++;
           }
         } else if (result.pass) {
           console.log(ok('通过'));
+          // 通过时也要打 notice。子套件在自己进程里跳过一条判据后仍然 exit 0,
+          // 父层只会显示"通过 ✅", 而 detail 在通过路径上根本不打印 —— 于是一条被
+          // 降级的判据在门禁层面完全静默: CI 看到的是全绿, 没有任何迹象表明少验了
+          // 什么。"可见的跳过"这个承诺正是在跨进程边界上失守的。
+          if (result.notice) {
+            // 续行也要缩进, 否则子套件的跳过原文顶到第 0 列, 看着像顶层输出。
+            const body = headTail(result.notice).split('\n').join('\n    ');
+            console.log(`    ${C.dim}${body}${C.reset}`);
+            childSkipNotices.push(t.name);
+          }
           passed++;
         } else {
           console.log(fail('失败'));
-          console.log(`    ${C.dim}${result.detail?.slice(0, 200)}${C.reset}`);
+          console.log(`    ${C.dim}${headTail(result.detail)}${C.reset}`);
           failed++;
         }
       } catch (e) {
@@ -4482,6 +4653,12 @@ function runSuite() {
   console.log('\n━━━ 汇总 ━━━');
   console.log(`  总计: ${total}  |  通过: ${passed}  |  失败: ${failed}  |  跳过: ${skipped}`);
   console.log(`  分数: ${grade} ${score}%`);
+  // 上面那个"跳过"只统计父层自己的测试。子套件在自己进程里降级掉的判据不在其中,
+  // 只扫汇总行的人会把它读成"全都验过了" —— 所以另起一行点名, 不动计数语义。
+  if (childSkipNotices.length) {
+    console.log(`  ${warn(`另有 ${childSkipNotices.length} 项子套件内部降级(判据未验证), 明细见上方 ⚠ 行: `
+      + childSkipNotices.join('; '))}`);
+  }
 
   if (harnessMetrics) {
     console.log(`  Harness verification: ${formatHarnessMetrics(harnessMetrics)}`);

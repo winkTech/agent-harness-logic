@@ -5,6 +5,7 @@ const crypto = require('node:crypto');
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
+const { withFileLockSync } = require('./project-scope.cjs');
 
 const HARNESS_ROOT = path.resolve(__dirname, '../../..');
 const MIN_REASON_LENGTH = 16;
@@ -54,7 +55,28 @@ function appendAudit(auditPath, record) {
   }
 }
 
-function evaluateGateBypass({ gateId, sessionId, env = process.env, now = Date.now(), auditPath }) {
+function readAuditRecords(auditPath) {
+  try {
+    if (!fs.existsSync(auditPath)) return [];
+    return fs.readFileSync(auditPath, 'utf8').split(/\r?\n/).filter(Boolean)
+      .map((line) => {
+        try { return JSON.parse(line); } catch { return null; }
+      }).filter(Boolean);
+  } catch {
+    return [];
+  }
+}
+
+function evaluateGateBypass({
+  gateId,
+  sessionId,
+  env = process.env,
+  now = Date.now(),
+  auditPath,
+  actionHash = '',
+  requireActionBinding = false,
+  oneShot = false,
+}) {
   const requested = bypassRequested(env);
   if (!requested) return { requested: false, allowed: false, errors: [] };
 
@@ -68,6 +90,9 @@ function evaluateGateBypass({ gateId, sessionId, env = process.env, now = Date.n
   const issuedAt = /^\d+$/.test(issuedAtRaw) ? Number(issuedAtRaw) : Date.parse(issuedAtRaw);
   const issuedAtValid = Number.isFinite(issuedAt) && Number.isFinite(new Date(issuedAt).getTime());
   const ttlMs = /^\d+$/.test(ttlRaw) ? Number(ttlRaw) : Number.NaN;
+  const boundActionHash = String(env.CLAUDE_GATES_DISABLE_ACTION_SHA256 || '').trim().toLowerCase();
+  const currentActionHash = String(actionHash || '').trim().toLowerCase();
+  const nonce = String(env.CLAUDE_GATES_DISABLE_NONCE || '').trim();
   const errors = [];
 
   if (reason.length < MIN_REASON_LENGTH) errors.push('reason_too_short');
@@ -85,6 +110,14 @@ function evaluateGateBypass({ gateId, sessionId, env = process.env, now = Date.n
   if (issuedAtValid && Number.isSafeInteger(ttlMs) && now > issuedAt + ttlMs) {
     errors.push('authorization_expired');
   }
+  if (requireActionBinding) {
+    if (!/^[a-f0-9]{64}$/.test(boundActionHash)) errors.push('action_binding_missing');
+    if (!/^[a-f0-9]{64}$/.test(currentActionHash)) errors.push('action_hash_invalid');
+    if (/^[a-f0-9]{64}$/.test(boundActionHash)
+        && /^[a-f0-9]{64}$/.test(currentActionHash)
+        && boundActionHash !== currentActionHash) errors.push('action_mismatch');
+  }
+  if (oneShot && (nonce.length < 12 || nonce.length > 128)) errors.push('nonce_invalid');
 
   let resolvedAuditPath;
   try {
@@ -93,7 +126,16 @@ function evaluateGateBypass({ gateId, sessionId, env = process.env, now = Date.n
     errors.push(error.message === 'audit_path_out_of_scope' ? 'audit_path_out_of_scope' : 'audit_path_invalid');
   }
 
-  const allowedBeforeAudit = errors.length === 0;
+  let allowedBeforeAudit = errors.length === 0;
+  const nonceHash = digest(nonce);
+  const authorizationHash = digest([
+    String(gateId || ''),
+    boundSession,
+    issuedAtValid ? String(issuedAt) : '',
+    Number.isSafeInteger(ttlMs) ? String(ttlMs) : '',
+    boundActionHash,
+    nonceHash,
+  ].join('|'));
   const record = {
     event: 'gate-bypass-evaluation',
     decision: allowedBeforeAudit ? 'allowed' : 'rejected',
@@ -105,6 +147,9 @@ function evaluateGateBypass({ gateId, sessionId, env = process.env, now = Date.n
     reasonLength: reason.length,
     actorHash: digest(actor),
     sessionHash: digest(boundSession),
+    actionHash: /^[a-f0-9]{64}$/.test(boundActionHash) ? boundActionHash : digest(boundActionHash),
+    nonceHash,
+    authorizationHash,
     evaluatedAt: new Date(now).toISOString(),
     issuedAt: issuedAtValid ? new Date(issuedAt).toISOString() : null,
     ttlMs: Number.isSafeInteger(ttlMs) ? ttlMs : null,
@@ -113,7 +158,20 @@ function evaluateGateBypass({ gateId, sessionId, env = process.env, now = Date.n
 
   if (resolvedAuditPath) {
     try {
-      appendAudit(resolvedAuditPath, record);
+      withFileLockSync(resolvedAuditPath, () => {
+        if (oneShot && allowedBeforeAudit) {
+          const consumed = readAuditRecords(resolvedAuditPath).some(entry =>
+            entry.decision === 'allowed' && entry.authorizationHash === authorizationHash
+          );
+          if (consumed) {
+            errors.push('authorization_consumed');
+            allowedBeforeAudit = false;
+          }
+        }
+        record.decision = allowedBeforeAudit ? 'allowed' : 'rejected';
+        record.errors = [...errors];
+        appendAudit(resolvedAuditPath, record);
+      });
     } catch {
       errors.push('audit_write_failed');
     }
@@ -141,13 +199,26 @@ function sessionIdFrom(payload, context, env = process.env) {
   ).trim();
 }
 
-function evaluateGuardBypass({ gateId, payload, context, env = process.env, now, auditPath }) {
+function evaluateGuardBypass({
+  gateId,
+  payload,
+  context,
+  env = process.env,
+  now,
+  auditPath,
+  actionHash,
+  requireActionBinding,
+  oneShot,
+}) {
   const result = evaluateGateBypass({
     gateId,
     sessionId: sessionIdFrom(payload, context, env),
     env,
     ...(now === undefined ? {} : { now }),
     ...(auditPath === undefined ? {} : { auditPath }),
+    ...(actionHash === undefined ? {} : { actionHash }),
+    ...(requireActionBinding === undefined ? {} : { requireActionBinding }),
+    ...(oneShot === undefined ? {} : { oneShot }),
   });
   if (result.requested) {
     console.error(`[gate-bypass] ${JSON.stringify({

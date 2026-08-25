@@ -1041,7 +1041,12 @@ test('semantic retrieval and quiet knowledge checks fail closed on a stale index
   assert(fresh.stale === false && fresh.changed === 0 && fresh.unindexed === 0,
     `new index was not fresh: ${JSON.stringify(fresh)}`);
 
-  const freshQuery = semantic.querySemantic('alpha handshake', { home: fixture, topK: 3 });
+  // now 必须与上面 inspectIndexFreshness 用同一个注入时钟。漏掉会落回 Date.now(),
+  // 于是 ageDays 从固定夹具 (2026-07-28) 一路真实增长, 越过 DEFAULT_MAX_AGE_DAYS=7 之后
+  // 这条"新索引应可查"的断言就永久失败 —— 2026-08-04 正好是引爆日。
+  const freshQuery = semantic.querySemantic('alpha handshake', {
+    home: fixture, topK: 3, now: Date.parse('2026-07-28T00:30:00.000Z'),
+  });
   assert(freshQuery.ok === true && freshQuery.results.length === 1,
     `fresh index query failed: ${JSON.stringify(freshQuery)}`);
 
@@ -1057,7 +1062,11 @@ test('semantic retrieval and quiet knowledge checks fail closed on a stale index
   });
   assert(stale.stale === true && stale.changed === 1 && stale.unindexed === 1,
     `mtime/unindexed drift was missed: ${JSON.stringify(stale)}`);
-  const blocked = semantic.querySemantic('alpha handshake', { home: fixture, topK: 3 });
+  // 同样注入时钟。漏掉的话这条会因为"索引过期"而通过, 而不是因为它真正要测的
+  // mtime/unindexed 漂移 —— 断言空转, 看着绿但什么都没验证。
+  const blocked = semantic.querySemantic('alpha handshake', {
+    home: fixture, topK: 3, now: Date.parse('2026-07-28T01:30:00.000Z'),
+  });
   assert(blocked.ok === false && blocked.status === 'stale_index' && blocked.results.length === 0,
     `stale query returned untrustworthy results: ${JSON.stringify(blocked)}`);
 

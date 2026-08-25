@@ -28,6 +28,21 @@
   "doc_refs": [
     "engineering-assets/docs/governance/CBB-治理与生产级准入规范-V1.0.md"
   ],
+  "protocol_anchor": {
+    "standard": "IEEE 802.3",
+    "baseline_relation": "cross_version",
+    "profile": "Ethernet MAC 字节流成帧 (GMII 语义)",
+    "scope": "载波字节流上的前导/SFD 检测与成帧: >=P_MIN_PREAMBLE 个 0x55 + SFD 0xD5 之后转数据。不含 FCS 校验 (那是 crc32 的事)、不含 MAC 帧解析。",
+    "parameters": {
+      "preamble_byte": "0x55",
+      "sfd_byte": "0xD5",
+      "min_preamble_bytes": 2,
+      "valid_semantics": "GMII rx_dv (帧内必须连续, 拉低即帧尾)"
+    },
+    "deviations": [],
+    "anchor_basis": "standard 由包内实据反推: README 明写检测 0x55 前导 + 0xD5 SFD 且 i_valid 为 GMII rx_dv 语义, 三者合起来唯一指向以太网成帧。**未填版次年号**: README 未声明具体版次, 不臆造。min_preamble_bytes 取 integration/registry.json ITG-0021 的 pin 值 P_MIN_PREAMBLE=2。",
+    "notes": "跨标准理由: 本件锚在 IEEE 802.3 (以太网) 而非库基线的 802.11 —— 名字里的 \"frame_sync\" 容易被当成 802.11 帧同步件误取。802.11 的突发同步是 sync_top (STS/LTS 相关), 与本件无共用逻辑。baseline_relation 用 cross_version 表达\"非基线\", 涵盖跨版次与跨标准族两种情形。"
+  },
   "fidelity": {
     "status": "na"
   },

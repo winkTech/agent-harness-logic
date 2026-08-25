@@ -1,0 +1,366 @@
+{
+  "schema_version": "1.0",
+  "asset_uid": "fft64_sdf",
+  "version": "1.0.2",
+  "created_at": "2026-08-04T08:10:22.334Z",
+  "git_head": "05430ce49491c9a596654442e8e8df04de233fed",
+  "manifest_sha256": "89d8fafd6d6d7a95a8fe40126f3df8ba87d1b6d92dda0410c3709292895780e1",
+  "evidence_source": "var/gates/pg/fft64_sdf",
+  "files": [
+    {
+      "path": "alignment-report.json",
+      "sha256": "cbdf7fb022c69e32c3469fa39489e5aad4ffe5906e2d72a098a3e31d0f7cac32",
+      "bytes": 2139
+    },
+    {
+      "path": "cdc-report.json",
+      "sha256": "000c0cd760a61a0dc1b286c4006d6ba8dc3470a24e52fd0434d37d440c988895",
+      "bytes": 344
+    },
+    {
+      "path": "clocks.rpt",
+      "sha256": "b74a40b1ea85f6ff0714d82929a1ceb649c8377a83f04907ac6a146598d29392",
+      "bytes": 1491
+    },
+    {
+      "path": "CS-1.json",
+      "sha256": "f5d82dc282cab7aec0f5f93abab516a112db3a0ed10f4d7dfc4bea61a6b4bf3d",
+      "bytes": 161
+    },
+    {
+      "path": "CS-2.json",
+      "sha256": "31cfa0fe6a8e813b089bab7519f8d7332d6ac49ceb941ac8a253f18192906a78",
+      "bytes": 178
+    },
+    {
+      "path": "envelope-check.json",
+      "sha256": "925bbba4ff479fd0c8c27a5578402a405cbadf417d59f0d80bddf09acf9a589f",
+      "bytes": 885
+    },
+    {
+      "path": "G-A-00.json",
+      "sha256": "1553807a32df473c43c1a71fe05ab92b0d178e9a3274c4c5bfdf4ca513662ca4",
+      "bytes": 186
+    },
+    {
+      "path": "G-A-01.json",
+      "sha256": "10dc7da3f0f2a61b6ff64d75dd0c662bf01d372ede45918111b1c9d776adc795",
+      "bytes": 169
+    },
+    {
+      "path": "G-A-02.json",
+      "sha256": "fcbc3b0c6fc9d62236fd1274e7d54c852f33655ff92b71b2bf2c2bd1977d739c",
+      "bytes": 172
+    },
+    {
+      "path": "G-A-04.json",
+      "sha256": "16aedcf88a66d617b89719cd1b342d3090dd0408e4c644975badaf817cac4479",
+      "bytes": 179
+    },
+    {
+      "path": "G-B-01.json",
+      "sha256": "5697de9b5cb2b1390ba3a6a7a825fa958c6592a922e1790f2958890f95b708db",
+      "bytes": 168
+    },
+    {
+      "path": "G-B-02.json",
+      "sha256": "c93f5708da89ca392618f17c69e7706c3812848446b3c7c2012c781698a73187",
+      "bytes": 206
+    },
+    {
+      "path": "G-B-03.json",
+      "sha256": "060005204a8e03d70244366501954ad6c4ee50b92d2cfae50c7349dff8b7d778",
+      "bytes": 241
+    },
+    {
+      "path": "G-B-04.json",
+      "sha256": "6fc6aa9c54f3d6b294c6902a08cd1918f0ad03ccffc5f41f03853ba00b5371e7",
+      "bytes": 222
+    },
+    {
+      "path": "G-C-01.json",
+      "sha256": "9d7f9a59694f670b291244c02cd53d0c4b9d0526fb132fee2cee350979653669",
+      "bytes": 213
+    },
+    {
+      "path": "G-C-02.json",
+      "sha256": "40dae912361fa395a53823687bf6796dd38bed199ccb10ac23f2d00f2f6c52a3",
+      "bytes": 218
+    },
+    {
+      "path": "G-C-03.json",
+      "sha256": "37d2a9101e1a5e546079e8fe54650a7116364cec05912e9ea5f82883b9fcbf39",
+      "bytes": 167
+    },
+    {
+      "path": "G-C-04.json",
+      "sha256": "c3659407dafa05ebe5954fff24c40f68a2ed85a3fd7ab1d018fe6244a9239ed7",
+      "bytes": 193
+    },
+    {
+      "path": "G-C-05.json",
+      "sha256": "c2d84ded0fe40491ddade009d1081423d0cf446605337eb1d6ff0dfe0db83b71",
+      "bytes": 175
+    },
+    {
+      "path": "G-DOC-01.json",
+      "sha256": "60a755bec0d9cba29dccedf878c212747cf467a1effa268f5a745413874e9cb5",
+      "bytes": 174
+    },
+    {
+      "path": "G-DOC-03.json",
+      "sha256": "449bb27f3d20014caf6f71d546f61136ed7aade327fb8528259efbbece7f5b5e",
+      "bytes": 176
+    },
+    {
+      "path": "G-DOC-04.json",
+      "sha256": "2fdec288ea36ada47f36af0b5f3812c09d822d92f629f108603054de601bd7d5",
+      "bytes": 242
+    },
+    {
+      "path": "G-GATE-01.json",
+      "sha256": "55884ffe480c6de56a254802c8f6fe5b94b269195cdb3184c4f65fe57b6d0802",
+      "bytes": 170
+    },
+    {
+      "path": "G-GATE-02.json",
+      "sha256": "e350c70d1547f39d65fa74b8f6a2dfc4d060017ba6bb52b2327da3f2a7de7891",
+      "bytes": 226
+    },
+    {
+      "path": "G-SIGN-01.json",
+      "sha256": "ddc665f472b8dda79e63862017c16bdddf539a999115795205b5bf4151b8b32f",
+      "bytes": 170
+    },
+    {
+      "path": "gate-results.json",
+      "sha256": "0f5d7a23ee75e941e4bf0f648cda5cc53807dedc3a6f97de5e4122d2f774a10c",
+      "bytes": 3185
+    },
+    {
+      "path": "reset-sim.json",
+      "sha256": "36bfdaca86330edd6a017193a4bfdecaa76e070b7bb199d2095a2640e579788b",
+      "bytes": 5216
+    },
+    {
+      "path": "RL-OUT.json",
+      "sha256": "a61da0e07fc68fb86ff2b921f5b00550259d0d6d9b819ee551e89a10cd1c8b70",
+      "bytes": 188
+    },
+    {
+      "path": "stability/backpressure.json",
+      "sha256": "a57f29e8163db907bc58a8688b8275d1eff94ac2a7469d69c20b0bcf624825f1",
+      "bytes": 504
+    },
+    {
+      "path": "stability/boundary.json",
+      "sha256": "af00b60fd0e271f0f653db2b778ee84a1481577352cf82ab2a8d623a0df9c221",
+      "bytes": 375
+    },
+    {
+      "path": "stability/regression.json",
+      "sha256": "373bff76249c3481b99e67e46e6ade8e6f38d2288bec3a4e876db0043e9859bb",
+      "bytes": 849
+    },
+    {
+      "path": "stability/stress.json",
+      "sha256": "14fb2efeb64fe89fc7a27bc055bdf71e2b7f97a05b8decf63ae792d39446dc0d",
+      "bytes": 333
+    },
+    {
+      "path": "synth-meta.json",
+      "sha256": "7e920ad3ab85be111a9bf2adc2ea1fa17f9405ade2c79b5e77239a0f84f8745d",
+      "bytes": 179
+    },
+    {
+      "path": "synthesis-timing-evidence.json",
+      "sha256": "656cd25f7e80bd5524740cdf0b50c7e2e87b122949fcccab3117b7c53cb077af",
+      "bytes": 1232
+    },
+    {
+      "path": "timing-summary.rpt",
+      "sha256": "d6900b71fbf11d2418b50b6da6f71f815ae29a604513643622093efab28dd78a",
+      "bytes": 18662
+    },
+    {
+      "path": "utilization.rpt",
+      "sha256": "824120e97ef122e9fc3ed4253a34c5fa7cf67e56c6519d003ed6ae9727ba43ec",
+      "bytes": 8822
+    }
+  ],
+  "gate_summary": {
+    "asset_uid": "fft64_sdf",
+    "name": "fft64_sdf",
+    "declared_level": "certified",
+    "cleared_level": "certified",
+    "blocking_at": null,
+    "gate_count": 22,
+    "generated_by": "gate-runner.cjs v1.1",
+    "redline_contract": "reset-signal-scoped",
+    "gates": [
+      {
+        "id": "CS-1",
+        "level": "intake",
+        "must": true,
+        "status": "pass",
+        "severity": "high"
+      },
+      {
+        "id": "CS-2",
+        "level": "intake",
+        "must": true,
+        "status": "pass",
+        "severity": "high"
+      },
+      {
+        "id": "G-A-00",
+        "level": "intake",
+        "must": true,
+        "status": "pass",
+        "severity": "high"
+      },
+      {
+        "id": "G-A-02",
+        "level": "intake",
+        "must": true,
+        "status": "pass",
+        "severity": "high"
+      },
+      {
+        "id": "G-A-01",
+        "level": "qualification",
+        "must": true,
+        "status": "pass",
+        "severity": "high"
+      },
+      {
+        "id": "RL-OUT",
+        "level": "qualification",
+        "must": true,
+        "status": "pass",
+        "severity": "high"
+      },
+      {
+        "id": "G-C-03",
+        "level": "qualification",
+        "must": true,
+        "status": "pass",
+        "severity": "high"
+      },
+      {
+        "id": "G-A-04",
+        "level": "qualification",
+        "must": true,
+        "status": "pass",
+        "severity": "mid"
+      },
+      {
+        "id": "G-DOC-03",
+        "level": "qualification",
+        "must": true,
+        "status": "pass",
+        "severity": "mid"
+      },
+      {
+        "id": "G-DOC-04",
+        "level": "qualification",
+        "must": true,
+        "status": "pass",
+        "severity": "mid"
+      },
+      {
+        "id": "G-DOC-01",
+        "level": "intake",
+        "must": true,
+        "status": "pass",
+        "severity": "warning"
+      },
+      {
+        "id": "G-B-01",
+        "level": "intake",
+        "must": true,
+        "status": "pass",
+        "severity": "mid"
+      },
+      {
+        "id": "G-B-04",
+        "level": "intake",
+        "must": true,
+        "status": "pass",
+        "severity": "mid"
+      },
+      {
+        "id": "G-B-02",
+        "level": "qualification",
+        "must": true,
+        "status": "pass",
+        "severity": "high"
+      },
+      {
+        "id": "G-B-03",
+        "level": "certified",
+        "must": true,
+        "status": "pass",
+        "severity": "high"
+      },
+      {
+        "id": "G-C-01",
+        "level": "certified",
+        "must": true,
+        "status": "pass",
+        "severity": "high"
+      },
+      {
+        "id": "G-C-02",
+        "level": "certified",
+        "must": true,
+        "status": "pass",
+        "severity": "high"
+      },
+      {
+        "id": "G-C-04",
+        "level": "certified",
+        "must": true,
+        "status": "pass",
+        "severity": "high"
+      },
+      {
+        "id": "G-C-05",
+        "level": "certified",
+        "must": true,
+        "status": "pass",
+        "severity": "high"
+      },
+      {
+        "id": "G-GATE-01",
+        "level": "certified",
+        "must": true,
+        "status": "pass",
+        "severity": "high"
+      },
+      {
+        "id": "G-GATE-02",
+        "level": "certified",
+        "must": true,
+        "status": "pass",
+        "severity": "high"
+      },
+      {
+        "id": "G-SIGN-01",
+        "level": "certified",
+        "must": true,
+        "status": "pass",
+        "severity": "high"
+      }
+    ]
+  },
+  "reseal_history": [
+    {
+      "at": "2026-08-08T15:43:56.917Z",
+      "reason": "manifest 去掉 README.md 的 sha256 哈希锁: 规范 §4.2 明定派生视图用重生成防漂移而非 hash 锁, README 的 MANIFEST 生成块因此无法注入 (manifest-render 长期报 stale)。同为 certified 的 rrc_polyphase_fir 本就未锁 README, 本次与之对齐。仿真/综合/对拍证据分毫未动。",
+      "prior_manifest_sha256": "17ea22388c80980b4e79051f90f1dbd9a18a6d678f066918f7a206c445c3df55",
+      "prior_git_head": "673e642d9f2aec717549e53e3544837442356abc",
+      "changed_evidence": []
+    }
+  ]
+}

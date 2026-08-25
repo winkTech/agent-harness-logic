@@ -1,0 +1,98 @@
+[
+  {
+    "id": "claude-post-tool-use-no-status",
+    "transport": "claude-code",
+    "input": {
+      "hook_event_name": "PostToolUse",
+      "tool_name": "Bash",
+      "tool_input": { "command": "node --test" },
+      "cwd": "C:/work/project",
+      "session_id": "sess-001"
+    },
+    "expected": {
+      "eventType": "tool.post",
+      "transport": "claude-code",
+      "status": "unknown",
+      "sessionId": "sess-001",
+      "cwd": "C:/work/project",
+      "toolName": "Bash",
+      "source": { "nativeEventName": "PostToolUse", "adapter": "claude-hook-v1", "statusInferred": true }
+    },
+    "notes": "D1: PostToolUse 本身不含结果语义，缺 status 一律 unknown，不臆测成功。"
+  },
+  {
+    "id": "claude-post-tool-use-failure",
+    "transport": "claude-code",
+    "input": {
+      "hook_event_name": "PostToolUseFailure",
+      "tool_name": "Bash",
+      "tool_input": { "command": "node --test failing.test.cjs" },
+      "cwd": "C:/work/project",
+      "session_id": "sess-001"
+    },
+    "expected": {
+      "eventType": "tool.post",
+      "transport": "claude-code",
+      "status": "failed",
+      "sessionId": "sess-001",
+      "toolName": "Bash",
+      "source": { "nativeEventName": "PostToolUseFailure", "adapter": "claude-hook-v1", "statusInferred": false }
+    },
+    "notes": "D1: 事件名本身即失败证据，判定 failed 不算臆测。"
+  },
+  {
+    "id": "claude-session-start",
+    "transport": "claude-code",
+    "input": {
+      "hook_event_name": "SessionStart",
+      "cwd": "C:/work/project",
+      "session_id": "sess-002"
+    },
+    "expected": {
+      "eventType": "session.start",
+      "transport": "claude-code",
+      "status": "unknown",
+      "sessionId": "sess-002",
+      "source": { "nativeEventName": "SessionStart", "adapter": "claude-hook-v1", "statusInferred": true }
+    },
+    "notes": "会话开始事件无成功/失败语义，status 为 unknown。"
+  },
+  {
+    "id": "claude-tool-pre-with-tool-use-id",
+    "transport": "claude-code",
+    "input": {
+      "hook_event_name": "PreToolUse",
+      "tool_name": "Edit",
+      "tool_use_id": "toolu_abc123",
+      "tool_input": { "file_path": "C:/work/project/rtl/rx_fifo.sv" },
+      "cwd": "C:/work/project",
+      "session_id": "sess-003"
+    },
+    "expected": {
+      "eventType": "tool.pre",
+      "transport": "claude-code",
+      "status": "unknown",
+      "sessionId": "sess-003",
+      "toolUseId": "toolu_abc123",
+      "toolName": "Edit",
+      "source": { "nativeEventName": "PreToolUse", "adapter": "claude-hook-v1", "statusInferred": true }
+    },
+    "notes": "PreToolUse 携带 tool_use_id，归一化后必须透传到 toolUseId 供配对。"
+  },
+  {
+    "id": "claude-unknown-event-name",
+    "transport": "claude-code",
+    "input": {
+      "hook_event_name": "SomeFutureEvent",
+      "cwd": "C:/work/project",
+      "session_id": "sess-004"
+    },
+    "expected": {
+      "eventType": "unknown",
+      "transport": "claude-code",
+      "status": "unknown",
+      "source": { "nativeEventName": "SomeFutureEvent", "adapter": "claude-hook-v1", "statusInferred": true }
+    },
+    "notes": "未知事件名归一到 unknown，fail-closed：宁可 unknown 也不误判。"
+  }
+]

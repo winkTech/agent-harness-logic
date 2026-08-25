@@ -27,6 +27,25 @@
     "engineering-assets/knowledge/primary/domains/comm/ldpc/stage7_fpga_implementation_report.md"
   ],
   "golden_model_ref": "model_comm_ldpc",
+  "protocol_anchor": {
+    "standard": "IEEE 802.11n-2009",
+    "baseline_relation": "cross_version",
+    "profile": "11n QC-LDPC R=1/2 N=648 Z=27",
+    "scope": "FEC 编译码 (码字级)。仅实现 11n 定义码型中的一种 (R=1/2 / N=648 / Z=27), 其余码长码率未实现; 不含速率匹配/打孔、不含帧结构、不含 SIGNAL。",
+    "parameters": {
+      "code": "QC-LDPC",
+      "code_rate": "1/2",
+      "n": 648,
+      "k": 324,
+      "z": 27,
+      "llr_width": 10,
+      "llr_signed": true,
+      "llr_per_beat": 1
+    },
+    "deviations": [],
+    "anchor_basis": "standard 定为 802.11n-2009 (引入 LDPC 的修正案); **clause 号未填** —— HT PHY 的条款号未经标准原文核对, 且库内已知条款号随版次变动, 不臆造。profile/parameters 来自包内实据: 码型参数见 docs/limitations.md 第 1 条 (码型写死 R=1/2 N=648 K=324 Z=27) 与 rtl/h_matrix_addr.v 的 P 矩阵注释; LLR 契约 (signed 10-bit, 每拍 1 个) 见 tb/uvm/ldpc_seq_item.sv 与 tb_ldpc_uvm_top.sv。",
+    "notes": "跨版理由: 库基线 Clause 17 (11a/g) 本身不含 LDPC —— 11a 的强制 FEC 是 BCC+Viterbi, LDPC 由 11n 引入。首条 TX->RX 闭环按\"演示闭环\"定位交付 (owner 裁定 2026-08-02 决策②): 11a 帧结构 + 11n LDPC, 显式标注跨版组合, 不声明任何单版合规。严格 Clause 17 合规闭环需 BCC+Viterbi, 按需触发立项 (决策⑨)。"
+  },
   "fidelity": {
     "status": "bit_true",
     "bit_accurate_against": "model_comm_ldpc@1.0.0"

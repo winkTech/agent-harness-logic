@@ -23,6 +23,17 @@ const { HARNESS_ROOT, resolveHarnessRoot } = require('./lib/harness-root.cjs');
 
 const COVERAGE_THRESHOLD = 60;
 
+/**
+ * run-all-tests.cjs 的整体墙钟预算。超出即被 SIGTERM 砍断, 见下方超时诊断。
+ *
+ * 2026-08-04 实测定值: 本机 5 次带 NODE_V8_COVERAGE 插桩的完整跑, 耗时
+ * 165.6/172.4/184.4/185.4/192.8 s (mean 180.1, max 192.8)。原值 120000 被 5/5 超出 ——
+ * 门禁与测试是否通过无关地必然失败, 且失败表象是"运行器提前退出", 极难归因。
+ * 取 max×2 留出 CI runner 慢于本机的余量; 上游 harness-ci 的外层预算必须更大。
+ * 注意插桩开销约 +35%, 用裸跑耗时定这个值会低估。
+ */
+const RUNNER_TIMEOUT_MS = 420000;
+
 // ── 路径解析 ──────────────────────────────────────────────────────────────────
 
 function resolveRoot() {
@@ -228,15 +239,17 @@ function main() {
 
   console.log(`[coverage-runner] 🔍 运行测试 (NODE_V8_COVERAGE=${tmpCoverage})...`);
 
+  const startedAt = Date.now();
   const result = spawnSync(process.execPath, ['--no-warnings', RUNNER, '--no-persist'], {
     encoding: 'utf8',
-    timeout: 120000,
+    timeout: RUNNER_TIMEOUT_MS,
     windowsHide: true,
     env: {
       ...process.env,
       NODE_V8_COVERAGE: tmpCoverage,
     },
   });
+  const elapsedMs = Date.now() - startedAt;
 
   // 打印测试输出
   if (result.stdout) console.log(result.stdout);
@@ -299,11 +312,26 @@ function main() {
       console.error('[coverage-runner] ── 失败项(复述自上方测试输出) ──');
       for (const line of failures) console.error(`[coverage-runner] ${line}`);
     } else {
-      console.error('[coverage-runner] ── 测试输出里没有 ❌ 行: 运行器可能在跑完前就退出了 ──');
+      // 没有 ❌ 行有两种可能, 处置完全相反, 必须分清:
+      //   超时被杀 —— 预算问题, 套件根本没跑完, 判决数和"没有失败项"都不可信;
+      //   自身崩溃 —— 代码问题。
+      // 原先一律报"运行器可能在跑完前就退出了", 而 spawnSync 早就把结论放在
+      // result.error.code='ETIMEDOUT' / signal='SIGTERM' 里, 只是从没打印出来 ——
+      // 实测四次 CI 失败全卡在这里, 每次都要手动重跑才能发现是超时。
+      const timedOut = result.error?.code === 'ETIMEDOUT' || (result.status === null && !!result.signal);
+      const verdicts = (String(result.stdout || '').match(/[✅❌]/g) || []).length;
+      if (timedOut) {
+        console.error('[coverage-runner] ── 测试运行超时被杀, 不是测试失败 ──');
+        console.error(`[coverage-runner]   已跑出 ${verdicts} 项判决, 耗时 ${(elapsedMs / 1000).toFixed(1)}s, 上限 ${RUNNER_TIMEOUT_MS / 1000}s`);
+        console.error('[coverage-runner]   套件未跑完 —— 判决数、覆盖率与"没有失败项"均不代表结论。');
+        console.error(`[coverage-runner]   拿完整结果: node ${path.relative(ROOT, RUNNER).replace(/\\/g, '/')} --no-persist`);
+      } else {
+        console.error('[coverage-runner] ── 测试输出里没有 ❌ 行: 运行器可能在跑完前就退出了 ──');
+      }
       const tail = String(result.stdout || '').trimEnd().split(/\r?\n/).slice(-8);
       for (const line of tail) console.error(`[coverage-runner]   ${line}`);
     }
-    console.error(`[coverage-runner] ⚠️ 测试运行 exit=${result.status}`);
+    console.error(`[coverage-runner] ⚠️ 测试运行 exit=${result.status} signal=${result.signal || 'none'} error=${result.error?.code || 'none'} elapsed=${(elapsedMs / 1000).toFixed(1)}s`);
   }
 
   if (result.status !== 0 || result.error || result.signal || !summary.passed) {

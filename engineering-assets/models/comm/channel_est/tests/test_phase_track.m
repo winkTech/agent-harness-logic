@@ -14,11 +14,16 @@ function [pass, detail] = test_phase_track()
 
     fr = sim_frame(cfg);
     H0 = lts_channel_est(fr.Y_lts, cfg.N);
-    pilot_val = [1; 1; -1; 1];
+    % **直接取实际发送的导频值**, 不再在测试里另写一份常量。
+    % 教训来自本轮两次踩坑: 这条测试原先硬编码 [1;1;-1;1], 与 sim_frame 用了同一个
+    % 错值, 于是它**本可以更早抓到约定不一致却没抓到**; 订正 sim_frame 后它立刻报
+    % 3.141 rad。随后加逐符号极性时, 硬编码的常量又会第二次失配。
+    % 测试里复写一份"应该是什么"就等于把被测对象抄了一遍 —— 取真值才测得到东西。
 
     err = zeros(cfg.nsym, 1);
     ev_t = 0; ev_u = 0;
     for m = 1:cfg.nsym
+        pilot_val = fr.X_syms(cfg.pilot_idx, m);          % 该符号实际发送值 (含极性)
         [H_corr, cpe] = pilot_phase_track(fr.Y_syms(:, m), H0, cfg.pilot_idx, pilot_val);
         err(m) = abs(angle(exp(1j*(cpe - fr.cpe_true(m)))));
         Xt = fr.Y_syms(cfg.data_idx, m) ./ H_corr(cfg.data_idx);

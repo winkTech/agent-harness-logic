@@ -265,7 +265,10 @@ function inspectIndexFreshness(opts = {}) {
   return {
     found: true,
     stale,
-    reason: stale ? 'index_drift' : null,
+    // 漂移和过期是两回事: 前者要重建索引, 后者可能只是没人动过仓库。
+    // 原先一律报 index_drift, 于是出现过 "missing/unindexed/changed 全为 0 却说 drift"
+    // 这种自相矛盾的诊断, 把排查带向错误方向。
+    reason: stale ? ((missing > 0 || unindexed > 0 || changed > 0) ? 'index_drift' : 'stale_by_age') : null,
     builtAt: meta.builtAt || null,
     ageDays,
     indexed: recorded.size,

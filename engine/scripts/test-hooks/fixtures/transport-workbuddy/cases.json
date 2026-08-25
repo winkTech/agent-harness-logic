@@ -1,0 +1,96 @@
+[
+  {
+    "id": "workbuddy-post-tool-use-explicit-success",
+    "transport": "workbuddy",
+    "input": {
+      "hook_event_name": "PostToolUse",
+      "tool_name": "Bash",
+      "tool_input": { "command": "node --test" },
+      "status": "success",
+      "cwd": "C:/work/project",
+      "session_id": "wb-sess-001"
+    },
+    "expected": {
+      "eventType": "tool.post",
+      "transport": "workbuddy",
+      "status": "succeeded",
+      "sessionId": "wb-sess-001",
+      "toolName": "Bash",
+      "source": { "nativeEventName": "PostToolUse", "adapter": "workbuddy-hook-v1", "statusInferred": false }
+    },
+    "notes": "D1: 载荷带显式 status=success，映射 succeeded（显式证据，非臆测）。"
+  },
+  {
+    "id": "workbuddy-post-tool-use-failure-event",
+    "transport": "workbuddy",
+    "input": {
+      "hook_event_name": "PostToolUseFailure",
+      "tool_name": "Bash",
+      "tool_input": { "command": "node --test failing.test.cjs" },
+      "cwd": "C:/work/project",
+      "session_id": "wb-sess-001"
+    },
+    "expected": {
+      "eventType": "tool.post",
+      "transport": "workbuddy",
+      "status": "failed",
+      "source": { "nativeEventName": "PostToolUseFailure", "adapter": "workbuddy-hook-v1", "statusInferred": false }
+    },
+    "notes": "D1: 事件名本身即失败证据，判定 failed。"
+  },
+  {
+    "id": "workbuddy-post-tool-use-no-status",
+    "transport": "workbuddy",
+    "input": {
+      "hook_event_name": "PostToolUse",
+      "tool_name": "Edit",
+      "tool_use_id": "wb_tool_002",
+      "tool_input": { "file_path": "C:/work/project/src/main.cjs" },
+      "cwd": "C:/work/project",
+      "session_id": "wb-sess-002"
+    },
+    "expected": {
+      "eventType": "tool.post",
+      "transport": "workbuddy",
+      "status": "unknown",
+      "toolUseId": "wb_tool_002",
+      "toolName": "Edit",
+      "source": { "nativeEventName": "PostToolUse", "adapter": "workbuddy-hook-v1", "statusInferred": true }
+    },
+    "notes": "D1: 缺 status/success 证据，一律 unknown，绝不臆测成功。"
+  },
+  {
+    "id": "workbuddy-post-tool-use-result-status-failed",
+    "transport": "workbuddy",
+    "input": {
+      "hook_event_name": "PostToolUse",
+      "tool_name": "Bash",
+      "result": { "status": "failed" },
+      "cwd": "C:/work/project",
+      "session_id": "wb-sess-003"
+    },
+    "expected": {
+      "eventType": "tool.post",
+      "transport": "workbuddy",
+      "status": "failed",
+      "source": { "nativeEventName": "PostToolUse", "adapter": "workbuddy-hook-v1", "statusInferred": false }
+    },
+    "notes": "D1: 嵌套 result.status 也是显式结果证据。"
+  },
+  {
+    "id": "workbuddy-session-start-unknown",
+    "transport": "workbuddy",
+    "input": {
+      "hook_event_name": "SessionStart",
+      "cwd": "C:/work/project",
+      "session_id": "wb-sess-004"
+    },
+    "expected": {
+      "eventType": "session.start",
+      "transport": "workbuddy",
+      "status": "unknown",
+      "source": { "nativeEventName": "SessionStart", "adapter": "workbuddy-hook-v1", "statusInferred": true }
+    },
+    "notes": "会话开始无结果语义。"
+  }
+]

@@ -235,3 +235,36 @@ TB 按**运行目录相对**读写、跑完再把证据搬到门禁约定位置�
   两侧都无流控，`G-C-05` 背压子结果无法通过。补上入口 ready 与出口停顿门控后，
   TB 的 cosim 驱动循环（原固定每 4 拍发一拍、不看 tready）随即暴露为会静默丢符号
   （实测 2048/2048 全失配），一并改为按握手推进。背压下复测 0/2048 失配。
+
+<!-- BEGIN:MANIFEST:PORTS -->
+<!-- Generated from manifest.json; do not edit this block. -->
+| Name | Dir | Width | Bus |
+|---|---|---:|---|
+| `i_clk` | input | 1 | — |
+| `i_rst` | input | 1 | — |
+| `s_axis_tvalid` | input | 1 | axi-stream |
+| `s_axis_tready` | output | 1 | axi-stream |
+| `s_axis_tdata` | input | 32 | axi-stream |
+| `m_axis_tvalid` | output | 1 | axi-stream |
+| `m_axis_tready` | input | 1 | axi-stream |
+| `m_axis_tdata` | output | 32 | axi-stream |
+<!-- END:MANIFEST:PORTS -->
+
+<!-- BEGIN:MANIFEST:PARAMS -->
+<!-- Generated from manifest.json; do not edit this block. -->
+| Name | Values | Support |
+|---|---|---|
+| `DATA_W` | — | yes |
+| `COEFF_W` | — | yes |
+| `ACC_W` | — | yes |
+| `SPS` | — | yes |
+| `TAPS_PP` | — | yes |
+<!-- END:MANIFEST:PARAMS -->
+
+<!-- BEGIN:MANIFEST:CLOCKRESET -->
+<!-- Generated from manifest.json; do not edit this block. -->
+| Field | Value |
+|---|---|
+| Clock | `i_clk` (4 ns) |
+| Reset | `i_rst` / active_high / sync |
+<!-- END:MANIFEST:CLOCKRESET -->

@@ -197,6 +197,33 @@ function atomicWriteJson(filePath, value) {
   }
 }
 
+function stateHasTaskTargetForFile(state, filePath, opts = {}) {
+  if (!state || Number(state.version) !== 2) return false;
+  if (!String(state.taskId || '').trim()) return false;
+  if (!/^[a-f0-9]{64}$/i.test(String(state.contractHash || '').trim())) return false;
+  const validUntil = Date.parse(String(state.validUntil || ''));
+  const now = Number.isFinite(Number(opts.now)) ? Number(opts.now) : Date.now();
+  if (!Number.isFinite(validUntil) || validUntil <= now) return false;
+  const projectRoot = resolvePath(String(state.projectRoot || '').trim());
+  const resolvedFile = resolvePath(filePath);
+  const targets = Array.isArray(state.targets) ? state.targets : [];
+  if (!projectRoot || !resolvedFile || !isInsidePath(resolvedFile, projectRoot) || targets.length === 0) {
+    return false;
+  }
+  return targets.some((target) => {
+    const raw = String(target || '').trim().replace(/\\/g, '/');
+    if (!raw) return false;
+    if (path.isAbsolute(raw) || path.win32.isAbsolute(raw) || path.posix.isAbsolute(raw)) return false;
+    const recursive = raw.endsWith('/**');
+    const targetValue = recursive ? raw.slice(0, -3) : raw;
+    const resolvedTarget = resolvePath(targetValue, projectRoot);
+    if (!isInsidePath(resolvedTarget, projectRoot) || isSamePath(resolvedTarget, projectRoot)) return false;
+    return recursive
+      ? isInsidePath(resolvedFile, resolvedTarget)
+      : isSamePath(resolvedFile, resolvedTarget);
+  });
+}
+
 function sleepSync(milliseconds) {
   Atomics.wait(LOCK_SLEEP, 0, 0, Math.max(1, milliseconds));
 }
@@ -312,6 +339,7 @@ module.exports = {
   memoryScopeFromPayload,
   stateScopeRoots,
   stateHasScopeForFile,
+  stateHasTaskTargetForFile,
   readJson,
   atomicWriteJson,
   withFileLockSync,

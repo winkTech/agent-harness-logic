@@ -3,16 +3,25 @@
   "asset_uid": "model_comm_ofdm",
   "name": "ofdm_tx_golden",
   "kind": "golden-model",
-  "version": "1.2.0",
+  "version": "1.8.0",
   "owner": "lihan",
   "maturity": {
     "level": "intake"
   },
   "requirement_ref": "engineering-assets/knowledge/primary/domains/comm/ofdm/algorithm_spec.md",
   "implements_for": [
-    "ofdm_tx_top"
+    "ofdm_tx_top",
+    "fft64_sdf",
+    "cp_remove",
+    "eq_zf"
   ],
   "models": [
+    {
+      "role": "fixed_point",
+      "trait": "设计特性",
+      "path": "src/rtl_mirror_eq.m",
+      "note": "定点位真镜像 (eq_zf), 1.6.0 新增。**它同时是均衡器 RTL 的需求侧单一事实源** —— 归一化移位 s∈[-1,30]、256 项倒数表的地址取法与内容公式、Newton 的三步整数写法 (p=(M16*r0)>>16 / t=2^15-p / r1=(r0*t)>>14)、末级 sh=33-s 的加半右移与 int16 饱和, 这些此前全无出处, 由本文件钉死。按 2026-08-04/05 四条 owner 裁定 + incubator/intake/eq_zf/analysis/fixed-point-study.md 的实测结论写成, **写在 RTL 之前** (eq_zf 至今无 RTL), 故不存在被 RTL 带偏的可能。**偏离本镜像的是 RTL, cosim 失配时修 RTL 而非改本镜像**。实测: 对浮点 eq_zf 2304 点最大偏差 0.82 个 Q4.12 LSB; H=1,Y=1 标定得 4096; |H|²=2^31 (s=-1 唯一情形) 逐位等于闭式期望 -1024+1024i。子载波下标用 ofdm 侧有符号自然序, 与 channel_est 的 fftshift 序不可混用 (初版曾栽在此)"
+    },
     {
       "role": "reference",
       "trait": "普遍性",
@@ -36,6 +45,42 @@
       "trait": "设计特性",
       "path": "src/generate_vectors.m",
       "note": "定点向量导出 (1.2.0 重写): 激励改比特层 (对齐 DUT 入口, 原频域中间量与 DUT 不同层, 比对语义不成立), 期望改由 rtl_mirror_tx 位真产出 (0 容差, 替代原浮点直接量化+±1LSB), 频域缩放由 ×32767 修正为 config.m 声明的 Q2.14 ×16384。1.1.0 的两处缺陷已结案, 见 MODEL-STATUS §4"
+    },
+    {
+      "role": "reference",
+      "trait": "普遍性",
+      "path": "src/fft_chain.m",
+      "note": "浮点正向 FFT 参考; 自然序契约与 ifft_chain 对称 (DC 在位置 1), fft(x)/sqrt(N) 标定 —— 与 ifft_chain 的 ifft(x)*sqrt(N) 互逆, 两者同为 sum(...)/8, 这是 fft64_sdf \"单核双向共用同一移位调度\" 的标定依据。由 rx_chain 内联表达式提取而成, 数值语义逐位不变 (tests/test_fft_chain.m 断言)"
+    },
+    {
+      "role": "fixed_point",
+      "trait": "设计特性",
+      "path": "src/rtl_mirror_fft64.m",
+      "note": "定点位真镜像 (fft64_sdf): 按需求侧规格实现 —— 结构取 ADR-004 的 R2²SDF (逐拍 SDF: 各级 FIFO/计数器/warm-up 剥离/两个复乘的 P=[0,2,1,3] 指数), 缩放舍入取 fixed_point_report §2.2/§2.4, 内部位宽 P_W 可配 (fft64_sdf=21, 传 20 复现既有 ifft64_sdf)。**偏离该规格的是 RTL, cosim 失配时修 RTL 而非改本镜像**。实测: ifft/P_W=20 与已认证 rtl_mirror_tx 四调制各 512 样点 0 失配 1.4.1 修正方向缺陷: 方向切换须同时翻转非平凡旋转因子表**与** BF2II 的平凡 ±j, 原实现只翻前者。"
+    },
+    {
+      "role": "reference",
+      "trait": "普遍性",
+      "path": "src/rx_cp_window.m",
+      "note": "cp_remove 的正确性锚: 按 802.11a 帧结构切窗 (T1/T2 各 64 不带 CP; 数据符号跳 CP16 取 64)。独立于 rx_chain 而非改写它 —— rx_chain 第 10-17 行按 sym_len=80 均匀切窗、不建模前导, 无法覆盖长前导; 本函数补上这一段并保持 rx_chain 既有行为不变。帧结构数字取自 models/comm/synch/config.m 与 generate_preamble.m (引 IEEE 802.11a-1999 §17.3.3)"
+    },
+    {
+      "role": "reference",
+      "trait": "普遍性",
+      "path": "src/eq_zf.m",
+      "note": "均衡器正确性锚: ZF 频域均衡 X = Y·conj(H)·(1/|H|²) + 64→48 数据子载波提取。算法三项由 owner 2026-08-04 裁定 (ZF 而非 MMSE / 共轭乘+实数倒数而非复数除法 / 子载波提取在件内) —— 知识库对本件是真空的, algorithm_spec.md 只有框图里一个「均衡」方块, rx_chain 建的是理想信道链、无均衡级。**刻意按共轭乘+倒数的运算路径书写而非直接写 Y./H**: 锚要贴合被判定对象的运算路径, 否则定点镜像对齐时会把算法差异误当成量化误差。|H|²=0 时报错而非静默出 Inf/NaN; zf_noise_gain 与 min_h_mag2 如实返回供后续定点分析。实测端到端还原最大误差 4.965e-16, 见 MODEL-STATUS §9"
+    },
+    {
+      "role": "reference",
+      "trait": "普遍性",
+      "path": "src/mod_demapper_llr.m",
+      "note": "软判决解调正确性锚 (max-log LLR), 1.7.0 新增。立件动因是**跨已认证资产的契约缺口**: cbb/ldpc_codec 吃 LLR Q(10,4) + 归一化 Min-Sum, 而 src/mod_demapper.m 出的是硬比特 —— 硬比特喂不进软译码器。**符号约定是本件最要紧处**: 两族映射方向相反 (ofdm 侧 s=2b-1 即 bit1->+1; ldpc 侧 tx=1-2c 且 llr=2y/σ² 即正 LLR=bit0), 本锚按下游即后者输出, 相对'直接看符号正负'要翻一个号; BPSK 闭式 LLR=-2y/σ² 可验。搞错该号译码器会整体失效而现象像'译码器不工作'。星座与比特标号**穷举自治理侧 mod_mapper**, 不重新推导 Gray 表, 避免两处各写一份的漂移。逐载波权重 w=|H|² 来自 owner 裁定⑤ (ZF 后等效噪声方差为 σ²/|H|²; 归一化 Min-Sum 对全局标度不敏感但对逐载波相对权重敏感); w=0 自然得 LLR=0, 裁定④ 的 erasure 语义到此闭环。实测: 对 mod_demapper 硬判决四调制各 0 比特差异"
+    },
+    {
+      "role": "fixed_point",
+      "trait": "设计特性",
+      "path": "src/rtl_mirror_demap.m",
+      "note": "定点位真镜像 (mod_demapper), 1.8.0 新增, **它同时是解调器 RTL 的需求侧单一事实源**。与 src/mod_demapper_llr.m 的分工: 那一支是**浮点正确性锚** (穷举整星座, 数学上无近似), 本件是**定点位真规格** (按 I/Q 轴分解 + 整数通路) —— 测试同时锁两者, 本件对锚的差必须落在 Q(10,4) 的量化地板 (1 LSB) 内, **超出即为规格错而不是'精度问题'**。此前全无出处、由本文件钉死的: 每轴 √M 个电平的 Q4.12 取值 (RTL 的 ROM 内容就取 info.levels) / 8 槽位统一化后与调制无关的比特掩码 / 定标常数 **67** = 2^24 (d2 是 Q4.12 的**平方**) + ÷2 (锚里的 ÷2σ²), 首版漏掉这两处差出 2^25 / sh' 的逐档值域 [33-log2K, 67-log2K] 与**全档上界 66 -> 移位量字段 7 位** / metric*wman 上界 s49 与 sh'>=48 时可证恒 0 的捷径 / 加半右移与 10 位有符号饱和。**写在 RTL 之前** (写它时 mod_demapper 尚无 RTL), 故不存在被 RTL 带偏的可能; **偏离本镜像的是 RTL, cosim 失配时修 RTL 而非改本镜像**。K 按调制分档 (2/16/32) 的判据是**端到端 BER** 而非量化率之类的代理指标 —— 代价高度不对称, 64QAM 误用 K=2 时 BER 由 3.09e-05 恶化到 0.0902 约 3000 倍。BPSK 刻意报错 (三档 K 之外无实测值), 这是真实的范围缺口, 见 MODEL-STATUS §10。实测: 对浮点锚三档最大差均 1.00 LSB、>1LSB 占 0%; RTL 三档 27648 个 LLR 对本镜像 0 失配"
     }
   ],
   "vectors": {
@@ -57,7 +102,55 @@
     {
       "path": "run_all_tests.m",
       "role": "reference",
-      "sha256": "e246622b22c8515ce8c65ef6c8e7985784133722ee889c3c20b695840a2a9b7e"
+      "sha256": "f8f5a1509e687930a690d770914efa92ed7bbf6add4e5eaf64ec72cb7fc18270"
+    },
+    {
+      "path": "src/rtl_mirror_demap.m",
+      "role": "fixed_point",
+      "sha256": "b1f198e51f32c7e02d4d40315c8534f981b793153a053328b5d396b1d67fb77e",
+      "note": "mod_demapper 定点位真镜像 = 解调器 RTL 的需求侧单一事实源, 1.8.0 新增, **写在 RTL 之前**。每个常数都有实测出处, 无一是'看着合理'定的: 按 I/Q 轴分解 (demap_axis_check.m —— 前提'比特标号也按轴划分'是查出来的不是假定的, 三档轴归属实测 [I..I,Q..Q], 分解式对锚偏差 2.66e-15) / 标度 K=2·16·32 分档 (demap_e2e_ber.m, 判据是**端到端 BER**, 代理指标定不了; 代价高度不对称: 64QAM 误用 K=2 时 BER 由 3.09e-05 恶化到 0.0902 约 3000 倍, 而 QPSK 误用 K=32 仅 1.6 倍) / 权重 6 位尾数+6 位指数 (裁定⑤ 的 o_conf) / 定标常数 **67** (=2^24 的 Q4.12 平方 + 锚里的 ÷2σ², 首版漏掉差出 2^25, 现象是 LLR 全饱和) / sh' 值域按调制不同 [33-log2K, 67-log2K], **全档上界 66 故移位量字段要 7 位** —— 该 66 是判卷向量的覆盖自查撞出来的 (只随机 sh∈[3,34] 时实测停在 59, 按 63 开会截成 2, 深衰落载波给满量程乱数而非 0)。**BPSK 刻意报错**: 端到端 BER 只测了三档 K, 不凭'跟 QPSK 差不多'往规格填数 —— 这是真实范围缺口 (802.11a 的 6/9 Mbps 即 BPSK)。**偏离本镜像的是 RTL, cosim 失配时修 RTL 而非改本镜像**。实测: 对浮点锚 mod_demapper_llr 三档最大差均 1.00 LSB、>1LSB 占 0% (Q(10,4) 量化地板); RTL 三档 27648 个 LLR 对本镜像 **0 失配**"
+    },
+    {
+      "path": "tests/test_rtl_mirror_demap.m",
+      "role": "test",
+      "sha256": "826d79b12ea8e07968896086dc784ecb9933ec3ecf5a9badf65e89097285c79f",
+      "note": "七判据: 对浮点锚 Q(10,4) 地板 / 擦除语义双保险 (拉 erasure **与** conf=0 各一路, 防 RTL 省掉一路后无人察觉) / 饱和非回绕 / 电平表即 RTL ROM 内容 / 位宽上界与 sh' 值域 (激励强制含 sh=34 与哨兵 sh=0 两端, 并断言字段恰为 7 位) / 输入契约 6 例 / 标定自检手算闭式 [-16 16]"
+    },
+    {
+      "path": "src/mod_demapper_llr.m",
+      "role": "reference",
+      "sha256": "c3676b08e4f53f82a5b55cadcb5a8e35449742fe273129054db4d34bfa4c61e1",
+      "note": "软判决解调锚 (max-log LLR + |H|² 加权 + erasure->0); 符号约定按下游 ldpc_codec"
+    },
+    {
+      "path": "tests/test_mod_demapper_llr.m",
+      "role": "test",
+      "sha256": "bc52179e95c3fb225b12a7aee5861c10b034c0d3a3ca0f2ebb3b4fc88e8cc9cc",
+      "note": "七判据: BPSK 闭式 / 符号约定四调制 / **对 mod_demapper 硬判决 0 比特差异** / erasure->LLR 0 / 权重线性 / 形状 / 非法入参报错"
+    },
+    {
+      "path": "src/rtl_mirror_eq.m",
+      "role": "fixed_point",
+      "sha256": "ac4dc441acf0365ca9d91bd6e155d0862a2f8b5e25a549801972b92e22513245",
+      "note": "eq_zf 定点位真镜像 = 均衡器 RTL 的需求侧单一事实源 (归一化/查表/Newton/定标饱和)。2026-08-05 按裁定⑤ 增出 info.m16 / info.sh 逐载波可靠度侧带 —— 归一化时已算好的中间量, 只是导出, **数值行为未改** (test_eq_mirror 七判据复跑全过)。重构关系 |H|²=(m16/2^16)·2^(sh-30) 实测最大相对误差 2.516e-05, 恰在 M16 截断的理论界 2^-15 之内"
+    },
+    {
+      "path": "tests/test_eq_mirror.m",
+      "role": "test",
+      "sha256": "b1dc80eec4d70e7ab30c0b3c70ad7c3cb893147402b44c61356ae9a8468b0195",
+      "note": "镜像七判据: 标定 4096 / bin 与 eq_zf 一致 (约定漂移的回归防线) / LUT 结构 / 对浮点 2304 点 <2 LSB / 除零置零+erasure 且零误报 / 深衰落必须饱和不回绕 / s=-1 边界闭式逐位 / 入参防呆"
+    },
+    {
+      "path": "src/eq_zf.m",
+      "role": "reference",
+      "sha256": "4993c97f139f88f4b727828bc09734a556f944e08d02b01dcdb59e757203553e",
+      "note": "ZF 频域均衡 + 64→48 数据子载波提取 (均衡器正确性锚)。紧邻 run_all_tests.m 登记而非追加到数组末尾, 是为了让哈希更新与两条新登记落在同一次授权写入内"
+    },
+    {
+      "path": "tests/test_eq_zf.m",
+      "role": "test",
+      "sha256": "9abab4d52819f11ccc4a0e46bb6f6d11e8bb6025d93f3eff0f97cc3273794b77",
+      "note": "均衡六判据: H=1 恒等 / 端到端还原 (造已知信道后逐点回到原始发射符号, 实测 4.965e-16) / 非数据载波隔离 / 深衰落噪声增益如实报出 / |H|=0 报错不得静默出 Inf-NaN / 维度不符报错"
     },
     {
       "path": "src/tx_chain.m",
@@ -77,7 +170,8 @@
     {
       "path": "src/mod_demapper.m",
       "role": "reference",
-      "sha256": "5facd063dbe659df60ff5506214ec79f220807b85aa3d1983708d69f69b78e8c"
+      "sha256": "a2d290c2d97c84e6830806c0afb0c9c798d5696edeeb491891a39497b7342acd",
+      "note": "**硬判决**。2026-08-05 仅修正头注释 (原写'软判决'与实现不符), 数值行为一字未改 —— rx_chain / test_ber 继续依赖它, run_all_tests 9/9 PASS 确认。软信息路径见 src/mod_demapper_llr.m"
     },
     {
       "path": "src/subcarrier_map.m",
@@ -153,6 +247,42 @@
       "path": "vectors/vector_config.txt",
       "role": "config",
       "sha256": "e953fdd0b27d1d58789851d2e24ee5ef5c4da62fc39ed04b4384f54e317cbd01"
+    },
+    {
+      "path": "src/fft_chain.m",
+      "role": "reference",
+      "sha256": "c36fe254252bc721af9c537be1a788a6bbf441158b3e3d34c072df4383a2d870",
+      "note": "正向 FFT 浮点参考 (与 ifft_chain 对称)"
+    },
+    {
+      "path": "src/rtl_mirror_fft64.m",
+      "role": "fixed_point",
+      "sha256": "fb69d5af091a69ef610133202f60d1101d13a7f24009396f9d4471927741b3dc",
+      "note": "fft64_sdf 定点位真镜像 (方向与输出序可配, P_W 可配)"
+    },
+    {
+      "path": "tests/test_fft_chain.m",
+      "role": "test",
+      "sha256": "f63ad2cda7a3cc08f3680107dc3ab3862ee4549817cbf5560e6c7a33e2277601",
+      "note": "fft_chain 契约测试: 与 ifft_chain 互逆 / 自然序 / 与 rx_chain 内联逐位相同"
+    },
+    {
+      "path": "tests/test_fft64_mirror.m",
+      "role": "test",
+      "sha256": "2f219a8a83e2404049bb800f010c0677f5cd05a0d59ac79e4526faf6ec76a8b7",
+      "note": "镜像反验 (对 rtl_mirror_tx 0 失配) + s20/s21 溢出判定"
+    },
+    {
+      "path": "src/rx_cp_window.m",
+      "role": "reference",
+      "sha256": "2295231969499d6c5a24e1df0275a985dc3bc8054c0515330240fd0210f5278c",
+      "note": "802.11a 帧结构切窗参考 (cp_remove 正确性锚)"
+    },
+    {
+      "path": "tests/test_rx_cp_window.m",
+      "role": "test",
+      "sha256": "0d0d461bf90c54a60bf3c2797b7b9ed6563e7e2eea3575ddf8b5693a5fef80c4",
+      "note": "切窗测试: 逐样点一致 / 下标间距 / n_sym=0 / 样点不足报错 / 非法入参"
     }
   ],
   "waivers": [],

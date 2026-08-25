@@ -117,12 +117,6 @@
       "provenance": "fix-in-place-guard 的来源事故与纪律记录"
     },
     {
-      "id": "instruction-compliance",
-      "query": "指令遵从 用户要求 边界",
-      "expected": ["memory/learnings/instruction-compliance.md"],
-      "provenance": "instructionCaptured 指标对应的记忆"
-    },
-    {
       "id": "knowledge-search-mandate",
       "query": "知识库检索 强制 优先级",
       "expected": ["memory/learnings/knowledge-base-search-mandate.md", "memory/learnings/2026-06-02-知识检索优先级规则.md"],

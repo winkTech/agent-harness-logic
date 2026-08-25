@@ -1,4 +1,4 @@
-<!-- asset-status: certified v1.0.2 -->
+<!-- asset-status: certified v1.0.4 -->
 <!-- 级别横幅（由成熟度派生）: CERTIFIED — 全门绿 + owner 签署 (2026-08-01) -->
 
 # channel_est_top
@@ -16,7 +16,7 @@
 - 每帧 = 2×LTS + N 个数据符号（均为 FFT 输出，64 子载波/符号，Q2.14）；
 - LTS 阶段：全用载波 LS —— `H_LTS[k] = ((X_lts·Y1 + X_lts·Y2 + 1) >>> 1)`
   （X_lts ∈ {±1,0}，除法退化为符号翻转），保护带/DC 恒 +1.0；
-- 数据符号阶段：4 导频（{-21,-7,7,21}，极性 [1,1,-1,1]）估计公共相位
+- 数据符号阶段：4 导频（{-21,-7,7,21}，值 **[1,1,1,-1]**，负号在 +21）估计公共相位
   `CPE = angle(Σ Y[p]·conj(H_LTS[p])·pilot[p])`（CORDIC 14 迭代），
   输出 `H(m) = H_LTS · e^{j·CPE(m)}`（逐点复乘 + round + 饱和）；
 - LTS 符号不产生输出；每个数据符号输出 64 点。
@@ -78,8 +78,15 @@
   `cordic_cv` 头注释）与 `generate_vectors.m` 必须逐字同步，任何一侧改动
   定点语义都要同步另一侧。
 - UVM 环境断链（承自 0.1.0）。
-- 导频极性为固定 [1,1,-1,1]（golden `sim_frame.m` 契约）；802.11a 逐符号导频
-  扰码未建模，golden 升级时需同步（需求门禁 D6 已记录）。
+- 导频**值**为 [1,1,1,-1]（负号在 +21，802.11a 的 P 序列）。1.0.x 之前误作
+  [1,1,-1,1]（负号在 +7），与 `models/comm/ofdm` 及 `cbb/ofdm_tx_top` 相反 ——
+  两个已认证件在同一条链上约定相反，串起来 CPE 的四项会抵消。2026-08-09 订正，
+  现由 `integration/contracts/chain_pilot_contract.m` 实跑把关。
+- 导频**极性**（逐符号 ±1）已于 1.0.4 施加（owner 裁定方案 A：跟随 TX 的交替，
+  不改标准合规性）。`cpe_tracker` 用数据符号计数器 `r_pol_neg`，在锁存 S 时整体取负
+  ——极性对四个导频相同，负一次 S 与逐个翻转等价且更省。
+  **仍与 Clause 17 不符**：标准用 127 长 PRBS 而非交替（`cbb/ofdm_tx_top` 已登记为
+  偏差 L3）；本件与 TX 现状一致，两侧同时改 PRBS 才能互通。
 - G-SIGN-01：certified 需 owner 具名签字。
 
 ## 0.1.0 历史缺陷的归宿
@@ -89,3 +96,35 @@
 （`ls_estimator`/`channel_interpolator`）的整体替换而消灭，不再逐条修补；
 0.1.0 修复的两个致命缺陷（计数差一、导频计数不清零）在新架构中以
 帧定序 + 逐符号 S 清零的结构性方式覆盖（TB T2/T6 多符号场景验证）。
+
+<!-- BEGIN:MANIFEST:PORTS -->
+<!-- Generated from manifest.json; do not edit this block. -->
+| Name | Dir | Width | Bus |
+|---|---|---:|---|
+| `i_clk` | input | 1 | — |
+| `i_rst` | input | 1 | — |
+| `i_frame_start` | input | 1 | — |
+| `s_axis_tvalid` | input | 1 | axi-stream |
+| `s_axis_tready` | output | 1 | axi-stream |
+| `s_axis_tdata` | input | 32 | axi-stream |
+| `m_axis_tvalid` | output | 1 | axi-stream |
+| `m_axis_tready` | input | 1 | axi-stream |
+| `m_axis_tdata` | output | 32 | axi-stream |
+<!-- END:MANIFEST:PORTS -->
+
+<!-- BEGIN:MANIFEST:PARAMS -->
+<!-- Generated from manifest.json; do not edit this block. -->
+| Name | Values | Support |
+|---|---|---|
+| `DATA_W` | — | yes |
+| `N_FFT` | — | yes |
+| `N_PILOT` | — | yes |
+<!-- END:MANIFEST:PARAMS -->
+
+<!-- BEGIN:MANIFEST:CLOCKRESET -->
+<!-- Generated from manifest.json; do not edit this block. -->
+| Field | Value |
+|---|---|
+| Clock | `i_clk` (10 ns) |
+| Reset | `i_rst` / active_high / sync |
+<!-- END:MANIFEST:CLOCKRESET -->

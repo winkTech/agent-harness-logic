@@ -32,7 +32,9 @@ function sha256(bytes) { return crypto.createHash('sha256').update(bytes).digest
 
 function gitHead(root) {
   try {
-    return cp.execFileSync('git', ['-c', 'safe.directory=*', 'rev-parse', 'HEAD'], { cwd: root, encoding: 'utf8' }).trim();
+    // stderr 丢弃: root 不是 git 仓库时 (如测试固件) git 会往父进程 stderr 打 fatal,
+    // 看着像失败其实已被 catch 兜住 —— 返回 null 才是这里的契约。
+    return cp.execFileSync('git', ['-c', 'safe.directory=*', 'rev-parse', 'HEAD'], { cwd: root, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }).trim();
   } catch { return null; }
 }
 
@@ -42,13 +44,18 @@ function manifestFor(scan, uid) {
   return asset;
 }
 
-function snapshotSpec(scan, uid, version) {
+// 门禁机器产物: 逐门 JSON 与 gate-results 聚合。它们随门禁清单本身变动而再生,
+// 与被测资产的行为无关 —— 新增一道门会让全库这些文件变, 但仿真/综合/对拍证据分毫未动。
+// 重封 (--reseal) 只容许这一类差异; 实质证据一旦变动必须升版重取。
+const GATE_PRODUCT = /^(?:gate-results\.json|RL-OUT\.json|(?:G|CS)-[A-Z0-9./_-]+\.json)$/;
+
+function snapshotSpec(scan, uid, version, { allowExisting = false } = {}) {
   const asset = manifestFor(scan, uid);
   if (version && asset.version !== version) throw new Error(`${uid} manifest version=${asset.version}, requested=${version}`);
   const sourceDir = path.join(scan.root, 'var', 'gates', 'pg', uid);
   if (!fs.existsSync(sourceDir)) throw new Error(`evidence source missing: var/gates/pg/${uid}`);
   const destination = path.join(scan.root, 'evidence', uid, asset.version);
-  if (fs.existsSync(destination)) throw new Error(`snapshot destination exists; bump version before resnapshot: ${path.relative(scan.root, destination)}`);
+  if (fs.existsSync(destination) && !allowExisting) throw new Error(`snapshot destination exists; bump version before resnapshot: ${path.relative(scan.root, destination)}`);
   return { asset, sourceDir, destination };
 }
 
@@ -79,8 +86,8 @@ function synthWarnings(sourceDir) {
   return lines.length ? { source: 'synth.log', lines } : null;
 }
 
-function makeSnapshot(scan, uid, version) {
-  const { asset, sourceDir, destination } = snapshotSpec(scan, uid, version);
+// files[] 的计算 —— --write 与 --reseal 共用, 避免两条路径算法漂移。
+function evidenceFiles(sourceDir) {
   const unexpected = allFiles(sourceDir).filter(({ rel }) => !EXCLUDED.test(rel) && !ALLOWED.test(rel));
   if (unexpected.length) throw new Error(`non-whitelisted evidence file: ${unexpected.map((file) => file.rel).join(', ')}`);
   const warning = synthWarnings(sourceDir);
@@ -95,6 +102,12 @@ function makeSnapshot(scan, uid, version) {
   }
   const total = files.reduce((sum, file) => sum + file.bytes, 0);
   if (total > MAX_BYTES) throw new Error(`snapshot exceeds 1MB guard: ${total} bytes`);
+  return { files, warning };
+}
+
+function makeSnapshot(scan, uid, version) {
+  const { asset, sourceDir, destination } = snapshotSpec(scan, uid, version);
+  const { files, warning } = evidenceFiles(sourceDir);
   fs.mkdirSync(destination, { recursive: true });
   if (warning) fs.writeFileSync(path.join(destination, 'synth-warnings.json'), `${JSON.stringify(warning, null, 2)}\n`, 'utf8');
   const gatePath = path.join(sourceDir, 'gate-results.json');
@@ -113,6 +126,59 @@ function makeSnapshot(scan, uid, version) {
   };
   fs.writeFileSync(path.join(destination, 'SNAPSHOT.json'), `${JSON.stringify(snapshot, null, 2)}\n`, 'utf8');
   return snapshot;
+}
+
+// 受限重封 —— 治理机制自身变动 (如新增一道门) 会让全库的门禁产物再生, 但被测资产
+// 的行为证据分毫未动。此时"升版重取"会让版本史谎称设计改过, "删了重写"会把重封这件
+// 事本身抹掉。故给一条窄路径: 只容许门禁产物差异, 实质证据一旦变动即拒绝; 重封原因、
+// 时间、旧 manifest 哈希与逐项差异写进 SNAPSHOT.json 的 reseal_history, 可独立复核。
+// (owner 裁定 2026-08-03; 同类情形先例见 integration/registry.json ITG-0002 ldpc 1.0.0)
+function resealSnapshot(root, uid, reason) {
+  if (!reason || !String(reason).trim()) throw new Error('--reseal requires --reason "<why>"');
+  const scan = scanRepository(root);
+  const { asset, sourceDir, destination } = snapshotSpec(scan, uid, undefined, { allowExisting: true });
+  const snapshotPath = path.join(destination, 'SNAPSHOT.json');
+  if (!fs.existsSync(snapshotPath)) throw new Error(`no sealed snapshot to reseal: ${path.relative(scan.root, snapshotPath)} (use --write)`);
+  const sealed = JSON.parse(fs.readFileSync(snapshotPath, 'utf8'));
+  if (!Array.isArray(sealed.files)) throw new Error('sealed snapshot has no files[]');
+  const { files, warning } = evidenceFiles(sourceDir);
+
+  const before = new Map(sealed.files.map((file) => [file.path, file]));
+  const after = new Map(files.map((file) => [file.path, file]));
+  const changed = [];
+  for (const [rel, file] of after) {
+    const prior = before.get(rel);
+    if (!prior) changed.push(`+${rel}`);
+    else if (prior.sha256 !== file.sha256 || prior.bytes !== file.bytes) changed.push(`~${rel}`);
+  }
+  for (const rel of before.keys()) if (!after.has(rel)) changed.push(`-${rel}`);
+  changed.sort();
+  const substantive = changed.filter((entry) => !GATE_PRODUCT.test(entry.slice(1)));
+  if (substantive.length) throw new Error(`substantive evidence changed — reseal refused, bump version instead: ${substantive.join(', ')}`);
+
+  const manifestHash = sha256(canonicalBytes(asset.manifest_path));
+  if (!changed.length && manifestHash === sealed.manifest_sha256) throw new Error('no drift — nothing to reseal');
+
+  const gatePath = path.join(sourceDir, 'gate-results.json');
+  const history = Array.isArray(sealed.reseal_history) ? sealed.reseal_history.slice() : [];
+  history.push({
+    at: new Date().toISOString(),
+    reason: String(reason).trim(),
+    prior_manifest_sha256: sealed.manifest_sha256,
+    prior_git_head: sealed.git_head || null,
+    changed_evidence: changed,
+  });
+  if (warning) fs.writeFileSync(path.join(destination, 'synth-warnings.json'), `${JSON.stringify(warning, null, 2)}\n`, 'utf8');
+  const snapshot = {
+    ...sealed,                                     // created_at 等原封存事实保留
+    git_head: gitHead(scan.root),
+    manifest_sha256: manifestHash,
+    files,
+    gate_summary: fs.existsSync(gatePath) ? JSON.parse(fs.readFileSync(gatePath, 'utf8')) : null,
+    reseal_history: history,
+  };
+  fs.writeFileSync(snapshotPath, `${JSON.stringify(snapshot, null, 2)}\n`, 'utf8');
+  return { snapshot, changed };
 }
 
 function verifySnapshot(root, uid, version) {
@@ -198,8 +264,18 @@ function main(argv = process.argv.slice(2)) {
       console.log(`[evidence-snapshot] verified ${refs.length} snapshots historical=${results.filter((result) => result.historical).length}`);
       return 0;
     }
-    const uid = argv.find((arg, index) => !arg.startsWith('-') && index !== rootIndex + 1);
-    if (!uid || !argv.includes('--write')) throw new Error('usage: evidence-snapshot.cjs <uid> --write --root <engineering-assets> | --verify <uid>@<version> | --verify-all');
+    const reasonIndex = argv.indexOf('--reason');
+    // 跳过的是"选项的取值位", 不是固定下标。此处必须先判 >= 0 —— 否则 -1 + 1 = 0
+    // 会把 argv[0] 当成某个选项的取值排除掉, 而 usage 里写的正是 `<uid> --write`,
+    // 即 uid 就在 argv[0]。结果是文档里的调用形式必然报 usage 错。
+    const skip = new Set([rootIndex, reasonIndex].filter((i) => i >= 0).map((i) => i + 1));
+    const uid = argv.find((arg, index) => !arg.startsWith('-') && !skip.has(index));
+    if (uid && argv.includes('--reseal')) {
+      const { snapshot, changed } = resealSnapshot(root, uid, reasonIndex >= 0 ? argv[reasonIndex + 1] : '');
+      console.log(`[evidence-snapshot] resealed ${snapshot.asset_uid}@${snapshot.version} (门禁产物差异 ${changed.length} 项, 实质证据未变)`);
+      return 0;
+    }
+    if (!uid || !argv.includes('--write')) throw new Error('usage: evidence-snapshot.cjs <uid> --write --root <engineering-assets> | <uid> --reseal --reason "<why>" | --verify <uid>@<version> | --verify-all');
     const snapshot = makeSnapshot(scanRepository(root), uid);
     console.log(`[evidence-snapshot] created ${snapshot.asset_uid}@${snapshot.version}`);
     return 0;
@@ -210,4 +286,4 @@ function main(argv = process.argv.slice(2)) {
 }
 
 if (require.main === module) process.exitCode = main();
-module.exports = { allFiles, canonicalBytes, main, makeSnapshot, sourceFiles, verifySnapshot };
+module.exports = { allFiles, canonicalBytes, evidenceFiles, main, makeSnapshot, resealSnapshot, sourceFiles, verifySnapshot };

@@ -43,6 +43,16 @@
       "golden_model_ref": null
     },
     {
+      "asset_uid": "cp_remove",
+      "level": "certified",
+      "requirement_ref": "engineering-assets/knowledge/primary/domains/comm/ofdm/algorithm_spec.md",
+      "doc_refs": [
+        "engineering-assets/knowledge/primary/domains/comm/synch/algorithm_spec.md",
+        "engineering-assets/docs/governance/adr/ADR-003-sync-top-causal-contract.md"
+      ],
+      "golden_model_ref": "model_comm_ofdm"
+    },
+    {
       "asset_uid": "crc32",
       "level": "certified",
       "requirement_ref": "engineering-assets/docs/CBB候选台账-hdl-coding-templates.md",
@@ -69,6 +79,26 @@
         "engineering-assets/docs/CBB候选台账-hdl-coding-templates.md"
       ],
       "golden_model_ref": null
+    },
+    {
+      "asset_uid": "eq_zf",
+      "level": "certified",
+      "requirement_ref": "engineering-assets/knowledge/primary/domains/comm/ofdm/algorithm_spec.md",
+      "doc_refs": [
+        "engineering-assets/cbb/eq_zf/analysis/fixed-point-study.md"
+      ],
+      "golden_model_ref": null
+    },
+    {
+      "asset_uid": "fft64_sdf",
+      "level": "certified",
+      "requirement_ref": "engineering-assets/knowledge/primary/domains/comm/ofdm/algorithm_spec.md",
+      "doc_refs": [
+        "engineering-assets/knowledge/primary/domains/comm/ofdm/fixed_point_report.md",
+        "engineering-assets/knowledge/primary/domains/comm/ofdm/rtl_architecture.md",
+        "engineering-assets/docs/governance/adr/ADR-004-ofdm-tx-ifft-and-scope.md"
+      ],
+      "golden_model_ref": "model_comm_ofdm"
     },
     {
       "asset_uid": "frame_sync",
@@ -98,6 +128,15 @@
       "doc_refs": [
         "engineering-assets/docs/governance/CBB-治理与生产级准入规范-V1.0.md",
         "engineering-assets/docs/CBB候选台账-hdl-coding-templates.md"
+      ],
+      "golden_model_ref": null
+    },
+    {
+      "asset_uid": "mod_demapper",
+      "level": "certified",
+      "requirement_ref": "engineering-assets/knowledge/primary/domains/comm/ofdm/algorithm_spec.md",
+      "doc_refs": [
+        "engineering-assets/cbb/mod_demapper/analysis/fixed-point-study.md"
       ],
       "golden_model_ref": null
     },
@@ -176,6 +215,16 @@
         "engineering-assets/knowledge/primary/domains/comm/rrc/report_rrc_fpga_implementation.md"
       ],
       "golden_model_ref": "model_comm_rrc"
+    },
+    {
+      "asset_uid": "sb_align",
+      "level": "certified",
+      "requirement_ref": "engineering-assets/knowledge/primary/domains/comm/ofdm/algorithm_spec.md",
+      "doc_refs": [
+        "engineering-assets/docs/governance/adr/ADR-001-axis-tready-and-output-registration.md",
+        "engineering-assets/docs/governance/adr/ADR-002-channel-est-estimation-basis.md"
+      ],
+      "golden_model_ref": null
     },
     {
       "asset_uid": "sdp_ram",

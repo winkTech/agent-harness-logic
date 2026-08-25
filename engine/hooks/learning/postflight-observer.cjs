@@ -1,10 +1,16 @@
 #!/usr/bin/env node
 'use strict';
 
+const crypto = require('node:crypto');
 const fs = require('node:fs');
 const path = require('node:path');
 const { HARNESS_ROOT } = require('../../scripts/lib/harness-root.cjs');
 const { shouldSyncMemoryFile } = require('../../scripts/lib/memory-file-policy.cjs');
+const { withFileLockSync } = require('../../scripts/lib/project-scope.cjs');
+
+const RAW_RISK_RETENTION_MS = 14 * 24 * 60 * 60 * 1000;
+const AGGREGATE_RISK_RETENTION_MS = 90 * 24 * 60 * 60 * 1000;
+const MAX_RAW_RISK_EVENTS = 5000;
 
 function sessionIdFrom(payload = {}) {
   return String(
@@ -31,6 +37,109 @@ function compact(value, limit = 200) {
   if (typeof value === 'string') return value.slice(0, limit);
   try { return JSON.stringify(value).slice(0, limit); }
   catch { return String(value).slice(0, limit); }
+}
+
+function digest(value) {
+  return crypto.createHash('sha256').update(String(value || ''), 'utf8').digest('hex');
+}
+
+function atomicWriteText(filePath, content) {
+  fs.mkdirSync(path.dirname(filePath), { recursive: true });
+  const tempPath = `${filePath}.${process.pid}.${Date.now()}.tmp`;
+  try {
+    fs.writeFileSync(tempPath, content, { encoding: 'utf8', mode: 0o600 });
+    fs.renameSync(tempPath, filePath);
+  } finally {
+    try { if (fs.existsSync(tempPath)) fs.unlinkSync(tempPath); } catch { /* cleanup */ }
+  }
+}
+
+function readJsonLines(filePath) {
+  try {
+    return fs.readFileSync(filePath, 'utf8').split(/\r?\n/).filter(Boolean)
+      .map((line) => {
+        try { return JSON.parse(line); } catch { return null; }
+      }).filter(Boolean);
+  } catch {
+    return [];
+  }
+}
+
+function recordRiskTelemetry(payload = {}, opts = {}) {
+  const env = opts.env || process.env;
+  if (env.CLAUDE_HARNESS_NO_PERSIST === '1'
+      || env.CLAUDE_HARNESS_VERIFY_READONLY === '1'
+      || env.CLAUDE_NO_DIAGNOSTIC_WRITES === '1') {
+    return { recorded: false, reason: 'persistence-disabled' };
+  }
+  const eventName = String(payload.hook_event_name || payload.event || '');
+  if (!['PostToolUse', 'PostToolUseFailure'].includes(eventName)) {
+    return { recorded: false, reason: 'event-not-applicable' };
+  }
+  const policy = require('../../scripts/lib/risk-policy.cjs');
+  const preflight = require('../../scripts/hooks/preflight-router.cjs');
+  const runtime = preflight.runtimeFrom(payload);
+  const assessment = policy.classifyRisk(preflight.riskFactsFromRuntime(runtime));
+  const nowMs = Date.parse(opts.now || new Date().toISOString());
+  if (!Number.isFinite(nowMs)) throw new TypeError('risk telemetry timestamp is invalid');
+  const timestamp = new Date(nowMs).toISOString();
+  const telemetryDir = path.resolve(opts.telemetryDir || path.join(HARNESS_ROOT, 'var', 'telemetry'));
+  const rawPath = path.join(telemetryDir, 'risk-events.jsonl');
+  const dailyPath = path.join(telemetryDir, 'risk-daily.json');
+  const bypassRequested = ['1', 'true'].includes(String(env.CLAUDE_GATES_DISABLED || '').toLowerCase())
+    && String(env.CLAUDE_GATES_DISABLE_TARGET || '') === 'risk-policy.cjs';
+  const kind = bypassRequested ? 'bypass'
+    : eventName === 'PostToolUseFailure' ? 'failure'
+      : ['R2', 'R3'].includes(assessment.effectiveRiskLevel) ? 'upgrade'
+        : 'success';
+  const projectHash = digest(runtime.cwd);
+
+  withFileLockSync(rawPath, () => {
+    const retained = readJsonLines(rawPath).filter(entry => {
+      const at = Date.parse(entry.timestamp || '');
+      return Number.isFinite(at) && at >= nowMs - RAW_RISK_RETENTION_MS;
+    });
+    if (kind !== 'success') {
+      retained.push({
+        schemaVersion: 1,
+        timestamp,
+        kind,
+        eventName,
+        tool: runtime.toolName,
+        riskLevel: assessment.effectiveRiskLevel,
+        riskReasons: assessment.riskReasons,
+        requiredEvidence: assessment.requiredEvidence,
+        sessionHash: digest(sessionIdFrom(payload)),
+        projectHash,
+        targetHash: digest(runtime.filePath),
+        commandHash: digest(runtime.command),
+        bypassTargetHash: kind === 'bypass' ? digest(env.CLAUDE_GATES_DISABLE_TARGET) : null,
+      });
+    }
+    const bounded = retained.slice(-MAX_RAW_RISK_EVENTS);
+    atomicWriteText(rawPath, bounded.length ? `${bounded.map(entry => JSON.stringify(entry)).join('\n')}\n` : '');
+  });
+
+  if (kind === 'success') {
+    withFileLockSync(dailyPath, () => {
+      let aggregate;
+      try { aggregate = JSON.parse(fs.readFileSync(dailyPath, 'utf8')); }
+      catch { aggregate = { schemaVersion: 1, days: {} }; }
+      if (!aggregate.days || typeof aggregate.days !== 'object') aggregate.days = {};
+      for (const day of Object.keys(aggregate.days)) {
+        const dayMs = Date.parse(`${day}T00:00:00.000Z`);
+        if (!Number.isFinite(dayMs) || dayMs < nowMs - AGGREGATE_RISK_RETENTION_MS) {
+          delete aggregate.days[day];
+        }
+      }
+      const day = timestamp.slice(0, 10);
+      const key = `${projectHash.slice(0, 16)}:${runtime.toolName || 'unknown'}:${assessment.effectiveRiskLevel}`;
+      aggregate.days[day] ||= {};
+      aggregate.days[day][key] = Number(aggregate.days[day][key] || 0) + 1;
+      atomicWriteText(dailyPath, `${JSON.stringify(aggregate, null, 2)}\n`);
+    });
+  }
+  return { recorded: true, kind, riskLevel: assessment.effectiveRiskLevel };
 }
 
 function defaultWarn(record) {
@@ -71,6 +180,14 @@ function runAuxiliaryServices(payload = {}, opts = {}) {
         if (process.env.CLAUDE_TRANSPARENCY_LEDGER_DISABLED === '1') return null;
         return require('../../scripts/hooks/agent-transparency-ledger.cjs').run(input);
       }),
+      args: [payload],
+    });
+  }
+  if ((eventName === 'PostToolUse' || eventName === 'PostToolUseFailure')
+      && (typeof opts.riskTelemetry === 'function' || !injectedRuntime)) {
+    services.push({
+      source: 'risk-telemetry',
+      run: opts.riskTelemetry || recordRiskTelemetry,
       args: [payload],
     });
   }
@@ -466,4 +583,5 @@ module.exports = {
   explicitResolution,
   auxiliaryFailureWarning,
   runAuxiliaryServices,
+  recordRiskTelemetry,
 };

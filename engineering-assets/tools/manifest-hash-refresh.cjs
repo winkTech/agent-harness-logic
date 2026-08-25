@@ -9,7 +9,7 @@ const { discoverManifestPaths } = require('./catalog-gen.cjs');
 // 受保护路径判定见 lib/protected-write.cjs —— 该判定被多个经 Bash 运行、会写
 // models/** 的工具共用, 抽成库以免各写一份后漂移(改了一处忘另一处, 洞就从没改的
 // 那处漏)。本脚本的 --write 会改写全库每一份 manifest, 含受治理的 golden 模型。
-const { isProtected, hasApproval } = require('./lib/protected-write.cjs');
+const { blockReason } = require('./lib/protected-write.cjs');
 
 const TEXT_EXTENSIONS = new Set(['.cjs', '.do', '.hex', '.json', '.m', '.md', '.py', '.sdc', '.sv', '.svh', '.tcl', '.txt', '.v', '.vh', '.xdc']);
 function canonicalBytes(file) {
@@ -30,7 +30,11 @@ function scan(root) {
       if (source.sha256 !== next) { changes.push({ manifest: path.relative(root, manifestPath), path: source.path, old: source.sha256, next }); source.sha256 = next; changed = true; }
     }
     if (!changed || !writing) continue;
-    if (isProtected(manifestPath) && !hasApproval(manifestPath)) {
+    // blockReason 放行时会**就地消费令牌并写审计** (owner 2026-08-09 裁定: 消费与
+    // 留痕归库, 不推给 hook —— hook 在 Bash 路径上根本不运行)。故每次实际写入前
+    // 恰好调一次, 且必须在 writeFileSync 之前。
+    const why = blockReason(manifestPath, { tool: 'manifest-hash-refresh' });
+    if (why) {
       blocked.push(path.relative(root, manifestPath));
       continue; // 受保护且无令牌 —— 跳过写入, 上面记下的 changes 仍如实报告
     }

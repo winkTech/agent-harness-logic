@@ -2,7 +2,8 @@
 // cpe_tracker — 导频公共相位跟踪 (ADR-002)
 // 功能: 对每个数据符号:
 //       (1) 导频拍即乘即累加 S = Σ_p Y[p]·conj(H_LTS[p])·pilot[p]
-//           (pilot = [1,1,-1,1] @ {11,25,39,53}, 取负即 -1);
+//           (pilot = [1,1,1,-1] @ {11,25,39,53} = 子载波 {-21,-7,+7,+21},
+//            取负的是 +21 —— 802.11a 的 P 序列; 2026-08-09 由 [1,1,-1,1] 订正);
 //       (2) 符号尾: CORDIC 向量模式求 CPE = angle(S), 旋转模式求
 //           (cos,sin) = e^{j·CPE} (Q2.14);
 //       (3) 校正输出交给子模块 cpe_rotate_out (逐点读 H_LTS RAM 复乘
@@ -85,7 +86,10 @@ module cpe_tracker #(
     assign w_p_hit = i_beat && i_ph_data &&
                      (i_sub inside {P_IDX_W'(P_PILOT_POS[0]), P_IDX_W'(P_PILOT_POS[1]),
                                     P_IDX_W'(P_PILOT_POS[2]), P_IDX_W'(P_PILOT_POS[3])});
-    assign w_p_neg = (i_sub == P_IDX_W'(P_PILOT_POS[2]));   // pilot = [1,1,-1,1]
+    // 负号在 P_PILOT_POS[3] = bin 53 = 子载波 +21 (802.11a 的 P 序列)。1.0.3 由 [2]
+    // (bin 39 = +7) 订正 —— 原值与 models/comm/ofdm 及 tx_pilot_map 相反, 串成链路时
+    // CPE 四项抵消。由 integration/contracts/chain_pilot_contract.m 实跑把关。
+    assign w_p_neg = (i_sub == P_IDX_W'(P_PILOT_POS[3]));   // pilot = [1,1,1,-1]
 
     logic                     r_p1_v, r_p1_neg;
     logic signed [DATA_W-1:0] r_p1_yi, r_p1_yq, r_p1_hi, r_p1_hq;
@@ -174,11 +178,24 @@ module cpe_tracker #(
         else if (r_cstate == P_CIDLE && r_sym_pend) r_sym_pend <= 1'b0;
     end
 
+    // 逐符号导频极性 (1.0.4, owner 裁定方案 A): TX 侧按符号序把四个导频整体 ±1 交替,
+    // 首个数据符号 +1。本件此前不建模极性, 每隔一个符号 CPE 差 pi —— 与 1.0.3 那次的
+    // "导频值放错位置"是**两个独立缺陷**。极性对四个导频相同, 故锁存 S 时整体取负一次
+    // 即可 (S 是四项之和, 负 S 与负每一项等价), 比逐个翻转便宜。
+    // 标准用 127 长 PRBS 而非交替 (ofdm_tx_top 偏差 L3); 改 PRBS 只需换 r_pol_neg 的
+    // 产生式, 其余不动。详见 CHANGELOG 1.0.4 与 docs/limitations.md。
+    logic r_pol_neg;                              // 1 = 本符号极性为 -1
+
+    always_ff @(posedge i_clk) begin
+        if (i_rst || i_abort) r_pol_neg <= 1'b0;  // 帧内首个数据符号极性 +1
+        else if (w_sym_end)   r_pol_neg <= ~r_pol_neg;
+    end
+
     // S 锁存 (数据通路, 不复位; 由 FSM 定拍)
     always_ff @(posedge i_clk) begin
         if (w_sym_end) begin
-            r_sl_re <= r_s_re;
-            r_sl_im <= r_s_im;
+            r_sl_re <= r_pol_neg ? -r_s_re : r_s_re;
+            r_sl_im <= r_pol_neg ? -r_s_im : r_s_im;
         end
     end
 

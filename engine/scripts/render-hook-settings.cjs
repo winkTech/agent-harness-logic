@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * engine/scripts/render-hook-settings.cjs — 把可移植的 hook 注册模板渲染成 settings.json。
+ * engine/scripts/render-hook-settings.cjs — 多目标 hook 注册渲染器。
  *
  * 背景：
  *   settings.json 被 .gitignore 忽略（hook 命令必须写本机绝对路径，改用 $HOME 会导致 hook
@@ -10,16 +10,20 @@
  *   "manifest marks an unregistered hook active"。
  *
  *   engine/hooks/registrations.json 入库、用 {{HARNESS_ROOT}} 占位，是注册的唯一权威声明；
- *   本脚本把它展开成绝对路径写进 settings.json。
+ *   本脚本把它展开成绝对路径写入目标。Phase 1 起为**多目标渲染器**：
+ *     - Claude Code：settings.json（hooks 块，向后兼容，历史渲染语义不变）
+ *     - WorkBuddy：engine/hooks/workbuddy.hooks.json（插件 hooks.json 结构与 Claude
+ *       同构 —— 事件名/matcher/hooks/type:command 一致，已对真实插件样例核对）
  *
  * 用法：
- *   node engine/scripts/render-hook-settings.cjs            # 渲染并写入 settings.json
- *   node engine/scripts/render-hook-settings.cjs --check    # 只比对，不写；漂移则 exit 1
- *   node engine/scripts/render-hook-settings.cjs --print    # 打印渲染结果到 stdout
+ *   node engine/scripts/render-hook-settings.cjs            # 渲染并写入两个目标
+ *   node engine/scripts/render-hook-settings.cjs --check    # 只比对，不写；任一目标漂移则 exit 1
+ *   node engine/scripts/render-hook-settings.cjs --print    # 打印 Claude 目标 hooks 到 stdout
+ *   node engine/scripts/render-hook-settings.cjs --print-workbuddy  # 打印 WorkBuddy 目标到 stdout
  *
  * 退出码：
  *   0 — 成功 / 无漂移
- *   1 — --check 发现 settings.json 的 hooks 与模板不一致
+ *   1 — --check 发现任一目标与模板不一致
  *   2 — 模板缺失或不可解析
  */
 
@@ -31,6 +35,7 @@ const path = require('node:path');
 const { HARNESS_ROOT } = require('./lib/harness-root.cjs');
 
 const TEMPLATE_RELATIVE = path.join('engine', 'hooks', 'registrations.json');
+const WORKBUDDY_TARGET_RELATIVE = path.join('engine', 'hooks', 'workbuddy.hooks.json');
 const PLACEHOLDER = /\{\{HARNESS_ROOT\}\}/g;
 
 /** settings.json 里的路径一律用正斜杠，与既有写法保持一致。 */
@@ -174,6 +179,80 @@ function checkDrift(opts = {}) {
   return { drift: true, reason: parts.join('；'), settingsExists: true, rendered };
 }
 
+// ── WorkBuddy 目标 ──────────────────────────────────────────────────────────
+// WorkBuddy 插件 hooks.json 与 Claude settings.json 的 hooks 块同构（事件名 /
+// matcher / hooks / type:command / command / timeout 字段一致，已对真实插件样例
+// sheetagent / financial-analysis 核对）。因此 registrations.json 单一契约源
+// 直接复用，占位符展开成绝对路径后包一层 { hooks } 即为 WorkBuddy 目标。
+
+function workbuddyHooksPath(root = HARNESS_ROOT) {
+  return path.join(root, WORKBUDDY_TARGET_RELATIVE);
+}
+
+/**
+ * 渲染 WorkBuddy 目标（顶层 { hooks } 结构）。
+ * @returns {{ hooks: object }}
+ */
+function renderWorkbuddyHooks(opts = {}) {
+  const root = opts.root || HARNESS_ROOT;
+  const hooks = renderHooks({ root, templatePath: opts.templatePath });
+  return { hooks };
+}
+
+/**
+ * 写入 workbuddy.hooks.json。独立文件（非合并进 settings.json），
+ * 每次全量覆写模板渲染结果。
+ */
+function writeWorkbuddyHooks(opts = {}) {
+  const root = opts.root || HARNESS_ROOT;
+  const target = opts.workbuddyPath || workbuddyHooksPath(root);
+  const rendered = renderWorkbuddyHooks({ root, templatePath: opts.templatePath });
+  fs.writeFileSync(target, `${JSON.stringify(rendered, null, 2)}\n`, 'utf8');
+  const count = Object.values(rendered.hooks).reduce(
+    (sum, groups) => sum + groups.reduce((n, g) => n + (g.hooks?.length || 0), 0), 0,
+  );
+  return { target, hooks: rendered.hooks, count };
+}
+
+/**
+ * 比对 workbuddy.hooks.json 与模板渲染结果。
+ */
+function checkWorkbuddyDrift(opts = {}) {
+  const root = opts.root || HARNESS_ROOT;
+  const target = opts.workbuddyPath || workbuddyHooksPath(root);
+  const rendered = renderWorkbuddyHooks({ root, templatePath: opts.templatePath });
+
+  if (!fs.existsSync(target)) {
+    return { drift: false, reason: null, targetExists: false, rendered };
+  }
+
+  let actual;
+  try {
+    actual = JSON.parse(fs.readFileSync(target, 'utf8')).hooks || {};
+  } catch (err) {
+    return { drift: true, reason: `workbuddy.hooks.json 不可解析: ${err.message}`, targetExists: true, rendered };
+  }
+
+  if (canonical(rendered.hooks) === canonical(actual)) {
+    return { drift: false, reason: null, targetExists: true, rendered };
+  }
+
+  const renderedEvents = Object.keys(rendered.hooks).sort();
+  const actualEvents = Object.keys(actual).sort();
+  const onlyTemplate = renderedEvents.filter((e) => !actualEvents.includes(e));
+  const onlyTarget = actualEvents.filter((e) => !renderedEvents.includes(e));
+  const changed = renderedEvents
+    .filter((e) => actualEvents.includes(e))
+    .filter((e) => canonical(rendered.hooks[e]) !== canonical(actual[e]));
+
+  const parts = [];
+  if (onlyTemplate.length) parts.push(`模板独有事件: ${onlyTemplate.join(', ')}`);
+  if (onlyTarget.length) parts.push(`workbuddy.hooks.json 独有事件: ${onlyTarget.join(', ')}`);
+  if (changed.length) parts.push(`注册内容不同的事件: ${changed.join(', ')}`);
+
+  return { drift: true, reason: parts.join('；'), targetExists: true, rendered };
+}
+
 function main() {
   const args = process.argv.slice(2);
   try {
@@ -182,19 +261,33 @@ function main() {
       return 0;
     }
 
+    if (args.includes('--print-workbuddy')) {
+      process.stdout.write(`${JSON.stringify(renderWorkbuddyHooks(), null, 2)}\n`);
+      return 0;
+    }
+
     if (args.includes('--check')) {
-      const result = checkDrift();
-      if (!result.settingsExists) {
-        process.stdout.write('[render-hook-settings] settings.json 不存在，跳过漂移比对\n');
-        return 0;
+      const claude = checkDrift();
+      const workbuddy = checkWorkbuddyDrift();
+      const failures = [];
+      if (claude.settingsExists && claude.drift) {
+        failures.push(`[claude settings.json] ${claude.reason}`);
       }
-      if (result.drift) {
-        process.stderr.write(`[render-hook-settings] ✖ hook 注册漂移: ${result.reason}\n`);
+      if (workbuddy.targetExists && workbuddy.drift) {
+        failures.push(`[workbuddy.hooks.json] ${workbuddy.reason}`);
+      }
+      if (failures.length) {
+        for (const failure of failures) process.stderr.write(`[render-hook-settings] ✖ hook 注册漂移: ${failure}\n`);
         process.stderr.write('[render-hook-settings]   模板是权威声明。修好模板后跑 '
-          + 'node engine/scripts/render-hook-settings.cjs 重新生成 settings.json\n');
+          + 'node engine/scripts/render-hook-settings.cjs 重新生成\n');
         return 1;
       }
-      process.stdout.write('[render-hook-settings] ✓ settings.json 的 hooks 与模板一致\n');
+      const bits = [];
+      if (claude.settingsExists) bits.push('settings.json 的 hooks 与模板一致');
+      else bits.push('settings.json 不存在，跳过漂移比对');
+      if (workbuddy.targetExists) bits.push('workbuddy.hooks.json 与模板一致');
+      else bits.push('workbuddy.hooks.json 不存在，跳过漂移比对');
+      process.stdout.write(`[render-hook-settings] ✓ ${bits.join('；')}\n`);
       return 0;
     }
 
@@ -204,6 +297,10 @@ function main() {
     );
     process.stdout.write(`[render-hook-settings] ${created ? '已创建' : '已更新'} ${target}`
       + ` (${Object.keys(hooks).length} 个事件 / ${count} 条 hook)\n`);
+
+    const wb = writeWorkbuddyHooks();
+    process.stdout.write(`[render-hook-settings] 已更新 ${wb.target}`
+      + ` (${Object.keys(wb.hooks).length} 个事件 / ${wb.count} 条 hook)\n`);
     return 0;
   } catch (err) {
     process.stderr.write(`[render-hook-settings] ${err.message}\n`);
@@ -217,9 +314,14 @@ if (require.main === module) {
 
 module.exports = {
   TEMPLATE_RELATIVE,
+  WORKBUDDY_TARGET_RELATIVE,
   templatePath,
   settingsPath,
+  workbuddyHooksPath,
   renderHooks,
   writeSettings,
   checkDrift,
+  renderWorkbuddyHooks,
+  writeWorkbuddyHooks,
+  checkWorkbuddyDrift,
 };

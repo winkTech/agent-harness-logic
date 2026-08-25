@@ -27,6 +27,11 @@
   "doc_refs": [
     "engineering-assets/docs/governance/CBB-治理与生产级准入规范-V1.0.md"
   ],
+  "protocol_anchor": {
+    "standard": "none",
+    "baseline_relation": "neutral",
+    "notes": "通用件: 反射语义 CRC-32 (自检含 IEEE 检验值 \"123456789\" -> 0xCBF43926 硬锚)。该多项式为以太网/802.11 FCS 等多个标准共用, 属通用算法而非某一版标准的实现, 故不锚版本; 若将来要声明 802.3 FCS 合规, 应另立锚点并核对帧尾取反/字节序约定。"
+  },
   "fidelity": {
     "status": "na"
   },

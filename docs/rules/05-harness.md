@@ -125,6 +125,29 @@ WSL 注意：`/tmp` 会被 systemd 清理，跨调用要用 `/var/tmp`；参数�
 
 判错方向的代价是：前者被当成后者会永久失去一项检查，后者被当成前者会让 CI 一直红。凡是 CI 需要而本机全局已有的依赖，必须由契约测试钉住其安装步骤——本机跑一遍看不出它缺失。
 
+### 10. 风险自适应门禁：宽进严出
+
+默认策略是 `CLAUDE_RISK_POLICY_MODE=shadow`；可切换为 `enforce` 或 `off`。风险以语义变化和影响半径为依据，不按扩展名、脚本数量或 diff 行数机械升级：
+
+| 等级 | 典型范围 | 同步行为 | 交付前证据 |
+|:-----|:---------|:---------|:-----------|
+| R0 | 只读、lint/语法检查 | 静默放行 | 无 |
+| R1 | 已有模块内部局部改动，接口/时钟/复位/CDC/Golden 不变 | 静默放行 | targeted test |
+| R2 | 新模块、接口或共享核心变化、重复失败、影响半径不确定 | shadow 短提示；不追溯阻断已执行动作 | task contract + affected regression |
+| R3 | 破坏性、保护目标、跨项目、发布/提交签核 | enforce 下无精确授权即阻断 | exact authorization + fresh signoff |
+
+执行合同：
+
+- Harness 只给出最低风险；Agent 可以升级，不能降级。降级只能由用户提供目标精确、限时、可审计的授权。
+- 风险按 project + session 单调保持，只有同级或更高级的 GREEN 证据才能清除；过期状态自动失效。
+- 普通编辑不因需求/验证画像状态直接硬阻断。硬安全在动作前执行；证据完整性在 Stop/commit/release/signoff 等交付边界执行。环境不可用时可交付 `unverified`，不得表述为 completed/verified。
+- R1/R2 证据缓存绑定项目、源码/测试/Golden 哈希、规范化命令、工具版本和风险级别，默认保留 7 天、最多 100 条；内容变化即失效。R3 永不复用缓存。
+- Progress watchdog 仅跟踪长任务、失败修复循环及 R2/R3 任务；普通 R0/R1 单次操作不创建 watchdog 状态。冻结会话仍保留只读检查、通知和审计 reset 通道。
+- 风险遥测复用异步 observer：失败、升级、旁路写原始散列事件并保留 14 天；普通成功只写每日聚合并保留 90 天。遥测、单次成功和未分析错误不得晋升为记忆。
+- R3 旁路必须同时绑定精确 action hash、nonce、操作者、原因和有效期，并原子消费一次；第二次使用必须失败。禁止常驻 disable 开关。
+
+发布顺序固定为 `shadow -> fast enforce -> strict enforce`。进入下一阶段前至少满足：Read 同步 P95 <= 150 ms；普通 Edit/Write 的 Pre+Post 同步 P95 <= 250 ms；提示上下文 <= 600 字符、单次门禁提示 <= 320 字符；审查语料普通操作误阻断为 0、高风险检测为 100%；每个阻断都给一个原因和可执行 remediation。在线误阻断率 `<0.5%` 必须由 shadow 遥测窗口证明，不能用本地 fixture 代替。硬安全与证据完整性可以超过延迟预算，但 advisory 必须服从预算。
+
 ## Rule promotion lifecycle
 
 唯一允许的生命周期是：

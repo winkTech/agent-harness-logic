@@ -29,6 +29,22 @@
     "engineering-assets/docs/governance/adr/ADR-003-sync-top-causal-contract.md"
   ],
   "golden_model_ref": "model_comm_synch",
+  "protocol_anchor": {
+    "standard": "IEEE 802.11-2020",
+    "baseline_relation": "baseline",
+    "clause": "17",
+    "profile": "11a/g OFDM 20MHz",
+    "scope": "PLCP 前导段: STS 递推自相关包检测 + 粗 CFO 估计校正, LTS (T1/T2) 符号量化互相关精定时, 输出对齐到 T1 首样点的 o_fft_start。不含 SIGNAL 解码; 精 CFO 跟踪不在 RTL 范围; 单突发语义。",
+    "parameters": {
+      "bw_mhz": 20,
+      "n_fft": 64,
+      "preamble": "STS + 2xLTS (T1/T2)",
+      "lts_corr_lag_samples": 64,
+      "data_format": "Q2.14 {Q,I} 16bit"
+    },
+    "deviations": [],
+    "anchor_basis": "standard/clause/profile 取自库基线 catalog/protocol-baseline.json (owner 裁定 2026-08-02), 未经标准原文核对。parameters 逐项来自包内实据: n_fft=64 与 lts_corr_lag=64 由 README 防错锁判据 |R(pk-64)|^2 佐证, 前导结构 STS+T1/T2 由 README 同步链描述佐证, 数据格式由 manifest.params DATA_W=16 (Q2.14) 佐证; bw_mhz 来自基线 profile 而非包内实测。"
+  },
   "fidelity": {
     "status": "bit_true"
   },
