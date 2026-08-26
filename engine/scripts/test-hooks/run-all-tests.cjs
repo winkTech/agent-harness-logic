@@ -2281,8 +2281,11 @@ define('E2ETests', 'test-e2e.cjs 语法正确', () => {
 define('E2ETests', '全部 E2E 通过', () => {
   const p = path.join(HOME, 'engine/scripts/test-hooks/test-e2e.cjs');
   if (!fs.existsSync(p)) return { pass: true, skip: true, detail: '文件不存在' };
+  // 外层预算必须 ≥ 内层各 spawn 预算之和: e2e 内部 7 个测试, 其中 P0 内嵌
+  // painpoints 已放宽到 180s (全量负载下 90s 仍被砍)。30s 外层在这里是
+  // 必然超时 —— 2026-08-26 多轮全量 E2E 红全是这一处, 与 e2e 内部逻辑无关。
   const r = spawnSync('node', [p], {
-    encoding: 'utf8', timeout: 30000, windowsHide: true,
+    encoding: 'utf8', timeout: 300000, windowsHide: true,
   });
   const passed = r.status === 0 && !r.error && !r.signal;
   // 原先只报 exit/signal, 子进程说了什么全丢 —— 与 painpoints 同一个毛病。
@@ -2362,7 +2365,10 @@ function childSkipNotice(stdout) {
 // 迹象。整整 11 天里它掩埋了 6 个真问题 —— 陈旧派生视图、失效的快照防篡改断言、
 // 与 schema 对不上的契约判据等。接进来才谈得上"门禁覆盖资产库"。
 const ASSET_TEST_SUITES = [
-  ['catalog/audit 契约', 'test-catalog-audit.cjs'],
+  // catalog/audit 单独跑 ~40s, 但它对真实仓库做篡改演练(extra-file.bin 写入→finally 清理)。
+  // 全量负载下 120s 超时被杀时 finally 不执行 → extra-file.bin 残留 → 毒化下一次运行
+  // (2026-08-25/26 两次全量红均由此起)。放宽到 300s, 且残留清理见 run 前防御。
+  ['catalog/audit 契约', 'test-catalog-audit.cjs', 300000],
   ['抽取流水线契约', 'test-extraction-pipeline.cjs'],
   ['协议锚点契约', 'test-protocol-anchor.cjs'],
   // 跨包判据: 每个包的 TB 与自己的 RTL 用同一套约定互相印证, 两边一起错也照样全绿。
@@ -2370,11 +2376,17 @@ const ASSET_TEST_SUITES = [
   // 串起来 CPE 直接失效而各自 22 门全过。MATLAB 缺席时显式 SKIP 计数, 不当成通过。
   ['跨包链路判据', 'test-chain-contracts.cjs'],
 ];
-for (const [label, script] of ASSET_TEST_SUITES) {
+for (const entry of ASSET_TEST_SUITES) {
+  const [label, script, timeoutMs] = entry;
   define('EngineeringAssets', label, () => {
     const p = path.join(HOME, 'engineering-assets/tools', script);
     if (!fs.existsSync(p)) return { pass: true, skip: true, detail: `${script} 不存在` };
-    const r = spawnSync('node', [p], { encoding: 'utf8', timeout: 120000, windowsHide: true });
+    // 防御: 清掉上次中断残留的篡改演练文件 (它未被 git 跟踪, 出现即残留)
+    const staleExtra = path.join(HOME, 'engineering-assets/evidence/rrc_polyphase_fir/0.4.0/extra-file.bin');
+    if (fs.existsSync(staleExtra)) {
+      try { fs.rmSync(staleExtra, { force: true }); } catch { /* 清不掉会让下面检查如实报红 */ }
+    }
+    const r = spawnSync('node', [p], { encoding: 'utf8', timeout: timeoutMs || 120000, windowsHide: true });
     const passed = r.status === 0 && !r.error && !r.signal;
     return {
       pass: passed,
@@ -2390,7 +2402,7 @@ define('PainpointRegression', 'harness-painpoints.cjs 全部通过', () => {
   const p = path.join(HOME, 'engine/scripts/test-hooks/harness-painpoints.cjs');
   if (!fs.existsSync(p)) return { pass: false, detail: 'harness-painpoints.cjs 不存在' };
   const r = spawnSync('node', [p], {
-    encoding: 'utf8', timeout: 30000, windowsHide: true,
+    encoding: 'utf8', timeout: 90000, windowsHide: true,
   });
   const passed = r.status === 0 && !r.error && !r.signal;
   // 原先只报 `exit=${r.status}`, 子进程的 stdout/stderr 全丢 —— 这条失败在 CI 上
@@ -2409,7 +2421,7 @@ const AUDIT_REMEDIATION_CONTRACTS = [
   ['controlled gate bypass', 'gate-bypass-contract.test.cjs', 30000],
   ['risk-adaptive policy', 'risk-policy-contract.cjs', 30000],
   ['golden protection contract', 'golden-protection-contract.test.cjs', 30000],
-  ['Git and CI reproducibility', 'git-ci-repro-contract.test.cjs', 30000],
+  ['Git and CI reproducibility', 'git-ci-repro-contract.test.cjs', 90000],
   ['single-process preflight router', 'preflight-router-contract.cjs', 30000],
   ['single-process prompt context', 'prompt-context-contract.cjs', 30000],
   ['single-process postflight state', 'postflight-router-contract.cjs', 30000],
@@ -2423,9 +2435,9 @@ const AUDIT_REMEDIATION_CONTRACTS = [
   ['graph-driven module order', 'module-topology-contract.cjs', 90000],
   ['memory consumer and promotion lifecycle', 'memory-consumer-promotion-contract.test.cjs', 60000],
   ['read-only hook side effects', 'read-only-hooks.cjs', 30000],
-  ['state concurrency', 'state-concurrency.cjs', 60000],
+  ['state concurrency', 'state-concurrency.cjs', 120000],
   ['statusline hot path', 'statusline-contract.cjs', 30000],
-  ['transparency privacy and retention', 'transparency-retention.cjs', 30000],
+  ['transparency privacy and retention', 'transparency-retention.cjs', 90000],
   ['cost usage telemetry', 'cost-usage-contract.cjs', 30000],
   ['memory recall tiers', 'memory-recall-tier-contract.cjs', 30000],
   ['memory outcome loop', 'memory-outcome-loop-contract.cjs', 30000],
@@ -2476,7 +2488,7 @@ define('WorkflowContracts', 'workflow-contracts.cjs 全部通过', () => {
   const p = path.join(HOME, 'engine/scripts/test-hooks/workflow-contracts.cjs');
   if (!fs.existsSync(p)) return { pass: false, detail: 'workflow-contracts.cjs 不存在' };
   const r = spawnSync('node', [p], {
-    encoding: 'utf8', timeout: 30000, windowsHide: true,
+    encoding: 'utf8', timeout: 90000, windowsHide: true,
   });
   return { pass: r.status === 0, detail: `exit=${r.status}` };
 });

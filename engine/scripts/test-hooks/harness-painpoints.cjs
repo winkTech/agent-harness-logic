@@ -1363,16 +1363,28 @@ test('cross-link retrieval uses only the fresh failure payload without hit or si
 
 test('postflight records causal lifecycle events and refuses anonymous telemetry', () => {
   const observer = require(path.join(HOME, 'engine/hooks/learning/postflight-observer.cjs'));
+  // 2026-08-26 修: sessionIdFrom 回退读 process.env.CLAUDE_SESSION_ID —— 这是
+  // 生产设计(宿主会话身份), 但宿主(WorkBuddy)会给子进程注入该变量, 于是
+  // "匿名事件"在宿主 env 下获得合成身份, 本断言在 e2e/全量里稳定失败而单独
+  // 跑(干净 shell)通过。测试语义是"payload 无身份时不得伪造", 必须剥离宿主
+  // env 干扰; 保存/恢复以免影响同进程其他用例。
+  const savedSid = process.env.CLAUDE_SESSION_ID;
+  delete process.env.CLAUDE_SESSION_ID;
   let anonymousOpens = 0;
-  const anonymous = observer.handlePayload({
-    hook_event_name: 'PostToolUseFailure',
-    tool_name: 'Bash',
-    tool_response: { status: 1, stderr: 'anonymous failure' },
-  }, {
-    openDb() { anonymousOpens += 1; throw new Error('anonymous event opened DB'); },
-  });
-  assert(observer.sessionIdFrom({}) === '' && anonymous.actions.length === 0 && anonymousOpens === 0,
-    `anonymous event was assigned synthetic identity: ${JSON.stringify({ anonymous, anonymousOpens })}`);
+  let anonymous;
+  try {
+    anonymous = observer.handlePayload({
+      hook_event_name: 'PostToolUseFailure',
+      tool_name: 'Bash',
+      tool_response: { status: 1, stderr: 'anonymous failure' },
+    }, {
+      openDb() { anonymousOpens += 1; throw new Error('anonymous event opened DB'); },
+    });
+    assert(observer.sessionIdFrom({}) === '' && anonymous.actions.length === 0 && anonymousOpens === 0,
+      `anonymous event was assigned synthetic identity: ${JSON.stringify({ anonymous, anonymousOpens })}`);
+  } finally {
+    if (savedSid !== undefined) process.env.CLAUDE_SESSION_ID = savedSid;
+  }
 
   const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'postflight-causal-'));
   const dbPath = path.join(tempDir, 'causal.db');
@@ -2015,11 +2027,20 @@ test('verification gate does not treat make clean as functional verification', (
 });
 
 test('verification gate only clears after successful PostToolUse evidence', () => {
-  const stateFile = path.join(HOME, 'var/verify-gate.json');
-  const ledgerFile = path.join(HOME, 'var/verification-ledger.json');
+  // 2026-08-26 修: 原先直接读写真实 var/verify-gate.json (仅 withFileBackup 还原),
+  // 全量跑时被前面套件留在状态文件里的 risk/pending 段污染 → gate 走不同分支 →
+  // "单独绿、全量红"的间歇失败。改为 tmpdir + env 指针隔离, 与同文件
+  // 'allows read-only echo chains' 用例同一模式 (gate 支持这两个 env 覆盖)。
+  const tmpRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'verify-clear-'));
+  const stateFile = path.join(tmpRoot, 'verify-gate.json');
+  const ledgerFile = path.join(tmpRoot, 'verification-ledger.json');
   const gate = path.join(HOME, 'engine/scripts/hooks/verification-gate.cjs');
+  const env = {
+    CLAUDE_VERIFY_GATE_STATE_FILE: stateFile,
+    CLAUDE_VERIFICATION_LEDGER_FILE: ledgerFile,
+  };
 
-  withFileBackup(stateFile, () => withFileBackup(ledgerFile, () => {
+  try {
     fs.writeFileSync(stateFile, JSON.stringify({
       edited: true,
       verified: false,
@@ -2031,7 +2052,7 @@ test('verification gate only clears after successful PostToolUse evidence', () =
       hook_event_name: 'PreToolUse',
       tool_name: 'Bash',
       tool_input: { command: 'pytest tests' },
-    }));
+    }), env);
     assert(pre.status === 0, `verification command should be allowed to run, exit=${pre.status}`);
     let state = readJson(stateFile, {});
     assert(state.edited === true && state.verified !== true, 'PreToolUse cleared verification before execution evidence existed');
@@ -2041,7 +2062,7 @@ test('verification gate only clears after successful PostToolUse evidence', () =
       tool_name: 'Bash',
       tool_input: { command: 'pytest tests' },
       tool_response: { status: 0, stdout: 'RESULT: FAIL', stderr: '' },
-    }));
+    }), env);
     assert(postFail.status === 0, `failed post evidence should not crash hook, exit=${postFail.status}`);
     state = readJson(stateFile, {});
     assert(state.edited === true && state.verified !== true, 'failed verification log cleared pending state');
@@ -2051,11 +2072,13 @@ test('verification gate only clears after successful PostToolUse evidence', () =
       tool_name: 'Bash',
       tool_input: { command: 'pytest tests' },
       tool_response: { status: 0, stdout: '2 passed', stderr: '' },
-    }));
+    }), env);
     assert(postPass.status === 0, `passing post evidence failed, exit=${postPass.status}`);
     state = readJson(stateFile, {});
     assert(state.edited === false && state.verified === true, 'passing PostToolUse evidence did not clear pending state');
-  }));
+  } finally {
+    try { fs.rmSync(tmpRoot, { recursive: true, force: true }); } catch { /* Windows 句柄延迟 */ }
+  }
 });
 
 test('verification gate allows read-only echo chains but blocks echo redirection', () => {

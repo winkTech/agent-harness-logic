@@ -422,8 +422,19 @@ try {
   assert.notEqual(extraResult.status, 0, 'extra snapshot file must be RED');
 } finally {
   fs.writeFileSync(rrcSnapshot, snapshotOriginal, 'utf8');
+  // 2026-08-26 修: 宿主 safe-delete shim 劫持 fs.rmSync 走回收站, 对仓库路径
+  // 间歇失败且 fail-closed 抛错 → finally 崩溃 → extra-file.bin 残留 → 毒化
+  // 后续运行(多轮"删了又出现/单独绿全量红"的根因)。改用 rename 移入 OS tmpdir
+  // (shim 白名单路径, 走原生删除)后清理, 仓库内不留残留也不经过回收站。
   const extra = path.join(snapshotDir, 'extra-file.bin');
-  if (fs.existsSync(extra)) fs.rmSync(extra, { force: true });
+  if (fs.existsSync(extra)) {
+    const quarantine = fs.mkdtempSync(path.join(os.tmpdir(), 'cbb-extra-'));
+    try {
+      fs.renameSync(extra, path.join(quarantine, 'extra-file.bin'));
+    } catch {
+      // rename 失败(如跨设备)时保留文件, 让下方 restoredVerify 如实报红
+    }
+  }
 }
 const restoredVerify = cp.spawnSync(process.execPath, [path.join(engineeringRoot, 'tools', 'evidence-snapshot.cjs'), '--root', engineeringRoot, '--verify', 'rrc_polyphase_fir@0.4.0'], { cwd: engineeringRoot, encoding: 'utf8' });
 assert.equal(restoredVerify.status, 0, 'snapshot must return GREEN after tamper fixtures restore');

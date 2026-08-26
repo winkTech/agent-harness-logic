@@ -18,7 +18,10 @@ const PLUGIN_LOCK_SCHEMA = path.join(ROOT, 'engine', 'schemas', 'plugin-lock.sch
 function run(command, args, options = {}) {
   return spawnSync(command, args, {
     encoding: 'utf8',
-    timeout: 30_000,
+    // 30s 在全量负载下曾砍断 pre-commit 子进程 (2026-08-26 duration 31.2s,
+    // status=null 被断言当真实失败)。pre-commit 本身要跑 git+python+tclsh
+    // 多个孙进程, Windows spawn 开销大, 放宽到 90s。
+    timeout: 90_000,
     windowsHide: true,
     ...options,
   });

@@ -226,10 +226,24 @@ test('新 gate 语法检查', () => {
 test('P0 痛点回归', () => {
   const p = path.join(HOME, 'engine/scripts/test-hooks/harness-painpoints.cjs');
   if (!fs.existsSync(p)) return { ok: false, detail: 'harness-painpoints.cjs 不存在' };
+  // painpoints 单独跑 ~14s, 但全量负载下曾 30s/90s 两次被砍断 (spawnSync 对多级
+  // 孙进程的回收在 Windows 上开销大; 2026-08-26 实测 90s 仍 ETIMEDOUT)。
+  // 放宽到 180s 并在超时时显式标注, 避免误判为真实失败。
   const r = spawnSync('node', [p], {
-    encoding: 'utf8', timeout: 30000, windowsHide: true,
+    encoding: 'utf8', timeout: 180000, windowsHide: true,
   });
-  return { ok: r.status === 0, detail: `exit=${r.status}` };
+  if (r.error && /ETIMEDOUT/i.test(String(r.error.message || ''))) {
+    return { ok: false, detail: 'painpoints 超时被杀 (180s) —— 负载型超时, 非真实失败, 单独跑可复核' };
+  }
+  // exit=1 时把失败断言行透传上来 —— 只报 exit 码无法定位 (2026-08-26 全量
+  // 红了三天, 每次都要手工重跑 painpoints 才知道挂的是哪条)
+  if (r.status !== 0) {
+    const lines = (r.stdout || '').split('\n');
+    const failIdx = lines.findIndex(l => /FAIL/.test(l));
+    const context = failIdx >= 0 ? lines.slice(failIdx, failIdx + 3).join(' | ') : (r.stderr || '').slice(0, 300);
+    return { ok: false, detail: `exit=${r.status} ${context}` };
+  }
+  return { ok: true, detail: `exit=${r.status}` };
 });
 
 // ═════════════════════════════════════════════════════════════════════════════
