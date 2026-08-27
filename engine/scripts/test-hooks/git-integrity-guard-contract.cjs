@@ -99,4 +99,22 @@ function runGuard(repo) {
   console.log('ok 5 - non-HEAD ref deletion does not false-positive');
 }
 
+// 6. HEAD ref 文件被清空(2026-08-27 第六次事故形态: safe-delete 清空而非删除) → 自动恢复
+{
+  const { repo, git } = makeRepo();
+  const before = git(['rev-parse', 'HEAD']).stdout.trim();
+  const refFile = path.join(repo, '.git', 'refs', 'heads', 'master');
+  if (!fs.existsSync(refFile)) {
+    const branch = git(['symbolic-ref', '--short', 'HEAD']).stdout.trim();
+    fs.writeFileSync(path.join(repo, '.git', 'refs', 'heads', branch), '');
+  } else {
+    fs.writeFileSync(refFile, '');
+  }
+  const r = runGuard(repo);
+  assert.equal(r.status, 0, `emptied HEAD ref must auto-recover, got exit=${r.status}: ${r.stdout}${r.stderr}`);
+  const after = git(['rev-parse', 'HEAD']).stdout.trim();
+  assert.equal(after, before, 'recovered HEAD must match pre-corruption sha');
+  console.log('ok 6 - emptied HEAD ref auto-recovers');
+}
+
 console.log('git-integrity-guard contract: all checks passed');

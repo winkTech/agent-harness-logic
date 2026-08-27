@@ -67,7 +67,9 @@ if (!headContent) {
 
 let headSha = git(['rev-parse', 'HEAD']);
 if (!headSha) {
-  // HEAD 指向的 ref 文件丢失 → 从 packed-refs 恢复
+  // HEAD 指向的 ref 文件丢失或被清空 → 从 packed-refs 恢复
+  // (2026-08-27 第六次事故形态: safe-delete 把 ref 文件清空而非删除,
+  //  目录还在, 只查目录存在性查不出来 —— rev-parse 失败是唯一信号)
   const m = headContent.match(/^ref:\s*(\S+)/);
   const refName = m ? m[1] : null;
   if (refName) {
