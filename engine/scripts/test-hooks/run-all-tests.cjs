@@ -2453,6 +2453,7 @@ const AUDIT_REMEDIATION_CONTRACTS = [
   ['weekly report wiring', 'weekly-report-contract.cjs', 180000],
   ['transport normalization contract', 'transport-contract.test.cjs', 30000],
   ['workbuddy render target', 'render-workbuddy-contract.test.cjs', 30000],
+  ['git integrity guard', 'git-integrity-guard-contract.cjs', 120000],
 ];
 
 for (const [name, relative, timeout, extraArgs = []] of AUDIT_REMEDIATION_CONTRACTS) {

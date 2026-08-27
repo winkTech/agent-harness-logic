@@ -115,6 +115,11 @@
             "command": "node {{HARNESS_ROOT}}/engine/scripts/hooks/codegraph-sync.cjs --session",
             "timeout": 60,
             "async": true
+          },
+          {
+            "type": "command",
+            "command": "node {{HARNESS_ROOT}}/engine/hooks/git/git-integrity-guard.cjs",
+            "timeout": 15
           }
         ]
       }
@@ -132,6 +137,12 @@
             "type": "command",
             "command": "node {{HARNESS_ROOT}}/engine/hooks/learning/postflight-observer.cjs",
             "timeout": 30,
+            "async": true
+          },
+          {
+            "type": "command",
+            "command": "node {{HARNESS_ROOT}}/engine/hooks/git/git-integrity-guard.cjs",
+            "timeout": 15,
             "async": true
           }
         ]

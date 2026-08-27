@@ -57,6 +57,31 @@
   ],
   "entries": [
     {
+      "script": "engine/hooks/git/git-integrity-guard.cjs",
+      "kind": "maintenance",
+      "events": [
+        "SessionStart",
+        "Stop"
+      ],
+      "tools": [
+        "*"
+      ],
+      "payloadSchema": "harness-event-v1",
+      "blocking": true,
+      "sideEffects": [
+        "git-refs-recovery"
+      ],
+      "timeoutSeconds": 15,
+      "owner": "harness-gates",
+      "fixture": "engine/scripts/test-hooks/git-integrity-guard-contract.cjs",
+      "active": true,
+      "transports": [
+        "claude-code",
+        "workbuddy"
+      ],
+      "$comment": "2026-08-26 五次 Codex/宿主 safe-delete 删 .git refs/pack 事故的检测+自动恢复兜底。契约测试在临时仓演练五种事故形态。"
+    },
+    {
       "script": "engine/hooks/learning/postflight-observer.cjs",
       "kind": "observer",
       "events": [
