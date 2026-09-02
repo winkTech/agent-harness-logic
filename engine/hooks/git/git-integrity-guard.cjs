@@ -130,6 +130,43 @@ if (fs.existsSync(packDir)) {
   }
 }
 
+// ── 5.5 HEAD 落后 reflog 顶端检测 (2026-08-27 第七次事故盲区) ──
+// 形态: loose ref 被删但 packed-refs 里有旧值 → rev-parse 经 packed-refs 兜底
+// 成功, HEAD 静默回退到旧提交, 一切看似健康。对策: reflog 顶端(本仓最近一次
+// 真实操作的结果)比 HEAD 新时, 自动把 HEAD ref 快进到 reflog 顶端。
+// 仅当顶端 object 存在且 HEAD 是其祖先(纯落后, 无分叉)时才动。
+{
+  let reflogTop = null;
+  try {
+    const lines = fs.readFileSync(path.join(GIT_DIR, 'logs', 'HEAD'), 'utf8').trim().split('\n').filter(Boolean);
+    for (let i = lines.length - 1; i >= 0; i--) {
+      const lm = lines[i].match(/^([0-9a-f]{40})\s+([0-9a-f]{40})\s/);
+      if (lm && lm[2] && !/^0+$/.test(lm[2])) { reflogTop = lm[2]; break; }
+    }
+  } catch { /* 无 reflog 文件则跳过本检查 */ }
+  if (reflogTop && reflogTop !== headSha.trim()) {
+    const topExists = git(['cat-file', '-t', reflogTop]) !== null;
+    // git() 成功返回 stdout 字符串、失败(含 merge-base 判否的 exit 1)返回 null。
+    // merge-base --is-ancestor 静默: 返回非 null 即退出码 0 = HEAD 是 reflog 顶端的祖先。
+    const mergeBase = topExists ? git(['merge-base', '--is-ancestor', headSha.trim(), reflogTop]) : null;
+    if (topExists && mergeBase !== null) {
+      const m = headContent.match(/^ref:\s*(\S+)/);
+      const refName = m ? m[1] : null;
+      if (refName) {
+        const refFile = path.join(GIT_DIR, ...refName.split('/'));
+        fs.mkdirSync(path.dirname(refFile), { recursive: true });
+        fs.writeFileSync(refFile, `${reflogTop}\n`);
+        out(`HEAD 静默回退检测: ${headSha.trim().slice(0, 8)} → reflog 顶端 ${reflogTop.slice(0, 8)} 已恢复`);
+        headSha = reflogTop + '\n';
+      } else {
+        out(`WARN: HEAD (${headSha.trim().slice(0, 8)}) 落后 reflog 顶端 ${reflogTop.slice(0, 8)} 但 HEAD 非符号引用, 需人工核对`);
+      }
+    } else if (topExists) {
+      out(`WARN: HEAD (${headSha.trim().slice(0, 8)}) 与 reflog 顶端 ${reflogTop.slice(0, 8)} 分叉 — 不自动改写, 需人工确认哪个是预期状态`);
+    }
+  }
+}
+
 // ── 6. index 完整性 (轻量探测; 不跑全量 fsck, 守卫必须快) ──
 const lsFiles = git(['ls-files', '-z']);
 if (lsFiles === null) {

@@ -7,6 +7,8 @@
 //   3. pack 被清空(留 .idx) → CRITICAL, exit 2
 //   4. HEAD commit object 丢失 → CRITICAL, exit 2
 //   5. 非 HEAD loose ref 单删 → 不误报, exit 0
+//   6. HEAD ref 文件被清空 → 自动恢复, exit 0
+//   7. loose ref 删除且 packed-refs 有旧值(静默回退) → 快进到 reflog 顶端, exit 0
 const assert = require('node:assert/strict');
 const cp = require('node:child_process');
 const fs = require('node:fs');
@@ -115,6 +117,29 @@ function runGuard(repo) {
   const after = git(['rev-parse', 'HEAD']).stdout.trim();
   assert.equal(after, before, 'recovered HEAD must match pre-corruption sha');
   console.log('ok 6 - emptied HEAD ref auto-recovers');
+}
+
+// 7. loose ref 删除但 packed-refs 持旧值 → HEAD 静默回退, guard 快进到 reflog 顶端
+{
+  const { repo, git } = makeRepo();
+  const branch = git(['symbolic-ref', '--short', 'HEAD']).stdout.trim();
+  const headC2 = git(['rev-parse', 'HEAD']).stdout.trim();
+  // c2 打进 packed-refs (stale 锚点), loose ref 消失
+  git(['pack-refs', '--all']);
+  // 新提交 c3 → loose ref 重新覆盖 packed 里的 c2
+  fs.appendFileSync(path.join(repo, 'f.txt'), 'c\n');
+  git(['add', '.']);
+  git(['commit', '-qm', 'c3']);
+  const headC3 = git(['rev-parse', 'HEAD']).stdout.trim();
+  assert.notEqual(headC2, headC3, 'c3 must differ from c2');
+  // 删 loose ref → rev-parse 经 packed-refs 兜底静默回退到 c2
+  fs.rmSync(path.join(repo, '.git', 'refs', 'heads', branch), { force: true });
+  assert.equal(git(['rev-parse', 'HEAD']).stdout.trim(), headC2, 'HEAD must silently roll back to stale packed value');
+  const r = runGuard(repo);
+  assert.equal(r.status, 0, `silent rollback must auto-recover, got exit=${r.status}: ${r.stdout}${r.stderr}`);
+  assert.match(r.stdout, /HEAD 静默回退检测: .+已恢复/, 'guard must log the silent-rollback recovery');
+  assert.equal(git(['rev-parse', 'HEAD']).stdout.trim(), headC3, 'HEAD must be fast-forwarded to reflog top (c3)');
+  console.log('ok 7 - silent rollback (packed-refs stale) fast-forwards HEAD to reflog top');
 }
 
 console.log('git-integrity-guard contract: all checks passed');
