@@ -15,9 +15,10 @@ const {
   scopeId,
   updateJsonFileSync,
 } = require('./project-scope.cjs');
+const { varPath } = require('./harness-state.cjs');
 
 const STATE_FILE = process.env.CLAUDE_VERIFY_GATE_STATE_FILE ||
-  path.join(HOME, 'var', 'verify-gate.json');
+  varPath('verify-gate.json');
 const DEFAULT_PENDING_TTL_MS = 24 * 60 * 60 * 1000;
 const {
   canReuseEvidence,

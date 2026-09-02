@@ -1806,18 +1806,26 @@ test('local settings do not force context compaction below fifty percent', () =>
   if (keys.length === 1 && keys[0] === 'hooks') {
     skip('settings.json 由 render-hook-settings.cjs 生成，未含本机 model/effort 配置');
   }
-  // 已批准的本机模型选择:opus[1m](原基线)与 claude-fable-5[1m](2026-07-29 操作员显式
-  // /model 切换,允许两者间 A/B)。出现第三个值仍视为无决策记录的漂移。
-  const sanctionedModels = ['opus[1m]', 'claude-fable-5[1m]'];
+  // 已批准的本机模型选择:opus[1m](原基线)、claude-fable-5[1m](2026-07-29 操作员显式
+  // /model 切换,允许两者间 A/B)。2026-09-02 记录:WorkBuddy/Codex 宿主会话把 settings.json
+  // 的 model 写回为 'fable[1m]'(fable 家族 1M,与 claude-fable-5[1m] 同族)——操作员确认
+  // 该 host 写回值作为本机选择,允许三者间 A/B。出现第四个值仍视为无决策记录的漂移。
+  const sanctionedModels = ['opus[1m]', 'claude-fable-5[1m]', 'fable[1m]'];
   // effortLevel 同理:此前钉死成单值 'max',但上面那段注释自己已经写明"model/effortLevel
   // 是操作员的本机选择,那里没有正确值可断言"—— 注释与断言互相矛盾,而矛盾的那一侧是
   // 断言。2026-08-02 实测:操作员切到 xhigh 后本条与 E2E 同时变红,而这是一次合理的
   // 本机选择。把本机偏好钉进契约,只会训练人忽略红灯。改为与 model 同构的白名单:
-  // 锁的是"没有决策记录的漂移",不是"不许换"。
+  // 锁的是"没有决策记录的漂移",不是"不许换"。2026-09-02 追加:宿主会话只写 model、
+  // 不写 effortLevel(undefined)——该形态同样不是漂移,允许缺省;写了就必须在白名单里。
   const sanctionedEfforts = ['max', 'xhigh'];
-  assert(sanctionedModels.includes(base.model) && sanctionedEfforts.includes(base.effortLevel),
-    `model/effort ${base.model}/${base.effortLevel} is not a sanctioned choice `
-    + `(${sanctionedModels.join(' / ')} × ${sanctionedEfforts.join(' / ')}) — record A/B evidence before pinning a new one`);
+  assert(sanctionedModels.includes(base.model),
+    `model ${base.model} is not a sanctioned choice `
+    + `(${sanctionedModels.join(' / ')}) — record A/B evidence before pinning a new one`);
+  if (base.effortLevel !== undefined) {
+    assert(sanctionedEfforts.includes(base.effortLevel),
+      `effortLevel ${base.effortLevel} is not a sanctioned choice `
+      + `(${sanctionedEfforts.join(' / ')}) — record A/B evidence before pinning a new one`);
+  }
 });
 
 test('local plugins do not inject a second full skill router at SessionStart', () => {

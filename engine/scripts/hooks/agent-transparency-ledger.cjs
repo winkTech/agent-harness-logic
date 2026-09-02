@@ -2,6 +2,7 @@
 'use strict';
 
 const { HARNESS_ROOT } = require('../lib/harness-root.cjs');
+const { varPath } = require('../lib/harness-state.cjs');
 
 const fs = require('node:fs');
 const os = require('node:os');
@@ -427,7 +428,7 @@ function buildContext(payload) {
   );
   const explicitRunDir = process.env.CLAUDE_TRANSPARENCY_RUN_DIR;
   const runsRoot = resolvePath(
-    process.env.CLAUDE_TRANSPARENCY_RUNS_DIR || path.join(HOME, 'var', 'runs'),
+    process.env.CLAUDE_TRANSPARENCY_RUNS_DIR || varPath('runs'),
     projectRoot,
   );
   const runDir = explicitRunDir

@@ -2453,6 +2453,7 @@ const AUDIT_REMEDIATION_CONTRACTS = [
   ['weekly report wiring', 'weekly-report-contract.cjs', 180000],
   ['transport normalization contract', 'transport-contract.test.cjs', 30000],
   ['workbuddy render target', 'render-workbuddy-contract.test.cjs', 30000],
+  ['harness state root and migration', 'harness-state-contract.test.cjs', 60000],
   ['git integrity guard', 'git-integrity-guard-contract.cjs', 120000],
 ];
 
@@ -3519,6 +3520,14 @@ define('MemoryLifecycle', 'collector refuses events without a stable session ide
   const { openDb } = require(path.join(HOME, 'engine/sqlite/index.cjs'));
   const events = require(path.join(HOME, 'engine/sqlite/store-events.cjs'));
   let wDb;
+  // 宿主会把会话 ID 注入本进程 env (CLAUDE_SESSION_ID/CODEBUDDY_SESSION_ID)，
+  // 令 "没有 session 身份" 的事件被 env 兜底成稳定身份 → 摘掉 env 再验证拒绝路径。
+  const savedSessionEnv = {
+    CLAUDE_SESSION_ID: process.env.CLAUDE_SESSION_ID,
+    CODEBUDDY_SESSION_ID: process.env.CODEBUDDY_SESSION_ID,
+  };
+  delete process.env.CLAUDE_SESSION_ID;
+  delete process.env.CODEBUDDY_SESSION_ID;
   try {
     wDb = openDb({ path: ':memory:' });
     const missing = collector.emitSync('user_correct', { message: 'missing session' }, { db: wDb.db });
@@ -3533,6 +3542,10 @@ define('MemoryLifecycle', 'collector refuses events without a stable session ide
       && rows[0].sessionId === 'memory-lifecycle-session';
     return { pass, detail: `missing=${missing} stable=${stable} rows=${JSON.stringify(rows)}` };
   } finally {
+    for (const key of ['CLAUDE_SESSION_ID', 'CODEBUDDY_SESSION_ID']) {
+      if (savedSessionEnv[key] !== undefined) process.env[key] = savedSessionEnv[key];
+      else delete process.env[key];
+    }
     if (wDb) wDb.close();
   }
 });

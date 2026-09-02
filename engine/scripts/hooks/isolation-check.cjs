@@ -20,10 +20,11 @@ const fs = require('fs');
 const os = require('node:os');
 const path = require('path');
 const { HARNESS_ROOT } = require('../lib/harness-root.cjs');
+const { varPath } = require('../lib/harness-state.cjs');
 const { updateJsonFileSync } = require('../lib/project-scope.cjs');
 
 const HARNESS = HARNESS_ROOT;
-const STATE_FILE = process.env.CLAUDE_RUNTIME_STATE_FILE || path.join(HARNESS, 'var', 'index', 'runtime-state.json');
+const STATE_FILE = process.env.CLAUDE_RUNTIME_STATE_FILE || varPath('index', 'runtime-state.json');
 
 // ── 隔离检测 ─────────────────────────────────────────────────────────────────
 

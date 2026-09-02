@@ -13,14 +13,13 @@
  * 输出：命中时打印 JSON 行，hook 框架将其注入到 Claude 的上下文中。
  */
 
-const { HARNESS_ROOT } = require('../lib/harness-root.cjs');
+const { varPath } = require('../lib/harness-state.cjs');
 const { updateJsonFileSync } = require('../lib/project-scope.cjs');
 
 const p = require('node:path');
 const f = require('node:fs');
 
-const HOME = HARNESS_ROOT;
-const STATE_FILE = process.env.CLAUDE_RUNTIME_STATE_FILE || p.join(HOME, 'var', 'index', 'runtime-state.json');
+const STATE_FILE = process.env.CLAUDE_RUNTIME_STATE_FILE || varPath('index', 'runtime-state.json');
 const FAILURE_SIGNAL_THROTTLE_MS = 60 * 1000;
 // failureCount 的语义是"连续失败"——证据超过时效窗口后不再构成强制切换的依据。
 // 没有可解析时间戳的计数同样视为陈旧:宁可少注入一次提醒,不可跨会话误报。

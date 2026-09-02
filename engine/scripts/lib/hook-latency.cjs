@@ -13,9 +13,9 @@
 
 const fs = require('node:fs');
 const path = require('node:path');
-const { HARNESS_ROOT } = require('./harness-root.cjs');
+const { varPath } = require('./harness-state.cjs');
 
-const STORE_FILE = path.join(HARNESS_ROOT, 'var', 'metrics', 'hook-latency.jsonl');
+const STORE_FILE = varPath('metrics', 'hook-latency.jsonl');
 const MAX_BYTES = 5 * 1024 * 1024;
 const P95_BUDGET_MS = 2000;
 

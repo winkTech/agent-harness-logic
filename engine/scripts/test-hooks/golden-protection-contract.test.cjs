@@ -164,6 +164,7 @@ function tokenFixture(t, remainingWrites = 2) {
   fs.copyFileSync(GUARD, path.join(hooks, 'file-protection-guard.cjs'));
   for (const dep of [
     'gate-bypass.cjs',
+    'harness-state.cjs',
     'project-directory-contract.cjs',
     'project-scope.cjs',
     'harness-root.cjs',

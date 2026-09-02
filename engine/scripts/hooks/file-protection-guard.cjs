@@ -21,6 +21,7 @@
 
 const fs = require('node:fs');
 const { evaluateGuardBypass } = require('../lib/gate-bypass.cjs');
+const { statePath, varPath } = require('../lib/harness-state.cjs');
 const {
   findProjectRoot,
   readDirectoryContract,
@@ -344,7 +345,7 @@ function creationExemption(filePath, approval, inversion) {
 const APPROVAL_FILE = 'var/audit/protected-write-approvals.json';
 
 function approvalFilePath() {
-  return require('node:path').join(__dirname, '..', '..', '..', APPROVAL_FILE);
+  return statePath(APPROVAL_FILE);
 }
 
 /** 令牌是否仍在有效期内。 */
@@ -495,7 +496,7 @@ const PENDING_FILE = 'var/audit/protected-write-pending.json';
 const PENDING_RELEASE_GRACE_MS = 5 * 60 * 1000;
 
 function pendingFilePath() {
-  return require('node:path').join(__dirname, '..', '..', '..', PENDING_FILE);
+  return statePath(PENDING_FILE);
 }
 
 /** 内容指纹；文件不存在记 null，这样"新建"也能被识别为发生过写入。 */
@@ -692,7 +693,7 @@ function auditApprovedWrite(filePath, pattern, reason, basis, inversion) {
   if (process.env.CLAUDE_NO_DIAGNOSTIC_WRITES === '1' || process.env.CLAUDE_HARNESS_NO_PERSIST === '1') return;
   try {
     const path = require('node:path');
-    const dir = path.join(__dirname, '..', '..', '..', 'var', 'audit');
+    const dir = varPath('audit');
     fs.mkdirSync(dir, { recursive: true });
     // basis/direction 入账: 日后要复核"这批 golden 改动是被需求推的还是被 RTL 拖的",
     // 靠的是这两个字段, 而不是重读一遍自由文本 reason。

@@ -25,6 +25,7 @@
 'use strict';
 
 const { HARNESS_ROOT } = require('../lib/harness-root.cjs');
+const { varPath } = require('../lib/harness-state.cjs');
 
 const { spawnSync } = require('node:child_process');
 const path = require('node:path');
@@ -48,8 +49,8 @@ function eccRoot() {
   const slugs = ['ecc', 'ecc@ecc', 'everything-claude-code', 'everything-claude-code@everything-claude-code'];
 
   for (const base of [
-    HOME, path.join(HOME, 'var', 'plugins'), path.join(HOME, 'plugins'),
-    path.join(HOME, 'var', 'plugins', 'marketplaces'), path.join(HOME, 'plugins', 'marketplaces'),
+    HOME, varPath('plugins'), path.join(HOME, 'plugins'),
+    varPath('plugins', 'marketplaces'), path.join(HOME, 'plugins', 'marketplaces'),
   ]) {
     for (const slug of slugs) {
       const dir = check(path.join(base, slug));
@@ -58,7 +59,7 @@ function eccRoot() {
   }
 
   try {
-    const cacheDir = path.join(HOME, 'var', 'plugins', 'cache');
+    const cacheDir = varPath('plugins', 'cache');
     if (fs.existsSync(cacheDir)) {
       for (const entry of fs.readdirSync(cacheDir)) {
         const dir = check(path.join(cacheDir, entry));

@@ -27,6 +27,7 @@ const path = require('node:path');
 const { spawnSync } = require('node:child_process');
 
 const { HARNESS_ROOT } = require('./harness-root.cjs');
+const { varPath } = require('./harness-state.cjs');
 const { readJson, findProjectRoot, resolvePath } = require('./project-scope.cjs');
 
 const GREEN_GATE_STATUS = new Set(['completed', 'passed', 'green', 'ok', 'approved']);
@@ -45,11 +46,11 @@ const COMMAND_TIMEOUT_MS = 30_000;
 
 function ledgerPath() {
   return process.env.CLAUDE_EVIDENCE_LEDGER_FILE
-    || path.join(HARNESS_ROOT, 'var', 'verification-ledger.json');
+    || varPath('verification-ledger.json');
 }
 
 function gatesDir() {
-  return process.env.CLAUDE_GATES_DIR || path.join(HARNESS_ROOT, 'var', 'gates');
+  return process.env.CLAUDE_GATES_DIR || varPath('gates');
 }
 
 // ── 单项判据 ────────────────────────────────────────────────────────────────

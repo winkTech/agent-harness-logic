@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 'use strict';
 
-const { HARNESS_ROOT } = require('../../scripts/lib/harness-root.cjs');
+const { varPath } = require('../../scripts/lib/harness-state.cjs');
 
 const fs = require('node:fs');
 const os = require('node:os');
@@ -14,9 +14,8 @@ const {
 
 const transport = require('../../scripts/transport/index.cjs');
 
-const HOME = HARNESS_ROOT;
-const DEFAULT_STATE_FILE = path.join(HOME, 'var', 'index', 'progress-watchdog-state.json');
-const DEFAULT_ARCHIVE_DIR = path.join(HOME, 'var', 'failures', 'progress-watchdog');
+const DEFAULT_STATE_FILE = varPath('index', 'progress-watchdog-state.json');
+const DEFAULT_ARCHIVE_DIR = varPath('failures', 'progress-watchdog');
 const DEFAULT_MAX_NO_PROGRESS_TURNS = 8;
 const DEFAULT_MAX_IDLE_MS = 45 * 60 * 1000;
 const DEFAULT_MAX_SESSIONS = 64;

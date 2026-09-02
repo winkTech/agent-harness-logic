@@ -52,14 +52,14 @@ const {
   writeVerificationState,
 } = require('../lib/verification-state.cjs');
 const { payloadCwd, payloadFilePath } = require('../lib/project-scope.cjs');
-const { HARNESS_ROOT } = require('../lib/harness-root.cjs');
+const { VAR_DIR } = require('../lib/harness-state.cjs');
 const {
   commandEvidence,
   ensureEvidenceDir,
   writeEvidenceLedger,
 } = require('../lib/evidence-ledger.cjs');
 
-const STATE_DIR = path.join(HARNESS_ROOT, 'var');
+const STATE_DIR = VAR_DIR;
 const STATE_FILE = path.join(STATE_DIR, 'verify-gate.json');
 /**
  * 证据账本路径**惰性解析** (2026-07-30 修)。

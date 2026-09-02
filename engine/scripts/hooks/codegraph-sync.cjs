@@ -22,7 +22,7 @@
 const fs = require('node:fs');
 const path = require('node:path');
 
-const { HARNESS_ROOT } = require('../lib/harness-root.cjs');
+const { varPath } = require('../lib/harness-state.cjs');
 const {
   findProjectRoot,
   payloadCwd,
@@ -33,7 +33,7 @@ const {
 } = require('../lib/project-scope.cjs');
 
 const STATE_FILE = process.env.CLAUDE_CG_SYNC_STATE_FILE
-  || path.join(HARNESS_ROOT, 'var', 'index', 'codegraph-sync.json');
+  || varPath('index', 'codegraph-sync.json');
 
 /** 会话级全量同步的最小间隔 (默认 30 分钟)。 */
 const SYNC_INTERVAL_MS = (() => {
@@ -148,7 +148,7 @@ function runSessionSync(payload, opts = {}) {
  */
 function collectRequirementEdges(projectRoot, projectId) {
   try {
-    const gateFile = path.join(HARNESS_ROOT, 'var', 'gates', 'requirements-gate.json');
+    const gateFile = varPath('gates', 'requirements-gate.json');
     const state = readJson(gateFile, null);
     if (!state) return { linked: 0 };
     const { collectRequirementEdges: collect } = require('../lib/graph-collectors.cjs');

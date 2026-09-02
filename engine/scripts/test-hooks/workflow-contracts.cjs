@@ -1591,10 +1591,27 @@ test('postflight observer invokes memory attribution fail-open only for identifi
   assert(failedCalls === 1 && failed.dropped === false && failed.attribution?.dropped === true,
     `attribution failure corrupted the observer: ${JSON.stringify(failed)}`);
 
-  const anonymous = observer.handlePayload({ ...payload, session_id: '' }, {
-    openDb: openFreshDb,
-    attributionObserver() { throw new Error('anonymous event reached attribution'); },
-  });
+  // 宿主环境会把会话 ID 注入子进程 env (CLAUDE_SESSION_ID/CODEBUDDY_SESSION_ID)，
+  // 令"匿名"载荷在 sessionIdFrom 回退读取 env 时变成"已识别"→ 先摘掉 env 再验证匿名路径
+  // (与 harness-painpoints 的 postflight 匿名遥测修复同款)。
+  const savedSessionEnv = {
+    CLAUDE_SESSION_ID: process.env.CLAUDE_SESSION_ID,
+    CODEBUDDY_SESSION_ID: process.env.CODEBUDDY_SESSION_ID,
+  };
+  delete process.env.CLAUDE_SESSION_ID;
+  delete process.env.CODEBUDDY_SESSION_ID;
+  let anonymous;
+  try {
+    anonymous = observer.handlePayload({ ...payload, session_id: '' }, {
+      openDb: openFreshDb,
+      attributionObserver() { throw new Error('anonymous event reached attribution'); },
+    });
+  } finally {
+    for (const key of ['CLAUDE_SESSION_ID', 'CODEBUDDY_SESSION_ID']) {
+      if (savedSessionEnv[key] !== undefined) process.env[key] = savedSessionEnv[key];
+      else delete process.env[key];
+    }
+  }
   assert(!anonymous.actions.includes('memory:attribution'),
     `anonymous event entered attribution: ${JSON.stringify(anonymous)}`);
 });

@@ -14,11 +14,9 @@
 'use strict';
 
 const fs = require('fs');
-const path = require('path');
-const { HARNESS_ROOT } = require('../lib/harness-root.cjs');
+const { varPath } = require('../lib/harness-state.cjs');
 
-const HARNESS = HARNESS_ROOT;
-const PRESSURE_FILE = path.join(HARNESS, 'var', 'sessions', '.compact-needed');
+const PRESSURE_FILE = varPath('sessions', '.compact-needed');
 
 /**
  * 检查是否有压缩信号文件。
@@ -48,7 +46,7 @@ function hasPressureSignal() {
  */
 function getContextStatus() {
   try {
-    const stateFile = path.join(HARNESS, 'var', 'index', 'runtime-state.json');
+    const stateFile = varPath('index', 'runtime-state.json');
     if (fs.existsSync(stateFile)) {
       const raw = fs.readFileSync(stateFile, 'utf8');
       const state = JSON.parse(raw);

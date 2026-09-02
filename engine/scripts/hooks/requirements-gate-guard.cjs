@@ -28,12 +28,12 @@
 const fs = require('fs');
 const path = require('path');
 const { findProjectRoot, stateHasTaskTargetForFile } = require('../lib/project-scope.cjs');
-const { HARNESS_ROOT } = require('../lib/harness-root.cjs');
+const { varPath } = require('../lib/harness-state.cjs');
 const { evaluateGuardBypass } = require('../lib/gate-bypass.cjs');
 
 const GATE_ID = 'requirements-gate-guard.cjs';
 
-const HOME_GATES_DIR = path.join(HARNESS_ROOT, 'var', 'gates');
+const HOME_GATES_DIR = varPath('gates');
 const HOME_STATE_FILE = path.join(HOME_GATES_DIR, 'requirements-gate.json');
 
 // ── 哪些文件类型触发门禁检查 ──────────────────────────────────────────────
