@@ -52,6 +52,24 @@ function main() {
   const eventCount = Object.keys(workbuddyHooks).length;
   assert.ok(eventCount >= 7, `workbuddy target exposes only ${eventCount} events`);
 
+  // 4b. WorkBuddy 目标每条命令末尾带 `--transport workbuddy`（M3 传输层标注）；
+  //     Claude 目标不追加 —— 默认即 claude-code，追加只会让本机注册漂移。
+  const commandsOf = (hooksBlock) => Object.values(hooksBlock)
+    .flatMap((groups) => (Array.isArray(groups) ? groups : []))
+    .flatMap((group) => (Array.isArray(group?.hooks) ? group.hooks : [group]))
+    .map((hook) => String(hook?.command || ''))
+    .filter(Boolean);
+  const workbuddyCommands = commandsOf(workbuddyHooks);
+  assert.ok(workbuddyCommands.length > 0, 'workbuddy target renders no commands');
+  for (const command of workbuddyCommands) {
+    assert.ok(command.endsWith(' --transport workbuddy'),
+      `workbuddy command must carry the transport flag: ${command}`);
+  }
+  for (const command of commandsOf(claudeHooks)) {
+    assert.doesNotMatch(command, /--transport\b/,
+      `claude settings.json command must stay transport-free: ${command}`);
+  }
+
   // 5. manifest 的 active 条目在 WorkBuddy 目标上全部有据可依
   const validated = validateHookManifest({ root: ROOT, config: { hooks: workbuddyHooks } });
   assert.deepEqual(validated.errors, [], `manifest disagrees with workbuddy render: ${validated.errors.join('; ')}`);

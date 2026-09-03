@@ -23,6 +23,7 @@ const fs = require('node:fs');
 
 const { payloadCwd, findProjectRoot, scopeId } = require('../lib/project-scope.cjs');
 const { markerVerdict, isUnreadableVerdict } = require('../lib/verification-markers.cjs');
+const { ingest } = require('../transport/index.cjs');
 
 const BOM = new RegExp('^' + String.fromCharCode(0xFEFF));
 /** transcript 只读尾部这么多字节 —— 判定标记总在最后, 没必要读整个会话。 */
@@ -150,7 +151,7 @@ function evaluateSubagentStop(payload = {}, deps = {}) {
 }
 
 function main() {
-  const payload = readPayload();
+  const { payload } = ingest(readPayload(), { argv: process.argv });
   try {
     const result = evaluateSubagentStop(payload);
     if (process.env.CLAUDE_SUBAGENT_VERDICT_DEBUG === '1') {

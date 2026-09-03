@@ -2452,6 +2452,8 @@ const AUDIT_REMEDIATION_CONTRACTS = [
   ['ten dimension dashboard', 'ten-dimension-contract.cjs', 180000],
   ['weekly report wiring', 'weekly-report-contract.cjs', 180000],
   ['transport normalization contract', 'transport-contract.test.cjs', 30000],
+  ['transport decision render contract', 'render-contract.test.cjs', 30000],
+  ['router transport equivalence', 'router-transport-equivalence.test.cjs', 60000],
   ['workbuddy render target', 'render-workbuddy-contract.test.cjs', 30000],
   ['claude code plugin manifest', 'plugin-manifest-contract.test.cjs', 300000],
   ['harness state root and migration', 'harness-state-contract.test.cjs', 60000],

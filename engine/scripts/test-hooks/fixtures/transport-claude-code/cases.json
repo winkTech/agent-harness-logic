@@ -94,5 +94,55 @@
       "source": { "nativeEventName": "SomeFutureEvent", "adapter": "claude-hook-v1", "statusInferred": true }
     },
     "notes": "未知事件名归一到 unknown，fail-closed：宁可 unknown 也不误判。"
+  },
+  {
+    "id": "claude-pre-tool-use-write-snake",
+    "transport": "claude-code",
+    "input": {
+      "hook_event_name": "PreToolUse",
+      "tool_name": "Write",
+      "tool_use_id": "toolu_pair_001",
+      "tool_input": { "file_path": "C:/work/project/src/new-module.cjs", "content": "module.exports = {};" },
+      "transcript_path": "C:/work/project/.transcript.jsonl",
+      "cwd": "C:/work/project",
+      "session_id": "pair-sess-001"
+    },
+    "expected": {
+      "eventType": "tool.pre",
+      "transport": "claude-code",
+      "status": "unknown",
+      "sessionId": "pair-sess-001",
+      "cwd": "C:/work/project",
+      "toolName": "Write",
+      "toolUseId": "toolu_pair_001",
+      "toolInput": { "file_path": "C:/work/project/src/new-module.cjs", "content": "module.exports = {};" },
+      "source": { "nativeEventName": "PreToolUse", "adapter": "claude-hook-v1", "statusInferred": true }
+    },
+    "notes": "M3 等价对（snake 侧）：与 workbuddy 的 camelCase 例归一化后 toolName/toolInput 必须一致。"
+  },
+  {
+    "id": "claude-pre-tool-use-write-camel",
+    "transport": "claude-code",
+    "input": {
+      "hookEventName": "PreToolUse",
+      "toolName": "Write",
+      "toolUseId": "toolu_pair_001",
+      "toolInput": { "file_path": "C:/work/project/src/new-module.cjs", "content": "module.exports = {};" },
+      "transcriptPath": "C:/work/project/.transcript.jsonl",
+      "cwd": "C:/work/project",
+      "sessionId": "pair-sess-001"
+    },
+    "expected": {
+      "eventType": "tool.pre",
+      "transport": "claude-code",
+      "status": "unknown",
+      "sessionId": "pair-sess-001",
+      "cwd": "C:/work/project",
+      "toolName": "Write",
+      "toolUseId": "toolu_pair_001",
+      "toolInput": { "file_path": "C:/work/project/src/new-module.cjs", "content": "module.exports = {};" },
+      "source": { "nativeEventName": "PreToolUse", "adapter": "claude-hook-v1", "statusInferred": true }
+    },
+    "notes": "M3：Claude 适配器对 camelCase 键容错归一化，结果与 snake 例等价（transcriptPath 走 extensions）。"
   }
 ]

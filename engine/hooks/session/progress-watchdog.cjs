@@ -13,6 +13,7 @@ const {
 } = require('../../scripts/lib/project-scope.cjs');
 
 const transport = require('../../scripts/transport/index.cjs');
+const { renderDecision } = require('../../scripts/transport/render.cjs');
 
 const DEFAULT_STATE_FILE = varPath('index', 'progress-watchdog-state.json');
 const DEFAULT_ARCHIVE_DIR = varPath('failures', 'progress-watchdog');
@@ -159,40 +160,27 @@ function payloadDeclaresLongTask(payload) {
  * @returns {{event: object, transportError: Error|null}}
  */
 function normalizePayload(payload, opts = {}) {
-  const transportName = opts.transport || process.env.HARNESS_TRANSPORT || 'claude-code';
-  try {
-    const event = transport.normalize(payload, transportName);
-    return { event, transportError: null };
-  } catch (error) {
-    return {
-      event: {
-        schema: 'harness.event',
-        version: 1,
-        eventId: 'fallback',
-        eventType: 'unknown',
-        transport: transportName,
-        occurredAt: new Date().toISOString(),
-        receivedAt: new Date().toISOString(),
-        sessionId: sessionIdFor(payload),
-        cwd: cwdFor(payload),
-        status: 'unknown',
-        toolName: toolName(payload),
-        toolInput: null,
-        toolUseId: null,
-        actor: null,
-        source: {
-          nativeEventName: eventName(payload) || 'unknown',
-          adapter: 'fallback',
-          statusInferred: true,
-          timestampInferred: true,
-          payloadHash: null,
-        },
-        raw: null,
-        extensions: {},
+  // 边界统一走 ingest（显式 > env HARNESS_TRANSPORT > claude-code；本 hook 不读 argv）。
+  const { event, error } = transport.ingest(payload, {
+    transport: opts.transport,
+    argv: [],
+  });
+  if (!error) return { event, transportError: null };
+  // D1 的 fallback 是纯函数（不读 env / process.cwd()）；本 hook 的既有兜底语义
+  // —— CLAUDE_SESSION_ID 与 process.cwd() —— 必须保留。
+  return {
+    event: {
+      ...event,
+      sessionId: sessionIdFor(payload),
+      cwd: cwdFor(payload),
+      toolName: toolName(payload),
+      source: {
+        ...event.source,
+        nativeEventName: eventName(payload) || 'unknown',
       },
-      transportError: error,
-    };
-  }
+    },
+    transportError: error,
+  };
 }
 
 function shouldTrackProgress(payload, opts = {}) {
@@ -849,6 +837,10 @@ function main() {
       return;
     }
   }
+  // 边界：一次识别运行时；claude-code 下规范载荷就是 raw 本身（同一引用）。
+  const ingested = transport.ingest(payload, { argv: process.argv });
+  payload = ingested.payload;
+  const transportName = ingested.transport;
 
   const result = updateProgress(payload);
   if (result.status === 'bypass_reason_required') {
@@ -861,21 +853,21 @@ function main() {
     process.exit(2);
   }
   if (result.status === 'bypassed') {
-    process.stdout.write(JSON.stringify({
-      hookSpecificOutput: {
-        hookEventName: eventName(payload) || 'PreToolUse',
-        additionalContext: JSON.stringify({
-          schemaVersion: 1,
-          kind: 'harness-advisory',
-          source: 'progress-watchdog',
-          status: 'bypassed',
-          blocking: false,
-          reason: result.bypass.reason,
-          actor: result.bypass.actor,
-          sessionStatus: result.session.status,
-        }),
-      },
-    }));
+    const rendered = renderDecision(transportName, {
+      decision: 'allow',
+      eventName: eventName(payload) || 'PreToolUse',
+      additionalContext: JSON.stringify({
+        schemaVersion: 1,
+        kind: 'harness-advisory',
+        source: 'progress-watchdog',
+        status: 'bypassed',
+        blocking: false,
+        reason: result.bypass.reason,
+        actor: result.bypass.actor,
+        sessionStatus: result.session.status,
+      }),
+    });
+    if (rendered.stdout) process.stdout.write(rendered.stdout);
     return;
   }
   if (result.status === 'warning') {

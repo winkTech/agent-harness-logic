@@ -7,6 +7,8 @@ const contextResume = require('../context-resume.cjs');
 const dreamStartup = require('../dream-startup-inject.cjs');
 const isolation = require('./isolation-check.cjs');
 const pluginSessionContext = require('./plugin-session-context.cjs');
+const { ingest } = require('../transport/index.cjs');
+const { renderDecision } = require('../transport/render.cjs');
 
 const SUPPORTED_SOURCES = Object.freeze(['startup', 'resume', 'clear', 'compact', 'fork']);
 
@@ -87,6 +89,10 @@ function runSessionBootstrap(raw, opts = {}) {
     return { exitCode: 0, payload: {}, source: '', componentsRun: [] };
   }
 
+  const ingested = ingest(payload, { transport: opts.transport, argv: opts.argv || process.argv });
+  payload = ingested.payload;
+  const transport = ingested.transport;
+
   if (typeof opts.onParsed === 'function') opts.onParsed(payload);
   const source = sessionSource(payload);
   if (!SUPPORTED_SOURCES.includes(source)) {
@@ -129,12 +135,12 @@ function runSessionBootstrap(raw, opts = {}) {
   }
 
   if (contextBlocks.length > 0) {
-    io.stdout(JSON.stringify({
-      hookSpecificOutput: {
-        hookEventName: 'SessionStart',
-        additionalContext: contextBlocks.join('\n\n'),
-      },
-    }));
+    const rendered = renderDecision(transport, {
+      decision: 'allow',
+      eventName: 'SessionStart',
+      additionalContext: contextBlocks.join('\n\n'),
+    });
+    if (rendered.stdout) io.stdout(rendered.stdout);
   }
 
   return { exitCode, payload, source, componentsRun: route, contextBlocks };

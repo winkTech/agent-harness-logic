@@ -32,6 +32,29 @@ const ALLOWED_EVENT_TYPES = new Set([
 
 const ALLOWED_STATUS = new Set(['succeeded', 'failed', 'unknown']);
 
+/**
+ * 收集 schema 顶层字段之外、但门禁真实读取的载荷片段（extras），键名 camelCase
+ * 写入 event.extensions。Codex 以结构化 options 构造事件，snake / camel 两种
+ * 键名都接受；只在键存在时写入。
+ */
+function collectExtras(options) {
+  const extras = {};
+  const toolResponse = options.tool_response !== undefined ? options.tool_response
+    : options.toolResponse !== undefined ? options.toolResponse
+    : options.result !== undefined ? options.result
+    : options.output !== undefined ? options.output
+    : undefined;
+  if (toolResponse !== undefined) extras.toolResponse = toolResponse;
+  if (options.prompt !== undefined) extras.prompt = options.prompt;
+  const transcriptPath = options.transcript_path !== undefined ? options.transcript_path : options.transcriptPath;
+  if (transcriptPath !== undefined) extras.transcriptPath = transcriptPath;
+  if (options.trigger !== undefined) extras.trigger = options.trigger;
+  const stopHookActive = options.stop_hook_active !== undefined ? options.stop_hook_active : options.stopHookActive;
+  if (stopHookActive !== undefined) extras.stopHookActive = stopHookActive;
+  if (options.error !== undefined) extras.error = options.error;
+  return extras;
+}
+
 function normalizeCodexEvent(options = {}) {
   if (!options || typeof options !== 'object' || Array.isArray(options)) {
     const error = new Error('codex transport: options must be a JSON object');
@@ -79,7 +102,7 @@ function normalizeCodexEvent(options = {}) {
       payloadHash: null,
     },
     raw: null,
-    extensions: {},
+    extensions: collectExtras(options),
   };
 }
 
@@ -87,4 +110,4 @@ function deriveEventId(parts) {
   return crypto.createHash('sha256').update(JSON.stringify(parts)).digest('hex').slice(0, 32);
 }
 
-module.exports = { ADAPTER, EVENT_SCHEMA, EVENT_VERSION, normalizeCodexEvent };
+module.exports = { ADAPTER, EVENT_SCHEMA, EVENT_VERSION, collectExtras, normalizeCodexEvent };

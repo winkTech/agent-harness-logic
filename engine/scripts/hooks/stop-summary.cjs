@@ -8,6 +8,8 @@ const contextPressure = require('./context-pressure-warn.cjs');
 const loopController = require('./loop-controller.cjs');
 const watchdog = require('../../hooks/session/progress-watchdog.cjs');
 const { isSamePath } = require('../lib/project-scope.cjs');
+const { ingest } = require('../transport/index.cjs');
+const { renderDecision } = require('../transport/render.cjs');
 
 function defaultIo(opts = {}) {
   return {
@@ -44,21 +46,21 @@ function runWatchdog(payload, io, opts = {}) {
     return { exitCode: 2, result };
   }
   if (result.status === 'bypassed') {
-    io.stdout(JSON.stringify({
-      hookSpecificOutput: {
-        hookEventName: hookEventName(payload) || 'PreToolUse',
-        additionalContext: JSON.stringify({
-          schemaVersion: 1,
-          kind: 'harness-advisory',
-          source: 'progress-watchdog',
-          status: 'bypassed',
-          blocking: false,
-          reason: result.bypass.reason,
-          actor: result.bypass.actor,
-          sessionStatus: result.session.status,
-        }),
-      },
-    }));
+    const rendered = renderDecision(opts.transport || 'claude-code', {
+      decision: 'allow',
+      eventName: hookEventName(payload) || 'PreToolUse',
+      additionalContext: JSON.stringify({
+        schemaVersion: 1,
+        kind: 'harness-advisory',
+        source: 'progress-watchdog',
+        status: 'bypassed',
+        blocking: false,
+        reason: result.bypass.reason,
+        actor: result.bypass.actor,
+        sessionStatus: result.session.status,
+      }),
+    });
+    if (rendered.stdout) io.stdout(rendered.stdout);
     return { exitCode: 0, result };
   }
   if (result.status === 'warning') {
@@ -239,12 +241,12 @@ function runDeliveryRisk(payload, io, opts = {}) {
   if (unavailable) {
     const detail = String(highest.verificationReason || 'required verification environment unavailable')
       .slice(0, 120);
-    io.stdout(JSON.stringify({
-      hookSpecificOutput: {
-        hookEventName: hookEventName(payload) || 'Stop',
-        additionalContext: `[risk-policy] status=unverified; ${detail}. Report the blocker and evidence boundary; do not claim success.`,
-      },
-    }));
+    const rendered = renderDecision(opts.transport || 'claude-code', {
+      decision: 'allow',
+      eventName: hookEventName(payload) || 'Stop',
+      additionalContext: `[risk-policy] status=unverified; ${detail}. Report the blocker and evidence boundary; do not claim success.`,
+    });
+    if (rendered.stdout) io.stdout(rendered.stdout);
     return { exitCode: 0, decision: 'allow', status: 'unverified', entries };
   }
 
@@ -317,8 +319,12 @@ function runStopSummary(raw, opts = {}) {
     return { exitCode: 0, payload: {}, componentsRun: [] };
   }
 
+  const ingested = ingest(payload, { transport: opts.transport, argv: opts.argv || process.argv });
+  payload = ingested.payload;
+  const transport = ingested.transport;
+
   if (typeof opts.onParsed === 'function') opts.onParsed(payload);
-  const components = opts.components || defaultComponents(opts);
+  const components = opts.components || defaultComponents({ ...opts, transport });
   const route = ['loopController', 'deliveryRisk', 'contextPressure', 'progressWatchdog'];
   const componentsRun = [];
   let exitCode = 0;

@@ -47,6 +47,29 @@ function deriveEventId(parts) {
   return crypto.createHash('sha256').update(JSON.stringify(parts)).digest('hex').slice(0, 32);
 }
 
+/**
+ * 收集 schema 顶层字段之外、但门禁真实读取的载荷片段（extras），键名 camelCase
+ * 写入 event.extensions（schema 对 extensions 允许任意键，无需放宽 additionalProperties）。
+ * 只在键存在时写入，缺席即缺席（不写 null 占位，避免与"显式 null"混淆）。
+ */
+function collectExtras(raw) {
+  const extras = {};
+  const toolResponse = raw.tool_response !== undefined ? raw.tool_response
+    : raw.toolResponse !== undefined ? raw.toolResponse
+    : raw.result !== undefined ? raw.result
+    : raw.output !== undefined ? raw.output
+    : undefined;
+  if (toolResponse !== undefined) extras.toolResponse = toolResponse;
+  if (raw.prompt !== undefined) extras.prompt = raw.prompt;
+  const transcriptPath = raw.transcript_path !== undefined ? raw.transcript_path : raw.transcriptPath;
+  if (transcriptPath !== undefined) extras.transcriptPath = transcriptPath;
+  if (raw.trigger !== undefined) extras.trigger = raw.trigger;
+  const stopHookActive = raw.stop_hook_active !== undefined ? raw.stop_hook_active : raw.stopHookActive;
+  if (stopHookActive !== undefined) extras.stopHookActive = stopHookActive;
+  if (raw.error !== undefined) extras.error = raw.error;
+  return extras;
+}
+
 function normalizeClaudeEvent(raw) {
   if (!raw || typeof raw !== 'object' || Array.isArray(raw)) {
     const error = new Error('claude-code transport: payload must be a JSON object');
@@ -95,8 +118,8 @@ function normalizeClaudeEvent(raw) {
       payloadHash: `sha256:${crypto.createHash('sha256').update(JSON.stringify(raw)).digest('hex')}`,
     },
     raw: null,
-    extensions: {},
+    extensions: collectExtras(raw),
   };
 }
 
-module.exports = { ADAPTER, EVENT_SCHEMA, EVENT_VERSION, normalizeClaudeEvent };
+module.exports = { ADAPTER, EVENT_SCHEMA, EVENT_VERSION, EVENT_TYPE_BY_NATIVE, collectExtras, normalizeClaudeEvent };

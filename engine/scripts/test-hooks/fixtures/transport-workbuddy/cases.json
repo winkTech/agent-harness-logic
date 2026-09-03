@@ -92,5 +92,55 @@
       "source": { "nativeEventName": "SessionStart", "adapter": "workbuddy-hook-v1", "statusInferred": true }
     },
     "notes": "会话开始无结果语义。"
+  },
+  {
+    "id": "workbuddy-pre-tool-use-write-camel",
+    "transport": "workbuddy",
+    "input": {
+      "hookEventName": "PreToolUse",
+      "toolName": "Write",
+      "toolUseId": "toolu_pair_001",
+      "toolInput": { "file_path": "C:/work/project/src/new-module.cjs", "content": "module.exports = {};" },
+      "transcriptPath": "C:/work/project/.transcript.jsonl",
+      "cwd": "C:/work/project",
+      "sessionId": "pair-sess-001"
+    },
+    "expected": {
+      "eventType": "tool.pre",
+      "transport": "workbuddy",
+      "status": "unknown",
+      "sessionId": "pair-sess-001",
+      "cwd": "C:/work/project",
+      "toolName": "Write",
+      "toolUseId": "toolu_pair_001",
+      "toolInput": { "file_path": "C:/work/project/src/new-module.cjs", "content": "module.exports = {};" },
+      "source": { "nativeEventName": "PreToolUse", "adapter": "workbuddy-hook-v1", "statusInferred": true }
+    },
+    "notes": "M3 等价对（camel 侧）：WorkBuddy 风格 camelCase PreToolUse Write，与 Claude snake 例归一化后必须一致。"
+  },
+  {
+    "id": "workbuddy-pre-tool-use-write-snake",
+    "transport": "workbuddy",
+    "input": {
+      "hook_event_name": "PreToolUse",
+      "tool_name": "Write",
+      "tool_use_id": "toolu_pair_001",
+      "tool_input": { "file_path": "C:/work/project/src/new-module.cjs", "content": "module.exports = {};" },
+      "transcript_path": "C:/work/project/.transcript.jsonl",
+      "cwd": "C:/work/project",
+      "session_id": "pair-sess-001"
+    },
+    "expected": {
+      "eventType": "tool.pre",
+      "transport": "workbuddy",
+      "status": "unknown",
+      "sessionId": "pair-sess-001",
+      "cwd": "C:/work/project",
+      "toolName": "Write",
+      "toolUseId": "toolu_pair_001",
+      "toolInput": { "file_path": "C:/work/project/src/new-module.cjs", "content": "module.exports = {};" },
+      "source": { "nativeEventName": "PreToolUse", "adapter": "workbuddy-hook-v1", "statusInferred": true }
+    },
+    "notes": "M3：同一事件的 snake_case 形状，WorkBuddy 适配器归一化结果与 camel 例等价。"
   }
 ]

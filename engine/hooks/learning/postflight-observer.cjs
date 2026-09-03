@@ -8,6 +8,7 @@ const { HARNESS_ROOT } = require('../../scripts/lib/harness-root.cjs');
 const { varPath } = require('../../scripts/lib/harness-state.cjs');
 const { shouldSyncMemoryFile } = require('../../scripts/lib/memory-file-policy.cjs');
 const { withFileLockSync } = require('../../scripts/lib/project-scope.cjs');
+const { ingest } = require('../../scripts/transport/index.cjs');
 
 const RAW_RISK_RETENTION_MS = 14 * 24 * 60 * 60 * 1000;
 const AGGREGATE_RISK_RETENTION_MS = 90 * 24 * 60 * 60 * 1000;
@@ -549,7 +550,11 @@ function handlePayload(payload = {}, opts = {}) {
 function handleRaw(raw, opts = {}) {
   let payload;
   try {
-    payload = JSON.parse(String(raw || '{}'));
+    // 边界：解析后归一化为规范载荷（claude-code 下同一引用，零变化）。
+    payload = ingest(JSON.parse(String(raw || '{}')), {
+      transport: opts.transport,
+      argv: opts.argv || process.argv,
+    }).payload;
   } catch (error) {
     const warning = {
       event: 'postflight-observer-warning',

@@ -4,6 +4,8 @@
 const crypto = require('node:crypto');
 const fs = require('node:fs');
 const path = require('node:path');
+const { ingest } = require('../transport/index.cjs');
+const { renderDecision } = require('../transport/render.cjs');
 
 const WRITE_TOOLS = new Set(['edit', 'write', 'multiedit']);
 const SHELL_TOOLS = new Set(['bash', 'powershell']);
@@ -472,28 +474,49 @@ function readPayload() {
   }
 }
 
-function emit(payload, result) {
+function emit(payload, result, transport = 'claude-code') {
   for (const item of result.diagnostics) {
     process.stderr.write(`[postflight-router:${item.source}] ${item.message}\n`);
   }
-  if (result.additionalContext) {
-    process.stdout.write(JSON.stringify({
-      hookSpecificOutput: {
-        hookEventName: String(payload?.hook_event_name || 'PostToolUseFailure'),
-        additionalContext: result.additionalContext,
-      },
-    }));
-  }
-  if (result.decision === 'block') process.exitCode = 2;
+  // postflight 的既有形态：block 时仍注入 additionalContext（emitContextOnBlock: true）。
+  const rendered = renderDecision(transport, {
+    decision: result.decision === 'block' ? 'block' : 'allow',
+    eventName: String(payload?.hook_event_name || 'PostToolUseFailure'),
+    additionalContext: result.additionalContext,
+    diagnostics: result.diagnostics.map((item) => `[${item.source}] ${item.message}`),
+    emitContextOnBlock: true,
+  });
+  if (rendered.stdout) process.stdout.write(rendered.stdout);
+  if (rendered.exitCode) process.exitCode = rendered.exitCode;
 }
 
 async function main() {
-  const payload = readPayload();
+  const { transport, payload } = ingest(readPayload(), { argv: process.argv });
   await require('../lib/hook-latency.cjs').timed(
     'postflight-router',
     String(payload?.hook_event_name || ''),
-    async () => emit(payload, await route(payload)),
+    async () => emit(payload, await route(payload), transport),
   );
+}
+
+/**
+ * 进程内判定入口（等价测试用）：不写 stdout / stderr、不设 exitCode。
+ * @returns {{transport, decision, eventName, diagnosticsSources, additionalContext}}
+ */
+async function decide(raw, opts = {}) {
+  const { transport, payload } = ingest(raw, {
+    transport: opts.transport,
+    argv: opts.argv || [],
+    env: opts.env || {},
+  });
+  const result = await route(payload, opts.injected || {});
+  return {
+    transport,
+    decision: result.decision,
+    eventName: String(payload?.hook_event_name || 'PostToolUseFailure'),
+    diagnosticsSources: [...new Set(result.diagnostics.map((item) => item.source))].sort(),
+    additionalContext: result.additionalContext,
+  };
 }
 
 if (require.main === module) {
@@ -504,6 +527,7 @@ if (require.main === module) {
 
 module.exports = {
   main,
+  decide,
   route,
   hasVerificationVerdict,
   recordDeliveryFromVerdict,

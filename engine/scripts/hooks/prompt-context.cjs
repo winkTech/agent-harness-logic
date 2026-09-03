@@ -2,6 +2,8 @@
 'use strict';
 
 const fs = require('node:fs');
+const { ingest } = require('../transport/index.cjs');
+const { renderDecision } = require('../transport/render.cjs');
 
 const DEFAULT_CONTEXT_MAX_CHARS = 600;
 const CONTEXT_TRUNCATION_MARKER = '\n...(context truncated)';
@@ -88,18 +90,19 @@ function combinePromptContext(payload = {}, deps = {}) {
 
   const mergedContext = mergeContextBlocks(blocks, deps.maxContextChars);
   if (!mergedContext) return null;
-  return {
-    hookSpecificOutput: {
-      hookEventName: payload.hook_event_name || 'UserPromptSubmit',
-      additionalContext: mergedContext,
-    },
-  };
+  // 渲染层是唯一拼 hookSpecificOutput 的地方；此处回读，为进程内调用方保留既有返回形状。
+  const rendered = renderDecision(deps.transport || 'claude-code', {
+    decision: 'allow',
+    eventName: payload.hook_event_name || 'UserPromptSubmit',
+    additionalContext: mergedContext,
+  });
+  return rendered.stdout ? JSON.parse(rendered.stdout) : null;
 }
 
 function main(deps = {}) {
   const raw = (deps.readStdinRaw || readStdinRaw)();
-  const payload = parsePayload(raw);
-  const output = combinePromptContext(payload, deps);
+  const { transport, payload } = ingest(parsePayload(raw), { argv: deps.argv || process.argv });
+  const output = combinePromptContext(payload, { transport, ...deps });
   if (output) (deps.writeStdout || process.stdout.write.bind(process.stdout))(JSON.stringify(output));
   return output;
 }

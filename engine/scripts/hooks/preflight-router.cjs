@@ -3,6 +3,8 @@
 
 const fs = require('node:fs');
 const path = require('node:path');
+const { ingest } = require('../transport/index.cjs');
+const { renderDecision } = require('../transport/render.cjs');
 
 const SHELL_TOOLS = new Set(['bash', 'powershell']);
 const WRITE_TOOLS = new Set(['edit', 'write', 'multiedit']);
@@ -483,43 +485,43 @@ async function commitDeferred(runtime) {
 }
 
 function emit(runtime, decision) {
-  if (decision === 'block') {
+  const blocked = decision === 'block';
+  if (blocked) {
     for (const item of runtime.diagnostics) {
       process.stderr.write(`[preflight-router:${item.source}] ${item.message}\n`);
     }
     process.stderr.write('[preflight-router] BLOCKED\n');
-    process.exitCode = 2;
-    return;
   }
-  const additionalContext = formatAdditionalContext(runtime);
-  if (additionalContext) {
-    process.stdout.write(JSON.stringify({
-      hookSpecificOutput: {
-        hookEventName: runtime.eventName || 'PreToolUse',
-        additionalContext,
-      },
-    }));
-  }
+  // preflight 的既有形态：block 时不注入 additionalContext（emitContextOnBlock 默认 false）。
+  const rendered = renderDecision(runtime.transport || 'claude-code', {
+    decision: blocked ? 'block' : 'allow',
+    eventName: runtime.eventName || 'PreToolUse',
+    additionalContext: blocked ? '' : formatAdditionalContext(runtime),
+    diagnostics: runtime.diagnostics.map((item) => `[${item.source}] ${item.message}`),
+  });
+  if (rendered.stdout) process.stdout.write(rendered.stdout);
+  if (rendered.exitCode) process.exitCode = rendered.exitCode;
 }
 
 async function main() {
-  let payload;
+  let rawPayload;
   try {
-    payload = readPayload();
+    rawPayload = readPayload();
   } catch (error) {
     process.stderr.write(`[preflight-router] ${error.message}\n`);
     process.exitCode = 2;
     return;
   }
+  const { transport, payload } = ingest(rawPayload, { argv: process.argv });
   return require('../lib/hook-latency.cjs').timed(
     'preflight-router',
     String(payload?.hook_event_name || 'PreToolUse'),
-    () => mainWithPayload(payload),
+    () => mainWithPayload(payload, { transport }),
   );
 }
 
-async function mainWithPayload(payload) {
-  const runtime = runtimeFrom(payload);
+/** 跑完全部门禁，返回中立判定 'allow' | 'block'；不写 stdout / 不设 exitCode。 */
+async function evaluateRuntime(runtime) {
   const promotedPolicy = await runGate(runtime, {
     source: 'promoted-harness-gate',
     failClosed: true,
@@ -527,36 +529,56 @@ async function mainWithPayload(payload) {
   });
   if (promotedPolicy.decision === 'block') {
     recordPromotedAttribution(runtime, promotedPolicy);
-    emit(runtime, 'block');
-    return;
+    return 'block';
   }
   const riskPolicy = normalizedResult('risk-policy', evaluateRiskPolicy(runtime));
   appendResult(runtime, riskPolicy);
-  if (riskPolicy.decision === 'block') {
-    emit(runtime, 'block');
-    return;
-  }
+  if (riskPolicy.decision === 'block') return 'block';
+
   const specs = SHELL_TOOLS.has(runtime.toolKey)
     ? shellSpecs(runtime.command)
     : WRITE_TOOLS.has(runtime.toolKey) ? writeSpecs(runtime) : [];
 
   for (const spec of specs) {
     const result = await runGate(runtime, spec);
-    if (result.decision === 'block') {
-      emit(runtime, 'block');
-      return;
-    }
+    if (result.decision === 'block') return 'block';
   }
 
   const common = await runCommon(runtime, {
     riskLevel: riskPolicy.assessment?.effectiveRiskLevel,
   });
-  if (common.decision === 'block') {
-    emit(runtime, 'block');
-    return;
-  }
+  if (common.decision === 'block') return 'block';
+
   const committed = await commitDeferred(runtime);
-  emit(runtime, committed.decision);
+  return committed.decision;
+}
+
+async function mainWithPayload(payload, opts = {}) {
+  const runtime = runtimeFrom(payload);
+  runtime.transport = opts.transport || 'claude-code';
+  emit(runtime, await evaluateRuntime(runtime));
+}
+
+/**
+ * 进程内判定入口（等价测试用）：不写 stdout / stderr、不设 exitCode。
+ * @returns {{transport, decision, eventName, diagnosticsSources, additionalContext}}
+ */
+async function decide(raw, opts = {}) {
+  const { transport, payload } = ingest(raw, {
+    transport: opts.transport,
+    argv: opts.argv || [],
+    env: opts.env || {},
+  });
+  const runtime = runtimeFrom(payload);
+  runtime.transport = transport;
+  const decision = await evaluateRuntime(runtime);
+  return {
+    transport,
+    decision,
+    eventName: runtime.eventName,
+    diagnosticsSources: [...new Set(runtime.diagnostics.map((item) => item.source))].sort(),
+    additionalContext: decision === 'block' ? '' : formatAdditionalContext(runtime),
+  };
 }
 
 if (require.main === module) {
@@ -568,6 +590,8 @@ if (require.main === module) {
 
 module.exports = {
   main,
+  mainWithPayload,
+  decide,
   runtimeFrom,
   riskFactsFromRuntime,
   isReadOnlyShellCommand,

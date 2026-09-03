@@ -196,12 +196,38 @@ function workbuddyHooksPath(root = HARNESS_ROOT) {
 }
 
 /**
- * 渲染 WorkBuddy 目标（顶层 { hooks } 结构）。
+ * 传输层标注（M3）：入口用 `--transport <name>` 在边界识别一次运行时。
+ * 只有 WorkBuddy 目标需要显式标注 —— Claude 的 settings.json 与 plugin.hooks.json
+ * 默认即 claude-code，追加只会让本机注册产生无谓漂移。
+ */
+const WORKBUDDY_TRANSPORT_FLAG = '--transport workbuddy';
+
+function withWorkbuddyTransport(hook) {
+  const command = String(hook?.command || '');
+  if (!command) return hook;
+  if (parseArgvTokens(command).includes('--transport')) return hook;
+  return { ...hook, command: `${command} ${WORKBUDDY_TRANSPORT_FLAG}` };
+}
+
+function parseArgvTokens(command) {
+  return String(command).trim().split(/\s+/);
+}
+
+/**
+ * 渲染 WorkBuddy 目标（顶层 { hooks } 结构，命令末尾带 `--transport workbuddy`）。
  * @returns {{ hooks: object }}
  */
 function renderWorkbuddyHooks(opts = {}) {
   const root = opts.root || HARNESS_ROOT;
-  const hooks = renderHooks({ root, templatePath: opts.templatePath });
+  const rendered = renderHooks({ root, templatePath: opts.templatePath });
+  const hooks = {};
+  for (const [event, groups] of Object.entries(rendered)) {
+    hooks[event] = (Array.isArray(groups) ? groups : []).map((group) => (
+      Array.isArray(group?.hooks)
+        ? { ...group, hooks: group.hooks.map(withWorkbuddyTransport) }
+        : withWorkbuddyTransport(group)
+    ));
+  }
   return { hooks };
 }
 
@@ -448,6 +474,8 @@ module.exports = {
   renderWorkbuddyHooks,
   writeWorkbuddyHooks,
   checkWorkbuddyDrift,
+  WORKBUDDY_TRANSPORT_FLAG,
+  withWorkbuddyTransport,
   toExecForm,
   renderPluginHooks,
   writePluginHooks,

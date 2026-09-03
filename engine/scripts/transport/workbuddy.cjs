@@ -63,6 +63,29 @@ function explicitStatus(payload) {
   return null;
 }
 
+/**
+ * 收集 schema 顶层字段之外、但门禁真实读取的载荷片段（extras），键名 camelCase
+ * 写入 event.extensions（schema 对 extensions 允许任意键，无需放宽 additionalProperties）。
+ * 只在键存在时写入，缺席即缺席。
+ */
+function collectExtras(raw) {
+  const extras = {};
+  const toolResponse = raw.tool_response !== undefined ? raw.tool_response
+    : raw.toolResponse !== undefined ? raw.toolResponse
+    : raw.result !== undefined ? raw.result
+    : raw.output !== undefined ? raw.output
+    : undefined;
+  if (toolResponse !== undefined) extras.toolResponse = toolResponse;
+  if (raw.prompt !== undefined) extras.prompt = raw.prompt;
+  const transcriptPath = raw.transcript_path !== undefined ? raw.transcript_path : raw.transcriptPath;
+  if (transcriptPath !== undefined) extras.transcriptPath = transcriptPath;
+  if (raw.trigger !== undefined) extras.trigger = raw.trigger;
+  const stopHookActive = raw.stop_hook_active !== undefined ? raw.stop_hook_active : raw.stopHookActive;
+  if (stopHookActive !== undefined) extras.stopHookActive = stopHookActive;
+  if (raw.error !== undefined) extras.error = raw.error;
+  return extras;
+}
+
 function normalizeWorkbuddyEvent(raw) {
   if (!raw || typeof raw !== 'object' || Array.isArray(raw)) {
     const error = new Error('workbuddy transport: payload must be a JSON object');
@@ -112,8 +135,8 @@ function normalizeWorkbuddyEvent(raw) {
       payloadHash: `sha256:${crypto.createHash('sha256').update(JSON.stringify(raw)).digest('hex')}`,
     },
     raw: null,
-    extensions: {},
+    extensions: collectExtras(raw),
   };
 }
 
-module.exports = { ADAPTER, EVENT_SCHEMA, EVENT_VERSION, explicitStatus, normalizeWorkbuddyEvent };
+module.exports = { ADAPTER, EVENT_SCHEMA, EVENT_VERSION, EVENT_TYPE_BY_NATIVE, collectExtras, explicitStatus, normalizeWorkbuddyEvent };
