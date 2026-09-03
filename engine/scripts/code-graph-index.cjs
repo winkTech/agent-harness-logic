@@ -20,6 +20,7 @@
  */
 
 const { HARNESS_ROOT } = require('./lib/harness-root.cjs');
+const { varPath } = require('./lib/harness-state.cjs');
 
 const p = require('node:path');
 const f = require('node:fs');
@@ -27,7 +28,7 @@ const os = require('node:os');
 const crypto = require('node:crypto');
 
 const HOME = HARNESS_ROOT;
-const INDEX_DIR = p.join(HOME, 'var', 'index');
+const INDEX_DIR = varPath('index');
 const INDEX_FILE = p.join(INDEX_DIR, 'code-graph.json');
 const LOOKUP_FILE = INDEX_FILE.replace('.json', '-lookup.json');
 

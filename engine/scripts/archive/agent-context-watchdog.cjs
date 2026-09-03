@@ -21,11 +21,13 @@
 const fs = require('node:fs');
 const path = require('node:path');
 
+const { varPath } = require('../lib/harness-state.cjs');
+
 const HOMEDIR = require('node:os').homedir();
 const HARNESS_DIR = path.join(HOMEDIR, '.claude');
-const STATE_FILE = path.join(HARNESS_DIR, 'var', 'index', 'runtime-state.json');
+const STATE_FILE = varPath('index', 'runtime-state.json');
 const AGENTS_DIR = path.join(HARNESS_DIR, 'skills', 'agents');
-const STATE_DIR = path.join(HARNESS_DIR, 'var', 'index');
+const STATE_DIR = varPath('index');
 
 const budget = require('./agent-context-budget.cjs');
 

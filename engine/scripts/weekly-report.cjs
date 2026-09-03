@@ -23,10 +23,9 @@
 const fs = require('node:fs');
 const path = require('node:path');
 
-const { HARNESS_ROOT } = require('./lib/harness-root.cjs');
+const { varPath } = require('./lib/harness-state.cjs');
 
-const HOME = HARNESS_ROOT;
-const REPORT_FILE = path.join(HOME, 'var', 'metrics', 'weekly-report.json');
+const REPORT_FILE = varPath('metrics', 'weekly-report.json');
 
 /**
  * 采集一个数据源。**区分两种"没数据"**:

@@ -16,15 +16,14 @@
 
 'use strict';
 
-const { HARNESS_ROOT } = require('./lib/harness-root.cjs');
+const { varPath } = require('./lib/harness-state.cjs');
 
 const fs = require('node:fs');
 const path = require('node:path');
 const { spawnSync } = require('node:child_process');
 const os = require('node:os');
 
-const HOME = HARNESS_ROOT;
-const RESULTS_DIR = path.join(HOME, 'var', 'index');
+const RESULTS_DIR = varPath('index');
 
 // ── RTL 端口提取 ───────────────────────────────────────────────────────────
 

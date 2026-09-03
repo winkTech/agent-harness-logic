@@ -20,6 +20,7 @@ const os = require('node:os');
 const path = require('node:path');
 const { spawnSync } = require('node:child_process');
 const { HARNESS_ROOT, resolveHarnessRoot } = require('./lib/harness-root.cjs');
+const { varPath } = require('./lib/harness-state.cjs');
 
 const COVERAGE_THRESHOLD = 60;
 
@@ -48,7 +49,7 @@ const ROOT = resolveRoot();
 const RUNNER = path.join(ROOT, 'engine/scripts/test-hooks/run-all-tests.cjs');
 const SUMMARY_FILE = process.env.CLAUDE_COVERAGE_SUMMARY_FILE
   ? path.resolve(process.env.CLAUDE_COVERAGE_SUMMARY_FILE)
-  : path.join(ROOT, 'var', 'coverage', 'coverage-summary.json');
+  : varPath('coverage', 'coverage-summary.json');
 const SUMMARY_DIR = path.dirname(SUMMARY_FILE);
 
 function ensureDir(d) {

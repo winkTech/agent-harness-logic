@@ -21,6 +21,7 @@
 'use strict';
 
 const { HARNESS_ROOT } = require('./lib/harness-root.cjs');
+const { varPath } = require('./lib/harness-state.cjs');
 
 const fs = require('node:fs');
 const path = require('node:path');
@@ -154,7 +155,7 @@ function normalizeTimestamp(value) {
 
 // ── 文件后备存储 ────────────────────────────────────────────────────────────
 
-const FILE_STORE = path.join(HOME, 'var', 'delivery-log.jsonl');
+const FILE_STORE = varPath('delivery-log.jsonl');
 
 function recordEventFile(args) {
   const entry = {

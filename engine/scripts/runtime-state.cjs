@@ -18,7 +18,7 @@
  * 索引位置: var/index/runtime-state.json
  */
 
-const { HARNESS_ROOT } = require('./lib/harness-root.cjs');
+const { varPath } = require('./lib/harness-state.cjs');
 const {
   atomicWriteJson,
   replaceJsonFileSync,
@@ -29,8 +29,7 @@ const {
 const p = require('node:path');
 const f = require('node:fs');
 
-const HOME = HARNESS_ROOT;
-const INDEX_DIR = p.join(HOME, 'var', 'index');
+const INDEX_DIR = varPath('index');
 const STATE_FILE = process.env.CLAUDE_RUNTIME_STATE_FILE || p.join(INDEX_DIR, 'runtime-state.json');
 
 const MODES = ['根因分析', '第一性原理', '减法', '搜索优先', '倒推', '证据驱动', '闭环'];

@@ -2,7 +2,7 @@
 # Batch-add name: field to knowledge base .md files missing it
 # Usage: ./add_name_frontmatter.sh [--dry-run]
 
-BASE="/c/Users/Lihan/.claude"
+BASE="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 DRY_RUN=false
 
 if [[ "$1" == "--dry-run" ]]; then

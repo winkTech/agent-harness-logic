@@ -7,6 +7,7 @@
 | 文件 | 内容 |
 |:-----|:-----|
 | [[lessons-summary]] | 最佳实践汇总 |
+| [[hot-path-hook-edit-atomicity]] | 热路径 hook 文件须 require 先行、原子落盘；改坏会让全机写入被拒 |
 | [[pipeline-framework-must-follow-order]] | 工作流纪律 |
 | [[context-compression-rule]] | 压缩策略 |
 | [[knowledge-retrieval-priority]] | 检索顺序 |

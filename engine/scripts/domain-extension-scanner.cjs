@@ -18,6 +18,7 @@
 'use strict';
 
 const { HARNESS_ROOT } = require('./lib/harness-root.cjs');
+const { varPath } = require('./lib/harness-state.cjs');
 
 const fs = require('node:fs');
 const path = require('node:path');
@@ -243,7 +244,7 @@ function main() {
 
     case 'report':
       // 从上次扫描结果读取
-      const resultsFile = path.join(HOME, 'var', 'domain-scan-results.json');
+      const resultsFile = varPath('domain-scan-results.json');
       if (fs.existsSync(resultsFile)) {
         const data = JSON.parse(fs.readFileSync(resultsFile, 'utf8'));
         generateReport(data);
@@ -270,7 +271,7 @@ function main() {
     const dir = process.argv[3] || process.cwd();
     const result = scanDirectory(dir);
     if (result) {
-      const rf = path.join(HOME, 'var', 'domain-scan-results.json');
+      const rf = varPath('domain-scan-results.json');
       fs.writeFileSync(rf, JSON.stringify(result, null, 2), 'utf8');
     }
   }

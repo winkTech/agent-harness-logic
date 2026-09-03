@@ -3,12 +3,16 @@
 # 防止插件升级后 hooks 因版本号写死而静默失效
 PLUGIN_HOOK="$1"  # session-end.js | session-start.js
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=../../config.path.sh
+source "$SCRIPT_DIR/../../config.path.sh"
+
 # 尝试多个已知位置
 for BASE in \
-  "$HOME/.claude/var/plugins/marketplaces/ecc" \
-  "$HOME/.claude/var/plugins/marketplaces/ecc@ecc" \
-  "$HOME/.claude/var/plugins/marketplaces/everything-claude-code" \
-  "$HOME/.claude/var/plugins/cache/everything-claude-code/everything-claude-code/"*/; do
+  "$VAR_DIR/plugins/marketplaces/ecc" \
+  "$VAR_DIR/plugins/marketplaces/ecc@ecc" \
+  "$VAR_DIR/plugins/marketplaces/everything-claude-code" \
+  "$VAR_DIR/plugins/cache/everything-claude-code/everything-claude-code/"*/; do
   if [ -d "$BASE" ] && [ -f "${BASE}/scripts/lib/utils.js" ]; then
     PLUGIN_DIR="$BASE"
     break

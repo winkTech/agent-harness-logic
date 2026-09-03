@@ -21,14 +21,13 @@
 
 'use strict';
 
-const { HARNESS_ROOT } = require('./lib/harness-root.cjs');
+const { varPath } = require('./lib/harness-state.cjs');
 
 const fs = require('node:fs');
 const path = require('node:path');
 const os = require('node:os');
 
-const HOME = HARNESS_ROOT;
-const DB_FILE = path.join(HOME, 'var', 'quality-metrics.json');
+const DB_FILE = varPath('quality-metrics.json');
 const MAX_HISTORY = 200;
 
 function ensureDir(d) { if (!fs.existsSync(d)) fs.mkdirSync(d, { recursive: true }); }

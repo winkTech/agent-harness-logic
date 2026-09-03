@@ -6,9 +6,20 @@
 const fs = require('node:fs');
 const path = require('node:path');
 const { HARNESS_ROOT } = require('./lib/harness-root.cjs');
+const { STATE_ROOT, varPath } = require('./lib/harness-state.cjs');
 const { shouldIndexSemanticFile } = require('./lib/memory-file-policy.cjs');
 const { inspectIndexFreshness } = require('./semantic-search.cjs');
 const { healthCheck } = require('./resolve-wiki-links.cjs');
+
+/**
+ * 以 home 为基构造 var/ 路径。home 指向本机代码根/状态根时走状态根 (varPath)，
+ * 测试 fixture 传入的临时根保持原样拼接。
+ */
+function varUnder(home, ...parts) {
+  const resolved = path.resolve(home);
+  if (resolved === STATE_ROOT || resolved === path.resolve(HARNESS_ROOT)) return varPath(...parts);
+  return path.join(home, 'var', ...parts);
+}
 
 function locationsFor(home = HARNESS_ROOT) {
   const knowledgeDir = path.join(home, 'engineering-assets', 'knowledge');
@@ -16,7 +27,7 @@ function locationsFor(home = HARNESS_ROOT) {
     home,
     knowledgeDir,
     memoryDir: path.join(home, 'memory'),
-    semanticMeta: path.join(home, 'var', 'index', 'semantic-index-meta.json'),
+    semanticMeta: varUnder(home, 'index', 'semantic-index-meta.json'),
   };
 }
 

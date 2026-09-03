@@ -14,6 +14,7 @@
 'use strict';
 
 const { HARNESS_ROOT } = require('./lib/harness-root.cjs');
+const { varPath } = require('./lib/harness-state.cjs');
 
 const fs = require('node:fs');
 const path = require('node:path');
@@ -59,13 +60,13 @@ function collectData() {
   const data = {};
 
   // 1. Quality metrics
-  data.quality = loadJson(path.join(HOME, 'var', 'quality-metrics.json')) || [];
+  data.quality = loadJson(varPath('quality-metrics.json')) || [];
 
   // 2. FPR log
-  data.fpr = loadJsonl(path.join(HOME, 'var', 'fp-rate-log.jsonl'));
+  data.fpr = loadJsonl(varPath('fp-rate-log.jsonl'));
 
   // 3. Delivery log (file fallback)
-  data.delivery = loadJsonl(path.join(HOME, 'var', 'delivery-log.jsonl'));
+  data.delivery = loadJsonl(varPath('delivery-log.jsonl'));
 
   // 4. SQLite sources
   const db = getDb();
@@ -80,7 +81,7 @@ function collectData() {
   }
 
   // 5. Coverage summary
-  data.coverage = loadJson(path.join(HOME, 'var', 'coverage', 'coverage-summary.json'));
+  data.coverage = loadJson(varPath('coverage', 'coverage-summary.json'));
 
   return data;
 }
@@ -326,7 +327,7 @@ function main() {
       return;
     }
 
-    const outputPath = process.argv[3] || path.join(HOME, 'var', 'dashboard.html');
+    const outputPath = process.argv[3] || varPath('dashboard.html');
     ensureDir(path.dirname(outputPath));
     fs.writeFileSync(outputPath, html, 'utf8');
     console.log(`[dashboard] ✅ 仪表盘已生成: ${outputPath}`);

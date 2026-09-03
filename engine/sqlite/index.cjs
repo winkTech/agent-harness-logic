@@ -10,7 +10,7 @@
  *
  * 设计原则:
  *   - node:sqlite (DatabaseSync) 内置, 零依赖
- *   - 默认路径 ~/.claude/.wright/memory.db (git 不可见)
+ *   - 默认路径 状态根下的 .wright（见 harness-state.cjs）/memory.db (git 不可见)
  *   - 单例缓存 (path+open mode→DatabaseSync), 同路径同模式复用实例
  *   - 注射式 opts.db 让多个 store 共享同一连接
  *   - WAL 模式 + 外键约束自动启用
@@ -20,12 +20,12 @@
 const { DatabaseSync } = require('node:sqlite');
 const path = require('node:path');
 const fs = require('node:fs');
-const { HARNESS_ROOT } = require('../scripts/lib/harness-root.cjs');
+const { WRIGHT_DIR } = require('../scripts/lib/harness-state.cjs');
 
 // ── 默认路径 ──────────────────────────────────────────────────────────────
 
-/** ~/.claude/.wright/ 下的默认数据库文件名 */
-const DEFAULT_DB_DIR = path.join(HARNESS_ROOT, '.wright');
+/** 状态根下的 .wright（见 harness-state.cjs）下的默认数据库文件名 */
+const DEFAULT_DB_DIR = WRIGHT_DIR;
 const DEFAULT_DB_PATH = process.env.CLAUDE_SQLITE_PATH || path.join(DEFAULT_DB_DIR, 'memory.db');
 
 // ── 连接缓存 ──────────────────────────────────────────────────────────────
@@ -50,7 +50,7 @@ const connectionCache = new Map();
  * 打开 (或获取缓存) 一个 SQLite 数据库连接。
  *
  * @param {object} [opts]
- * @param {string} [opts.path]         — 数据库路径, 默认 ~/.claude/.wright/memory.db
+ * @param {string} [opts.path]         — 数据库路径, 默认 状态根下的 .wright（见 harness-state.cjs）/memory.db
  * @param {boolean} [opts.readonly]    — true = 只读模式 (backup/检查用, 不建表)
  * @param {boolean} [opts.noInit]      — true = 跳过 WAL/外键/迁移 (给内部迁移脚本用)
  * @param {number} [opts.busyTimeoutMs] — 锁竞争等待时间，默认 5000ms
@@ -165,7 +165,7 @@ function closeAll() {
  * 备份数据库到指定路径 (VACUUM INTO)。
  * 仅对文件数据库有效, :memory: 跳过。
  *
- * @param {string} [dest]  — 备份目标路径, 默认 ~/.claude/.wright/backups/{timestamp}-memory.db
+ * @param {string} [dest]  — 备份目标路径, 默认 状态根下的 .wright（见 harness-state.cjs）/backups/{timestamp}-memory.db
  * @param {object} [opts]
  * @param {string} [opts.sourcePath]  — 源数据库路径, 默认 DEFAULT_DB_PATH
  * @returns {string} 备份文件路径

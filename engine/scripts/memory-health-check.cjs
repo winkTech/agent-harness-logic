@@ -4,6 +4,7 @@
 const fs = require('node:fs');
 const path = require('node:path');
 const { HARNESS_ROOT } = require('./lib/harness-root.cjs');
+const { STATE_ROOT, varPath } = require('./lib/harness-state.cjs');
 const {
   purgeExpired,
 } = require('../sqlite/store-memory.cjs');
@@ -20,6 +21,16 @@ const FILE_FACT_SOURCES = new Set([
   'hook:postflight-observer',
 ]);
 
+/**
+ * 以 home 为基构造 var/ 路径。home 指向本机代码根/状态根时走状态根 (varPath)，
+ * 测试 fixture 传入的临时根保持原样拼接。
+ */
+function varUnder(home, ...parts) {
+  const resolved = path.resolve(home);
+  if (resolved === STATE_ROOT || resolved === path.resolve(HARNESS_ROOT)) return varPath(...parts);
+  return path.join(home, 'var', ...parts);
+}
+
 function tableExists(db, name) {
   return Boolean(db.prepare("SELECT 1 FROM sqlite_master WHERE type IN ('table','view') AND name = ?").get(name));
 }
@@ -27,7 +38,7 @@ function tableExists(db, name) {
 function inspectPromotedRuleIntegrity(home = HARNESS_ROOT) {
   const root = path.resolve(home);
   const rulesDir = path.join(root, 'docs', 'rules');
-  const ledgerPath = path.join(root, 'var', 'maintenance', 'harness-rule-candidates.json');
+  const ledgerPath = varUnder(root, 'maintenance', 'harness-rule-candidates.json');
   const {
     readLedger,
     validatePromotedRuleArtifact,
@@ -66,7 +77,7 @@ function inspectPromotedRuleIntegrity(home = HARNESS_ROOT) {
 }
 
 function inspectRuleCandidateLifecycle(home = HARNESS_ROOT, now = Date.now()) {
-  const ledgerPath = path.join(path.resolve(home), 'var', 'maintenance', 'harness-rule-candidates.json');
+  const ledgerPath = varUnder(path.resolve(home), 'maintenance', 'harness-rule-candidates.json');
   const { candidateCompleteness, readLedger } = require('./harness-rule-candidates.cjs');
   let ledger;
   try {
@@ -330,7 +341,7 @@ function currentSemanticFiles(home) {
 }
 
 function inspectSemantic(home, now) {
-  const metaPath = path.join(home, 'var', 'index', 'semantic-index-meta.json');
+  const metaPath = varUnder(home, 'index', 'semantic-index-meta.json');
   const meta = readJson(metaPath, null);
   const current = new Map(currentSemanticFiles(home).map((filePath) => [
     path.relative(home, filePath).replace(/\\/g, '/'),
@@ -406,7 +417,7 @@ function settingsMaintenanceSources(home) {
 }
 
 function inspectMaintenance(home, now, intervalDays = DEFAULT_INTERVAL_DAYS) {
-  const statePath = path.join(home, 'var', 'maintenance', 'memory-knowledge-maintenance.json');
+  const statePath = varUnder(home, 'maintenance', 'memory-knowledge-maintenance.json');
   const schedulePath = path.join(home, '.claude', 'scheduled_tasks.json');
   const state = readJson(statePath, {});
   const schedule = readJson(schedulePath, { tasks: [] });
@@ -775,8 +786,8 @@ function queryDeliveryPlanTelemetry(db, now) {
  *   3. 令牌不得含通配符 (逐文件批准是该通道的核心约束)。
  */
 function queryProtectedWrites(home) {
-  const auditFile = path.join(home, 'var', 'audit', 'protected-writes.jsonl');
-  const approvalFile = path.join(home, 'var', 'audit', 'protected-write-approvals.json');
+  const auditFile = varUnder(home, 'audit', 'protected-writes.jsonl');
+  const approvalFile = varUnder(home, 'audit', 'protected-write-approvals.json');
   const result = {
     auditAvailable: fs.existsSync(auditFile),
     approvalsAvailable: fs.existsSync(approvalFile),
@@ -821,7 +832,7 @@ function queryProtectedWrites(home) {
  * 或从未维护过的机器被误报。
  */
 function queryWeeklyReport(home, now, maintenance) {
-  const reportFile = path.join(home, 'var', 'metrics', 'weekly-report.json');
+  const reportFile = varUnder(home, 'metrics', 'weekly-report.json');
   const result = { available: fs.existsSync(reportFile), generatedAt: null, ageDays: null, erroredSections: [] };
   if (result.available) {
     try {

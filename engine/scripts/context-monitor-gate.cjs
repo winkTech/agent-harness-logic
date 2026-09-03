@@ -30,13 +30,12 @@
 
 const fs = require('fs');
 const path = require('path');
-const { HARNESS_ROOT } = require('./lib/harness-root.cjs');
+const { varPath } = require('./lib/harness-state.cjs');
 
 // ── 配置 ────────────────────────────────────────────────────────────────────
 
-const HARNESS = HARNESS_ROOT;
-const STATE_FILE = path.join(HARNESS, 'var', 'index', 'runtime-state.json');
-const COMPACT_LOG = path.join(HARNESS, 'var', 'sessions', 'compaction-log.txt');
+const STATE_FILE = varPath('index', 'runtime-state.json');
+const COMPACT_LOG = varPath('sessions', 'compaction-log.txt');
 
 if (process.env.CLAUDE_BENCH === '1') process.exit(0);
 
@@ -47,7 +46,7 @@ const THRESHOLDS = {
 };
 
 // ── 降级计数器（环境变量缺失时的后备方案）──────────
-const COUNTER_FILE = path.join(HARNESS, 'var', 'index', 'post-counter.json');
+const COUNTER_FILE = varPath('index', 'post-counter.json');
 // 当 env 指标全为零时的硬阈值:
 // 10 次 PostMessage = YELLOW, 20 次 = RED
 const FALLBACK_YELLOW_AFTER = 10;
@@ -110,7 +109,7 @@ function getTranscriptInfo() {
 
   if (!transcriptPath) {
     // fallback: 在 var/sessions/ 下按时间找最近的文件
-    const sessionsDir = path.join(HARNESS, 'var', 'sessions');
+    const sessionsDir = varPath('sessions');
     if (fs.existsSync(sessionsDir)) {
       const files = fs.readdirSync(sessionsDir)
         .filter(f => f.endsWith('.jsonl') || f.endsWith('.log'))

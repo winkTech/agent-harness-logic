@@ -22,9 +22,10 @@ const fs = require('node:fs');
 const path = require('node:path');
 const scope = require('./lib/project-scope.cjs');
 const { HARNESS_ROOT } = require('./lib/harness-root.cjs');
+const { varPath } = require('./lib/harness-state.cjs');
 
-const STATE_FILE = path.join(HARNESS_ROOT, 'var', 'index', 'runtime-state.json');
-const TASK_FILE = path.join(HARNESS_ROOT, 'var', 'active-task.yaml');
+const STATE_FILE = varPath('index', 'runtime-state.json');
+const TASK_FILE = varPath('active-task.yaml');
 const WORK_DIR = path.join(HARNESS_ROOT, 'memory', 'work');
 const HOME_ROOT = HARNESS_ROOT;
 

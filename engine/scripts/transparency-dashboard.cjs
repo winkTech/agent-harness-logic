@@ -1,13 +1,11 @@
 #!/usr/bin/env node
 'use strict';
 
-const { HARNESS_ROOT } = require('./lib/harness-root.cjs');
+const { varPath } = require('./lib/harness-state.cjs');
 
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
-
-const HOME = HARNESS_ROOT;
 
 function readJson(filePath, fallback = null) {
   try {
@@ -36,7 +34,7 @@ function argValue(args, name, fallback = '') {
 }
 
 function runsDirFromArgs(args) {
-  return path.resolve(argValue(args, '--runs-dir', process.env.CLAUDE_TRANSPARENCY_RUNS_DIR || path.join(HOME, 'var', 'runs')));
+  return path.resolve(argValue(args, '--runs-dir', process.env.CLAUDE_TRANSPARENCY_RUNS_DIR || varPath('runs')));
 }
 
 function collectRuns(runsDir) {
@@ -173,7 +171,7 @@ function main() {
     console.log(JSON.stringify(report, null, 2));
     return;
   }
-  const outPath = path.resolve(argValue(args, '--out', path.join(HOME, 'var', 'agent-transparency-dashboard.html')));
+  const outPath = path.resolve(argValue(args, '--out', varPath('agent-transparency-dashboard.html')));
   fs.mkdirSync(path.dirname(outPath), { recursive: true });
   fs.writeFileSync(outPath, renderHtml(report), 'utf8');
   console.log(JSON.stringify({ outPath, summary: report.summary }, null, 2));

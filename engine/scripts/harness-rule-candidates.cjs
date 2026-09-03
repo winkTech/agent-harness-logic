@@ -13,6 +13,7 @@ const crypto = require('node:crypto');
 const fs = require('node:fs');
 const path = require('node:path');
 const { HARNESS_ROOT } = require('./lib/harness-root.cjs');
+const { VAR_DIR, varPath } = require('./lib/harness-state.cjs');
 const {
   behaviorContractHash,
   evidenceEntrySha256,
@@ -28,7 +29,7 @@ function isoNow(value) {
 }
 
 function defaultLedgerPath() {
-  return path.join(HARNESS_ROOT, 'var', 'maintenance', 'harness-rule-candidates.json');
+  return varPath('maintenance', 'harness-rule-candidates.json');
 }
 
 function readLedger(ledgerPath = defaultLedgerPath()) {
@@ -172,7 +173,7 @@ function allowedEvidenceRoots(ledgerPath, opts = {}) {
     : ledgerDir;
   return [
     ledgerStateRoot,
-    path.join(HARNESS_ROOT, 'var'),
+    VAR_DIR,
     ...(Array.isArray(opts.evidenceRoots) ? opts.evidenceRoots : []),
   ].map((root) => path.resolve(root));
 }

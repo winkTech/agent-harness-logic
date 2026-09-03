@@ -22,6 +22,7 @@
 const fs = require('node:fs');
 const path = require('node:path');
 const { HARNESS_ROOT } = require('./lib/harness-root.cjs');
+const { varPath } = require('./lib/harness-state.cjs');
 
 // ── Budget Tiers (char limits for the assembled prompt) ──────────────────
 const TIERS = {
@@ -114,8 +115,8 @@ function resolveAgentCompress() {
 
   // Search paths for agent-compress.js
   const searchPaths = [
-    path.join(HARNESS_ROOT, 'var', 'plugins', 'marketplaces', 'ecc', 'scripts', 'lib', 'agent-compress.js'),
-    path.join(HARNESS_ROOT, 'var', 'plugins', 'marketplaces', 'everything-claude-code', 'scripts', 'lib', 'agent-compress.js'),
+    varPath('plugins', 'marketplaces', 'ecc', 'scripts', 'lib', 'agent-compress.js'),
+    varPath('plugins', 'marketplaces', 'everything-claude-code', 'scripts', 'lib', 'agent-compress.js'),
   ];
 
   for (const p of searchPaths) {

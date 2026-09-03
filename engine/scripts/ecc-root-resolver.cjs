@@ -4,6 +4,7 @@
 const p = require('node:path');
 const f = require('node:fs');
 const { HARNESS_ROOT } = require('./lib/harness-root.cjs');
+const { varPath } = require('./lib/harness-state.cjs');
 const HOME = HARNESS_ROOT;
 const UTILS_REL = p.join('scripts', 'lib', 'utils.js');
 
@@ -24,9 +25,9 @@ function resolve() {
   ];
   for (const base of [
     HOME,
-    p.join(HOME, 'var', 'plugins'),
+    varPath('plugins'),
     p.join(HOME, 'plugins'),
-    p.join(HOME, 'var', 'plugins', 'marketplaces'),
+    varPath('plugins', 'marketplaces'),
     p.join(HOME, 'plugins', 'marketplaces'),
   ]) {
     if (check(base)) return base;
@@ -37,7 +38,7 @@ function resolve() {
   }
 
   // 2. Cache paths: var/plugins/cache/ + plugins/cache/
-  for (const cacheBase of [p.join(HOME, 'var', 'plugins', 'cache'), p.join(HOME, 'plugins', 'cache')]) {
+  for (const cacheBase of [varPath('plugins', 'cache'), p.join(HOME, 'plugins', 'cache')]) {
     for (const slug of ['ecc', 'everything-claude-code']) {
       const slugDir = p.join(cacheBase, slug);
       try {

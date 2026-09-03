@@ -21,6 +21,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 
 const { HARNESS_ROOT } = require('./lib/harness-root.cjs');
+const { varPath } = require('./lib/harness-state.cjs');
 
 const HOME = HARNESS_ROOT;
 const DAY_MS = 86_400_000;
@@ -259,10 +260,10 @@ function buildTenDimensionReport(opts = {}) {
 
   // ── D10 可观察 Trace completeness ──
   const transparency = safe(() => require('./transparency-dashboard.cjs')
-    .buildReport(path.join(HOME, 'var', 'runs')));
+    .buildReport(varPath('runs')));
   const ledgerAnomalies = safe(() => {
     const file = process.env.CLAUDE_VERIFICATION_LEDGER_FILE
-      || path.join(HOME, 'var', 'verification-ledger.json');
+      || varPath('verification-ledger.json');
     if (!fs.existsSync(file)) return { entries: 0, contradictory: 0, unknownStatus: 0 };
     const ledger = JSON.parse(fs.readFileSync(file, 'utf8'));
     const entries = Array.isArray(ledger.entries) ? ledger.entries : [];

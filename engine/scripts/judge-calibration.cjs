@@ -17,15 +17,14 @@
 
 'use strict';
 
-const { HARNESS_ROOT } = require('./lib/harness-root.cjs');
+const { varPath } = require('./lib/harness-state.cjs');
 
 const fs = require('node:fs');
 const path = require('node:path');
 const os = require('node:os');
 
-const HOME = HARNESS_ROOT;
-const SAMPLES_DIR = path.join(HOME, 'var', 'calibration-samples');
-const RESULTS_FILE = path.join(HOME, 'var', 'calibration-results.json');
+const SAMPLES_DIR = varPath('calibration-samples');
+const RESULTS_FILE = varPath('calibration-results.json');
 
 function ensureDir(d) { if (!fs.existsSync(d)) fs.mkdirSync(d, { recursive: true }); }
 

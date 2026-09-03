@@ -6,6 +6,7 @@ const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 const { withFileLockSync } = require('./project-scope.cjs');
+const { STATE_ROOT, varPath } = require('./harness-state.cjs');
 
 const HARNESS_ROOT = path.resolve(__dirname, '../../..');
 const MIN_REASON_LENGTH = 16;
@@ -32,14 +33,14 @@ function resolveAuditPath(explicitPath, env) {
   const selected = String(
     explicitPath
       || env?.CLAUDE_GATES_DISABLE_AUDIT_PATH
-      || path.join(HARNESS_ROOT, 'var', 'audit', 'gate-bypass.jsonl'),
+      || varPath('audit', 'gate-bypass.jsonl'),
   ).trim();
   if (!selected || !path.isAbsolute(selected) || path.extname(selected).toLowerCase() !== '.jsonl') {
     throw new Error('audit_path_invalid');
   }
 
   const resolved = path.resolve(selected);
-  if (!isWithin(HARNESS_ROOT, resolved) && !isWithin(os.tmpdir(), resolved)) {
+  if (!isWithin(HARNESS_ROOT, resolved) && !isWithin(STATE_ROOT, resolved) && !isWithin(os.tmpdir(), resolved)) {
     throw new Error('audit_path_out_of_scope');
   }
   return resolved;

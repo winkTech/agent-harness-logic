@@ -12,7 +12,18 @@
 const fs = require('node:fs');
 const path = require('node:path');
 const { HARNESS_ROOT } = require('./lib/harness-root.cjs');
+const { STATE_ROOT, varPath } = require('./lib/harness-state.cjs');
 const { shouldIndexSemanticFile } = require('./lib/memory-file-policy.cjs');
+
+/**
+ * 以 home 为基构造 var/ 路径。home 指向本机代码根/状态根时走状态根 (varPath)，
+ * 测试 fixture 传入的临时根保持原样拼接。
+ */
+function varUnder(home, ...parts) {
+  const resolved = path.resolve(home);
+  if (resolved === STATE_ROOT || resolved === path.resolve(HARNESS_ROOT)) return varPath(...parts);
+  return path.join(home, 'var', ...parts);
+}
 
 const DAY_MS = 86_400_000;
 const DEFAULT_MAX_AGE_DAYS = 7;
@@ -31,7 +42,7 @@ const STOP_WORDS = new Set([
 
 function pathsFor(home = HARNESS_ROOT) {
   const knowledgeDir = path.join(home, 'engineering-assets', 'knowledge');
-  const indexDir = path.join(home, 'var', 'index');
+  const indexDir = varUnder(home, 'index');
   return {
     home,
     memoryDir: path.join(home, 'memory'),

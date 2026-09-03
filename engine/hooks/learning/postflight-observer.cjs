@@ -5,6 +5,7 @@ const crypto = require('node:crypto');
 const fs = require('node:fs');
 const path = require('node:path');
 const { HARNESS_ROOT } = require('../../scripts/lib/harness-root.cjs');
+const { varPath } = require('../../scripts/lib/harness-state.cjs');
 const { shouldSyncMemoryFile } = require('../../scripts/lib/memory-file-policy.cjs');
 const { withFileLockSync } = require('../../scripts/lib/project-scope.cjs');
 
@@ -83,7 +84,7 @@ function recordRiskTelemetry(payload = {}, opts = {}) {
   const nowMs = Date.parse(opts.now || new Date().toISOString());
   if (!Number.isFinite(nowMs)) throw new TypeError('risk telemetry timestamp is invalid');
   const timestamp = new Date(nowMs).toISOString();
-  const telemetryDir = path.resolve(opts.telemetryDir || path.join(HARNESS_ROOT, 'var', 'telemetry'));
+  const telemetryDir = path.resolve(opts.telemetryDir || varPath('telemetry'));
   const rawPath = path.join(telemetryDir, 'risk-events.jsonl');
   const dailyPath = path.join(telemetryDir, 'risk-daily.json');
   const bypassRequested = ['1', 'true'].includes(String(env.CLAUDE_GATES_DISABLED || '').toLowerCase())

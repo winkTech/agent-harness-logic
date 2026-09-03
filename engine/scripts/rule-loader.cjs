@@ -31,6 +31,7 @@ const crypto = require('node:crypto');
 const os = require('node:os');
 const path = require('node:path');
 const { HARNESS_ROOT } = require('./lib/harness-root.cjs');
+const { varPath } = require('./lib/harness-state.cjs');
 
 // ── 配置 ────────────────────────────────────────────────────────────────────
 
@@ -50,7 +51,7 @@ const RULES_DIR = (() => {
   if (fs.existsSync(preferred)) return preferred;
   return path.join(HARNESS_ROOT, 'rules');
 })();
-const STATE_FILE = path.join(HARNESS_ROOT, 'var', 'index', 'runtime-state.json');
+const STATE_FILE = varPath('index', 'runtime-state.json');
 const DEFAULT_CAPSULE_MAX_CHARS = 1800;
 
 // ── Frontmatter 解析 ─────────────────────────────────────────────────────────

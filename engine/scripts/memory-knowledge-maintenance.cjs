@@ -5,10 +5,21 @@ const fs = require('node:fs');
 const path = require('node:path');
 const { spawnSync } = require('node:child_process');
 const { HARNESS_ROOT } = require('./lib/harness-root.cjs');
+const { STATE_ROOT, varPath } = require('./lib/harness-state.cjs');
 const { shouldSyncMemoryFile } = require('./lib/memory-file-policy.cjs');
 
+/**
+ * 以 home 为基构造 var/ 路径。home 指向本机代码根/状态根时走状态根 (varPath)，
+ * 测试 fixture 传入的临时根保持原样拼接。
+ */
+function varUnder(home, ...parts) {
+  const resolved = path.resolve(home);
+  if (resolved === STATE_ROOT || resolved === path.resolve(HARNESS_ROOT)) return varPath(...parts);
+  return path.join(home, 'var', ...parts);
+}
+
 const DAY_MS = 86_400_000;
-const STATE_RELATIVE_PATH = path.join('var', 'maintenance', 'memory-knowledge-maintenance.json');
+const STATE_RELATIVE_PARTS = ['maintenance', 'memory-knowledge-maintenance.json'];
 const DEFAULTS = {
   intervalDays: 7,
   workDays: 14,
@@ -247,7 +258,7 @@ function ruleCandidateFrom(candidate) {
 }
 
 function loadState(home) {
-  return readJson(path.join(home, STATE_RELATIVE_PATH), {});
+  return readJson(varUnder(home, ...STATE_RELATIVE_PARTS), {});
 }
 
 function dueState(home, now, intervalDays) {
@@ -498,7 +509,7 @@ function defaultStageCandidates(candidates, context) {
   const candidateModule = require('./harness-rule-candidates.cjs');
   const ledgerPath = context.opts.candidateLedger
     ? path.resolve(context.opts.candidateLedger)
-    : path.join(context.home, 'var', 'maintenance', 'harness-rule-candidates.json');
+    : varUnder(context.home, 'maintenance', 'harness-rule-candidates.json');
   const ids = candidates.map((candidate) => candidateModule.stageCandidate(candidate, { ledgerPath }).id);
   return { staged: ids.length, ids, ledgerPath };
 }
@@ -541,7 +552,7 @@ function defaultRebuildIndex(_plan, context) {
 }
 
 function defaultSaveState(state, context) {
-  const statePath = path.join(context.home, STATE_RELATIVE_PATH);
+  const statePath = varUnder(context.home, ...STATE_RELATIVE_PARTS);
   fs.mkdirSync(path.dirname(statePath), { recursive: true });
   fs.writeFileSync(statePath, JSON.stringify(state, null, 2), 'utf8');
 }

@@ -16,7 +16,8 @@ TS=$(date '+%Y%m%d_%H%M%S')
 if [ -n "$PROJECT_NAME" ]; then
     TARGET_DIR="$HARNESS_DIR/memory/projects/$PROJECT_NAME"
 else
-    TARGET_DIR="$HARNESS_DIR/var/work/ctx-checkpoints"
+    STATE_ROOT="${HARNESS_STATE_DIR:-$HARNESS_DIR}"
+    TARGET_DIR="$STATE_ROOT/var/work/ctx-checkpoints"
 fi
 
 mkdir -p "$TARGET_DIR"

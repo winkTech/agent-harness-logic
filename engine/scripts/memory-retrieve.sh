@@ -18,9 +18,11 @@ if [ -z "$QUERY" ]; then
 fi
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+# shellcheck source=../config.path.sh
+source "$SCRIPT_DIR/../config.path.sh"
 HOME_DIR="$SCRIPT_DIR/../.."
 ENGINE_SCRIPTS="$HOME_DIR/engine/scripts"
-INDEX_DIR="$HOME_DIR/var/index"
+INDEX_DIR="$VAR_DIR/index"
 
 # ── 0. SQLite FTS5 全文搜索 (Phase 1 新增, 优先) ─────────────────────
 if command -v node &>/dev/null; then

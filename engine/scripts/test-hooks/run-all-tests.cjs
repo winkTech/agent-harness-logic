@@ -2027,7 +2027,7 @@ define('BashSafety', '绝对路径源码重定向拦截', () => {
   const stdin = JSON.stringify({
     hook_event_name: 'PreToolUse',
     tool_name: 'Bash',
-    tool_input: { command: "cat > /c/Users/Lihan/tmp/project/src/telemetry.py << 'PYEOF'\nprint('x')\nPYEOF" },
+    tool_input: { command: "cat > /c/Users/operator/tmp/project/src/telemetry.py << 'PYEOF'\nprint('x')\nPYEOF" },
   });
   const r = runNode(p, stdin);
   return { pass: r.status === 2, detail: `absolute redirect exit=${r.status} (期望 2)` };

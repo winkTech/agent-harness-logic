@@ -20,17 +20,16 @@
 
 const fs = require('fs');
 const path = require('path');
-const { HARNESS_ROOT } = require('./lib/harness-root.cjs');
+const { varPath } = require('./lib/harness-state.cjs');
 const {
   atomicWriteJson,
   updateJsonFileSync,
   withFileLockSync,
 } = require('./lib/project-scope.cjs');
 
-const HARNESS = HARNESS_ROOT;
-const STATE_FILE = process.env.CLAUDE_RUNTIME_STATE_FILE || path.join(HARNESS, 'var', 'index', 'runtime-state.json');
-const COMPACT_LOG = process.env.CLAUDE_COMPACTION_LOG_FILE || path.join(HARNESS, 'var', 'sessions', 'compaction-log.txt');
-const PRESSURE_SIGNAL = process.env.CLAUDE_COMPACT_SIGNAL_FILE || path.join(HARNESS, 'var', 'sessions', '.compact-needed');
+const STATE_FILE = process.env.CLAUDE_RUNTIME_STATE_FILE || varPath('index', 'runtime-state.json');
+const COMPACT_LOG = process.env.CLAUDE_COMPACTION_LOG_FILE || varPath('sessions', 'compaction-log.txt');
+const PRESSURE_SIGNAL = process.env.CLAUDE_COMPACT_SIGNAL_FILE || varPath('sessions', '.compact-needed');
 const COMPACT_LOG_MAX_ENTRIES = Math.max(10, Number.parseInt(process.env.CLAUDE_COMPACTION_LOG_MAX_ENTRIES || '500', 10));
 
 // ── 辅助 ─────────────────────────────────────────────────────────────────────

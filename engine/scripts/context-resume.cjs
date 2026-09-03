@@ -18,6 +18,7 @@
 'use strict';
 
 const { HARNESS_ROOT } = require('./lib/harness-root.cjs');
+const { varPath } = require('./lib/harness-state.cjs');
 
 const p = require('node:path');
 const f = require('node:fs');
@@ -25,7 +26,7 @@ const os = require('node:os');
 const scope = require('./lib/project-scope.cjs');
 
 const HOME = HARNESS_ROOT;
-const STATE_FILE = p.join(HOME, 'var', 'index', 'pre-compact-state.json');
+const STATE_FILE = varPath('index', 'pre-compact-state.json');
 const HOME_ROOT = HOME;
 
 function normalizePath(value) {
