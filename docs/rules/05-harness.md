@@ -75,6 +75,7 @@ Agent 只有在任务主题、路径、错误签名或用户明确要求与候�
 | 同一个 Hook | 只在一处注册 | 同时写进 `settings.json` 与 `settings.local.json`（会每次触发跑两遍） |
 | 新增 Hook 落地 | 同时在 `engine/hooks/manifest.json` 声明，且 `active` 与真实注册一致 | 只注册不声明，或声明 `active: true` 却没有注册 |
 | `.claude/workflows/` 镜像 | 由 `sync-workflow-mirror.cjs` 从 `workflows/` 单向重建 | 反向同步（会把手工改镜像的错误“修”掉，那正是漂移检查要抓的） |
+| `engine/hooks/plugin.hooks.json` | 与 `workbuddy.hooks.json` 同为渲染产物，但**入库**（插件安装方拿不到渲染器）；改注册仍只改模板再跑渲染器 | 手工编辑该文件；或在其中写本机绝对路径（插件根 `${CLAUDE_PLUGIN_ROOT}` 每次更新换目录） |
 
 `manifest.json` 与实际注册的交叉核对是硬门禁。它读不到任何注册来源时**必须报错**，不得因“环境里没有 settings.json”而跳过——那正是它唯一有意义的场景。
 

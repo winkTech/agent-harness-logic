@@ -21,7 +21,7 @@ const os = require('node:os');
 const { readSettingsFiles, validateHookScripts } = require('./scripts/lib/hook-registry.cjs');
 const {
   STATE_ROOT,
-  IS_LEGACY_IN_PLACE,
+  STATE_MODE,
   STATE_LAYOUT_VERSION,
   readStateMarker,
 } = require('./scripts/lib/harness-state.cjs');
@@ -140,10 +140,9 @@ function checkHooks() {
 
 function checkFilesystem() {
   section('文件系统');
-  const stateMode = process.env.HARNESS_STATE_DIR ? 'env' : (IS_LEGACY_IN_PLACE ? 'legacy in-place' : 'migrated');
   let stateMarker = null;
   try { stateMarker = readStateMarker(STATE_ROOT); } catch (e) { stateMarker = { error: e.message }; }
-  info(`状态根: ${STATE_ROOT} (${stateMode})`);
+  info(`状态根: ${STATE_ROOT} (STATE_MODE=${STATE_MODE})`);
   info(`layoutVersion: ${stateMarker ? (stateMarker.error || stateMarker.layoutVersion) : `${STATE_LAYOUT_VERSION} (无 state.json 标记)`}`);
   try {
     const r = spawnSync('git', ['status', '--short'], { cwd: HOME, encoding: 'utf8', timeout: 5000, windowsHide: true });

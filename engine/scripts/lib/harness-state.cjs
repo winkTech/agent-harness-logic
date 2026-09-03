@@ -62,15 +62,17 @@ function assertLayoutSupported(stateRoot) {
 }
 
 /**
- * 解析状态根。纯函数：不创建目录、不写文件。
- * 顺序：
- *  1. env.HARNESS_STATE_DIR 非空 → path.resolve 后返回（不校验存在性）；
- *  2. 默认目录 <homedir>/.logical-paradox 下存在 state.json → 返回默认目录（已迁移机器）；
- *  3. 否则 → 返回 harnessRoot（legacy in-place）。
+ * 解析状态根并说明命中哪一级。纯函数：不创建目录、不写文件。
+ * 顺序（M2）：
+ *  1. env.HARNESS_STATE_DIR 非空 → path.resolve 后返回（不校验存在性）           mode='env'
+ *  2. 默认目录 <homedir>/.logical-paradox 下存在 state.json → 默认目录（已迁移） mode='migrated'
+ *  3. harnessRoot 下存在 .wright 或 var → harnessRoot（legacy in-place）        mode='legacy'
+ *  4. env.CLAUDE_PLUGIN_DATA 非空 → 该目录（插件安装模式，跨插件更新存活）        mode='plugin-data'
+ *  5. 否则 → <homedir>/.logical-paradox（首次运行，消费者自行 mkdir）           mode='default'
  * @param {{env?: object, harnessRoot?: string, homeDir?: string}} [opts]
- * @returns {string}
+ * @returns {{stateRoot: string, mode: 'env'|'migrated'|'legacy'|'plugin-data'|'default'}}
  */
-function resolveStateRoot(opts = {}) {
+function resolveState(opts = {}) {
   const env = opts.env || process.env;
   const harnessRoot = path.resolve(String(opts.harnessRoot || HARNESS_ROOT));
   const homeDir = String(opts.homeDir || os.homedir());
@@ -79,20 +81,46 @@ function resolveStateRoot(opts = {}) {
   if (override) {
     const resolved = path.resolve(override);
     assertLayoutSupported(resolved);
-    return resolved;
+    return { stateRoot: resolved, mode: 'env' };
   }
 
   const defaultRoot = path.resolve(homeDir, DEFAULT_STATE_DIRNAME);
   if (fs.existsSync(path.join(defaultRoot, STATE_MARKER))) {
     assertLayoutSupported(defaultRoot);
-    return defaultRoot;
+    return { stateRoot: defaultRoot, mode: 'migrated' };
   }
 
-  assertLayoutSupported(harnessRoot);
-  return harnessRoot;
+  const hasLegacyState = fs.existsSync(path.join(harnessRoot, '.wright'))
+    || fs.existsSync(path.join(harnessRoot, 'var'));
+  if (hasLegacyState) {
+    assertLayoutSupported(harnessRoot);
+    return { stateRoot: harnessRoot, mode: 'legacy' };
+  }
+
+  const pluginData = env.CLAUDE_PLUGIN_DATA ? String(env.CLAUDE_PLUGIN_DATA).trim() : '';
+  if (pluginData) {
+    const resolved = path.resolve(pluginData);
+    assertLayoutSupported(resolved);
+    return { stateRoot: resolved, mode: 'plugin-data' };
+  }
+
+  assertLayoutSupported(defaultRoot);
+  return { stateRoot: defaultRoot, mode: 'default' };
 }
 
-const STATE_ROOT = resolveStateRoot();
+/**
+ * 解析状态根（只要路径）。纯函数，顺序见 resolveState。
+ * @param {{env?: object, harnessRoot?: string, homeDir?: string}} [opts]
+ * @returns {string}
+ */
+function resolveStateRoot(opts = {}) {
+  return resolveState(opts).stateRoot;
+}
+
+const RESOLVED_STATE = resolveState();
+const STATE_ROOT = RESOLVED_STATE.stateRoot;
+/** 命中的解析级别：'env' | 'migrated' | 'legacy' | 'plugin-data' | 'default' */
+const STATE_MODE = RESOLVED_STATE.mode;
 /** legacy in-place：状态仍留在仓库目录里（未迁移的机器与所有旧克隆） */
 const IS_LEGACY_IN_PLACE = STATE_ROOT === path.resolve(HARNESS_ROOT);
 
@@ -114,9 +142,11 @@ module.exports = {
   STATE_MARKER,
   DEFAULT_STATE_DIRNAME,
   STATE_ROOT,
+  STATE_MODE,
   IS_LEGACY_IN_PLACE,
   VAR_DIR,
   WRIGHT_DIR,
+  resolveState,
   resolveStateRoot,
   readStateMarker,
   statePath,

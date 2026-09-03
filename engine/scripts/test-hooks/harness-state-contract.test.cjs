@@ -15,6 +15,10 @@
  *   8. 迁移 execute：文件搬到位、state.json 内容正确、旧位置留 STATE-MOVED.txt；
  *   9. 第二次 execute 到同一目标 → exit 3（拒绝覆盖）；
  *  10. 跨卷回退：注入 rename 失败后走递归复制 + 删源路径。
+ * 以及 M2（插件模式）合同追加的 3 条：
+ *  11. 旧位置没有 var/.wright 时不再回落 harnessRoot，而是落到默认状态目录；
+ *  12. CLAUDE_PLUGIN_DATA 生效，但优先级低于 legacy in-place；
+ *  13. STATE_MODE 五种取值 env / migrated / legacy / plugin-data / default。
  *
  * 全部在 os.tmpdir() 下的临时目录进行，不触碰真实 HARNESS_ROOT 的状态。
  * 独立可执行：退出码 0 = 通过（由 run-all-tests.cjs 的 AuditRemediationContracts spawn 校验）。
@@ -32,6 +36,8 @@ const {
   STATE_LAYOUT_VERSION,
   STATE_MARKER,
   DEFAULT_STATE_DIRNAME,
+  STATE_MODE,
+  resolveState,
   resolveStateRoot,
   readStateMarker,
 } = require(LIB);
@@ -144,10 +150,11 @@ test('2. default state dir with a marker wins over the harness root', () => {
   assert.equal(readStateMarker(defaultRoot).layoutVersion, STATE_LAYOUT_VERSION);
 });
 
-// ── 3. 无 marker → legacy in-place ─────────────────────────────────────────
+// ── 3. 无 marker + 旧位置仍有状态 → legacy in-place ────────────────────────
 
 test('3. without any marker resolution falls back to the harness root (legacy in-place)', () => {
   const base = makeCase('legacy');
+  // M2 起 legacy 一级要求旧位置真的有状态目录：seedHarnessRoot 建的 var/ 与 .wright/ 即前提
   const harnessRoot = seedHarnessRoot(path.join(base, 'repo'));
   const homeDir = path.join(base, 'home');
   fs.mkdirSync(homeDir, { recursive: true });
@@ -259,7 +266,9 @@ test('8. migration execute moves both trees and writes the marker plus the moved
   const note = fs.readFileSync(path.join(harnessRoot, MOVED_NOTE), 'utf8');
   assert.match(note, new RegExp(target.replace(/[\\^$*+?.()|[\]{}]/g, '\\$&')));
 
-  // 目标不在默认位置时，只有 HARNESS_STATE_DIR 能指向它；否则仍是 legacy
+  // 目标不在默认位置时，只有 HARNESS_STATE_DIR 能指向它；否则仍是 legacy。
+  // M2 起 legacy 一级以旧位置存在 var/.wright 为前提，迁移已把它们搬走，这里重建同一前提。
+  seedHarnessRoot(harnessRoot);
   assert.equal(
     resolveStateRoot({ env: {}, harnessRoot, homeDir: base }),
     path.resolve(harnessRoot),
@@ -323,4 +332,123 @@ test('10. a failing rename falls back to recursive copy plus source removal', ()
   assert.equal(fs.existsSync(path.join(harnessRoot, 'var')), false, 'copy fallback must still delete the source');
   assert.equal(fs.existsSync(path.join(harnessRoot, '.wright')), false, 'copy fallback must still delete the source');
   assert.equal(readStateMarker(target).layoutVersion, STATE_LAYOUT_VERSION);
+});
+
+// ── 11. 旧位置没有状态目录 → 不再回落 harnessRoot ──────────────────────────
+
+test('11. an empty harness root no longer captures state (falls through to the default dir)', () => {
+  const base = makeCase('no-legacy');
+  const harnessRoot = path.join(base, 'repo');
+  fs.mkdirSync(harnessRoot, { recursive: true });
+  fs.writeFileSync(path.join(harnessRoot, 'README.md'), 'code only', 'utf8');
+  const homeDir = path.join(base, 'home');
+  fs.mkdirSync(homeDir, { recursive: true });
+
+  const resolved = resolveStateRoot({ env: {}, harnessRoot, homeDir });
+  assert.equal(resolved, path.resolve(homeDir, DEFAULT_STATE_DIRNAME),
+    'a harness root without var/ or .wright/ must not become the state root');
+  assert.notEqual(resolved, path.resolve(harnessRoot));
+  assert.equal(fs.existsSync(resolved), false, 'resolution must not create the default dir');
+
+  // 只要旧位置有其中任意一个目录，legacy 一级就重新成立
+  for (const dirname of ['var', '.wright']) {
+    const legacyRoot = path.join(base, `legacy-${dirname.replace('.', '')}`);
+    fs.mkdirSync(path.join(legacyRoot, dirname), { recursive: true });
+    assert.equal(
+      resolveStateRoot({ env: {}, harnessRoot: legacyRoot, homeDir }),
+      path.resolve(legacyRoot),
+      `${dirname}/ alone must keep legacy in-place resolution`,
+    );
+  }
+});
+
+// ── 12. CLAUDE_PLUGIN_DATA 生效，但低于 legacy ─────────────────────────────
+
+test('12. CLAUDE_PLUGIN_DATA is honoured for fresh installs but never outranks legacy state', () => {
+  const base = makeCase('plugin-data');
+  const homeDir = path.join(base, 'home');
+  fs.mkdirSync(homeDir, { recursive: true });
+  const pluginData = path.join(base, 'plugins', 'data', 'logical-paradox');
+  const env = { CLAUDE_PLUGIN_DATA: pluginData };
+
+  const freshRoot = path.join(base, 'fresh-repo');
+  fs.mkdirSync(freshRoot, { recursive: true });
+  assert.equal(
+    resolveStateRoot({ env, harnessRoot: freshRoot, homeDir }),
+    path.resolve(pluginData),
+    'a plugin install with no legacy state must use CLAUDE_PLUGIN_DATA',
+  );
+  assert.equal(fs.existsSync(pluginData), false, 'resolution must not create CLAUDE_PLUGIN_DATA');
+
+  const legacyRoot = seedHarnessRoot(path.join(base, 'legacy-repo'));
+  assert.equal(
+    resolveStateRoot({ env, harnessRoot: legacyRoot, homeDir }),
+    path.resolve(legacyRoot),
+    'existing in-place state must outrank CLAUDE_PLUGIN_DATA',
+  );
+
+  // env 覆盖与已迁移默认目录仍然压过 CLAUDE_PLUGIN_DATA
+  const envDir = path.join(base, 'explicit');
+  assert.equal(
+    resolveStateRoot({ env: { ...env, HARNESS_STATE_DIR: envDir }, harnessRoot: freshRoot, homeDir }),
+    path.resolve(envDir),
+  );
+  const defaultRoot = path.join(homeDir, DEFAULT_STATE_DIRNAME);
+  fs.mkdirSync(defaultRoot, { recursive: true });
+  fs.writeFileSync(
+    path.join(defaultRoot, STATE_MARKER),
+    JSON.stringify({ layoutVersion: STATE_LAYOUT_VERSION }),
+    'utf8',
+  );
+  assert.equal(
+    resolveStateRoot({ env, harnessRoot: freshRoot, homeDir }),
+    path.resolve(defaultRoot),
+    'a migrated default dir must outrank CLAUDE_PLUGIN_DATA',
+  );
+});
+
+// ── 13. STATE_MODE 五种取值 ───────────────────────────────────────────────
+
+test('13. resolveState reports which precedence level was hit', () => {
+  const base = makeCase('state-mode');
+  const homeDir = path.join(base, 'home');
+  fs.mkdirSync(homeDir, { recursive: true });
+  const legacyRoot = seedHarnessRoot(path.join(base, 'legacy-repo'));
+  const freshRoot = path.join(base, 'fresh-repo');
+  fs.mkdirSync(freshRoot, { recursive: true });
+  const pluginData = path.join(base, 'plugin-data');
+
+  assert.deepEqual(
+    resolveState({ env: { HARNESS_STATE_DIR: path.join(base, 'explicit') }, harnessRoot: legacyRoot, homeDir }),
+    { stateRoot: path.resolve(base, 'explicit'), mode: 'env' },
+  );
+  assert.deepEqual(
+    resolveState({ env: {}, harnessRoot: legacyRoot, homeDir }),
+    { stateRoot: path.resolve(legacyRoot), mode: 'legacy' },
+  );
+  assert.deepEqual(
+    resolveState({ env: { CLAUDE_PLUGIN_DATA: pluginData }, harnessRoot: freshRoot, homeDir }),
+    { stateRoot: path.resolve(pluginData), mode: 'plugin-data' },
+  );
+  assert.deepEqual(
+    resolveState({ env: {}, harnessRoot: freshRoot, homeDir }),
+    { stateRoot: path.resolve(homeDir, DEFAULT_STATE_DIRNAME), mode: 'default' },
+  );
+
+  const defaultRoot = path.join(homeDir, DEFAULT_STATE_DIRNAME);
+  fs.mkdirSync(defaultRoot, { recursive: true });
+  fs.writeFileSync(
+    path.join(defaultRoot, STATE_MARKER),
+    JSON.stringify({ layoutVersion: STATE_LAYOUT_VERSION }),
+    'utf8',
+  );
+  assert.deepEqual(
+    resolveState({ env: {}, harnessRoot: legacyRoot, homeDir }),
+    { stateRoot: path.resolve(defaultRoot), mode: 'migrated' },
+  );
+
+  assert.ok(
+    ['env', 'migrated', 'legacy', 'plugin-data', 'default'].includes(STATE_MODE),
+    `exported STATE_MODE must be one of the five levels, got ${STATE_MODE}`,
+  );
 });

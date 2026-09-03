@@ -6,6 +6,7 @@ const stateResume = require('../state-resume.cjs');
 const contextResume = require('../context-resume.cjs');
 const dreamStartup = require('../dream-startup-inject.cjs');
 const isolation = require('./isolation-check.cjs');
+const pluginSessionContext = require('./plugin-session-context.cjs');
 
 const SUPPORTED_SOURCES = Object.freeze(['startup', 'resume', 'clear', 'compact', 'fork']);
 
@@ -35,6 +36,12 @@ function contextInjectOutput() {
 
 function defaultComponents() {
   return {
+    coreCapsule(payload, io) {
+      return pluginSessionContext.coreCapsule(payload, io);
+    },
+    registrationOverlap(payload, io) {
+      return pluginSessionContext.registrationOverlap(payload, io);
+    },
     stateResume() {
       const output = stateResume.main({ emit: false });
       const context = output?.handoffBrief
@@ -86,8 +93,9 @@ function runSessionBootstrap(raw, opts = {}) {
     return { exitCode: 0, payload, source, componentsRun: [] };
   }
 
-  const components = opts.components || defaultComponents();
-  const route = ['stateResume', 'contextResumeInject', 'dreamStartup'];
+  // 注入的 components 覆盖默认实现；未覆盖的名字仍走默认，插件组件因此永远在路由上。
+  const components = { ...defaultComponents(), ...(opts.components || {}) };
+  const route = ['coreCapsule', 'registrationOverlap', 'stateResume', 'contextResumeInject', 'dreamStartup'];
   if (source === 'startup') route.push('isolationCheck');
 
   let exitCode = 0;

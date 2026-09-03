@@ -2453,7 +2453,9 @@ const AUDIT_REMEDIATION_CONTRACTS = [
   ['weekly report wiring', 'weekly-report-contract.cjs', 180000],
   ['transport normalization contract', 'transport-contract.test.cjs', 30000],
   ['workbuddy render target', 'render-workbuddy-contract.test.cjs', 30000],
+  ['claude code plugin manifest', 'plugin-manifest-contract.test.cjs', 300000],
   ['harness state root and migration', 'harness-state-contract.test.cjs', 60000],
+  ['plugin mode session context', 'plugin-mode-contract.test.cjs', 30000],
   ['git integrity guard', 'git-integrity-guard-contract.cjs', 120000],
 ];
 

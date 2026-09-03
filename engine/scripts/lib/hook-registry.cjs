@@ -9,6 +9,8 @@ const { HARNESS_ROOT, settingsFiles } = require('./harness-root.cjs');
 const HOME = HARNESS_ROOT;
 const DEFAULT_SETTINGS_FILES = settingsFiles(HOME);
 const MANIFEST_RELATIVE_PATH = path.join('engine', 'hooks', 'manifest.json');
+const PLUGIN_HOOKS_RELATIVE_PATH = path.join('engine', 'hooks', 'plugin.hooks.json');
+const PLUGIN_ROOT_PLACEHOLDER = /\$\{CLAUDE_PLUGIN_ROOT\}/g;
 const TOOL_EVENTS = new Set(['PreToolUse', 'PostToolUse', 'PostToolUseFailure']);
 const COMPOSITE_HOOKS = new Set([
   'preflight-router.cjs',
@@ -51,18 +53,25 @@ function readSettingsFiles(files = DEFAULT_SETTINGS_FILES) {
   return { config, loadedFiles };
 }
 
-function collectHookEntries(opts = {}) {
-  const files = opts.files || settingsFiles(opts.root || HOME);
-  const { config } = opts.config ? { config: opts.config } : readSettingsFiles(files);
-  const hooks = config.hooks || {};
-  const entries = [];
+/**
+ * 插件 hooks.json 用 exec 形式（command:"node", args:[...]），settings.json 用整行命令。
+ * 归一成命令行字符串，后续的 scriptRefsForCommand / manifest 交叉核对不必区分来源。
+ */
+function hookCommandLine(hook) {
+  const command = hook.command || hook.run || '';
+  if (!command) return '';
+  const args = Array.isArray(hook.args) ? hook.args : [];
+  if (!args.length) return command;
+  return [command, ...args.map(arg => (/\s/.test(String(arg)) ? `"${arg}"` : String(arg)))].join(' ');
+}
 
-  for (const [point, groups] of Object.entries(hooks)) {
+function appendHookEntries(entries, hooks, source) {
+  for (const [point, groups] of Object.entries(hooks || {})) {
     const arr = Array.isArray(groups) ? groups : [];
     for (const [groupIndex, group] of arr.entries()) {
       const hookList = Array.isArray(group.hooks) ? group.hooks : [group];
       for (const [hookIndex, hook] of hookList.entries()) {
-        const command = hook.command || hook.run || '';
+        const command = hookCommandLine(hook);
         if (!command) continue;
         entries.push({
           point,
@@ -72,10 +81,48 @@ function collectHookEntries(opts = {}) {
           isAsync: Boolean(hook.async || group.async),
           groupIndex,
           hookIndex,
+          source,
           raw: hook,
         });
       }
     }
+  }
+  return entries;
+}
+
+/**
+ * 插件来源默认关闭 —— 只读 settings 文件是历史行为。
+ * 通过 opts.includePlugin 或 env CLAUDE_HARNESS_REGISTRY_INCLUDE_PLUGIN=1 打开。
+ */
+function pluginSourceEnabled(opts = {}) {
+  if (typeof opts.includePlugin === 'boolean') return opts.includePlugin;
+  return String(process.env.CLAUDE_HARNESS_REGISTRY_INCLUDE_PLUGIN || '') === '1';
+}
+
+/**
+ * 读取入库的 engine/hooks/plugin.hooks.json，把 ${CLAUDE_PLUGIN_ROOT} 展开为 root。
+ * 文件缺失不是错误（未渲染的克隆），返回空 hooks。
+ */
+function readPluginHooks(opts = {}) {
+  const root = opts.root || HOME;
+  const file = opts.pluginPath || path.join(root, PLUGIN_HOOKS_RELATIVE_PATH);
+  if (!fs.existsSync(file)) return { hooks: {}, file: null };
+  const raw = fs.readFileSync(file, 'utf8')
+    .replace(PLUGIN_ROOT_PLACEHOLDER, String(root).replace(/\\/g, '/').replace(/\/+$/, ''));
+  const parsed = JSON.parse(raw);
+  return { hooks: parsed.hooks || {}, file };
+}
+
+function collectHookEntries(opts = {}) {
+  const files = opts.files || settingsFiles(opts.root || HOME);
+  const { config } = opts.config ? { config: opts.config } : readSettingsFiles(files);
+  const entries = [];
+
+  appendHookEntries(entries, config.hooks || {}, 'settings');
+
+  if (pluginSourceEnabled(opts)) {
+    const { hooks } = readPluginHooks({ root: opts.root || HOME, pluginPath: opts.pluginPath });
+    appendHookEntries(entries, hooks, 'plugin');
   }
 
   return entries;
@@ -263,6 +310,8 @@ function validateHookManifest(opts = {}) {
     root,
     ...(opts.files ? { files: opts.files } : {}),
     ...(opts.config ? { config: opts.config } : {}),
+    ...(typeof opts.includePlugin === 'boolean' ? { includePlugin: opts.includePlugin } : {}),
+    ...(opts.pluginPath ? { pluginPath: opts.pluginPath } : {}),
   });
   const errors = [];
   const declared = new Map();
@@ -426,8 +475,12 @@ module.exports = {
   HOME,
   DEFAULT_SETTINGS_FILES,
   MANIFEST_RELATIVE_PATH,
+  PLUGIN_HOOKS_RELATIVE_PATH,
   COMPOSITE_HOOKS,
   parseCommandLine,
+  hookCommandLine,
+  pluginSourceEnabled,
+  readPluginHooks,
   harnessRelativeParts,
   batchScriptsFromCommand,
   mergeHookConfigs,
