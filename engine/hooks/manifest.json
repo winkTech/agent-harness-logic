@@ -59,6 +59,7 @@
     {
       "script": "engine/hooks/git/git-integrity-guard.cjs",
       "kind": "maintenance",
+      "tier": "core",
       "events": [
         "SessionStart",
         "Stop"
@@ -84,6 +85,7 @@
     {
       "script": "engine/hooks/learning/postflight-observer.cjs",
       "kind": "observer",
+      "tier": "core",
       "events": [
         "PostToolUse",
         "PostToolUseFailure",
@@ -120,6 +122,7 @@
     {
       "script": "engine/scripts/hooks/postflight-router.cjs",
       "kind": "router",
+      "tier": "core",
       "events": [
         "PostToolUse",
         "PostToolUseFailure"
@@ -149,6 +152,7 @@
     {
       "script": "engine/scripts/hooks/prompt-context.cjs",
       "kind": "router",
+      "tier": "core",
       "events": [
         "UserPromptSubmit"
       ],
@@ -175,6 +179,7 @@
     {
       "script": "engine/scripts/pre-compact.cjs",
       "kind": "checkpoint",
+      "tier": "core",
       "events": [
         "PreCompact"
       ],
@@ -199,6 +204,7 @@
     {
       "script": "engine/scripts/hooks/preflight-router.cjs",
       "kind": "router",
+      "tier": "core",
       "events": [
         "PreToolUse"
       ],
@@ -229,6 +235,7 @@
     {
       "script": "engine/scripts/hooks/subagent-verdict.cjs",
       "kind": "observer",
+      "tier": "core",
       "events": [
         "SubagentStop"
       ],
@@ -252,6 +259,7 @@
     {
       "script": "engine/scripts/hooks/loop-controller.cjs",
       "kind": "controller",
+      "tier": "lab",
       "events": [
         "Stop"
       ],
@@ -275,6 +283,7 @@
     {
       "script": "engine/scripts/hooks/codegraph-sync.cjs",
       "kind": "indexer",
+      "tier": "codegraph",
       "events": [
         "SessionStart",
         "PostToolUse"
@@ -302,6 +311,7 @@
     {
       "script": "engine/scripts/hooks/session-bootstrap.cjs",
       "kind": "router",
+      "tier": "core",
       "events": [
         "SessionStart"
       ],
@@ -331,6 +341,7 @@
     {
       "script": "engine/scripts/memory-knowledge-maintenance.cjs",
       "kind": "maintenance",
+      "tier": "core",
       "events": [
         "SessionStart"
       ],
@@ -358,6 +369,7 @@
     {
       "script": "engine/scripts/hooks/stop-summary.cjs",
       "kind": "router",
+      "tier": "core",
       "events": [
         "Stop"
       ],

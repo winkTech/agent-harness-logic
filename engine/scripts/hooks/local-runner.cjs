@@ -84,15 +84,15 @@ function shouldSkipScript(scriptName, payload) {
     return !['Write', 'Edit', 'MultiEdit'].includes(tool) || !/\.(sv|v|py)$/i.test(filePath);
   }
 
-  if (base === 'pre-commit-lint.js') {
+  if (base === 'pre-commit-lint.cjs') {
     return !/\bgit\s+commit\b/i.test(command);
   }
 
-  if (base === 'diff-size-gate.js') {
+  if (base === 'diff-size-gate.cjs') {
     return Boolean(command) && isReadOnlyShellCommand(command);
   }
 
-  if (base === 'resource-budget-gate.js') {
+  if (base === 'resource-budget-gate.cjs') {
     return Boolean(command)
       && isReadOnlyShellCommand(command)
       && !/\b(vivado|xsim|vsim|pytest|npm\s+(?:test|run)|python|node)\b/i.test(command);

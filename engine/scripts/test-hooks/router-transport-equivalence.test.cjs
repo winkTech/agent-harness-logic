@@ -28,11 +28,27 @@
 
 process.env.CLAUDE_HARNESS_NO_PERSIST = '1';
 
+// 状态根隔离（必须在下方 require 路由器之前）：路由器的重复失败检测会读取
+// 状态根下累积的真实事件历史——本机反复跑过该用例后，PostToolUseFailure Bash
+// 会被"同一错误签名第二次出现"逻辑判 warn 而非 allow，10s 慢路径即历史扫描。
+// harness-state 在模块加载时解析一次，因此这里把 HARNESS_STATE_DIR 指向全新
+// 临时目录，用例看到的是零事件的干净状态（与 CI / 新克隆等价）。
+const fs = require('node:fs');
+const os = require('node:os');
+const path = require('node:path');
+process.env.HARNESS_STATE_DIR = fs.mkdtempSync(path.join(os.tmpdir(), 'router-equiv-'));
+
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const path = require('node:path');
 
 const { HARNESS_ROOT } = require('../lib/harness-root.cjs');
+
+// best-effort 清理；状态目录即使残留也在系统临时目录，不影响任何判定。
+test.after(() => {
+  try {
+    fs.rmSync(process.env.HARNESS_STATE_DIR, { recursive: true, force: true });
+  } catch { /* Windows 句柄占用时留待系统清理 */ }
+});
 
 const hooksRoot = path.join(HARNESS_ROOT, 'engine', 'scripts', 'hooks');
 const preflight = require(path.join(hooksRoot, 'preflight-router.cjs'));

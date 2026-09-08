@@ -1,0 +1,118 @@
+# M4：延迟预算分级硬限（M4a）与插件 Pack 结构（M4b）设计
+
+## Metadata
+
+| Field | Value |
+|---|---|
+| Date | 2026-09-08 |
+| Status | M4a 已实现待提交；M4b tier 分类法已铺、目录重构未启动 |
+| Repository | `C:\Users\Lihan\.claude`（分支 `feat/logical-paradox-m1-state-dir`） |
+| 决策来源 | 2026-09 会话收敛决策（M4a 档位 + M4b pack 划分），本文档为其首次落库固化 |
+| 前序里程碑 | M1 状态分离（c619a47）、M2 Claude Code 插件形态（9fb59c8）、M3 传输层闭环（5357877） |
+
+---
+
+## 1. M4a：延迟预算分级硬限
+
+### 1.1 决策（已收敛）
+
+按同步热路径入口分级设定 **warm p95 硬限**，超标 exit 1：
+
+| 档位 | 硬限 | 依据 |
+|---|---|---|
+| `preflight-router` | 200 ms | PreToolUse 关键路径，任何写操作前必经 |
+| `postflight-router` | 250 ms | PostToolUse 结算路径 |
+| `prompt-context` | 300 ms | UserPromptSubmit 注入路径 |
+| 其余**同步**入口 | 500 ms | 兜底档 |
+| async 入口 | 不计入 | 平台不阻塞等待，延迟不进热路径 |
+
+档位与 async 判定的**单一来源**是 `engine/scripts/lib/hook-latency.cjs`（`budgetFor` / `registrationIndex` / `latencyScale`）；`env CLAUDE_HARNESS_LATENCY_SCALE` 整体放大预算（CI 用 3，容忍 runner 性能差异）。
+
+与 `docs/rules/05-harness.md` §10 发布晋级门槛的关系（两套数字、两种用途，不得混用）：
+
+| 数字集 | 用途 | 出处 |
+|---|---|---|
+| M4a 档位（200/250/300/500） | **per-entry 硬限**，`bench-hooks --sla` 与 CI 强制 | `lib/hook-latency.cjs` |
+| Read ≤150 / Edit+Write Pre+Post ≤250 / 上下文 ≤600 字符 | shadow → enforce **晋级门槛** | `docs/rules/05-harness.md` §10 |
+
+### 1.2 实现现状（2026-09-08 核实）
+
+| 件 | 状态 | 证据 |
+|---|---|---|
+| 档位定义 + report() 预算判定 | **已提交**（b543355） | `engine/scripts/lib/hook-latency.cjs` |
+| `bench-hooks --quick --sla` 档位硬门 | 工作树（README 未提交） | README.md +3 行 |
+| SLA 契约测试 | 工作树未跟踪，**9/9 通过** | `test-hooks/hook-latency-sla-contract.test.cjs` |
+| 门禁降级契约测试 | 工作树未跟踪，**7/7 通过** | `test-hooks/gate-load-degradation-contract.test.cjs` |
+| CI 接线 | 工作树（+53 行） | `engine/scripts/harness-ci.cjs` |
+
+**M4a 剩余动作**：在途变更提交（见 §4 未决问题 #1）。
+
+---
+
+## 2. M4b：插件 Pack 结构
+
+### 2.1 决策（已收敛）
+
+- skills / agents / MCP 按域拆为 `packs/fpga` 与 `packs/office` 两类 pack；
+- **engine（hooks、diagnostics、状态层）驻留 Core**，不进任何 pack；
+- 市场渠道**仅复制各插件自有目录**（per-plugin），Core 不随渠道分发。
+
+### 2.2 tier 分类法（已铺，工作树未提交）
+
+`engine/hooks/manifest.json` 每个 entry 已加 `tier` 字段，`docs/rules/05-harness.md` 已记录分类法：
+
+| tier | 语义 |
+|---|---|
+| `core` | 任何项目都跑 |
+| `fpga` | 仅 `.sv/.v` 写入时唤醒 |
+| `codegraph` | 图索引 |
+| `office` | 文档域 |
+| `lab` | 实验性，不得 `active: true` |
+
+当前标注：core ×10、codegraph ×1（codegraph-sync）、lab ×1（loop-controller）。fail-closed 白名单只有 `bash-safety` 与 `file-protection`，其余门禁 fail-open 降级为 advisory。
+
+### 2.3 目录迁移映射（2026-09-08 全图盘点结果）
+
+| 迁入 | 现位置 | 备注 |
+|---|---|---|
+| **packs/fpga/skills/** | `skills/{vivado-flow, rtl-gen, hdl-coding, python-hardware-debug}` | 4 个 FPGA 域技能 |
+| **packs/fpga/agents/** | `agents/domain/`（logic-engineer、algorithm-engineer）+ `agents/compound/`（ce-* 评审团 4 个） | 不新建 `fpga-algorithm-engineer`，现有专家即等价物 |
+| **packs/fpga/scripts/**（或经 skills 引用驻留 engine） | `engine/scripts/{fpga-timing-parser, fpga-xdc-parser}.cjs`、`lib/module-topology.cjs` | DAG 可视化复用 `code-graph-index`/`cg-queries` 加渲染层，不另起炉灶 |
+| **packs/fpga/references/** | `engineering-assets/reference-assets/`（2875 文件） | 见 §4 未决问题 #3 |
+| **packs/office/skills/** | `skills/{doc-gen, markitdown-converter, pdf, presentation}` | 4 个文档域技能 |
+| **Core 保留** | `engine/` 全部、hooks、diagnostics、`schemas/`、`docs/rules/`、通用技能（code-review、debugging、git-expert、tdd…） | 通用域不迁移 |
+
+规划中的新增（对照 `Desktop/fpga_harness_plan.md` v0.1 的裁决）：
+
+| 候选 | 裁决 | 说明 |
+|---|---|---|
+| `xdc-constraint-gen` | **做**，packs/fpga 首个新技能 | 唯一真实缺口：现有 `fpga-xdc-parser.cjs` 只解析不生成；从解析器反推三套模板（clock-period / pin-assignment / timing-exception） |
+| vivado-report-parser | **不做** | `fpga-timing-parser.cjs` 已覆盖 WNS/TNS/Fmax，避免重复实现 |
+| `fpga-algorithm-engineer` 新专家 | **不做** | 与 domain/compound 现有专家重复 |
+| bin/ 工具目录 | **不做** | engine/scripts + skills/*/scripts 已覆盖 |
+| PSS 检测 / 频偏估计 MATLAB | 归 packs/fpga 项目资产 | 按需创建，不预建 |
+
+### 2.4 迁移步骤（M4b 目录重构，未启动）
+
+1. 前置：在途变更（§1.2 表中工作树项）全部提交、`run-all-tests` 全绿、`render-hook-settings --check` 0 漂移。
+2. 建 `packs/fpga/`、`packs/office/` 骨架，`git mv` 迁移 §2.3 表中条目（保留历史）。
+3. 更新引用方：manifest tier 标注与 pack 归属对齐；`.claude-plugin/` 清单、`plugins.lock.json`、skills 互引路径。
+4. 市场渠道脚本改为仅复制 per-plugin 目录（Core 不出仓）。
+5. 验收：`run-all-tests` 全绿；`render-hook-settings --check` 0 漂移；`plugin-manifest-contract` 通过；`manifest` 交叉核对 0 error；干净 worktree（剥离 gitignore 产物 + 本机工具链）在 Windows 与 CI matrix 各 OS 上 exit 0。
+
+---
+
+## 3. 2026-09-08 执行记录
+
+| 项 | 结果 |
+|---|---|
+| M1 收尾复核 | **非测试代码已闭环**。此前记档的 4 处"var/ 硬编码残留"逐处核实为误报：两 guard 的 `projectRoot/var/gates` 是项目级候选路径（eval 流写入目标，M1 有意保留）；`bench-hooks.cjs:39` 是 tmpdir 基准沙箱；`ctx-checkpoint.sh` 的 env+legacy 两级回落是 `engine/config.path.sh:10-11` 明文记载的 shell 侧既定设计 |
+| hook 注册漂移 | **发现并修复**：本机 `settings.json` 盘符大小写（`C:/` vs `c:/`）导致 8 事件全判漂移，按模板权威源重渲染后 `--check` 0 漂移（settings.json / workbuddy.hooks.json / plugin.hooks.json 三产物一致） |
+| 契约验证 | hook-latency-sla 9/9、gate-load-degradation 7/7、guard-coverage 12/12（51 cases） |
+
+## 4. 未决问题（阻塞项按序）
+
+1. **在途变更归属与提交**：工作树含 M4a 收尾（2 个未跟踪测试、harness-ci +53、README/manifest/05-harness diff）+ 4 个 hook 脚本 `.js→.cjs` 暂存重命名 + `skills/grill-me` 暂存删除。这些来自另一会话的在途工作，需其完成或由用户裁决后统一提交，M4b 目录重构以其为前置。
+2. **push 冲突**：M4b 属重大结构变更，按仓库规则"重大变更必须 push"，与当前"暂不 push"硬约束冲突，需用户显式裁决优先级。
+3. **reference-assets 归属**：2875 个文件随 packs/fpga 外移还是 Core 只留 catalog 索引，影响仓库体积（当前入库文件 ~81% 在 engineering-assets），迁移前需定方案。
+4. `agents-archive/`、`rules-archive/` 未纳入本次盘点，迁移时按需补查。

@@ -3,7 +3,7 @@
 /**
  * engine/scripts/lib/lint-utils.cjs — Lint 工具共享库 (v2)。
  *
- * 被 pre-commit-lint.js 和 lint-auto-gate.js 共用。
+ * 被 pre-commit-lint.cjs 和 lint-auto-gate.cjs 共用。
  * 职责: 文件过滤 + EDA 工具链自适应 + 格式化输出。
  *
  * 增强 v2:

@@ -148,6 +148,50 @@ function checkPythonSyntax(files) {
   return [result.error?.message || result.stdout || result.stderr || result.signal || 'Python syntax check failed'];
 }
 
+// Hook 延迟档位硬门 (M4a): warm p95 按 hook-latency.cjs 的档位表判定。
+// CI 机器比 dev 机器慢, 用 CLAUDE_HARNESS_LATENCY_SCALE=3 整体放大预算 ——
+// 放大的是绝对阈值, 档位之间的相对关系不变。
+// 无 hook 注册 / 无可测同步入口时**显式 skip 并说明原因**, 不静默通过 (规则 8)。
+function runLatencySla() {
+  const script = path.join(HARNESS_ROOT, 'engine', 'scripts', 'lib', 'bench-hooks.cjs');
+  const result = spawnSync(process.execPath, [script, '--quick', '--json', '--sla'], {
+    cwd: HARNESS_ROOT,
+    encoding: 'utf8',
+    timeout: 180000,
+    windowsHide: true,
+    env: {
+      ...process.env,
+      CLAUDE_HARNESS_ROOT: HARNESS_ROOT,
+      CLAUDE_HARNESS_LATENCY_SCALE: '3',
+      CLAUDE_HARNESS_NO_PERSIST: '1',
+      CLAUDE_NO_DIAGNOSTIC_WRITES: '1',
+    },
+  });
+  if (result.error || result.signal) {
+    return { errors: [`hook latency SLA: bench-hooks 未能运行 — ${result.error?.message || `signal=${result.signal}`}`] };
+  }
+  let parsed;
+  try {
+    parsed = JSON.parse(result.stdout || '');
+  } catch (error) {
+    return { errors: [`hook latency SLA: bench-hooks 输出不是 JSON — ${error.message} ${(result.stderr || result.stdout || '').slice(0, 200)}`] };
+  }
+  // settings.json 被 .gitignore 忽略, 新克隆/CI 上可能一条 hook 都注册不到。
+  if (parsed.error) return { skip: parsed.reason || parsed.error };
+  const sla = parsed.sla;
+  if (!sla) return { errors: ['hook latency SLA: bench-hooks --sla 未产出 sla 字段'] };
+  if (sla.checks.length === 0) {
+    const reasons = [...new Set((sla.skipped || []).map(entry => entry.reason))].join(', ') || 'unknown';
+    return { skip: `无可测同步入口 (${sla.skipped?.length || 0} 条全部跳过: ${reasons})` };
+  }
+  if (!sla.pass) {
+    return {
+      errors: sla.violations.map(v => `hook latency SLA: ${v.script} warm p95 ${v.warm_p95_ms}ms > 预算 ${v.budget_ms}ms (档位 ${v.tier}, scale ${sla.scale})`),
+    };
+  }
+  return { sla };
+}
+
 function runCoverage() {
   const script = path.join(HARNESS_ROOT, 'engine', 'scripts', 'coverage-runner.cjs');
   return spawnSync(process.execPath, [script, '--ci', HARNESS_ROOT], {
@@ -197,6 +241,15 @@ function main() {
   const schemas = validateSchemaCatalog();
   if (schemas.errors.length > 0) fail(schemas.errors);
   console.log(`[harness-ci] schema catalog passed (${schemas.files.length} schemas)`);
+
+  const latency = runLatencySla();
+  if (latency.errors) fail(latency.errors);
+  if (latency.skip) {
+    console.log(`[harness-ci] hook latency SLA skipped — ${latency.skip}`);
+  } else {
+    const worst = [...latency.sla.checks].sort((a, b) => (b.warm_p95_ms / b.budget_ms) - (a.warm_p95_ms / a.budget_ms))[0];
+    console.log(`[harness-ci] hook latency SLA passed (${latency.sla.checks.length} entries, scale ${latency.sla.scale}, worst ${worst.script} ${worst.warm_p95_ms}ms/${worst.budget_ms}ms)`);
+  }
 
   const coverage = runCoverage();
   if (coverage.stdout) process.stdout.write(coverage.stdout);

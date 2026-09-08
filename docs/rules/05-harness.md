@@ -137,6 +137,9 @@ WSL 注意：`/tmp` 会被 systemd 清理，跨调用要用 `/var/tmp`；参数�
 | R2 | 新模块、接口或共享核心变化、重复失败、影响半径不确定 | shadow 短提示；不追溯阻断已执行动作 | task contract + affected regression |
 | R3 | 破坏性、保护目标、跨项目、发布/提交签核 | enforce 下无精确授权即阻断 | exact authorization + fresh signoff |
 
+- **门禁分层**：manifest entry 与 preflight 门禁 spec 都必填 `tier` ∈ {`core` 任何项目都跑, `fpga` 仅 `.sv/.v` 写入时唤醒, `codegraph` 图索引, `office` 文档域, `lab` 实验性且不得 `active: true`}。
+- **fail-closed 白名单只有 `bash-safety` 与 `file-protection`**：其余门禁一律 fail-open —— 门禁自身加载失败或抛错降级为 advisory 并写诊断，只有门禁正常返回的 block 才阻断；路由自身崩溃时也只用这两个守卫兜底判定（`fallbackDecision`），否则以 degraded 放行。
+
 执行合同：
 
 - Harness 只给出最低风险；Agent 可以升级，不能降级。降级只能由用户提供目标精确、限时、可审计的授权。

@@ -23,10 +23,13 @@ function main() {
     'hook manifest must declare active consumers');
 
   const requiredFields = [
-    'script', 'kind', 'events', 'tools', 'payloadSchema', 'transports', 'blocking',
+    'script', 'kind', 'tier', 'events', 'tools', 'payloadSchema', 'transports', 'blocking',
     'sideEffects', 'timeoutSeconds', 'owner', 'fixture', 'active',
   ];
   const ALLOWED_TRANSPORTS = new Set(['claude-code', 'workbuddy', 'codex']);
+  // M4 分层：tier 决定 entry 属于哪个分发单元。lab 是未成熟实验位，
+  // 只能停在 active:false —— 一条 active 的 lab hook 等于把实验推给所有安装者。
+  const ALLOWED_TIERS = new Set(['core', 'fpga', 'codegraph', 'office', 'lab']);
   for (const entry of manifest.entries) {
     for (const field of requiredFields) {
       assert.ok(Object.hasOwn(entry, field), `${entry.script || '<unknown>'} missing ${field}`);
@@ -43,6 +46,10 @@ function main() {
       `${entry.script} must support at least one event`);
     assert.ok(Array.isArray(entry.tools) && entry.tools.length > 0,
       `${entry.script} must declare tool matchers`);
+    assert.ok(ALLOWED_TIERS.has(entry.tier),
+      `${entry.script} tier '${entry.tier}' is not one of ${[...ALLOWED_TIERS].join(', ')}`);
+    assert.ok(!(entry.active === true && entry.tier === 'lab'),
+      `${entry.script} is tier 'lab' and must not be active`);
     assert.ok(Array.isArray(entry.sideEffects), `${entry.script} sideEffects must be an array`);
     assert.equal(typeof entry.blocking, 'boolean', `${entry.script} blocking must be boolean`);
     assert.equal(typeof entry.active, 'boolean', `${entry.script} active must be boolean`);

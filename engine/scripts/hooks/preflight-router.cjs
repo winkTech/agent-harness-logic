@@ -282,36 +282,70 @@ async function runGate(runtime, spec) {
   }
 }
 
-function shellSpecs(command) {
+const DEFAULT_LOADERS = {
+  'agent-transparency-ledger': () => require('./agent-transparency-ledger.cjs'),
+  'tool-action-contract-gate': () => require('./tool-action-contract-gate.cjs'),
+  'progress-watchdog': () => require('../../hooks/session/progress-watchdog.cjs'),
+  'bash-safety-guard': () => require('./bash-safety-guard.cjs'),
+  'file-protection-guard': () => require('./file-protection-guard.cjs'),
+};
+
+/** 取模块加载器；opts.loaders 可注入（契约测试用），否则用默认 require。 */
+function loaderFor(opts, key) {
+  const injected = opts && opts.loaders ? opts.loaders[key] : undefined;
+  return typeof injected === 'function' ? injected : DEFAULT_LOADERS[key];
+}
+
+/**
+ * 受保护加载：模块加载失败时记一条 warn 诊断并返回 null，由调用方跳过该段继续。
+ * 裸 require 失败会让路由进程 fatal → 全机 exit 2（见 memory/learnings/hot-path-hook-edit-atomicity.md）。
+ */
+function loadGuarded(runtime, source, loader) {
+  try {
+    if (typeof loader !== 'function') throw new Error(`no loader registered for ${source}`);
+    const moduleValue = loader();
+    if (!moduleValue) throw new Error('module export is empty');
+    return moduleValue;
+  } catch (error) {
+    appendResult(runtime, {
+      source,
+      decision: 'warn',
+      diagnostics: [`load failed: ${error.stack || error.message}`],
+    });
+    return null;
+  }
+}
+
+function shellSpecs(command, opts = {}) {
   const { gitSubcommand } = require('./verification-gate.cjs');
   const gitAction = gitSubcommand(command);
   const specs = [
-    { source: 'bash-safety', failClosed: true, load: () => require('./bash-safety-guard.cjs') },
-    { source: 'fix-in-place', failClosed: false, load: () => require('../../hooks/safety/fix-in-place-guard.cjs') },
-    { source: 'verification-gate', failClosed: false, load: () => require('./verification-gate.cjs') },
+    { source: 'bash-safety', tier: 'core', failClosed: true, load: loaderFor(opts, 'bash-safety-guard') },
+    { source: 'fix-in-place', tier: 'core', failClosed: false, load: () => require('../../hooks/safety/fix-in-place-guard.cjs') },
+    { source: 'verification-gate', tier: 'core', failClosed: false, load: () => require('./verification-gate.cjs') },
   ];
   if (gitAction === 'commit') {
     // diff-size 在 commit 时只跑范围溢出检查 —— 噪声要在进历史之前说, 等到 push
     // 才提示已经晚了。规模阈值仍只在 push 时按分支累计判定。
     specs.push(
-      { source: 'diff-size', failClosed: false, load: () => require('./diff-size-gate.js') },
-      { source: 'resource-budget', failClosed: false, load: () => require('./resource-budget-gate.js') },
+      { source: 'diff-size', tier: 'core', failClosed: false, load: () => require('./diff-size-gate.cjs') },
+      { source: 'resource-budget', tier: 'core', failClosed: false, load: () => require('./resource-budget-gate.cjs') },
     );
   } else if (gitAction === 'push') {
     specs.push(
-      { source: 'diff-size', failClosed: false, load: () => require('./diff-size-gate.js') },
-      { source: 'resource-budget', failClosed: false, load: () => require('./resource-budget-gate.js') },
+      { source: 'diff-size', tier: 'core', failClosed: false, load: () => require('./diff-size-gate.cjs') },
+      { source: 'resource-budget', tier: 'core', failClosed: false, load: () => require('./resource-budget-gate.cjs') },
     );
   }
   return specs;
 }
 
-function writeSpecs(runtime = {}) {
+function writeSpecs(runtime = {}, opts = {}) {
   const specs = [
-    { source: 'project-directory', failClosed: true, load: () => require('./project-directory-guard.cjs') },
-    { source: 'repair-content', failClosed: true, load: () => require('./repair-content-gate.cjs') },
-    { source: 'file-protection', failClosed: true, load: () => require('./file-protection-guard.cjs') },
-    { source: 'fix-in-place', failClosed: false, load: () => require('../../hooks/safety/fix-in-place-guard.cjs') },
+    { source: 'project-directory', tier: 'core', failClosed: false, load: () => require('./project-directory-guard.cjs') },
+    { source: 'repair-content', tier: 'core', failClosed: false, load: () => require('./repair-content-gate.cjs') },
+    { source: 'file-protection', tier: 'core', failClosed: true, load: loaderFor(opts, 'file-protection-guard') },
+    { source: 'fix-in-place', tier: 'core', failClosed: false, load: () => require('../../hooks/safety/fix-in-place-guard.cjs') },
   ];
   const filePath = String(runtime.filePath || '').trim();
   const ext = path.extname(filePath).toLowerCase();
@@ -331,17 +365,17 @@ function writeSpecs(runtime = {}) {
     || /[/\\](?:golden|matlab)[/\\]/i.test(filePath);
 
   if (isRtl) {
-    specs.push({ source: 'hdl-gate', failClosed: false, load: () => require('./hdl-gate.cjs') });
+    specs.push({ source: 'hdl-gate', tier: 'fpga', failClosed: false, load: () => require('./hdl-gate.cjs') });
   }
   if (isNewFile && isCode && !excludedFromRequirements
       && (runtime.toolKey === 'write' || runtime.toolKey === 'edit')) {
-    specs.push({ source: 'requirements-gate', failClosed: false, load: () => require('./requirements-gate-guard.cjs') });
+    specs.push({ source: 'requirements-gate', tier: 'core', failClosed: false, load: () => require('./requirements-gate-guard.cjs') });
   }
   if (isNewFile && isTest && runtime.toolKey === 'write') {
-    specs.push({ source: 'verification-quality', failClosed: false, load: () => require('./verification-quality-guard.cjs') });
+    specs.push({ source: 'verification-quality', tier: 'core', failClosed: false, load: () => require('./verification-quality-guard.cjs') });
   }
   if (isRtl) {
-    specs.push({ source: 'rtl-semantic-oracle', failClosed: false, load: () => require('./rtl-semantic-oracle.cjs') });
+    specs.push({ source: 'rtl-semantic-oracle', tier: 'fpga', failClosed: false, load: () => require('./rtl-semantic-oracle.cjs') });
   }
   return specs;
 }
@@ -396,17 +430,19 @@ function watchdogResult(payload, result) {
 }
 
 async function runCommon(runtime, opts = {}) {
-  const noPersist = process.env.CLAUDE_HARNESS_NO_PERSIST === '1'
-    || process.env.CLAUDE_HARNESS_VERIFY_READONLY === '1';
+  const env = opts.env || process.env;
+  const noPersist = env.CLAUDE_HARNESS_NO_PERSIST === '1'
+    || env.CLAUDE_HARNESS_VERIFY_READONLY === '1';
   let commonResult = { source: 'common', decision: 'allow' };
 
   // Preserve the security/audit order for controlled actions: write one fresh
   // contract, validate that exact payload, and only then inspect watchdog state.
   // Read-only and ordinary low-risk calls still skip the heavy ledger path.
-  if (!noPersist && process.env.CLAUDE_TRANSPARENCY_LEDGER_DISABLED !== '1'
+  if (!noPersist && env.CLAUDE_TRANSPARENCY_LEDGER_DISABLED !== '1'
       && ACTION_CONTRACT_TOOLS.has(runtime.toolName)) {
-    const ledger = require('./agent-transparency-ledger.cjs');
-    if (ledger.mayRequireActionContract(runtime.payload)) {
+    const ledger = loadGuarded(runtime, 'agent-transparency-ledger',
+      loaderFor(opts, 'agent-transparency-ledger'));
+    if (ledger && ledger.mayRequireActionContract(runtime.payload)) {
       let context;
       try {
         context = ledger.buildContext(runtime.payload);
@@ -424,14 +460,17 @@ async function runCommon(runtime, opts = {}) {
       if (context) {
         try {
           const written = ledger.run(runtime.payload, { context });
-          const contractGate = require('./tool-action-contract-gate.cjs');
-          const result = normalizedResult('tool-action-contract', contractGate.evaluate(runtime.payload, {
-            context,
-            contract: written.artifacts?.toolActionContract,
-          }));
-          appendResult(runtime, result);
-          commonResult = result;
-          if (result.decision === 'block') return result;
+          const contractGate = loadGuarded(runtime, 'tool-action-contract',
+            loaderFor(opts, 'tool-action-contract-gate'));
+          if (contractGate) {
+            const result = normalizedResult('tool-action-contract', contractGate.evaluate(runtime.payload, {
+              context,
+              contract: written.artifacts?.toolActionContract,
+            }));
+            appendResult(runtime, result);
+            commonResult = result;
+            if (result.decision === 'block') return result;
+          }
         } catch (error) {
           const result = {
             source: 'tool-action-contract',
@@ -447,7 +486,8 @@ async function runCommon(runtime, opts = {}) {
   }
 
   if (!noPersist && !ALWAYS_READ_ONLY_TOOLS.has(runtime.toolName)) {
-    const watchdog = require('../../hooks/session/progress-watchdog.cjs');
+    const watchdog = loadGuarded(runtime, 'progress-watchdog', loaderFor(opts, 'progress-watchdog'));
+    if (!watchdog) return commonResult;
     if (watchdog.isReadOnlyAction(runtime.payload)) return commonResult;
     try {
       const result = watchdogResult(runtime.payload, watchdog.inspectProgress(runtime.payload, {
@@ -503,6 +543,59 @@ function emit(runtime, decision) {
   if (rendered.exitCode) process.exitCode = rendered.exitCode;
 }
 
+const FALLBACK_GUARDS = [
+  { source: 'bash-safety', key: 'bash-safety-guard' },
+  { source: 'file-protection', key: 'file-protection-guard' },
+];
+
+/**
+ * 崩溃兜底：路由自身抛出未知异常时，只重新判定两个 fail-closed 硬拦截。
+ * 任一 block（含其加载/判定抛错）→ exit 2；否则写 degraded 警告并以 exit 0 放行，
+ * 让运行期异常只降级、不锁死整机。
+ * @returns {{exitCode: number, decision: 'allow'|'block', stderr: string}}
+ */
+function fallbackDecision(payload, error, opts = {}) {
+  const reason = (error && (error.message || String(error))) || 'unknown error';
+  let runtime;
+  try {
+    runtime = runtimeFrom(payload || {});
+  } catch {
+    return { exitCode: 0, decision: 'allow', stderr: `[preflight-router] degraded: ${reason}\n` };
+  }
+  const lines = [];
+  let blocked = false;
+  for (const guard of FALLBACK_GUARDS) {
+    try {
+      const loader = loaderFor(opts, guard.key);
+      if (typeof loader !== 'function') throw new Error(`no loader registered for ${guard.key}`);
+      const moduleValue = loader();
+      const evaluate = moduleValue && moduleValue.evaluate;
+      if (typeof evaluate !== 'function') throw new Error('evaluate(payload, runtime) export is missing');
+      const result = normalizedResult(guard.source, evaluate(runtime.payload, runtime));
+      if (result.decision === 'block') {
+        blocked = true;
+        const diagnostics = Array.isArray(result.diagnostics) ? result.diagnostics : [];
+        const detail = diagnostics
+          .map((item) => (typeof item === 'string' ? item : (item && item.message) || String(item)))
+          .join('; ');
+        lines.push(`[preflight-router:${guard.source}] ${detail || 'blocked'}`);
+      }
+    } catch (guardError) {
+      blocked = true;
+      lines.push(`[preflight-router:${guard.source}] fallback guard unavailable: ${guardError.message}`);
+    }
+  }
+  if (blocked) {
+    lines.push(`[preflight-router] degraded: ${reason}`);
+    lines.push('[preflight-router] BLOCKED');
+    return { exitCode: 2, decision: 'block', stderr: `${lines.join('\n')}\n` };
+  }
+  return { exitCode: 0, decision: 'allow', stderr: `[preflight-router] degraded: ${reason}\n` };
+}
+
+/** main() 已摄入的载荷；崩溃兜底要在 catch 里拿到它。 */
+let fatalPayload = null;
+
 async function main() {
   let rawPayload;
   try {
@@ -512,7 +605,9 @@ async function main() {
     process.exitCode = 2;
     return;
   }
+  fatalPayload = rawPayload;
   const { transport, payload } = ingest(rawPayload, { argv: process.argv });
+  fatalPayload = payload;
   return require('../lib/hook-latency.cjs').timed(
     'preflight-router',
     String(payload?.hook_event_name || 'PreToolUse'),
@@ -521,10 +616,11 @@ async function main() {
 }
 
 /** 跑完全部门禁，返回中立判定 'allow' | 'block'；不写 stdout / 不设 exitCode。 */
-async function evaluateRuntime(runtime) {
+async function evaluateRuntime(runtime, opts = {}) {
   const promotedPolicy = await runGate(runtime, {
     source: 'promoted-harness-gate',
-    failClosed: true,
+    tier: 'core',
+    failClosed: false,
     load: () => require('./promoted-harness-gate.cjs'),
   });
   if (promotedPolicy.decision === 'block') {
@@ -536,8 +632,8 @@ async function evaluateRuntime(runtime) {
   if (riskPolicy.decision === 'block') return 'block';
 
   const specs = SHELL_TOOLS.has(runtime.toolKey)
-    ? shellSpecs(runtime.command)
-    : WRITE_TOOLS.has(runtime.toolKey) ? writeSpecs(runtime) : [];
+    ? shellSpecs(runtime.command, opts)
+    : WRITE_TOOLS.has(runtime.toolKey) ? writeSpecs(runtime, opts) : [];
 
   for (const spec of specs) {
     const result = await runGate(runtime, spec);
@@ -545,6 +641,7 @@ async function evaluateRuntime(runtime) {
   }
 
   const common = await runCommon(runtime, {
+    ...opts,
     riskLevel: riskPolicy.assessment?.effectiveRiskLevel,
   });
   if (common.decision === 'block') return 'block';
@@ -561,7 +658,7 @@ async function mainWithPayload(payload, opts = {}) {
 
 /**
  * 进程内判定入口（等价测试用）：不写 stdout / stderr、不设 exitCode。
- * @returns {{transport, decision, eventName, diagnosticsSources, additionalContext}}
+ * @returns {{transport, decision, eventName, diagnosticsSources, diagnostics, additionalContext}}
  */
 async function decide(raw, opts = {}) {
   const { transport, payload } = ingest(raw, {
@@ -571,20 +668,22 @@ async function decide(raw, opts = {}) {
   });
   const runtime = runtimeFrom(payload);
   runtime.transport = transport;
-  const decision = await evaluateRuntime(runtime);
+  const decision = await evaluateRuntime(runtime, opts);
   return {
     transport,
     decision,
     eventName: runtime.eventName,
     diagnosticsSources: [...new Set(runtime.diagnostics.map((item) => item.source))].sort(),
+    diagnostics: runtime.diagnostics.map((item) => `[${item.source}] ${item.message}`),
     additionalContext: decision === 'block' ? '' : formatAdditionalContext(runtime),
   };
 }
 
 if (require.main === module) {
   main().catch((error) => {
-    process.stderr.write(`[preflight-router] fatal: ${error.stack || error.message}\n`);
-    process.exitCode = 2;
+    const fallback = fallbackDecision(fatalPayload, error);
+    if (fallback.stderr) process.stderr.write(fallback.stderr);
+    process.exitCode = fallback.exitCode;
   });
 }
 
@@ -597,6 +696,7 @@ module.exports = {
   isReadOnlyShellCommand,
   evaluateRiskPolicy,
   writeSpecs,
+  fallbackDecision,
   formatAdditionalContext,
   recordPromotedAttribution,
 };

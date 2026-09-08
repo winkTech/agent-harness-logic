@@ -501,6 +501,9 @@ node engine/diagnostics.cjs --bench
 # 快速检查（仅 PreToolUse 延迟）
 node engine/diagnostics.cjs --quick
 
+# 延迟档位硬门（preflight 200 / postflight 250 / prompt-context 300 / 其余同步 500ms，超标 exit 1）
+node engine/scripts/lib/bench-hooks.cjs --quick --sla
+
 # Hook 集成测试（8 个触发点全量 dry-run）
 node engine/diagnostics.cjs --hooks
 

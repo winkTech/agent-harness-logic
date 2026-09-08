@@ -9,6 +9,10 @@
  *   node engine/scripts/lib/bench-hooks.cjs              # 全量基准
  *   node engine/scripts/lib/bench-hooks.cjs --quick      # 快速（只测 PreToolUse）
  *   node engine/scripts/lib/bench-hooks.cjs --json       # JSON 输出（供 diagnostics 消费）
+ *   node engine/scripts/lib/bench-hooks.cjs --sla        # 按 hook-latency 档位判定 warm p95，超标 exit 1
+ *
+ * --sla 的档位与 async 判定全部来自 engine/scripts/lib/hook-latency.cjs（单一档位来源）；
+ * env CLAUDE_HARNESS_LATENCY_SCALE 整体放大预算（CI 用 3）。
  */
 
 'use strict';
@@ -20,6 +24,7 @@ const path = require('node:path');
 const { spawnSync } = require('node:child_process');
 const os = require('node:os');
 const { collectHookEntries } = require('./hook-registry.cjs');
+const { budgetFor, registrationIndex, latencyScale, scriptNamesFromCommand } = require('./hook-latency.cjs');
 
 const HOME = HARNESS_ROOT;
 const SETTINGS_FILES = [
@@ -238,12 +243,55 @@ function benchmarkEntries(entries, opts = {}) {
         cwd: opts.cwd || sandbox.root,
         env: { ...sandbox.env, ...(opts.env || {}) },
       });
-      results.push({ point: entry.point, ...result, skipped: false });
+      results.push({ point: entry.point, cmd: entry.cmd, ...result, skipped: false });
     }
     return { results, isolated: true };
   } finally {
     if (!opts.keepSandbox) sandbox.cleanup();
   }
+}
+
+// ── SLA 判定 ───────────────────────────────────────────────────────────────
+
+/**
+ * 按 hook-latency 的档位表判定每个实测点的 warm p95。
+ * async 入口与被 --quick 跳过的点不计入；无 warm 样本时退回 elapsed。
+ * @returns {{pass, scale, checks, violations, skipped}}
+ */
+function evaluateSla(results, opts = {}) {
+  const index = opts.index || registrationIndex(opts);
+  const scale = Number.isFinite(opts.scale) && opts.scale > 0
+    ? opts.scale
+    : latencyScale(opts.env || process.env);
+  const checks = [];
+  const skipped = [];
+  for (const result of results || []) {
+    // result.script 是 cmd.slice(0,60)（可能截断），所以优先用完整命令行取脚本名。
+    const command = result.cmd || result.id || result.script || '';
+    const name = scriptNamesFromCommand(command)[0] || command;
+    const budget = budgetFor(name, { index, scale });
+    if (result.isAsync || budget.budgetMs === null) {
+      skipped.push({ id: result.id, script: budget.name, reason: 'async-hook' });
+      continue;
+    }
+    if (result.skipped) {
+      skipped.push({ id: result.id, script: budget.name, reason: result.skipReason || 'skipped' });
+      continue;
+    }
+    const p95 = Number(result.warm_p95_ms ?? result.elapsed ?? 0);
+    checks.push({
+      id: result.id,
+      point: result.point,
+      script: budget.name,
+      tier: budget.tier,
+      registered: budget.registered,
+      warm_p95_ms: p95,
+      budget_ms: budget.budgetMs,
+      over: p95 > budget.budgetMs,
+    });
+  }
+  const violations = checks.filter(check => check.over);
+  return { pass: violations.length === 0, scale, checks, violations, skipped };
 }
 
 // ── 主流程 ─────────────────────────────────────────────────────────────────
@@ -252,6 +300,7 @@ function main() {
   const args = process.argv.slice(2);
   const isQuick = args.includes('--quick');
   const isJson = args.includes('--json');
+  const isSla = args.includes('--sla');
   const valueAfter = (flag, fallback) => {
     const index = args.indexOf(flag);
     if (index < 0) return fallback;
@@ -263,8 +312,10 @@ function main() {
 
   const entries = collectHooks();
   if (entries.length === 0) {
-    if (isJson) { console.log(JSON.stringify({ error: '无 hook 条目' })); }
-    else { console.log('无 hook 条目'); }
+    // settings.json 属 .gitignore 覆盖路径 —— 读不到时必须显式说明原因, 不得静默通过 (规则 8)。
+    const reason = 'no-hook-registrations: settings.json/settings.local.json 无 hook 条目 (未渲染?)';
+    if (isJson) { console.log(JSON.stringify({ error: '无 hook 条目', reason })); }
+    else { console.log(`无 hook 条目 — ${reason}`); }
     process.exit(1);
   }
 
@@ -291,6 +342,8 @@ function main() {
     ? (elapsedTimes.reduce((a, b) => a + b, 0) / elapsedTimes.length).toFixed(1)
     : 0;
 
+  const sla = isSla ? evaluateSla(results) : null;
+
   if (isJson) {
     console.log(JSON.stringify({
       total: entries.length,
@@ -302,9 +355,11 @@ function main() {
       p95_ms: p95,
       avg_ms: parseFloat(avg),
       total_bench_ms: totalElapsed,
+      sla,
       results,
     }, null, 2));
-    return;
+    if (sla && !sla.pass) process.exitCode = 1;
+    return { sla };
   }
 
   // 详细输出
@@ -353,11 +408,27 @@ function main() {
 
   for (const w of slaWarnings) console.log(`  ${w}`);
 
-  return { total: entries.length, passed: okRuns.length, p50, p95, avg_ms: parseFloat(avg) };
+  if (sla) {
+    console.log(`\n━━━ 档位 SLA (scale ${sla.scale}) ━━━`);
+    for (const check of sla.checks) {
+      console.log(`  ${check.over ? '❌' : '✅'} ${check.script.padEnd(28)} warm p95 ${String(check.warm_p95_ms).padStart(5)}ms / 预算 ${check.budget_ms}ms (${check.tier})`);
+    }
+    for (const entry of sla.skipped) {
+      console.log(`  ⏭ ${String(entry.script).padEnd(28)} 不计入 (${entry.reason})`);
+    }
+    if (!sla.pass) {
+      console.log(`  ❌ ${sla.violations.length} 条超标: ${sla.violations.map(v => `${v.script} ${v.warm_p95_ms}ms>${v.budget_ms}ms`).join(', ')}`);
+      process.exitCode = 1;
+    } else {
+      console.log('  ✅ 全部在预算内');
+    }
+  }
+
+  return { total: entries.length, passed: okRuns.length, p50, p95, avg_ms: parseFloat(avg), sla };
 }
 
 if (require.main === module) {
   main();
 }
 
-module.exports = { benchHook, benchmarkEntries, collectHooks, createBenchSandbox, main, payloadForEntry };
+module.exports = { benchHook, benchmarkEntries, collectHooks, createBenchSandbox, evaluateSla, main, payloadForEntry };

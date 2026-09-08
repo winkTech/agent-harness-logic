@@ -203,9 +203,9 @@ test('ordinary hook paths do not auto-run simulation governance or scan FPGA rep
 
 test('Stop reports state without linting the entire dirty worktree', () => {
   const entries = collectHookEntries({ files: [path.join(HOME, 'settings.json')] });
-  const stopLint = entries.find(entry => entry.point === 'Stop' && entry.command.includes('lint-auto-gate.js'));
+  const stopLint = entries.find(entry => entry.point === 'Stop' && entry.command.includes('lint-auto-gate.cjs'));
   assert(!stopLint, `Stop still runs full-tree lint: ${stopLint?.command}`);
-  assert(fs.existsSync(path.join(HOME, 'engine/scripts/hooks/lint-auto-gate.js')),
+  assert(fs.existsSync(path.join(HOME, 'engine/scripts/hooks/lint-auto-gate.cjs')),
     'lint helper was deleted instead of retained for explicit validation');
 });
 

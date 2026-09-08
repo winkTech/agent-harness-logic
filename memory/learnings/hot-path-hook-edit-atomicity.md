@@ -24,3 +24,14 @@ metadata:
    同一假设连续两次被拒即停止重试并把这条命令交给用户。
 4. 中长期防御（M4 分层时落地）：路由对"门禁自身加载失败"应区分于"门禁判定阻断"——前者按 advisory 降级并把
    错误写入遥测，只有 bash-safety 与 file-protection 这两个硬拦截保持 fail-closed（D2 决策）。
+5. **2026-09-04 第二次事故（M4a E1）**：子代理在 `preflight-router.cjs` 的 `evaluateRuntime` 里插入了对尚未定义的
+   `loaderFor()` 的调用。`node --check` 通过（语法合法），但每次工具调用都在运行期抛 `ReferenceError` →
+   `main().catch` fatal → exit 2 → 全机所有工具（含 Read）被拒。结论：**`node --check` 不够**，语法检查看不见未定义标识符。
+   新协议（M4a 起对四个热路径入口及其同步依赖强制）：
+   - 不在原地编辑。先 `cp` 到 `var/tmp/hotpath/<name>.cjs`（或同目录 `.next` 后缀），在副本上改；
+   - 副本改完后跑：`node --check`、`node -e "require('<副本>')"`、对副本做 `decide()` 级别的契约测试或
+     `echo '<最小载荷>' | node <副本>`（至少 Read / Write / Bash 三种），全部通过；
+   - 再用一次 `fs.renameSync`/`mv` 原子替换原文件；替换后立刻回放 `var/tmp/m3-baseline/replay.sh`。
+   - 路由自身加**崩溃兜底**（D2）：`main().catch` 里不再直接 exit 2，而是单独加载 bash-safety 与 file-protection
+     对载荷判定；任一 block → exit 2；否则写 stderr 警告并以 exit 0 放行。这样运行期异常只降级、不锁机。
+     局限：模块顶层加载失败（语法错误）仍会 fatal，所以副本协议仍是第一道防线。

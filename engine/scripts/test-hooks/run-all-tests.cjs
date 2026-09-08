@@ -269,15 +269,15 @@ const HOOK_SCRIPTS = [
   'engine/scripts/hooks/rtl-semantic-oracle.cjs',
   'engine/scripts/hooks/bash-safety-guard.cjs',
   'engine/scripts/hooks/file-protection-guard.cjs',
-  'engine/scripts/hooks/diff-size-gate.js',
-  'engine/scripts/hooks/resource-budget-gate.js',
+  'engine/scripts/hooks/diff-size-gate.cjs',
+  'engine/scripts/hooks/resource-budget-gate.cjs',
   'engine/scripts/hooks/frustration-detector.cjs',
   'engine/scripts/hooks/hdl-gate.cjs',
   'engine/scripts/hooks/repair-content-gate.cjs',
   'engine/scripts/hooks/toolchain-health-gate.cjs',
   'engine/scripts/hooks/project-directory-guard.cjs',
-  'engine/scripts/hooks/pre-commit-lint.js',
-  'engine/scripts/hooks/lint-auto-gate.js',
+  'engine/scripts/hooks/pre-commit-lint.cjs',
+  'engine/scripts/hooks/lint-auto-gate.cjs',
   'engine/scripts/hooks/stop-runner.cjs',
   'engine/scripts/hooks/context-pressure-warn.cjs',
   'engine/scripts/hooks/isolation-check.cjs',
@@ -1131,7 +1131,7 @@ define('HookRegistry', 'high-frequency and Stop hooks have bounded timeout contr
   const stopObserver = entries.find((entry) => entry.point === 'Stop'
     && entry.command.includes('postflight-observer.cjs'));
   const memory = find('memory-retrieve-hook.cjs');
-  const lint = find('lint-auto-gate.js');
+  const lint = find('lint-auto-gate.cjs');
   const pressure = find('context-pressure-warn.cjs');
   const watchdog = find('progress-watchdog.cjs');
   const staleStopRunner = find('stop-runner.cjs');
@@ -2423,6 +2423,7 @@ const AUDIT_REMEDIATION_CONTRACTS = [
   ['golden protection contract', 'golden-protection-contract.test.cjs', 30000],
   ['Git and CI reproducibility', 'git-ci-repro-contract.test.cjs', 90000],
   ['single-process preflight router', 'preflight-router-contract.cjs', 30000],
+  ['gate load degradation', 'gate-load-degradation-contract.test.cjs', 30000],
   ['single-process prompt context', 'prompt-context-contract.cjs', 30000],
   ['single-process postflight state', 'postflight-router-contract.cjs', 30000],
   ['single-process lifecycle routing', 'lifecycle-router-contract.cjs', 30000],
@@ -2459,6 +2460,7 @@ const AUDIT_REMEDIATION_CONTRACTS = [
   ['harness state root and migration', 'harness-state-contract.test.cjs', 60000],
   ['plugin mode session context', 'plugin-mode-contract.test.cjs', 30000],
   ['git integrity guard', 'git-integrity-guard-contract.cjs', 120000],
+  ['hook latency SLA tiers', 'hook-latency-sla-contract.test.cjs', 30000],
 ];
 
 for (const [name, relative, timeout, extraArgs = []] of AUDIT_REMEDIATION_CONTRACTS) {
@@ -3141,12 +3143,12 @@ define('LongTaskEval', 'agent-eval-runner dry-run 支持 Claude/Codex', () => {
 });
 
 // Suite 12 (CommitGate) 已删除：engine/scripts/gates/commit-gate.cjs 不存在。
-// 提交路径的实际防护是 pre-commit-lint.js 与 verification-gate 的 git 分支。
+// 提交路径的实际防护是 pre-commit-lint.cjs 与 verification-gate 的 git 分支。
 
 // ── Suite 6: 功能测试 — Diff Size Gate ──
 
 define('DiffSizeGate', '脚本语法正确', () => {
-  const p = path.join(HOME, 'engine/scripts/hooks/diff-size-gate.js');
+  const p = path.join(HOME, 'engine/scripts/hooks/diff-size-gate.cjs');
   if (!fs.existsSync(p)) return { pass: true, skip: true, detail: '文件不存在' };
   const r = nodeCheck(p);
   return { pass: r.ok, detail: r.ok ? '语法通过' : r.stderr.slice(0, 200) };
@@ -3157,7 +3159,7 @@ define('DiffSizeGate', '脚本语法正确', () => {
 // 与请求无关。首版用 `git diff -w` 做判据完全失效 —— 它只忽略行内空白, 看不出
 // "一行拆成七行"。这个用例锁的就是那种形状。
 define('DiffSizeGate', '范围溢出: 行改动量与内容改动量不成比例时点名', () => {
-  const { evaluate } = require(path.join(HOME, 'engine/scripts/hooks/diff-size-gate.js'));
+  const { evaluate } = require(path.join(HOME, 'engine/scripts/hooks/diff-size-gate.cjs'));
   const repo = fs.mkdtempSync(path.join(os.tmpdir(), 'scope-gate-'));
   const git = (...args) => spawnSync('git', args, { cwd: repo, encoding: 'utf8', timeout: 20000 });
   try {
@@ -3209,7 +3211,7 @@ define('DiffSizeGate', '范围溢出: 行改动量与内容改动量不成比例
 // ── Suite 7: 功能测试 — Resource Budget Gate ──
 
 define('ResourceBudgetGate', '脚本语法正确', () => {
-  const p = path.join(HOME, 'engine/scripts/hooks/resource-budget-gate.js');
+  const p = path.join(HOME, 'engine/scripts/hooks/resource-budget-gate.cjs');
   if (!fs.existsSync(p)) return { pass: true, skip: true, detail: '文件不存在' };
   const r = nodeCheck(p);
   return { pass: r.ok, detail: r.ok ? '语法通过' : r.stderr.slice(0, 200) };

@@ -10,9 +10,9 @@ const settingsPath = path.join(HARNESS_ROOT, 'settings.json');
 const routerPath = path.join(HARNESS_ROOT, 'engine', 'scripts', 'hooks', 'preflight-router.cjs');
 const EVALUATOR_MODULES = [
   'engine/scripts/hooks/verification-gate.cjs',
-  'engine/scripts/hooks/pre-commit-lint.js',
-  'engine/scripts/hooks/diff-size-gate.js',
-  'engine/scripts/hooks/resource-budget-gate.js',
+  'engine/scripts/hooks/pre-commit-lint.cjs',
+  'engine/scripts/hooks/diff-size-gate.cjs',
+  'engine/scripts/hooks/resource-budget-gate.cjs',
   'engine/scripts/hooks/bash-safety-guard.cjs',
   'engine/hooks/safety/fix-in-place-guard.cjs',
   'engine/scripts/hooks/file-protection-guard.cjs',
@@ -66,7 +66,7 @@ function assertNoNestedExecution() {
   const source = fs.readFileSync(routerPath, 'utf8');
   assert(!/child_process|spawn(?:Sync)?\s*\(|exec(?:File|Sync)?\s*\(|new\s+Worker\s*\(/.test(source),
     'preflight router must evaluate guards in-process without child processes or workers');
-  assert(!source.includes("load: () => require('./pre-commit-lint.js')"),
+  assert(!source.includes("load: () => require('./pre-commit-lint.cjs')"),
     'pre-commit lint must stay in the Git hook, outside the 20-second PreToolUse path');
 }
 
