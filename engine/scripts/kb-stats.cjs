@@ -159,7 +159,7 @@ function collectStats(opts = {}) {
     methodology: count(path.join(knowledgeDir, 'methodology')).files,
     templates: count(path.join(knowledgeDir, 'docs', 'templates')).files,
     sources: count(path.join(knowledgeDir, 'archive', 'sources')).files,
-    pdfs: count(path.join(home, 'engineering-assets', 'reference-assets', 'datasheets'), (name) => name.endsWith('.pdf')).files,
+    pdfs: count(path.join(home, 'packs', 'fpga', 'references', 'datasheets'), (name) => name.endsWith('.pdf')).files,
     frontmatterRate: frontmatter.frontmatterRate,
     totalMd: frontmatter.totalMd,
     withFrontmatter: frontmatter.withFrontmatter,

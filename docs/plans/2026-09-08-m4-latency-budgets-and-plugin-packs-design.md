@@ -78,7 +78,7 @@
 | **packs/fpga/skills/** | `skills/{vivado-flow, rtl-gen, hdl-coding, python-hardware-debug}` | 4 个 FPGA 域技能 |
 | **packs/fpga/agents/** | `agents/domain/`（logic-engineer、algorithm-engineer）+ `agents/compound/`（ce-* 评审团 4 个） | 不新建 `fpga-algorithm-engineer`，现有专家即等价物 |
 | **packs/fpga/scripts/**（或经 skills 引用驻留 engine） | `engine/scripts/{fpga-timing-parser, fpga-xdc-parser}.cjs`、`lib/module-topology.cjs` | DAG 可视化复用 `code-graph-index`/`cg-queries` 加渲染层，不另起炉灶 |
-| **packs/fpga/references/** | `engineering-assets/reference-assets/`（2875 文件） | 见 §4 未决问题 #3 |
+| **packs/fpga/references/** | ~~`engineering-assets/reference-assets/`~~ **已迁**（2026-09-08，2875 文件：vendor/ 6 个第三方上游工程 + datasheets/） | 消费方 3 处（kb-stats / perf-monitor / add_name_frontmatter）已同步改指新路径；`knowledge/`、`catalog/`、`cbb/` 等留 Core（engine 经 config.path.sh 消费） |
 | **packs/office/skills/** | `skills/{doc-gen, markitdown-converter, pdf, presentation}` | 4 个文档域技能 |
 | **Core 保留** | `engine/` 全部、hooks、diagnostics、`schemas/`、`docs/rules/`、通用技能（code-review、debugging、git-expert、tdd…） | 通用域不迁移 |
 
@@ -124,6 +124,6 @@
 
 1. ~~在途变更归属与提交~~ **已解决（2026-09-08）**：用户裁决"验证后统一提交"，M4a 在途工作经 474/474 全量回归验证后以 `dbed370` 提交。
 2. ~~push 冲突~~ **已解决（2026-09-08）**：用户裁决"必须 push"，分支已推 origin。提交过程中 safe-delete 第八次实时复发（loose ref 亚秒级被删），按恢复手册直写 packed-refs 后恢复并推送成功。
-3. **reference-assets 归属**：2875 个文件随 packs/fpga 外移还是 Core 只留 catalog 索引，影响仓库体积（当前入库文件 ~81% 在 engineering-assets），迁移前需定方案。
+3. ~~reference-assets 归属~~ **已解决（2026-09-08）**：2875 文件全部 `git mv` 至 `packs/fpga/references/`（vendor/ 零程序化消费 + datasheets/ 仅 3 处消费方，均已改引用）。Core 的 `engineering-assets/` 保留 catalog / knowledge（engine 经 config.path.sh 消费）/ cbb / models / evidence / schemas。仓库入库文件结构：fpga 域资产（skills + agents + references）自此集中于 packs/fpga。
 4. `agents-archive/`、`rules-archive/` 未纳入本次盘点，迁移时按需补查。
 5. **safe-delete 删除者身份**：第八次复发时无 codex.exe 进程在场，删除签名与历次一致但宿主未确认——需单独排查（建议方向：宿主 turn-diff 清理类进程）。

@@ -97,7 +97,7 @@
     {
       "path": "rtl/pulse_merge.sv",
       "role": "rtl",
-      "sha256": "0cdd8c3d53e4167a374d81d7d6fd8280430e9f8499e7097be6c10e911d4097d0"
+      "sha256": "3bc52e05bece6c9fb27a45aecf62feebdc2f34c56e56d00ef730558856a86286"
     },
     {
       "path": "constraints/pulse_merge.xdc",
@@ -119,7 +119,7 @@
     {
       "path": "docs/requirements.md",
       "role": "doc",
-      "sha256": "3d0644fd66fdd7a972144e24151419ebb2c4b23a66d0a206f8e23a69ac0fa737"
+      "sha256": "974d4f8d0d5d8afb1b27fe166c03cc05fdae6b65fe19d51bf258e21a54dadbb4"
     },
     {
       "path": "docs/verification.md",
@@ -139,7 +139,7 @@
     {
       "path": "docs/provenance.json",
       "role": "reference",
-      "sha256": "6f9a56792dc995704c7c19ac1addabb2d408e3daf90621348b1e80de461e1401"
+      "sha256": "e541eb82e75b03afc78410423ce5a539174f050ebab028a85fd0a57c9adeef0c"
     },
     {
       "path": "eda/README.md",
@@ -226,7 +226,7 @@
     "license": "MIT",
     "retrieved": "2024-04-27",
     "commit": "25156a9a162c41c60f11f41590c7d006d015ae5a",
-    "commit_basis": "commit 日期 2024-04-26T17:15:17Z, 标题 'Add example design for Alveo U55C'。2026-08-02 由内容比对反查确定, 非声明。归档 engineering-assets/reference-assets/vendor/verilog-pcie-master/ 无 .git, 但 git blob SHA 是内容的函数, 故可反查: 对该 commit 的递归树逐路径比对 633 个文件, 路径集完全一致 (仅本地 0 / 仅上游 0), blob 分类为 逐字节一致 4 + 仅 CRLF 差异 545 + 上游 symlink 在 Windows 解压落成空文件 84 (上游 symlink 总数正是 84), 未解释的差异 0。相邻 commit 均不满足: 195be74a 及更早尚无 AU55C 那批文件。本模块直接来源 rtl/pulse_merge.v 单独复核: 上游 blob aafe38a8e7c4ea76b7287b3d7e04342810a82297 = 本地文件 LF 归一后的 blob, 内容一致仅行尾不同。"
+    "commit_basis": "commit 日期 2024-04-26T17:15:17Z, 标题 'Add example design for Alveo U55C'。2026-08-02 由内容比对反查确定, 非声明。归档 engineering-assets/reference-assets/vendor/verilog-pcie-master/ 无 .git, 但 git blob SHA 是内容的函数, 故可反查: 对该 commit 的递归树逐路径比对 633 个文件, 路径集完全一致 (仅本地 0 / 仅上游 0), blob 分类为 逐字节一致 4 + 仅 CRLF 差异 545 + 上游 symlink 在 Windows 解压落成空文件 84 (上游 symlink 总数正是 84), 未解释的差异 0。相邻 commit 均不满足: 195be74a 及更早尚无 AU55C 那批文件。本模块直接来源 rtl/pulse_merge.v 单独复核: 上游 blob aafe38a8e7c4ea76b7287b3d7e04342810a82297 = 本地文件 LF 归一后的 blob, 内容一致仅行尾不同。（注: 该归档 2026-09-08 M4b 迁移至 packs/fpga/references/vendor/verilog-pcie-master/, 反查结论不受迁移影响。）"
   },
   "notes": "Certified foundation CBB admission with MIT provenance retained. Upstream commit SHA pinned on 2026-08-02 by content matching (see provenance.commit_basis). Routed implementation, board and field validation remain outside this admission.",
   "reproduce": {

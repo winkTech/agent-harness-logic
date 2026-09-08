@@ -46,12 +46,3 @@ Assets: 28 · RED: 0 · YELLOW: 0
 | `model_comm_ldpc` | 1.0.0 | golden-model | `models/comm/ldpc` | — | n/a — 非 RTL 门梯适用范围 | 1 | — |
 | `model_comm_ofdm` | 1.8.0 | golden-model | `models/comm/ofdm` | — | n/a — 非 RTL 门梯适用范围 | 3 | — |
 | `model_comm_synch` | 1.1.0 | golden-model | `models/comm/synch` | — | n/a — 非 RTL 门梯适用范围 | 1 | — |
-
-## 参考资料根目录（非受治理资产）
-
-以下目录按设计**不登记为 CBB**：存放数据手册与 vendor 上游归档，供查阅与溯源，
-不进门梯、不发版本、不取证。**这不是待办项** —— 上方 `RED/YELLOW` 统计不含它们。
-（vendor 归档的上游 commit 已全部钉定，见 `integration/registry.json` 各条 `provenance`。）
-
-- `reference-assets/datasheets`
-- `reference-assets/vendor`

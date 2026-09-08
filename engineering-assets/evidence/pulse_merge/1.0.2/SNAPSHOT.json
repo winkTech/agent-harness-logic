@@ -3,8 +3,8 @@
   "asset_uid": "pulse_merge",
   "version": "1.0.2",
   "created_at": "2026-08-02T05:30:41.049Z",
-  "git_head": "b7818e1ce6bb73feef9f05ca9bc36e2fb7acac6a",
-  "manifest_sha256": "3f64458ee6be49167ae434619eb71942db923cf4ee20169e3e218214c302bd27",
+  "git_head": "fc1363ec97a0a313717e30555246bc2ff278fb5f",
+  "manifest_sha256": "91e254fbbc30624ccabb05fb7c8f2a117d858e2f790bad47b6c3d050f7e6fb5e",
   "evidence_source": "var/gates/pg/pulse_merge",
   "files": [
     {
@@ -369,6 +369,20 @@
         "+G-B-04.json",
         "~gate-results.json"
       ]
+    },
+    {
+      "at": "2026-09-08T11:01:24.339Z",
+      "reason": "M4b reference-assets migration: provenance reference_source/license_source and commit_basis note now point to packs/fpga/references/vendor/verilog-pcie-master/ (paths only, no semantic change)",
+      "prior_manifest_sha256": "3f64458ee6be49167ae434619eb71942db923cf4ee20169e3e218214c302bd27",
+      "prior_git_head": "b7818e1ce6bb73feef9f05ca9bc36e2fb7acac6a",
+      "changed_evidence": []
+    },
+    {
+      "at": "2026-09-08T11:03:28.700Z",
+      "reason": "M4b reference-assets migration: source path pointers updated to packs/fpga/references/vendor/ and sources sha256 re-pinned (path-annotation only, no semantic change)",
+      "prior_manifest_sha256": "f8580f97610fd2aaa51ffac9933db7734ceb74ef87b4dd2339b9b46e7828f3bc",
+      "prior_git_head": "fc1363ec97a0a313717e30555246bc2ff278fb5f",
+      "changed_evidence": []
     }
   ]
 }

@@ -2,7 +2,7 @@
 `default_nettype none
 
 // pulse_merge — normalized local implementation of the MIT reference behavior.
-// Upstream source: engineering-assets/reference-assets/vendor/verilog-pcie-master/rtl/pulse_merge.v
+// Upstream source: packs/fpga/references/vendor/verilog-pcie-master/rtl/pulse_merge.v
 // License/provenance: docs/LICENSE-MIT.txt and docs/provenance.json
 module pulse_merge #(
     parameter integer INPUT_WIDTH = 2,

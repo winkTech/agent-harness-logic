@@ -5,7 +5,7 @@
 `pulse_merge` combines several single-cycle status pulses into a registered
 pending-credit counter. This is a local normalized implementation based on the
 MIT-licensed vendor reference at
-`engineering-assets/reference-assets/vendor/verilog-pcie-master/rtl/pulse_merge.v`.
+`packs/fpga/references/vendor/verilog-pcie-master/rtl/pulse_merge.v`.
 
 ## Contract
 

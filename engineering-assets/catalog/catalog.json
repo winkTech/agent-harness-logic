@@ -9,12 +9,9 @@
     },
     "red_count": 0,
     "yellow_count": 0,
-    "unregistered_root_count": 2
+    "unregistered_root_count": 0
   },
-  "unregistered_roots": [
-    "reference-assets/datasheets",
-    "reference-assets/vendor"
-  ],
+  "unregistered_roots": [],
   "drift": {
     "red": [],
     "yellow": []

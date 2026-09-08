@@ -12,7 +12,7 @@
 | `models/` | **仅认证通过**的 MATLAB 模型 |
 | `knowledge/` | 领域知识/方法论/索引（已自 `~/.claude/knowledge/` 迁入） |
 | `incubator/{intake,qualification}` | 孵化中、未认证资产 |
-| `reference-assets/vendor/` | 第三方完整工程（仅参考，不认证） |
+| ~~`reference-assets/vendor/`~~ | 第三方完整工程（仅参考，不认证）——2026-09-08 M4b 已迁至 `../packs/fpga/references/vendor/` |
 | `schemas/` | `cbb-manifest.schema.json` 等 |
 | `tools/` | `gate-runner.cjs` 门禁 runner · `pg-synth.{cjs,tcl}` Vivado 证据生成 |
 | `docs/governance/` | 《CBB 治理与生产级准入规范 V1.0》 |

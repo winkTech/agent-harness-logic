@@ -170,7 +170,9 @@ function classifyPath(filePath, manifestLevel = null) {
   if (p.startsWith('cbb/')) return { category: manifestLevel === 'certified' ? 'promote-to-CBB' : 'normalize-and-qualify', deletion_candidate: false, reason: 'certified area is governed source' };
   if (p.startsWith('incubator/')) return { category: 'normalize-and-qualify', deletion_candidate: false, reason: 'incubator source requires qualification' };
   if (p.startsWith('skills/hdl-coding/templates/')) return { category: 'normalize-and-qualify', deletion_candidate: false, reason: 'reusable HDL template requires governed package intake' };
-  if (p.startsWith('reference-assets/vendor/') || p.startsWith('knowledge/') || p.startsWith('models/')) return { category: 'retain-as-evidence/source', deletion_candidate: false, reason: 'source or evidence lineage is retained' };
+  // packs/fpga/references/vendor/ = M4b 迁移 (2026-09-08) 后 vendor 归档的新位置
+  // (以仓库根为 root 扫描时出现); 旧前缀保留用于历史扫描结果回放。
+  if (p.startsWith('reference-assets/vendor/') || p.startsWith('packs/fpga/references/vendor/') || p.startsWith('knowledge/') || p.startsWith('models/')) return { category: 'retain-as-evidence/source', deletion_candidate: false, reason: 'source or evidence lineage is retained' };
   if (p.startsWith('var/tmp/') || p.startsWith('var/build/') || p.startsWith('var/scratch/')) return { category: 'permanent-delete candidate', deletion_candidate: false, reason: 'generated path is not deletable until all five conditions are independently proven' };
   return { category: SOURCE_EXT.test(p) ? 'retain-as-evidence/source' : 'retain-as-evidence/source', deletion_candidate: false, reason: 'unclassified repository material remains protected by default' };
 }

@@ -35,7 +35,7 @@ SOURCE_COUNT=$(find "${HOME}/.claude/engineering-assets/knowledge/primary" -name
 echo "📄 源文档提取: ${SOURCE_COUNT} 个"
 
 # 8. 原始 PDF 数
-PDF_COUNT=$(find "${HOME}/.claude/engineering-assets/reference-assets/datasheets" -name "*.pdf" 2>/dev/null | wc -l)
+PDF_COUNT=$(find "${HOME}/.claude/packs/fpga/references/datasheets" -name "*.pdf" 2>/dev/null | wc -l)
 echo "📑 原始 PDF: ${PDF_COUNT} 个"
 
 # 9. Git 提交数

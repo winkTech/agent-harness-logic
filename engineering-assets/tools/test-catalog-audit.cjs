@@ -45,10 +45,27 @@ assert.deepEqual(
   [...scan.assets.map((asset) => asset.asset_uid)].sort(),
   'assets must be sorted deterministically by asset_uid',
 );
+// M4b 迁移 (2026-09-08): reference-assets/ 整体迁至 packs/fpga/references/,
+// 不再位于 engineeringRoot 扫描范围内。真仓库不再提供 vendor 未注册根实例,
+// fail-open 可见性契约改由下方 scratch 构造覆盖, 防止迁移后契约失去正向用例。
 assert(
-  scan.unregistered_roots.includes('reference-assets/vendor'),
-  'unregistered vendor reference root must be visible in the catalog scan',
+  !fs.existsSync(path.join(engineeringRoot, 'reference-assets')),
+  'reference-assets must have migrated out of engineering-assets (M4b packs migration)',
 );
+assert(
+  fs.existsSync(path.resolve(engineeringRoot, '..', 'packs', 'fpga', 'references', 'vendor')),
+  'migrated vendor archive must exist at packs/fpga/references/vendor',
+);
+const visibilityScratch = fs.mkdtempSync(path.join(os.tmpdir(), 'cbb-catalog-vis-'));
+try {
+  fs.mkdirSync(path.join(visibilityScratch, 'reference-assets', 'vendor', 'demo-lib'), { recursive: true });
+  assert(
+    scanRepository(visibilityScratch).unregistered_roots.includes('reference-assets/vendor'),
+    'unregistered vendor reference root must be visible in the catalog scan (fail-open)',
+  );
+} finally {
+  fs.rmSync(visibilityScratch, { recursive: true, force: true });
+}
 
 console.log('ok 1 - true repository catalog scan');
 

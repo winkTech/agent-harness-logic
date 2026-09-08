@@ -1,5 +1,6 @@
-# reference-assets/vendor — 第三方上游工程
+# packs/fpga/references/vendor — 第三方上游工程
 
+> 原位置 `engineering-assets/reference-assets/vendor/`（2026-09-08 M4b 迁入 packs/fpga）。
 > **未认证**。本目录下全部内容为第三方上游工程原样归档，仅作参考。
 > 未过任何 CBB 准入门（规范 §2），**不得直接复用进产品设计**。
 > 需要复用其中某个模块时，走 `incubator/intake` 重新打包并过门禁。

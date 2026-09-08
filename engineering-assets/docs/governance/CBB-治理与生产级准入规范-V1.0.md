@@ -164,7 +164,7 @@ stateDiagram-v2
 
 | 级别 | 目录 | 准入判据 | 准出到下一级需过的门子集 | 签字人 |
 |:--|:--|:--|:--|:--|
-| **reference** | `reference-assets/` | `asset_uid` + `provenance{source,license,retrieved}` + `owner` + "未认证"横幅 | 晋级 intake：manifest schema-valid + 源文件 sha256 匹配、无未登记文件 + G-A-00/02 + G-B-01 | owner 登记 |
+| **reference** | `reference-assets/`（2026-09-08 M4b 起实际位于仓库根 `packs/fpga/references/`） | `asset_uid` + `provenance{source,license,retrieved}` + `owner` + "未认证"横幅 | 晋级 intake：manifest schema-valid + 源文件 sha256 匹配、无未登记文件 + G-A-00/02 + G-B-01 | owner 登记 |
 | **intake** | `incubator/`（新进） | schema-valid manifest + iverilog 编译干净 + 锚链起点（`requirement_ref`+`doc_refs≥1`）已连 | 晋级 qualification：G-A-01/03/04/05/06、G-A-07（映射类）、G-B-02/05、G-D-03 全绿 | owner 复核 |
 | **qualification** | `incubator/`（合格） | hdl-coding 全合规 + golden 绑定 + 方向一致 | 晋级 certified：G-B-03/04、G-C-01..05、G-GATE-01、G-SIGN-01 | owner + ce-\* 面板初评（建议，无放行权） |
 | **certified** | `cbb/` | A+B+C 全 PASS + G-D-03 + 证据齐备 + signoff | 终态；仅可 → deprecated 或版本演进 | signoff.by（具名真人） |

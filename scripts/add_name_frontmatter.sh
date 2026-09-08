@@ -128,7 +128,7 @@ process_dir "engineering-assets/knowledge/primary"
 process_dir "engineering-assets/knowledge/docs"
 process_dir "engineering-assets/knowledge/archive"
 process_dir "engineering-assets/knowledge/references"
-process_dir "engineering-assets/reference-assets/datasheets"
+process_dir "packs/fpga/references/datasheets"
 process_dir "engineering-assets/knowledge/methodology"
 process_dir "engineering-assets/knowledge/math-foundation"
 process_dir "engineering-assets/knowledge/linear-algebra"
@@ -163,7 +163,7 @@ if ! $DRY_RUN; then
             still_missing=$((still_missing + 1))
         fi
     ALL_KNOWLEDGE_DIRS=""
-    for d in engineering-assets/knowledge/primary engineering-assets/knowledge/docs engineering-assets/knowledge/archive engineering-assets/knowledge/references engineering-assets/reference-assets/datasheets engineering-assets/knowledge/methodology engineering-assets/knowledge/math-foundation engineering-assets/knowledge/linear-algebra engineering-assets/knowledge/probability-statistics engineering-assets/knowledge/python-basics engineering-assets/knowledge/data-viz; do
+    for d in engineering-assets/knowledge/primary engineering-assets/knowledge/docs engineering-assets/knowledge/archive engineering-assets/knowledge/references packs/fpga/references/datasheets engineering-assets/knowledge/methodology engineering-assets/knowledge/math-foundation engineering-assets/knowledge/linear-algebra engineering-assets/knowledge/probability-statistics engineering-assets/knowledge/python-basics engineering-assets/knowledge/data-viz; do
         ALL_KNOWLEDGE_DIRS="$ALL_KNOWLEDGE_DIRS $BASE/$d"
     done
     done < <(find $ALL_KNOWLEDGE_DIRS -name '*.md' -type f -print0 2>/dev/null)
