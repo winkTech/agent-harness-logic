@@ -2515,7 +2515,7 @@ define('GateRegistryContract', 'gate-registry-contract.cjs 全部通过', () => 
 // ── vivado-flow 参数契约 (2026-07-27 审计: 文档里 [MUST] 的命令 100% exit 2) ──
 
 define('VivadoFlowArgs', '文档中出现的每条 vivado_flow 调用都能通过参数校验', () => {
-  const tcl = path.join(HOME, 'skills/vivado-flow/scripts/vivado_flow.tcl');
+  const tcl = path.join(HOME, 'packs/fpga/skills/vivado-flow/scripts/vivado_flow.tcl');
   if (!fs.existsSync(tcl)) return { pass: true, skipped: true, detail: 'vivado-flow 未安装' };
   const probe = spawnSync('tclsh', ['-encoding', 'utf-8'], { encoding: 'utf8', timeout: 5000, windowsHide: true });
   if (probe.error) return { pass: true, skipped: true, detail: 'tclsh 不可用' };

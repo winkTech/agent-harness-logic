@@ -64,6 +64,21 @@ engine/hooks/workbuddy.hooks.json
 #
 # 同理，.claude/workflows/ 镜像由 engine/scripts/sync-workflow-mirror.cjs 从 workflows/ 重建。
 #
+# M4b（2026-09-08）起 pack 技能的权威源在 packs/{fpga,office}/skills/，
+# skills/ 下同名目录是运行时发现镜像，由 engine/scripts/sync-pack-skills.cjs
+# 单向重建（--check 校验漂移）。镜像不入库，避免与权威源重复。
+# 必须锚定仓库根（/skills/...）：未锚定会任意深度匹配，静默吞掉
+# packs/{fpga,office}/skills/ 下的权威源新文件（lessons：/plans/ 锚定事故）。
+/skills/vivado-flow/
+/skills/rtl-gen/
+/skills/hdl-coding/
+/skills/python-hardware-debug/
+/skills/xdc-constraint-gen/
+/skills/doc-gen/
+/skills/markitdown-converter/
+/skills/pdf/
+/skills/presentation/
+#
 # settings.local.json 未列入，仍需版本控制：现在只承载 permissions / enabledPlugins / env，
 # 不再放 hook。
 

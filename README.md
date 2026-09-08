@@ -143,11 +143,15 @@
 > node engine/scripts/render-hook-settings.cjs          # 换机/新克隆：生成本机 settings.json
 > node engine/scripts/render-hook-settings.cjs --check   # 校验本机注册是否与模板漂移
 > node engine/scripts/sync-workflow-mirror.cjs           # 同理重建 .claude/workflows/ 镜像
+> node engine/scripts/sync-pack-skills.cjs               # 重建 skills/ 下的 pack 技能镜像（权威源 packs/{fpga,office}/skills/，M4b）
 > ```
 >
 > 改 hook 请改**模板**再渲染；直接改 `settings.json` 会被 `--check` 报漂移。
 > CI 在跑门禁前会执行这两步 —— 否则全新 checkout 上一条注册都没有，
 > `engine/hooks/manifest.json` 里标 `active` 的条目会全部核对不上。
+>
+> M4b 起同理：改 pack 技能请改 `packs/{fpga,office}/skills/` 权威源再跑
+> `sync-pack-skills.cjs`；`skills/` 下这 8 个目录是镜像（.gitignore 已锚定忽略）。
 > 改完请自测一次触发，不要只看 JSON 语法。
 
 下表以 `settings.json` 为唯一事实源；`preflight-router.cjs` 在一个进程内加载匹配门禁，README 不复制易漂移的内部清单。

@@ -3,7 +3,7 @@
  * engine/scripts/lib/check-templates.cjs — HDL 模板元数据检查。
  *
  * 由 diagnostics.cjs --templates 调用。
- * 检查 skills/hdl-coding/templates/ 下所有模板是否包含规范头部元数据。
+ * 检查 packs/fpga/skills/hdl-coding/templates/ 下所有模板是否包含规范头部元数据。
  */
 
 'use strict';
@@ -15,7 +15,7 @@ const path = require('node:path');
 const os = require('node:os');
 
 const HOME = HARNESS_ROOT;
-const TEMPLATES_DIR = path.join(HOME, 'skills', 'hdl-coding', 'templates');
+const TEMPLATES_DIR = path.join(HOME, 'packs', 'fpga', 'skills', 'hdl-coding', 'templates');
 
 // 预期的元数据字段（按域划分）
 const META_FIELDS = ['template', 'version', 'domain', 'description'];

@@ -1,0 +1,10 @@
+{
+  "name": "logical-paradox-office",
+  "displayName": "logical-paradox Office Pack",
+  "version": "0.1.0",
+  "description": "文档域 pack：文档生成（doc-gen）、格式转换（markitdown-converter）、PDF 处理（pdf）、演示文稿（presentation）。",
+  "author": { "name": "Lihan" },
+  "repository": "https://github.com/winkTech/agent-harness-logic",
+  "license": "MIT",
+  "keywords": ["docs", "pdf", "presentation", "markdown"]
+}

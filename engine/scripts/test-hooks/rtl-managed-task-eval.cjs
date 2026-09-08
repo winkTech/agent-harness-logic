@@ -490,7 +490,7 @@ function buildPrompt(previous = null) {
     'Reference AGENTS.md:',
     agentRules(),
     '',
-    'Reference skills/hdl-coding/SKILL.md:',
+    'Reference packs/fpga/skills/hdl-coding/SKILL.md:',
     hdlSkill(),
     '',
     'Reference knowledge/examples/valid_ready_stage.sv:',

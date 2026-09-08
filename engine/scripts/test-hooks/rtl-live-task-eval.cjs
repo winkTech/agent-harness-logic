@@ -343,7 +343,7 @@ function agentRules() {
     '',
     '- First classify the request as implementation_with_spec, ambiguous_direction, or debug_existing_failure.',
     '- For implementation_with_spec, complete visible checkpoints before code:',
-    '  - Checkpoint 0: inspect knowledge examples and skills/hdl-coding/SKILL.md.',
+    '  - Checkpoint 0: inspect knowledge examples and packs/fpga/skills/hdl-coding/SKILL.md.',
     '  - Checkpoint 1: summarize interface, microarchitecture, and verification plan.',
     '  - Checkpoint 2: before writing RTL, state coding self-check for i_/o_, sync reset, FSM/comb defaults, and bit widths.',
     '  - Checkpoint 3: after edits, run the required verification command.',

@@ -34,10 +34,10 @@ const GRADERS = {
   C: path.join(__dirname, 'graders', 'grade-track-c.cjs'),
 };
 const HARNESS_FULL_ASSETS = [
-  ['skills/hdl-coding/SKILL.md', 'harness/hdl-coding/SKILL.md'],
+  ['packs/fpga/skills/hdl-coding/SKILL.md', 'harness/hdl-coding/SKILL.md'],
   ['docs/rules/01-hdl.md', 'harness/rules/01-hdl.md'],
-  ['skills/vivado-flow/SKILL.md', 'harness/vivado-flow/SKILL.md'],
-  ['skills/vivado-flow/scripts/vivado_flow.tcl', 'harness/vivado-flow/scripts/vivado_flow.tcl'],
+  ['packs/fpga/skills/vivado-flow/SKILL.md', 'harness/vivado-flow/SKILL.md'],
+  ['packs/fpga/skills/vivado-flow/scripts/vivado_flow.tcl', 'harness/vivado-flow/scripts/vivado_flow.tcl'],
 ];
 const SAFE_ENV_KEYS = [
   'PATH', 'Path', 'PATHEXT', 'SystemRoot', 'SYSTEMROOT', 'WINDIR', 'ComSpec', 'COMSPEC',

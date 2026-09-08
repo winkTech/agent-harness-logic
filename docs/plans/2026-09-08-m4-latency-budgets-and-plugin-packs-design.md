@@ -5,7 +5,7 @@
 | Field | Value |
 |---|---|
 | Date | 2026-09-08 |
-| Status | M4a 已实现待提交；M4b tier 分类法已铺、目录重构未启动 |
+| Status | M4a 已实现；M4b 目录重构**已于同日落地**（见 §2.5 实施记录） |
 | Repository | `C:\Users\Lihan\.claude`（分支 `feat/logical-paradox-m1-state-dir`） |
 | 决策来源 | 2026-09 会话收敛决策（M4a 档位 + M4b pack 划分），本文档为其首次落库固化 |
 | 前序里程碑 | M1 状态分离（c619a47）、M2 Claude Code 插件形态（9fb59c8）、M3 传输层闭环（5357877） |
@@ -92,13 +92,23 @@
 | bin/ 工具目录 | **不做** | engine/scripts + skills/*/scripts 已覆盖 |
 | PSS 检测 / 频偏估计 MATLAB | 归 packs/fpga 项目资产 | 按需创建，不预建 |
 
-### 2.4 迁移步骤（M4b 目录重构，未启动）
+### 2.4 迁移步骤（M4b 目录重构，已于 2026-09-08 执行，见 §2.5）
 
 1. 前置：在途变更（§1.2 表中工作树项）全部提交、`run-all-tests` 全绿、`render-hook-settings --check` 0 漂移。
 2. 建 `packs/fpga/`、`packs/office/` 骨架，`git mv` 迁移 §2.3 表中条目（保留历史）。
 3. 更新引用方：manifest tier 标注与 pack 归属对齐；`.claude-plugin/` 清单、`plugins.lock.json`、skills 互引路径。
 4. 市场渠道脚本改为仅复制 per-plugin 目录（Core 不出仓）。
 5. 验收：`run-all-tests` 全绿；`render-hook-settings --check` 0 漂移；`plugin-manifest-contract` 通过；`manifest` 交叉核对 0 error；干净 worktree（剥离 gitignore 产物 + 本机工具链）在 Windows 与 CI matrix 各 OS 上 exit 0。
+
+### 2.5 M4b 实施记录（2026-09-08 同日执行）
+
+- **已迁**：fpga 4 技能 + office 4 技能（git mv 保历史）→ `packs/{fpga,office}/skills/`；`agents/{domain,compound}` → `packs/fpga/agents/`。
+- **运行时发现镜像**：新增 `engine/scripts/sync-pack-skills.cjs`（对齐 sync-workflow-mirror 契约：packs 权威源单向复制到 `skills/`、`--check` 漂移检查）；镜像路径在 `.gitignore` **锚定仓库根**忽略（未锚定会任意深度匹配、静默吞掉 packs 下权威源新文件）。
+- **引用更新**：engine/rtl-bench、check-templates、run-all-tests、eval prompt、hdl-coding-dag-workflow、docs/rules/01-hdl·02-python、skills/workflows/hdl-coding-workflow.md 的路径引用改为 packs 权威源；**pack 内部技能互引保留 `skills/<name>/` 相对形式**（对镜像与插件安装两种场景都可解析）。
+- **engine 的 fpga 脚本驻留 Core**（§2.3 的备选分支）：`fpga-timing-parser`/`fpga-xdc-parser`/`module-topology` 未迁移——引擎与测试按仓库内路径引用，迁移收益低、破坏面大。
+- **per-plugin 分发**：`packs/{fpga,office}/.claude-plugin/plugin.json` 使各 pack 成为可独立安装的 Claude Code 插件（skills 自动发现于 pack 根）。
+- **xdc-constraint-gen 落地**：SKILL.md + 3 个语法基准模板 + `gen_xdc_from_rtl.py`（stdlib-only；ANSI/非 ANSI 端口解析、时钟与复位启发式、参数化位宽显式警告不静默丢端口；冒烟测试含边界用例，错误路径 exit 2）。已注册进 OWNED 镜像清单。
+- **市场渠道脚本**：scripts/ 下无既有打包脚本，per-plugin 复制由 pack 自带清单承接；未来建渠道脚本时按"仅复制 pack 目录"原则实现。
 
 ---
 
@@ -112,7 +122,8 @@
 
 ## 4. 未决问题（阻塞项按序）
 
-1. **在途变更归属与提交**：工作树含 M4a 收尾（2 个未跟踪测试、harness-ci +53、README/manifest/05-harness diff）+ 4 个 hook 脚本 `.js→.cjs` 暂存重命名 + `skills/grill-me` 暂存删除。这些来自另一会话的在途工作，需其完成或由用户裁决后统一提交，M4b 目录重构以其为前置。
-2. **push 冲突**：M4b 属重大结构变更，按仓库规则"重大变更必须 push"，与当前"暂不 push"硬约束冲突，需用户显式裁决优先级。
+1. ~~在途变更归属与提交~~ **已解决（2026-09-08）**：用户裁决"验证后统一提交"，M4a 在途工作经 474/474 全量回归验证后以 `dbed370` 提交。
+2. ~~push 冲突~~ **已解决（2026-09-08）**：用户裁决"必须 push"，分支已推 origin。提交过程中 safe-delete 第八次实时复发（loose ref 亚秒级被删），按恢复手册直写 packed-refs 后恢复并推送成功。
 3. **reference-assets 归属**：2875 个文件随 packs/fpga 外移还是 Core 只留 catalog 索引，影响仓库体积（当前入库文件 ~81% 在 engineering-assets），迁移前需定方案。
 4. `agents-archive/`、`rules-archive/` 未纳入本次盘点，迁移时按需补查。
+5. **safe-delete 删除者身份**：第八次复发时无 codex.exe 进程在场，删除签名与历次一致但宿主未确认——需单独排查（建议方向：宿主 turn-diff 清理类进程）。

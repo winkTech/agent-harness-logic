@@ -95,4 +95,4 @@ triggers:
 | 证据 JSON 契约 | `schemas/check-result.schema.json` | check_<module>.py 输出格式 |
 | Code Review 工作流 | `skills/workflows/code-review-workflow.md` | Phase 7 之外的独立审查入口 |
 | 调试方法论 | `skills/debugging/SKILL.md` | Phase 4 调试循环超限时加载 |
-| Agent 定义 | `agents/domain/algorithm-engineer.md` / `agents/domain/logic-engineer.md` / `agents/compound/ce-*.md` | 责任分工的执行者 |
+| Agent 定义 | `packs/fpga/agents/domain/algorithm-engineer.md` / `packs/fpga/agents/domain/logic-engineer.md` / `packs/fpga/agents/compound/ce-*.md` | 责任分工的执行者 |

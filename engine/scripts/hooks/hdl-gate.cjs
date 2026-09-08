@@ -2,7 +2,7 @@
 /**
  * engine/scripts/hooks/hdl-gate.cjs — HDL 编码规则硬门禁 (P0)
  *
- * 强制执行 docs/rules/01-hdl.md 和 skills/hdl-coding/SKILL.md 中的关键规则:
+ * 强制执行 docs/rules/01-hdl.md 和 packs/fpga/skills/hdl-coding/SKILL.md 中的关键规则:
  *
  *   1. Testbench-First: 新建 RTL 模块前必须有对应的 Testbench
  *   2. No initial in RTL: 综合代码禁止使用 initial 语句
@@ -275,7 +275,7 @@ function extractDirectedPorts(content) {
  * 存储器阵列上电初值的 initial 块 —— 唯一被允许的 initial 形态。
  *
  * 依据 (本仓库既有政策, 本函数是把它落到 hook 上):
- *   - skills/hdl-coding 描述: "initial 仅允许 RAM/ROM 阵列初值"
+ *   - packs/fpga/skills/hdl-coding 描述: "initial 仅允许 RAM/ROM 阵列初值"
  *   - gate-runner 的 G-C-03 对"仅初始化存储器阵列"的 initial 明确不判为违规
  *   - Xilinx UG901: $readmemb/$readmemh 初始化数组是 ROM/RAM 推断的标准写法
  *

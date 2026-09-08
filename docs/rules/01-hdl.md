@@ -8,7 +8,7 @@ skip: "not HDL"
 
 # HDL 编码规则
 
-> L1 优先级。涉及 .sv/.v 时加载。详细规范 & 模板见 `skills/hdl-coding/SKILL.md`。
+> L1 优先级。涉及 .sv/.v 时加载。详细规范 & 模板见 `packs/fpga/skills/hdl-coding/SKILL.md`。
 
 ---
 
@@ -71,15 +71,15 @@ skip: "not HDL"
 
 | 需求 | 文件 |
 |:-----|:-----|
-| 三段式 FSM 模板 | `skills/hdl-coding/references/fsm-templates.md` |
-| 流水线模板 | `skills/hdl-coding/references/pipeline-templates.md` |
-| 复位模板 | `skills/hdl-coding/references/reset-templates.md` |
-| TB 模板 | `skills/hdl-coding/references/tb-templates.md` |
-| RTL 审查清单 | `skills/hdl-coding/references/rtl-code-review.md` |
-| 代码对齐 & LUT 门禁 | `skills/hdl-coding/references/RTL_DESIGN_RULE.md` |
-| Vivado 可综合子集 / 综合属性 (UG901) | `skills/hdl-coding/references/vivado-synthesis-ug901.md` |
-| Vivado RTL 方法学 / Know What You Infer (UG949) | `skills/hdl-coding/references/ug949-rtl-methodology.md` |
-| Vivado 工具流 (RTL DRC / report_* / xsim) | `skills/hdl-coding/references/vivado-tool-flow.md` |
+| 三段式 FSM 模板 | `packs/fpga/skills/hdl-coding/references/fsm-templates.md` |
+| 流水线模板 | `packs/fpga/skills/hdl-coding/references/pipeline-templates.md` |
+| 复位模板 | `packs/fpga/skills/hdl-coding/references/reset-templates.md` |
+| TB 模板 | `packs/fpga/skills/hdl-coding/references/tb-templates.md` |
+| RTL 审查清单 | `packs/fpga/skills/hdl-coding/references/rtl-code-review.md` |
+| 代码对齐 & LUT 门禁 | `packs/fpga/skills/hdl-coding/references/RTL_DESIGN_RULE.md` |
+| Vivado 可综合子集 / 综合属性 (UG901) | `packs/fpga/skills/hdl-coding/references/vivado-synthesis-ug901.md` |
+| Vivado RTL 方法学 / Know What You Infer (UG949) | `packs/fpga/skills/hdl-coding/references/ug949-rtl-methodology.md` |
+| Vivado 工具流 (RTL DRC / report_* / xsim) | `packs/fpga/skills/hdl-coding/references/vivado-tool-flow.md` |
 
 ---
 
@@ -87,9 +87,9 @@ skip: "not HDL"
 
 - **[MUST]** 资源 / Fmax / 时序 / 可综合性 / CDC 的结论必须有 Vivado 报告支撑，无 EDA 环境时写"未验证"
 - **[MUST]** 红线 3 含义是“要复位就用同步高有效”，**不是**“每个寄存器都复位”
-- **[SHOULD]** 数据通路默认无复位（控制集 + Fmax）；细则 `skills/hdl-coding/SKILL.md` §1.1
+- **[SHOULD]** 数据通路默认无复位（控制集 + Fmax）；细则 `packs/fpga/skills/hdl-coding/SKILL.md` §1.1
 - **[MUST]** 红线 3 的**硬豁免**（必须不复位）：BRAM 读/输出寄存器、DSP 内部流水、SRL 中间级  
   —— 加复位阻断宏吸收。须 `// [复位豁免]` 注释 + `report_utilization` 验证，见 `vivado-synthesis-ug901.md` §5.1
 - **[MUST]** 阵列 `initial` 综合后无 `[Synth 8-6896]`；标量 `initial` 直接 FAIL
 - **[MUST]** 禁止门控时钟（`always @(posedge (clk & en))`），改用 BUFGCE 的时钟使能
-- 一键检查：`skills/vivado-flow/scripts/vivado_flow.tcl` —— `-to rtlcheck`（RTL 级）/ `-to synth`（综合级），判定读 `<out>/rpt/flow_summary.json`
+- 一键检查：`packs/fpga/skills/vivado-flow/scripts/vivado_flow.tcl` —— `-to rtlcheck`（RTL 级）/ `-to synth`（综合级），判定读 `<out>/rpt/flow_summary.json`

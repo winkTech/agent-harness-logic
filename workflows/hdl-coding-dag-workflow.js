@@ -11,10 +11,10 @@
  *   (BRAM 输出寄存器没吸收 / DSP 没流水 / SRL 掉成 FF 链) 不报错, 只掉性能。
  *
  * v3.7.1 — Vivado 入口收敛 (2026-07-27):
- *   原先 Phase 6b 调 skills/hdl-coding/templates/tcl/ 下两个脚本
+ *   原先 Phase 6b 调 packs/fpga/skills/hdl-coding/templates/tcl/ 下两个脚本
  *   (vivado_rtl_check.tcl + vivado_synth_report.tcl)。二者是 vivado-flow 技能里
  *   vivado_flow.tcl 的 rtlcheck / synth 两阶段的子集, 留两套必然漂移, 已删除。
- *   现在统一走 skills/vivado-flow/scripts/vivado_flow.tcl:
+ *   现在统一走 packs/fpga/skills/vivado-flow/scripts/vivado_flow.tcl:
  *     一条命令跑 rtlcheck → synth, 逐阶段存 DCP 可断点续跑,
  *     证据汇总为 <out>/rpt/flow_summary.json (嵌套结构, 按阶段分段)。
  *   阻断条件: 脚本 ok=false, 或 critical+errors > 0, 或 WNS < 0, 或有推断失败项。
@@ -754,7 +754,7 @@ TB: 02_sim/${mod}/tb_${mod}.sv (唯一 TB, 直接覆盖)
 
 [Vivado 可综合性 — UG949 Know What You Infer]
 推断失败是**静默的**: 仿真全对, 综合完 BRAM 用了 0 块 / DSP 没吸收流水 / SRL 掉成 FF 链,
-工具不报任何错。编码时避开这四种写法 (细则 skills/hdl-coding/references/ug949-rtl-methodology.md §4):
+工具不报任何错。编码时避开这四种写法 (细则 packs/fpga/skills/hdl-coding/references/ug949-rtl-methodology.md §4):
   - 给 BRAM 读数据/输出寄存器加复位 → 输出寄存器吸收失败, Fmax 崩
   - BRAM 输出寄存器多扇出 → 同上 (每个消费者复制一份自己的输出寄存器)
   - 给 DSP 内部流水寄存器加复位 → MREG/PREG 吸收失败
@@ -1402,8 +1402,8 @@ nodes.p6b_vivado_check = {
 模块: ${modules.join(', ') || '项目默认'}
 ${partHint}
 
-执行入口: vivado-flow 技能 (skills/vivado-flow/SKILL.md)
-规范依据: skills/hdl-coding/references/ug949-rtl-methodology.md (§4 Know What You Infer)
+执行入口: vivado-flow 技能 (packs/fpga/skills/vivado-flow/SKILL.md)
+规范依据: packs/fpga/skills/hdl-coding/references/ug949-rtl-methodology.md (§4 Know What You Infer)
 
 ━━━ 步骤 ━━━
 1. 探测工具链:
@@ -1414,7 +1414,7 @@ ${partHint}
 
 2. 跑 rtlcheck → synth (**一条命令覆盖两个阶段, 脚本自动分趟处理 elaborate 与综合**):
    vivado -mode batch -nojournal -nolog \\
-     -source ~/.claude/skills/vivado-flow/scripts/vivado_flow.tcl \\
+     -source ~/.claude/packs/fpga/skills/vivado-flow/scripts/vivado_flow.tcl \\
      -tclargs -top top -part <part> -src 01_src/00_hdl -xdc 03_xdc \\
               -out 04_prj -from rtlcheck -to synth
    读 04_prj/rpt/flow_summary.json
@@ -1519,7 +1519,7 @@ nodes.p7_review = {
    - 模块命名是否与 architecture.yaml 一致?
 7. [工具链] 如有 EDA 工具链约束 (如 ModelSim 10.6c 禁令),
    检查 RTL 是否违规
-8. [Vivado 可综合性] 依据 skills/hdl-coding/references/ug949-rtl-methodology.md:
+8. [Vivado 可综合性] 依据 packs/fpga/skills/hdl-coding/references/ug949-rtl-methodology.md:
    - 门控时钟 always @(posedge (clk & en)) → 违规, 必须改 BUFGCE 时钟使能
    - 未加复位的寄存器: 是否属于 §5.1 豁免场景 (BRAM 输出/DSP 流水/SRL 链)?
      属于 → 必须有 "// [复位豁免] ..." 注释; 不属于 → 违反红线 3

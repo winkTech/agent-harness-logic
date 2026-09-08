@@ -3,7 +3,7 @@
   "id": "mac_pipe",
   "title": "3 级流水有符号乘累加 (MAC, DSP 推断)",
   "difficulty": "D2",
-  "provenance": "经典流水线 MAC;16x16→48 位宽与 3 级流水(AREG/MREG/PREG)取自 DSP48E1 原生结构;推断核查规则来自 UG949 Know What You Infer(skills/hdl-coding/references/ug949-rtl-methodology.md §4)",
+  "provenance": "经典流水线 MAC;16x16→48 位宽与 3 级流水(AREG/MREG/PREG)取自 DSP48E1 原生结构;推断核查规则来自 UG949 Know What You Infer(packs/fpga/skills/hdl-coding/references/ug949-rtl-methodology.md §4)",
   "top": "mac_pipe",
   "part": "xc7a100tcsg324-2",
   "clockNs": 4,
