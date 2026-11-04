@@ -244,7 +244,9 @@ function prepareWorktree(repoRoot, worktreePath, commit) {
     fs.rmSync(worktreePath, { recursive: true, force: true });
   }
   git(repoRoot, ['worktree', 'prune']);
-  git(repoRoot, ['worktree', 'add', '--detach', worktreePath, commit]);
+  // Force LF in replay worktrees: global core.autocrlf=true would check out
+  // CRLF and break LF-context applyPatch files (git apply matches exactly).
+  git(repoRoot, ['-c', 'core.autocrlf=false', 'worktree', 'add', '--detach', worktreePath, commit]);
 }
 
 function cleanupWorktree(repoRoot, worktreePath) {
