@@ -31,6 +31,10 @@
 const fs = require('node:fs');
 const path = require('node:path');
 
+// 进程启动 (模块加载) 时刻 —— duration_sec 唯一可信的计时起点。
+// 本脚本是工作流真实调用的进程, 加载→证据检查→落库的 elapsed 全程可测。
+const PROCESS_STARTED_AT = Date.now();
+
 // Windows 工具链 (尤其 PowerShell 5.1 的 -Encoding utf8) 写文件带 BOM,
 // JSON.parse 会在 ﻿ 上直接失败 —— 证据文件本身没问题却被判 FAIL。
 function readTextNoBom(p) {
@@ -128,6 +132,10 @@ function recordPhaseDelivery(report, opts, deps = {}) {
       phase,
       status: report.ok ? 'pass' : 'fail',
       modules: opts.modules.length,
+      // duration_sec: 进程加载到落库的真实 elapsed (秒), 覆盖全部证据检查耗时。
+      // retry_count 留 0: 本门禁没有重试路径, 无真实计数可记, 不编造;
+      // 若上游工作流引入重试, 应在真实重试点 +1 后经 args.retries 传入。
+      duration: Math.max(0, Math.round((Date.now() - PROCESS_STARTED_AT) / 1000)),
       error: report.ok ? null : report.failures.join('; ').slice(0, 200) || null,
       project: path.basename(path.resolve(opts.projectRoot)),
       cwd: path.resolve(opts.projectRoot),

@@ -6,9 +6,29 @@ const fs = require('node:fs');
 const path = require('node:path');
 const { ingest } = require('../transport/index.cjs');
 const { renderDecision } = require('../transport/render.cjs');
+const { recordHealth } = require('../lib/hook-health.cjs');
 
 const WRITE_TOOLS = new Set(['edit', 'write', 'multiedit']);
 const SHELL_TOOLS = new Set(['bash', 'powershell']);
+
+let mainStartedAt = null;
+/** 当前调用的事件名；invoke() 的 per-gate 遥测与顶层崩溃遥测共用。 */
+let activeHealthEvent = 'PostToolUseFailure';
+
+function healthEventFrom(payload) {
+  return String(payload?.hook_event_name || payload?.event || 'PostToolUseFailure');
+}
+
+/** 健康遥测统一入口：startedAt 传 null 表示非整调用级事件（per-gate，无计时）。 */
+function recordRouterHealth(event, outcome, startedAt, error) {
+  recordHealth({
+    hook: 'postflight-router',
+    event,
+    outcome,
+    ms: startedAt == null ? null : Date.now() - startedAt,
+    error: error ? (error.stack || error.message || String(error)) : null,
+  });
+}
 
 function defaultDependencies() {
   return {
@@ -288,10 +308,24 @@ function recordDeliveryFromVerdict(payload, gateResult, deps) {
   const reason = String(verification.reason || verification.detail || '');
   const status = verification.ok ? 'pass'
     : UNREADABLE_VERDICT_REASONS.has(reason) ? 'partial' : 'fail';
+  // duration_sec / retry_count 留 0 的原因 (2026-11 实测 1,227 条全 0 的根因):
+  //   - duration: PostToolUse 载荷 (Claude Code) 只有 {stdout, stderr, interrupted},
+  //     不带命令起始时间戳, elapsed 在此上下文不可达。上游改造点: 平台在
+  //     tool_response 暴露 startedAt/durationMs 后, verification-gate 的
+  //     bashResultFromPayload 已透传计时字段, 此处再传 args.duration 即可。
+  //   - retries: 门禁路径没有重试语义, 无真实重试计数可记, 不编造。
   return deps.deliveryTracker.recordDelivery({
     workflow: 'verification-gate',
     phase: 'verification',
     status,
+    // partial 归因 (迁移 005-delivery-uncovered): 未满足的证据类型列表由
+    // verification-gate.verificationVerdict 计算, 只在 partial 时携带 ——
+    // fail 的原因已在 error 字段, pass 无缺失。
+    ...(status === 'partial'
+      && Array.isArray(verification.uncovered)
+      && verification.uncovered.length > 0
+      ? { uncovered: verification.uncovered }
+      : {}),
     error: verification.ok ? null : reason.slice(0, 200) || null,
     sessionId: String(payload?.session_id || payload?.sessionId || '') || undefined,
     cwd: String(payload?.cwd || '') || undefined,
@@ -351,6 +385,8 @@ async function invoke(results, source, callback, normalize = normalizedResult) {
       diagnostics: [`internal error: ${error.stack || error.message}`],
     };
     results.push(result);
+    // 既有降级语义：per-gate 异常 → warn advisory（fail-open），继续跑余下门禁。
+    recordRouterHealth(activeHealthEvent, 'fail-open', null, error);
     return result;
   }
 }
@@ -381,6 +417,7 @@ function recordVerificationAttribution(payload, gateResult, deps) {
 
 async function route(payload, injected = {}) {
   const deps = { ...defaultDependencies(), ...injected };
+  activeHealthEvent = healthEventFrom(payload);
   const eventKey = String(payload?.hook_event_name || payload?.event || '').toLowerCase();
   const toolKey = String(payload?.tool_name || payload?.tool?.name || payload?.name || '').toLowerCase();
   const isSuccess = eventKey === 'posttooluse';
@@ -491,12 +528,15 @@ function emit(payload, result, transport = 'claude-code') {
 }
 
 async function main() {
+  mainStartedAt = Date.now();
   const { transport, payload } = ingest(readPayload(), { argv: process.argv });
+  activeHealthEvent = healthEventFrom(payload);
   await require('../lib/hook-latency.cjs').timed(
     'postflight-router',
     String(payload?.hook_event_name || ''),
     async () => emit(payload, await route(payload), transport),
   );
+  recordRouterHealth(activeHealthEvent, 'ok', mainStartedAt, null);
 }
 
 /**
@@ -522,6 +562,8 @@ async function decide(raw, opts = {}) {
 if (require.main === module) {
   main().catch((error) => {
     process.stderr.write(`[postflight-router] internal error: ${error.stack || error.message}\n`);
+    // 既有失败语义：顶层崩溃不设非零 exitCode（fail-open），只写 stderr 诊断。
+    recordRouterHealth(activeHealthEvent, 'fail-open', mainStartedAt, error);
   });
 }
 

@@ -295,8 +295,15 @@ function bashResultFromPayload(payload) {
   } else if (!raw || typeof raw !== 'object') result = {};
   const stdout = typeof result.stdout === 'string' ? result.stdout
     : (typeof result.output === 'string' ? result.output : '');
+  // 计时字段落载可能有就透传 (WorkBuddy 等平台载荷带 durationMs/startedAt);
+  // 没有时不造键 —— commandEvidence 靠"字段是否存在"区分 timingKnown 真假。
+  const timing = {};
+  if (result.durationMs != null) timing.durationMs = result.durationMs;
+  if (result.startedAt) timing.startedAt = result.startedAt;
+  if (result.completedAt) timing.completedAt = result.completedAt;
   return {
     status: normalizeStatus(result.status ?? result.exit_code ?? result.exitCode),
+    ...timing,
     signal: result.signal || null,
     error: result.error || '',
     stdout,
@@ -322,7 +329,32 @@ function bashResultFromPayload(payload) {
  */
 const { PASS_MARKERS, failureMarker } = require('../lib/verification-markers.cjs');
 
+/**
+ * partial 归因: 未满足的证据要求项 = 要求全集 - 已满足项。
+ * 只描述"门禁看不到什么判据", 纯增量字段, 不参与任何判定分支。
+ * 交付层 (postflight-router) 在 partial 事件里把它写进 delivery_events.uncovered,
+ * 回答"1,227 条里 54.9% partial 到底缺了什么证据"。
+ */
+function uncoveredEvidence(result, combined) {
+  const uncovered = [];
+  if (normalizeStatus(result?.status) === null) uncovered.push('exit-code');
+  if (!combined.trim()) uncovered.push('log-evidence');
+  else if (!PASS_MARKERS.some((re) => re.test(combined))) uncovered.push('pass-marker');
+  return uncovered;
+}
+
 function verificationVerdict(command, result) {
+  const verdict = verificationVerdictBase(command, result);
+  if (verdict && verdict.ok === false) {
+    verdict.uncovered = uncoveredEvidence(
+      result,
+      `${String(result?.stdout || '')}\n${String(result?.stderr || '')}\n${String(result?.error || '')}`,
+    );
+  }
+  return verdict;
+}
+
+function verificationVerdictBase(command, result) {
   const stdout = String(result?.stdout || '');
   const stderr = String(result?.stderr || '');
   const error = String(result?.error || '');

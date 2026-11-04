@@ -5,6 +5,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const { ingest } = require('../transport/index.cjs');
 const { renderDecision } = require('../transport/render.cjs');
+const { recordHealth } = require('../lib/hook-health.cjs');
 
 const SHELL_TOOLS = new Set(['bash', 'powershell']);
 const WRITE_TOOLS = new Set(['edit', 'write', 'multiedit']);
@@ -278,6 +279,7 @@ async function runGate(runtime, spec) {
       diagnostics: [`internal error: ${error.stack || error.message}`],
     };
     appendResult(runtime, result);
+    recordGateHealth(runtime, result.decision, error);
     return result;
   }
 }
@@ -312,6 +314,7 @@ function loadGuarded(runtime, source, loader) {
       decision: 'warn',
       diagnostics: [`load failed: ${error.stack || error.message}`],
     });
+    recordGateHealth(runtime, 'warn', error);
     return null;
   }
 }
@@ -454,6 +457,7 @@ async function runCommon(runtime, opts = {}) {
           diagnostics: [`context build failed: ${error.stack || error.message}`],
         };
         appendResult(runtime, result);
+        recordGateHealth(runtime, result.decision, error);
         commonResult = result;
       }
 
@@ -478,6 +482,7 @@ async function runCommon(runtime, opts = {}) {
             diagnostics: [`ledger write failed: ${error.stack || error.message}`],
           };
           appendResult(runtime, result);
+          recordGateHealth(runtime, result.decision, error);
           commonResult = result;
           if (result.decision === 'block') return result;
         }
@@ -501,6 +506,7 @@ async function runCommon(runtime, opts = {}) {
         decision: 'warn',
         diagnostics: [`internal error: ${error.stack || error.message}`],
       });
+      recordGateHealth(runtime, 'warn', error);
     }
   }
 
@@ -518,6 +524,7 @@ async function commitDeferred(runtime) {
         diagnostics: [`deferred commit failed: ${error.stack || error.message}`],
       };
       appendResult(runtime, result);
+      recordGateHealth(runtime, result.decision, error);
       if (result.decision === 'block') return result;
     }
   }
@@ -595,24 +602,46 @@ function fallbackDecision(payload, error, opts = {}) {
 
 /** main() 已摄入的载荷；崩溃兜底要在 catch 里拿到它。 */
 let fatalPayload = null;
+let mainStartedAt = null;
+let mainEventName = 'PreToolUse';
+
+/** 健康遥测统一入口：startedAt 传 null 表示非整调用级事件（per-gate，无计时）。 */
+function recordRouterHealth(event, outcome, startedAt, error) {
+  recordHealth({
+    hook: 'preflight-router',
+    event,
+    outcome,
+    ms: startedAt == null ? null : Date.now() - startedAt,
+    error: error ? (error.stack || error.message || String(error)) : null,
+  });
+}
+
+/** gate 级内部错误 → outcome 按既有降级语义：block（fail-closed 保持）记 error，降级 advisory 记 fail-open。 */
+function recordGateHealth(runtime, decision, error) {
+  recordRouterHealth(runtime.eventName, decision === 'block' ? 'error' : 'fail-open', null, error);
+}
 
 async function main() {
+  mainStartedAt = Date.now();
   let rawPayload;
   try {
     rawPayload = readPayload();
   } catch (error) {
     process.stderr.write(`[preflight-router] ${error.message}\n`);
     process.exitCode = 2;
+    recordRouterHealth(mainEventName, 'error', mainStartedAt, error);
     return;
   }
   fatalPayload = rawPayload;
   const { transport, payload } = ingest(rawPayload, { argv: process.argv });
   fatalPayload = payload;
-  return require('../lib/hook-latency.cjs').timed(
+  mainEventName = String(payload?.hook_event_name || 'PreToolUse');
+  await require('../lib/hook-latency.cjs').timed(
     'preflight-router',
-    String(payload?.hook_event_name || 'PreToolUse'),
+    mainEventName,
     () => mainWithPayload(payload, { transport }),
   );
+  recordRouterHealth(mainEventName, 'ok', mainStartedAt, null);
 }
 
 /** 跑完全部门禁，返回中立判定 'allow' | 'block'；不写 stdout / 不设 exitCode。 */
@@ -684,6 +713,12 @@ if (require.main === module) {
     const fallback = fallbackDecision(fatalPayload, error);
     if (fallback.stderr) process.stderr.write(fallback.stderr);
     process.exitCode = fallback.exitCode;
+    recordRouterHealth(
+      mainEventName,
+      fallback.decision === 'block' ? 'error' : 'fail-open',
+      mainStartedAt,
+      error,
+    );
   });
 }
 

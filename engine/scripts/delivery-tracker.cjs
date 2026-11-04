@@ -72,14 +72,34 @@ function ensureMigration(db) {
         applied_at TEXT NOT NULL DEFAULT (datetime('now'))
       )
     `);
-    const row = db.prepare("SELECT name FROM _delivery_migration WHERE name = '004-delivery-tracking'").all();
-    if (row.length === 0) {
+    // 迁移用命名清单驱动: 已应用的跳过, 新迁移按序补齐。
+    // 005: partial 事件的归因列 —— 未满足的证据类型列表 (JSON 数组字符串)。
+    //   背景: 1,227 条记录里 partial 占 54.9% 却无法回答"缺了什么证据"。
+    //   ensureColumn: 容忍旧库被手工加过列 (ALTER 会因列已存在而抛错)。
+    const MIGRATIONS = [
+      { name: '004-delivery-tracking', sql: MIGRATION_SQL },
+      {
+        name: '005-delivery-uncovered',
+        sql: 'ALTER TABLE delivery_events ADD COLUMN uncovered TEXT',
+        ensureColumn: 'uncovered',
+      },
+    ];
+    const applied = new Set(
+      db.prepare('SELECT name FROM _delivery_migration').all().map((row) => row.name),
+    );
+    for (const migration of MIGRATIONS) {
+      if (applied.has(migration.name)) continue;
       db.exec('BEGIN IMMEDIATE');
       try {
-        db.exec(MIGRATION_SQL);
-        db.prepare("INSERT INTO _delivery_migration (name) VALUES ('004-delivery-tracking')").run();
+        if (migration.ensureColumn) {
+          const columns = db.prepare('PRAGMA table_info(delivery_events)').all().map((col) => col.name);
+          if (!columns.includes(migration.ensureColumn)) db.exec(migration.sql);
+        } else {
+          db.exec(migration.sql);
+        }
+        db.prepare('INSERT INTO _delivery_migration (name) VALUES (?)').run(migration.name);
         db.exec('COMMIT');
-        console.log('[delivery-tracker] 迁移 004-delivery-tracking 已应用');
+        console.log(`[delivery-tracker] 迁移 ${migration.name} 已应用`);
       } catch (txErr) {
         db.exec('ROLLBACK');
         throw txErr;
@@ -90,6 +110,19 @@ function ensureMigration(db) {
     console.error('[delivery-tracker] 迁移失败:', e.message);
     return false;
   }
+}
+
+/**
+ * uncovered 归因序列化。lib 调用方传字符串数组, CLI 传原样字符串;
+ * 空数组/空值归一为 NULL (不写无信息的行)。
+ */
+function serializeUncovered(value) {
+  if (value === null || value === undefined || value === '') return null;
+  if (Array.isArray(value)) {
+    const list = value.map((item) => String(item)).filter(Boolean);
+    return list.length > 0 ? JSON.stringify(list) : null;
+  }
+  return String(value);
 }
 
 // ── 记录交付事件 ────────────────────────────────────────────────────────────
@@ -113,8 +146,8 @@ function recordDelivery(args, opts = {}) {
   ensureMigration(db);
 
   const stmt = db.prepare(`
-    INSERT INTO delivery_events (workflow_name, phase, status, module_count, retry_count, duration_sec, error_msg, project, session_id, timestamp)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, COALESCE(?, datetime('now')))
+    INSERT INTO delivery_events (workflow_name, phase, status, module_count, retry_count, duration_sec, error_msg, project, session_id, uncovered, timestamp)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, COALESCE(?, datetime('now')))
   `);
 
   const sessionId = args.sessionId || process.env.CLAUDE_SESSION_ID || 'unknown';
@@ -129,6 +162,7 @@ function recordDelivery(args, opts = {}) {
     args.error || null,
     args.project || path.basename(args.cwd || process.cwd()),
     sessionId,
+    serializeUncovered(args.uncovered),
     normalizeTimestamp(args.timestamp),
   );
   return true;
@@ -166,6 +200,7 @@ function recordEventFile(args) {
     retries: parseInt(args.retries) || 0,
     duration: parseInt(args.duration) || 0,
     error: args.error || null,
+    uncovered: serializeUncovered(args.uncovered),
     project: args.project || path.basename(process.cwd()),
     timestamp: new Date().toISOString(),
     sessionId: process.env.CLAUDE_SESSION_ID || 'unknown',
