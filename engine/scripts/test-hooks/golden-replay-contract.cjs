@@ -25,6 +25,9 @@
  *    CLAUDE_HOOK_NO_WRITE) are stripped even when set by the parent
  *  - child env: HARNESS_STATE_DIR points inside the worktree and the shim
  *    observes the directory as existing at run time
+ *  - task package: applyPatch applied at start (eval sees MUTATED app.js);
+ *    injectFiles placed at start, tampered by the shim, and RE-PLACED after
+ *    the restorePaths revert so eval sees the canonical canary content
  * Cleans up all temp artifacts.
  */
 
@@ -96,6 +99,13 @@ try {
   fs.mkdirSync(path.dirname(guard), { recursive: true });
   fs.writeFileSync(guard, 'GUARD-TAMPERED', 'utf8');
 } catch { /* tamper is best-effort */ }
+// Simulate tampering of the task-package-injected (untracked) acceptance file:
+// git checkout -- does NOT revert untracked files, so only the re-place step
+// can bring the canonical content back before eval.
+try {
+  const canary = path.join(cwd, 'engine', 'scripts', 'test-hooks', 'injected-canary.txt');
+  if (fs.existsSync(canary)) fs.writeFileSync(canary, 'CANARY-TAMPERED', 'utf8');
+} catch { /* tamper is best-effort */ }
 const READONLY_KEYS = ['CLAUDE_HARNESS_NO_PERSIST', 'CLAUDE_HARNESS_VERIFY_READONLY', 'CLAUDE_NO_DIAGNOSTIC_WRITES', 'CLAUDE_HOOK_NO_WRITE'];
 fs.appendFileSync(process.env.GOLDEN_SHIM_LOG, JSON.stringify({
   cwd, argv, stdin,
@@ -128,11 +138,16 @@ function setupScratchRepo(root) {
   const run = (args) => spawnSync('git', ['-C', repo, ...args], { encoding: 'utf8' });
   const init = run(['init', '-b', 'main']);
   if (init.status !== 0) throw new Error(`git init failed: ${init.stderr}`);
+  // Keep LF exact so the hand-crafted mutation patch applies deterministically.
+  run(['config', 'core.autocrlf', 'false']);
   fs.writeFileSync(path.join(repo, 'README.md'), '# scratch\n', 'utf8');
   // Tracked file under the harness's default restorePaths: the shim tampers it
   // and the pass eval asserts the replayer restored the original content.
   fs.mkdirSync(path.join(repo, 'engine', 'scripts', 'test-hooks'), { recursive: true });
   fs.writeFileSync(path.join(repo, 'engine', 'scripts', 'test-hooks', 'guard.txt'), 'GUARD-ORIGINAL', 'utf8');
+  // Tracked file targeted by the task package's applyPatch (start-state mutation).
+  fs.mkdirSync(path.join(repo, 'src'), { recursive: true });
+  fs.writeFileSync(path.join(repo, 'src', 'app.js'), "module.exports.tag = 'ORIGINAL';\n", 'utf8');
   run(['add', '.']);
   const commit = run(['-c', 'user.email=t@t', '-c', 'user.name=t', 'commit', '-m', 'init']);
   if (commit.status !== 0) throw new Error(`git commit failed: ${commit.stderr}`);
@@ -175,16 +190,38 @@ function main() {
     const passScript = path.join(root, 'eval-pass.cjs');
     const failScript = path.join(root, 'eval-fail.cjs');
     const restoreObserved = path.join(root, 'restore-observed.txt');
-    // Passes only if the tampered guard file was reverted before eval; dumps
-    // the observed content for a dedicated assertion.
+    // Passes only if (a) the tampered guard file was reverted before eval,
+    // (b) applyPatch's start-state mutation is present in src/app.js, and
+    // (c) the tampered injected canary was re-placed from the task package.
+    // Dumps everything observed for dedicated assertions.
     write(passScript, `
 'use strict';
 const fs = require('node:fs');
 const observed = fs.readFileSync('engine/scripts/test-hooks/guard.txt', 'utf8');
-fs.writeFileSync(process.env.GOLDEN_RESTORE_OBSERVED, observed, 'utf8');
-process.exit(observed === 'GUARD-ORIGINAL' ? 0 : 1);
+const app = fs.readFileSync('src/app.js', 'utf8');
+const canary = fs.readFileSync('engine/scripts/test-hooks/injected-canary.txt', 'utf8');
+fs.writeFileSync(process.env.GOLDEN_RESTORE_OBSERVED, JSON.stringify({ guard: observed, app, canary }), 'utf8');
+const pass = observed === 'GUARD-ORIGINAL'
+  && app.includes("module.exports.tag = 'MUTATED';")
+  && canary === 'INJECT-CANARY';
+process.exit(pass ? 0 : 1);
 `);
     write(failScript, 'process.exit(3);');
+
+    // Task package: single-hunk mutation patch (ORIGINAL -> MUTATED) and the
+    // canonical injected acceptance asset the shim will tamper mid-run.
+    const mutationPatch = path.join(root, 'mutation.patch');
+    write(mutationPatch, [
+      'diff --git a/src/app.js b/src/app.js',
+      '--- a/src/app.js',
+      '+++ b/src/app.js',
+      '@@ -1 +1 @@',
+      "-module.exports.tag = 'ORIGINAL';",
+      "+module.exports.tag = 'MUTATED';",
+      '',
+    ].join('\n'));
+    const canarySrc = path.join(root, 'task-package', 'injected-canary.txt');
+    write(canarySrc, 'INJECT-CANARY');
 
     const worktreeRoot = path.join(root, 'wt');
     const cfg = {
@@ -192,7 +229,9 @@ process.exit(observed === 'GUARD-ORIGINAL' ? 0 : 1);
       repoRoot: repo,
       permissionMode: 'acceptEdits',
       tasks: [
-        { id: 't-pass', category: 'cat-a', commit: sha, promptFile: promptPass, maxTurns: 30, evalCommand: `node "${passScript}"`, runs: 1 },
+        { id: 't-pass', category: 'cat-a', commit: sha, promptFile: promptPass, maxTurns: 30, evalCommand: `node "${passScript}"`, runs: 1,
+          applyPatch: mutationPatch,
+          injectFiles: [{ src: canarySrc, dst: 'engine/scripts/test-hooks/injected-canary.txt' }] },
         { id: 't-fail', category: 'cat-b', commit: sha, promptFile: promptFail, maxTurns: 30, evalCommand: `node "${failScript}"`, runs: 1 },
       ],
     };
@@ -281,14 +320,28 @@ process.exit(observed === 'GUARD-ORIGINAL' ? 0 : 1);
     }
 
     /* anti-tamper: eval observed the restored (original) guard content */
-    let observedGuard = '';
-    try { observedGuard = fs.readFileSync(restoreObserved, 'utf8'); } catch { /* below */ }
+    let observedDump = '';
+    try { observedDump = fs.readFileSync(restoreObserved, 'utf8'); } catch { /* below */ }
+    let observed = { guard: '', app: '', canary: '' };
+    try { observed = JSON.parse(observedDump); } catch { /* parse failures fail assertions below */ }
     assert('eval read restored guard.txt (tamper reverted before eval)',
-      observedGuard === 'GUARD-ORIGINAL', JSON.stringify(observedGuard));
+      observed.guard === 'GUARD-ORIGINAL', JSON.stringify(observedDump));
+    /* task package: applyPatch start state + injected asset re-placed pre-eval */
+    assert('applyPatch start state visible to eval (src/app.js mutated)',
+      String(observed.app).trim() === "module.exports.tag = 'MUTATED';", JSON.stringify(observed.app));
+    assert('injected canary re-placed before eval (tamper overwritten by task package)',
+      observed.canary === 'INJECT-CANARY', JSON.stringify(observed.canary));
     assert('run entry records restorePaths restore ok',
       Array.isArray(rPass.restore) && rPass.restore.length === 1
       && rPass.restore[0].path === 'engine/scripts/test-hooks' && rPass.restore[0].ok === true,
       JSON.stringify(rPass.restore));
+    assert('run entry records setup.patch ok, setup.inject ok, reinject ok',
+      rPass.setup && rPass.setup.patch && rPass.setup.patch.ok === true
+      && Array.isArray(rPass.setup.inject) && rPass.setup.inject.length === 1
+      && rPass.setup.inject[0].ok === true
+      && Array.isArray(rPass.reinject) && rPass.reinject.length === 1
+      && rPass.reinject[0].ok === true,
+      JSON.stringify({ setup: rPass.setup, reinject: rPass.reinject }));
 
     /* harvest: cost-state last-wins + usage dedupe */
     assert('cost harvested with final cumulative (double-write collapsed)',

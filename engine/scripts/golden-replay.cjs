@@ -25,6 +25,13 @@
  *     "evalCommand": "npm test",       // required, pass = exit 0 (run in worktree)
  *     "runs": 1,                       // optional, default 1
  *     "restorePaths": ["engine/scripts/test-hooks"], // optional, see NOTE-RESTORE-PATHS
+ *     "applyPatch": "patches/mutation.patch",  // optional, git-applied in the
+ *                                              // worktree right after creation
+ *                                              // (start state; see NOTE-TASK-PACKAGE)
+ *     "injectFiles": [                         // optional, task-package files
+ *       {"src": "tasks/P-T2/acceptance.test.cjs",
+ *        "dst": "engine/scripts/test-hooks/..."}, // placed at start AND re-placed
+ *     ],                                       // before eval (see NOTE-TASK-PACKAGE)
  *     "permissionMode": "bypassPermissions", // optional, overrides batch
  *     "model": "claude-opus-5"         // optional, overrides batch
  *   }]
@@ -41,6 +48,18 @@
  * pass. Convention: acceptance tests injected by the TASK PACKAGE must live
  * OUTSIDE restorePaths and are referenced directly by evalCommand — the
  * harness-owned test hooks are restored, the task's own eval assets are not.
+ *
+ * NOTE-TASK-PACKAGE: start-state and eval-asset provisioning.
+ *  - applyPatch: applied via `git apply` inside the worktree immediately after
+ *    creation (before the agent runs). A failed apply aborts the run loudly —
+ *    a wrong start state must never be judged.
+ *  - injectFiles: copied src→dst at the same moment, AND re-copied after the
+ *    restorePaths revert, right before eval. Rationale: injected files are
+ *    untracked, so `git checkout --` does NOT revert them; a misbehaving agent
+ *    could tamper an injected acceptance test. Re-placing the canonical copy
+ *    from the task package closes that hole (curator spec §4.1). A failed
+ *    re-place also aborts the run — an eval without the canonical asset is
+ *    not judgeable.
  *
  * NOTE-CHILD-ENV: each claude child process gets
  *  - HARNESS_STATE_DIR=<worktree>/.harness-state (pre-created; kept after the
@@ -181,10 +200,21 @@ function loadConfig(args) {
       restorePaths: Array.isArray(raw.restorePaths)
         ? raw.restorePaths.map((p) => String(p)).filter(Boolean)
         : DEFAULT_RESTORE_PATHS.slice(),
+      applyPatch: raw.applyPatch ? resolvePath(raw.applyPatch, configDir) : '',
+      injectFiles: Array.isArray(raw.injectFiles)
+        ? raw.injectFiles.map((f) => ({ src: resolvePath(f.src, configDir), dst: String(f.dst || '') }))
+        : [],
       promptFile: raw.promptFile ? resolvePath(raw.promptFile, configDir) : '',
     };
     if (!task.id) throw new Error(`tasks[${index}].id is required`);
     if (!task.commit) throw new Error(`tasks[${index}].commit is required`);
+    if (task.applyPatch && !fs.existsSync(task.applyPatch)) {
+      throw new Error(`tasks[${index}].applyPatch not found: ${raw.applyPatch}`);
+    }
+    for (const f of task.injectFiles) {
+      if (!f.dst) throw new Error(`tasks[${index}].injectFiles[].dst is required`);
+      if (!fs.existsSync(f.src)) throw new Error(`tasks[${index}].injectFiles[].src not found: ${f.src}`);
+    }
     if (!task.promptFile || !fs.existsSync(task.promptFile)) {
       throw new Error(`tasks[${index}].promptFile not found: ${raw.promptFile}`);
     }
@@ -236,6 +266,37 @@ function restoreTaskPaths(worktreePath, restorePaths) {
       // Tolerated: a path absent from the pinned commit has nothing to revert.
       return { path: p, ok: false, error: String(error.message || error) };
     }
+  });
+}
+
+/** Apply the task-package patch in the worktree (start state). Throws loudly. */
+function applyTaskPatch(worktreePath, patchPath) {
+  git(worktreePath, ['apply', '--whitespace=nowarn', patchPath]);
+  return { patch: path.basename(patchPath), ok: true };
+}
+
+/** Copy task-package files into the worktree (start state). Throws loudly. */
+function injectTaskFiles(injectFiles, worktreePath) {
+  return injectFiles.map((f) => {
+    const dst = path.join(worktreePath, f.dst);
+    fs.mkdirSync(path.dirname(dst), { recursive: true });
+    fs.copyFileSync(f.src, dst);
+    return { dst: f.dst, ok: true };
+  });
+}
+
+/**
+ * Re-place task-package files after the restorePaths revert, right before
+ * eval (NOTE-TASK-PACKAGE): injected files are untracked, so the anti-tamper
+ * checkout cannot restore them. Throws loudly — an eval without the canonical
+ * asset is not judgeable.
+ */
+function reinjectTaskFiles(injectFiles, worktreePath) {
+  return injectFiles.map((f) => {
+    const dst = path.join(worktreePath, f.dst);
+    fs.mkdirSync(path.dirname(dst), { recursive: true });
+    fs.copyFileSync(f.src, dst);
+    return { dst: f.dst, ok: true };
   });
 }
 
@@ -450,6 +511,8 @@ function main() {
       promptFile: t.promptFile,
       evalCommand: t.evalCommand,
       restorePaths: t.restorePaths,
+      applyPatch: t.applyPatch || '',
+      injectFiles: t.injectFiles || [],
     })),
   };
 
@@ -462,6 +525,10 @@ function main() {
         + `maxTurns=${t.maxTurns}(not forwarded, no CLI flag) mode=${t.permissionMode} ${t.model}\n`);
       process.stdout.write(`    prompt: ${t.promptFile}\n    eval:   ${t.evalCommand}\n`);
       process.stdout.write(`    restorePaths: ${JSON.stringify(t.restorePaths)}\n`);
+      if (t.applyPatch) process.stdout.write(`    applyPatch:  ${t.applyPatch}\n`);
+      if (t.injectFiles.length) {
+        process.stdout.write(`    injectFiles: ${JSON.stringify(t.injectFiles.map((f) => f.dst))}\n`);
+      }
     }
     process.stdout.write(`would write report to: ${reportPath}\n`);
     process.stdout.write('dry-run complete — no claude invocation, no worktree created\n');
@@ -493,11 +560,16 @@ function main() {
         toolUseCount: null,
         eval: null,
         restore: [],
+        reinject: [],
+        setup: null,
         harnessStateDir: '',
         error: '',
       };
       try {
         prepareWorktree(repoRoot, worktreePath, task.commit);
+        entry.setup = { patch: null, inject: [] };
+        if (task.applyPatch) entry.setup.patch = applyTaskPatch(worktreePath, task.applyPatch);
+        if (task.injectFiles.length) entry.setup.inject = injectTaskFiles(task.injectFiles, worktreePath);
         const headless = runHeadless(task, worktreePath, runIndex);
         entry.harnessStateDir = path.join(worktreePath, HARNESS_STATE_DIRNAME);
         Object.assign(entry, {
@@ -522,6 +594,9 @@ function main() {
         }
         // Anti-tamper: revert harness test-hook paths before judging (NOTE-RESTORE-PATHS).
         entry.restore = restoreTaskPaths(worktreePath, task.restorePaths);
+        // Re-place task-package eval assets after the revert (NOTE-TASK-PACKAGE):
+        // injected files are untracked, so the checkout above cannot restore them.
+        entry.reinject = task.injectFiles.length ? reinjectTaskFiles(task.injectFiles, worktreePath) : [];
         entry.eval = runEval(task.evalCommand, worktreePath);
       } catch (error) {
         entry.error = entry.error || String(error.message || error);
