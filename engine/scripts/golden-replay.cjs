@@ -81,8 +81,11 @@
  *  - cost-state: last record in file order = final cumulative
  *    (periodic double-writes collapse naturally; dedupe key
  *     sessionId|startTime|totalCostUSD per cost-state-ingest.cjs)
- *  - assistant message.usage: dedupe by message.id, keep first, sum tokens
- *  - tool call count: tool_use blocks in deduped assistant messages
+ *  - assistant records: identity = message.id + content fingerprint
+ *    (sha1 of the content array). Pure double-writes collapse; split turns
+ *    (same id, different content blocks — observed on third-party endpoints)
+ *    are kept. usage summed per kept record; tool_use counted per kept record.
+ *  - tool call count: tool_use blocks in kept assistant records
  * cwd-slug rule (validated against real samples, e.g.
  * C:\Users\Lihan\.claude -> C--Users-Lihan--claude): every non-alphanumeric
  * character replaced with '-'.
@@ -91,6 +94,7 @@
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
+const crypto = require('node:crypto');
 const { spawnSync } = require('node:child_process');
 
 const { HARNESS_ROOT } = require('./lib/harness-root.cjs');
@@ -241,7 +245,22 @@ function prepareWorktree(repoRoot, worktreePath, commit) {
   // Reuse the path: an existing directory (registered or leftover) is removed first.
   if (fs.existsSync(worktreePath)) {
     git(repoRoot, ['worktree', 'remove', '--force', worktreePath], { allowFailure: true });
-    fs.rmSync(worktreePath, { recursive: true, force: true });
+    try {
+      fs.rmSync(worktreePath, { recursive: true, force: true });
+    } catch (rmError) {
+      // Host safe-delete/trash layers can veto recursive deletes (observed:
+      // "Error during a `trash` operation"). Move the leftover aside instead
+      // so the run proceeds on a clean path; the stale copy is cleaned later.
+      const stale = `${worktreePath}.stale-${Date.now()}`;
+      try {
+        fs.renameSync(worktreePath, stale);
+      } catch (renameError) {
+        throw new Error(
+          `worktree reuse cleanup failed: rm=${String(rmError.message || rmError)} `
+          + `rename=${String(renameError.message || renameError)}`,
+        );
+      }
+    }
   }
   git(repoRoot, ['worktree', 'prune']);
   // Force LF in replay worktrees: global core.autocrlf=true would check out
@@ -407,7 +426,7 @@ function harvestTranscript(file) {
   };
   const tokens = emptyTokens();
   let toolUseCount = 0;
-  const seenMessages = new Set(); // message.id — usage double-writes keep first
+  const seenRecords = new Set(); // id + content fingerprint — see note above
   const raw = fs.readFileSync(file, 'utf8');
   for (const line of raw.split('\n')) {
     const trimmed = line.trim();
@@ -420,17 +439,27 @@ function harvestTranscript(file) {
       cost.totalCostUSD = typeof rec.totalCostUSD === 'number' ? rec.totalCostUSD : cost.totalCostUSD;
       cost.totalAPIDuration = rec.totalAPIDuration ?? cost.totalAPIDuration;
       cost.totalToolDuration = rec.totalToolDuration ?? cost.totalToolDuration;
-    } else if (rec.type === 'assistant' && rec.message && rec.message.usage) {
-      const id = rec.message.id;
-      if (typeof id === 'string' && id) {
-        if (seenMessages.has(id)) continue;
-        seenMessages.add(id);
-      }
+    } else if (rec.type === 'assistant' && rec.message) {
+      // Record identity = message.id + content fingerprint. A pure double-write
+      // (identical copies) collapses; a split turn — same id emitted as several
+      // records with DIFFERENT content blocks (observed on third-party
+      // endpoints: first record thinking-only, later records carry tool_use) —
+      // is kept, so tool_use counting stays exact.
+      const id = typeof rec.message.id === 'string' ? rec.message.id : '';
+      const fp = crypto.createHash('sha1')
+        .update(JSON.stringify(rec.message.content ?? null))
+        .digest('hex')
+        .slice(0, 16);
+      const recordKey = `${id || 'noid'}:${fp}`;
+      if (seenRecords.has(recordKey)) continue;
+      seenRecords.add(recordKey);
       const usage = rec.message.usage;
-      tokens.inputTokens += Number(usage.input_tokens) || 0;
-      tokens.outputTokens += Number(usage.output_tokens) || 0;
-      tokens.cacheReadInputTokens += Number(usage.cache_read_input_tokens) || 0;
-      tokens.cacheCreationInputTokens += Number(usage.cache_creation_input_tokens) || 0;
+      if (usage && typeof usage === 'object') {
+        tokens.inputTokens += Number(usage.input_tokens) || 0;
+        tokens.outputTokens += Number(usage.output_tokens) || 0;
+        tokens.cacheReadInputTokens += Number(usage.cache_read_input_tokens) || 0;
+        tokens.cacheCreationInputTokens += Number(usage.cache_creation_input_tokens) || 0;
+      }
       if (Array.isArray(rec.message.content)) {
         toolUseCount += rec.message.content.filter((block) => block && block.type === 'tool_use').length;
       }
