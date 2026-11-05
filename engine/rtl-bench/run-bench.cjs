@@ -271,6 +271,9 @@ function main() {
     const started = Date.now();
     const r = spawnSync(parts[0], parts.slice(1), {
       cwd: workspaceDir, input: prompt, encoding: 'utf8',
+      // stream-json + --verbose 每个思考 token 都产出一行 system 事件，输出量
+      // 远超 spawnSync 默认 1MB maxBuffer（实测 45s 即 ENOBUFS→SIGTERM 杀会话）。
+      maxBuffer: 256 * 1024 * 1024,
       timeout: timeoutMin * 60 * 1000, windowsHide: false, env,
     });
     const transcript = (r.stdout || '');
