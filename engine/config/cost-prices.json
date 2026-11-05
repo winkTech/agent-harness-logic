@@ -1,7 +1,8 @@
 {
-  "version": 1,
+  "version": 2,
   "updatedAt": "2026-11-05",
   "unit": "USD_per_MTok",
+  "notes": "v2: 增补 deepseek-v4 系列（approx=官方 deepseek-chat 档公开价占位，待用户实际套餐价校正）。claude 系为真实反解价（cost-state 锚定）。",
   "prices": {
     "claude-opus-5": {
       "input": 5.0,
@@ -27,6 +28,34 @@
       "output": 35.3,
       "cacheWrite": 8.825,
       "cacheRead": 0.706,
+      "approx": true
+    },
+    "deepseek-v4-flash": {
+      "input": 0.27,
+      "output": 1.1,
+      "cacheWrite": 0.27,
+      "cacheRead": 0.07,
+      "approx": true
+    },
+    "deepseek-v4-flash[1M]": {
+      "input": 0.27,
+      "output": 1.1,
+      "cacheWrite": 0.27,
+      "cacheRead": 0.07,
+      "approx": true
+    },
+    "deepseek-v4-pro": {
+      "input": 0.27,
+      "output": 1.1,
+      "cacheWrite": 0.27,
+      "cacheRead": 0.07,
+      "approx": true
+    },
+    "deepseek-v4-pro[1M]": {
+      "input": 0.27,
+      "output": 1.1,
+      "cacheWrite": 0.27,
+      "cacheRead": 0.07,
       "approx": true
     }
   }
