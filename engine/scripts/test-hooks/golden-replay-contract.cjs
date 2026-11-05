@@ -231,6 +231,7 @@ process.exit(pass ? 0 : 1);
       tasks: [
         { id: 't-pass', category: 'cat-a', commit: sha, promptFile: promptPass, maxTurns: 30, evalCommand: `node "${passScript}"`, runs: 1,
           applyPatch: mutationPatch,
+          sparsePaths: ['engine', 'src'],
           injectFiles: [{ src: canarySrc, dst: 'engine/scripts/test-hooks/injected-canary.txt' }] },
         { id: 't-fail', category: 'cat-b', commit: sha, promptFile: promptFail, maxTurns: 30, evalCommand: `node "${failScript}"`, runs: 1 },
       ],
@@ -290,13 +291,14 @@ process.exit(pass ? 0 : 1);
     assert('wallMs and stdoutBytes recorded', rPass.wallMs >= 0 && rPass.stdoutBytes > 0);
     assert('transcript located', typeof rPass.transcript === 'string' && rPass.transcript.endsWith('.jsonl'));
 
-    /* shim invocations: cwd, argv, stdin */
+    /* shim invocations: cwd, argv, stdin (worktree names carry a per-run
+     * nonce suffix — assert by prefix) */
     const log = readShimLog(shimLog);
     assert('shim called exactly twice', log.length === 2, `calls=${log.length}`);
-    const expectedWt1 = path.join(worktreeRoot, 't-pass-r1');
-    const expectedWt2 = path.join(worktreeRoot, 't-fail-r1');
+    const wtPrefix1 = path.join(worktreeRoot, 't-pass-r1-');
+    const wtPrefix2 = path.join(worktreeRoot, 't-fail-r1-');
     if (log.length === 2) {
-      assert('shim run1 cwd is task worktree', path.resolve(log[0].cwd) === path.resolve(expectedWt1), log[0].cwd);
+      assert('shim run1 cwd is task worktree', path.resolve(log[0].cwd).startsWith(path.resolve(wtPrefix1)), log[0].cwd);
       assert('shim run1 args contain -p/--output-format json/--permission-mode acceptEdits',
         log[0].argv.includes('-p') && log[0].argv.includes('--output-format')
         && log[0].argv[log[0].argv.indexOf('--output-format') + 1] === 'json'
@@ -304,12 +306,12 @@ process.exit(pass ? 0 : 1);
         && log[0].argv[log[0].argv.indexOf('--permission-mode') + 1] === 'acceptEdits',
         JSON.stringify(log[0].argv));
       assert('shim run1 received prompt via stdin', log[0].stdin === 'contract pass prompt');
-      assert('shim run2 cwd is second worktree', path.resolve(log[1].cwd) === path.resolve(expectedWt2), log[1].cwd);
+      assert('shim run2 cwd is second worktree', path.resolve(log[1].cwd).startsWith(path.resolve(wtPrefix2)), log[1].cwd);
       /* child env: HARNESS_STATE_DIR scoped to the worktree */
       const stateDir = log[0].env.harnessStateDir;
       assert('shim env HARNESS_STATE_DIR inside worktree, .harness-state, exists at run time',
         stateDir
-        && path.resolve(stateDir).startsWith(path.resolve(expectedWt1) + path.sep)
+        && path.resolve(stateDir).startsWith(path.resolve(wtPrefix1))
         && path.basename(stateDir) === '.harness-state'
         && log[0].env.harnessStateDirExists === true,
         JSON.stringify(log[0].env));
@@ -364,7 +366,12 @@ process.exit(pass ? 0 : 1);
 
     /* worktree cleanup */
     assert('worktrees removed after run',
-      !fs.existsSync(expectedWt1) && !fs.existsSync(expectedWt2)
+      (() => {
+        try {
+          return fs.readdirSync(worktreeRoot)
+            .filter((d) => d.startsWith('t-pass-r1-') || d.startsWith('t-fail-r1-')).length === 0;
+        } catch { return true; }
+      })()
       && rPass.worktreeCleanup && rPass.worktreeCleanup.removed === true);
 
     /* medians + FPY */

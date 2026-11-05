@@ -105,6 +105,9 @@ const DEFAULT_BUDGET_USD = 20;
 const DEFAULT_PERMISSION_MODE = 'acceptEdits';
 const EVAL_TIMEOUT_MS = 10 * 60 * 1000;
 const MTIME_SLACK_MS = 5000;
+/** Sparse-checkout default: replays only need the engine tree (packs/ alone
+ *  is ~1GB — full checkouts would cost ~1.4GB per worktree on this repo). */
+const DEFAULT_SPARSE_PATHS = ['engine', 'docs'];
 /** Per-run claude child state dir, inside the worktree (kept after the run). */
 const HARNESS_STATE_DIRNAME = '.harness-state';
 /**
@@ -204,6 +207,9 @@ function loadConfig(args) {
       restorePaths: Array.isArray(raw.restorePaths)
         ? raw.restorePaths.map((p) => String(p)).filter(Boolean)
         : DEFAULT_RESTORE_PATHS.slice(),
+      sparsePaths: Array.isArray(raw.sparsePaths)
+        ? raw.sparsePaths.map((p) => String(p)).filter(Boolean)
+        : (Array.isArray(config.sparsePaths) ? config.sparsePaths.map((p) => String(p)).filter(Boolean) : []),
       applyPatch: raw.applyPatch ? resolvePath(raw.applyPatch, configDir) : '',
       injectFiles: Array.isArray(raw.injectFiles)
         ? raw.injectFiles.map((f) => ({ src: resolvePath(f.src, configDir), dst: String(f.dst || '') }))
@@ -241,16 +247,17 @@ function git(repoRoot, gitArgs, opts = {}) {
   return result;
 }
 
-function prepareWorktree(repoRoot, worktreePath, commit) {
+function prepareWorktree(repoRoot, worktreePath, commit, sparsePaths) {
   // Reuse the path: an existing directory (registered or leftover) is removed first.
   if (fs.existsSync(worktreePath)) {
     git(repoRoot, ['worktree', 'remove', '--force', worktreePath], { allowFailure: true });
     try {
       fs.rmSync(worktreePath, { recursive: true, force: true });
     } catch (rmError) {
-      // Host safe-delete/trash layers can veto recursive deletes (observed:
-      // "Error during a `trash` operation"). Move the leftover aside instead
-      // so the run proceeds on a clean path; the stale copy is cleaned later.
+      // Host safe-delete/trash layers can veto recursive deletes and leftover
+      // dirs can be EBUSY-locked by a lingering child process. The caller
+      // mitigates by using a unique path per run; a stale collision here is
+      // moved aside when possible, otherwise fatal (nothing to judge).
       const stale = `${worktreePath}.stale-${Date.now()}`;
       try {
         fs.renameSync(worktreePath, stale);
@@ -265,7 +272,14 @@ function prepareWorktree(repoRoot, worktreePath, commit) {
   git(repoRoot, ['worktree', 'prune']);
   // Force LF in replay worktrees: global core.autocrlf=true would check out
   // CRLF and break LF-context applyPatch files (git apply matches exactly).
-  git(repoRoot, ['-c', 'core.autocrlf=false', 'worktree', 'add', '--detach', worktreePath, commit]);
+  // Sparse checkout keeps worktrees small — the full repo carries ~1GB of
+  // packs/engineering-assets that no replay task touches.
+  const sp = (Array.isArray(sparsePaths) && sparsePaths.length ? sparsePaths : DEFAULT_SPARSE_PATHS)
+    .map((p) => String(p));
+  git(repoRoot, ['-c', 'core.autocrlf=false', 'worktree', 'add', '--no-checkout', '--detach', worktreePath, commit]);
+  git(worktreePath, ['sparse-checkout', 'init', '--cone']);
+  git(worktreePath, ['sparse-checkout', 'set', ...sp]);
+  git(worktreePath, ['checkout', 'HEAD', '--']);
 }
 
 function cleanupWorktree(repoRoot, worktreePath) {
@@ -556,6 +570,7 @@ function main() {
         + `maxTurns=${t.maxTurns}(not forwarded, no CLI flag) mode=${t.permissionMode} ${t.model}\n`);
       process.stdout.write(`    prompt: ${t.promptFile}\n    eval:   ${t.evalCommand}\n`);
       process.stdout.write(`    restorePaths: ${JSON.stringify(t.restorePaths)}\n`);
+      process.stdout.write(`    sparsePaths: ${JSON.stringify(t.sparsePaths)}\n`);
       if (t.applyPatch) process.stdout.write(`    applyPatch:  ${t.applyPatch}\n`);
       if (t.injectFiles.length) {
         process.stdout.write(`    injectFiles: ${JSON.stringify(t.injectFiles.map((f) => f.dst))}\n`);
@@ -577,7 +592,10 @@ function main() {
     }
     const runs = [];
     for (let runIndex = 1; runIndex <= task.runs; runIndex++) {
-      const worktreePath = path.join(worktreeRoot, `${task.id}-r${runIndex}`);
+      // Unique suffix per run: leftover dirs from aborted runs can be EBUSY-
+      // locked by lingering child processes (host safe-delete vetoes deletes);
+      // a fresh path never collides, orphans are swept best-effort elsewhere.
+      const worktreePath = path.join(worktreeRoot, `${task.id}-r${runIndex}-${Date.now().toString(36)}`);
       const entry = {
         run: runIndex,
         worktree: worktreePath,
@@ -597,7 +615,7 @@ function main() {
         error: '',
       };
       try {
-        prepareWorktree(repoRoot, worktreePath, task.commit);
+        prepareWorktree(repoRoot, worktreePath, task.commit, task.sparsePaths);
         entry.setup = { patch: null, inject: [] };
         if (task.applyPatch) entry.setup.patch = applyTaskPatch(worktreePath, task.applyPatch);
         if (task.injectFiles.length) entry.setup.inject = injectTaskFiles(task.injectFiles, worktreePath);
