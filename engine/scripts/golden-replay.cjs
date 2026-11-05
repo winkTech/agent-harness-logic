@@ -556,6 +556,7 @@ function main() {
       promptFile: t.promptFile,
       evalCommand: t.evalCommand,
       restorePaths: t.restorePaths,
+      sparsePaths: t.sparsePaths,
       applyPatch: t.applyPatch || '',
       injectFiles: t.injectFiles || [],
     })),
