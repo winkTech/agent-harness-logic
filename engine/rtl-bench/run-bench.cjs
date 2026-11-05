@@ -115,6 +115,12 @@ function buildIsolatedEnv(sandboxHome, sourceEnv = process.env) {
   });
   if (sourceEnv.CLAUDE_LIVE_EVAL_ANTHROPIC_API_KEY) env.ANTHROPIC_API_KEY = sourceEnv.CLAUDE_LIVE_EVAL_ANTHROPIC_API_KEY;
   if (sourceEnv.CLAUDE_LIVE_EVAL_OAUTH_TOKEN) env.CLAUDE_CODE_OAUTH_TOKEN = sourceEnv.CLAUDE_LIVE_EVAL_OAUTH_TOKEN;
+  // 中转/兼容端点三件套（与 settings.json env 等价能力的显式注入路径）：
+  // BASE_URL + AUTH_TOKEN(+ MODEL) 缺一时，子 claude 会直连默认端点并以无凭据
+  // 状态 403 失败（2026-11-05 实测）。
+  if (sourceEnv.CLAUDE_LIVE_EVAL_ANTHROPIC_BASE_URL) env.ANTHROPIC_BASE_URL = sourceEnv.CLAUDE_LIVE_EVAL_ANTHROPIC_BASE_URL;
+  if (sourceEnv.CLAUDE_LIVE_EVAL_ANTHROPIC_AUTH_TOKEN) env.ANTHROPIC_AUTH_TOKEN = sourceEnv.CLAUDE_LIVE_EVAL_ANTHROPIC_AUTH_TOKEN;
+  if (sourceEnv.CLAUDE_LIVE_EVAL_ANTHROPIC_MODEL) env.ANTHROPIC_MODEL = sourceEnv.CLAUDE_LIVE_EVAL_ANTHROPIC_MODEL;
   if (sourceEnv.CODEX_LIVE_EVAL_OPENAI_API_KEY) env.OPENAI_API_KEY = sourceEnv.CODEX_LIVE_EVAL_OPENAI_API_KEY;
   return env;
 }
