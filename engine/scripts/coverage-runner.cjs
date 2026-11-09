@@ -10,7 +10,7 @@
  *   node engine/scripts/coverage-runner.cjs --ci <repo-root>   # CI 模式
  *   node engine/scripts/coverage-runner.cjs --check            # 只检查上次结果
  *
- * 阈值: 60% — 低于此值 exit 2
+ * 阈值: 66% (Phase 0 全量分母修复后的实测基线 floor) — 低于此值 exit 2
  */
 
 'use strict';
@@ -22,7 +22,12 @@ const { spawnSync } = require('node:child_process');
 const { HARNESS_ROOT, resolveHarnessRoot } = require('./lib/harness-root.cjs');
 const { varPath } = require('./lib/harness-state.cjs');
 
-const COVERAGE_THRESHOLD = 60;
+/**
+ * 覆盖率阈值。Phase 0 步骤 0.4 将分母从"被加载的文件"改为 engine 全量 .cjs
+ * (未加载文件计 0 覆盖) 后, 2026-11-09 实测新基线 66%, 本值对齐 floor(66)=66。
+ * Phase 2/5 死代码清理后分母缩小, 届时随实测回升重新校准。
+ */
+const COVERAGE_THRESHOLD = 66;
 
 /**
  * run-all-tests.cjs 的整体墙钟预算。超出即被 SIGTERM 砍断, 见下方超时诊断。
@@ -115,15 +120,51 @@ function coveredLinesForRanges(sourceLines, ranges) {
   return covered;
 }
 
+// ── 全量分母 ─────────────────────────────────────────────────────────────────
+
+/**
+ * 递归收集 engine/ 下全部 .cjs 文件 (Phase 0 全量分母修复)。
+ * 旧分母只统计 NODE_V8_COVERAGE 数据里出现过的文件 —— 即"被加载的文件"。
+ * 从未被执行入口 require 到的脚本完全不在分母里, 覆盖率系统性偏高 (失明)。
+ * 新分母 = engine 递归全量 .cjs 文件, 未加载文件计 0 覆盖。
+ */
+function collectEngineCjs(root) {
+  const engineDir = path.join(root, 'engine');
+  const files = [];
+  const walk = (dir) => {
+    let entries;
+    try {
+      entries = fs.readdirSync(dir, { withFileTypes: true });
+    } catch {
+      return;
+    }
+    for (const entry of entries) {
+      const full = path.join(dir, entry.name);
+      if (entry.isDirectory()) walk(full);
+      else if (entry.isFile() && entry.name.endsWith('.cjs')) files.push(full);
+    }
+  };
+  walk(engineDir);
+  return files;
+}
+
 /**
  * 解析 V8 覆盖率 JSON，计算行覆盖率。
+ * 分母 = engine 递归全量 .cjs ∪ 覆盖数据中出现的 engine/ 下文件。
  * @param {string} coverageDir NODE_V8_COVERAGE 输出目录
  * @returns {{ totalLines: number, coveredLines: number, percent: number, files: number }}
  */
 function parseV8Coverage(coverageDir, options = {}) {
   const root = path.resolve(options.root || ROOT);
   if (!fs.existsSync(coverageDir)) {
-    return { totalLines: 0, coveredLines: 0, percent: 0, files: 0 };
+    // 无覆盖率数据 ≠ 空分母: 全量 engine/**/*.cjs 依然计入, 全部 0 覆盖
+    let totalLines = 0;
+    for (const file of collectEngineCjs(root)) {
+      try {
+        totalLines += fs.readFileSync(file, 'utf8').split('\n').length;
+      } catch {}
+    }
+    return { totalLines, coveredLines: 0, percent: 0, files: 0, unloadedFiles: 0 };
   }
 
   const coverageFiles = fs.readdirSync(coverageDir).filter(f => f.endsWith('.json'));
@@ -180,6 +221,21 @@ function parseV8Coverage(coverageDir, options = {}) {
     }
   }
 
+  // 全量分母: 补齐未被任何子进程加载的 engine/**/*.cjs, 计 0 覆盖
+  let unloadedFiles = 0;
+  for (const file of collectEngineCjs(root)) {
+    if (byScript.has(file)) continue;
+    try {
+      byScript.set(file, {
+        sourceLines: fs.readFileSync(file, 'utf8').split('\n'),
+        coveredLines: new Set(),
+      });
+      unloadedFiles += 1;
+    } catch {
+      continue;
+    }
+  }
+
   let totalLines = 0;
   let coveredLines = 0;
   for (const scriptCoverage of byScript.values()) {
@@ -187,7 +243,7 @@ function parseV8Coverage(coverageDir, options = {}) {
     coveredLines += scriptCoverage.coveredLines.size;
   }
   const percent = totalLines > 0 ? Math.round((coveredLines / totalLines) * 100) : 0;
-  return { totalLines, coveredLines, percent, files: byScript.size };
+  return { totalLines, coveredLines, percent, files: byScript.size, unloadedFiles };
 }
 
 // ── 报告 ──────────────────────────────────────────────────────────────────────
@@ -258,15 +314,17 @@ function main() {
 
   // 解析覆盖率
   console.log(`\n[coverage-runner] 📊 解析覆盖率数据...`);
-  const { totalLines, coveredLines, percent, files } = parseV8Coverage(tmpCoverage);
+  const { totalLines, coveredLines, percent, files, unloadedFiles } = parseV8Coverage(tmpCoverage);
 
   const summary = {
     timestamp: new Date().toISOString(),
     root: ROOT,
+    denominator: 'engine/**/*.cjs (全量, 未加载文件计 0 覆盖)',
     totalLines,
     coveredLines,
     percent,
     files,
+    unloadedFiles,
     threshold: COVERAGE_THRESHOLD,
     passed: percent >= COVERAGE_THRESHOLD,
   };
@@ -279,7 +337,8 @@ function main() {
   // 输出
   console.log('');
   console.log('━━━ V8 覆盖率报告 ━━━');
-  console.log(`  检测文件数: ${files}`);
+  console.log('  分母:       engine/**/*.cjs 全量');
+  console.log(`  检测文件数: ${files} (其中未被加载计 0 覆盖: ${unloadedFiles})`);
   console.log(`  总行数:     ${totalLines}`);
   console.log(`  覆盖行数:   ${coveredLines}`);
   console.log(`  覆盖率:     ${percent}%`);

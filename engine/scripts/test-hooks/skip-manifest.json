@@ -3,5 +3,11 @@
   "allowedIds": [
     "LongTaskEval::固定历史产物不再计为 fresh live 通过"
   ],
-  "reason": "唯一允许的跳过是环境条件跳过：LongTaskEval 复算 var/agent-evals/long-task 下已捕获的真实 agent 运行产物，var/ 不入版本库，全新 checkout 与 CI 上无对象可复算；本机有产物时照常执行，因此本机实际跳过数为 0，CI 为 1。原先白名单里的 13 条 PythonGate/MatlabGate/CoverageGate/FPRHook/CommitGate 已随测试一并删除——它们的目标脚本在本仓库任何位置都不存在，属门禁移除后的测试残骸，在所有环境恒定跳过，不是环境条件跳过。新增跳过在明确复核前一律失败。"
+  "reason": "唯一允许的跳过是环境条件跳过：LongTaskEval 复算 var/agent-evals/long-task 下已捕获的真实 agent 运行产物，var/ 不入版本库，全新 checkout 与 CI 上无对象可复算；本机有产物时照常执行，因此本机实际跳过数为 0，CI 为 1。原先白名单里的 13 条 PythonGate/MatlabGate/CoverageGate/FPRHook/CommitGate 已随测试一并删除——它们的目标脚本在本仓库任何位置都不存在，属门禁移除后的测试残骸，在所有环境恒定跳过，不是环境条件跳过。新增跳过在明确复核前一律失败。",
+  "coverageThresholdAdjustment": {
+    "date": "2026-11-09",
+    "threshold": 66,
+    "baselinePercent": 66,
+    "reason": "Phase 0 全量分母修复：coverage-runner 分母从被加载文件改为 engine 全量 .cjs（未加载文件计 0 覆盖），2026-11-09 实测新基线 66%（86841 行 / 266 文件，其中 42 个未加载计 0）。实测值高于原 60% 阈值，无实际下调需求；按 Phase 0 步骤 0.4 指令将阈值对齐 floor(66)=66。Phase 2/5 随死代码清理分母缩小后重新校准。"
+  }
 }

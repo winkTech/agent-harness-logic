@@ -4556,6 +4556,24 @@ define('TransparencyDashboard', 'summarizes run artifacts without source content
   return { pass, detail: pass ? 'dashboard summarized artifacts' : html.slice(0, 500) };
 });
 
+// ── Suite: BenchRefactor (重构基准薄壳 smoke, Phase 0 步骤 0.6) ──
+
+define('BenchRefactor', '--dry-run 列出 phase 0 全部命令且不执行', () => {
+  const p = path.join(HOME, 'engine/scripts/bench-refactor.cjs');
+  if (!fs.existsSync(p)) return { pass: true, skip: true, detail: '文件不存在' };
+  const r = spawnSync(process.execPath, [p, '--phase', '0', '--dry-run'], {
+    encoding: 'utf8', timeout: 30000, windowsHide: true,
+  });
+  const ids = ['C-2', 'C-3', 'P-1a', 'P-1b', 'P-2'];
+  const missing = ids.filter((id) => !r.stdout.includes(`[${id}]`));
+  return {
+    pass: r.status === 0 && missing.length === 0,
+    detail: r.status === 0 && missing.length === 0
+      ? `exit=0, 列出 ${ids.length} 条命令`
+      : `exit=${r.status}, 缺少: ${missing.join(', ') || 'none'}`,
+  };
+});
+
 // CI 钉住的 Node 版本是仓库契约(lint-health.yml);本机运行时是操作员状态,
 // 按 docs/rules/05-harness.md 规则 8 只警告不断言——但差异必须可见,否则
 // "本机绿"会在 node:sqlite 等实验 API 的版本行为差上误导 CI 预期(规则 9)。
