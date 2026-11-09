@@ -158,10 +158,26 @@ const candidates = skills.decayCandidates(90);
 每次 openDb() 自动检查待迁移:
   1. 建 _migrations 追踪表
   2. 扫描 migrations/*.cjs 按文件名排序
-  3. 执行未应用的迁移 (事务内, 幂等)
+  3. 编号防撞守卫: 重复数字前缀且非历史冻结组 → 抛错拒绝加载 (fail-closed)
+  4. 执行未应用的迁移 (事务内, 幂等)
 ```
 
-添加新迁移时使用下一个未占用序号；不得修改已应用迁移：
+### 迁移编号纪律 (fail-closed)
+
+1. **编号冻结** — 新迁移使用下一个未占用序号；禁止复用已有前缀。
+   schema.cjs 加载时校验数字前缀唯一，冲突即抛错拒绝开库。
+2. **已应用文件永不改名/删除** — `_migrations` 按文件名（去扩展名）记账，
+   改名/删除会让已应用的库在下次扫描时失配（重放或误判缺失）。
+3. **回滚用新迁移** — 序号只增不减；逆向操作写成一个新迁移，不修改历史文件。
+4. **历史冻结例外** — `002-cjk-fts5.cjs` 与 `002-fix-events-check.cjs` 前缀
+   重复但早于守卫存在，按**文件名精确冻结**：只容忍这两个文件原样共存
+   （与库内 applied 状态无关，否则全新库开库即炸）；新增任何 `002-*` 或对
+   其改名都会触发守卫抛错。
+5. **收编野生 DDL** — 组件不得自带私有迁移账本（历史教训：delivery-tracker
+   的 `_delivery_migration` 已收编进 013）。表结构一律走 `_migrations` 统一账本。
+
+up 字段可以是 SQL 字符串，也可以是 `(db) => {}` 函数（用于 ADD COLUMN 这类
+SQLite 原生不支持 `IF NOT EXISTS` 的语句，需自行查 PRAGMA 容错）：
 
 ```js
 module.exports = {
@@ -169,6 +185,14 @@ module.exports = {
   up: `ALTER TABLE facts ADD COLUMN tags TEXT DEFAULT '[]'`,
 };
 ```
+
+## 测试 fixture
+
+- `test-fixtures/legacy-2026-11.db` — 真实库的脱敏裁剪副本（schema 完整、
+  每表 ≤50 行合成替换数据，无任何真实行），用于旧库升级回归；
+  sha256 清单见 `test-fixtures/legacy-2026-11.db.sha256`。
+- 旧库升级回归同时覆盖程序化路径：按迁移链重放 001→012 构造旧形态
+  `:memory:` 库再升到最新（见 `run-all-tests.cjs` 的 SqliteMigrations 套件）。
 
 ## 设计原则
 

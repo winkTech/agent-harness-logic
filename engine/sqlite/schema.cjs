@@ -14,7 +14,9 @@
  *
  * 约定:
  *   - 迁移文件命名: {序号}-{名称}.cjs, 如 001-init.cjs
- *   - 每个迁移导出: module.exports = { name, up: 'SQL DDL ...' }
+ *   - 每个迁移导出: module.exports = { name, up } — up 是 SQL 字符串,
+ *     或 (收编野生 DDL 时) 接收 db 的函数, 用于 ADD COLUMN 这类
+ *     SQLite 原生不支持 IF NOT EXISTS 的语句需自行查 PRAGMA 容错
  *   - 序号递增, 永不回退 (回滚用新迁移逆向操作)
  *   - 迁移幂等: 所有 CREATE 用 IF NOT EXISTS
  */
@@ -39,20 +41,74 @@ function ensureMigrationTable(db) {
 }
 
 /**
+ * 提取迁移文件的数字前缀。无前缀返回 null (不参与编号账本)。
+ * @param {string} file
+ * @returns {string|null}
+ */
+function migrationPrefix(file) {
+  const m = file.match(/^(\d+)/);
+  return m ? m[1] : null;
+}
+
+/**
+ * 迁移编号防撞守卫 (fail-closed): 同一数字前缀出现多个文件即拒绝加载。
+ *
+ * 规则 (详见 README.md "迁移编号纪律"):
+ *   - 编号冻结: 新迁移必须用下一个未占用序号;
+ *   - 已应用文件永不改名/删除, 回滚用新迁移逆向操作;
+ *   - 历史冻结例外: 守卫上线前已存在的双 002 (002-cjk-fts5 / 002-fix-events-check)
+ *     按文件名精确冻结 —— 只容忍这两个文件原样共存, 新增任何 002-* 或其他重复
+ *     前缀立即抛错。按文件名而非按库内 applied 状态判定: 全新库的 _migrations
+ *     为空, 历史例外不能依赖每库状态, 否则 fresh 开库即炸。
+ *
+ * @param {string[]} files — 扫描到的迁移文件名 (已排序)
+ */
+const HISTORICAL_FROZEN_DUPLICATES = ['002-cjk-fts5.cjs', '002-fix-events-check.cjs'];
+
+function assertUniqueMigrationPrefixes(files) {
+  const byPrefix = new Map();
+  for (const file of files) {
+    const prefix = migrationPrefix(file);
+    if (prefix === null) continue;
+    if (!byPrefix.has(prefix)) byPrefix.set(prefix, []);
+    byPrefix.get(prefix).push(file);
+  }
+
+  const conflicts = [];
+  for (const [prefix, group] of byPrefix) {
+    if (group.length < 2) continue;
+    const isFrozenHistory = group.length === HISTORICAL_FROZEN_DUPLICATES.length &&
+      HISTORICAL_FROZEN_DUPLICATES.every((f) => group.includes(f));
+    if (isFrozenHistory) continue; // 历史冻结: 按文件名精确容忍, 不可扩充
+    conflicts.push(`前缀 ${prefix}: ${group.join(', ')}`);
+  }
+  if (conflicts.length > 0) {
+    throw new Error(
+      `[sqlite/schema] 迁移编号前缀冲突 (fail-closed): ${conflicts.join('; ')}。` +
+      '编号已冻结: 新迁移必须用下一个未占用序号; 已应用文件永不改名/删除。',
+    );
+  }
+}
+
+/**
  * 扫描并应用所有未执行的迁移。
  * 幂等: 已存在的迁移自动跳过。
  *
  * @param {import('node:sqlite').DatabaseSync} db
+ * @param {object} [opts]
+ * @param {string} [opts.dir] — 迁移目录 (默认 engine/sqlite/migrations; fixture 测试用)
  */
-function applyPendingMigrations(db) {
+function applyPendingMigrations(db, opts = {}) {
   ensureMigrationTable(db);
 
+  const migrationsDir = opts.dir || MIGRATIONS_DIR;
+
   // 扫描迁移文件
-  if (!fs.existsSync(MIGRATIONS_DIR)) {
+  if (!fs.existsSync(migrationsDir)) {
     return; // 无迁移目录, 跳过
   }
 
-  const files = fs.readdirSync(MIGRATIONS_DIR)
+  const files = fs.readdirSync(migrationsDir)
     .filter(f => f.endsWith('.cjs') || f.endsWith('.js'))
     .sort(); // 按文件名排序确保顺序
 
@@ -62,6 +118,9 @@ function applyPendingMigrations(db) {
   const applied = new Set(
     db.prepare('SELECT name FROM _migrations').all().map((/** @type {any} */ r) => r.name),
   );
+
+  // 编号防撞守卫 (fail-closed): 重复数字前缀且非历史冻结组 → 拒绝加载
+  assertUniqueMigrationPrefixes(files);
 
   const getApplied = db.prepare('SELECT name FROM _migrations');
   /** @type {string[]} */
@@ -76,7 +135,7 @@ function applyPendingMigrations(db) {
     if (appliedSet.has(migrationName)) continue;
 
     try {
-      const migration = require(path.join(MIGRATIONS_DIR, file));
+      const migration = require(path.join(migrationsDir, file));
 
       if (!migration || !migration.up) {
         console.warn(`[sqlite/schema] 迁移 ${file} 无 up 字段, 跳过`);
@@ -86,7 +145,8 @@ function applyPendingMigrations(db) {
       // 事务内执行迁移
       db.exec('BEGIN IMMEDIATE');
       try {
-        db.exec(migration.up);
+        if (typeof migration.up === 'function') migration.up(db);
+        else db.exec(migration.up);
         db.prepare('INSERT INTO _migrations (name) VALUES (?)').run(migrationName);
         db.exec('COMMIT');
         // 必须走 stderr: 迁移会在 hook 进程里首次开库时触发, 而 hook 的 stdout
@@ -106,9 +166,11 @@ function applyPendingMigrations(db) {
 /**
  * 列出所有迁移状态。
  * @param {import('node:sqlite').DatabaseSync} db
+ * @param {object} [opts]
+ * @param {string} [opts.dir] — 迁移目录 (默认 engine/sqlite/migrations)
  * @returns {{ name: string, applied: boolean, applied_at: string|null }[]}
  */
-function listMigrations(db) {
+function listMigrations(db, opts = {}) {
   ensureMigrationTable(db);
 
   const applied = new Map(
@@ -116,13 +178,14 @@ function listMigrations(db) {
       .map((/** @type {any} */ r) => [r.name, r.applied_at]),
   );
 
-  if (!fs.existsSync(MIGRATIONS_DIR)) {
+  const migrationsDir = opts.dir || MIGRATIONS_DIR;
+  if (!fs.existsSync(migrationsDir)) {
     return Array.from(applied.entries()).map(([name, applied_at]) => ({
       name, applied: true, applied_at,
     }));
   }
 
-  const files = fs.readdirSync(MIGRATIONS_DIR)
+  const files = fs.readdirSync(migrationsDir)
     .filter(f => f.endsWith('.cjs') || f.endsWith('.js'))
     .sort();
 
@@ -137,4 +200,6 @@ module.exports = {
   applyPendingMigrations,
   listMigrations,
   ensureMigrationTable,
+  assertUniqueMigrationPrefixes,
+  migrationPrefix,
 };

@@ -2446,6 +2446,7 @@ const AUDIT_REMEDIATION_CONTRACTS = [
   ['memory attribution retirement', 'memory-retirement-contract.cjs', 30000],
   ['evidence status basis', 'evidence-status-basis-contract.cjs', 30000],
   ['evidence delivery attribution', 'evidence-delivery-attribution-contract.cjs', 30000],
+  ['legacy database upgrade', 'legacy-upgrade-contract.cjs', 60000],
   ['harness gate eval corpus', 'harness-gate-eval.cjs', 120000, ['--variance']],
   ['retrieval golden set', 'retrieval-eval-contract.cjs', 120000],
   ['plan accuracy and delivery window', 'plan-accuracy-contract.cjs', 30000],
@@ -3227,6 +3228,99 @@ define('SQLite', 'Schema 加载', () => {
     return { pass: true, detail: 'schema 加载成功' };
   } catch (e) {
     return { pass: false, detail: `加载失败: ${e.message}` };
+  }
+});
+
+// ── Suite 9.1: 迁移编号防撞守卫 (fail-closed) ──
+
+/** 构造一个最小迁移文件 fixture */
+function writeMigrationFixture(dir, fileName) {
+  fs.writeFileSync(path.join(dir, fileName), `'use strict';\nmodule.exports = { name: ${JSON.stringify(fileName.replace(/\.cjs$/, ''))}, up: 'CREATE TABLE IF NOT EXISTS t_${fileName.replace(/[^a-z]/g, '')} (id INTEGER)' };\n`, 'utf8');
+}
+
+define('SqliteMigrations', '重复数字前缀加载即抛 (fixture 全未应用)', () => {
+  const { applyPendingMigrations } = require(path.join(HOME, 'engine/sqlite/schema.cjs'));
+  const { openDb } = require(path.join(HOME, 'engine/sqlite/index.cjs'));
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'mig-guard-'));
+  try {
+    writeMigrationFixture(dir, '001-alpha.cjs');
+    writeMigrationFixture(dir, '001-beta.cjs');
+    const handle = openDb({ path: ':memory:' });
+    try {
+      applyPendingMigrations(handle.db, { dir });
+      return { pass: false, detail: '重复前缀未被拒绝加载' };
+    } catch (e) {
+      const pass = /编号前缀冲突/.test(e.message);
+      return { pass, detail: pass ? '加载即抛: ' + e.message.slice(0, 120) : `抛错但信息不符: ${e.message.slice(0, 120)}` };
+    } finally {
+      handle.close();
+    }
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+define('SqliteMigrations', '重复前缀部分已应用同样抛错 (禁止向冻结编号扩充)', () => {
+  const { applyPendingMigrations, ensureMigrationTable } = require(path.join(HOME, 'engine/sqlite/schema.cjs'));
+  const { DatabaseSync } = require('node:sqlite');
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'mig-guard-'));
+  try {
+    writeMigrationFixture(dir, '013-delivery-events.cjs');
+    writeMigrationFixture(dir, '013-sneaky.cjs');
+    // 裸连接: openDb(':memory:') 会先跑真实迁移 (013 已应用), 无法构造"部分已应用"前提
+    const db = new DatabaseSync(':memory:');
+    try {
+      ensureMigrationTable(db);
+      db.prepare("INSERT INTO _migrations (name) VALUES ('013-delivery-events')").run();
+      applyPendingMigrations(db, { dir });
+      return { pass: false, detail: '向已应用编号扩充新文件未被拒绝' };
+    } catch (e) {
+      const pass = /编号前缀冲突/.test(e.message);
+      return { pass, detail: pass ? '扩充即抛: ' + e.message.slice(0, 120) : `抛错但信息不符: ${e.message.slice(0, 120)}` };
+    } finally {
+      db.close();
+    }
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+define('SqliteMigrations', '历史冻结组按文件名精确容忍 (双 002 原样共存, 扩充即抛)', () => {
+  const { assertUniqueMigrationPrefixes } = require(path.join(HOME, 'engine/sqlite/schema.cjs'));
+  try {
+    // 历史冻结: 这两个文件原样共存 → 容忍 (与库内 applied 状态无关)
+    assertUniqueMigrationPrefixes(['002-cjk-fts5.cjs', '002-fix-events-check.cjs']);
+    // 新增第三个 002 → 抛错
+    let threwExpansion = false;
+    try {
+      assertUniqueMigrationPrefixes(['002-cjk-fts5.cjs', '002-fix-events-check.cjs', '002-new.cjs']);
+    } catch { threwExpansion = true; }
+    // 换掉其中一个文件名 (改名) → 抛错
+    let threwRename = false;
+    try {
+      assertUniqueMigrationPrefixes(['002-cjk-fts5.cjs', '002-renamed.cjs']);
+    } catch { threwRename = true; }
+    const pass = threwExpansion && threwRename;
+    return { pass, detail: pass ? '冻结容忍 + 扩充/改名即抛, 语义正确' : `expansion=${threwExpansion} rename=${threwRename}` };
+  } catch (e) {
+    return { pass: false, detail: `历史冻结组不应抛错: ${e.message}` };
+  }
+});
+
+define('SqliteMigrations', '真实迁移目录当前状态通过守卫', () => {
+  const { listMigrations, assertUniqueMigrationPrefixes } = require(path.join(HOME, 'engine/sqlite/schema.cjs'));
+  const { openDb } = require(path.join(HOME, 'engine/sqlite/index.cjs'));
+  const migrationsDir = path.join(HOME, 'engine/sqlite/migrations');
+  const handle = openDb({ path: ':memory:' });
+  try {
+    const files = fs.readdirSync(migrationsDir).filter((f) => f.endsWith('.cjs') || f.endsWith('.js')).sort();
+    assertUniqueMigrationPrefixes(files); // 冻结组之外不得有重复前缀
+    const states = listMigrations(handle.db);
+    return { pass: states.length === files.length, detail: `真实目录 ${files.length} 个迁移全部通过守卫` };
+  } catch (e) {
+    return { pass: false, detail: `守卫拒绝真实目录: ${e.message.slice(0, 160)}` };
+  } finally {
+    handle.close();
   }
 });
 

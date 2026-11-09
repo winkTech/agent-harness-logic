@@ -13,9 +13,11 @@
  *   3. 账本 500 条 exitCodeKnown 仅 1%、timingKnown 为 0: 载荷带退出码/耗时的
  *      完成条目必须回填 (exitCodeKnown/timingKnown=true); 载荷不带时保持 false。
  *
- * schema 决策: 归因走 delivery-tracker 既有 _delivery_migration 命名迁移机制加
+ * schema 决策: 归因走统一迁移账本 migrations/013-delivery-events.cjs 加
  * uncovered TEXT 列 (JSON 数组字符串), 不编码进 error_msg —— 加列可查询可聚合;
  * error_msg 是自由文本且写入端截断到 200 字符, 编码进它会随截断丢失。
+ * (013 收编了 delivery-tracker 曾私有的 _delivery_migration 账本; 本测试第 1 节
+ *  锁定旧库升级语义: 004 时代的库经统一迁移升到最新, uncovered 列补齐且幂等。)
  */
 
 const assert = require('node:assert/strict');
@@ -70,10 +72,11 @@ function gatePayload(toolResponse) {
 }
 
 function main() {
-  // ── 1. 旧库迁移: 004 时代 (无 uncovered 列) 的库必须 ALTER 出新列, 且幂等 ──
-  const legacyHandle = openDb({ path: path.join(TMP, 'legacy.db') });
-  const legacyDb = legacyHandle.db;
-  legacyDb.exec(`CREATE TABLE delivery_events (
+  // ── 1. 旧库迁移: 004 时代 (无 uncovered 列, 私有 _delivery_migration 账本) 的库
+  //        必须经统一迁移账本升到最新, uncovered 列补齐, 且重开库幂等 ──
+  const legacyPath = path.join(TMP, 'legacy.db');
+  const seed = new (require('node:sqlite').DatabaseSync)(legacyPath);
+  seed.exec(`CREATE TABLE delivery_events (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     workflow_name TEXT NOT NULL DEFAULT 'hdl-coding-dag-workflow',
     phase TEXT NOT NULL,
@@ -86,14 +89,25 @@ function main() {
     timestamp TEXT NOT NULL DEFAULT (datetime('now')),
     session_id TEXT
   )`);
-  legacyDb.exec(`CREATE TABLE _delivery_migration (
+  seed.exec(`CREATE TABLE _delivery_migration (
     name TEXT PRIMARY KEY, applied_at TEXT NOT NULL DEFAULT (datetime('now')))`);
-  legacyDb.prepare("INSERT INTO _delivery_migration (name) VALUES ('004-delivery-tracking')").run();
-  assert.equal(delivery.ensureMigration(legacyDb), true, '005 migration must apply on a 004-era database');
-  const legacyCols = legacyDb.prepare('PRAGMA table_info(delivery_events)').all().map((col) => col.name);
-  assert.ok(legacyCols.includes('uncovered'), '005 migration must add the uncovered column');
-  assert.equal(delivery.ensureMigration(legacyDb), true, 'ensureMigration must be idempotent');
+  seed.prepare("INSERT INTO _delivery_migration (name) VALUES ('004-delivery-tracking')").run();
+  seed.close();
+  // openDb() 自动跑统一迁移: 013 应对旧形态 delivery_events 补出 uncovered 列
+  const legacyHandle = openDb({ path: legacyPath });
+  const legacyCols = legacyHandle.db.prepare('PRAGMA table_info(delivery_events)').all().map((col) => col.name);
+  assert.ok(legacyCols.includes('uncovered'), 'unified migration 013 must add the uncovered column to a 004-era database');
+  assert.ok(
+    legacyHandle.db.prepare("SELECT name FROM _migrations WHERE name='013-delivery-events'").get(),
+    '013-delivery-events must be recorded in the unified _migrations ledger',
+  );
   legacyHandle.close();
+  const reopened = openDb({ path: legacyPath });
+  assert.ok(
+    reopened.db.prepare("SELECT name FROM _migrations WHERE name='013-delivery-events'").get(),
+    'reopening the upgraded database must not re-run or fail migration 013 (idempotent)',
+  );
+  reopened.close();
 
   // ── 2. partial 交付事件携带 uncovered 归因 (端到端: 门禁判定 → delivery 参数) ──
   const recorded = [];

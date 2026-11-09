@@ -41,76 +41,12 @@ function getDb() {
   }
 }
 
-// ── 迁移: 创建交付追踪表 ────────────────────────────────────────────────────
-
-const MIGRATION_SQL = `
-  CREATE TABLE IF NOT EXISTS delivery_events (
-    id            INTEGER PRIMARY KEY AUTOINCREMENT,
-    workflow_name TEXT    NOT NULL DEFAULT 'hdl-coding-dag-workflow',
-    phase         TEXT    NOT NULL,
-    status        TEXT    NOT NULL CHECK(status IN ('pass','fail','partial')),
-    module_count  INTEGER DEFAULT 0,
-    retry_count   INTEGER DEFAULT 0,
-    duration_sec  INTEGER DEFAULT 0,
-    error_msg     TEXT,
-    project       TEXT,
-    timestamp     TEXT    NOT NULL DEFAULT (datetime('now')),
-    session_id    TEXT
-  );
-
-  CREATE INDEX IF NOT EXISTS idx_delivery_phase ON delivery_events(phase);
-  CREATE INDEX IF NOT EXISTS idx_delivery_status ON delivery_events(status);
-  CREATE INDEX IF NOT EXISTS idx_delivery_ts ON delivery_events(timestamp);
-`;
-
-function ensureMigration(db) {
-  if (!db) return false;
-  try {
-    db.exec(`
-      CREATE TABLE IF NOT EXISTS _delivery_migration (
-        name TEXT PRIMARY KEY,
-        applied_at TEXT NOT NULL DEFAULT (datetime('now'))
-      )
-    `);
-    // 迁移用命名清单驱动: 已应用的跳过, 新迁移按序补齐。
-    // 005: partial 事件的归因列 —— 未满足的证据类型列表 (JSON 数组字符串)。
-    //   背景: 1,227 条记录里 partial 占 54.9% 却无法回答"缺了什么证据"。
-    //   ensureColumn: 容忍旧库被手工加过列 (ALTER 会因列已存在而抛错)。
-    const MIGRATIONS = [
-      { name: '004-delivery-tracking', sql: MIGRATION_SQL },
-      {
-        name: '005-delivery-uncovered',
-        sql: 'ALTER TABLE delivery_events ADD COLUMN uncovered TEXT',
-        ensureColumn: 'uncovered',
-      },
-    ];
-    const applied = new Set(
-      db.prepare('SELECT name FROM _delivery_migration').all().map((row) => row.name),
-    );
-    for (const migration of MIGRATIONS) {
-      if (applied.has(migration.name)) continue;
-      db.exec('BEGIN IMMEDIATE');
-      try {
-        if (migration.ensureColumn) {
-          const columns = db.prepare('PRAGMA table_info(delivery_events)').all().map((col) => col.name);
-          if (!columns.includes(migration.ensureColumn)) db.exec(migration.sql);
-        } else {
-          db.exec(migration.sql);
-        }
-        db.prepare('INSERT INTO _delivery_migration (name) VALUES (?)').run(migration.name);
-        db.exec('COMMIT');
-        console.log(`[delivery-tracker] 迁移 ${migration.name} 已应用`);
-      } catch (txErr) {
-        db.exec('ROLLBACK');
-        throw txErr;
-      }
-    }
-    return true;
-  } catch (e) {
-    console.error('[delivery-tracker] 迁移失败:', e.message);
-    return false;
-  }
-}
+// ── 迁移: 表结构由统一迁移账本 (_migrations) 管理 ──────────────────────────
+//
+// delivery_events 的 DDL (建表 + uncovered 归因列) 已收编进
+// engine/sqlite/migrations/013-delivery-events.cjs, 由 openDb() 自动应用。
+// 此处的私有 _delivery_migration 账本已删除 —— 旧库残留的该表只是只读历史。
+// 注入 opts.db 的调用方须通过 openDb() 取连接 (迁移在开库时已跑)。
 
 /**
  * uncovered 归因序列化。lib 调用方传字符串数组, CLI 传原样字符串;
@@ -143,8 +79,6 @@ function recordDelivery(args, opts = {}) {
     // SQLite 不可用 → 写 JSON 文件作为后备
     return recordEventFile(args);
   }
-  ensureMigration(db);
-
   const stmt = db.prepare(`
     INSERT INTO delivery_events (workflow_name, phase, status, module_count, retry_count, duration_sec, error_msg, project, session_id, uncovered, timestamp)
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, COALESCE(?, datetime('now')))
@@ -274,7 +208,7 @@ function summarizeDeliveries(rows, opts = {}) {
 function loadDeliveryRows(opts = {}) {
   const db = opts.db || getDb();
   let rows = [];
-  if (db && ensureMigration(db)) {
+  if (db) {
     try {
       rows = db.prepare('SELECT * FROM delivery_events ORDER BY timestamp DESC LIMIT ?')
         .all(Number(opts.limit || 1000));
@@ -350,8 +284,8 @@ function main() {
 
   switch (cmd) {
     case 'init':
-      const db = getDb();
-      if (db && ensureMigration(db)) {
+      // getDb() 内部的 openDb() 已自动跑统一迁移 (含 013-delivery-events)
+      if (getDb()) {
         console.log('[delivery-tracker] ✅ 迁移就绪');
       } else {
         console.log('[delivery-tracker] ⚠️  SQLite 不可用，使用文件后备存储');
@@ -390,7 +324,6 @@ function main() {
 module.exports = {
   recordDelivery,
   recordEvent,
-  ensureMigration,
   summarizeDeliveries,
   loadDeliveryRows,
   deliveryReport,
