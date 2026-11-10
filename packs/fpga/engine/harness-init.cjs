@@ -3,7 +3,8 @@
 
 const fs = require('node:fs');
 const path = require('node:path');
-const { detect: detectEda, pickLintTool } = require('./eda-detect.cjs');
+// eda-detect 属宿主无关工具链探测，驻留 core（packs→core 依赖方向合法，§3.3）。
+const { detect: detectEda, pickLintTool } = require('../../../core/engine/scripts/eda-detect.cjs');
 const { HARNESS_ROOT } = require('../../../core/engine/scripts/lib/harness-root.cjs');
 const {
   ensureProjectDirs,

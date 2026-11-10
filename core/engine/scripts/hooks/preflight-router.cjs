@@ -120,8 +120,14 @@ function riskFactsFromRuntime(runtime, opts = {}) {
   const goldenChange = Boolean(signals.goldenChange)
     || /[/\\](?:golden|models?)[/\\]/i.test(runtime.filePath)
     || /\bgolden\s+model\b/i.test(changedText);
+  // Phase 1 拆层修正: 布局根目录更名为 core/ 后, 原 [/\](?:lib|shared|core|cbb)[/\]
+  // 会把 core/engine/** 一切编辑误判为 shared-core-change(全仓库 R2 化)。
+  // 语义不变: shared-core 指"被多方共享的库/组件目录"(lib/ shared/ cbb/ 及
+  // 名为 core 的叶子目录), 不是本仓库的 core/ 布局层。core/engine/** 的普通
+  // 修改回归 R1; 引擎文件的 interface-change/golden 等文本信号照旧生效。
   const sharedCoreChange = Boolean(signals.sharedCoreChange)
-    || /[/\\](?:lib|shared|core|cbb)[/\\]/i.test(runtime.filePath);
+    || /[/\\](?:lib|shared|cbb)[/\\]/i.test(runtime.filePath)
+    || /[/\\]core[/\\](?!engine[/\\])/i.test(runtime.filePath);
   const repeatedFailure = Boolean(signals.repeatedFailure)
     || Number(runtime.payload?.failure_count || runtime.payload?.failureCount || 0) >= 2;
   return {

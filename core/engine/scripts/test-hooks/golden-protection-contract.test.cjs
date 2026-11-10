@@ -32,6 +32,11 @@ function fixture(t) {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'golden-protection-'));
   t.after(() => fs.rmSync(root, { recursive: true, force: true }));
 
+  // Phase 1.2 起 package.json 锚点(name=harness)是根判定主依据——tmp 树补锚点，
+  // 令牌/审计路径才落在隔离树内（旧布局 CLAUDE.md 标记对 core/ 布局不再命中，
+  // 不补则 HARNESS_ROOT 兜底到 ~/.claude 真实仓库，污染 var/audit）。
+  fs.writeFileSync(path.join(root, 'package.json'),
+    JSON.stringify({ name: 'harness', private: true }), 'utf8');
   fs.writeFileSync(path.join(root, 'CLAUDE.md'), '# fixture root marker\n', 'utf8');
 
   const withConsumer = path.join(root, 'packs', 'fpga', 'engineering-assets', 'models', 'comm', 'withconsumer');
@@ -174,6 +179,9 @@ function tokenFixture(t, remainingWrites = 2) {
   }
 
   fs.writeFileSync(path.join(root, 'CLAUDE.md'), '# fixture root marker\n', 'utf8');
+  // 同上：tmp 树补 package.json 锚点，隔离令牌/审计写入。
+  fs.writeFileSync(path.join(root, 'package.json'),
+    JSON.stringify({ name: 'harness', private: true }), 'utf8');
 
   const model = path.join(root, 'packs', 'fpga', 'engineering-assets', 'models', 'comm', 'withconsumer');
   fs.mkdirSync(path.join(model, 'src'), { recursive: true });

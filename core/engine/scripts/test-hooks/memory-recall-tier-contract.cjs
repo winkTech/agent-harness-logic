@@ -29,7 +29,8 @@ const { retrieveContext, buildContextQuery } = retrieveHook;
 function assertInactiveMemoryIsNotSemanticallyIndexed() {
   const fixture = fs.mkdtempSync(path.join(os.tmpdir(), 'semantic-memory-lifecycle-'));
   try {
-    const learningDir = path.join(fixture, 'memory', 'learnings');
+    // Phase 1.7: 运行时记忆状态根 memory/ → personal/（semantic-search roots 同步迁移）
+    const learningDir = path.join(fixture, 'personal', 'learnings');
     fs.mkdirSync(learningDir, { recursive: true });
     fs.mkdirSync(path.join(fixture, 'packs', 'fpga', 'engineering-assets', 'knowledge', 'primary'), { recursive: true });
     const active = path.join(learningDir, 'active.md');

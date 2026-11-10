@@ -15,8 +15,8 @@
 ```
 ~/.claude/
 │
-├── CLAUDE.md              ← 核心指令（session 注入）
-├── docs/rules/            ← L1 边界：约束规则（渐进式披露，由 rule-loader 按需注入）
+├── CLAUDE.md              ← 核心指令（session 注入，未跟踪渲染产物）
+├── core/rules/            ← L1 边界：约束规则（渐进式披露，由 rule-loader 按需注入）
 │   ├── 00-core.md         ←     核心路由 + 常驻指引
 │   ├── 01-hdl.md          ←     HDL 编码规范（五条红线 + Vivado 证据要求）
 │   ├── 02-python.md       ←     Python 开发规范
@@ -27,7 +27,7 @@
 ├── docs/rules-archive/    ← 已归档规则（11 份：调试/安全/认知/系统/约束/检索/绘图/TDD…）
 │                                不再加载，仅供追溯
 │
-├── engine/                ← 核心引擎
+├── core/engine/           ← 核心引擎（拆层后宿主无关框架）
 │   ├── sqlite/            ←     持久层（FTS5 全文检索 + 记忆/事件/技能/成本）
 │   │   └── README.md      ←     SQLite 文档
 │   ├── dag-engine.cjs     ←     DAG 调度引擎（拓扑排序 + 分层并行 + 重试/超时）
@@ -204,7 +204,7 @@
 - Harness 规则的唯一生命周期是 `candidate -> verified -> approved -> promoted`；
 - Dream 只能产生 candidate；verified 必须来自 Verification Gate 账本中同一行为契约的真实 RED/GREEN，且必须有用户显式 approval 才能进入规则；
 - promoted 文件在加载和执行前复核 candidate id、批准记录与 artifact SHA-256；缺账本、手工复制或被篡改的文件不生效并进入健康告警；
-- 详细 TTL、退役与召回条件见 `memory/MEMORY_RULES.md`，稳定约束见 `docs/rules/05-harness.md`。
+- 详细 TTL、退役与召回条件见 `core/MEMORY_RULES.md`，稳定约束见 `core/rules/05-harness.md`。
 
 ### 统一检索链
 
@@ -435,7 +435,7 @@ harness 里三处独立在数同一件事，各用一套判据：
 | `fact → file` (recalled_for) | 记忆检索命中时 —— 哪条经验和这个文件相关 | **0.6**（启发式） |
 
 **采集内联在既有写路径上，不新增事件消费者** —— 新 consumer 必须注册 watermark +
-心跳 + 真实调度，否则记忆健康检查会红（`docs/rules/05-harness.md` #3）。
+心跳 + 真实调度，否则记忆健康检查会红（`core/rules/05-harness.md` #3）。
 内联的代价是**绝不能抛异常**：图是索引，账本和门禁才是权威。
 
 ### 使用条款
@@ -489,7 +489,7 @@ node engine/scripts/module-order.cjs --impacted cdc_sync        # 改它会波�
 **晋升边界**: Dream 只产生候选 candidate；没有行为测试 PASS 与用户显式批准 approval，不得写入耐久 Harness 规则。
 **消费边界**: 每个事件消费者使用独立 watermark；Dream 与 Skill-Evolve 都必须有有界调度；任何 dry-run 都不得推进消费进度。注册消费者未调度或落后时，健康检查失败且 retention 按所有注册消费者的最小水位保持阻塞，不允许筛掉或强推。
 
-详见 `engine/scripts/dream-consolidate.cjs`（检测引擎）、`engine/scripts/harness-rule-candidates.cjs`（晋升账本）和 `docs/rules/05-harness.md`（稳定规则）。
+详见 `engine/scripts/dream-consolidate.cjs`（检测引擎）、`engine/scripts/harness-rule-candidates.cjs`（晋升账本）和 `core/rules/05-harness.md`（稳定规则）。
 
 ---
 
@@ -686,10 +686,10 @@ node engine/scripts/quality-regression-dashboard.cjs report  # 自动 10% 退化
 
 | 你要做的事 | 入口 |
 |-----------|------|
-| 核心规则 | `docs/rules/00-core.md` |
-| Git 操作规则 | `docs/rules/04-git.md` |
-| Harness/记忆规则 | `docs/rules/05-harness.md` |
-| 记忆时效与退役 | `memory/MEMORY_RULES.md` |
+| 核心规则 | `core/rules/00-core.md` |
+| Git 操作规则 | `core/rules/04-git.md` |
+| Harness/记忆规则 | `core/rules/05-harness.md` |
+| 记忆时效与退役 | `core/MEMORY_RULES.md` |
 | 安全规则 | `docs/rules-archive/04-security.md` |
 | 认知层 | `docs/rules-archive/06-cognition.md` |
 | 检索工具选择 | `docs/rules-archive/09-search-tools.md` |

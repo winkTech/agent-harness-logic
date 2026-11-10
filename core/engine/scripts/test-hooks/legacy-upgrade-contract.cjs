@@ -76,8 +76,10 @@ function main() {
   const postMigrations = upgraded.db.prepare('SELECT name FROM _migrations ORDER BY name').all().map((r) => r.name);
   assert.ok(postMigrations.includes('013-delivery-events'),
     'opening the legacy fixture must backfill 013 into the unified _migrations ledger');
-  assert.deepEqual(postMigrations, [...preMigrations, '013-delivery-events'].sort(),
-    'upgrade must add exactly 013 and preserve the existing ledger entries');
+  // Phase 1.7 起 fixture 之上还有 014-personal-repath（及未来更多迁移）：
+  // 断言放宽为"保留既有账目 + 补齐 fixture 之后的全部真实迁移"。
+  assert.deepEqual(postMigrations, [...preMigrations, '013-delivery-events', '014-personal-repath'].sort(),
+    'upgrade must add every post-fixture migration (013, 014) and preserve the existing ledger entries');
   assert.deepEqual(snapshotDeliveryRows(upgraded.db), preRows,
     'sampled delivery rows must survive the upgrade byte-identically');
   const cols = upgraded.db.prepare('PRAGMA table_info(delivery_events)').all().map((c) => c.name);
@@ -94,7 +96,7 @@ function main() {
   const replayDir = path.join(TMP, 'migrations-001-012');
   fs.mkdirSync(replayDir);
   for (const f of fs.readdirSync(REAL_MIGRATIONS).sort()) {
-    if (f === '013-delivery-events.cjs') continue; // 只重放 001→012
+    if (f === '013-delivery-events.cjs' || f === '014-personal-repath.cjs') continue; // 只重放 001→012
     fs.copyFileSync(path.join(REAL_MIGRATIONS, f), path.join(replayDir, f));
   }
   const oldDb = new DatabaseSync(':memory:');

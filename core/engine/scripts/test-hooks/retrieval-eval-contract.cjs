@@ -34,11 +34,11 @@ function writeFixtureHome() {
     fs.writeFileSync(full, content, 'utf8');
   };
   // 两篇正文高度相似、只有路径不同的文档 —— 正是路径亲和度要解决的形态
-  write('memory/learnings/ldpc-fixed-point.md',
+  write('personal/learnings/ldpc-fixed-point.md',
     '# 定点报告\n\n定点量化 位宽 报告 误差 分析 覆盖 全流程 定点 量化 位宽 报告\n');
-  write('memory/learnings/ofdm-fixed-point.md',
+  write('personal/learnings/ofdm-fixed-point.md',
     '# 定点报告\n\n定点量化 位宽 报告 误差 分析 覆盖 全流程 定点 量化 位宽 报告\n');
-  write('memory/learnings/unrelated-topic.md',
+  write('personal/learnings/unrelated-topic.md',
     '# 目录纪律\n\n项目目录 结构 清理 纪律 与定点无关\n');
   return home;
 }
@@ -58,10 +58,10 @@ function main() {
     // 1. 路径亲和度让同正文的两篇按路径区分: ldpc 查询必须先返回 ldpc 那篇
     const hit = evalWith(home, [{
       id: 'ldpc', query: 'ldpc 定点量化 位宽',
-      expected: ['memory/learnings/ldpc-fixed-point.md'],
+      expected: ['personal/learnings/ldpc-fixed-point.md'],
     }]);
     assert.equal(hit.perCase[0].hit, true, `path affinity failed to disambiguate: ${JSON.stringify(hit.perCase[0].returned)}`);
-    assert.equal(hit.perCase[0].returned[0], 'memory/learnings/ldpc-fixed-point.md',
+    assert.equal(hit.perCase[0].returned[0], 'personal/learnings/ldpc-fixed-point.md',
       `expected the path-matching document first, got ${hit.perCase[0].returned[0]}`);
     assert.equal(hit.perCase[0].reciprocalRank, 1);
     assert.equal(hit.status, 'passed');
@@ -69,7 +69,7 @@ function main() {
     // 2. 未命中必须如实报 miss, 不得被"返回了同类文档"糊过去
     const miss = evalWith(home, [{
       id: 'nonexistent', query: '定点量化 位宽',
-      expected: ['memory/learnings/does-not-exist.md'],
+      expected: ['personal/learnings/does-not-exist.md'],
     }]);
     assert.equal(miss.perCase[0].hit, false);
     assert.equal(miss.summary.hitRate, 0);
@@ -78,7 +78,7 @@ function main() {
 
     // 3. 阈值默认值必须生效 (曾因 Number(null)=0 让门禁形同虚设)
     const defaults = evalWith(home, [{
-      id: 'nonexistent', query: '定点量化', expected: ['memory/learnings/does-not-exist.md'],
+      id: 'nonexistent', query: '定点量化', expected: ['personal/learnings/does-not-exist.md'],
     }], { minPrecision: null, minHitRate: undefined });
     assert.equal(defaults.thresholds.minPrecision, MIN_PRECISION, 'null must fall back to the default precision floor');
     assert.equal(defaults.thresholds.minHitRate, MIN_HIT_RATE);
@@ -89,10 +89,10 @@ function main() {
       /expected documents are required/);
 
     // 5. 索引陈旧时失败关闭 (改一个文件的 mtime 即制造漂移)
-    const drifted = path.join(home, 'memory/learnings/ldpc-fixed-point.md');
+    const drifted = path.join(home, 'personal/learnings/ldpc-fixed-point.md');
     fs.appendFileSync(drifted, '\n追加内容制造 mtime 漂移\n', 'utf8');
     const stale = evalWith(home, [{
-      id: 'ldpc', query: 'ldpc 定点量化', expected: ['memory/learnings/ldpc-fixed-point.md'],
+      id: 'ldpc', query: 'ldpc 定点量化', expected: ['personal/learnings/ldpc-fixed-point.md'],
     }]);
     assert.equal(stale.freshness.stale, true, 'appending to an indexed file must be detected as drift');
     assert.equal(stale.status, 'failed');

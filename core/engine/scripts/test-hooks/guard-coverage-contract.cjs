@@ -241,7 +241,7 @@ function main() {
       'models/comm/synch/src/generate_vectors.m',
     ];
     {
-      const eaRoot = path.join(ROOT, 'engineering-assets');
+      const eaRoot = path.join(ROOT, 'packs', 'fpga', 'engineering-assets');
       const walk = (dir, out = []) => {
         for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
           const p = path.join(dir, e.name);
@@ -326,6 +326,10 @@ function main() {
       fs.mkdirSync(libDir, { recursive: true });
       fs.copyFileSync(path.join(toolsDir, 'lib', 'protected-write.cjs'),
         path.join(libDir, 'protected-write.cjs'));
+      // protected-write.cjs 拆层后按 package.json(name=harness) 锚点找 var/audit，
+      // fixture 树补锚点使令牌/审计落在 libRoot 下（与真实仓库同构）。
+      fs.writeFileSync(path.join(libRoot, 'package.json'),
+        JSON.stringify({ name: 'harness', private: true }), 'utf8');
       const auditDir2 = path.join(libRoot, 'var', 'audit');
       fs.mkdirSync(auditDir2, { recursive: true });
       const approvals = path.join(auditDir2, 'protected-write-approvals.json');

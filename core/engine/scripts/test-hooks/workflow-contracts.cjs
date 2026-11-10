@@ -376,7 +376,7 @@ test('memory health fails closed when the learning loop is structurally green bu
   assert(typeof health.buildHealthReport === 'function', 'memory health report API missing');
 
   const fixture = fs.mkdtempSync(path.join(os.tmpdir(), 'memory-health-contract-'));
-  const memoryDir = path.join(fixture, 'memory');
+  const memoryDir = path.join(fixture, 'personal');
   const learningDir = path.join(memoryDir, 'learnings');
   const errorDir = path.join(memoryDir, 'errors');
   const indexDir = path.join(fixture, 'var', 'index');
@@ -462,8 +462,8 @@ test('memory health excludes retired facts without hiding a genuinely missing ac
   delete require.cache[require.resolve(healthPath)];
   const health = require(healthPath);
   const fixture = fs.mkdtempSync(path.join(os.tmpdir(), 'memory-health-status-contract-'));
-  const learningDir = path.join(fixture, 'memory', 'learnings');
-  const errorDir = path.join(fixture, 'memory', 'errors');
+  const learningDir = path.join(fixture, 'personal', 'learnings');
+  const errorDir = path.join(fixture, 'personal', 'errors');
   fs.mkdirSync(learningDir, { recursive: true });
   fs.mkdirSync(errorDir, { recursive: true });
 
@@ -540,7 +540,7 @@ test('memory health detects content drift through stable file identity', () => {
   delete require.cache[require.resolve(healthPath)];
   const health = require(healthPath);
   const fixture = fs.mkdtempSync(path.join(os.tmpdir(), 'memory-health-content-contract-'));
-  const learningDir = path.join(fixture, 'memory', 'learnings');
+  const learningDir = path.join(fixture, 'personal', 'learnings');
   fs.mkdirSync(learningDir, { recursive: true });
 
   const learningPath = path.join(learningDir, 'stable-learning.md');
@@ -582,7 +582,7 @@ test('memory freshness governance exempts reconciled files but flags unmanaged p
   delete require.cache[require.resolve(healthPath)];
   const health = require(healthPath);
   const fixture = fs.mkdtempSync(path.join(os.tmpdir(), 'memory-health-freshness-contract-'));
-  const learningDir = path.join(fixture, 'memory', 'learnings');
+  const learningDir = path.join(fixture, 'personal', 'learnings');
   fs.mkdirSync(learningDir, { recursive: true });
 
   const governedPath = path.join(learningDir, 'governed.md');
@@ -718,7 +718,7 @@ test('memory maintenance keeps dry-run read-only and executes only bounded maint
   assert(typeof maintenance.runMaintenance === 'function', 'bounded maintenance API missing');
 
   const fixture = fs.mkdtempSync(path.join(os.tmpdir(), 'memory-maintenance-contract-'));
-  const memoryDir = path.join(fixture, 'memory');
+  const memoryDir = path.join(fixture, 'personal');
   const errorsDir = path.join(memoryDir, 'errors');
   const workDir = path.join(memoryDir, 'work');
   const stateDir = path.join(fixture, 'var', 'maintenance');
@@ -828,8 +828,8 @@ test('memory fact reconciliation uses stable source identity and tombstones lega
   assert(typeof maintenance.fileFacts === 'function', 'stable file fact adapter is missing');
 
   const fixture = fs.mkdtempSync(path.join(os.tmpdir(), 'memory-reconcile-contract-'));
-  const errorsDir = path.join(fixture, 'memory', 'errors');
-  const workDir = path.join(fixture, 'memory', 'work');
+  const errorsDir = path.join(fixture, 'personal', 'errors');
+  const workDir = path.join(fixture, 'personal', 'work');
   fs.mkdirSync(errorsDir, { recursive: true });
   fs.mkdirSync(workDir, { recursive: true });
   const verifiedContent = [
@@ -1031,7 +1031,7 @@ test('semantic retrieval and quiet knowledge checks fail closed on a stale index
   assert(typeof semantic.querySemantic === 'function', 'fail-closed semantic query API missing');
 
   const fixture = fs.mkdtempSync(path.join(os.tmpdir(), 'semantic-stale-contract-'));
-  const learningDir = path.join(fixture, 'memory', 'learnings');
+  const learningDir = path.join(fixture, 'personal', 'learnings');
   const knowledgeDir = path.join(fixture, 'packs', 'fpga', 'engineering-assets', 'knowledge');
   fs.mkdirSync(learningDir, { recursive: true });
   fs.mkdirSync(path.join(knowledgeDir, 'primary'), { recursive: true });
@@ -1623,7 +1623,8 @@ test('postflight observer invokes memory attribution fail-open only for identifi
 });
 
 test('memory governance documents define retrieval, freshness, retirement, and harness promotion boundaries', () => {
-  const harnessRulesPath = path.join(HOME, 'docs', 'rules', '05-harness.md');
+  // Phase 1.1 拆层: 规则真源 docs/rules/ → core/rules/（fixture 内路径是任意构造目录，不受影响）
+  const harnessRulesPath = path.join(HOME, 'core', 'rules', '05-harness.md');
   assert(fs.existsSync(harnessRulesPath), 'durable harness rule document is missing');
   const harnessRules = fs.readFileSync(harnessRulesPath, 'utf8');
   for (const required of [
@@ -1647,7 +1648,8 @@ test('memory governance documents define retrieval, freshness, retirement, and h
   assert(/Dream[^\n]+(?:must not|MUST NOT)[^\n]+(?:rule|promot)/i.test(harnessRules),
     'Dream auto-promotion prohibition is missing');
 
-  const memoryRules = fs.readFileSync(path.join(HOME, 'memory', 'MEMORY_RULES.md'), 'utf8');
+  // Phase 1.7: memory 状态目录迁 personal/，治理文档真源 core/MEMORY_RULES.md
+  const memoryRules = fs.readFileSync(path.join(HOME, 'core', 'MEMORY_RULES.md'), 'utf8');
   assert(memoryRules.length < 9000, `memory policy is still an operational dump (${memoryRules.length} chars)`);
   for (const required of [
     '## Memory tiers',
@@ -1663,10 +1665,10 @@ test('memory governance documents define retrieval, freshness, retirement, and h
   assert(/tool_success[^\n]+(?:not memory|不是记忆)/i.test(memoryRules),
     'runtime success telemetry is still treated as durable memory');
 
-  const ruleIndex = fs.readFileSync(path.join(HOME, 'docs', 'rules', 'README.md'), 'utf8');
+  const ruleIndex = fs.readFileSync(path.join(HOME, 'core', 'rules', 'README.md'), 'utf8');
   assert(ruleIndex.includes('05-harness.md'), 'core rule index does not expose harness rules');
   const rootReadme = fs.readFileSync(path.join(HOME, 'README.md'), 'utf8');
-  for (const required of ['docs/rules/05-harness.md', 'memory-knowledge-maintenance.cjs', 'harness-rule-candidates.cjs']) {
+  for (const required of ['core/rules/05-harness.md', 'memory-knowledge-maintenance.cjs', 'harness-rule-candidates.cjs']) {
     assert(rootReadme.includes(required), `root README does not expose ${required}`);
   }
   for (const required of [

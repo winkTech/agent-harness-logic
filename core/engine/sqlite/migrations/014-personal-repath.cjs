@@ -34,6 +34,8 @@ module.exports = {
     // 防御性兜底（万一历史上有绝对路径形态的 key），幂等无副作用。
     const keyRows = remap('source_key');
 
-    console.log(`[014-personal-repath] source_path 重映射 ${pathRows.changes} 行, source_key 兜底 ${keyRows.changes} 行`);
+    // stderr 而非 stdout: 迁移会在 hook 进程首次开库时触发, hook 的 stdout
+    // 被 Claude Code 当作协议输出解析（与 schema.cjs 迁移日志同一契约）。
+    console.error(`[014-personal-repath] source_path 重映射 ${pathRows.changes} 行, source_key 兜底 ${keyRows.changes} 行`);
   },
 };

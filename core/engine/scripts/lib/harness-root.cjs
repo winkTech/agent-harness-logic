@@ -13,7 +13,16 @@ const MODULE_ROOT = path.resolve(__dirname, '..', '..', '..', '..');
 const ANCHOR_PACKAGE_NAME = 'harness';
 
 function normalizeRoot(value) {
-  return value ? path.resolve(String(value)) : '';
+  if (!value) return '';
+  const resolved = path.resolve(String(value));
+  // Windows 盘符大小写归一（Phase 1 Bench 门 H-1 修复）：
+  // Git Bash/MSYS 启动的 node 进程 __filename 带小写盘符（c:\...），
+  // PowerShell/Win32 侧为大写（C:\...）。渲染产物（settings.json /
+  // workbuddy.hooks.json 内嵌绝对路径）与 canonical 比对需要 case-stable
+  // 的根，统一为大写盘符（Win32 API 惯例）。
+  return process.platform === 'win32'
+    ? resolved.replace(/^[a-z](?=:)/, (m) => m.toUpperCase())
+    : resolved;
 }
 
 function readPackageName(root) {

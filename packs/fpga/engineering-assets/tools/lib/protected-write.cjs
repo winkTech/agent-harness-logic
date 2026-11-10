@@ -31,6 +31,27 @@
 const fs = require('node:fs');
 const path = require('node:path');
 
+// Phase 1.1 拆层后本库位于 packs/fpga/engineering-assets/tools/lib/，
+// __dirname 上溯 3 级不再到仓库根。审计/令牌路径改为锚点发现：
+// 向上找 package.json(name=harness) 锚点；找不到（单独部署 engineering-assets）
+// 保持旧布局相对位置语义（.../var/audit 相对 tools/lib 上溯 3 级）。
+function findAuditDir(startDir) {
+  let cur = path.resolve(startDir);
+  for (let i = 0; i < 8; i += 1) {
+    const pkg = path.join(cur, 'package.json');
+    try {
+      const meta = JSON.parse(fs.readFileSync(pkg, 'utf8'));
+      if (meta && meta.name === 'harness') return path.join(cur, 'var', 'audit');
+    } catch { /* 无锚点继续上溯 */ }
+    const parent = path.dirname(cur);
+    if (parent === cur) break;
+    cur = parent;
+  }
+  return path.join(startDir, '..', '..', '..', 'var', 'audit');
+}
+
+const AUDIT_DIR = findAuditDir(__dirname);
+
 // 与 engine/scripts/hooks/file-protection-guard.cjs 的 PROTECTED_PATTERNS 对应。
 //
 // 最后一条**比 hook 侧多一种形态**: hook 拿到的永远是绝对路径, 故它只需匹配
@@ -47,7 +68,7 @@ const PROTECTED_PATTERNS = [
   /^models\//i,
 ];
 
-const AUDIT_DIR = path.join(__dirname, '..', '..', '..', 'var', 'audit');
+// AUDIT_DIR 见上方 findAuditDir（拆层后锚点发现）。
 const APPROVAL_FILE = path.join(AUDIT_DIR, 'protected-write-approvals.json');
 const AUDIT_FILE = path.join(AUDIT_DIR, 'protected-writes.jsonl');
 
