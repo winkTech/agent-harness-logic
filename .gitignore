@@ -10,11 +10,11 @@ paste-cache/
 # 生成器已修：hook_failure 按 shell 退出码误触发；tool_success 因取错载荷字段
 # 每次 Write/Edit 都写一条 "工具 tool_success 执行成功"（7 天 110 个）。
 # memory-knowledge-maintenance.cjs:119 早已把这两类排除在索引外，此处补上 git 侧。
-memory/errors/*hook_failure*
-memory/work/*tool_success*
+personal/errors/*hook_failure*
+personal/work/*tool_success*
 # auto-record-success 的每日汇总记录（运行时产物，memory-file-policy 的
 # shouldSyncMemoryFile 本就跳过 work/，无任何消费者）。TEMPLATE.md 仍入库。
-memory/work/20??-??-??-*.md
+personal/work/20??-??-??-*.md
 
 # SQLite 运行时数据库（自动创建）
 .wright/
@@ -147,7 +147,7 @@ transcript
 work/
 # ModelSim 会在任何执行目录建 work/，故保留宽匹配；但 memory/work/ 是记忆源目录，
 # 曾被本条静默吞掉 109 个文件（git 连 ?? 都不显示），此处显式放行。
-!memory/work/
+!personal/work/
 *.wlf
 *.vstf
 *.mem
@@ -205,7 +205,7 @@ venv/
 *.swo
 
 # 记忆库运行时状态（自动更新，不应入库）
-memory/.last-active
+personal/.last-active
 
 # WorkBuddy 应用运行时数据（memory/ 等，非 harness 仓库内容）
 .workbuddy/

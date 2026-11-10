@@ -27,7 +27,7 @@ function locationsFor(home = HARNESS_ROOT) {
   return {
     home,
     knowledgeDir,
-    memoryDir: path.join(home, 'memory'),
+    memoryDir: path.join(home, 'personal'),
     semanticMeta: varUnder(home, 'index', 'semantic-index-meta.json'),
   };
 }

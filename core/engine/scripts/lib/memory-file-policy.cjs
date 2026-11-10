@@ -97,7 +97,7 @@ function shouldIndexKnowledgeFile(filePath, opts = {}) {
 
 function shouldIndexSemanticFile(filePath, opts = {}) {
   const home = opts.home;
-  const memoryDir = opts.memoryDir || (home ? path.join(home, 'memory') : null);
+  const memoryDir = opts.memoryDir || (home ? path.join(home, 'personal') : null);
   const knowledgeDir = opts.knowledgeDir || (home ? kbPath(home) : null);
   const abs = path.resolve(filePath);
 

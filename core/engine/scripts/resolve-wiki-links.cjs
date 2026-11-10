@@ -29,7 +29,7 @@ const path = require('node:path');
 const { kbPath } = require('../config.cjs');
 const { HARNESS_ROOT } = require('./lib/harness-root.cjs');
 
-const MEMORY_DIR = path.join(HARNESS_ROOT, 'memory');
+const MEMORY_DIR = path.join(HARNESS_ROOT, 'personal');
 const LEARNINGS_DIR = path.join(MEMORY_DIR, 'learnings');
 const ERRORS_DIR = path.join(MEMORY_DIR, 'errors');
 const PROJECTS_DIR = path.join(MEMORY_DIR, 'projects');

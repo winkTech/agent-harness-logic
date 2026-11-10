@@ -160,7 +160,7 @@ function relative(home, filePath) {
 
 function collectMemoryCandidates(opts, now = new Date(), runtime = {}) {
   const home = path.resolve(runtime.home || opts.home || HARNESS_ROOT);
-  const memoryDir = path.join(home, 'memory');
+  const memoryDir = path.join(home, 'personal');
   const candidates = [];
   const add = (filePath, kind, reason, ageDays, content) => candidates.push({
     kind,
@@ -347,7 +347,7 @@ function defaultRetainEvents(plan, context) {
 }
 
 function fileFacts(home) {
-  const memoryDir = path.join(home, 'memory');
+  const memoryDir = path.join(home, 'personal');
   const { parseMemoryFact } = require('../hooks/learning/postflight-observer.cjs');
   const output = [];
   for (const filePath of walkMarkdown(memoryDir)) {

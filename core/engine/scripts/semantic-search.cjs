@@ -46,10 +46,10 @@ function pathsFor(home = HARNESS_ROOT) {
   const indexDir = varUnder(home, 'index');
   return {
     home,
-    memoryDir: path.join(home, 'memory'),
+    memoryDir: path.join(home, 'personal'),
     knowledgeDir,
     roots: [
-      path.join(home, 'memory'),
+      path.join(home, 'personal'),
       path.join(knowledgeDir, 'primary'),
       path.join(knowledgeDir, 'docs'),
       path.join(knowledgeDir, 'references'),

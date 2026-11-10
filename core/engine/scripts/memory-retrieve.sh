@@ -28,7 +28,7 @@ INDEX_DIR="$VAR_DIR/index"
 if command -v node &>/dev/null; then
     sqlite_out=$(node -e "
         var p = require('path');
-        var mem = require(p.join(process.argv[1], 'engine', 'sqlite', 'store-memory.cjs'));
+        var mem = require(p.join(process.argv[1], 'core', 'engine', 'sqlite', 'store-memory.cjs'));
         var sqlite = require(p.join(process.argv[1], 'engine', 'sqlite', 'index.cjs'));
         var wDb;
         try {
@@ -53,7 +53,7 @@ if command -v node &>/dev/null; then
 fi
 
 # ── 1. grep 精确匹配 ──────────────────────────────────────────────────
-grep_hits=$(find "$HOME_DIR/memory" "$HOME_DIR/engineering-assets/knowledge" -name "*.md" -not -name "MEMORY.md" -not -name "MEMORY_RULES.md" 2>/dev/null \
+grep_hits=$(find "$HOME_DIR/personal" "$HOME_DIR/packs/fpga/engineering-assets/knowledge" -name "*.md" -not -name "MEMORY.md" -not -name "MEMORY_RULES.md" 2>/dev/null \
   | xargs grep -r -l -i "$QUERY" 2>/dev/null | head -10)
 
 if [ -n "$grep_hits" ]; then

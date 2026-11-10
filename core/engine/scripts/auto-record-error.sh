@@ -10,7 +10,7 @@ if [[ "${CLAUDE_HARNESS_VERIFY_READONLY:-}" == "1" || "${CLAUDE_NO_DIAGNOSTIC_WR
   exit 0
 fi
 
-MEMORY_DIR="$HOME/.claude/memory"
+MEMORY_DIR="$HOME/.claude/personal"
 ERRORS_DIR="$MEMORY_DIR/errors"
 mkdir -p "$ERRORS_DIR"
 

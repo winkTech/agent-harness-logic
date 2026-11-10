@@ -8,7 +8,7 @@ if [[ "${CLAUDE_HARNESS_VERIFY_READONLY:-}" == "1" || "${CLAUDE_NO_DIAGNOSTIC_WR
   exit 0
 fi
 
-WORK_DIR="$HOME/.claude/memory/work"
+WORK_DIR="$HOME/.claude/personal/work"
 mkdir -p "$WORK_DIR"
 DATE=$(date +%Y-%m-%d)
 TIME=$(date +%H-%M-%S)

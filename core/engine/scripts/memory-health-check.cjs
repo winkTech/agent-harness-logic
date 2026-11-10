@@ -246,7 +246,7 @@ function normalizeSourcePath(filePath) {
 }
 
 function scanMarkdown(home, db) {
-  const memoryDir = path.join(home, 'memory');
+  const memoryDir = path.join(home, 'personal');
   const allFiles = walkMarkdown(memoryDir).sort();
   const currentFacts = [];
   let totalBytes = 0;
@@ -324,7 +324,7 @@ function scanMarkdown(home, db) {
 }
 
 function currentSemanticFiles(home) {
-  const memoryDir = path.join(home, 'memory');
+  const memoryDir = path.join(home, 'personal');
   const knowledgeDir = kbPath(home);
   const roots = [
     memoryDir,

@@ -5,7 +5,7 @@
 
 set -euo pipefail
 
-MEMORY_DIR="$HOME/.claude/memory"
+MEMORY_DIR="$HOME/.claude/personal"
 TRACK_FILE="$MEMORY_DIR/.last-active"
 CLEANUP_SCRIPT="$HOME/.claude/engine/scripts/memory-cleanup.sh"
 

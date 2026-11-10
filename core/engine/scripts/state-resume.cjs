@@ -26,7 +26,7 @@ const { varPath } = require('./lib/harness-state.cjs');
 
 const STATE_FILE = varPath('index', 'runtime-state.json');
 const TASK_FILE = varPath('active-task.yaml');
-const WORK_DIR = path.join(HARNESS_ROOT, 'memory', 'work');
+const WORK_DIR = path.join(HARNESS_ROOT, 'personal', 'work');
 const HOME_ROOT = HARNESS_ROOT;
 
 function readJSON(filePath) {

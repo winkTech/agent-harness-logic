@@ -25,7 +25,7 @@ const { shouldMigrateMemoryFile } = require('./lib/memory-file-policy.cjs');
 // ── 配置 ───────────────────────────────────────────────────────────────────
 
 const HOME_DIR = path.resolve(__dirname, '..', '..', '..');
-const MEMORY_DIR = path.join(HOME_DIR, 'memory');
+const MEMORY_DIR = path.join(HOME_DIR, 'personal');
 
 /** 命名空间映射: 子目录 → fact.namespace (需匹配 CHECK 约束) */
 const DIR_NS_MAP = {
