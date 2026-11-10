@@ -42,7 +42,7 @@ const PROTECTED_PATTERNS = [
   '**/matlab/**',
   '**/07_mat/**',
   '**/golden_model*/**',
-  '**/packs/fpga/engineering-assets/models/**',
+  '**/engineering-assets/models/**',
 ];
 
 // ── Helpers ────────────────────────────────────────────────────────────────

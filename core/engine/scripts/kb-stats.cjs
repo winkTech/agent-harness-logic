@@ -192,7 +192,7 @@ function checkKnowledge(opts = {}) {
   const issues = [];
 
   if (!indexContent) {
-    issues.push({ code: 'knowledge_index_missing', message: 'packs/fpga/engineering-assets/knowledge/INDEX.md is missing' });
+    issues.push({ code: 'knowledge_index_missing', message: 'knowledge/INDEX.md is missing（KB_PATH 根下）' });
   } else {
     const dateMatch = indexContent.match(/(?:last\s+updated|最后更新)\s*[:：]?\s*(\d{4}-\d{2}-\d{2})/i);
     const countMatch = indexContent.match(/文档:\s*(\d+)\s*篇\s*primary\s*\+\s*(\d+)\s*篇\s*source\s*\+\s*(\d+)\s*篇\s*鸢尾花书蒸馏\s*\+\s*(\d+)\s*篇\s*methodology\s*\+\s*(\d+)\s*篇\s*references\s*\+\s*(\d+)\s*篇\s*templates/i);

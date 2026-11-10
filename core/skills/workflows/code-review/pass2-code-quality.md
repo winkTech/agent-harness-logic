@@ -1,6 +1,6 @@
 # Pass 2: Code Quality Review (Non-blocking)
 
-> 所属工作流: `workflows/code-review-workflow.md`
+> 所属工作流: `core/skills/workflows/code-review-workflow.md`
 > Pass 2 仅当 Pass 1 无阻塞问题后执行。所有发现为建议项，不阻塞合并。
 
 ## 2.1 Code Quality and Structure

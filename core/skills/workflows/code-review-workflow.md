@@ -1,7 +1,7 @@
 ---
 name: code-review-workflow
 description: Two-pass code review with per-finding adversarial verification.
-executable: workflows/code-review-workflow.js
+executable: core/workflows/code-review-workflow.js
 triggers:
   - pull request created
   - code review requested
@@ -15,7 +15,7 @@ agents:
 
 # Code Review Workflow
 
-> 可执行的单一真源是 `workflows/code-review-workflow.js`。两者如有出入，以 js 为准。
+> 可执行的单一真源是 `core/workflows/code-review-workflow.js`。两者如有出入，以 js 为准。
 
 Two-pass code review ensuring spec compliance, logic correctness, security, and code quality,
 plus a per-finding adversarial verification layer.

@@ -244,6 +244,19 @@ function fail(errors) {
 }
 
 function main() {
+  // Phase 1.6：分层执法器先行（§3.3 依赖方向 + 宿主词耦合，零白名单挂载）
+  const boundary = spawnSync(process.execPath, [path.join(HARNESS_ROOT, 'core/engine/scripts/layer-boundary.cjs'), '--check'], {
+    cwd: HARNESS_ROOT,
+    encoding: 'utf8',
+    timeout: 60000,
+    windowsHide: true,
+  });
+  if (boundary.status !== 0) {
+    process.stdout.write(boundary.stdout || '');
+    fail([`layer boundary: exit=${boundary.status}`]);
+  }
+  process.stdout.write(boundary.stdout || '');
+
   const files = sourceFiles();
   const staticErrors = [
     ...checkNodeSyntax(files),

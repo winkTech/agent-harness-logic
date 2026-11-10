@@ -7,9 +7,9 @@
   "repository": "https://github.com/winkTech/agent-harness-logic",
   "license": "MIT",
   "keywords": ["harness", "hooks", "memory", "verification", "fpga"],
-  "hooks": "./engine/hooks/plugin.hooks.json",
+  "hooks": "./core/engine/hooks/plugin.hooks.json",
   "mcpServers": {
-    "codegraph": { "command": "node", "args": ["${CLAUDE_PLUGIN_ROOT}/engine/mcp/codegraph-server.cjs"] },
+    "codegraph": { "command": "node", "args": ["${CLAUDE_PLUGIN_ROOT}/core/engine/mcp/codegraph-server.cjs"] },
     "mcp-pdf": { "command": "npx", "args": ["-y", "mcp-pdf@1.1.0"] }
   }
 }

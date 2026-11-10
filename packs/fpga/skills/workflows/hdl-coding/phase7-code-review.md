@@ -54,7 +54,7 @@
 
 ## 提交审查
 
-用 `code-review` 的 quality 模式执行审查，详见 `workflows/code-review-workflow.md`。
+用 `code-review` 的 quality 模式执行审查，详见 `core/skills/workflows/code-review-workflow.md`。
 
 ---
 

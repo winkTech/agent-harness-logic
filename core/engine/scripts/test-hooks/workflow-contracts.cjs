@@ -83,8 +83,13 @@ function realBehaviorEvidence(fixture, label) {
 }
 
 test('all workflow files satisfy the strict runtime contract', () => {
-  const result = validateWorkflowSet(path.join(HOME, 'workflows'));
-  assert(result.ok, result.errors.join('\n'));
+  // Phase 1.1 后工作流真源 = core/workflows + packs/fpga/workflows（均须过严格契约）
+  const failures = [];
+  for (const dir of ['core/workflows', 'packs/fpga/workflows']) {
+    const result = validateWorkflowSet(path.join(HOME, dir));
+    if (!result.ok) failures.push(`${dir}: ${result.errors.join(' | ')}`);
+  }
+  assert(failures.length === 0, failures.join('\n'));
 });
 
 test('strict workflow contract rejects empty checkpoint and evidence arrays', () => {
@@ -211,14 +216,14 @@ test('workflow evidence scanner fails closed for missing, empty, escaped, and tr
 });
 
 test('code review workflow fails when blocking findings exist', () => {
-  const content = read('workflows/code-review-workflow.js');
+  const content = read('core/workflows/code-review-workflow.js');
   assert(!/return\s*\{\s*pass\s*:\s*true\b/s.test(content), 'unconditional pass:true remains');
   assert(content.includes('workflowPassed'), 'workflowPassed gate missing');
   assert(content.includes('blockingIssues'), 'blockingIssues gate missing');
 });
 
 test('security workflow uses an argv request and binds complete scanner evidence', () => {
-  const content = read('workflows/security-review-workflow.js');
+  const content = read('core/workflows/security-review-workflow.js');
   assert(content.includes("runner: 'argv'"), 'security workflow does not declare an argv runner');
   assert(content.includes("'--targets-json'"), 'security workflow does not pass targets as JSON argv');
   assert(!content.includes('`node core/engine/scripts/workflow-evidence-scan.cjs'),
@@ -312,8 +317,9 @@ test('root shell scripts are thin compatibility wrappers for canonical engine sc
   assert(engineProject.includes('harness-init.cjs'), 'canonical engine init-project implementation target missing');
 });
 
-test('root and platform workflow directories do not drift', () => {
-  const rootDir = path.join(HOME, 'workflows');
+test('core workflow truth and platform mirror do not drift', () => {
+  // Phase 1.1 后真源 = core/workflows（sync-workflow-mirror 单向镜像到 .claude/workflows）
+  const rootDir = path.join(HOME, 'core', 'workflows');
   const platformDir = path.join(HOME, '.claude', 'workflows');
   const jsNames = (dir) => fs.readdirSync(dir).filter((name) => name.endsWith('.js')).sort();
   const rootNames = jsNames(rootDir);
@@ -328,7 +334,7 @@ test('root and platform workflow directories do not drift', () => {
 });
 
 test('HDL workflow never accepts arbitrary output merely containing PASS', () => {
-  const content = read('workflows/hdl-coding-dag-workflow.js');
+  const content = read('packs/fpga/workflows/hdl-coding-dag-workflow.js');
   assert(
     !/\.includes\(\s*['"]PASS['"]\s*\)/.test(content),
     'substring PASS acceptance remains in the HDL workflow'

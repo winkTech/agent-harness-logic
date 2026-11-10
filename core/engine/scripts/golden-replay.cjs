@@ -273,7 +273,7 @@ function prepareWorktree(repoRoot, worktreePath, commit, sparsePaths) {
   // Force LF in replay worktrees: global core.autocrlf=true would check out
   // CRLF and break LF-context applyPatch files (git apply matches exactly).
   // Sparse checkout keeps worktrees small — the full repo carries ~1GB of
-  // packs/fpga/engineering-assets that no replay task touches.
+  // FPGA 工程资产库（packs 侧）——no replay task touches。
   const sp = (Array.isArray(sparsePaths) && sparsePaths.length ? sparsePaths : DEFAULT_SPARSE_PATHS)
     .map((p) => String(p));
   git(repoRoot, ['-c', 'core.autocrlf=false', 'worktree', 'add', '--no-checkout', '--detach', worktreePath, commit]);

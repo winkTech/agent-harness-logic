@@ -958,7 +958,7 @@ define('FPGATimingEvidence', 'automatic FPGA report hook finds reports in the cu
 define('FPGATimingEvidence', 'pg-synth requires passed timing handoff after Vivado succeeds', () => {
   const source = fs.readFileSync(path.join(HOME, 'packs/fpga/engineering-assets/tools/pg-synth.cjs'), 'utf8');
   const required = [
-    "require('../../packs/fpga/engine/fpga-timing-parser.cjs')",
+    "require('../../engine/fpga-timing-parser.cjs')",
     "'synthesis-timing-evidence.json'",
     "evidence.status !== 'passed'",
     'process.exit(2)',
@@ -2577,8 +2577,8 @@ define('VivadoFlowArgs', '文档中出现的每条 vivado_flow 调用都能通�
 // ── 工作流文档一致性 (2026-07-26 审计: md 与 js 曾漂移到互相矛盾) ──────────
 
 define('WorkflowDocs', 'hdl md/js 阶段数与证据路径一致', () => {
-  const mdPath = path.join(HOME, 'skills/workflows/hdl-coding-workflow.md');
-  const jsPath = path.join(HOME, 'workflows/hdl-coding-dag-workflow.js');
+  const mdPath = path.join(HOME, 'packs/fpga/skills/workflows/hdl-coding-workflow.md');
+  const jsPath = path.join(HOME, 'packs/fpga/workflows/hdl-coding-dag-workflow.js');
   const md = fs.readFileSync(mdPath, 'utf8');
   const js = fs.readFileSync(jsPath, 'utf8');
 

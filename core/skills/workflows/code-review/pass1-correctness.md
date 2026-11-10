@@ -1,6 +1,6 @@
 # Pass 1: Correctness Review (Blocking)
 
-> 所属工作流: `workflows/code-review-workflow.md`
+> 所属工作流: `core/skills/workflows/code-review-workflow.md`
 > Pass 1 阻塞性审查 — 不通过则不能合并，不能进入 Pass 2。
 
 ## 1.1 Specification Compliance

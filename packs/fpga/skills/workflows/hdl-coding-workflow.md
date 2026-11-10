@@ -2,7 +2,7 @@
 name: hdl-coding-workflow
 description: RTL 开发全流程 — 系统方案→微架构→定点量化→TB向量生成→逐模块RTL+脚本化对比→确定性证据门禁→顶层全链仿真→回归→Vivado综合体检→双维审查→报告
 version: 3.7.0
-executable: workflows/hdl-coding-dag-workflow.js
+executable: packs/fpga/workflows/hdl-coding-dag-workflow.js
 agents: [algorithm-engineer, logic-engineer, ce-correctness-reviewer, ce-api-contract-reviewer, ce-architecture-strategist, ce-performance-oracle]
 phases: 13
 triggers:
@@ -15,7 +15,7 @@ triggers:
 
 # HDL Coding Workflow (v3.7)
 
-> **本文档是方法论说明；可执行的单一真源是 `workflows/hdl-coding-dag-workflow.js`**，
+> **本文档是方法论说明；可执行的单一真源是 `packs/fpga/workflows/hdl-coding-dag-workflow.js`**，
 > 通过 `Workflow({name: 'hdl-coding-dag-workflow', args: {...}})` 调用
 > （`hdl-coding-workflow` 为向后兼容别名）。两者如有出入，以 js 为准。
 
@@ -84,7 +84,7 @@ triggers:
 
 | 资源 | 路径 | 用途 |
 |------|------|------|
-| 可执行工作流（单一真源） | `workflows/hdl-coding-dag-workflow.js` | DAG 定义、检查点、agent 接线 |
+| 可执行工作流（单一真源） | `packs/fpga/workflows/hdl-coding-dag-workflow.js` | DAG 定义、检查点、agent 接线 |
 | 证据门禁脚本 | `core/engine/scripts/hdl-evidence-gate.cjs` | Phase 1b/4/4.5 确定性证据判定 |
 | HDL 编码规范 | `skills/hdl-coding/SKILL.md` | 命名规则、时序安全、lint 门禁 |
 | 算法→Verilog 参考 | `skills/hdl-coding/references/alg-flow-verilog.md` | 代码模板、NMSE 判定、排查表 |
@@ -92,7 +92,7 @@ triggers:
 | Vivado 执行入口 | `skills/vivado-flow/SKILL.md` / `skills/vivado-flow/scripts/vivado_flow.tcl` | Phase 6b 实际执行的 TCL（全流程 + 断点续跑） |
 | 各 Phase 详细说明 | `skills/workflows/hdl-coding/` | phase0-8 文档（P1 文档覆盖 P1a/P1b） |
 | P1a/P1b 门禁清单 | `packs/fpga/engineering-assets/knowledge/primary/architecture-patterns/gate-checklist-p1a.md` / `gate-checklist-p1b.md` | design-review 检查点核对表 |
-| 证据 JSON 契约 | `schemas/check-result.schema.json` | check_<module>.py 输出格式 |
-| Code Review 工作流 | `skills/workflows/code-review-workflow.md` | Phase 7 之外的独立审查入口 |
+| 证据 JSON 契约 | `core/engine/schemas/check-result.schema.json` | check_<module>.py 输出格式 |
+| Code Review 工作流 | `core/skills/workflows/code-review-workflow.md` | Phase 7 之外的独立审查入口 |
 | 调试方法论 | `skills/debugging/SKILL.md` | Phase 4 调试循环超限时加载 |
 | Agent 定义 | `packs/fpga/agents/domain/algorithm-engineer.md` / `packs/fpga/agents/domain/logic-engineer.md` / `packs/fpga/agents/compound/ce-*.md` | 责任分工的执行者 |

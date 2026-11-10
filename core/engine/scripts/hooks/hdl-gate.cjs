@@ -2,7 +2,7 @@
 /**
  * core/engine/scripts/hooks/hdl-gate.cjs — HDL 编码规则硬门禁 (P0)
  *
- * 强制执行 docs/rules/01-hdl.md 和 packs/fpga/skills/hdl-coding/SKILL.md 中的关键规则:
+ * 强制执行 core/rules 与 FPGA pack 规则（01-hdl.md / hdl-coding SKILL.md）中的关键规则:
  *
  *   1. Testbench-First: 新建 RTL 模块前必须有对应的 Testbench
  *   2. No initial in RTL: 综合代码禁止使用 initial 语句
@@ -22,10 +22,9 @@
 const fs = require('fs');
 const path = require('path');
 const os = require('os');
-// Phase 1.1 后 hdl-lint/ 随 F 切片迁至 packs/fpga/engine/——此跨层 require 为保断链的
-// 最小修复；hdl-gate 整体迁 packs 的裁决留给 1.6 layer-boundary（core→packs 依赖会
-// 被检查器标记，登记为已知债务）。
-const logicAnalyzer = require('../../../../packs/fpga/engine/hdl-lint/logic-analyzer.cjs');
+// Phase 1.6 裁决：logic-analyzer 回迁 core（唯一消费者是本 gate，消费内聚；
+// gate 家族整体 packs 化 + manifest 数据化分发留 Phase 2 host-concepts/manifest v3）。
+const logicAnalyzer = require('../hdl-lint/logic-analyzer.cjs');
 const { evaluateGuardBypass } = require('../lib/gate-bypass.cjs');
 
 const GATE_ID = 'hdl-gate.cjs';
@@ -278,7 +277,7 @@ function extractDirectedPorts(content) {
  * 存储器阵列上电初值的 initial 块 —— 唯一被允许的 initial 形态。
  *
  * 依据 (本仓库既有政策, 本函数是把它落到 hook 上):
- *   - packs/fpga/skills/hdl-coding 描述: "initial 仅允许 RAM/ROM 阵列初值"
+ *   - hdl-coding SKILL.md 描述: "initial 仅允许 RAM/ROM 阵列初值"
  *   - gate-runner 的 G-C-03 对"仅初始化存储器阵列"的 initial 明确不判为违规
  *   - Xilinx UG901: $readmemb/$readmemh 初始化数组是 ROM/RAM 推断的标准写法
  *

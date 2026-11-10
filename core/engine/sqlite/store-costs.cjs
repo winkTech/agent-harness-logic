@@ -8,7 +8,7 @@
  *      message.usage 按模型累加, phase='usage' 幂等 upsert (主路径);
  *   2. estimate — 字符数粗估, phase='estimate' (仅当无 transcript 时的回退)。
  *
- * 定价唯一来源: packs/fpga/engine/toolchains/model-pricing.json (USD/MTok + cache 系数)。
+ * 定价唯一来源: core/engine/config/model-pricing.json (USD/MTok + cache 系数)。
  *
  * 依赖: cost_ledger 表 (001-init 建表, 009-cost-usage 加 usage 列)
  */
@@ -17,9 +17,9 @@ const fs = require('node:fs');
 const path = require('node:path');
 const { openDb, resolveDb } = require('./index.cjs');
 
-// Phase 1.1 后 toolchains 随 F 切片迁 packs/fpga/engine/——core→packs 跨层引用为
-// 已知债务（1.6 layer-boundary 将标记；定价表迁 core 或注入化的裁决留待彼时）。
-const PRICING_FILE = path.join(__dirname, '..', '..', '..', 'packs', 'fpga', 'engine', 'toolchains', 'model-pricing.json');
+// Phase 1.6 裁决：定价表属成本数据族，迁 core/engine/config/（与 cost-prices.json 同居）；
+// toolchains/*.mk 留 packs。
+const PRICING_FILE = path.join(__dirname, '..', 'config', 'model-pricing.json');
 
 let pricingCache = null;
 

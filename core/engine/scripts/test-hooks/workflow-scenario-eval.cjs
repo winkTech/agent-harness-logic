@@ -21,7 +21,7 @@ function assert(condition, message) {
 }
 
 function workflowPath(name) {
-  return path.join(HOME, 'workflows', `${name}.js`);
+  return path.join(HOME, name.startsWith('hdl-coding') ? 'packs/fpga/workflows' : 'core/workflows', `${name}.js`);
 }
 
 function compileWorkflow(name) {
