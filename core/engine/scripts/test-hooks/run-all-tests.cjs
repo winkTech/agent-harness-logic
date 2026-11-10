@@ -1202,10 +1202,18 @@ define('HookRegistry', 'relocates installed Windows hook paths into an arbitrary
 });
 
 define('HarnessRoot', 'explicit and arbitrary checkout roots resolve consistently', () => {
+  // Phase 1.2：全新克隆无根级 CLAUDE/AGENTS 渲染产物，根判定改 package.json 锚点。
   const checkout = fs.mkdtempSync(path.join(os.tmpdir(), 'harness-checkout-'));
-  const nested = path.join(checkout, 'engine', 'scripts', 'test-hooks');
+  const nested = path.join(checkout, 'core', 'engine', 'scripts', 'test-hooks');
   fs.mkdirSync(nested, { recursive: true });
-  fs.writeFileSync(path.join(checkout, 'AGENTS.md'), '# test harness\n', 'utf8');
+  fs.writeFileSync(path.join(checkout, 'package.json'), JSON.stringify({
+    name: 'harness', private: true, version: '0.0.0-test',
+  }), 'utf8');
+  // 旧布局兼容回退（拆层前检出/快照逃生仍须可被发现）
+  const legacy = fs.mkdtempSync(path.join(os.tmpdir(), 'harness-legacy-'));
+  const legacyNested = path.join(legacy, 'engine', 'scripts', 'test-hooks');
+  fs.mkdirSync(legacyNested, { recursive: true });
+  fs.writeFileSync(path.join(legacy, 'AGENTS.md'), '# legacy harness\n', 'utf8');
   try {
     const explicit = resolveHarnessRoot({ root: HOME });
     const discovered = resolveHarnessRoot({
@@ -1220,10 +1228,30 @@ define('HarnessRoot', 'explicit and arbitrary checkout roots resolve consistentl
       homeDir: path.join(checkout, 'missing-home'),
       env: { CLAUDE_HARNESS_ROOT: checkout },
     });
-    const pass = explicit === HOME && discovered === checkout && fromEnv === checkout;
-    return { pass, detail: `explicit=${explicit}, discovered=${discovered}, env=${fromEnv}` };
+    const fromPrimaryEnv = resolveHarnessRoot({
+      startPath: path.parse(checkout).root,
+      moduleRoot: '',
+      homeDir: path.join(checkout, 'missing-home'),
+      env: { HARNESS_ROOT: checkout, CLAUDE_HARNESS_ROOT: legacy },
+    });
+    const legacyDiscovered = resolveHarnessRoot({
+      startPath: legacyNested,
+      moduleRoot: '',
+      homeDir: path.join(legacy, 'missing-home'),
+      env: {},
+    });
+    const pass = explicit === HOME
+      && discovered === checkout
+      && fromEnv === checkout
+      && fromPrimaryEnv === checkout
+      && legacyDiscovered === legacy;
+    return {
+      pass,
+      detail: `explicit=${explicit}, discovered=${discovered}, env=${fromEnv}, primaryEnv=${fromPrimaryEnv}, legacy=${legacyDiscovered}`,
+    };
   } finally {
     fs.rmSync(checkout, { recursive: true, force: true });
+    fs.rmSync(legacy, { recursive: true, force: true });
   }
 });
 
