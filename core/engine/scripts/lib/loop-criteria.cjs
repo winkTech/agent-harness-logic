@@ -1,7 +1,7 @@
 'use strict';
 
 /**
- * engine/scripts/lib/loop-criteria.cjs — 循环收敛判据求值。
+ * core/engine/scripts/lib/loop-criteria.cjs — 循环收敛判据求值。
  *
  * 判据是**声明式**的: 一个 JSON 数组, 每项 {type, ...}。求值只回答一个问题 ——
  * "这个任务可以停了吗"。

@@ -93,7 +93,7 @@ function withFileBackup(filePath, fn) {
 }
 
 test('rule loader scopes gates to new assets while preserving HDL/Python file rules', () => {
-  const loader = require(path.join(HOME, 'engine/scripts/rule-loader.cjs'));
+  const loader = require(path.join(HOME, 'core/engine/scripts/rule-loader.cjs'));
   loader.invalidateRuleIndex();
 
   const filesFor = (result) => new Set([...(result.matches || []), ...(result.allMatches || [])].map(item => (
@@ -195,9 +195,9 @@ test('ordinary hook paths do not auto-run simulation governance or scan FPGA rep
   const entries = collectHookEntries({ files: [path.join(HOME, 'settings.json')] });
   const hot = entries.filter(entry => /sim-governance\.cjs|auto-parse-fpga-reports\.cjs/.test(entry.command));
   assert(hot.length === 0, `explicit validation helper remains in automatic ${hot[0]?.point}: ${hot[0]?.command}`);
-  assert(fs.existsSync(path.join(HOME, 'engine/hooks/safety/sim-governance.cjs')),
+  assert(fs.existsSync(path.join(HOME, 'core/engine/hooks/safety/sim-governance.cjs')),
     'sim-governance explicit helper was deleted instead of retired from hooks');
-  assert(fs.existsSync(path.join(HOME, 'engine/scripts/auto-parse-fpga-reports.cjs')),
+  assert(fs.existsSync(path.join(HOME, 'packs/fpga/engine/auto-parse-fpga-reports.cjs')),
     'FPGA report parser was deleted instead of retained for explicit validation');
 });
 
@@ -205,12 +205,12 @@ test('Stop reports state without linting the entire dirty worktree', () => {
   const entries = collectHookEntries({ files: [path.join(HOME, 'settings.json')] });
   const stopLint = entries.find(entry => entry.point === 'Stop' && entry.command.includes('lint-auto-gate.cjs'));
   assert(!stopLint, `Stop still runs full-tree lint: ${stopLint?.command}`);
-  assert(fs.existsSync(path.join(HOME, 'engine/scripts/hooks/lint-auto-gate.cjs')),
+  assert(fs.existsSync(path.join(HOME, 'core/engine/scripts/hooks/lint-auto-gate.cjs')),
     'lint helper was deleted instead of retained for explicit validation');
 });
 
 test('postflight observer records failures but never labels successful tools as drift_stuck', () => {
-  const observer = require(path.join(HOME, 'engine/hooks/learning/postflight-observer.cjs'));
+  const observer = require(path.join(HOME, 'core/engine/hooks/learning/postflight-observer.cjs'));
   const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'postflight-signal-'));
   const dbPath = path.join(tempDir, 'signals.db');
   const success = observer.handlePayload({
@@ -227,7 +227,7 @@ test('postflight observer records failures but never labels successful tools as 
     tool_input: { command: 'pytest' },
     tool_response: { status: 1, stdout: '', stderr: '1 failed' },
   }, { dbPath });
-  const { openDb } = require(path.join(HOME, 'engine/sqlite/index.cjs'));
+  const { openDb } = require(path.join(HOME, 'core/engine/sqlite/index.cjs'));
   const wDb = openDb({ path: dbPath });
   const rows = wDb.db.prepare('SELECT type, COUNT(*) AS count FROM runtime_events GROUP BY type').all();
   wDb.close();
@@ -242,8 +242,8 @@ test('postflight observer records failures but never labels successful tools as 
 });
 
 test('postflight observer shares one database connection across exact Skill and Stop routes', () => {
-  const observer = require(path.join(HOME, 'engine/hooks/learning/postflight-observer.cjs'));
-  const sqlite = require(path.join(HOME, 'engine/sqlite/index.cjs'));
+  const observer = require(path.join(HOME, 'core/engine/hooks/learning/postflight-observer.cjs'));
+  const sqlite = require(path.join(HOME, 'core/engine/sqlite/index.cjs'));
   const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'postflight-routes-'));
   const dbPath = path.join(tempDir, 'routes.db');
   let opens = 0;
@@ -277,7 +277,7 @@ test('postflight observer shares one database connection across exact Skill and 
 });
 
 test('postflight observer syncs only real tool_input memory paths and warns on dropped writes', () => {
-  const observer = require(path.join(HOME, 'engine/hooks/learning/postflight-observer.cjs'));
+  const observer = require(path.join(HOME, 'core/engine/hooks/learning/postflight-observer.cjs'));
   const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'postflight-memory-'));
   const memoryDir = path.join(tempDir, 'memory');
   const memoryFile = path.join(memoryDir, 'learnings', 'routing.md');
@@ -301,7 +301,7 @@ test('postflight observer syncs only real tool_input memory paths and warns on d
     openDb() { throw new Error('database is locked'); },
     warn(record) { warnings.push(record); },
   });
-  const { openDb } = require(path.join(HOME, 'engine/sqlite/index.cjs'));
+  const { openDb } = require(path.join(HOME, 'core/engine/sqlite/index.cjs'));
   const wDb = openDb({ path: dbPath });
   const facts = wDb.db.prepare("SELECT COUNT(*) AS count FROM facts WHERE source='hook:postflight-observer'").get().count;
   wDb.close();
@@ -320,8 +320,8 @@ test('postflight observer syncs only real tool_input memory paths and warns on d
 test('memory facts use stable sources and reconciliation tombstones missing or moved files', () => {
   const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'memory-fact-sources-'));
   const dbPath = path.join(tempDir, 'facts.db');
-  const { openDb } = require(path.join(HOME, 'engine/sqlite/index.cjs'));
-  const store = require(path.join(HOME, 'engine/sqlite/store-memory.cjs'));
+  const { openDb } = require(path.join(HOME, 'core/engine/sqlite/index.cjs'));
+  const store = require(path.join(HOME, 'core/engine/sqlite/store-memory.cjs'));
   const wDb = openDb({ path: dbPath });
   const first = store.writeMemory({
     namespace: 'learnings',
@@ -390,7 +390,7 @@ test('memory facts use stable sources and reconciliation tombstones missing or m
 });
 
 test('memory sync rejects noise and only gives verified errors high confidence', () => {
-  const observer = require(path.join(HOME, 'engine/hooks/learning/postflight-observer.cjs'));
+  const observer = require(path.join(HOME, 'core/engine/hooks/learning/postflight-observer.cjs'));
   const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'memory-sync-policy-'));
   const memoryDir = path.join(tempDir, 'memory');
   const write = (relative, content) => {
@@ -452,7 +452,7 @@ test('memory sync rejects noise and only gives verified errors high confidence',
 });
 
 test('memory retrieval is readonly scoped relevant and returns provenance metadata', () => {
-  const hook = require(path.join(HOME, 'engine/scripts/memory-retrieve-hook.cjs'));
+  const hook = require(path.join(HOME, 'core/engine/scripts/memory-retrieve-hook.cjs'));
   const injectedDb = { marker: 'readonly-db' };
   let openOptions = null;
   let receivedDb = null;
@@ -516,7 +516,7 @@ test('memory retrieval is readonly scoped relevant and returns provenance metada
 });
 
 test('memory relevance recognizes Chinese task signatures and rejects unrelated Chinese matches', () => {
-  const hook = require(path.join(HOME, 'engine/scripts/memory-retrieve-hook.cjs'));
+  const hook = require(path.join(HOME, 'core/engine/scripts/memory-retrieve-hook.cjs'));
   const query = '怎么解决接收缓冲区空读污染帧状态';
   const terms = hook.distinctiveQueryTerms(query);
   const relevant = {
@@ -539,7 +539,7 @@ test('memory relevance recognizes Chinese task signatures and rejects unrelated 
 });
 
 test('memory context queries retain discriminating directory components', () => {
-  const hook = require(path.join(HOME, 'engine/scripts/memory-retrieve-hook.cjs'));
+  const hook = require(path.join(HOME, 'core/engine/scripts/memory-retrieve-hook.cjs'));
   assert(typeof hook.buildContextQuery === 'function', 'buildContextQuery is not an exported contract');
   const query = hook.buildContextQuery(`${FIXTURE_REPO}/decoder/control/common.sv`).toLowerCase();
   assert(query.includes('decoder') && query.includes('control') && query.includes('common'),
@@ -549,7 +549,7 @@ test('memory context queries retain discriminating directory components', () => 
 });
 
 test('memory project ids canonicalize equivalent roots and isolate different roots', () => {
-  const projectScope = require(path.join(HOME, 'engine/scripts/lib/project-scope.cjs'));
+  const projectScope = require(path.join(HOME, 'core/engine/scripts/lib/project-scope.cjs'));
   const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'memory-project-id-'));
   const repoA = path.join(tempDir, 'Repo-A');
   const repoB = path.join(tempDir, 'Repo-B');
@@ -581,8 +581,8 @@ test('memory project ids canonicalize equivalent roots and isolate different roo
 test('memory retrieval hard-isolates repository facts before relevance ranking', () => {
   const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'memory-project-scope-'));
   const dbPath = path.join(tempDir, 'memory.db');
-  const { openDb } = require(path.join(HOME, 'engine/sqlite/index.cjs'));
-  const store = require(path.join(HOME, 'engine/sqlite/store-memory.cjs'));
+  const { openDb } = require(path.join(HOME, 'core/engine/sqlite/index.cjs'));
+  const store = require(path.join(HOME, 'core/engine/sqlite/store-memory.cjs'));
   const wDb = openDb({ path: dbPath });
 
   store.writeMemory({
@@ -637,8 +637,8 @@ test('memory retrieval hard-isolates repository facts before relevance ranking',
 test('memory retrieval without trigger scope fails closed while explicit review remains available', () => {
   const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'memory-missing-scope-'));
   const dbPath = path.join(tempDir, 'memory.db');
-  const { openDb } = require(path.join(HOME, 'engine/sqlite/index.cjs'));
-  const store = require(path.join(HOME, 'engine/sqlite/store-memory.cjs'));
+  const { openDb } = require(path.join(HOME, 'core/engine/sqlite/index.cjs'));
+  const store = require(path.join(HOME, 'core/engine/sqlite/store-memory.cjs'));
   const wDb = openDb({ path: dbPath });
   const shared = {
     namespace: 'learnings', confidence: 0.9, verificationState: 'verified',
@@ -679,8 +679,8 @@ test('memory retrieval without trigger scope fails closed while explicit review 
 test('memory retrieval enforces path scopes inside the selected repository', () => {
   const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'memory-path-scope-'));
   const dbPath = path.join(tempDir, 'memory.db');
-  const { openDb } = require(path.join(HOME, 'engine/sqlite/index.cjs'));
-  const store = require(path.join(HOME, 'engine/sqlite/store-memory.cjs'));
+  const { openDb } = require(path.join(HOME, 'core/engine/sqlite/index.cjs'));
+  const store = require(path.join(HOME, 'core/engine/sqlite/store-memory.cjs'));
   const wDb = openDb({ path: dbPath });
   const shared = {
     namespace: 'learnings',
@@ -729,8 +729,8 @@ test('memory retrieval enforces path scopes inside the selected repository', () 
 test('memory retrieval enforces trigger contracts inside the selected scope', () => {
   const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'memory-trigger-scope-'));
   const dbPath = path.join(tempDir, 'memory.db');
-  const { openDb } = require(path.join(HOME, 'engine/sqlite/index.cjs'));
-  const store = require(path.join(HOME, 'engine/sqlite/store-memory.cjs'));
+  const { openDb } = require(path.join(HOME, 'core/engine/sqlite/index.cjs'));
+  const store = require(path.join(HOME, 'core/engine/sqlite/store-memory.cjs'));
   const wDb = openDb({ path: dbPath });
   const shared = {
     namespace: 'learnings',
@@ -779,8 +779,8 @@ test('memory retrieval enforces trigger contracts inside the selected scope', ()
 test('memory retrieval injects only current verified facts by default', () => {
   const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'memory-verification-scope-'));
   const dbPath = path.join(tempDir, 'memory.db');
-  const { openDb } = require(path.join(HOME, 'engine/sqlite/index.cjs'));
-  const store = require(path.join(HOME, 'engine/sqlite/store-memory.cjs'));
+  const { openDb } = require(path.join(HOME, 'core/engine/sqlite/index.cjs'));
+  const store = require(path.join(HOME, 'core/engine/sqlite/store-memory.cjs'));
   const wDb = openDb({ path: dbPath });
   const shared = {
     namespace: 'learnings',
@@ -837,8 +837,8 @@ test('memory retrieval injects only current verified facts by default', () => {
 test('memory source updates preserve applicability metadata when fields are omitted', () => {
   const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'memory-update-scope-'));
   const dbPath = path.join(tempDir, 'memory.db');
-  const { openDb } = require(path.join(HOME, 'engine/sqlite/index.cjs'));
-  const store = require(path.join(HOME, 'engine/sqlite/store-memory.cjs'));
+  const { openDb } = require(path.join(HOME, 'core/engine/sqlite/index.cjs'));
+  const store = require(path.join(HOME, 'core/engine/sqlite/store-memory.cjs'));
   const wDb = openDb({ path: dbPath });
   store.writeMemory({
     namespace: 'learnings',
@@ -879,8 +879,8 @@ test('memory file reconciliation replaces stale applicability metadata from the 
   const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'memory-reconcile-scope-'));
   const dbPath = path.join(tempDir, 'memory.db');
   const sourcePath = path.join(tempDir, 'memory', 'learnings', 'scope.md');
-  const { openDb } = require(path.join(HOME, 'engine/sqlite/index.cjs'));
-  const store = require(path.join(HOME, 'engine/sqlite/store-memory.cjs'));
+  const { openDb } = require(path.join(HOME, 'core/engine/sqlite/index.cjs'));
+  const store = require(path.join(HOME, 'core/engine/sqlite/store-memory.cjs'));
   const wDb = openDb({ path: dbPath });
   store.writeMemory({
     namespace: 'learnings',
@@ -935,9 +935,9 @@ test('memory file reconciliation replaces stale applicability metadata from the 
 test('memory retrieval handles PreToolUse Edit and Write file path payload shapes', () => {
   const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'memory-pretool-'));
   const dbPath = path.join(tempDir, 'memory.db');
-  const { openDb } = require(path.join(HOME, 'engine/sqlite/index.cjs'));
-  const store = require(path.join(HOME, 'engine/sqlite/store-memory.cjs'));
-  const projectScope = require(path.join(HOME, 'engine/scripts/lib/project-scope.cjs'));
+  const { openDb } = require(path.join(HOME, 'core/engine/sqlite/index.cjs'));
+  const store = require(path.join(HOME, 'core/engine/sqlite/store-memory.cjs'));
+  const projectScope = require(path.join(HOME, 'core/engine/scripts/lib/project-scope.cjs'));
   const wDb = openDb({ path: dbPath });
   store.writeMemory({
     namespace: 'learnings',
@@ -956,7 +956,7 @@ test('memory retrieval handles PreToolUse Edit and Write file path payload shape
   }, { db: wDb.db });
   wDb.close();
 
-  const hookPath = path.join(HOME, 'engine/scripts/memory-retrieve-hook.cjs');
+  const hookPath = path.join(HOME, 'core/engine/scripts/memory-retrieve-hook.cjs');
   const env = {
     CLAUDE_SQLITE_PATH: dbPath,
     CLAUDE_MEMORY_HINT_CACHE_DISABLED: '1',
@@ -988,7 +988,7 @@ test('memory retrieval handles PreToolUse Edit and Write file path payload shape
 });
 
 test('memory retrieval exposes an injectable in-process context contract for preflight router', () => {
-  const hook = require(path.join(HOME, 'engine/scripts/memory-retrieve-hook.cjs'));
+  const hook = require(path.join(HOME, 'core/engine/scripts/memory-retrieve-hook.cjs'));
   const queries = [];
   let cacheMarked = false;
   const deps = {
@@ -1029,8 +1029,8 @@ test('memory retrieval exposes an injectable in-process context contract for pre
 });
 
 test('PreToolUse memory retrieval passes project path and trigger scope to the store', () => {
-  const hook = require(path.join(HOME, 'engine/scripts/memory-retrieve-hook.cjs'));
-  const projectScope = require(path.join(HOME, 'engine/scripts/lib/project-scope.cjs'));
+  const hook = require(path.join(HOME, 'core/engine/scripts/memory-retrieve-hook.cjs'));
+  const projectScope = require(path.join(HOME, 'core/engine/scripts/lib/project-scope.cjs'));
   const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'memory-hook-scope-'));
   const repoRoot = path.join(tempDir, 'repo');
   const rtlDir = path.join(repoRoot, 'rtl');
@@ -1090,10 +1090,10 @@ test('PreToolUse memory retrieval passes project path and trigger scope to the s
 });
 
 test('memory retrieval records only injected exposures through a separate managed database', () => {
-  const hook = require(path.join(HOME, 'engine/scripts/memory-retrieve-hook.cjs'));
-  const attribution = require(path.join(HOME, 'engine/sqlite/store-memory-attribution.cjs'));
-  const sqlite = require(path.join(HOME, 'engine/sqlite/index.cjs'));
-  const projectScope = require(path.join(HOME, 'engine/scripts/lib/project-scope.cjs'));
+  const hook = require(path.join(HOME, 'core/engine/scripts/memory-retrieve-hook.cjs'));
+  const attribution = require(path.join(HOME, 'core/engine/sqlite/store-memory-attribution.cjs'));
+  const sqlite = require(path.join(HOME, 'core/engine/sqlite/index.cjs'));
+  const projectScope = require(path.join(HOME, 'core/engine/scripts/lib/project-scope.cjs'));
   const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'memory-exposure-hook-'));
   const repoRoot = path.join(tempDir, 'repo');
   const rtlDir = path.join(repoRoot, 'rtl');
@@ -1175,9 +1175,9 @@ test('memory retrieval records only injected exposures through a separate manage
 });
 
 test('UserPrompt memory injection records a scoped exposure without a tool anchor', () => {
-  const hook = require(path.join(HOME, 'engine/scripts/memory-retrieve-hook.cjs'));
-  const sqlite = require(path.join(HOME, 'engine/sqlite/index.cjs'));
-  const { memoryProjectId } = require(path.join(HOME, 'engine/scripts/lib/project-scope.cjs'));
+  const hook = require(path.join(HOME, 'core/engine/scripts/memory-retrieve-hook.cjs'));
+  const sqlite = require(path.join(HOME, 'core/engine/sqlite/index.cjs'));
+  const { memoryProjectId } = require(path.join(HOME, 'core/engine/scripts/lib/project-scope.cjs'));
   const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'prompt-memory-exposure-'));
   const repoRoot = path.join(tempDir, 'repo');
   const dbPath = path.join(tempDir, 'attribution.db');
@@ -1219,7 +1219,7 @@ test('UserPrompt memory injection records a scoped exposure without a tool ancho
 });
 
 test('in-process memory retrieval handles MultiEdit direct and edits-array paths', () => {
-  const hook = require(path.join(HOME, 'engine/scripts/memory-retrieve-hook.cjs'));
+  const hook = require(path.join(HOME, 'core/engine/scripts/memory-retrieve-hook.cjs'));
   const queries = [];
   const deps = {
     doMemoryQuery(query, label) {
@@ -1256,9 +1256,9 @@ test('in-process memory retrieval handles MultiEdit direct and edits-array paths
 });
 
 test('cross-link retrieval uses only the fresh failure payload without hit or signal loops', () => {
-  const crossLink = require(path.join(HOME, 'engine/scripts/cross-link-memory.cjs'));
-  const source = fs.readFileSync(path.join(HOME, 'engine/scripts/cross-link-memory.cjs'), 'utf8');
-  const sqlite = require(path.join(HOME, 'engine/sqlite/index.cjs'));
+  const crossLink = require(path.join(HOME, 'core/engine/scripts/cross-link-memory.cjs'));
+  const source = fs.readFileSync(path.join(HOME, 'core/engine/scripts/cross-link-memory.cjs'), 'utf8');
+  const sqlite = require(path.join(HOME, 'core/engine/sqlite/index.cjs'));
   const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'cross-link-exposure-'));
   const dbPath = path.join(tempDir, 'attribution.db');
   const db = { marker: 'readonly-cross-link' };
@@ -1330,7 +1330,7 @@ test('cross-link retrieval uses only the fresh failure payload without hit or si
   assert(calls.length === 4 && calls.every(call => call.options.db === db
       && call.options.trackHit === false),
     `cross-link query mutated retrieval state: ${JSON.stringify(calls)}`);
-  const { memoryProjectId } = require(path.join(HOME, 'engine/scripts/lib/project-scope.cjs'));
+  const { memoryProjectId } = require(path.join(HOME, 'core/engine/scripts/lib/project-scope.cjs'));
   assert(calls.every((call) => call.options.scope?.projectId === memoryProjectId(FIXTURE_REPO)
       && call.options.scope?.triggerKind === 'tool_failure'
       && call.options.scope?.triggerSignature === 'negative_hold_slack'),
@@ -1350,7 +1350,7 @@ test('cross-link retrieval uses only the fresh failure payload without hit or si
       && Boolean(exposure.retrieval_id)
       && exposure.correlation_id === failurePayload.tool_use_id,
   `failure exposure identity chain is incomplete: ${JSON.stringify(exposure)}`);
-  const attribution = require(path.join(HOME, 'engine/sqlite/store-memory-attribution.cjs'));
+  const attribution = require(path.join(HOME, 'core/engine/sqlite/store-memory-attribution.cjs'));
   assert(exposure.trigger_kind === 'tool-failure' && exposure.rank === 1
       && exposure.confidence === 0.9 && exposure.anchor_tool === 'Bash'
       && exposure.anchor_input_sha256 === attribution.toolInputSha256(failurePayload),
@@ -1362,7 +1362,7 @@ test('cross-link retrieval uses only the fresh failure payload without hit or si
 });
 
 test('postflight records causal lifecycle events and refuses anonymous telemetry', () => {
-  const observer = require(path.join(HOME, 'engine/hooks/learning/postflight-observer.cjs'));
+  const observer = require(path.join(HOME, 'core/engine/hooks/learning/postflight-observer.cjs'));
   // 2026-08-26 修: sessionIdFrom 回退读 process.env.CLAUDE_SESSION_ID —— 这是
   // 生产设计(宿主会话身份), 但宿主(WorkBuddy)会给子进程注入该变量, 于是
   // "匿名事件"在宿主 env 下获得合成身份, 本断言在 e2e/全量里稳定失败而单独
@@ -1412,7 +1412,7 @@ test('postflight records causal lifecycle events and refuses anonymous telemetry
     },
   }, { dbPath });
 
-  const { openDb } = require(path.join(HOME, 'engine/sqlite/index.cjs'));
+  const { openDb } = require(path.join(HOME, 'core/engine/sqlite/index.cjs'));
   const wDb = openDb({ path: dbPath });
   const rows = wDb.db.prepare(
     'SELECT type, payload FROM runtime_events ORDER BY event_id',
@@ -1452,7 +1452,7 @@ test('PostToolUseFailure routes shell failures through verification and health g
 });
 
 test('harness CI recognizes PostToolUseFailure as a real hook lifecycle event', () => {
-  const source = fs.readFileSync(path.join(HOME, 'engine/scripts/harness-ci.cjs'), 'utf8');
+  const source = fs.readFileSync(path.join(HOME, 'core/engine/scripts/harness-ci.cjs'), 'utf8');
   const block = source.match(/const VALID_HOOK_EVENTS = new Set\(\[([\s\S]*?)\]\);/);
   assert(block, 'harness-ci VALID_HOOK_EVENTS declaration is missing');
   assert(/['"]PostToolUseFailure['"]/.test(block[1]),
@@ -1504,7 +1504,7 @@ function measureNodeStartupMs(samples = 3) {
 }
 
 test('local runner enforces one batch deadline and reports structured timeout state', () => {
-  const runner = path.join(HOME, 'engine/scripts/hooks/local-runner.cjs');
+  const runner = path.join(HOME, 'core/engine/scripts/hooks/local-runner.cjs');
 
   // 参数相对冷启动标定, 不写死。
   //
@@ -1593,7 +1593,7 @@ test('local runner deadline cancels descendant processes before they outlive the
   const ready = path.join(tempDir, 'child-ready.txt');
   const marker = path.join(tempDir, 'orphan-marker.txt');
   const hook = path.join(tempDir, 'spawn-child.cjs');
-  const runner = path.join(HOME, 'engine/scripts/hooks/local-runner.cjs');
+  const runner = path.join(HOME, 'core/engine/scripts/hooks/local-runner.cjs');
   // 同样相对冷启动标定, 理由与 batch deadline 那条一致。
   //
   // 原参数写死 deadline=600ms, 隐含假设"hook 与孙进程两次 node 冷启动 ≪ 600ms"。
@@ -1642,7 +1642,7 @@ test('local-runner remains tested but is retired from active hook paths', () => 
     .filter(entry => entry.command.includes('local-runner.cjs'));
 
   assert(entries.length === 0, `local-runner remains active: ${entries[0]?.command}`);
-  assert(fs.existsSync(path.join(HOME, 'engine/scripts/hooks/local-runner.cjs')),
+  assert(fs.existsSync(path.join(HOME, 'core/engine/scripts/hooks/local-runner.cjs')),
     'local-runner helper was deleted instead of retained for explicit compatibility tests');
 });
 
@@ -1650,7 +1650,7 @@ test('hook benchmark counts a nonzero exit status as a failed sample', () => {
   const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'hook-bench-exit-'));
   const failingHook = path.join(tempDir, 'fail.cjs');
   fs.writeFileSync(failingHook, 'process.exit(7);\n', 'utf8');
-  const { benchHook } = require(path.join(HOME, 'engine/scripts/lib/bench-hooks.cjs'));
+  const { benchHook } = require(path.join(HOME, 'core/engine/scripts/lib/bench-hooks.cjs'));
   const result = benchHook(`node "${failingHook}"`, 'failing-hook', false);
   fs.rmSync(tempDir, { recursive: true, force: true });
 
@@ -1662,7 +1662,7 @@ test('hook benchmark records one cold sample and repeated warm samples', () => {
   const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'hook-bench-samples-'));
   const hook = path.join(tempDir, 'pass.cjs');
   fs.writeFileSync(hook, 'process.exit(0);\n', 'utf8');
-  const { benchHook } = require(path.join(HOME, 'engine/scripts/lib/bench-hooks.cjs'));
+  const { benchHook } = require(path.join(HOME, 'core/engine/scripts/lib/bench-hooks.cjs'));
   const result = benchHook(`node "${hook}"`, 'sampled-hook', false, {
     warmupRuns: 1,
     sampleRuns: 3,
@@ -1677,7 +1677,7 @@ test('hook benchmark records one cold sample and repeated warm samples', () => {
 });
 
 test('hook benchmark redirects harness state writes into a disposable sandbox', () => {
-  const bench = require(path.join(HOME, 'engine/scripts/lib/bench-hooks.cjs'));
+  const bench = require(path.join(HOME, 'core/engine/scripts/lib/bench-hooks.cjs'));
   assert(typeof bench.createBenchSandbox === 'function', 'benchmark sandbox factory is missing');
   const sandbox = bench.createBenchSandbox();
   const probeName = `bench-probe-${process.pid}-${Date.now()}.txt`;
@@ -1709,7 +1709,7 @@ test('hook benchmark redirects harness state writes into a disposable sandbox', 
 });
 
 test('benchmark entry runner always sandboxes sync hooks and never executes async hooks', () => {
-  const bench = require(path.join(HOME, 'engine/scripts/lib/bench-hooks.cjs'));
+  const bench = require(path.join(HOME, 'core/engine/scripts/lib/bench-hooks.cjs'));
   assert(typeof bench.benchmarkEntries === 'function', 'benchmark entry runner is missing');
   const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'hook-bench-entry-'));
   const syncHook = path.join(tempDir, 'sync.cjs');
@@ -1741,7 +1741,7 @@ test('benchmark entry runner always sandboxes sync hooks and never executes asyn
 });
 
 test('benchmark entry runner replays lifecycle-specific real payload shapes', () => {
-  const bench = require(path.join(HOME, 'engine/scripts/lib/bench-hooks.cjs'));
+  const bench = require(path.join(HOME, 'core/engine/scripts/lib/bench-hooks.cjs'));
   const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'hook-bench-payload-'));
   const makeCapture = (name) => {
     const script = path.join(tempDir, `${name}.cjs`);
@@ -1794,7 +1794,7 @@ test('local settings do not force context compaction below fifty percent', () =>
   const raw = local.env?.CLAUDE_AUTOCOMPACT_PCT_OVERRIDE;
   assert(raw === undefined || Number(raw) >= 50,
     `low autocompact override still amplifies SessionStart(compact): ${raw}`);
-  // settings.json 不入版本库（hook 命令含本机绝对路径，见 engine/hooks/registrations.json）。
+  // settings.json 不入版本库（hook 命令含本机绝对路径，见 hosts/claude-code/registrations.json）。
   // 全新 checkout / CI 上它要么不存在，要么只有渲染器生成的 hooks 块 —— model/effortLevel
   // 是操作员的本机选择，不是仓库契约，那里没有"正确值"可断言。
   const settingsPath = path.join(HOME, 'settings.json');
@@ -1847,7 +1847,7 @@ test('local runner gate bypass is short-lived, session-bound, target-exact, and 
   const marker = path.join(tempDir, 'executed.txt');
   const audit = path.join(tempDir, 'audit.jsonl');
   const hook = path.join(tempDir, 'target.cjs');
-  const runner = path.join(HOME, 'engine/scripts/hooks/local-runner.cjs');
+  const runner = path.join(HOME, 'core/engine/scripts/hooks/local-runner.cjs');
   const sessionId = 'runner-session-bound';
   const reason = 'approved recovery for a stale verification gate';
   const actor = 'operator-lihan';
@@ -1913,7 +1913,7 @@ test('local runner child environment preserves runtime context without inheritin
   const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'local-runner-env-'));
   const output = path.join(tempDir, 'env.json');
   const hook = path.join(tempDir, 'capture.cjs');
-  const runner = path.join(HOME, 'engine/scripts/hooks/local-runner.cjs');
+  const runner = path.join(HOME, 'core/engine/scripts/hooks/local-runner.cjs');
   fs.writeFileSync(hook, [
     "const fs = require('node:fs');",
     `fs.writeFileSync(${JSON.stringify(output)}, JSON.stringify({`,
@@ -1958,7 +1958,7 @@ test('local runner child environment preserves runtime context without inheritin
 // (校验 check_results/<mod>.json 真实存在且 status===PASS)。
 test('requirements gate does not honor completed state scoped to another project', () => {
   const stateFile = path.join(HOME, 'var/gates/requirements-gate.json');
-  const guard = path.join(HOME, 'engine/scripts/hooks/requirements-gate-guard.cjs');
+  const guard = path.join(HOME, 'core/engine/scripts/hooks/requirements-gate-guard.cjs');
   const target = path.join(os.tmpdir(), `harness-unrelated-${Date.now()}`, 'new_module.py');
 
   withFileBackup(stateFile, () => {
@@ -1985,7 +1985,7 @@ test('requirements gate does not honor completed state scoped to another project
 
 test('verification quality gate does not honor completed state scoped to another project', () => {
   const stateFile = path.join(HOME, 'var/gates/verification-quality.json');
-  const guard = path.join(HOME, 'engine/scripts/hooks/verification-quality-guard.cjs');
+  const guard = path.join(HOME, 'core/engine/scripts/hooks/verification-quality-guard.cjs');
   const target = path.join(os.tmpdir(), `harness-unrelated-${Date.now()}`, 'tb_new_module.sv');
 
   withFileBackup(stateFile, () => {
@@ -2012,7 +2012,7 @@ test('verification quality gate does not honor completed state scoped to another
 
 test('verification gate does not treat make clean as functional verification', () => {
   const stateFile = path.join(HOME, 'var/verify-gate.json');
-  const gate = path.join(HOME, 'engine/scripts/hooks/verification-gate.cjs');
+  const gate = path.join(HOME, 'core/engine/scripts/hooks/verification-gate.cjs');
 
   withFileBackup(stateFile, () => {
     fs.writeFileSync(stateFile, JSON.stringify({
@@ -2042,7 +2042,7 @@ test('verification gate only clears after successful PostToolUse evidence', () =
   const tmpRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'verify-clear-'));
   const stateFile = path.join(tmpRoot, 'verify-gate.json');
   const ledgerFile = path.join(tmpRoot, 'verification-ledger.json');
-  const gate = path.join(HOME, 'engine/scripts/hooks/verification-gate.cjs');
+  const gate = path.join(HOME, 'core/engine/scripts/hooks/verification-gate.cjs');
   const env = {
     CLAUDE_VERIFY_GATE_STATE_FILE: stateFile,
     CLAUDE_VERIFICATION_LEDGER_FILE: ledgerFile,
@@ -2090,7 +2090,7 @@ test('verification gate only clears after successful PostToolUse evidence', () =
 });
 
 test('verification gate allows read-only echo chains but blocks echo redirection', () => {
-  const gate = path.join(HOME, 'engine/scripts/hooks/verification-gate.cjs');
+  const gate = path.join(HOME, 'core/engine/scripts/hooks/verification-gate.cjs');
   const tmpRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'verify-echo-'));
   const env = {
     CLAUDE_VERIFY_GATE_STATE_FILE: path.join(tmpRoot, 'verify-gate.json'),
@@ -2126,7 +2126,7 @@ test('verification gate allows read-only echo chains but blocks echo redirection
 });
 
 test('verification pending is session-scoped and expires by TTL', () => {
-  const gate = path.join(HOME, 'engine/scripts/hooks/verification-gate.cjs');
+  const gate = path.join(HOME, 'core/engine/scripts/hooks/verification-gate.cjs');
   const tmpRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'verify-session-'));
   const stateFile = path.join(tmpRoot, 'verify-gate.json');
   const env = {
@@ -2180,7 +2180,7 @@ test('verification pending is session-scoped and expires by TTL', () => {
 
 test('verification gate cites the rule file without copying stale rule text', () => {
   const gate = fs.readFileSync(
-    path.join(HOME, 'engine/scripts/hooks/verification-gate.cjs'),
+    path.join(HOME, 'core/engine/scripts/hooks/verification-gate.cjs'),
     'utf8'
   );
   assert(gate.includes('docs/rules/00-core.md'), 'verification gate no longer cites docs/rules/00-core.md');
@@ -2189,7 +2189,7 @@ test('verification gate cites the rule file without copying stale rule text', ()
 });
 
 test('context compression preserves constitution and dynamic rules', () => {
-  const budget = require(path.join(HOME, 'engine/scripts/agent-context-budget.cjs'));
+  const budget = require(path.join(HOME, 'core/engine/scripts/agent-context-budget.cjs'));
   const prompt = [
     '## Agent Constitution',
     'Hard rule: obey user constraints before efficiency.',

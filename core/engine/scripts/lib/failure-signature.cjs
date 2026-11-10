@@ -1,7 +1,7 @@
 'use strict';
 
 /**
- * engine/scripts/lib/failure-signature.cjs — 失败指纹归一化。
+ * core/engine/scripts/lib/failure-signature.cjs — 失败指纹归一化。
  *
  * 为什么需要它: harness 里有三处独立在数"同一个失败重复了几次", 三处各用一套
  * 判据, 于是"连续失败两次就换方法"这条规则实际上从未按预期生效:

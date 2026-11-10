@@ -7,7 +7,7 @@ const path = require('node:path');
 const crypto = require('node:crypto');
 const { spawnSync } = require('node:child_process');
 
-const HOME = path.resolve(__dirname, '..', '..', '..');
+const HOME = path.resolve(__dirname, '..', '..', '..', '..');
 const DEFAULT_RUN_ROOT = path.join(os.tmpdir(), 'claude-harness-agent-evals', 'rtl-long-task');
 const TARGET_RTL = path.join('01_src', '00_hdl', 'skid_buffer', 'skid_buffer.sv');
 const VERIFY_COMMAND = 'node rtl_hidden_contract.cjs';
@@ -16,8 +16,8 @@ const DEFAULT_CLAUDE_COMMAND = 'claude -p --tools "" --output-format json --perm
 function usage() {
   return [
     'Usage:',
-    '  node engine/scripts/test-hooks/rtl-long-task-eval.cjs --dry-run --out <dir>',
-    '  node engine/scripts/test-hooks/rtl-long-task-eval.cjs --agent claude --out <dir>',
+    '  node core/engine/scripts/test-hooks/rtl-long-task-eval.cjs --dry-run --out <dir>',
+    '  node core/engine/scripts/test-hooks/rtl-long-task-eval.cjs --agent claude --out <dir>',
     '',
     'The agent returns one JSON object. The harness writes only the RTL file and runs hidden checks.',
   ].join('\n');
@@ -358,7 +358,7 @@ function verifyFunctional(runDir, plan) {
   checks.push({ name: 'hidden-rtl-contract', status: hidden.status === 0 ? 'passed' : 'failed', stdoutTail: hidden.stdout.slice(-1000), stderrTail: hidden.stderr.slice(-1000) });
 
   const rtlPath = path.join(runDir, TARGET_RTL);
-  const hdlGate = run(process.execPath, [path.join(HOME, 'engine/scripts/hooks/hdl-gate.cjs')], HOME, JSON.stringify({
+  const hdlGate = run(process.execPath, [path.join(HOME, 'core/engine/scripts/hooks/hdl-gate.cjs')], HOME, JSON.stringify({
     hook_event_name: 'PreToolUse',
     tool_name: 'Write',
     tool_input: {

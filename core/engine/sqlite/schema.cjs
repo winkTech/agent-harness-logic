@@ -1,7 +1,7 @@
 'use strict';
 
 /**
- * engine/sqlite/schema.cjs — 全系统 DDL 管理。
+ * core/engine/sqlite/schema.cjs — 全系统 DDL 管理。
  *
  * 职责:
  *   1. 维护 _migrations 追踪表 (自动建)
@@ -96,7 +96,7 @@ function assertUniqueMigrationPrefixes(files) {
  *
  * @param {import('node:sqlite').DatabaseSync} db
  * @param {object} [opts]
- * @param {string} [opts.dir] — 迁移目录 (默认 engine/sqlite/migrations; fixture 测试用)
+ * @param {string} [opts.dir] — 迁移目录 (默认 core/engine/sqlite/migrations; fixture 测试用)
  */
 function applyPendingMigrations(db, opts = {}) {
   ensureMigrationTable(db);
@@ -167,7 +167,7 @@ function applyPendingMigrations(db, opts = {}) {
  * 列出所有迁移状态。
  * @param {import('node:sqlite').DatabaseSync} db
  * @param {object} [opts]
- * @param {string} [opts.dir] — 迁移目录 (默认 engine/sqlite/migrations)
+ * @param {string} [opts.dir] — 迁移目录 (默认 core/engine/sqlite/migrations)
  * @returns {{ name: string, applied: boolean, applied_at: string|null }[]}
  */
 function listMigrations(db, opts = {}) {

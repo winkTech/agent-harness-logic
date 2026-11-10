@@ -2,6 +2,7 @@
 
 const fs = require('node:fs');
 const path = require('node:path');
+const { kbPath } = require('../../config.cjs');
 
 const MEMORY_INDEX_FILES = new Set(['MEMORY.md', 'MEMORY_RULES.md', 'links.md']);
 const TEMPLATE_RE = /template/i;
@@ -84,7 +85,7 @@ function shouldIndexMemoryFile(filePath, opts = {}) {
 
 function shouldIndexKnowledgeFile(filePath, opts = {}) {
   if (!isMarkdown(filePath)) return false;
-  const kbDir = opts.knowledgeDir || (opts.home ? path.join(opts.home, 'engineering-assets', 'knowledge') : null);
+  const kbDir = opts.knowledgeDir || (opts.home ? kbPath(opts.home) : null);
   const rel = kbDir ? relativeSlash(kbDir, filePath) : slashPath(filePath);
   if (hasIgnoredSegment(rel)) return false;
   if (hasSegment(rel, 'examples')) return false;
@@ -97,7 +98,7 @@ function shouldIndexKnowledgeFile(filePath, opts = {}) {
 function shouldIndexSemanticFile(filePath, opts = {}) {
   const home = opts.home;
   const memoryDir = opts.memoryDir || (home ? path.join(home, 'memory') : null);
-  const knowledgeDir = opts.knowledgeDir || (home ? path.join(home, 'engineering-assets', 'knowledge') : null);
+  const knowledgeDir = opts.knowledgeDir || (home ? kbPath(home) : null);
   const abs = path.resolve(filePath);
 
   if (memoryDir) {

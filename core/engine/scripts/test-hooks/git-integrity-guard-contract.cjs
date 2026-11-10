@@ -15,14 +15,14 @@ const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 
-const ROOT = path.resolve(__dirname, '..', '..', '..');
-const GUARD = path.join(ROOT, 'engine', 'hooks', 'git', 'git-integrity-guard.cjs');
+const ROOT = path.resolve(__dirname, '..', '..', '..', '..');
+const GUARD = path.join(ROOT, 'core', 'engine', 'hooks', 'git', 'git-integrity-guard.cjs');
 
 function makeRepo() {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'git-guard-contract-'));
   const repo = path.join(dir, 'repo');
-  fs.mkdirSync(path.join(repo, 'engine', 'hooks', 'git'), { recursive: true });
-  fs.copyFileSync(GUARD, path.join(repo, 'engine', 'hooks', 'git', 'git-integrity-guard.cjs'));
+  fs.mkdirSync(path.join(repo, 'core', 'engine', 'hooks', 'git'), { recursive: true });
+  fs.copyFileSync(GUARD, path.join(repo, 'core', 'engine', 'hooks', 'git', 'git-integrity-guard.cjs'));
   fs.writeFileSync(path.join(repo, 'f.txt'), 'a\n');
   const git = (args) => cp.spawnSync('git', args, { cwd: repo, encoding: 'utf8', timeout: 15000 });
   git(['init', '-q']);
@@ -37,7 +37,7 @@ function makeRepo() {
 }
 
 function runGuard(repo) {
-  return cp.spawnSync('node', [path.join(repo, 'engine', 'hooks', 'git', 'git-integrity-guard.cjs')], {
+  return cp.spawnSync('node', [path.join(repo, 'core', 'engine', 'hooks', 'git', 'git-integrity-guard.cjs')], {
     cwd: repo, encoding: 'utf8', timeout: 30000,
   });
 }

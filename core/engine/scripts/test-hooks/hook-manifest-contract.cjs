@@ -5,9 +5,9 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
 
-const ROOT = path.resolve(__dirname, '..', '..', '..');
-const REGISTRY = path.join(ROOT, 'engine', 'scripts', 'lib', 'hook-registry.cjs');
-const MANIFEST = path.join(ROOT, 'engine', 'hooks', 'manifest.json');
+const ROOT = path.resolve(__dirname, '..', '..', '..', '..');
+const REGISTRY = path.join(ROOT, 'core', 'engine', 'scripts', 'lib', 'hook-registry.cjs');
+const MANIFEST = path.join(ROOT, 'core', 'engine', 'hooks', 'manifest.json');
 
 function main() {
   const registry = require(REGISTRY);
@@ -91,7 +91,7 @@ function main() {
   assert.ok(consumerMismatch.errors.some(error => /dream/.test(error) && /Stop/.test(error)),
     'registry accepted a consumer event unsupported by its host entry');
 
-  const ciSource = fs.readFileSync(path.join(ROOT, 'engine', 'scripts', 'harness-ci.cjs'), 'utf8');
+  const ciSource = fs.readFileSync(path.join(ROOT, 'core', 'engine', 'scripts', 'harness-ci.cjs'), 'utf8');
   assert.match(ciSource, /validateHookManifest\s*\(/,
     'harness-ci does not enforce the active hook manifest');
 

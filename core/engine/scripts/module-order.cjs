@@ -2,7 +2,7 @@
 'use strict';
 
 /**
- * engine/scripts/module-order.cjs — 由代码图推导/校验模块验证顺序。
+ * core/engine/scripts/module-order.cjs — 由代码图推导/校验模块验证顺序。
  *
  * hdl-coding-dag-workflow 的 cascade 门禁 (上游没过就不调下游) 完全依赖
  * moduleOrder 正确, 而这个顺序一直是手写的、错了也没人报错。工作流跑在受限
@@ -10,9 +10,9 @@
  * 一次 Bash 调用取结果。
  *
  * 用法:
- *   node engine/scripts/module-order.cjs --modules a,b,c            # 推导顺序
- *   node engine/scripts/module-order.cjs --modules a,b,c --check    # 校验; 矛盾则 exit 1
- *   node engine/scripts/module-order.cjs --impacted leaf --project /p  # 改 leaf 要重验谁
+ *   node core/engine/scripts/module-order.cjs --modules a,b,c            # 推导顺序
+ *   node core/engine/scripts/module-order.cjs --modules a,b,c --check    # 校验; 矛盾则 exit 1
+ *   node core/engine/scripts/module-order.cjs --impacted leaf --project /p  # 改 leaf 要重验谁
  *
  * 输出恒为 JSON (供工作流解析), 人类可读的说明走 stderr。
  */
@@ -56,7 +56,7 @@ function main(argv = process.argv.slice(2)) {
       ok: false,
       staleIndex: true,
       reason: freshness.reason,
-      hint: `先重建索引: node engine/scripts/code-graph-index.cjs sync ${projectRoot}`,
+      hint: `先重建索引: node core/engine/scripts/code-graph-index.cjs sync ${projectRoot}`,
     }, null, 2));
     process.exitCode = 1;
     return;

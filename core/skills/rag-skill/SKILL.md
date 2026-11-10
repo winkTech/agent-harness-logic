@@ -70,7 +70,7 @@ L5: grep primary/ (全文扫描, 最后手段)
 
 **标题锚点加载**（文档增删内容后仍稳定）:
 ```powershell
-rg -n "^## (场景总览|[0-9]{2} )" engineering-assets/knowledge/SCENE_CARDS.md
+rg -n "^## (场景总览|[0-9]{2} )" packs/fpga/engineering-assets/knowledge/SCENE_CARDS.md
 ```
 
 先读取“场景总览”标题到第一个编号场景；选择场景后，从对应 `## NN` 标题
@@ -123,13 +123,13 @@ rg -n "^## (场景总览|[0-9]{2} )" engineering-assets/knowledge/SCENE_CARDS.md
 
 ```
 1. grep 场景内文档
-   grep -rl "keyword" engineering-assets/knowledge/primary/domains/<scene-dir>/
+   grep -rl "keyword" packs/fpga/engineering-assets/knowledge/primary/domains/<scene-dir>/
 
 2. grep 全 primary
-   grep -rl "keyword" engineering-assets/knowledge/primary/
+   grep -rl "keyword" packs/fpga/engineering-assets/knowledge/primary/
 
 3. grep archive 源文档
-   grep -rl "keyword" engineering-assets/knowledge/archive/sources/
+   grep -rl "keyword" packs/fpga/engineering-assets/knowledge/archive/sources/
 
 4. 告知用户未找到
    → "知识库中未找到相关信息"

@@ -14,7 +14,7 @@
  *   4. /^check_rtl_\w+\d+\.sv$/i — check_rtl_freq_recovery21.sv
  *   5. /^run_debug\d+\.do$/i     — run_debug5.do
  *
- * 注册源: settings.json hooks（由 engine/scripts/hooks/hook-registry.cjs 校验）
+ * 注册源: settings.json hooks（由 core/engine/scripts/hooks/hook-registry.cjs 校验）
  */
 
 'use strict';
@@ -220,7 +220,7 @@ module.exports.evaluate = evaluate;
 //
 // 这是本 guard「三重失效」的第一重: 以前整个文件只导出一个函数, 没有 stdin 读取、
 // 没有退出码、没有 require.main —— 即使在 settings.json 里注册了也只会被当成一个
-// 普通脚本执行一遍然后什么都不做。而 docs/rules/README.md 与三条 memory 记录都
+// 普通脚本执行一遍然后什么都不做。而 core/rules/README.md 与三条 memory 记录都
 // 声称它在 PreToolUse 阻断变体文件。文档说有、代码不跑, 比明说"没有"更糟。
 //
 // 分级: 基名已存在(或 check_rtl_/run_debug 这类一次性调试产物) → ERROR, 硬拦;

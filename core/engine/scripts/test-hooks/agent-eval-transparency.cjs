@@ -6,9 +6,9 @@ const os = require('node:os');
 const path = require('node:path');
 const { spawnSync } = require('node:child_process');
 
-const HOME = path.resolve(__dirname, '..', '..', '..');
-const RUNNER = path.join(HOME, 'engine/scripts/test-hooks/agent-eval-runner.cjs');
-const VERIFIER = path.join(HOME, 'engine/scripts/test-hooks/agent-eval-verify.cjs');
+const HOME = path.resolve(__dirname, '..', '..', '..', '..');
+const RUNNER = path.join(HOME, 'core/engine/scripts/test-hooks/agent-eval-runner.cjs');
+const VERIFIER = path.join(HOME, 'core/engine/scripts/test-hooks/agent-eval-verify.cjs');
 
 const tests = [];
 
@@ -77,12 +77,12 @@ function goodTranscript() {
   ].join('\n');
   return [
     assistant([{ type: 'text', text: checklist }]),
-    assistant([toolUse('Bash', { command: 'node engine/scripts/test-hooks/workflow-contracts.cjs' })]),
+    assistant([toolUse('Bash', { command: 'node core/engine/scripts/test-hooks/workflow-contracts.cjs' })]),
   ].join('\n');
 }
 
 function badTranscript() {
-  return assistant([toolUse('Bash', { command: 'node engine/scripts/test-hooks/workflow-contracts.cjs' })]);
+  return assistant([toolUse('Bash', { command: 'node core/engine/scripts/test-hooks/workflow-contracts.cjs' })]);
 }
 
 test('agent-eval-runner refuses non-empty output directories by default', () => {
@@ -228,11 +228,11 @@ test('agent-eval-verify fails directories without a fresh eval-run manifest', ()
   fs.mkdirSync(path.join(outDir, 'src'), { recursive: true });
   fs.mkdirSync(path.join(outDir, 'tests'), { recursive: true });
   fs.copyFileSync(
-    path.join(HOME, 'engine/scripts/test-hooks/fixtures/long-task/scenario/src/telemetry.py'),
+    path.join(HOME, 'core/engine/scripts/test-hooks/fixtures/long-task/scenario/src/telemetry.py'),
     path.join(outDir, 'src', 'telemetry.py')
   );
   fs.copyFileSync(
-    path.join(HOME, 'engine/scripts/test-hooks/fixtures/long-task/scenario/tests/test_telemetry.py'),
+    path.join(HOME, 'core/engine/scripts/test-hooks/fixtures/long-task/scenario/tests/test_telemetry.py'),
     path.join(outDir, 'tests', 'test_telemetry.py')
   );
   const responseFile = path.join(outDir, 'response.txt');

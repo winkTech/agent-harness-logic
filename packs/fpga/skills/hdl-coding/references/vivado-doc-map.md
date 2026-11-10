@@ -14,7 +14,7 @@
 查版本不要靠记忆或猜，跑探测器：
 
 ```bash
-node engine/scripts/eda-detect.cjs --json
+node core/engine/scripts/eda-detect.cjs --json
 ```
 
 它会读真实可执行文件报告 `vivado` / `xvlog` / `xelab` / `xsim` 的版本；同时装了多版时

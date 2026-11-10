@@ -1,5 +1,5 @@
 {
-  "$schema": "./engine/schemas/plugin-lock.schema.json",
+  "$schema": "./core/engine/schemas/plugin-lock.schema.json",
   "version": 1,
   "plugins": {
     "andrej-karpathy-skills@karpathy-skills": {

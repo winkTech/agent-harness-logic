@@ -21,7 +21,7 @@ const { spawnSync } = require('node:child_process');
 
 const { HARNESS_ROOT } = require('../lib/harness-root.cjs');
 
-const HOOK = path.join(HARNESS_ROOT, 'engine', 'scripts', 'hooks', 'codegraph-sync.cjs');
+const HOOK = path.join(HARNESS_ROOT, 'core', 'engine', 'scripts', 'hooks', 'codegraph-sync.cjs');
 
 function makeWorkspace() {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'cg-sync-'));

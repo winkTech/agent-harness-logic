@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * engine/scripts/dream-startup-inject.cjs — P3+P4: Dream 调度修复 + 闭环注入
+ * core/engine/scripts/dream-startup-inject.cjs — P3+P4: Dream 调度修复 + 闭环注入
  *
  * 在 SessionStart 时执行:
  *   1. 检查是否有未处理的事件（since watermark）
@@ -26,9 +26,9 @@ const crypto = require('node:crypto');
 const { HARNESS_ROOT } = require('./lib/harness-root.cjs');
 
 const HARNESS = HARNESS_ROOT;
-const DREAM_SCRIPT = path.join(HARNESS, 'engine', 'scripts', 'dream-consolidate.cjs');
-const EVENTS_STORE = path.join(HARNESS, 'engine', 'sqlite', 'store-events.cjs');
-const DB_INDEX = path.join(HARNESS, 'engine', 'sqlite', 'index.cjs');
+const DREAM_SCRIPT = path.join(HARNESS, 'core', 'engine', 'scripts', 'dream-consolidate.cjs');
+const EVENTS_STORE = path.join(HARNESS, 'core', 'engine', 'sqlite', 'store-events.cjs');
+const DB_INDEX = path.join(HARNESS, 'core', 'engine', 'sqlite', 'index.cjs');
 
 // 最少事件数才触发 Dream 运行 (v2: 10→5, 日均 ~5 条事件的节奏下每 session 都有机会触发)
 const MIN_EVENTS_THRESHOLD = 5;
@@ -216,7 +216,7 @@ function runStartup(opts = {}) {
 
 function main() {
   if (process.argv.includes('--help')) {
-    console.log('Usage: node engine/scripts/dream-startup-inject.cjs');
+    console.log('Usage: node core/engine/scripts/dream-startup-inject.cjs');
     return null;
   }
   const result = runStartup();

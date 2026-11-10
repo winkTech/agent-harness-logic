@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * engine/scripts/hooks/verification-gate.cjs — 验证闭环硬门禁 (P0)
+ * core/engine/scripts/hooks/verification-gate.cjs — 验证闭环硬门禁 (P0)
  *
  * ⚠️ 验证必须是功能验证，不只是语法检查 ⚠️
  *
@@ -115,7 +115,7 @@ const TEST_PATTERNS = [
   /^matlab\s+(?:-batch|-r)\b/,
   /^octave(?:-cli)?\b/,
   // 项目约定的模块校验脚本 02_sim/<mod>/check_<mod>.py
-  // (命名约定见 engine/scripts/lib/project-directory-contract.cjs)
+  // (命名约定见 core/engine/scripts/lib/project-directory-contract.cjs)
   /^(?:uv\s+run\s+)?python3?\s+["']?(?:[^\s"']*[\/\\])?check_[A-Za-z0-9_]+\.py\b/,
   /^make\s+(regress|sim|test|check|run)\b/,
   // Node/JS 测试
@@ -1056,7 +1056,7 @@ async function main() {
     console.error('║  ✅ 请运行功能验证 (pytest / vsim / iverilog / check_*.py)    ║');
     console.error('║                                                              ║');
     console.error('║  若这是合法验证命令但被误拦，解除方式:                        ║');
-    console.error('║  node engine/scripts/hooks/verification-gate.cjs --reset      ║');
+    console.error('║  node core/engine/scripts/hooks/verification-gate.cjs --reset      ║');
     console.error('║                                                              ║');
     console.error('║  [VerificationGate] 命令被阻断:                              ║');
     console.error(`║  ${command.slice(0, 72).padEnd(72)}║`);

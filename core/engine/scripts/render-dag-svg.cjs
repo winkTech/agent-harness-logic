@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * engine/scripts/render-dag-svg.cjs — 模块例化 DAG → SVG 渲染。
+ * core/engine/scripts/render-dag-svg.cjs — 模块例化 DAG → SVG 渲染。
  *
  * 数据源是代码图 (code-graph-index / cg-queries) 的 module 节点与穿透 contains
  * 的 instantiates 边（复用 lib/module-topology.cjs 的 buildModuleDeps，不重复
@@ -12,9 +12,9 @@
  * 失败关闭报错退出，不拿旧图画"可能相关"的依赖图。
  *
  * 用法:
- *   node engine/scripts/render-dag-svg.cjs --project <path>            # 全部模块，stdout
- *   node engine/scripts/render-dag-svg.cjs --project <path> --top top  # 只画 top 及其依赖闭包
- *   node engine/scripts/render-dag-svg.cjs --project <path> --out dag.svg
+ *   node core/engine/scripts/render-dag-svg.cjs --project <path>            # 全部模块，stdout
+ *   node core/engine/scripts/render-dag-svg.cjs --project <path> --top top  # 只画 top 及其依赖闭包
+ *   node core/engine/scripts/render-dag-svg.cjs --project <path> --out dag.svg
  *
  * 退出码:
  *   0 — 成功
@@ -184,7 +184,7 @@ function main() {
   const fresh = indexFreshness(projectId);
   if (!fresh.fresh) {
     fail(`索引不可用（${fresh.reason}${fresh.indexedAt ? `，索引于 ${new Date(fresh.indexedAt).toISOString()}` : ''}）`
-      + `—— 先跑 node engine/scripts/code-graph-index.cjs --project <path> 重建`, 1);
+      + `—— 先跑 node core/engine/scripts/code-graph-index.cjs --project <path> 重建`, 1);
   }
 
   const deps = buildModuleDeps(projectId);

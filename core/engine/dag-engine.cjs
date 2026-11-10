@@ -1,7 +1,7 @@
 'use strict';
 
 /**
- * engine/dag-engine.cjs — DAG 调度引擎。
+ * core/engine/dag-engine.cjs — DAG 调度引擎。
  *
  * 从 hdl-coding-dag-workflow.js 提取，独立可复用。
  * 支持：拓扑排序 / 分层并行 / 重试 / 超时 / 进度回调 / 循环检测。
@@ -11,7 +11,7 @@
  *   - maxRetriesAcrossLayers: 跨层全局最大重试计数门禁
  *
  * 用法:
- *   const dag = require('./engine/dag-engine.cjs');
+ *   const dag = require('./core/engine/dag-engine.cjs');
  *
  *   const nodes = {
  *     a: { deps: [], run: async (ctx, control) => 'result-a' },

@@ -6,7 +6,7 @@ const os = require('node:os');
 const path = require('node:path');
 const { spawnSync } = require('node:child_process');
 
-const HOME = path.resolve(__dirname, '..', '..', '..');
+const HOME = path.resolve(__dirname, '..', '..', '..', '..');
 const DEFAULT_RUN_ROOT = path.join(os.tmpdir(), 'claude-harness-agent-evals', 'claude-patch-executor');
 const TARGET_RTL = path.join('01_src', '00_hdl', 'spi_fifo', 'spi_fifo.sv');
 const PUBLIC_VERIFY = path.join('03_verify', 'spi_fifo_contract.cjs');
@@ -77,9 +77,9 @@ const NEW_BLOCK = [
 function usage() {
   return [
     'Usage:',
-    '  node engine/scripts/test-hooks/claude-patch-executor.cjs --dry-run --out <dir>',
-    '  node engine/scripts/test-hooks/claude-patch-executor.cjs --agent claude --out <dir>',
-    '  node engine/scripts/test-hooks/claude-patch-executor.cjs --agent codex --out <dir>',
+    '  node core/engine/scripts/test-hooks/claude-patch-executor.cjs --dry-run --out <dir>',
+    '  node core/engine/scripts/test-hooks/claude-patch-executor.cjs --agent claude --out <dir>',
+    '  node core/engine/scripts/test-hooks/claude-patch-executor.cjs --agent codex --out <dir>',
     '',
     'The agent may only return a JSON patch plan. The harness applies exact old/new',
     'blocks, checks RTL content semantics, runs verifier commands, and records evidence.',
@@ -486,7 +486,7 @@ function runEval(opts) {
     }
 
     if (apply.ok) {
-      const gateScript = path.join(HOME, 'engine/scripts/hooks/repair-content-gate.cjs');
+      const gateScript = path.join(HOME, 'core/engine/scripts/hooks/repair-content-gate.cjs');
       const gateRun = run(process.execPath, [gateScript, '--check', '--spec', specPath, '--project-root', projectRoot], projectRoot, '', 30000);
       contentGate = {
         ok: gateRun.status === 0,

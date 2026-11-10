@@ -1,14 +1,14 @@
 #!/usr/bin/env node
 /**
- * engine/scripts/hooks/test-hooks.cjs — Hook 集成测试。
+ * core/engine/scripts/hooks/test-hooks.cjs — Hook 集成测试。
  *
  * 对所有注册在 settings.json/settings.local.json 中的 hook 进行 dry-run，
  * 验证每条 hook 的命令是否可执行、脚本是否存在、exit code = 0。
  *
  * 用法:
- *   node engine/scripts/hooks/test-hooks.cjs              # 全量测试
- *   node engine/scripts/hooks/test-hooks.cjs --verbose    # 详细输出
- *   node engine/scripts/hooks/test-hooks.cjs --point Stop # 只测指定触发点
+ *   node core/engine/scripts/hooks/test-hooks.cjs              # 全量测试
+ *   node core/engine/scripts/hooks/test-hooks.cjs --verbose    # 详细输出
+ *   node core/engine/scripts/hooks/test-hooks.cjs --point Stop # 只测指定触发点
  *
  * 不测的 hook:
  *   - async hook（异步只检查脚本是否存在，不执行）

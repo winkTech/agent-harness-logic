@@ -1,7 +1,7 @@
 'use strict';
 
 /**
- * engine/sqlite/store-loops.cjs — 任务循环状态仓库。
+ * core/engine/sqlite/store-loops.cjs — 任务循环状态仓库。
  *
  * 用法:
  *   const loops = require('./store-loops.cjs');

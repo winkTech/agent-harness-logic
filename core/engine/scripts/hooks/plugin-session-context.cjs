@@ -1,7 +1,7 @@
 'use strict';
 
 /**
- * engine/scripts/hooks/plugin-session-context.cjs — SessionStart 的两个插件模式组件
+ * core/engine/scripts/hooks/plugin-session-context.cjs — SessionStart 的两个插件模式组件
  *
  * 由 session-bootstrap.cjs 在 stateResume 之前路由，返回形状与其它组件一致：
  * `{ exitCode, context }`。两者都 fail-open：任何异常只写一行 stderr warning，
@@ -129,7 +129,7 @@ function registrationOverlap(_payload, io, deps = {}) {
     }
     if (!overlapped) return { exitCode: 0 };
 
-    const remove = path.join(mode.pluginRoot, 'engine', 'scripts', 'render-hook-settings.cjs');
+    const remove = path.join(mode.pluginRoot, 'core', 'engine', 'scripts', 'render-hook-settings.cjs');
     return {
       exitCode: 0,
       context: '[logical-paradox] 检测到用户级 settings.json 也注册了 harness hook，'

@@ -2,7 +2,7 @@
 'use strict';
 
 /**
- * engine/scripts/hooks/subagent-verdict.cjs — SubagentStop 判定回灌。
+ * core/engine/scripts/hooks/subagent-verdict.cjs — SubagentStop 判定回灌。
  *
  * 并行编排 (workflow / Agent 工具) 的成败原本对主循环完全不可见: SubagentStop
  * 没有任何注册, 子 agent 干成什么样只留在它自己的上下文里。于是循环控制器看到

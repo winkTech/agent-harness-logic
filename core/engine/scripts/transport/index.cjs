@@ -1,10 +1,10 @@
 'use strict';
 
 /**
- * engine/scripts/transport/index.cjs — transport 归一化层统一入口
+ * core/engine/scripts/transport/index.cjs — transport 归一化层统一入口
  *
  * 职责：把各 agent/工具（Claude Code / WorkBuddy / Codex）的原始事件载荷
- * 归一化为 harness-event-v1 事件对象（契约见 engine/schemas/harness-event-v1.schema.json）。
+ * 归一化为 harness-event-v1 事件对象（契约见 core/engine/schemas/harness-event-v1.schema.json）。
  *
  * 这是 D1「真实事件语义」的守门层：
  *   - status 只在有明确证据时判定（事件名失败证据 / 载荷显式结果字段）；
@@ -12,7 +12,7 @@
  *   - 未知 transport / 非法载荷抛 EVENT_INVALID（fail-closed），调用方必须处理。
  *
  * 用法：
- *   const { normalize } = require('./engine/scripts/transport/index.cjs');
+ *   const { normalize } = require('./core/engine/scripts/transport/index.cjs');
  *   const event = normalize(JSON.parse(stdin), 'workbuddy');
  *
  *   // 边界入口（M3）：一次识别运行时，拿到事件 + 规范载荷

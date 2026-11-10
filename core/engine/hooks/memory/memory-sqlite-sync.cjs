@@ -10,14 +10,14 @@
  * - 只处理 memory/ 路径下 .md 文件的 Write/Edit (递归匹配子目录)
  * - 幂等: 同内容二次触发仅 UPDATE
  * - 不阻塞: 所有异常被捕获, 永不抛
- * - 零依赖: 只用 fs + path + engine/sqlite
+ * - 零依赖: 只用 fs + path + core/engine/sqlite
  *
  * 注册方式: settings.local.json hooks.PostToolUse 中添加:
  *   {
  *     "matcher": "Edit|Write",
  *     "hooks": [{
  *       "type": "command",
- *       "command": "node engine/hooks/memory/memory-sqlite-sync.cjs",
+ *       "command": "node core/engine/hooks/memory/memory-sqlite-sync.cjs",
  *       "async": true,
  *       "timeout": 5000
  *     }]

@@ -6,7 +6,7 @@ const os = require('node:os');
 const path = require('node:path');
 const { spawnSync } = require('node:child_process');
 
-const HOME = path.resolve(__dirname, '..', '..', '..');
+const HOME = path.resolve(__dirname, '..', '..', '..', '..');
 const DEFAULT_OUT_ROOT = path.join(os.tmpdir(), 'claude-harness-agent-evals', 'managed-action-matrix');
 const DEFAULT_AGENTS = ['claude', 'codex'];
 const DEFAULT_KINDS = ['implementation', 'ambiguous'];
@@ -17,8 +17,8 @@ const CODEX_NPX_EXEC_COMMAND = process.platform === 'win32'
 function usage() {
   return [
     'Usage:',
-    '  node engine/scripts/test-hooks/agent-managed-action-matrix.cjs --out <dir>',
-    '  node engine/scripts/test-hooks/agent-managed-action-matrix.cjs --live --report --agents claude,codex --kinds implementation,ambiguous --out <dir>',
+    '  node core/engine/scripts/test-hooks/agent-managed-action-matrix.cjs --out <dir>',
+    '  node core/engine/scripts/test-hooks/agent-managed-action-matrix.cjs --live --report --agents claude,codex --kinds implementation,ambiguous --out <dir>',
     '',
     'Without --live, this records readiness and produces not_run/blocked rows.',
     'With --live, available agents are evaluated through agent-managed-action-eval.cjs and unavailable agents become blocked rows.',

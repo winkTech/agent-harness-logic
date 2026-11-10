@@ -2,7 +2,7 @@
 'use strict';
 
 /**
- * engine/scripts/hdl-evidence-gate.cjs — HDL 工作流确定性证据门禁。
+ * core/engine/scripts/hdl-evidence-gate.cjs — HDL 工作流确定性证据门禁。
  *
  * 背景: hdl-coding-dag-workflow 的 Phase 1b/4/4.5 需要读磁盘证据
  * (architecture.yaml / 02_sim/check_results/*.json)。Workflow 运行时没有
@@ -12,9 +12,9 @@
  * agent 只负责把输出 JSON 原样带回。
  *
  * 用法:
- *   node engine/scripts/hdl-evidence-gate.cjs --project-root <dir> --arch
- *   node engine/scripts/hdl-evidence-gate.cjs --project-root <dir> --modules a,b,c
- *   node engine/scripts/hdl-evidence-gate.cjs --project-root <dir> --arch --modules a,b,c
+ *   node core/engine/scripts/hdl-evidence-gate.cjs --project-root <dir> --arch
+ *   node core/engine/scripts/hdl-evidence-gate.cjs --project-root <dir> --modules a,b,c
+ *   node core/engine/scripts/hdl-evidence-gate.cjs --project-root <dir> --arch --modules a,b,c
  *
  * 输出契约 (供工作流 schema 校验):
  *   stdout 第一段: 单个 JSON 对象 {gate, version, ok, arch?, modules?, failures}

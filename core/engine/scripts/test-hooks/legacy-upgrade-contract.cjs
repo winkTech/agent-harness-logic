@@ -24,16 +24,16 @@ const path = require('node:path');
 const crypto = require('node:crypto');
 const { DatabaseSync } = require('node:sqlite');
 
-const ROOT = path.resolve(__dirname, '..', '..', '..');
-const FIXTURE = path.join(ROOT, 'engine/sqlite/test-fixtures/legacy-2026-11.db');
-const FIXTURE_SHA = path.join(ROOT, 'engine/sqlite/test-fixtures/legacy-2026-11.db.sha256');
-const REAL_MIGRATIONS = path.join(ROOT, 'engine/sqlite/migrations');
+const ROOT = path.resolve(__dirname, '..', '..', '..', '..');
+const FIXTURE = path.join(ROOT, 'core/engine/sqlite/test-fixtures/legacy-2026-11.db');
+const FIXTURE_SHA = path.join(ROOT, 'core/engine/sqlite/test-fixtures/legacy-2026-11.db.sha256');
+const REAL_MIGRATIONS = path.join(ROOT, 'core/engine/sqlite/migrations');
 
 const TMP = fs.mkdtempSync(path.join(os.tmpdir(), 'legacy-upgrade-'));
 process.on('exit', () => { try { fs.rmSync(TMP, { recursive: true, force: true }); } catch { /* cleanup */ } });
 
-const { openDb } = require(path.join(ROOT, 'engine/sqlite/index.cjs'));
-const { applyPendingMigrations } = require(path.join(ROOT, 'engine/sqlite/schema.cjs'));
+const { openDb } = require(path.join(ROOT, 'core/engine/sqlite/index.cjs'));
+const { applyPendingMigrations } = require(path.join(ROOT, 'core/engine/sqlite/schema.cjs'));
 
 function snapshotDeliveryRows(db, limit = 50) {
   return db.prepare('SELECT * FROM delivery_events ORDER BY id LIMIT ?').all(limit);

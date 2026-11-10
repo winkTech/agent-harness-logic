@@ -1,14 +1,14 @@
 #!/usr/bin/env node
 /**
- * engine/scripts/coverage-runner.cjs — Hook 覆盖率运行器 (P0)
+ * core/engine/scripts/coverage-runner.cjs — Hook 覆盖率运行器 (P0)
  *
  * 使用 Node.js 22 内置 NODE_V8_COVERAGE 统计行覆盖率。
  * 零外部依赖 — 仅依赖 Node 标准库。
  *
  * 用法:
- *   node engine/scripts/coverage-runner.cjs                    # 本地 (从 ~/.claude)
- *   node engine/scripts/coverage-runner.cjs --ci <repo-root>   # CI 模式
- *   node engine/scripts/coverage-runner.cjs --check            # 只检查上次结果
+ *   node core/engine/scripts/coverage-runner.cjs                    # 本地 (从 ~/.claude)
+ *   node core/engine/scripts/coverage-runner.cjs --ci <repo-root>   # CI 模式
+ *   node core/engine/scripts/coverage-runner.cjs --check            # 只检查上次结果
  *
  * 阈值: 66% (Phase 0 全量分母修复后的实测基线 floor) — 低于此值 exit 2
  */
@@ -51,7 +51,7 @@ function resolveRoot() {
 }
 
 const ROOT = resolveRoot();
-const RUNNER = path.join(ROOT, 'engine/scripts/test-hooks/run-all-tests.cjs');
+const RUNNER = path.join(ROOT, 'core/engine/scripts/test-hooks/run-all-tests.cjs');
 const SUMMARY_FILE = process.env.CLAUDE_COVERAGE_SUMMARY_FILE
   ? path.resolve(process.env.CLAUDE_COVERAGE_SUMMARY_FILE)
   : varPath('coverage', 'coverage-summary.json');

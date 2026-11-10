@@ -24,12 +24,12 @@ const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 
-const ROOT = path.resolve(__dirname, '..', '..', '..');
+const ROOT = path.resolve(__dirname, '..', '..', '..', '..');
 process.env.CLAUDE_HARNESS_NO_PERSIST = '1';
 
-const weeklyReport = require(path.join(ROOT, 'engine/scripts/weekly-report.cjs'));
-const maintenance = require(path.join(ROOT, 'engine/scripts/memory-knowledge-maintenance.cjs'));
-const health = require(path.join(ROOT, 'engine/scripts/memory-health-check.cjs'));
+const weeklyReport = require(path.join(ROOT, 'core/engine/scripts/weekly-report.cjs'));
+const maintenance = require(path.join(ROOT, 'core/engine/scripts/memory-knowledge-maintenance.cjs'));
+const health = require(path.join(ROOT, 'core/engine/scripts/memory-health-check.cjs'));
 
 const DAY = 86_400_000;
 const NOW = Date.parse('2026-07-30T00:00:00.000Z');

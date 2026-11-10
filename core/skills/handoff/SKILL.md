@@ -68,7 +68,7 @@ Scan completion-claim keywords (done/merged/deleted/fixed/passed · 完成/合�
 
 Run memory-track in background (non-blocking):
 ```bash
-cd "$(git rev-parse --show-toplevel)" && ( bash ~/.claude/engine/scripts/hooks/memory-track.sh post-message > /dev/null 2>&1 & disown )
+cd "$(git rev-parse --show-toplevel)" && ( bash ~/.claude/core/engine/scripts/hooks/memory-track.sh post-message > /dev/null 2>&1 & disown )
 ```
 If memory-track.sh is not available, skip Step 4.
 

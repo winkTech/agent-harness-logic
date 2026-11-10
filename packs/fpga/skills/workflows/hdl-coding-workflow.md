@@ -26,7 +26,7 @@ triggers:
 - **RTL ↔ MATLAB 严格对标**: RTL 每模块必须与 MATLAB 模型的步骤一一对应
 - **微架构先行**: P1b 必须产出流水线结构/FSM 状态图/数据通路的正式文档 (architecture.yaml)，作为 RTL 编码的刚性契约
 - **逐模块验证 + 脚本化证据 [MUST]**: 每模块写完后必须生成 check_<module>.py 脚本，自动仿真对比 MATLAB golden，输出 JSON 证据文件至 `02_sim/check_results/`
-- **确定性证据门禁 [MUST]**: 证据判定由 `engine/scripts/hdl-evidence-gate.cjs` 完成（读磁盘、输出 JSON + RESULT: PASS/FAIL）；工作流派证据 agent 执行它并按 schema 原样带回，不信任任何 agent 自述
+- **确定性证据门禁 [MUST]**: 证据判定由 `core/engine/scripts/hdl-evidence-gate.cjs` 完成（读磁盘、输出 JSON + RESULT: PASS/FAIL）；工作流派证据 agent 执行它并按 schema 原样带回，不信任任何 agent 自述
 - **验证归逻辑工程师**: 所有 RTL 验证/TB/调试/对比脚本由 logic-engineer 负责；向量生成与定点归 algorithm-engineer；审查归 ce-* 只读审查员
 - **全链联调 [MUST]**: Phase 4.5 通过后方可搭建顶层，全链逐级与 golden model 对比
 - **最终输出 bit-true 对齐**: RTL 最终输出必须与定点 Golden Model 逐比特对齐，允许定点精度损失，不允许算法方向偏离
@@ -47,7 +47,7 @@ triggers:
 | **2** 定点量化 | algorithm-engineer | 位宽扫描 + bit-true 定点模型 + DSP/LUT/BRAM 预算表 | 资源在预算内 |
 | **3** TB+向量生成 | logic-engineer (TB) ∥ algorithm-engineer (向量) | 自检 TB + SVA + MATLAB golden 向量 (GM 先自检) | TB 编译通过 |
 | **4** 逐模块RTL+脚本化对比 | logic-engineer (编码/仿真/调试) + ce-correctness-reviewer (独立裁决/终验) | 每模块: RTL → 仿真 → 证据门禁单模块校验 → (FAIL 时 Debugger↔Reviewer 双视角循环, 封顶 5 次) | 每模块 gate_ok + compared_points>0 |
-| **4.4** 层次回查 | 调度层（`engine/scripts/module-order.cjs`） | RTL 落盘后重建代码图，用真实例化层次核对 `moduleOrder`：父模块不得排在它例化的子模块之前 | 无矛盾；有矛盾则自动纠正顺序并告警（Phase 4 的 cascade 结论需人工复核） |
+| **4.4** 层次回查 | 调度层（`core/engine/scripts/module-order.cjs`） | RTL 落盘后重建代码图，用真实例化层次核对 `moduleOrder`：父模块不得排在它例化的子模块之前 | 无矛盾；有矛盾则自动纠正顺序并告警（Phase 4 的 cascade 结论需人工复核） |
 | **4.5** 证据门禁 | hdl-evidence-gate.cjs (确定性) + ce-correctness-reviewer (高安全模块对抗) | 脚本校验全部模块 JSON 证据；高安全模块追加对抗 agent 读 RTL+golden 找差异 | 全部 PASS → **CP: evidence-review** |
 | **5** 顶层集成+全链仿真 | logic-engineer (集成/修复) + ce-api-contract-reviewer / ce-architecture-strategist / ce-performance-oracle (三路只读分析) | 4 路发散 (接口/数据通路/Golden/时序) → 合成 → 定向修复 | 全链各中间级与 golden 一致 |
 | **6** 回归覆盖率 | logic-engineer | make regress 全量回归 + covergroup 100% | regress 全绿 |
@@ -85,13 +85,13 @@ triggers:
 | 资源 | 路径 | 用途 |
 |------|------|------|
 | 可执行工作流（单一真源） | `workflows/hdl-coding-dag-workflow.js` | DAG 定义、检查点、agent 接线 |
-| 证据门禁脚本 | `engine/scripts/hdl-evidence-gate.cjs` | Phase 1b/4/4.5 确定性证据判定 |
+| 证据门禁脚本 | `core/engine/scripts/hdl-evidence-gate.cjs` | Phase 1b/4/4.5 确定性证据判定 |
 | HDL 编码规范 | `skills/hdl-coding/SKILL.md` | 命名规则、时序安全、lint 门禁 |
 | 算法→Verilog 参考 | `skills/hdl-coding/references/alg-flow-verilog.md` | 代码模板、NMSE 判定、排查表 |
 | Vivado 工具流 | `skills/hdl-coding/references/vivado-tool-flow.md` | Phase 6b 的命令、报告与证据纪律 |
 | Vivado 执行入口 | `skills/vivado-flow/SKILL.md` / `skills/vivado-flow/scripts/vivado_flow.tcl` | Phase 6b 实际执行的 TCL（全流程 + 断点续跑） |
 | 各 Phase 详细说明 | `skills/workflows/hdl-coding/` | phase0-8 文档（P1 文档覆盖 P1a/P1b） |
-| P1a/P1b 门禁清单 | `engineering-assets/knowledge/primary/architecture-patterns/gate-checklist-p1a.md` / `gate-checklist-p1b.md` | design-review 检查点核对表 |
+| P1a/P1b 门禁清单 | `packs/fpga/engineering-assets/knowledge/primary/architecture-patterns/gate-checklist-p1a.md` / `gate-checklist-p1b.md` | design-review 检查点核对表 |
 | 证据 JSON 契约 | `schemas/check-result.schema.json` | check_<module>.py 输出格式 |
 | Code Review 工作流 | `skills/workflows/code-review-workflow.md` | Phase 7 之外的独立审查入口 |
 | 调试方法论 | `skills/debugging/SKILL.md` | Phase 4 调试循环超限时加载 |

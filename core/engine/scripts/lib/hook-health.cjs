@@ -1,7 +1,7 @@
 'use strict';
 
 /**
- * engine/scripts/lib/hook-health.cjs — hook 健康遥测（错误遏制面）。
+ * core/engine/scripts/lib/hook-health.cjs — hook 健康遥测（错误遏制面）。
  *
  * 背景：progress-watchdog 的 varPath ReferenceError 曾被包装成工具错误存活 11 天、
  * 造成 302 次工具调用失败。本模块给 hot-path hook 提供统一的健康事件流：

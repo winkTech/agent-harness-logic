@@ -24,17 +24,17 @@ delete process.env.CLAUDE_HARNESS_VERIFY_READONLY;
 delete process.env.CLAUDE_NO_DIAGNOSTIC_WRITES;
 delete process.env.CLAUDE_HOOK_NO_WRITE;
 
-const ROOT = path.resolve(__dirname, '..', '..', '..');
+const ROOT = path.resolve(__dirname, '..', '..', '..', '..');
 const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'outcome-loop-'));
 // verification-gate 的证据账本在模块加载时解析 env, 必须先设再 require。
 process.env.CLAUDE_VERIFICATION_LEDGER_FILE = path.join(tmp, 'verification-ledger.json');
 
-const { openDb } = require(path.join(ROOT, 'engine/sqlite/index.cjs'));
-const storeMemory = require(path.join(ROOT, 'engine/sqlite/store-memory.cjs'));
-const attribution = require(path.join(ROOT, 'engine/sqlite/store-memory-attribution.cjs'));
-const { retrieveContext } = require(path.join(ROOT, 'engine/scripts/memory-retrieve-hook.cjs'));
-const postflight = require(path.join(ROOT, 'engine/scripts/hooks/postflight-router.cjs'));
-const verificationGate = require(path.join(ROOT, 'engine/scripts/hooks/verification-gate.cjs'));
+const { openDb } = require(path.join(ROOT, 'core/engine/sqlite/index.cjs'));
+const storeMemory = require(path.join(ROOT, 'core/engine/sqlite/store-memory.cjs'));
+const attribution = require(path.join(ROOT, 'core/engine/sqlite/store-memory-attribution.cjs'));
+const { retrieveContext } = require(path.join(ROOT, 'core/engine/scripts/memory-retrieve-hook.cjs'));
+const postflight = require(path.join(ROOT, 'core/engine/scripts/hooks/postflight-router.cjs'));
+const verificationGate = require(path.join(ROOT, 'core/engine/scripts/hooks/verification-gate.cjs'));
 
 function seedVerifiedFact(db, name) {
   const now = Date.now();
@@ -78,7 +78,7 @@ async function routeVerification(db, sessionId, cwd, stdout, deliveries, eventNa
     session_id: sessionId,
     cwd,
     tool_use_id: `toolu_${sessionId}_${eventName}`,
-    tool_input: { command: 'node engine/scripts/test-hooks/self-check.cjs' },
+    tool_input: { command: 'node core/engine/scripts/test-hooks/self-check.cjs' },
     tool_response: { stdout, stderr: '', interrupted: false },
   }, {
     verificationGate,

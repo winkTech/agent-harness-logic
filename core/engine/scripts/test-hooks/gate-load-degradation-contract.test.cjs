@@ -19,7 +19,7 @@ const ROOT = path.resolve(__dirname, '../../..');
 // 副本协议：替换前可用 PREFLIGHT_ROUTER_PATH 指向 preflight-router.next.cjs 先验证副本。
 const ROUTER_PATH = process.env.PREFLIGHT_ROUTER_PATH
   ? path.resolve(ROOT, process.env.PREFLIGHT_ROUTER_PATH)
-  : path.join(ROOT, 'engine', 'scripts', 'hooks', 'preflight-router.cjs');
+  : path.join(ROOT, 'core', 'engine', 'scripts', 'hooks', 'preflight-router.cjs');
 const router = require(ROUTER_PATH);
 
 const NO_PERSIST_ENV = { CLAUDE_HARNESS_NO_PERSIST: '1' };

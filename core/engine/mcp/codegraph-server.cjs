@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 /**
- * engine/mcp/codegraph-server.cjs — 代码图 MCP 服务器。
+ * core/engine/mcp/codegraph-server.cjs — 代码图 MCP 服务器。
  *
  * MCP stdio 协议实现。暴露 5 个工具给 AI 代理：
  *   harness_cg_explore  — 符号袋搜索+源码+关系（主入口）
@@ -15,7 +15,7 @@
  *   "mcpServers": {
  *     "codegraph": {
  *       "command": "node",
- *       "args": ["engine/mcp/codegraph-server.cjs"]
+ *       "args": ["core/engine/mcp/codegraph-server.cjs"]
  *     }
  *   }
  * }
@@ -459,7 +459,7 @@ function formatBlastRadiusResult(result, target) {
         type: 'text',
         text: `## 影响面: 索引不可信 (${result.staleReason})\n\n`
           + '拿过期的图算影响面比不算更危险, 因此不返回结果。\n'
-          + '先重建索引: `node engine/scripts/code-graph-index.cjs sync <项目路径>`',
+          + '先重建索引: `node core/engine/scripts/code-graph-index.cjs sync <项目路径>`',
       }],
     };
   }

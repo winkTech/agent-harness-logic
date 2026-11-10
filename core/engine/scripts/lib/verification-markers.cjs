@@ -1,7 +1,7 @@
 'use strict';
 
 /**
- * engine/scripts/lib/verification-markers.cjs — 通过/失败标记的唯一权威表。
+ * core/engine/scripts/lib/verification-markers.cjs — 通过/失败标记的唯一权威表。
  *
  * 为什么独立成模块 (2026-07-30): verification-gate 有一份标记表, evidence-ledger
  * 需要同样的判据来处理"载荷不带退出码"的观察型条目。复制一份表就会重演本仓库

@@ -8,10 +8,10 @@ const path = require('node:path');
 
 const { HARNESS_ROOT } = require('../lib/harness-root.cjs');
 
-const routerPath = path.join(HARNESS_ROOT, 'engine', 'scripts', 'hooks', 'prompt-context.cjs');
-const ruleLoaderPath = path.join(HARNESS_ROOT, 'engine', 'scripts', 'rule-loader.cjs');
-const memoryHookPath = path.join(HARNESS_ROOT, 'engine', 'scripts', 'memory-retrieve-hook.cjs');
-const frustrationPath = path.join(HARNESS_ROOT, 'engine', 'scripts', 'hooks', 'frustration-detector.cjs');
+const routerPath = path.join(HARNESS_ROOT, 'core', 'engine', 'scripts', 'hooks', 'prompt-context.cjs');
+const ruleLoaderPath = path.join(HARNESS_ROOT, 'core', 'engine', 'scripts', 'rule-loader.cjs');
+const memoryHookPath = path.join(HARNESS_ROOT, 'core', 'engine', 'scripts', 'memory-retrieve-hook.cjs');
+const frustrationPath = path.join(HARNESS_ROOT, 'core', 'engine', 'scripts', 'hooks', 'frustration-detector.cjs');
 
 function promptPayload() {
   return {

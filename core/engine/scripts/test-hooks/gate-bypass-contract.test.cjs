@@ -9,15 +9,15 @@ const { spawnSync } = require('node:child_process');
 const test = require('node:test');
 
 const ROOT = path.resolve(__dirname, '../../..');
-const BYPASS_MODULE = path.join(ROOT, 'engine', 'scripts', 'lib', 'gate-bypass.cjs');
+const BYPASS_MODULE = path.join(ROOT, 'core', 'engine', 'scripts', 'lib', 'gate-bypass.cjs');
 const GUARDS = [
-  path.join(ROOT, 'engine', 'hooks', 'safety', 'fix-in-place-guard.cjs'),
-  path.join(ROOT, 'engine', 'scripts', 'hooks', 'verification-quality-guard.cjs'),
-  path.join(ROOT, 'engine', 'scripts', 'hooks', 'verification-gate.cjs'),
-  path.join(ROOT, 'engine', 'scripts', 'hooks', 'requirements-gate-guard.cjs'),
-  path.join(ROOT, 'engine', 'scripts', 'hooks', 'project-directory-guard.cjs'),
-  path.join(ROOT, 'engine', 'scripts', 'hooks', 'hdl-gate.cjs'),
-  path.join(ROOT, 'engine', 'scripts', 'hooks', 'file-protection-guard.cjs'),
+  path.join(ROOT, 'core', 'engine', 'hooks', 'safety', 'fix-in-place-guard.cjs'),
+  path.join(ROOT, 'core', 'engine', 'scripts', 'hooks', 'verification-quality-guard.cjs'),
+  path.join(ROOT, 'core', 'engine', 'scripts', 'hooks', 'verification-gate.cjs'),
+  path.join(ROOT, 'core', 'engine', 'scripts', 'hooks', 'requirements-gate-guard.cjs'),
+  path.join(ROOT, 'core', 'engine', 'scripts', 'hooks', 'project-directory-guard.cjs'),
+  path.join(ROOT, 'core', 'engine', 'scripts', 'hooks', 'hdl-gate.cjs'),
+  path.join(ROOT, 'core', 'engine', 'scripts', 'hooks', 'file-protection-guard.cjs'),
 ];
 
 function makeAudit(t) {
@@ -144,7 +144,7 @@ test('a real blocking guard fails closed when only the legacy global switch is s
   fs.mkdirSync(path.join(projectRoot, 'var', 'project-init'), { recursive: true });
   fs.writeFileSync(path.join(projectRoot, 'var', 'project-init', 'directory-contract.json'), '{}\n');
   const auditPath = path.join(projectRoot, 'audit.jsonl');
-  const guard = path.join(ROOT, 'engine', 'scripts', 'hooks', 'project-directory-guard.cjs');
+  const guard = path.join(ROOT, 'core', 'engine', 'scripts', 'hooks', 'project-directory-guard.cjs');
   const payload = {
     hook_event_name: 'PreToolUse',
     session_id: 'session-real-guard',
@@ -193,7 +193,7 @@ test('real guard accepts only an unexpired exact gate and session binding', (t) 
   t.after(() => fs.rmSync(projectRoot, { recursive: true, force: true }));
   fs.mkdirSync(path.join(projectRoot, 'var', 'project-init'), { recursive: true });
   fs.writeFileSync(path.join(projectRoot, 'var', 'project-init', 'directory-contract.json'), '{}\n');
-  const guard = path.join(ROOT, 'engine', 'scripts', 'hooks', 'project-directory-guard.cjs');
+  const guard = path.join(ROOT, 'core', 'engine', 'scripts', 'hooks', 'project-directory-guard.cjs');
   const sessionId = 'session-exact-binding';
   const payload = JSON.stringify({
     hook_event_name: 'PreToolUse',
@@ -327,7 +327,7 @@ test('file protection uses explicit project paths while retaining known model di
     projectName: 'manifest-protection-fixture',
     protectedPaths: ['references/anchor.py', 'models/bittrue'],
   }, null, 2)}\n`);
-  const guard = path.join(ROOT, 'engine', 'scripts', 'hooks', 'file-protection-guard.cjs');
+  const guard = path.join(ROOT, 'core', 'engine', 'scripts', 'hooks', 'file-protection-guard.cjs');
   function run(filePath) {
     return spawnSync(process.execPath, [guard], {
       cwd: projectRoot,
@@ -358,7 +358,7 @@ test('file protection uses explicit project paths while retaining known model di
   // 而退出码同时受**当前是否存在有效批准令牌**影响 —— 用户放一张合法令牌, 边界照旧
   // 成立但退出码变 0, 断言会无故翻红。更糟的是 spawn 走的是完整放行路径, 测试因此
   // 会去动真实的授权状态。判定用 decision: 无批准 block / 有批准 warn, 两者都不是 allow。
-  const guardModule = require(path.join(ROOT, 'engine', 'scripts', 'hooks', 'file-protection-guard.cjs'));
+  const guardModule = require(path.join(ROOT, 'core', 'engine', 'scripts', 'hooks', 'file-protection-guard.cjs'));
   function boundaryDecision(filePath) {
     return guardModule.evaluate(
       { tool_name: 'Write', tool_input: { file_path: filePath } },
@@ -366,11 +366,11 @@ test('file protection uses explicit project paths while retaining known model di
     ).decision;
   }
 
-  assert.notEqual(boundaryDecision(path.join(ROOT, 'engineering-assets', 'models', 'comm', 'ofdm', 'manifest.json')),
-    'allow', 'the governed engineering-assets/models boundary was not protected');
+  assert.notEqual(boundaryDecision(path.join(ROOT, 'packs', 'fpga', 'engineering-assets', 'models', 'comm', 'ofdm', 'manifest.json')),
+    'allow', 'the governed packs/fpga/engineering-assets/models boundary was not protected');
   assert.notEqual(boundaryDecision(path.join(
     ROOT,
-    'engineering-assets',
+    'packs', 'fpga', 'engineering-assets',
     'knowledge',
     'docs',
     'templates',

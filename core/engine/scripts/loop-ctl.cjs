@@ -2,21 +2,21 @@
 'use strict';
 
 /**
- * engine/scripts/loop-ctl.cjs — 任务循环的显式控制入口。
+ * core/engine/scripts/loop-ctl.cjs — 任务循环的显式控制入口。
  *
  * 循环**只能显式创建**。自动给每个会话开循环会把所有正常 Stop 都变成潜在的
  * block, 那是把助推器改造成路障 —— 绝不做。
  *
  * 用法:
- *   node engine/scripts/loop-ctl.cjs start --goal "crc32 位真通过" \
+ *   node core/engine/scripts/loop-ctl.cjs start --goal "crc32 位真通过" \
  *        --criteria '[{"type":"gate_green","gate":"requirements-gate"}]' [--budget 5]
- *   node engine/scripts/loop-ctl.cjs start --goal "..." --criteria-file criteria.json
- *   node engine/scripts/loop-ctl.cjs status            # 当前 scope 的 active 循环 + 迭代史
- *   node engine/scripts/loop-ctl.cjs list [--all]
- *   node engine/scripts/loop-ctl.cjs check             # 只求值判据, 不写库 (dry-run)
- *   node engine/scripts/loop-ctl.cjs abandon [--id <loopId>] --reason "判据写错了"
+ *   node core/engine/scripts/loop-ctl.cjs start --goal "..." --criteria-file criteria.json
+ *   node core/engine/scripts/loop-ctl.cjs status            # 当前 scope 的 active 循环 + 迭代史
+ *   node core/engine/scripts/loop-ctl.cjs list [--all]
+ *   node core/engine/scripts/loop-ctl.cjs check             # 只求值判据, 不写库 (dry-run)
+ *   node core/engine/scripts/loop-ctl.cjs abandon [--id <loopId>] --reason "判据写错了"
  *
- * 判据类型见 engine/scripts/lib/loop-criteria.cjs。
+ * 判据类型见 core/engine/scripts/lib/loop-criteria.cjs。
  */
 
 const fs = require('node:fs');

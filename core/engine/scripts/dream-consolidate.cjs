@@ -1,15 +1,15 @@
 #!/usr/bin/env node
 
 /**
- * engine/scripts/dream-consolidate.cjs — Dream 提炼器。
+ * core/engine/scripts/dream-consolidate.cjs — Dream 提炼器。
  *
  * 分析运行时事件, 识别重复模式, 输出低置信、待人工审查的候选。
  * runtime events → pattern detection → review-only candidates.
  *
  * 用法:
- *   node engine/scripts/dream-consolidate.cjs              # 全量运行
- *   node engine/scripts/dream-consolidate.cjs --dry-run    # 试运行, 不写文件
- *   node engine/scripts/dream-consolidate.cjs --force      # 忽略水印, 重扫所有
+ *   node core/engine/scripts/dream-consolidate.cjs              # 全量运行
+ *   node core/engine/scripts/dream-consolidate.cjs --dry-run    # 试运行, 不写文件
+ *   node core/engine/scripts/dream-consolidate.cjs --force      # 忽略水印, 重扫所有
  */
 
 'use strict';

@@ -6,8 +6,8 @@ const os = require('node:os');
 const path = require('node:path');
 const { spawnSync } = require('node:child_process');
 
-const HOME = path.resolve(__dirname, '..', '..', '..');
-const EXECUTOR = path.join(HOME, 'engine/scripts/test-hooks/claude-patch-executor.cjs');
+const HOME = path.resolve(__dirname, '..', '..', '..', '..');
+const EXECUTOR = path.join(HOME, 'core/engine/scripts/test-hooks/claude-patch-executor.cjs');
 const HARNESS_CASE_CORPUS = path.join(__dirname, 'fixtures', 'harness-eval-cases.json');
 
 const {
@@ -186,7 +186,7 @@ function runAll() {
   }));
 
   results.push(test('toolchain-health-gate CLI blocks loader crash', () => {
-    const gate = path.join(HOME, 'engine/scripts/hooks/toolchain-health-gate.cjs');
+    const gate = path.join(HOME, 'core/engine/scripts/hooks/toolchain-health-gate.cjs');
     const r = spawnSync('node', [gate, '--classify', '--command', 'xvlog work/top.sv', '--status', '-1073741515'], {
       cwd: HOME,
       encoding: 'utf8',

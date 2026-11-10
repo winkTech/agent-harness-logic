@@ -8,7 +8,7 @@
   "additionalProperties": false,
   "properties": {
     "$schema": {
-      "const": "./engine/schemas/plugin-lock.schema.json"
+      "const": "./core/engine/schemas/plugin-lock.schema.json"
     },
     "version": {
       "const": 1

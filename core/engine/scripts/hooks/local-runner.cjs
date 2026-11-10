@@ -25,12 +25,12 @@ const {
 } = require('../lib/gate-bypass.cjs');
 
 const HOOKS_DIR = __dirname;
-const SCRIPTS_DIR = path.join(HOOKS_DIR, '..'); // engine/scripts/
+const SCRIPTS_DIR = path.join(HOOKS_DIR, '..'); // core/engine/scripts/
 
 /**
  * 将脚本名解析为绝对路径。
- * 支持: "script.cjs" → engine/scripts/hooks/script.cjs
- *       "../script.cjs" → engine/scripts/script.cjs
+ * 支持: "script.cjs" → core/engine/scripts/hooks/script.cjs
+ *       "../script.cjs" → core/engine/scripts/script.cjs
  *       绝对路径 → 原样
  */
 function resolveScript(name) {

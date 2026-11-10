@@ -7,21 +7,21 @@ const { spawnSync } = require('node:child_process');
 const { HARNESS_ROOT } = require('../lib/harness-root.cjs');
 
 const settingsPath = path.join(HARNESS_ROOT, 'settings.json');
-const routerPath = path.join(HARNESS_ROOT, 'engine', 'scripts', 'hooks', 'preflight-router.cjs');
+const routerPath = path.join(HARNESS_ROOT, 'core', 'engine', 'scripts', 'hooks', 'preflight-router.cjs');
 const EVALUATOR_MODULES = [
-  'engine/scripts/hooks/verification-gate.cjs',
-  'engine/scripts/hooks/pre-commit-lint.cjs',
-  'engine/scripts/hooks/diff-size-gate.cjs',
-  'engine/scripts/hooks/resource-budget-gate.cjs',
-  'engine/scripts/hooks/bash-safety-guard.cjs',
-  'engine/hooks/safety/fix-in-place-guard.cjs',
-  'engine/scripts/hooks/file-protection-guard.cjs',
-  'engine/scripts/hooks/project-directory-guard.cjs',
-  'engine/scripts/hooks/repair-content-gate.cjs',
-  'engine/scripts/hooks/hdl-gate.cjs',
-  'engine/scripts/hooks/requirements-gate-guard.cjs',
-  'engine/scripts/hooks/verification-quality-guard.cjs',
-  'engine/scripts/hooks/rtl-semantic-oracle.cjs',
+  'core/engine/scripts/hooks/verification-gate.cjs',
+  'core/engine/scripts/hooks/pre-commit-lint.cjs',
+  'core/engine/scripts/hooks/diff-size-gate.cjs',
+  'core/engine/scripts/hooks/resource-budget-gate.cjs',
+  'core/engine/scripts/hooks/bash-safety-guard.cjs',
+  'core/engine/hooks/safety/fix-in-place-guard.cjs',
+  'core/engine/scripts/hooks/file-protection-guard.cjs',
+  'core/engine/scripts/hooks/project-directory-guard.cjs',
+  'core/engine/scripts/hooks/repair-content-gate.cjs',
+  'core/engine/scripts/hooks/hdl-gate.cjs',
+  'core/engine/scripts/hooks/requirements-gate-guard.cjs',
+  'core/engine/scripts/hooks/verification-quality-guard.cjs',
+  'core/engine/scripts/hooks/rtl-semantic-oracle.cjs',
 ];
 
 function runRouter(payload, env = {}) {
@@ -72,7 +72,7 @@ function assertNoNestedExecution() {
 
 function assertGitCommandClassification() {
   const { gitSubcommand } = require(path.join(
-    HARNESS_ROOT, 'engine', 'scripts', 'hooks', 'verification-gate.cjs',
+    HARNESS_ROOT, 'core', 'engine', 'scripts', 'hooks', 'verification-gate.cjs',
   ));
   assert.equal(gitSubcommand('git commit -m test'), 'commit');
   assert.equal(gitSubcommand('git -C "C:\\repo path" push origin HEAD'), 'push');
@@ -176,7 +176,7 @@ function assertRiskAdaptivePreflight() {
   assert.equal(result.advisory, null);
 
   runtime = router.runtimeFrom(payload('Edit', {
-    file_path: path.join(HARNESS_ROOT, 'engine', 'scripts', 'hooks', 'preflight-router.cjs'),
+    file_path: path.join(HARNESS_ROOT, 'core', 'engine', 'scripts', 'hooks', 'preflight-router.cjs'),
     old_string: 'const ordinary = true;',
     new_string: 'const ordinary = false;',
   }));
@@ -191,7 +191,7 @@ function assertRiskAdaptivePreflight() {
   assert.equal(result.advisory, null);
 
   runtime = router.runtimeFrom(payload('Edit', {
-    file_path: path.join(HARNESS_ROOT, 'engine', 'scripts', 'hooks', 'preflight-router.cjs'),
+    file_path: path.join(HARNESS_ROOT, 'core', 'engine', 'scripts', 'hooks', 'preflight-router.cjs'),
     old_string: 'module.exports = { main };',
     new_string: 'module.exports = { main, evaluate };',
   }));
@@ -335,7 +335,7 @@ function assertAdvisoryUsesSingleModelChannel() {
 function assertWatchdogPrecheckIsReadOnly() {
   const os = require('node:os');
   const watchdog = require(path.join(
-    HARNESS_ROOT, 'engine', 'hooks', 'session', 'progress-watchdog.cjs',
+    HARNESS_ROOT, 'core', 'engine', 'hooks', 'session', 'progress-watchdog.cjs',
   ));
   assert.equal(typeof watchdog.inspectProgress, 'function',
     'watchdog must expose a read-only pre-action inspection');
@@ -386,7 +386,7 @@ function assertPreflightUsesReadOnlyWatchdogCheck() {
 function assertGateTargetsStayNarrowAndRelative() {
   const os = require('node:os');
   const { stateHasTaskTargetForFile } = require(path.join(
-    HARNESS_ROOT, 'engine', 'scripts', 'lib', 'project-scope.cjs',
+    HARNESS_ROOT, 'core', 'engine', 'scripts', 'lib', 'project-scope.cjs',
   ));
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'gate-target-scope-'));
   try {
@@ -428,7 +428,7 @@ function assertLegacyProjectRootDoesNotCompleteRequirementsGate() {
       },
     }), 'utf8');
     const guard = require(path.join(
-      HARNESS_ROOT, 'engine', 'scripts', 'hooks', 'requirements-gate-guard.cjs',
+      HARNESS_ROOT, 'core', 'engine', 'scripts', 'hooks', 'requirements-gate-guard.cjs',
     ));
     const result = guard.evaluate(payload('Write', {
       file_path: target,
@@ -482,7 +482,7 @@ function assertLegacyProjectRootDoesNotCompleteVerificationQualityGate() {
       },
     }), 'utf8');
     const guard = require(path.join(
-      HARNESS_ROOT, 'engine', 'scripts', 'hooks', 'verification-quality-guard.cjs',
+      HARNESS_ROOT, 'core', 'engine', 'scripts', 'hooks', 'verification-quality-guard.cjs',
     ));
     const result = guard.evaluate(payload('Write', {
       file_path: target,
@@ -537,7 +537,7 @@ function assertReadOnlyMemoryHitDoesNotCache() {
     process.env.CLAUDE_MEMORY_HINT_CACHE_FILE = cacheFile;
     process.env.CLAUDE_HARNESS_NO_PERSIST = '1';
     const memoryHook = require(path.join(
-      HARNESS_ROOT, 'engine', 'scripts', 'memory-retrieve-hook.cjs',
+      HARNESS_ROOT, 'core', 'engine', 'scripts', 'memory-retrieve-hook.cjs',
     ));
     assert.equal(memoryHook.cacheDisabled(), true,
       'no-persist mode must disable the memory hint cache');
@@ -642,7 +642,7 @@ function assertEditReconstructionAndDisableSwitches() {
       `RTL oracle disable switch must apply through router evaluate: ${disabled.stderr}`);
 
     const fixGuard = require(path.join(
-      HARNESS_ROOT, 'engine', 'hooks', 'safety', 'fix-in-place-guard.cjs',
+      HARNESS_ROOT, 'core', 'engine', 'hooks', 'safety', 'fix-in-place-guard.cjs',
     ));
     const variantPayload = payload('Write', {
       file_path: path.join(root, 'check_rtl_debug1.sv'),
@@ -720,7 +720,7 @@ function assertReadOnlyDoesNotPersist() {
 
 function assertWatchdogScopeIsRiskAdaptive() {
   const watchdog = require(path.join(
-    HARNESS_ROOT, 'engine', 'hooks', 'session', 'progress-watchdog.cjs',
+    HARNESS_ROOT, 'core', 'engine', 'hooks', 'session', 'progress-watchdog.cjs',
   ));
   assert.equal(typeof watchdog.shouldTrackProgress, 'function',
     'watchdog must expose one scope decision for every router');
@@ -785,10 +785,10 @@ function assertActionContractBindsFullToolInput() {
     process.env.CLAUDE_TRANSPARENCY_RUN_DIR = root;
     process.env.CLAUDE_TRANSPARENCY_RUN_ID = 'tool-input-binding';
     const ledger = require(path.join(
-      HARNESS_ROOT, 'engine', 'scripts', 'hooks', 'agent-transparency-ledger.cjs',
+      HARNESS_ROOT, 'core', 'engine', 'scripts', 'hooks', 'agent-transparency-ledger.cjs',
     ));
     const contractGate = require(path.join(
-      HARNESS_ROOT, 'engine', 'scripts', 'hooks', 'tool-action-contract-gate.cjs',
+      HARNESS_ROOT, 'core', 'engine', 'scripts', 'hooks', 'tool-action-contract-gate.cjs',
     ));
     const filePath = path.join(HARNESS_ROOT, 'docs', 'rules', '00-core.md');
     const first = {

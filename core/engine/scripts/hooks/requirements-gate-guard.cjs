@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * engine/scripts/hooks/requirements-gate-guard.cjs — 需求澄清门禁 (P0)
+ * core/engine/scripts/hooks/requirements-gate-guard.cjs — 需求澄清门禁 (P0)
  *
  * 建议规则: 创建新模块代码文件前，先完成 requirements-gate 六维澄清。
  * 未完成 → 打印提示，**不阻断**。

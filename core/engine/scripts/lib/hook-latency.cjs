@@ -1,7 +1,7 @@
 'use strict';
 
 /**
- * engine/scripts/lib/hook-latency.cjs — Hook 开销遥测 (D7, 2026-07-29)。
+ * core/engine/scripts/lib/hook-latency.cjs — Hook 开销遥测 (D7, 2026-07-29)。
  *
  * 设计约束 (度量不得反噬速度):
  *   - 热路径只做一次 JSONL append, 不碰 SQLite (事件表是消费者流, 混入会污染水位);
@@ -13,7 +13,7 @@
  * 预算档位 (warm p95):
  *   preflight-router 200ms / postflight-router 250ms / prompt-context 300ms /
  *   其余**同步**入口 500ms / async 入口不计入 (平台不阻塞等待, 延迟不进热路径)。
- * 同步还是 async 以 engine/hooks/registrations.json 里该脚本的 `async: true` 为准 —— 不硬编码
+ * 同步还是 async 以 hosts/claude-code/registrations.json 里该脚本的 `async: true` 为准 —— 不硬编码
  * 脚本名单; 同一脚本既有同步又有 async 注册时按同步算 (同步那条仍在热路径上)。
  * env `CLAUDE_HARNESS_LATENCY_SCALE` (默认 1, CI 设 3) 把所有档位整体放大。
  */
@@ -35,7 +35,7 @@ const SCRIPT_BUDGETS_MS = {
 const DEFAULT_SYNC_BUDGET_MS = 500;
 /** 兼容既有导出名: 现在含义是"未列档位的同步入口预算"。 */
 const P95_BUDGET_MS = DEFAULT_SYNC_BUDGET_MS;
-const REGISTRATIONS_FILE = path.join(HARNESS_ROOT, 'engine', 'hooks', 'registrations.json');
+const REGISTRATIONS_FILE = path.join(HARNESS_ROOT, 'core', 'engine', 'hooks', 'registrations.json');
 
 function persistenceDisabled() {
   return process.env.CLAUDE_HARNESS_NO_PERSIST === '1'

@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * engine/scripts/config-consistency-checker.cjs — 配置一致性检查器
+ * core/engine/scripts/config-consistency-checker.cjs — 配置一致性检查器
  *
  * 🔍 P1-2: 配置一致性检查
  * 参照: [1] MMLU — 多维度评估，配置一致性是 HDL 项目的关键维度
@@ -9,9 +9,9 @@
  * 发现位宽不匹配、信号缺失、顺序不一致等问题。
  *
  * 用法:
- *   node engine/scripts/config-consistency-checker.cjs check <rtl_file> <config_file>
- *   node engine/scripts/config-consistency-checker.cjs scan <directory>
- *   node engine/scripts/config-consistency-checker.cjs report
+ *   node core/engine/scripts/config-consistency-checker.cjs check <rtl_file> <config_file>
+ *   node core/engine/scripts/config-consistency-checker.cjs scan <directory>
+ *   node core/engine/scripts/config-consistency-checker.cjs report
  */
 
 'use strict';
@@ -324,9 +324,9 @@ function main() {
     default:
       console.log(`
 用法:
-  node engine/scripts/config-consistency-checker.cjs check <rtl.sv> <config.json>
-  node engine/scripts/config-consistency-checker.cjs scan <directory>
-  node engine/scripts/config-consistency-checker.cjs report
+  node core/engine/scripts/config-consistency-checker.cjs check <rtl.sv> <config.json>
+  node core/engine/scripts/config-consistency-checker.cjs scan <directory>
+  node core/engine/scripts/config-consistency-checker.cjs report
 `);
   }
 }

@@ -8,12 +8,12 @@ const path = require('node:path');
 const { spawnSync } = require('node:child_process');
 const test = require('node:test');
 
-const ROOT = path.resolve(__dirname, '../../..');
+const ROOT = path.resolve(__dirname, '../../../..'); // Phase 1.1 后 test-hooks 上溯 4 级
 const PRE_COMMIT = path.join(ROOT, '.githooks', 'pre-commit');
 const WORKFLOW = path.join(ROOT, '.github', 'workflows', 'lint-health.yml');
 const MCP_CONFIG = path.join(ROOT, '.mcp.json');
-const PLUGIN_LOCK = path.join(ROOT, 'plugins.lock.json');
-const PLUGIN_LOCK_SCHEMA = path.join(ROOT, 'engine', 'schemas', 'plugin-lock.schema.json');
+const PLUGIN_LOCK = path.join(ROOT, 'hosts', 'claude-code', 'plugins.lock.json');
+const PLUGIN_LOCK_SCHEMA = path.join(ROOT, 'core', 'engine', 'schemas', 'plugin-lock.schema.json');
 
 function run(command, args, options = {}) {
   return spawnSync(command, args, {
@@ -267,7 +267,7 @@ test('CI is least-privilege, immutable, cross-platform, and uploads provenance',
   assert.match(workflow, /actions\/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065\s+# v5\.6\.0/);
   // 必须钉在有 win32 构建的版本上，否则 windows-latest 那条腿装不上 Python。
   assert.match(workflow, /python-version:\s*['"]3\.12\.10['"]/);
-  assert.match(workflow, /node --test engine\/scripts\/test-hooks\/git-ci-repro-contract\.test\.cjs/);
+  assert.match(workflow, /node --test core\/engine\/scripts\/test-hooks\/git-ci-repro-contract\.test\.cjs/);
   assert.match(workflow, /actions\/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02\s+# v4\.6\.2/);
   assert.match(workflow, /var\/coverage\/coverage-summary\.json/);
   assert.match(workflow, /provenance/);
@@ -284,7 +284,7 @@ test('MCP package and enabled plugins are reproducibly locked', () => {
   const schema = JSON.parse(fs.readFileSync(PLUGIN_LOCK_SCHEMA, 'utf8'));
   const settings = JSON.parse(fs.readFileSync(path.join(ROOT, 'settings.local.json'), 'utf8'));
 
-  assert.equal(lock.$schema, './engine/schemas/plugin-lock.schema.json');
+  assert.equal(lock.$schema, './core/engine/schemas/plugin-lock.schema.json');
   assert.equal(lock.version, 1);
   assert.deepEqual(
     Object.keys(lock.plugins).sort(),
@@ -302,9 +302,9 @@ test('MCP package and enabled plugins are reproducibly locked', () => {
 });
 
 test('hook registrations are reproducible from a tracked template', () => {
-  const template = path.join(ROOT, 'engine', 'hooks', 'registrations.json');
-  const renderer = path.join(ROOT, 'engine', 'scripts', 'render-hook-settings.cjs');
-  assert.equal(fs.existsSync(template), true, 'engine/hooks/registrations.json is missing');
+  const template = path.join(ROOT, 'hosts', 'claude-code', 'registrations.json');
+  const renderer = path.join(ROOT, 'core', 'engine', 'scripts', 'render-hook-settings.cjs');
+  assert.equal(fs.existsSync(template), true, 'hosts/claude-code/registrations.json is missing');
   assert.equal(fs.existsSync(renderer), true, 'render-hook-settings.cjs is missing');
 
   // 模板必须可移植：不得含本机绝对路径，注册命令一律走 {{HARNESS_ROOT}} 占位符。
@@ -331,7 +331,7 @@ test('hook registrations are reproducible from a tracked template', () => {
   assert.match(workflow, /pytest==\d+\.\d+\.\d+/, 'pytest must be pinned for reproducibility');
 
   const { renderHooks } = require(renderer);
-  const { validateHookManifest } = require(path.join(ROOT, 'engine', 'scripts', 'lib', 'hook-registry.cjs'));
+  const { validateHookManifest } = require(path.join(ROOT, 'core', 'engine', 'scripts', 'lib', 'hook-registry.cjs'));
 
   // 渲染结果必须让 manifest 的 active 条目全部有据可依 —— 这正是 GitHub 上失败的那条。
   const rendered = renderHooks({ root: ROOT });

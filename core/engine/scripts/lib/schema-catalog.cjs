@@ -4,7 +4,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const { HARNESS_ROOT } = require('./harness-root.cjs');
 
-const SCHEMA_DIR = path.join(HARNESS_ROOT, 'engine', 'schemas');
+const SCHEMA_DIR = path.join(HARNESS_ROOT, 'core', 'engine', 'schemas');
 const CATALOG_FILE = path.join(SCHEMA_DIR, 'catalog.json');
 
 function schemaFiles(schemaDir = SCHEMA_DIR) {

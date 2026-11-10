@@ -41,7 +41,7 @@ Workflow({scriptPath, resumeFromRunId, args: {modules: ['fir'], confirmed: true,
 Workflow({name: 'hdl-coding-dag-workflow', args: {modules: ['fir'], confirmAllCheckpoints: true}})
 ```
 
-证据判定由 `engine/scripts/hdl-evidence-gate.cjs` 确定性完成
+证据判定由 `core/engine/scripts/hdl-evidence-gate.cjs` 确定性完成
 （读 `06_doc/architecture.yaml` 与 `02_sim/check_results/*.json`，
 输出 JSON + `RESULT: PASS/FAIL`），工作流内的证据 agent 只负责执行并原样带回。
 
@@ -57,14 +57,14 @@ Workflow({name: 'hdl-coding-dag-workflow', args: {modules: ['fir'], lite: true}}
 2. 文件必须包含 `export const meta = { name, description, phases, contract }`
 3. 通过 `Workflow({name: 'workflow-name', args: {...}})` 调用
 4. 严格工作流必须声明 `contract.strict=true`、输入、检查点、证据来源和完成标准。
-5. 不允许在 workflow 文件中使用 CommonJS `require()`、`execSync`、`spawnSync` 或直接 shell 执行；确定性证据扫描应通过 `engine/scripts/workflow-evidence-scan.cjs` 等外部证据脚本完成。
+5. 不允许在 workflow 文件中使用 CommonJS `require()`、`execSync`、`spawnSync` 或直接 shell 执行；确定性证据扫描应通过 `core/engine/scripts/workflow-evidence-scan.cjs` 等外部证据脚本完成。
 
 ## 回归验证
 
 ```bash
-node engine/scripts/test-hooks/workflow-contracts.cjs
-node engine/scripts/workflow-evidence-scan.cjs --json --targets workflows/security-review-workflow.js
-node engine/scripts/test-hooks/run-all-tests.cjs
+node core/engine/scripts/test-hooks/workflow-contracts.cjs
+node core/engine/scripts/workflow-evidence-scan.cjs --json --targets workflows/security-review-workflow.js
+node core/engine/scripts/test-hooks/run-all-tests.cjs
 ```
 
 ## 参考文档

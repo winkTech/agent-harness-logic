@@ -153,7 +153,7 @@ function checkPythonSyntax(files) {
 // 放大的是绝对阈值, 档位之间的相对关系不变。
 // 无 hook 注册 / 无可测同步入口时**显式 skip 并说明原因**, 不静默通过 (规则 8)。
 function runLatencySla() {
-  const script = path.join(HARNESS_ROOT, 'engine', 'scripts', 'lib', 'bench-hooks.cjs');
+  const script = path.join(HARNESS_ROOT, 'core', 'engine', 'scripts', 'lib', 'bench-hooks.cjs');
   const result = spawnSync(process.execPath, [script, '--quick', '--json', '--sla'], {
     cwd: HARNESS_ROOT,
     encoding: 'utf8',
@@ -193,7 +193,7 @@ function runLatencySla() {
 }
 
 function runCoverage() {
-  const script = path.join(HARNESS_ROOT, 'engine', 'scripts', 'coverage-runner.cjs');
+  const script = path.join(HARNESS_ROOT, 'core', 'engine', 'scripts', 'coverage-runner.cjs');
   return spawnSync(process.execPath, [script, '--ci', HARNESS_ROOT], {
     cwd: HARNESS_ROOT,
     encoding: 'utf8',

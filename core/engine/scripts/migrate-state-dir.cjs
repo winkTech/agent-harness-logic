@@ -2,12 +2,12 @@
 'use strict';
 
 /**
- * engine/scripts/migrate-state-dir.cjs — 把 harness 运行时状态搬出代码根
+ * core/engine/scripts/migrate-state-dir.cjs — 把 harness 运行时状态搬出代码根
  *
  * 用法:
- *   node engine/scripts/migrate-state-dir.cjs                       # dry-run（默认）：只打印计划，不写任何东西
- *   node engine/scripts/migrate-state-dir.cjs --json                 # dry-run，机器可读输出
- *   node engine/scripts/migrate-state-dir.cjs --execute [--to <dir>] # 真正搬运；目标默认 <homedir>/.logical-paradox
+ *   node core/engine/scripts/migrate-state-dir.cjs                       # dry-run（默认）：只打印计划，不写任何东西
+ *   node core/engine/scripts/migrate-state-dir.cjs --json                 # dry-run，机器可读输出
+ *   node core/engine/scripts/migrate-state-dir.cjs --execute [--to <dir>] # 真正搬运；目标默认 <homedir>/.logical-paradox
  *
  * 语义:
  *   - 源：<HARNESS_ROOT>/var、<HARNESS_ROOT>/.wright；任一不存在则跳过并说明。

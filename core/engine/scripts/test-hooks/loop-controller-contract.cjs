@@ -23,7 +23,7 @@ const { HARNESS_ROOT } = require('../lib/harness-root.cjs');
 const { openDb } = require('../../sqlite/index.cjs');
 const { scopeId, findProjectRoot } = require('../lib/project-scope.cjs');
 
-const HOOK = path.join(HARNESS_ROOT, 'engine', 'scripts', 'hooks', 'loop-controller.cjs');
+const HOOK = path.join(HARNESS_ROOT, 'core', 'engine', 'scripts', 'hooks', 'loop-controller.cjs');
 const controller = require(HOOK);
 const store = require('../../sqlite/store-loops.cjs');
 const criteriaLib = require('../lib/loop-criteria.cjs');
@@ -432,7 +432,7 @@ function assertReadOnlyHonored() {
 // ── 10. SubagentStop 判定回灌 ───────────────────────────────────────────────
 
 function assertSubagentVerdictFeedback() {
-  const subagent = require(path.join(HARNESS_ROOT, 'engine', 'scripts', 'hooks', 'subagent-verdict.cjs'));
+  const subagent = require(path.join(HARNESS_ROOT, 'core', 'engine', 'scripts', 'hooks', 'subagent-verdict.cjs'));
   const db = freshDb();
 
   // 无循环时什么也不记
@@ -484,7 +484,7 @@ function assertSubagentVerdictFeedback() {
 // ── 11. CLI 冒烟 + fail-open ────────────────────────────────────────────────
 
 function assertCliBehavior() {
-  const cli = path.join(HARNESS_ROOT, 'engine', 'scripts', 'loop-ctl.cjs');
+  const cli = path.join(HARNESS_ROOT, 'core', 'engine', 'scripts', 'loop-ctl.cjs');
   const bad = spawnSync(process.execPath, [cli, 'start', '--goal', 'x', '--criteria', '[{"type":"bogus"}]'], {
     encoding: 'utf8', cwd: HARNESS_ROOT, windowsHide: true,
   });

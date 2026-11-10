@@ -11,7 +11,7 @@
 ## §0 先探测工具链
 
 ```bash
-node engine/scripts/eda-detect.cjs --json
+node core/engine/scripts/eda-detect.cjs --json
 ```
 返回可用工具与版本（`vivado` / `xvlog` / `xelab` / `xsim` / `vlog` / `vsim` / `verilator` / `iverilog` …）。
 
@@ -98,12 +98,12 @@ vivado -mode batch -nojournal -nolog \
 harness 已有确定性解析器，**不要让 Agent 用眼睛读 .rpt 然后复述数字**：
 
 ```bash
-node engine/scripts/fpga-util-parser.cjs   04_prj/rpt/utilization.rpt   --json
-node engine/scripts/fpga-timing-parser.cjs 04_prj/rpt/timing_summary.rpt --json
-node engine/scripts/fpga-xdc-parser.cjs    03_xdc/top.xdc                    --json
+node core/engine/scripts/fpga-util-parser.cjs   04_prj/rpt/utilization.rpt   --json
+node core/engine/scripts/fpga-timing-parser.cjs 04_prj/rpt/timing_summary.rpt --json
+node core/engine/scripts/fpga-xdc-parser.cjs    03_xdc/top.xdc                    --json
 ```
 
-`engine/scripts/auto-parse-fpga-reports.cjs` 是 PostToolUse(Bash) hook：
+`core/engine/scripts/auto-parse-fpga-reports.cjs` 是 PostToolUse(Bash) hook：
 检测到 `vivado`/`vsim`/`synth` 类命令成功后会自动在 `.`、`02_sim/`、`04_prj/` 下找报告并解析摘要，
 **所以报告输出目录建议放在 `04_prj/rpt/`**，否则 hook 抓不到。
 
@@ -266,7 +266,7 @@ xsim.dir/ *.wdb *.pb xvlog.log xelab.log xsim.log webtalk*.jou webtalk*.log
 
 - 执行入口: `skills/vivado-flow/SKILL.md` + `skills/vivado-flow/scripts/vivado_flow.tcl`
 - 配置模板: `skills/vivado-flow/templates/flow.cfg`
-- 解析器: `engine/scripts/fpga-util-parser.cjs`、`fpga-timing-parser.cjs`、`fpga-xdc-parser.cjs`
-- 探测: `engine/scripts/eda-detect.cjs`
+- 解析器: `core/engine/scripts/fpga-util-parser.cjs`、`fpga-timing-parser.cjs`、`fpga-xdc-parser.cjs`
+- 探测: `core/engine/scripts/eda-detect.cjs`
 - 语言级/方法学: `vivado-synthesis-ug901.md`、`ug949-rtl-methodology.md`
 - 约束: `timing-constraints.md`

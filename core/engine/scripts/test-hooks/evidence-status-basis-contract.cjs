@@ -18,18 +18,18 @@ const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 
-const ROOT = path.resolve(__dirname, '..', '..', '..');
+const ROOT = path.resolve(__dirname, '..', '..', '..', '..');
 // 门禁模块在加载时解析状态/账本路径, 必须先隔离再 require, 否则测试会写真实账本。
 const TMP = fs.mkdtempSync(path.join(os.tmpdir(), 'evidence-basis-'));
 process.env.CLAUDE_HARNESS_NO_PERSIST = '1';
 process.env.CLAUDE_VERIFY_GATE_STATE_FILE = path.join(TMP, 'verify-gate.json');
 process.env.CLAUDE_VERIFICATION_LEDGER_FILE = path.join(TMP, 'verification-ledger.json');
 process.on('exit', () => { try { fs.rmSync(TMP, { recursive: true, force: true }); } catch { /* cleanup */ } });
-const { commandEvidence, statusFromEvidence } = require(path.join(ROOT, 'engine/scripts/lib/evidence-ledger.cjs'));
-const markers = require(path.join(ROOT, 'engine/scripts/lib/verification-markers.cjs'));
-const verificationGate = require(path.join(ROOT, 'engine/scripts/hooks/verification-gate.cjs'));
+const { commandEvidence, statusFromEvidence } = require(path.join(ROOT, 'core/engine/scripts/lib/evidence-ledger.cjs'));
+const markers = require(path.join(ROOT, 'core/engine/scripts/lib/verification-markers.cjs'));
+const verificationGate = require(path.join(ROOT, 'core/engine/scripts/hooks/verification-gate.cjs'));
 
-const CMD = 'node engine/scripts/test-hooks/run-all-tests.cjs';
+const CMD = 'node core/engine/scripts/test-hooks/run-all-tests.cjs';
 
 function main() {
   // 1. 退出码未知 + 正面 PASS 标记 → passed, 依据 markers

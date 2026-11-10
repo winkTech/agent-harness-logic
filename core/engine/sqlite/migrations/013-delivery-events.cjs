@@ -3,7 +3,7 @@
 /**
  * 013-delivery-events — 收编 delivery-tracker 的野生迁移 (_delivery_migration 私有账本)。
  *
- * 此前 engine/scripts/delivery-tracker.cjs 自带 _delivery_migration 追踪表, 在统一
+ * 此前 core/engine/scripts/delivery-tracker.cjs 自带 _delivery_migration 追踪表, 在统一
  * 迁移账本 (_migrations) 之外私自管理 delivery_events 的 DDL (原 004-delivery-tracking
  * 建表 + 005-delivery-uncovered 加归因列)。本迁移把那段 DDL 原样收编进统一账本,
  * 语义保持:

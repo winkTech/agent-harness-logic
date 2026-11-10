@@ -20,7 +20,7 @@
 const fs = require('node:fs');
 const path = require('node:path');
 const { spawnSync } = require('node:child_process');
-const { buildTimingEvidence } = require('../../engine/scripts/fpga-timing-parser.cjs');
+const { buildTimingEvidence } = require('../../engine/fpga-timing-parser.cjs');
 
 function die(msg) { console.error(`[pg-synth] ${msg}`); process.exit(2); }
 

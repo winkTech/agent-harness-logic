@@ -2,7 +2,7 @@
 'use strict';
 
 /**
- * engine/sqlite/test-fixtures/build-legacy-fixture.cjs — 旧库升级回归 fixture 构建。
+ * core/engine/sqlite/test-fixtures/build-legacy-fixture.cjs — 旧库升级回归 fixture 构建。
  *
  * 流程 (Phase 0.3, 重构安全网):
  *   1. backupDb() (VACUUM INTO) 导出真实库 (~/.claude/.wright/memory.db);
@@ -14,7 +14,7 @@
  *   5. 输出 legacy-2026-11.db + sha256 清单 (git 跟踪)。
  *
  * 用法:
- *   node engine/sqlite/test-fixtures/build-legacy-fixture.cjs
+ *   node core/engine/sqlite/test-fixtures/build-legacy-fixture.cjs
  *
  * 可复现: 输出确定性 (同一真实库状态 → 同一 fixture); sha256 清单同时用于
  * 回归测试守卫 (fixture 被意外改动即失败)。

@@ -1,7 +1,7 @@
 'use strict';
 
 /**
- * engine/scripts/transport/render.cjs — 中立判定 → transport 输出渲染层
+ * core/engine/scripts/transport/render.cjs — 中立判定 → transport 输出渲染层
  *
  * 职责：把门禁产出的中立判定（allow / block + additionalContext + diagnostics）
  * 渲染成目标 transport 的输出协议。纯函数：**不写 stdout / stderr、不设 exitCode**，

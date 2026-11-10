@@ -101,9 +101,9 @@ vivado -mode batch -nojournal -nolog \
 - **[MUST] 不跑工具不下综合结论。** 没有 `flow_summary.json` 就不许说"资源够用/时序能收敛/CDC 没问题"，
   无 Vivado 环境时明确写"未验证"
 - **[MUST] 数字取自 JSON**，不要从 `.rpt` 里人工抄
-- **[MUST] 报告落在 `<out>/rpt/`**，`engine/scripts/auto-parse-fpga-reports.cjs` 这个
+- **[MUST] 报告落在 `<out>/rpt/`**，`core/engine/scripts/auto-parse-fpga-reports.cjs` 这个
   PostToolUse hook 会自动抓取解析（它扫 `.`、`02_sim/`、`04_prj/` 的下级目录）
-- 先 `node engine/scripts/eda-detect.cjs --json` 探测工具链再决定能下什么结论
+- 先 `node core/engine/scripts/eda-detect.cjs --json` 探测工具链再决定能下什么结论
 
 ## 与 hdl-coding 的分工
 

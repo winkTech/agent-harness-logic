@@ -15,7 +15,7 @@ skip: ""
 以下任务必须加载本规则：
 
 - 修改 Hook 事件语义、Dream、SQLite 记忆表、检索、健康检查或维护脚本；
-- 新增、删除、改名或改变触发条件的 Hook，以及改动 `settings.json`、`engine/hooks/manifest.json`、CI workflow；
+- 新增、删除、改名或改变触发条件的 Hook，以及改动 `settings.json`、`core/engine/hooks/manifest.json`、CI workflow；
 - 根据历史错误新增全局约束；
 - 声称记忆“健康、已学习、可召回、已清理、已晋升”为规则；
 - 声称门禁“已通过”“已生效”，而验证只在本机跑过；
@@ -66,16 +66,16 @@ Agent 只有在任务主题、路径、错误签名或用户明确要求与候�
 
 `settings.json` 是**渲染产物**，在 `.gitignore` 里。它必须含本机绝对路径——hook 命令改用 `$HOME` 会导致静默不触发，既不报错也不执行，是本仓库代价最高的一类失败。
 
-因此注册的唯一权威声明是 `engine/hooks/registrations.json`，用 `{{HARNESS_ROOT}}` 占位保持可移植。
+因此注册的唯一权威声明是 `core/engine/hooks/registrations.json`，用 `{{HARNESS_ROOT}}` 占位保持可移植。
 
 | 动作 | 必须 | 不允许 |
 |:-----|:-----|:-------|
 | 新增/修改/删除 Hook | 改模板，再跑渲染器生成 `settings.json` | 直接编辑 `settings.json`（会被 `--check` 判为漂移） |
 | 模板写路径 | `{{HARNESS_ROOT}}/...` 占位 | 本机绝对路径；`$HOME`/`~` 等 shell 展开 |
 | 同一个 Hook | 只在一处注册 | 同时写进 `settings.json` 与 `settings.local.json`（会每次触发跑两遍） |
-| 新增 Hook 落地 | 同时在 `engine/hooks/manifest.json` 声明，且 `active` 与真实注册一致 | 只注册不声明，或声明 `active: true` 却没有注册 |
+| 新增 Hook 落地 | 同时在 `core/engine/hooks/manifest.json` 声明，且 `active` 与真实注册一致 | 只注册不声明，或声明 `active: true` 却没有注册 |
 | `.claude/workflows/` 镜像 | 由 `sync-workflow-mirror.cjs` 从 `workflows/` 单向重建 | 反向同步（会把手工改镜像的错误“修”掉，那正是漂移检查要抓的） |
-| `engine/hooks/plugin.hooks.json` | 与 `workbuddy.hooks.json` 同为渲染产物，但**入库**（插件安装方拿不到渲染器）；改注册仍只改模板再跑渲染器 | 手工编辑该文件；或在其中写本机绝对路径（插件根 `${CLAUDE_PLUGIN_ROOT}` 每次更新换目录） |
+| `core/engine/hooks/plugin.hooks.json` | 与 `workbuddy.hooks.json` 同为渲染产物，但**入库**（插件安装方拿不到渲染器）；改注册仍只改模板再跑渲染器 | 手工编辑该文件；或在其中写本机绝对路径（插件根 `${CLAUDE_PLUGIN_ROOT}` 每次更新换目录） |
 
 `manifest.json` 与实际注册的交叉核对是硬门禁。它读不到任何注册来源时**必须报错**，不得因“环境里没有 settings.json”而跳过——那正是它唯一有意义的场景。
 
@@ -83,7 +83,7 @@ Agent 只有在任务主题、路径、错误签名或用户明确要求与候�
 
 断言的对象若位于 `.gitignore` 覆盖的路径（`settings.json`、`var/`、`.claude/`、`plugins/`），它检的是**操作员本机状态**，不是仓库契约，在干净环境里永远不可能成立。
 
-处理方式只有一种：按环境条件**显式跳过并打印原因**，并登记进 `engine/scripts/test-hooks/skip-manifest.json` 的白名单（`maxSkips` 同步上调）。
+处理方式只有一种：按环境条件**显式跳过并打印原因**，并登记进 `core/engine/scripts/test-hooks/skip-manifest.json` 的白名单（`maxSkips` 同步上调）。
 
 - 不允许删断言——本机的检查价值仍在；
 - 不允许让它无声通过——那样“检过了”和“没检”就分不开了；
@@ -186,35 +186,35 @@ Dream output MUST NOT auto-promote a candidate into a durable rule; explicit app
 
 ```powershell
 # 只读维护计划
-node engine/scripts/memory-knowledge-maintenance.cjs --dry-run --json
+node core/engine/scripts/memory-knowledge-maintenance.cjs --dry-run --json
 
 # 机器可读健康与索引检查
-node engine/scripts/memory-health-check.cjs --json
-node engine/scripts/kb-stats.cjs --check --quiet --json
+node core/engine/scripts/memory-health-check.cjs --json
+node core/engine/scripts/kb-stats.cjs --check --quiet --json
 
 # 索引失效后显式重建
-node engine/scripts/semantic-search.cjs index --rebuild
+node core/engine/scripts/semantic-search.cjs index --rebuild
 
 # 查看候选
-node engine/scripts/harness-rule-candidates.cjs list
+node core/engine/scripts/harness-rule-candidates.cjs list
 ```
 
 Hook 注册的重建与校验（换机、新克隆、CI，以及每次改完 Hook）：
 
 ```powershell
-# 改 engine/hooks/registrations.json 之后渲染出本机 settings.json
+# 改 core/engine/hooks/registrations.json 之后渲染出本机 settings.json
 # 只替换 hooks 字段，env/model/statusLine/theme 等本机配置原样保留
-node engine/scripts/render-hook-settings.cjs
+node core/engine/scripts/render-hook-settings.cjs
 
 # 校验本机注册是否与模板漂移；CI 与提交前都要跑
-node engine/scripts/render-hook-settings.cjs --check
+node core/engine/scripts/render-hook-settings.cjs --check
 
 # 同理从 workflows/ 单向重建 .claude/workflows/ 镜像
-node engine/scripts/sync-workflow-mirror.cjs
-node engine/scripts/sync-workflow-mirror.cjs --check
+node core/engine/scripts/sync-workflow-mirror.cjs
+node core/engine/scripts/sync-workflow-mirror.cjs --check
 ```
 
-事件消费者的调度合同：Dream 与 Skill-Evolve 都必须有真实、有界、可观测的执行路径。当前 Dream 由 Session bootstrap 触发，Skill-Evolve 由异步 Stop observer 在同一进程调用，默认每次最多 harvest 100 条且只 stage 提案。每个消费者必须在 `engine/hooks/manifest.json` 的 `consumerRegistry` 中声明事件、宿主入口、批量/时效阈值和 heartbeat/watermark 要求；宿主 entry 必须显式链接 consumer，且该宿主必须真实注册在 `settings.json`。health 只依据这份结构化注册表、实际 Hook 注册和 SQLite heartbeat 判定 `scheduled`、`never-run`、`stale`、`failing`，不扫描源码文本猜测依赖；只在 migration 中插入 watermark 行不算已启用。health 还必须报告 exposure/application/outcome 计数与身份链完整性，以及 candidate 各状态数量、字段完整性和 30/90 天审查期限；没有 outcome 本身不是失败，孤儿身份链与逾期未审才是问题。
+事件消费者的调度合同：Dream 与 Skill-Evolve 都必须有真实、有界、可观测的执行路径。当前 Dream 由 Session bootstrap 触发，Skill-Evolve 由异步 Stop observer 在同一进程调用，默认每次最多 harvest 100 条且只 stage 提案。每个消费者必须在 `core/engine/hooks/manifest.json` 的 `consumerRegistry` 中声明事件、宿主入口、批量/时效阈值和 heartbeat/watermark 要求；宿主 entry 必须显式链接 consumer，且该宿主必须真实注册在 `settings.json`。health 只依据这份结构化注册表、实际 Hook 注册和 SQLite heartbeat 判定 `scheduled`、`never-run`、`stale`、`failing`，不扫描源码文本猜测依赖；只在 migration 中插入 watermark 行不算已启用。health 还必须报告 exposure/application/outcome 计数与身份链完整性，以及 candidate 各状态数量、字段完整性和 30/90 天审查期限；没有 outcome 本身不是失败，孤儿身份链与逾期未审才是问题。
 
 Markdown 对账是权威快照：源文件删除 `project_id`、`path_scope` 或 `trigger_signature` 时，SQLite 旧值必须被清除。普通 Hook 的局部 upsert 仍保留未提供字段。`trigger_signature` 只在调用 Hook 能从真实 payload 稳定复现该签名时使用，不得为自然语言查询凭空填写不可达签名。
 
@@ -222,21 +222,21 @@ Markdown 对账是权威快照：源文件删除 `project_id`、`path_scope` 或
 
 ```powershell
 # candidate.json: title/source/rootCause/verifiedFix/prevention/triggerConditions
-node engine/scripts/harness-rule-candidates.cjs stage --input candidate.json --ledger var/maintenance/harness-rule-candidates.json --by memory-maintenance
+node core/engine/scripts/harness-rule-candidates.cjs stage --input candidate.json --ledger var/maintenance/harness-rule-candidates.json --by memory-maintenance
 
 # verification.json: evidence 数组；至少一项 behavioral_test/regression，并含同一行为契约的账本化 RED/GREEN
 # red/green 均需 command、真实 exitCode、verification-gate ledger 路径与 entrySha256；contractHash 必须相同
-node engine/scripts/harness-rule-candidates.cjs verify --id hrc-<id> --input verification.json --ledger var/maintenance/harness-rule-candidates.json --by verifier
+node core/engine/scripts/harness-rule-candidates.cjs verify --id hrc-<id> --input verification.json --ledger var/maintenance/harness-rule-candidates.json --by verifier
 
 # 人工批准必须带 --explicit；没有此标志即失败
-node engine/scripts/harness-rule-candidates.cjs approve --id hrc-<id> --ledger var/maintenance/harness-rule-candidates.json --by user --explicit
+node core/engine/scripts/harness-rule-candidates.cjs approve --id hrc-<id> --ledger var/maintenance/harness-rule-candidates.json --by user --explicit
 
 # 只有 approved 候选可写入规则；--by 必须在任何文件写入前通过校验
-node engine/scripts/harness-rule-candidates.cjs promote --id hrc-<id> --ledger var/maintenance/harness-rule-candidates.json --rules docs/rules --by maintainer
+node core/engine/scripts/harness-rule-candidates.cjs promote --id hrc-<id> --ledger var/maintenance/harness-rule-candidates.json --rules core/rules --by maintainer
 ```
 
 Agent 只有在同一真实命令与同一 `contractHash` 上先失败、修复后通过，取得 `real RED -> GREEN`，且 RED/GREEN 都已由 Verification Gate 写入证据账本时，才可调用 `verify --id`。验证器会重新计算账本 entry SHA-256，核对命令、stdout/stderr 哈希、真实退出码、Gate 接受状态与时间顺序；任一不一致即拒绝。模型自报 PASS、静态审查结论、Dream 置信度、任意 JSON 或无法复现的旧日志都不能写成 `result: "PASS"`。
 
-晋升会原子写入独立的 `docs/rules/90-promoted-hrc-*.md`，其 frontmatter 必须带可索引的 `trigger` 与 candidate id；新会话由 rule loader 按 trigger 命中后注入。加载和硬门禁执行前都必须回查候选账本中的 explicit approval、账本化验证、文件名/marker/frontmatter candidate id 与晋升时记录的 artifact SHA-256；手工复制、缺账本或被篡改的文件保持不生效，并由健康检查报告。默认 `enforcement: advisory` 只注入规则正文。只有显式批准且声明 `enforcement: block` 的候选可生成硬门禁；硬门禁仅允许 `command`/`file_path` 上的 `contains`、`equals`、`prefix` 声明式谓词，不执行候选提供的代码或正则表达式。
+晋升会原子写入独立的 `core/rules/90-promoted-hrc-*.md`，其 frontmatter 必须带可索引的 `trigger` 与 candidate id；新会话由 rule loader 按 trigger 命中后注入。加载和硬门禁执行前都必须回查候选账本中的 explicit approval、账本化验证、文件名/marker/frontmatter candidate id 与晋升时记录的 artifact SHA-256；手工复制、缺账本或被篡改的文件保持不生效，并由健康检查报告。默认 `enforcement: advisory` 只注入规则正文。只有显式批准且声明 `enforcement: block` 的候选可生成硬门禁；硬门禁仅允许 `command`/`file_path` 上的 `contains`、`equals`、`prefix` 声明式谓词，不执行候选提供的代码或正则表达式。
 
 任何清理先保留可追踪的 candidate id、验证证据和批准记录。不要以减少文件数代替提炼，也不要用删除维护状态或强推 watermark 来制造健康状态。

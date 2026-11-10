@@ -6,8 +6,8 @@ const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 
-const ROOT = path.resolve(__dirname, '..', '..', '..');
-const observer = require(path.join(ROOT, 'engine', 'hooks', 'learning', 'postflight-observer.cjs'));
+const ROOT = path.resolve(__dirname, '..', '..', '..', '..');
+const observer = require(path.join(ROOT, 'core', 'engine', 'hooks', 'learning', 'postflight-observer.cjs'));
 
 function payload(event) {
   return {
@@ -57,7 +57,7 @@ function main() {
       && record.source === 'agent-transparency-ledger'),
   'auxiliary failures must be visible and fail-open');
 
-  const health = require(path.join(ROOT, 'engine', 'scripts', 'memory-health-check.cjs'));
+  const health = require(path.join(ROOT, 'core', 'engine', 'scripts', 'memory-health-check.cjs'));
   const schedules = health.detectConsumerSchedules(ROOT, ['skill-evolve']);
   assert.equal(schedules['skill-evolve'], true,
     'memory health must recognize Skill-Evolve inside the active Stop observer');
@@ -71,7 +71,7 @@ function main() {
       cwd: ROOT,
       tool_name: 'Edit',
       tool_input: {
-        file_path: path.join(ROOT, 'engine', 'hooks', 'learning', 'postflight-observer.cjs'),
+        file_path: path.join(ROOT, 'core', 'engine', 'hooks', 'learning', 'postflight-observer.cjs'),
         old_string: 'const value = 1;',
         new_string: 'const value = 2;',
       },

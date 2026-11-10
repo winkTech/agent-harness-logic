@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 /**
- * engine/scripts/skill-evolve.cjs — SkillOpt 方法蒸馏
+ * core/engine/scripts/skill-evolve.cjs — SkillOpt 方法蒸馏
  *
  * 核心循环 (SkillOpt distilled):
  *   harvest → mine → reflect → bounded edit → validate → stage
@@ -14,9 +14,9 @@
  *   - stage 到 .skillopt-sleep/staging/ 等待审查
  *
  * 用法:
- *   node engine/scripts/skill-evolve.cjs              # 全量运行
- *   node engine/scripts/skill-evolve.cjs --dry-run    # 试运行, 不写文件
- *   node engine/scripts/skill-evolve.cjs --force      # 忽略水印
+ *   node core/engine/scripts/skill-evolve.cjs              # 全量运行
+ *   node core/engine/scripts/skill-evolve.cjs --dry-run    # 试运行, 不写文件
+ *   node core/engine/scripts/skill-evolve.cjs --force      # 忽略水印
  *
  * 设计原则:
  *   1. 一次只改一条规则 (bounded edit)
@@ -31,7 +31,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const os = require('node:os');
 
-const HOME_DIR = path.resolve(__dirname, '..', '..');
+const HOME_DIR = path.resolve(__dirname, '..', '..', '..');
 const SKILLS_DIR = path.join(HOME_DIR, 'skills');
 const STAGING_BASE = path.join(HOME_DIR, '.skillopt-sleep', 'staging');
 

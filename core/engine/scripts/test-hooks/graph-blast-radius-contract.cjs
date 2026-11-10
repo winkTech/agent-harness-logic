@@ -189,7 +189,7 @@ function assertStoreGuards() {
 // ── 8. CLI ──────────────────────────────────────────────────────────────────
 
 function assertCli(projectId) {
-  const cli = path.join(HARNESS_ROOT, 'engine', 'scripts', 'cg-queries.cjs');
+  const cli = path.join(HARNESS_ROOT, 'core', 'engine', 'scripts', 'cg-queries.cjs');
   const result = spawnSync(process.execPath, [cli, 'blast', projectId, 'leaf'], {
     encoding: 'utf8', windowsHide: true, env: { ...process.env },
   });

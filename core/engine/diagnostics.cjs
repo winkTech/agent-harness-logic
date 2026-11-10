@@ -1,13 +1,13 @@
 #!/usr/bin/env node
 
 /**
- * engine/diagnostics.cjs — 全系统健康诊断。
+ * core/engine/diagnostics.cjs — 全系统健康诊断。
  *
  * 汇总: SQLite 健康 / Hook 配置 / 文件系统 / 记忆 / 成本 / 技能
  *
  * 用法:
- *   node engine/diagnostics.cjs          # 全量诊断
- *   node engine/diagnostics.cjs --quick  # 快速 (仅 SQLite + 分数)
+ *   node core/engine/diagnostics.cjs          # 全量诊断
+ *   node core/engine/diagnostics.cjs --quick  # 快速 (仅 SQLite + 分数)
  */
 
 'use strict';

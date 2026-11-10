@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * engine/scripts/pre-compact.cjs — 压缩前状态保存 + 自动压缩触发 (P2)
+ * core/engine/scripts/pre-compact.cjs — 压缩前状态保存 + 自动压缩触发 (P2)
  *
  * 功能:
  *   1. 在上下文压缩前保存 runtime state 检查点

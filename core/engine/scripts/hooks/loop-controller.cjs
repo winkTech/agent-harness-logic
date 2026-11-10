@@ -2,7 +2,7 @@
 'use strict';
 
 /**
- * engine/scripts/hooks/loop-controller.cjs — Stop 钩子上的任务循环控制器。
+ * core/engine/scripts/hooks/loop-controller.cjs — Stop 钩子上的任务循环控制器。
  *
  * harness 原本只有门禁 (一次判决就结束) 和观测 (离线报表), 没有闭环: 判定"没
  * 收敛"之后没有任何机制把工作顶回去继续。Stop 是唯一能做这件事的位置 ——

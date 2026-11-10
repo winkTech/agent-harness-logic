@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * engine/scripts/fp-rate-tracker.cjs — 假阳性/假阴性率追踪器
+ * core/engine/scripts/fp-rate-tracker.cjs — 假阳性/假阴性率追踪器
  *
  * 🔍 P1-1: 假阳性率仪表盘
  * 参照: [7] Brundage et al. — "评估需要关注假阳性/假阴性率"
@@ -8,10 +8,10 @@
  * 追踪三道闸门的拦截准确率。人工确认后，记录 gate 判断是否正确。
  *
  * 用法:
- *   node engine/scripts/fp-rate-tracker.cjs init               # 初始化
- *   node engine/scripts/fp-rate-tracker.cjs record --gate=verification --correct=true --note="确实需要验证"
- *   node engine/scripts/fp-rate-tracker.cjs report             # 查看报告
- *   node engine/scripts/fp-rate-tracker.cjs report --json      # JSON 输出
+ *   node core/engine/scripts/fp-rate-tracker.cjs init               # 初始化
+ *   node core/engine/scripts/fp-rate-tracker.cjs record --gate=verification --correct=true --note="确实需要验证"
+ *   node core/engine/scripts/fp-rate-tracker.cjs report             # 查看报告
+ *   node core/engine/scripts/fp-rate-tracker.cjs report --json      # JSON 输出
  */
 
 'use strict';
@@ -177,8 +177,8 @@ function harvestFpRate(opts = {}) {
     || process.env.CLAUDE_HARNESS_VERIFY_READONLY === '1'
     || process.env.CLAUDE_NO_DIAGNOSTIC_WRITES === '1') return { skipped: true };
   const crypto = require('node:crypto');
-  const { openDb } = require(path.join(HOME, 'engine/sqlite/index.cjs'));
-  const events = require(path.join(HOME, 'engine/sqlite/store-events.cjs'));
+  const { openDb } = require(path.join(HOME, 'core/engine/sqlite/index.cjs'));
+  const events = require(path.join(HOME, 'core/engine/sqlite/store-events.cjs'));
   const wright = opts.db ? { db: opts.db, close() { /* injected */ } } : openDb();
   const db = wright.db;
   const runId = crypto.randomUUID();
@@ -263,10 +263,10 @@ function main() {
     default:
       console.log(`
 用法:
-  node engine/scripts/fp-rate-tracker.cjs init
-  node engine/scripts/fp-rate-tracker.cjs record --gate=<name> --correct=true/false [--note="..."]
-  node engine/scripts/fp-rate-tracker.cjs auto-record
-  node engine/scripts/fp-rate-tracker.cjs report [--json]
+  node core/engine/scripts/fp-rate-tracker.cjs init
+  node core/engine/scripts/fp-rate-tracker.cjs record --gate=<name> --correct=true/false [--note="..."]
+  node core/engine/scripts/fp-rate-tracker.cjs auto-record
+  node core/engine/scripts/fp-rate-tracker.cjs report [--json]
 
 参数:
   --gate     verification | commit | bash-safety | file-protection | diff-size | resource-budget | hdl

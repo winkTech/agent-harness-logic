@@ -1,7 +1,7 @@
 'use strict';
 
 /**
- * engine/sqlite/store-events.cjs — 运行时事件仓库 (Dream 自学习的输入源)。
+ * core/engine/sqlite/store-events.cjs — 运行时事件仓库 (Dream 自学习的输入源)。
  *
  * 用法:
  *   const events = require('./store-events.cjs');

@@ -1,17 +1,17 @@
 #!/usr/bin/env node
 /**
- * engine/scripts/lib/bench-hooks.cjs — Hook 延迟基准库。
+ * core/engine/scripts/lib/bench-hooks.cjs — Hook 延迟基准库。
  *
  * 测量 settings.local.json 中注册的所有 hook 的启动和执行时间。
  * 由 diagnostics.cjs --bench 调用，也可独立运行。
  *
  * 用法:
- *   node engine/scripts/lib/bench-hooks.cjs              # 全量基准
- *   node engine/scripts/lib/bench-hooks.cjs --quick      # 快速（只测 PreToolUse）
- *   node engine/scripts/lib/bench-hooks.cjs --json       # JSON 输出（供 diagnostics 消费）
- *   node engine/scripts/lib/bench-hooks.cjs --sla        # 按 hook-latency 档位判定 warm p95，超标 exit 1
+ *   node core/engine/scripts/lib/bench-hooks.cjs              # 全量基准
+ *   node core/engine/scripts/lib/bench-hooks.cjs --quick      # 快速（只测 PreToolUse）
+ *   node core/engine/scripts/lib/bench-hooks.cjs --json       # JSON 输出（供 diagnostics 消费）
+ *   node core/engine/scripts/lib/bench-hooks.cjs --sla        # 按 hook-latency 档位判定 warm p95，超标 exit 1
  *
- * --sla 的档位与 async 判定全部来自 engine/scripts/lib/hook-latency.cjs（单一档位来源）；
+ * --sla 的档位与 async 判定全部来自 core/engine/scripts/lib/hook-latency.cjs（单一档位来源）；
  * env CLAUDE_HARNESS_LATENCY_SCALE 整体放大预算（CI 用 3）。
  */
 
@@ -35,7 +35,7 @@ const SETTINGS_FILES = [
 function createBenchSandbox() {
   const base = fs.mkdtempSync(path.join(os.tmpdir(), 'claude-hook-bench-'));
   const root = path.join(base, '.claude');
-  fs.mkdirSync(path.join(root, 'engine', 'scripts'), { recursive: true });
+  fs.mkdirSync(path.join(root, 'core', 'engine', 'scripts'), { recursive: true });
   fs.mkdirSync(path.join(root, 'var'), { recursive: true });
   const agentsSource = path.join(HOME, 'AGENTS.md');
   const agentsTarget = path.join(root, 'AGENTS.md');

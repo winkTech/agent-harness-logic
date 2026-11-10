@@ -13,8 +13,8 @@ const CODEX_NPX_VERSION_COMMAND = process.platform === 'win32'
 function usage() {
   return [
     'Usage:',
-    '  node engine/scripts/test-hooks/agent-live-readiness.cjs',
-    '  node engine/scripts/test-hooks/agent-live-readiness.cjs --agent claude --out readiness.json',
+    '  node core/engine/scripts/test-hooks/agent-live-readiness.cjs',
+    '  node core/engine/scripts/test-hooks/agent-live-readiness.cjs --agent claude --out readiness.json',
     '',
     'Reports whether external live-agent CLIs are available, blocked, missing, or failing.',
   ].join('\n');

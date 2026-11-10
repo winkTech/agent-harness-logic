@@ -9,7 +9,7 @@ const { spawnSync } = require('node:child_process');
 const crypto = require('node:crypto');
 const { parseCommandLine } = require('../lib/hook-registry.cjs');
 
-const HOME = path.resolve(__dirname, '..', '..', '..');
+const HOME = path.resolve(__dirname, '..', '..', '..', '..');
 const FIXTURE_ROOT = path.join(__dirname, 'fixtures', 'long-task');
 const SCENARIO = path.join(FIXTURE_ROOT, 'scenario');
 const RUN_ROOT = process.env.AGENT_EVAL_RUN_ROOT
@@ -20,9 +20,9 @@ const PROMPT_SCAFFOLD_VERSION = 'visible-tool-checklist-v1';
 function usage() {
   return [
     'Usage:',
-    '  node engine/scripts/test-hooks/agent-eval-runner.cjs --dry-run --agent claude --kind implementation',
-    '  node engine/scripts/test-hooks/agent-eval-runner.cjs --agent claude --kind ambiguous --command "claude"',
-    '  node engine/scripts/test-hooks/agent-eval-runner.cjs --reuse --agent claude --kind ambiguous --out existing-dir --command "claude"',
+    '  node core/engine/scripts/test-hooks/agent-eval-runner.cjs --dry-run --agent claude --kind implementation',
+    '  node core/engine/scripts/test-hooks/agent-eval-runner.cjs --agent claude --kind ambiguous --command "claude"',
+    '  node core/engine/scripts/test-hooks/agent-eval-runner.cjs --reuse --agent claude --kind ambiguous --out existing-dir --command "claude"',
     '',
     'The runner prepares a real task workspace and captures a run manifest.',
     'Live agent runs require a parseable JSONL/stream transcript by default.',

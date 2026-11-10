@@ -1,7 +1,7 @@
 'use strict';
 
 /**
- * engine/scripts/lib/module-topology.cjs — 从代码图推导模块验证顺序。
+ * core/engine/scripts/lib/module-topology.cjs — 从代码图推导模块验证顺序。
  *
  * 解决的问题: hdl-coding-dag-workflow 的 moduleOrder 一直是**调用方手写**的
  * (`args.moduleOrder || modules`)。整条 cascade 门禁 (上游没过就不调下游) 都

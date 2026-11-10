@@ -6,7 +6,7 @@ const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 
-const root = path.resolve(__dirname, '..', '..', '..');
+const root = path.resolve(__dirname, '..', '..', '..', '..');
 const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'dag-cancellation-'));
 const previousDbPath = process.env.CLAUDE_SQLITE_PATH;
 process.env.CLAUDE_SQLITE_PATH = path.join(tempRoot, 'events.db');
@@ -298,7 +298,7 @@ async function testAllowedLoopSkipIsNotFailure() {
     process.stdout.write('DAG_CANCELLATION_RESULT: PASS\n');
   } finally {
     try {
-      require(path.join(root, 'engine', 'sqlite', 'index.cjs')).closeAll();
+      require(path.join(root, 'core', 'engine', 'sqlite', 'index.cjs')).closeAll();
     } catch { /* best-effort test cleanup */ }
     if (previousDbPath === undefined) delete process.env.CLAUDE_SQLITE_PATH;
     else process.env.CLAUDE_SQLITE_PATH = previousDbPath;

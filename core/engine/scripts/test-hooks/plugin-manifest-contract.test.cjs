@@ -2,14 +2,14 @@
 'use strict';
 
 /**
- * engine/scripts/test-hooks/plugin-manifest-contract.test.cjs — Claude Code 插件清单契约
+ * core/engine/scripts/test-hooks/plugin-manifest-contract.test.cjs — Claude Code 插件清单契约
  *
  * M2 目标：本仓库可被 `claude --plugin-dir <仓库根>` 直接加载。
  * 插件加载失败的典型形态是**静默**的（清单字段拼错、hooks 路径指错、命令写死了本机绝对
  * 路径而插件根每次更新都换目录），所以这里把结构、渲染幂等和真实可执行性都断言死：
  *
  *   1. `.claude-plugin/plugin.json` 可解析，name/hooks/agents/mcpServers 指向真实存在的东西；
- *   2. `engine/hooks/plugin.hooks.json` 每条 hook 是 exec 形式，args[0] 展开后文件存在，
+ *   2. `core/engine/hooks/plugin.hooks.json` 每条 hook 是 exec 形式，args[0] 展开后文件存在，
  *      命令里不含本机绝对路径、不含未展开的 {{...}} 占位符；
  *   3. 渲染幂等：renderPluginHooks() 的输出与入库文件逐字节一致（CI 的 --check 能抓漂移，
  *      这里再钉一次，防止有人手改产物）；
@@ -26,10 +26,10 @@ const os = require('node:os');
 const path = require('node:path');
 const { spawnSync } = require('node:child_process');
 
-const ROOT = path.resolve(__dirname, '..', '..', '..');
+const ROOT = path.resolve(__dirname, '..', '..', '..', '..');
 const PLUGIN_MANIFEST = path.join(ROOT, '.claude-plugin', 'plugin.json');
-const PLUGIN_HOOKS = path.join(ROOT, 'engine', 'hooks', 'plugin.hooks.json');
-const RENDERER = path.join(ROOT, 'engine', 'scripts', 'render-hook-settings.cjs');
+const PLUGIN_HOOKS = path.join(ROOT, 'core', 'engine', 'hooks', 'plugin.hooks.json');
+const RENDERER = path.join(ROOT, 'core', 'engine', 'scripts', 'render-hook-settings.cjs');
 const { renderPluginHooks, toExecForm, PLUGIN_ROOT_PLACEHOLDER } = require(RENDERER);
 
 const POSIX_ROOT = ROOT.replace(/\\/g, '/');
@@ -72,7 +72,7 @@ test('plugin.json is parseable and every declared path resolves', () => {
   const hooksTarget = path.resolve(ROOT, manifest.hooks);
   assert.ok(fs.existsSync(hooksTarget), `plugin hooks file does not exist: ${manifest.hooks}`);
   assert.equal(path.resolve(hooksTarget), path.resolve(PLUGIN_HOOKS),
-    'plugin.json must point at the rendered engine/hooks/plugin.hooks.json');
+    'plugin.json must point at the rendered core/engine/hooks/plugin.hooks.json');
 
   // Claude Code 的清单校验只接受 .md 文件路径作为 agents 字段（"Invalid string: must end with .md"），
   // 写目录会让整个插件被静默拒绝加载（2026-09-03 真机复现）。agents/ 是默认目录且递归发现，
@@ -110,7 +110,7 @@ test('plugin.json is parseable and every declared path resolves', () => {
 // ── 2. 插件 hooks 产物形态 ─────────────────────────────────────────────────
 
 test('plugin.hooks.json entries are portable exec-form commands', () => {
-  assert.ok(fs.existsSync(PLUGIN_HOOKS), 'engine/hooks/plugin.hooks.json is missing (run render-hook-settings.cjs)');
+  assert.ok(fs.existsSync(PLUGIN_HOOKS), 'core/engine/hooks/plugin.hooks.json is missing (run render-hook-settings.cjs)');
   const raw = fs.readFileSync(PLUGIN_HOOKS, 'utf8');
   assert.doesNotMatch(raw, /\{\{[A-Z_]+\}\}/, 'plugin.hooks.json still contains unexpanded template placeholders');
   assert.doesNotMatch(raw, /[A-Za-z]:[\\/]/, 'plugin.hooks.json leaks an absolute path (plugin root moves on every update)');
@@ -139,7 +139,7 @@ test('plugin.hooks.json is byte-identical to renderPlugin() output', () => {
   const expected = `${JSON.stringify(renderPluginHooks({ root: ROOT }), null, 2)}\n`;
   const actual = fs.readFileSync(PLUGIN_HOOKS, 'utf8');
   assert.equal(actual, expected,
-    'plugin.hooks.json drifted from registrations.json (run node engine/scripts/render-hook-settings.cjs)');
+    'plugin.hooks.json drifted from registrations.json (run node core/engine/scripts/render-hook-settings.cjs)');
 });
 
 test('renderer refuses template commands that are not node invocations', () => {

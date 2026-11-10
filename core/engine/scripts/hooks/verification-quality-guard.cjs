@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * engine/scripts/hooks/verification-quality-guard.cjs — 验证质量门禁 (P0)
+ * core/engine/scripts/hooks/verification-quality-guard.cjs — 验证质量门禁 (P0)
  *
  * 规则: 创建新 Testbench/测试文件前，应先完成:
  *   1. 项目环境画像 (A.1)

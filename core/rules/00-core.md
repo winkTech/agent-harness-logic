@@ -17,9 +17,9 @@ skip: ""
 
 ## 按需规则
 
-- 新代码、新模块、新功能、接口或行为契约变化、正确行为不明：加载 `docs/rules/03-gates.md`。
-- HDL、Testbench、FPGA/ASIC 架构或审查：加载 `docs/rules/01-hdl.md` 与 `hdl-coding`。
-- Python：加载 `docs/rules/02-python.md`；Git：加载 `docs/rules/04-git.md`。
+- 新代码、新模块、新功能、接口或行为契约变化、正确行为不明：加载 `core/rules/03-gates.md`。
+- HDL、Testbench、FPGA/ASIC 架构或审查：加载 `packs/fpga/rules/01-hdl.md` 与 `hdl-coding`。
+- Python：加载 `packs/fpga/rules/02-python.md`；Git：加载 `core/rules/04-git.md`。
 - 其他领域只加载与当前任务直接相关的 Skill 或规则，不扩展到无关流程。
 
 ## 加载纪律

@@ -9,12 +9,12 @@ const path = require('node:path');
 const { spawnSync } = require('node:child_process');
 
 const HOME = HARNESS_ROOT;
-const { validateWorkflowSet } = require(path.join(HOME, 'engine/scripts/lib/workflow-runtime.cjs'));
+const { validateWorkflowSet } = require(path.join(HOME, 'core/engine/scripts/lib/workflow-runtime.cjs'));
 const {
   behaviorContractHash,
   commandEvidence,
   evidenceEntrySha256,
-} = require(path.join(HOME, 'engine/scripts/lib/evidence-ledger.cjs'));
+} = require(path.join(HOME, 'core/engine/scripts/lib/evidence-ledger.cjs'));
 
 const tests = [];
 
@@ -127,7 +127,7 @@ test('workflow evidence scanner produces concrete file-line findings', () => {
     'const query = "SELECT * FROM users WHERE id=" + id;',
   ].join('\n'), 'utf8');
 
-  const script = path.join(HOME, 'engine/scripts/workflow-evidence-scan.cjs');
+  const script = path.join(HOME, 'core/engine/scripts/workflow-evidence-scan.cjs');
   const result = spawnSync('node', [script, '--json', '--targets', fixture], {
     cwd: tmp,
     encoding: 'utf8',
@@ -155,7 +155,7 @@ test('workflow evidence scanner produces concrete file-line findings', () => {
 
 test('workflow evidence scanner fails closed for missing, empty, escaped, and truncated scans', () => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'workflow-evidence-boundary-'));
-  const script = path.join(HOME, 'engine/scripts/workflow-evidence-scan.cjs');
+  const script = path.join(HOME, 'core/engine/scripts/workflow-evidence-scan.cjs');
   const run = (argv) => {
     const result = spawnSync('node', [script, '--json', '--root', root, ...argv], {
       cwd: root,
@@ -221,7 +221,7 @@ test('security workflow uses an argv request and binds complete scanner evidence
   const content = read('workflows/security-review-workflow.js');
   assert(content.includes("runner: 'argv'"), 'security workflow does not declare an argv runner');
   assert(content.includes("'--targets-json'"), 'security workflow does not pass targets as JSON argv');
-  assert(!content.includes('`node engine/scripts/workflow-evidence-scan.cjs'),
+  assert(!content.includes('`node core/engine/scripts/workflow-evidence-scan.cjs'),
     'security workflow still constructs an interpolated shell command');
   assert(!content.includes('"pattern": "匹配模式"'), 'workflow still asks for raw secret pattern evidence');
   for (const field of ['ruleId', 'key', 'valueHash']) {
@@ -233,7 +233,7 @@ test('security workflow uses an argv request and binds complete scanner evidence
 });
 
 test('RTL live eval uses isolated env, redaction, safe defaults, and finally cleanup', () => {
-  const livePath = path.join(HOME, 'engine/scripts/test-hooks/rtl-live-task-eval.cjs');
+  const livePath = path.join(HOME, 'core/engine/scripts/test-hooks/rtl-live-task-eval.cjs');
   delete require.cache[require.resolve(livePath)];
   const live = require(livePath);
   for (const fn of ['buildIsolatedEnv', 'defaultCommandFor', 'redactSensitiveText', 'withCleanup']) {
@@ -281,7 +281,7 @@ test('RTL live eval fails closed before launching an agent without network opt-i
   const marker = path.join(tmp, 'agent-ran.txt');
   const fakeAgent = path.join(tmp, 'fake-agent.cjs');
   fs.writeFileSync(fakeAgent, `require('node:fs').writeFileSync(${JSON.stringify(marker)}, 'ran');\n`, 'utf8');
-  const livePath = path.join(HOME, 'engine/scripts/test-hooks/rtl-live-task-eval.cjs');
+  const livePath = path.join(HOME, 'core/engine/scripts/test-hooks/rtl-live-task-eval.cjs');
   const command = `"${process.execPath}" "${fakeAgent}"`;
   const result = spawnSync(process.execPath, [livePath, '--agent', 'claude', '--command', command, '--out', outDir], {
     cwd: HOME,
@@ -302,10 +302,10 @@ test('RTL live eval fails closed before launching an agent without network opt-i
 test('root shell scripts are thin compatibility wrappers for canonical engine scripts', () => {
   const rootModule = read('scripts/init-module.sh');
   const rootProject = read('scripts/init-project.sh');
-  const engineModule = read('engine/scripts/init-module.sh');
-  const engineProject = read('engine/scripts/init-project.sh');
-  assert(rootModule.includes('exec "$ROOT_DIR/engine/scripts/init-module.sh" "$@"'), 'root init-module bypasses canonical engine shell script');
-  assert(rootProject.includes('exec "$ROOT_DIR/engine/scripts/init-project.sh" "$@"'), 'root init-project bypasses canonical engine shell script');
+  const engineModule = read('packs/fpga/engine/init-module.sh');
+  const engineProject = read('packs/fpga/engine/init-project.sh');
+  assert(rootModule.includes('exec "$ROOT_DIR/packs/fpga/engine/init-module.sh" "$@"'), 'root init-module bypasses canonical engine shell script');
+  assert(rootProject.includes('exec "$ROOT_DIR/packs/fpga/engine/init-project.sh" "$@"'), 'root init-project bypasses canonical engine shell script');
   assert(!rootModule.includes('init-module.cjs'), 'root init-module contains implementation target details');
   assert(!rootProject.includes('harness-init.cjs'), 'root init-project duplicates implementation target details');
   assert(engineModule.includes('init-module.cjs'), 'canonical engine init-module implementation target missing');
@@ -340,7 +340,7 @@ test('HDL workflow never accepts arbitrary output merely containing PASS', () =>
   assert(/gate_executed\s*===\s*true/.test(content), 'structured gate_executed check missing');
   assert(/gate_ok\s*===\s*true/.test(content), 'structured gate_ok check missing');
   assert(/\(\s*\w+\?*\.?compared_points\s*\|\|\s*0\s*\)\s*>\s*0/.test(content), 'structured module evidence count gate missing');
-  const gateScript = read('engine/scripts/hdl-evidence-gate.cjs');
+  const gateScript = read('core/engine/scripts/hdl-evidence-gate.cjs');
   assert(gateScript.includes("data.status !== 'PASS'"), 'gate script structural status check missing');
   assert(gateScript.includes('points > 0'), 'gate script structural count check missing');
 
@@ -364,7 +364,7 @@ test('workflow trigger docs match actual workflow behavior', () => {
 });
 
 test('memory health fails closed when the learning loop is structurally green but functionally broken', () => {
-  const healthPath = path.join(HOME, 'engine/scripts/memory-health-check.cjs');
+  const healthPath = path.join(HOME, 'core/engine/scripts/memory-health-check.cjs');
   delete require.cache[require.resolve(healthPath)];
   const health = require(healthPath);
   assert(typeof health.buildHealthReport === 'function', 'memory health report API missing');
@@ -395,9 +395,9 @@ test('memory health fails closed when the learning loop is structurally green bu
     files: [],
   }), 'utf8');
 
-  const { openDb } = require(path.join(HOME, 'engine/sqlite/index.cjs'));
-  const { writeMemory } = require(path.join(HOME, 'engine/sqlite/store-memory.cjs'));
-  const events = require(path.join(HOME, 'engine/sqlite/store-events.cjs'));
+  const { openDb } = require(path.join(HOME, 'core/engine/sqlite/index.cjs'));
+  const { writeMemory } = require(path.join(HOME, 'core/engine/sqlite/store-memory.cjs'));
+  const events = require(path.join(HOME, 'core/engine/sqlite/store-events.cjs'));
   const wDb = openDb({ path: ':memory:' });
   writeMemory({
     namespace: 'learnings',
@@ -452,7 +452,7 @@ test('memory health fails closed when the learning loop is structurally green bu
 });
 
 test('memory health excludes retired facts without hiding a genuinely missing active file', () => {
-  const healthPath = path.join(HOME, 'engine/scripts/memory-health-check.cjs');
+  const healthPath = path.join(HOME, 'core/engine/scripts/memory-health-check.cjs');
   delete require.cache[require.resolve(healthPath)];
   const health = require(healthPath);
   const fixture = fs.mkdtempSync(path.join(os.tmpdir(), 'memory-health-status-contract-'));
@@ -471,8 +471,8 @@ test('memory health excludes retired facts without hiding a genuinely missing ac
   fs.writeFileSync(retiredPath, retiredContent, 'utf8');
   fs.writeFileSync(path.join(errorDir, 'ERROR_TEMPLATE.md'), '# Error template\nplaceholder\n', 'utf8');
 
-  const { openDb } = require(path.join(HOME, 'engine/sqlite/index.cjs'));
-  const { writeMemory, softDeleteMemory } = require(path.join(HOME, 'engine/sqlite/store-memory.cjs'));
+  const { openDb } = require(path.join(HOME, 'core/engine/sqlite/index.cjs'));
+  const { writeMemory, softDeleteMemory } = require(path.join(HOME, 'core/engine/sqlite/store-memory.cjs'));
   const wDb = openDb({ path: ':memory:' });
   writeMemory({
     namespace: 'learnings',
@@ -530,7 +530,7 @@ test('memory health excludes retired facts without hiding a genuinely missing ac
 });
 
 test('memory health detects content drift through stable file identity', () => {
-  const healthPath = path.join(HOME, 'engine/scripts/memory-health-check.cjs');
+  const healthPath = path.join(HOME, 'core/engine/scripts/memory-health-check.cjs');
   delete require.cache[require.resolve(healthPath)];
   const health = require(healthPath);
   const fixture = fs.mkdtempSync(path.join(os.tmpdir(), 'memory-health-content-contract-'));
@@ -540,8 +540,8 @@ test('memory health detects content drift through stable file identity', () => {
   const learningPath = path.join(learningDir, 'stable-learning.md');
   fs.writeFileSync(learningPath, '# Stable learning\nCurrent file content.\n', 'utf8');
 
-  const { openDb } = require(path.join(HOME, 'engine/sqlite/index.cjs'));
-  const { writeMemory } = require(path.join(HOME, 'engine/sqlite/store-memory.cjs'));
+  const { openDb } = require(path.join(HOME, 'core/engine/sqlite/index.cjs'));
+  const { writeMemory } = require(path.join(HOME, 'core/engine/sqlite/store-memory.cjs'));
   const wDb = openDb({ path: ':memory:' });
   writeMemory({
     namespace: 'learnings',
@@ -572,7 +572,7 @@ test('memory health detects content drift through stable file identity', () => {
 });
 
 test('memory freshness governance exempts reconciled files but flags unmanaged permanent facts', () => {
-  const healthPath = path.join(HOME, 'engine/scripts/memory-health-check.cjs');
+  const healthPath = path.join(HOME, 'core/engine/scripts/memory-health-check.cjs');
   delete require.cache[require.resolve(healthPath)];
   const health = require(healthPath);
   const fixture = fs.mkdtempSync(path.join(os.tmpdir(), 'memory-health-freshness-contract-'));
@@ -583,8 +583,8 @@ test('memory freshness governance exempts reconciled files but flags unmanaged p
   const governedContent = '# Governed learning\nReconciled from its durable source.\n';
   fs.writeFileSync(governedPath, governedContent, 'utf8');
 
-  const { openDb } = require(path.join(HOME, 'engine/sqlite/index.cjs'));
-  const { writeMemory } = require(path.join(HOME, 'engine/sqlite/store-memory.cjs'));
+  const { openDb } = require(path.join(HOME, 'core/engine/sqlite/index.cjs'));
+  const { writeMemory } = require(path.join(HOME, 'core/engine/sqlite/store-memory.cjs'));
   const wDb = openDb({ path: ':memory:' });
   writeMemory({
     namespace: 'learnings',
@@ -633,7 +633,7 @@ test('memory freshness governance exempts reconciled files but flags unmanaged p
 });
 
 test('memory health recognizes only an enabled executing SessionStart maintenance hook', () => {
-  const healthPath = path.join(HOME, 'engine/scripts/memory-health-check.cjs');
+  const healthPath = path.join(HOME, 'core/engine/scripts/memory-health-check.cjs');
   delete require.cache[require.resolve(healthPath)];
   const health = require(healthPath);
   const fixture = fs.mkdtempSync(path.join(os.tmpdir(), 'memory-health-schedule-contract-'));
@@ -646,7 +646,7 @@ test('memory health recognizes only an enabled executing SessionStart maintenanc
         matcher: 'startup',
         hooks: [{
           type: 'command',
-          command: 'node C:/harness/engine/scripts/memory-knowledge-maintenance.cjs --auto --execute',
+          command: 'node C:/harness/core/engine/scripts/memory-knowledge-maintenance.cjs --auto --execute',
           timeout: 120,
           async: true,
         }],
@@ -666,11 +666,11 @@ test('memory health recognizes only an enabled executing SessionStart maintenanc
         hooks: [
           {
             type: 'command',
-            command: 'node C:/harness/engine/scripts/memory-knowledge-maintenance.cjs --auto --dry-run',
+            command: 'node C:/harness/core/engine/scripts/memory-knowledge-maintenance.cjs --auto --dry-run',
           },
           {
             type: 'command',
-            command: 'node C:/harness/engine/scripts/memory-knowledge-maintenance.cjs --auto --execute',
+            command: 'node C:/harness/core/engine/scripts/memory-knowledge-maintenance.cjs --auto --execute',
             enabled: false,
           },
         ],
@@ -686,7 +686,7 @@ test('memory health recognizes only an enabled executing SessionStart maintenanc
   fs.writeFileSync(scheduledTasksPath, JSON.stringify({
     tasks: [{
       enabled: true,
-      command: 'node C:/harness/engine/scripts/memory-knowledge-maintenance.cjs --auto --execute',
+      command: 'node C:/harness/core/engine/scripts/memory-knowledge-maintenance.cjs --auto --execute',
     }],
   }), 'utf8');
   const periodic = health.inspectMaintenance(fixture, Date.parse('2026-07-28T06:00:00.000Z'));
@@ -697,7 +697,7 @@ test('memory health recognizes only an enabled executing SessionStart maintenanc
   fs.writeFileSync(scheduledTasksPath, JSON.stringify({
     tasks: [{
       enabled: true,
-      command: 'node C:/harness/engine/scripts/memory-knowledge-maintenance.cjs --auto --execute --dry-run',
+      command: 'node C:/harness/core/engine/scripts/memory-knowledge-maintenance.cjs --auto --execute --dry-run',
     }],
   }), 'utf8');
   const periodicDryRun = health.inspectMaintenance(fixture, Date.parse('2026-07-28T06:00:00.000Z'));
@@ -706,7 +706,7 @@ test('memory health recognizes only an enabled executing SessionStart maintenanc
 });
 
 test('memory maintenance keeps dry-run read-only and executes only bounded maintenance interfaces', () => {
-  const maintenancePath = path.join(HOME, 'engine/scripts/memory-knowledge-maintenance.cjs');
+  const maintenancePath = path.join(HOME, 'core/engine/scripts/memory-knowledge-maintenance.cjs');
   delete require.cache[require.resolve(maintenancePath)];
   const maintenance = require(maintenancePath);
   assert(typeof maintenance.runMaintenance === 'function', 'bounded maintenance API missing');
@@ -769,13 +769,13 @@ test('memory maintenance keeps dry-run read-only and executes only bounded maint
 });
 
 test('memory retention waits for every registered consumer and uses the consumer purge API', () => {
-  const maintenancePath = path.join(HOME, 'engine/scripts/memory-knowledge-maintenance.cjs');
+  const maintenancePath = path.join(HOME, 'core/engine/scripts/memory-knowledge-maintenance.cjs');
   delete require.cache[require.resolve(maintenancePath)];
   const maintenance = require(maintenancePath);
   const fixture = fs.mkdtempSync(path.join(os.tmpdir(), 'memory-retention-contract-'));
   const dbPath = path.join(fixture, 'memory.db');
-  const { openDb } = require(path.join(HOME, 'engine/sqlite/index.cjs'));
-  const events = require(path.join(HOME, 'engine/sqlite/store-events.cjs'));
+  const { openDb } = require(path.join(HOME, 'core/engine/sqlite/index.cjs'));
+  const events = require(path.join(HOME, 'core/engine/sqlite/store-events.cjs'));
   let wDb = openDb({ path: dbPath });
   const ids = [];
   for (let index = 0; index < 3; index += 1) {
@@ -816,7 +816,7 @@ test('memory retention waits for every registered consumer and uses the consumer
 });
 
 test('memory fact reconciliation uses stable source identity and tombstones legacy orphans', () => {
-  const maintenancePath = path.join(HOME, 'engine/scripts/memory-knowledge-maintenance.cjs');
+  const maintenancePath = path.join(HOME, 'core/engine/scripts/memory-knowledge-maintenance.cjs');
   delete require.cache[require.resolve(maintenancePath)];
   const maintenance = require(maintenancePath);
   assert(typeof maintenance.fileFacts === 'function', 'stable file fact adapter is missing');
@@ -867,8 +867,8 @@ test('memory fact reconciliation uses stable source identity and tombstones lega
   assert(unverifiedFact?.confidence === 0.4, `unverified error was over-trusted: ${JSON.stringify(unverifiedFact)}`);
 
   const dbPath = path.join(fixture, 'memory.db');
-  const { openDb } = require(path.join(HOME, 'engine/sqlite/index.cjs'));
-  const { writeMemory } = require(path.join(HOME, 'engine/sqlite/store-memory.cjs'));
+  const { openDb } = require(path.join(HOME, 'core/engine/sqlite/index.cjs'));
+  const { writeMemory } = require(path.join(HOME, 'core/engine/sqlite/store-memory.cjs'));
   let wDb = openDb({ path: dbPath });
   const claimed = writeMemory({
     namespace: 'errors',
@@ -916,9 +916,9 @@ test('memory fact reconciliation uses stable source identity and tombstones lega
 });
 
 test('kb frontmatter coverage excludes generated indexes but keeps safety controls and references', () => {
-  const kb = require(path.join(HOME, 'engine/scripts/kb-stats.cjs'));
+  const kb = require(path.join(HOME, 'core/engine/scripts/kb-stats.cjs'));
   const fixture = fs.mkdtempSync(path.join(os.tmpdir(), 'kb-frontmatter-contract-'));
-  const knowledge = path.join(fixture, 'engineering-assets', 'knowledge');
+  const knowledge = path.join(fixture, 'packs', 'fpga', 'engineering-assets', 'knowledge');
   const write = (relative, content) => {
     const file = path.join(knowledge, ...relative.split('/'));
     fs.mkdirSync(path.dirname(file), { recursive: true });
@@ -939,7 +939,7 @@ test('kb frontmatter coverage excludes generated indexes but keeps safety contro
 });
 
 test('knowledge index generator updates visible date and counts from repository truth', () => {
-  const generator = require(path.join(HOME, 'engineering-assets/tools/knowledge-index.cjs'));
+  const generator = require(path.join(HOME, 'packs/fpga/engineering-assets/tools/knowledge-index.cjs'));
   const fixture = fs.mkdtempSync(path.join(os.tmpdir(), 'knowledge-index-metadata-'));
   const write = (relative) => {
     const file = path.join(fixture, 'knowledge', ...relative.split('/'));
@@ -975,9 +975,9 @@ test('knowledge index generator updates visible date and counts from repository 
 });
 
 test('kb index freshness follows repository counts instead of expiring every day', () => {
-  const kb = require(path.join(HOME, 'engine/scripts/kb-stats.cjs'));
+  const kb = require(path.join(HOME, 'core/engine/scripts/kb-stats.cjs'));
   const fixture = fs.mkdtempSync(path.join(os.tmpdir(), 'kb-index-freshness-'));
-  const knowledge = path.join(fixture, 'engineering-assets', 'knowledge');
+  const knowledge = path.join(fixture, 'packs', 'fpga', 'engineering-assets', 'knowledge');
   fs.mkdirSync(knowledge, { recursive: true });
   fs.writeFileSync(path.join(knowledge, 'INDEX.md'), [
     '# Index',
@@ -1014,7 +1014,7 @@ test('kb index freshness follows repository counts instead of expiring every day
 });
 
 test('semantic retrieval and quiet knowledge checks fail closed on a stale index', () => {
-  const semanticPath = path.join(HOME, 'engine/scripts/semantic-search.cjs');
+  const semanticPath = path.join(HOME, 'core/engine/scripts/semantic-search.cjs');
   const semanticSource = fs.readFileSync(semanticPath, 'utf8');
   assert(semanticSource.includes('if (require.main === module)'), 'semantic search is not safe to require as a library');
 
@@ -1026,7 +1026,7 @@ test('semantic retrieval and quiet knowledge checks fail closed on a stale index
 
   const fixture = fs.mkdtempSync(path.join(os.tmpdir(), 'semantic-stale-contract-'));
   const learningDir = path.join(fixture, 'memory', 'learnings');
-  const knowledgeDir = path.join(fixture, 'engineering-assets', 'knowledge');
+  const knowledgeDir = path.join(fixture, 'packs', 'fpga', 'engineering-assets', 'knowledge');
   fs.mkdirSync(learningDir, { recursive: true });
   fs.mkdirSync(path.join(knowledgeDir, 'primary'), { recursive: true });
   fs.writeFileSync(path.join(learningDir, 'alpha.md'), '# Alpha\nalpha handshake evidence\n', 'utf8');
@@ -1070,7 +1070,7 @@ test('semantic retrieval and quiet knowledge checks fail closed on a stale index
   assert(blocked.ok === false && blocked.status === 'stale_index' && blocked.results.length === 0,
     `stale query returned untrustworthy results: ${JSON.stringify(blocked)}`);
 
-  const kbPath = path.join(HOME, 'engine/scripts/kb-stats.cjs');
+  const kbPath = path.join(HOME, 'core/engine/scripts/kb-stats.cjs');
   const checked = spawnSync(process.execPath, [kbPath, '--home', fixture, '--check', '--quiet', '--json'], {
     cwd: HOME,
     encoding: 'utf8',
@@ -1086,7 +1086,7 @@ test('semantic retrieval and quiet knowledge checks fail closed on a stale index
 });
 
 test('harness rules require verified evidence and explicit approval before promotion', () => {
-  const candidatesPath = path.join(HOME, 'engine/scripts/harness-rule-candidates.cjs');
+  const candidatesPath = path.join(HOME, 'core/engine/scripts/harness-rule-candidates.cjs');
   assert(fs.existsSync(candidatesPath), 'harness rule candidate lifecycle is missing');
   delete require.cache[require.resolve(candidatesPath)];
   const candidates = require(candidatesPath);
@@ -1190,9 +1190,9 @@ test('harness rules require verified evidence and explicit approval before promo
 });
 
 test('memory attribution records idempotent exposures with complete scoped identity', () => {
-  const attributionPath = path.join(HOME, 'engine/sqlite/store-memory-attribution.cjs');
+  const attributionPath = path.join(HOME, 'core/engine/sqlite/store-memory-attribution.cjs');
   const attribution = require(attributionPath);
-  const { openDb } = require(path.join(HOME, 'engine/sqlite/index.cjs'));
+  const { openDb } = require(path.join(HOME, 'core/engine/sqlite/index.cjs'));
   const wDb = openDb({ path: ':memory:' });
 
   assertThrows(() => attribution.recordExposure({
@@ -1234,8 +1234,8 @@ test('memory attribution records idempotent exposures with complete scoped ident
 });
 
 test('memory attribution records observed applications without accepting model adoption claims', () => {
-  const attribution = require(path.join(HOME, 'engine/sqlite/store-memory-attribution.cjs'));
-  const { openDb } = require(path.join(HOME, 'engine/sqlite/index.cjs'));
+  const attribution = require(path.join(HOME, 'core/engine/sqlite/store-memory-attribution.cjs'));
+  const { openDb } = require(path.join(HOME, 'core/engine/sqlite/index.cjs'));
   const wDb = openDb({ path: ':memory:' });
   const identity = {
     sessionId: 'session-application',
@@ -1296,8 +1296,8 @@ test('memory attribution records observed applications without accepting model a
 });
 
 test('memory attribution accepts outcomes only from verification-gate evidence', () => {
-  const attribution = require(path.join(HOME, 'engine/sqlite/store-memory-attribution.cjs'));
-  const { openDb } = require(path.join(HOME, 'engine/sqlite/index.cjs'));
+  const attribution = require(path.join(HOME, 'core/engine/sqlite/store-memory-attribution.cjs'));
+  const { openDb } = require(path.join(HOME, 'core/engine/sqlite/index.cjs'));
   const wDb = openDb({ path: ':memory:' });
   const identity = {
     sessionId: 'session-outcome',
@@ -1331,7 +1331,7 @@ test('memory attribution accepts outcomes only from verification-gate evidence',
     verdict: 'pass',
     accepted: true,
     reason: 'exit code 0 with explicit PASS evidence',
-    command: 'node engine/scripts/test-hooks/workflow-contracts.cjs',
+    command: 'node core/engine/scripts/test-hooks/workflow-contracts.cjs',
     stdout: 'Summary: 28/28 passed, 0 failed',
     stderr: '',
   };
@@ -1386,8 +1386,8 @@ test('memory attribution accepts outcomes only from verification-gate evidence',
 });
 
 test('memory attribution observer skips its anchor and never crosses project boundaries', () => {
-  const attribution = require(path.join(HOME, 'engine/sqlite/store-memory-attribution.cjs'));
-  const { openDb } = require(path.join(HOME, 'engine/sqlite/index.cjs'));
+  const attribution = require(path.join(HOME, 'core/engine/sqlite/store-memory-attribution.cjs'));
+  const { openDb } = require(path.join(HOME, 'core/engine/sqlite/index.cjs'));
   const wDb = openDb({ path: ':memory:' });
   const currentTool = {
     hook_event_name: 'PostToolUse',
@@ -1448,7 +1448,7 @@ test('memory attribution observer skips its anchor and never crosses project bou
   const nextTool = {
     ...currentTool,
     tool_name: 'Bash',
-    tool_input: { command: 'node engine/scripts/test-hooks/workflow-contracts.cjs' },
+    tool_input: { command: 'node core/engine/scripts/test-hooks/workflow-contracts.cjs' },
     tool_response: { status: 0, stdout: '29/29 passed', stderr: '' },
   };
   const second = attribution.observePostTool(nextTool, {
@@ -1486,13 +1486,13 @@ test('memory attribution observer skips its anchor and never crosses project bou
 });
 
 test('memory attribution closes outcomes only from normalized verification-gate verdicts', () => {
-  const attribution = require(path.join(HOME, 'engine/sqlite/store-memory-attribution.cjs'));
-  const { openDb } = require(path.join(HOME, 'engine/sqlite/index.cjs'));
+  const attribution = require(path.join(HOME, 'core/engine/sqlite/store-memory-attribution.cjs'));
+  const { openDb } = require(path.join(HOME, 'core/engine/sqlite/index.cjs'));
   const wDb = openDb({ path: ':memory:' });
   const payload = {
     hook_event_name: 'PostToolUse',
     tool_name: 'Bash',
-    tool_input: { command: 'node engine/scripts/test-hooks/workflow-contracts.cjs' },
+    tool_input: { command: 'node core/engine/scripts/test-hooks/workflow-contracts.cjs' },
     tool_response: { status: 0, stdout: 'Summary: 31/31 passed, 0 failed', stderr: '' },
     session_id: 'verified-attribution-session',
     cwd: HOME,
@@ -1544,8 +1544,8 @@ test('memory attribution closes outcomes only from normalized verification-gate 
 });
 
 test('postflight observer invokes memory attribution fail-open only for identified tool events', () => {
-  const observer = require(path.join(HOME, 'engine/hooks/learning/postflight-observer.cjs'));
-  const { openDb } = require(path.join(HOME, 'engine/sqlite/index.cjs'));
+  const observer = require(path.join(HOME, 'core/engine/hooks/learning/postflight-observer.cjs'));
+  const { openDb } = require(path.join(HOME, 'core/engine/sqlite/index.cjs'));
   const dbRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'observer-attribution-'));
   let dbSequence = 0;
   const openFreshDb = () => openDb({ path: path.join(dbRoot, `memory-${dbSequence += 1}.db`) });

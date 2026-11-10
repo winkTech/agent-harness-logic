@@ -176,7 +176,7 @@ coverage-check: coverage-report
 	@python3 -c "
 import json, sys
 # 解析 coverage-helper.cjs 的输出
-# node engine/scripts/coverage-helper.cjs coverage_report.txt
+# node core/engine/scripts/coverage-helper.cjs coverage_report.txt
 " 2>/dev/null || echo "⚠️ coverage-helper 未安装，跳过门禁检查"
 	@echo "Coverage check done"
 ```

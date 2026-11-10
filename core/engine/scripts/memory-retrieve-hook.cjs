@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * engine/scripts/memory-retrieve-hook.cjs — L2 记忆检索注入 (v2)
+ * core/engine/scripts/memory-retrieve-hook.cjs — L2 记忆检索注入 (v2)
  *
  * PreToolUse hook. 双层触发:
  *   [层1] 用户消息关键词 — 查/搜/记得/错误/经验 等 → FTS5 BM25
@@ -90,7 +90,7 @@ const TYPE_ENRICH = {
 const GENERIC_PATH_PARTS = new Set([
   'users', 'home', 'repo', 'repository', 'project', 'workspace',
   'src', 'source', 'sources', 'rtl', 'hdl', 'tb', 'test', 'tests',
-  'lib', 'libs', 'engine', 'scripts', 'include',
+  'lib', 'libs', 'core', 'engine', 'scripts', 'include',
 ]);
 
 function extractKeywords(filePath) {

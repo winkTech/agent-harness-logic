@@ -1,7 +1,7 @@
 'use strict';
 
 /**
- * engine/sqlite/store-graph.cjs — 跨域图边仓库。
+ * core/engine/sqlite/store-graph.cjs — 跨域图边仓库。
  *
  * 用法:
  *   const graph = require('./store-graph.cjs');

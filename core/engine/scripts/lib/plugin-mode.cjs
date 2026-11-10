@@ -1,7 +1,7 @@
 'use strict';
 
 /**
- * engine/scripts/lib/plugin-mode.cjs — 插件模式判定（纯函数）
+ * core/engine/scripts/lib/plugin-mode.cjs — 插件模式判定（纯函数）
  *
  * Claude Code 以 `--plugin-dir <root>` 或已安装插件加载本仓库时，会给 hook 进程注入
  * `CLAUDE_PLUGIN_ROOT`。本模块只回答两个问题：

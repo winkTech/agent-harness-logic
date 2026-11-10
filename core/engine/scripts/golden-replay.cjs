@@ -24,13 +24,13 @@
  *     "maxTurns": 30,                  // optional, default 30 (see NOTE-MAX-TURNS)
  *     "evalCommand": "npm test",       // required, pass = exit 0 (run in worktree)
  *     "runs": 1,                       // optional, default 1
- *     "restorePaths": ["engine/scripts/test-hooks"], // optional, see NOTE-RESTORE-PATHS
+ *     "restorePaths": ["core/engine/scripts/test-hooks"], // optional, see NOTE-RESTORE-PATHS
  *     "applyPatch": "patches/mutation.patch",  // optional, git-applied in the
  *                                              // worktree right after creation
  *                                              // (start state; see NOTE-TASK-PACKAGE)
  *     "injectFiles": [                         // optional, task-package files
  *       {"src": "tasks/P-T2/acceptance.test.cjs",
- *        "dst": "engine/scripts/test-hooks/..."}, // placed at start AND re-placed
+ *        "dst": "core/engine/scripts/test-hooks/..."}, // placed at start AND re-placed
  *     ],                                       // before eval (see NOTE-TASK-PACKAGE)
  *     "permissionMode": "bypassPermissions", // optional, overrides batch
  *     "model": "claude-opus-5"         // optional, overrides batch
@@ -43,7 +43,7 @@
  *
  * NOTE-RESTORE-PATHS: anti-tamper guard. After the agent run and BEFORE
  * evalCommand, every path in the task's restorePaths is reverted inside the
- * worktree via `git checkout -- <path>` (default ["engine/scripts/test-hooks"]),
+ * worktree via `git checkout -- <path>` (default ["core/engine/scripts/test-hooks"]),
  * so a misbehaving agent cannot edit the harness's acceptance tests to fake a
  * pass. Convention: acceptance tests injected by the TASK PACKAGE must live
  * OUTSIDE restorePaths and are referenced directly by evalCommand — the
@@ -66,7 +66,7 @@
  *    run for harvest diagnosis) so hooks/observers write telemetry into the
  *    worktree instead of leaking through to the real state root, and
  *  - READONLY_ENV_VARS removed (see constant below; matches the zero-write
- *    guard in engine/scripts/lib/hook-latency.cjs persistenceDisabled() and
+ *    guard in core/engine/scripts/lib/hook-latency.cjs persistenceDisabled() and
  *    hook-health.cjs): the replay environment must ALLOW hook telemetry
  *    writes — they are already isolated by HARNESS_STATE_DIR.
  *
@@ -112,7 +112,7 @@ const DEFAULT_SPARSE_PATHS = ['engine', 'docs'];
 const HARNESS_STATE_DIRNAME = '.harness-state';
 /**
  * Read-only env switches stripped from the claude child env. Exact group per
- * engine/scripts/lib/hook-latency.cjs persistenceDisabled() (lines 41-44) —
+ * core/engine/scripts/lib/hook-latency.cjs persistenceDisabled() (lines 41-44) —
  * identical list in hook-health.cjs (lines 27-30). With these set, hooks write
  * zero telemetry; replay must allow writes (isolated by HARNESS_STATE_DIR).
  */
@@ -123,7 +123,7 @@ const READONLY_ENV_VARS = [
   'CLAUDE_HOOK_NO_WRITE',
 ];
 /** Default restorePaths: harness-owned acceptance-test hooks. */
-const DEFAULT_RESTORE_PATHS = ['engine/scripts/test-hooks'];
+const DEFAULT_RESTORE_PATHS = ['core/engine/scripts/test-hooks'];
 
 /* ------------------------------------------------------------------ args */
 
@@ -273,7 +273,7 @@ function prepareWorktree(repoRoot, worktreePath, commit, sparsePaths) {
   // Force LF in replay worktrees: global core.autocrlf=true would check out
   // CRLF and break LF-context applyPatch files (git apply matches exactly).
   // Sparse checkout keeps worktrees small — the full repo carries ~1GB of
-  // packs/engineering-assets that no replay task touches.
+  // packs/fpga/engineering-assets that no replay task touches.
   const sp = (Array.isArray(sparsePaths) && sparsePaths.length ? sparsePaths : DEFAULT_SPARSE_PATHS)
     .map((p) => String(p));
   git(repoRoot, ['-c', 'core.autocrlf=false', 'worktree', 'add', '--no-checkout', '--detach', worktreePath, commit]);

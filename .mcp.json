@@ -6,7 +6,7 @@
     },
     "codegraph": {
       "command": "node",
-      "args": ["engine/mcp/codegraph-server.cjs"],
+      "args": ["core/engine/mcp/codegraph-server.cjs"],
       "env": {}
     }
   }

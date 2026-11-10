@@ -7,7 +7,7 @@ const path = require('node:path');
 const crypto = require('node:crypto');
 const { spawnSync } = require('node:child_process');
 
-const HOME = path.resolve(__dirname, '..', '..', '..');
+const HOME = path.resolve(__dirname, '..', '..', '..', '..');
 const DEFAULT_RUN_ROOT = path.join(os.tmpdir(), 'claude-harness-agent-evals', 'rtl-live-task');
 const TARGET_RTL = path.join('01_src', '00_hdl', 'axis_guard', 'axis_guard.sv');
 const TARGET_TB = path.join('02_sim', 'axis_guard', 'tb_axis_guard.sv');
@@ -41,9 +41,9 @@ const CHECKLIST_LABELS = {
 function usage() {
   return [
     'Usage:',
-    '  node engine/scripts/test-hooks/rtl-live-task-eval.cjs --dry-run --out <dir>',
-    '  node engine/scripts/test-hooks/rtl-live-task-eval.cjs --agent claude --out <dir>',
-    '  node engine/scripts/test-hooks/rtl-live-task-eval.cjs --agent codex --out <dir>',
+    '  node core/engine/scripts/test-hooks/rtl-live-task-eval.cjs --dry-run --out <dir>',
+    '  node core/engine/scripts/test-hooks/rtl-live-task-eval.cjs --agent claude --out <dir>',
+    '  node core/engine/scripts/test-hooks/rtl-live-task-eval.cjs --agent codex --out <dir>',
     '  Live mode additionally requires --allow-network.',
     '',
     'Live mode runs a real external agent in a temporary RTL project, captures JSONL',
@@ -859,7 +859,7 @@ function transcriptChecks(transcriptText, runDir) {
 }
 
 function runHdlGate(filePath, env = null) {
-  return run(process.execPath, [path.join(HOME, 'engine/scripts/hooks/hdl-gate.cjs')], HOME, JSON.stringify({
+  return run(process.execPath, [path.join(HOME, 'core/engine/scripts/hooks/hdl-gate.cjs')], HOME, JSON.stringify({
     hook_event_name: 'PreToolUse',
     tool_name: 'Write',
     tool_input: {

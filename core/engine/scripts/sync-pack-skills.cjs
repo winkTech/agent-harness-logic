@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * engine/scripts/sync-pack-skills.cjs — 把 packs 下各 pack 的 skills/ 同步到 skills/（运行时发现位）。
+ * core/engine/scripts/sync-pack-skills.cjs — 把 packs 下各 pack 的 skills/ 同步到 skills/（运行时发现位）。
  *
  * 背景（M4b）：
  *   packs/{fpga,office}/skills/ 是入库的权威源（市场渠道只复制各 pack 自有目录，
@@ -15,8 +15,8 @@
  *   归 skills/ 原地所有，本脚本不触碰。
  *
  * 用法：
- *   node engine/scripts/sync-pack-skills.cjs           # 同步
- *   node engine/scripts/sync-pack-skills.cjs --check   # 只比对，漂移则 exit 1
+ *   node core/engine/scripts/sync-pack-skills.cjs           # 同步
+ *   node core/engine/scripts/sync-pack-skills.cjs --check   # 只比对，漂移则 exit 1
  *
  * 退出码：
  *   0 — 成功 / 无漂移
@@ -125,7 +125,7 @@ function main() {
       if (result.drift) {
         process.stderr.write(`[sync-pack-skills] ✖ 镜像漂移: ${result.reasons.join('；')}\n`);
         process.stderr.write('[sync-pack-skills]   packs/*/skills/ 是权威源。跑 '
-          + 'node engine/scripts/sync-pack-skills.cjs 重建镜像\n');
+          + 'node core/engine/scripts/sync-pack-skills.cjs 重建镜像\n');
         return 1;
       }
       const total = Object.values(OWNED).reduce((n, list) => n + list.length, 0);

@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * engine/scripts/context-monitor-gate.cjs — 上下文监测门禁 (P2)
+ * core/engine/scripts/context-monitor-gate.cjs — 上下文监测门禁 (P2)
  *
  * 实时监测上下文使用情况，在阈值处自动报警/触发压缩。
  * 这是实现"上下文不得超过 50% 红线"的监控层。

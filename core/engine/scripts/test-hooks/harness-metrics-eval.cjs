@@ -4,7 +4,7 @@
 const fs = require('node:fs');
 const path = require('node:path');
 
-const HOME = path.resolve(__dirname, '..', '..', '..');
+const HOME = path.resolve(__dirname, '..', '..', '..', '..');
 const CORPUS_FILE = path.join(__dirname, 'fixtures', 'harness-eval-cases.json');
 const {
   computeHarnessMetrics,

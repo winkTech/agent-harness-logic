@@ -1,14 +1,14 @@
 #!/usr/bin/env node
 /**
- * engine/scripts/bench-refactor.cjs — 重构基准薄壳 (Phase 0 步骤 0.6)
+ * core/engine/scripts/bench-refactor.cjs — 重构基准薄壳 (Phase 0 步骤 0.6)
  *
  * 按 Phase 配置顺序执行既有 bench 命令, 汇总 pass/fail 写 verdict.json。
  * 只做编排: 命令引用各工具既有输出 (--json stdout / 工具落盘的 JSON / 退出码),
  * 不新造解析器; 指标经 quality-regression-dashboard 的 record CLI 入账。
  *
  * 用法:
- *   node engine/scripts/bench-refactor.cjs --phase 0            # 执行 phase 0
- *   node engine/scripts/bench-refactor.cjs --phase 0 --dry-run  # 只列将跑的命令
+ *   node core/engine/scripts/bench-refactor.cjs --phase 0            # 执行 phase 0
+ *   node core/engine/scripts/bench-refactor.cjs --phase 0 --dry-run  # 只列将跑的命令
  *
  * 输出: var/bench-refactor/verdict.json (overall=pass|fail)
  * 退出码: 0=pass, 1=fail
@@ -35,29 +35,29 @@ const PHASES = {
   0: [
     {
       id: 'C-2', desc: 'run-all-tests --no-persist (全量回归套件)',
-      cmd: [process.execPath, R('engine/scripts/test-hooks/run-all-tests.cjs'), '--no-persist'],
+      cmd: [process.execPath, R('core/engine/scripts/test-hooks/run-all-tests.cjs'), '--no-persist'],
       json: null, timeoutMs: 420000,
     },
     {
       id: 'C-3', desc: 'bench-hooks --json --sla (diagnostics --bench 的数据源)',
-      cmd: [process.execPath, R('engine/scripts/lib/bench-hooks.cjs'), '--json', '--sla'],
+      cmd: [process.execPath, R('core/engine/scripts/lib/bench-hooks.cjs'), '--json', '--sla'],
       json: 'stdout', timeoutMs: 180000,
     },
     {
       id: 'P-1a', desc: 'asset-audit (工程资产目录体检)',
-      cmd: [process.execPath, R('engineering-assets/tools/asset-audit.cjs'), '--root', R('engineering-assets')],
+      cmd: [process.execPath, R('packs/fpga/engineering-assets/tools/asset-audit.cjs'), '--root', R('packs/fpga/engineering-assets')],
       json: null, timeoutMs: 60000,
     },
     {
       id: 'P-1b', desc: 'evidence-snapshot --verify-all (证据封存全量校验)',
-      cmd: [process.execPath, R('engineering-assets/tools/evidence-snapshot.cjs'), '--verify-all', '--root', R('engineering-assets')],
+      cmd: [process.execPath, R('packs/fpga/engineering-assets/tools/evidence-snapshot.cjs'), '--verify-all', '--root', R('packs/fpga/engineering-assets')],
       json: null, timeoutMs: 60000,
     },
     {
       id: 'P-2', desc: 'gate-runner 抽样: cdc_sync',
-      cmd: [process.execPath, R('engineering-assets/tools/gate-runner.cjs'), R('engineering-assets/cbb/cdc_sync'), '--repo-root', HARNESS_ROOT],
+      cmd: [process.execPath, R('packs/fpga/engineering-assets/tools/gate-runner.cjs'), R('packs/fpga/engineering-assets/cbb/cdc_sync'), '--repo-root', HARNESS_ROOT],
       json: 'file',
-      jsonFile: R('engineering-assets/var/gates/pg/cdc_sync/gate-results.json'),
+      jsonFile: R('packs/fpga/engineering-assets/var/gates/pg/cdc_sync/gate-results.json'),
       timeoutMs: 60000,
     },
   ],
@@ -67,7 +67,7 @@ function record(metric, value, note) {
   // quality-regression-dashboard.cjs 未导出 recordMetric 且 require 即执行 main,
   // 复用其既有 CLI record 接口 (指标名 bench_* 为新名, 仪表盘会提示未知但仍入账)。
   spawnSync(process.execPath, [
-    R('engine/scripts/quality-regression-dashboard.cjs'), 'record',
+    R('core/engine/scripts/quality-regression-dashboard.cjs'), 'record',
     `--metric=${metric}`, `--value=${value}`, '--project=bench-refactor', `--note=${note}`,
   ], { encoding: 'utf8', timeout: 30000, windowsHide: true });
 }

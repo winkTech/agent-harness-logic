@@ -2,7 +2,7 @@
 'use strict';
 
 /**
- * engine/scripts/ten-dimension-dashboard.cjs — 十维仪表盘 (D10.3)。
+ * core/engine/scripts/ten-dimension-dashboard.cjs — 十维仪表盘 (D10.3)。
  *
  * 把十维升级方案里每一维的数据源汇到一处: 每维一行, 含
  *   value (当前值) / threshold (阈值) / status (pass|warn|fail|no-data) /
@@ -234,7 +234,7 @@ function buildTenDimensionReport(opts = {}) {
 
   // ── D9 安全 Attack resistance ──
   const redTeam = safe(() => require('./test-hooks/harness-gate-eval.cjs').runAll({
-    cases: path.join(HOME, 'engine', 'scripts', 'test-hooks', 'fixtures', 'harness-redteam-cases.json'),
+    cases: path.join(HOME, 'core', 'engine', 'scripts', 'test-hooks', 'fixtures', 'harness-redteam-cases.json'),
   }));
   const guard = safe(() => require('./guard-coverage.cjs').coverage({}));
   const redTeamPass = isError(redTeam) ? null

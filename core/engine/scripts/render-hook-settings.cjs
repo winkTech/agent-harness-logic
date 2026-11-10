@@ -22,8 +22,8 @@
  *   node core/engine/scripts/render-hook-settings.cjs          # 渲染并写入三个目标
  *   node core/engine/scripts/render-hook-settings.cjs --check    # 只比对，不写；任一目标漂移则 exit 1
  *   node core/engine/scripts/render-hook-settings.cjs --print    # 打印 Claude 目标 hooks 到 stdout
- *   node engine/scripts/render-hook-settings.cjs --print-workbuddy  # 打印 WorkBuddy 目标到 stdout
- *   node engine/scripts/render-hook-settings.cjs --print-plugin     # 打印插件目标到 stdout
+ *   node core/engine/scripts/render-hook-settings.cjs --print-workbuddy  # 打印 WorkBuddy 目标到 stdout
+ *   node core/engine/scripts/render-hook-settings.cjs --print-plugin     # 打印插件目标到 stdout
  *
  * 退出码：
  *   0 — 成功 / 无漂移

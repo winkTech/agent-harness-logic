@@ -1,16 +1,16 @@
 #!/usr/bin/env node
 
 /**
- * engine/scripts/migrate-files-to-sqlite.cjs
+ * core/engine/scripts/migrate-files-to-sqlite.cjs
  *
  * 将现有 memory/*.md 文件迁移到 SQLite 事实表。
  * 双写兼容: 源文件不动, 只读导入。
  *
  * 用法:
- *   node engine/scripts/migrate-files-to-sqlite.cjs              # 全量迁移
- *   node engine/scripts/migrate-files-to-sqlite.cjs --verify     # 只验证不迁移
- *   node engine/scripts/migrate-files-to-sqlite.cjs --dry-run    # 试运行
- *   node engine/scripts/migrate-files-to-sqlite.cjs --file memory/learnings/xxx.md  # 单文件
+ *   node core/engine/scripts/migrate-files-to-sqlite.cjs              # 全量迁移
+ *   node core/engine/scripts/migrate-files-to-sqlite.cjs --verify     # 只验证不迁移
+ *   node core/engine/scripts/migrate-files-to-sqlite.cjs --dry-run    # 试运行
+ *   node core/engine/scripts/migrate-files-to-sqlite.cjs --file memory/learnings/xxx.md  # 单文件
  */
 
 'use strict';
@@ -24,7 +24,7 @@ const { shouldMigrateMemoryFile } = require('./lib/memory-file-policy.cjs');
 
 // ── 配置 ───────────────────────────────────────────────────────────────────
 
-const HOME_DIR = path.resolve(__dirname, '..', '..');
+const HOME_DIR = path.resolve(__dirname, '..', '..', '..');
 const MEMORY_DIR = path.join(HOME_DIR, 'memory');
 
 /** 命名空间映射: 子目录 → fact.namespace (需匹配 CHECK 约束) */

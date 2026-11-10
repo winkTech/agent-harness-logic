@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * engine/scripts/hooks/bash-safety-guard.cjs — Bash 子进程安全门禁 (P0)
+ * core/engine/scripts/hooks/bash-safety-guard.cjs — Bash 子进程安全门禁 (P0)
  *
  * PreToolUse(Bash) Hook: 扫描 Bash 命令中的危险模式，拦截:
  *   1. 脚本子进程绕道写入受保护路径 (matlab/golden/fixed_point)

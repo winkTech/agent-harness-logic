@@ -3,9 +3,9 @@
 `harness-event-v1` 是 harness 与各执行工具（Claude Code / WorkBuddy / Codex）之间的**内部事件契约**。
 所有 hook 只消费本契约形状的事件对象，不直接解析各工具的原始 payload。
 
-- Schema: `engine/schemas/harness-event-v1.schema.json`
-- 生产归一化的代码: `engine/scripts/transport/<transport>.cjs`（每工具一个适配器）
-- 注册/消费声明: `engine/hooks/manifest.json` 的 `payloadSchema: "harness-event-v1"` + `transport` 字段
+- Schema: `core/engine/schemas/harness-event-v1.schema.json`
+- 生产归一化的代码: `core/engine/scripts/transport/<transport>.cjs`（每工具一个适配器）
+- 注册/消费声明: `core/engine/hooks/manifest.json` 的 `payloadSchema: "harness-event-v1"` + `transport` 字段
 
 ## 设计原则（不可破坏）
 
@@ -55,18 +55,18 @@
 
 ## transport 适配器约定
 
-- 每个工具一个适配器：`engine/scripts/transport/claude-code.cjs` / `workbuddy.cjs` / `codex.cjs`，统一从 `index.cjs` 导出 `parse(rawPayload)` → `harness-event-v1` 对象。
+- 每个工具一个适配器：`core/engine/scripts/transport/claude-code.cjs` / `workbuddy.cjs` / `codex.cjs`，统一从 `index.cjs` 导出 `parse(rawPayload)` → `harness-event-v1` 对象。
 - claude-code：读 stdin JSON（hook 事件），字段映射 `tool_name→toolName`、`tool_input→toolInput`、`tool_use_id→toolUseId`、`session_id→sessionId`。
 - workbuddy：插件 hooks.json 事件与 Claude 同构，字段形状按真实载荷对齐（8 类事件已实测触发，字段细节待实测确认后冻结）。
 - codex：**无 hook**，stdin-less —— 输入源为文件/参数（提交前门禁场景），适配器负责从文件构造事件。
-- 每 transport 必须带一套 fixture（含缺 status 用例），见 `engine/scripts/test-hooks/fixtures/transport-*/`。
+- 每 transport 必须带一套 fixture（含缺 status 用例），见 `core/engine/scripts/test-hooks/fixtures/transport-*/`。
 
 ## hook 接入方式
 
 ```js
 // 旧：直接读 stdin 解析 Claude payload（36 处耦合，逐步收敛）
 // 新：
-const { parse } = require('../transport'); // engine/scripts/transport/index.cjs
+const { parse } = require('../transport'); // core/engine/scripts/transport/index.cjs
 const event = parse(rawPayload);           // → harness-event-v1 对象
 ```
 

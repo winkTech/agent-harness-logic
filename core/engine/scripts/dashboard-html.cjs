@@ -1,14 +1,14 @@
 #!/usr/bin/env node
 /**
- * engine/scripts/dashboard-html.cjs — 静态 HTML 仪表盘生成器 (P1)
+ * core/engine/scripts/dashboard-html.cjs — 静态 HTML 仪表盘生成器 (P1)
  *
  * 读取所有数据源，生成自包含 HTML 仪表盘（Chart.js via CDN）。
  * 零外部 Node 依赖。
  *
  * 用法:
- *   node engine/scripts/dashboard-html.cjs generate [output-path]
- *   node engine/scripts/dashboard-html.cjs generate --stdout   # 输出到 stdout
- *   node engine/scripts/dashboard-html.cjs check               # 仅检查数据可用性
+ *   node core/engine/scripts/dashboard-html.cjs generate [output-path]
+ *   node core/engine/scripts/dashboard-html.cjs generate --stdout   # 输出到 stdout
+ *   node core/engine/scripts/dashboard-html.cjs check               # 仅检查数据可用性
  */
 
 'use strict';
@@ -40,7 +40,7 @@ function loadJsonl(filePath) {
 
 function loadSqlite(table, dbPath) {
   try {
-    const { openDb } = require(path.join(HOME, 'engine/sqlite/index.cjs'));
+    const { openDb } = require(path.join(HOME, 'core/engine/sqlite/index.cjs'));
     const wright = openDb();
     if (!wright || !wright.db) return [];
     const rows = wright.db.prepare(`SELECT * FROM ${table} ORDER BY timestamp DESC LIMIT 100`).all();
@@ -50,7 +50,7 @@ function loadSqlite(table, dbPath) {
 
 function getDb() {
   try {
-    const { openDb } = require(path.join(HOME, 'engine/sqlite/index.cjs'));
+    const { openDb } = require(path.join(HOME, 'core/engine/sqlite/index.cjs'));
     const wright = openDb();
     return wright && wright.db ? wright.db : null;
   } catch { return null; }
@@ -346,9 +346,9 @@ function main() {
 
   console.log(`
 用法:
-  node engine/scripts/dashboard-html.cjs generate [output-path]  # 生成 HTML 仪表盘
-  node engine/scripts/dashboard-html.cjs generate --stdout       # 输出到 stdout
-  node engine/scripts/dashboard-html.cjs check                   # 检查数据可用性
+  node core/engine/scripts/dashboard-html.cjs generate [output-path]  # 生成 HTML 仪表盘
+  node core/engine/scripts/dashboard-html.cjs generate --stdout       # 输出到 stdout
+  node core/engine/scripts/dashboard-html.cjs check                   # 检查数据可用性
 `);
 }
 

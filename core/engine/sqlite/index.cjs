@@ -1,10 +1,10 @@
 'use strict';
 
 /**
- * engine/sqlite/index.cjs — 统一 SQLite 持久层入口。
+ * core/engine/sqlite/index.cjs — 统一 SQLite 持久层入口。
  *
  * 用法:
- *   const { openDb, closeDb } = require('./engine/sqlite');
+ *   const { openDb, closeDb } = require('core/engine/sqlite');
  *   const db = openDb();              // singleton, WAL 模式
  *   const db2 = openDb(':memory:');   // 测试用独立连接
  *
@@ -143,7 +143,7 @@ function openDb(opts = {}) {
 
 /**
  * 获取默认数据库 (等价于 openDb() 但明确语义)。
- * 方便 require('./engine/sqlite').defaultDb 单行引用。
+ * 方便 require('core/engine/sqlite').defaultDb 单行引用。
  */
 function defaultDb() {
   return openDb();

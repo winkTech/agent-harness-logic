@@ -1,10 +1,10 @@
 #!/usr/bin/env node
 
 /**
- * engine/scripts/cg-queries.cjs — 代码图查询库。
+ * core/engine/scripts/cg-queries.cjs — 代码图查询库。
  *
  * 供 MCP 服务器 (codegraph-server.cjs) 和 CLI (code-graph-index.cjs) 共用。
- * 所有查询通过 engine/sqlite/index.cjs 的 openDb() 单例连接池。
+ * 所有查询通过 core/engine/sqlite/index.cjs 的 openDb() 单例连接池。
  *
  * 用法:
  *   const { searchNodes, getCallers, getSubgraphByNames } = require('./cg-queries.cjs');
@@ -127,7 +127,7 @@ function resolveProject(projectPath) {
 /**
  * 判定项目索引是否新鲜。
  *
- * 与语义检索的纪律一致 (docs/rules/05-harness.md #5): 索引不可信时失败关闭,
+ * 与语义检索的纪律一致 (core/rules/05-harness.md #5): 索引不可信时失败关闭,
  * 返回 stale 而不是拿旧图给出"可能相关"的答案。
  *
  * @param {string} projectId
@@ -844,7 +844,7 @@ function reverseImpact(db, seedIds, opts = {}) {
  * 落点: 改一个模块 → 下游哪些模块受影响 → 哪些证据因此失效 → 哪些门禁要重跑。
  *
  * 失败关闭: 索引不新鲜时返回 staleIndex=true 且**不给结果**, 与语义检索同一纪律
- * (docs/rules/05-harness.md #5) —— 拿过期的图算影响面, 比不算更危险。
+ * (core/rules/05-harness.md #5) —— 拿过期的图算影响面, 比不算更危险。
  *
  * @param {string} projectId
  * @param {string} target — 符号名 / qualified_name / 节点 id / 相对文件路径

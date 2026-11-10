@@ -2,7 +2,7 @@
 'use strict';
 
 /**
- * engine/scripts/guard-coverage.cjs — 守卫危险模式的测试覆盖率报告 (D9)。
+ * core/engine/scripts/guard-coverage.cjs — 守卫危险模式的测试覆盖率报告 (D9)。
  *
  * bash-safety-guard 的危险模式表逐条对应评测语料: 每个 category 至少要有一条
  * 真实 case 打到它。没有 case 的 category 就是"写了但从未被验证过"的防线 ——
@@ -16,10 +16,10 @@ const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 
-const HOME = path.resolve(__dirname, '..', '..');
+const HOME = path.resolve(__dirname, '..', '..', '..');
 const CORPORA = [
-  path.join(HOME, 'engine', 'scripts', 'test-hooks', 'fixtures', 'harness-gate-cases.json'),
-  path.join(HOME, 'engine', 'scripts', 'test-hooks', 'fixtures', 'harness-redteam-cases.json'),
+  path.join(HOME, 'core', 'engine', 'scripts', 'test-hooks', 'fixtures', 'harness-gate-cases.json'),
+  path.join(HOME, 'core', 'engine', 'scripts', 'test-hooks', 'fixtures', 'harness-redteam-cases.json'),
 ];
 
 function loadGuard() {

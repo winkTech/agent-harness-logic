@@ -19,11 +19,11 @@ const path = require('node:path');
 
 process.env.CLAUDE_HARNESS_NO_PERSIST = '1'; // 关缓存与归因持久化, 测试纯净
 
-const ROOT = path.resolve(__dirname, '..', '..', '..');
-const { openDb } = require(path.join(ROOT, 'engine/sqlite/index.cjs'));
-const storeMemory = require(path.join(ROOT, 'engine/sqlite/store-memory.cjs'));
-const retrieveHook = require(path.join(ROOT, 'engine/scripts/memory-retrieve-hook.cjs'));
-const semanticSearch = require(path.join(ROOT, 'engine/scripts/semantic-search.cjs'));
+const ROOT = path.resolve(__dirname, '..', '..', '..', '..');
+const { openDb } = require(path.join(ROOT, 'core/engine/sqlite/index.cjs'));
+const storeMemory = require(path.join(ROOT, 'core/engine/sqlite/store-memory.cjs'));
+const retrieveHook = require(path.join(ROOT, 'core/engine/scripts/memory-retrieve-hook.cjs'));
+const semanticSearch = require(path.join(ROOT, 'core/engine/scripts/semantic-search.cjs'));
 const { retrieveContext, buildContextQuery } = retrieveHook;
 
 function assertInactiveMemoryIsNotSemanticallyIndexed() {
@@ -31,7 +31,7 @@ function assertInactiveMemoryIsNotSemanticallyIndexed() {
   try {
     const learningDir = path.join(fixture, 'memory', 'learnings');
     fs.mkdirSync(learningDir, { recursive: true });
-    fs.mkdirSync(path.join(fixture, 'engineering-assets', 'knowledge', 'primary'), { recursive: true });
+    fs.mkdirSync(path.join(fixture, 'packs', 'fpga', 'engineering-assets', 'knowledge', 'primary'), { recursive: true });
     const active = path.join(learningDir, 'active.md');
     const superseded = path.join(learningDir, 'superseded.md');
     const retired = path.join(learningDir, 'retired.md');
@@ -145,8 +145,8 @@ function main() {
     // harness 自身是 .cjs, 旧清单只有 HDL/Python/C 系, 于是 harness 开发完全
     // 不产生记忆暴露 (实测 51 条活跃事实只有 2 条被暴露过, D5 永远停在 0.96)。
     for (const file of [
-      'engine/scripts/hooks/verification-gate.cjs',
-      'engine/scripts/lib/hook-latency.mjs',
+      'core/engine/scripts/hooks/verification-gate.cjs',
+      'core/engine/scripts/lib/hook-latency.mjs',
       'web/src/app.js',
       'web/src/app.ts',
       'rtl/rx_fifo.sv',
@@ -155,12 +155,12 @@ function main() {
       assert.ok(editTriggers(db, file), `${file} must trigger context retrieval`);
     }
     // 文档与配置刻意不触发: 改动频繁、检索价值低, 纳入只增注入噪声与 token
-    for (const file of ['docs/rules/05-harness.md', 'engine/hooks/manifest.json', 'var/state.txt']) {
+    for (const file of ['docs/rules/05-harness.md', 'core/engine/hooks/manifest.json', 'var/state.txt']) {
       assert.equal(editTriggers(db, file), false, `${file} must not trigger context retrieval`);
     }
 
     // 7: harness 语汇进入查询, 且各类型的增强词互不串味
-    const harnessQuery = buildContextQuery('engine/scripts/hooks/verification-gate.cjs');
+    const harnessQuery = buildContextQuery('core/engine/scripts/hooks/verification-gate.cjs');
     assert.ok(/harness/.test(harnessQuery), `harness enrichment missing: ${harnessQuery}`);
     assert.ok(/门禁/.test(harnessQuery), `gate enrichment missing: ${harnessQuery}`);
     assert.ok(!/Verilog|HDL/.test(harnessQuery), `HDL terms must not leak into .cjs query: ${harnessQuery}`);

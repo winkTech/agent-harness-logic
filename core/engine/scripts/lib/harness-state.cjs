@@ -1,7 +1,7 @@
 'use strict';
 
 /**
- * engine/scripts/lib/harness-state.cjs — 状态根解析（代码根 / 状态根解耦）
+ * core/engine/scripts/lib/harness-state.cjs — 状态根解析（代码根 / 状态根解耦）
  *
  * 代码根 HARNESS_ROOT 是仓库（插件）目录，未来会被整体版本替换；运行时状态必须活在别处。
  * 本模块只负责“状态根在哪”，不负责创建目录——消费者自行 mkdir。

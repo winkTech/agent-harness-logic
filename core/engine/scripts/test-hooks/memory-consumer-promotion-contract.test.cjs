@@ -8,19 +8,21 @@ const path = require('node:path');
 const { spawnSync } = require('node:child_process');
 const test = require('node:test');
 
-const ROOT = path.resolve(__dirname, '..', '..', '..');
-const CANDIDATES = path.join(ROOT, 'engine', 'scripts', 'harness-rule-candidates.cjs');
-const RULE_LOADER = path.join(ROOT, 'engine', 'scripts', 'rule-loader.cjs');
-const PREFLIGHT = path.join(ROOT, 'engine', 'scripts', 'hooks', 'preflight-router.cjs');
+const ROOT = path.resolve(__dirname, '..', '..', '..', '..');
+const CANDIDATES = path.join(ROOT, 'core', 'engine', 'scripts', 'harness-rule-candidates.cjs');
+const RULE_LOADER = path.join(ROOT, 'core', 'engine', 'scripts', 'rule-loader.cjs');
+const PREFLIGHT = path.join(ROOT, 'core', 'engine', 'scripts', 'hooks', 'preflight-router.cjs');
 const {
   behaviorContractHash,
   commandEvidence,
   evidenceEntrySha256,
-} = require(path.join(ROOT, 'engine', 'scripts', 'lib', 'evidence-ledger.cjs'));
+} = require(path.join(ROOT, 'core', 'engine', 'scripts', 'lib', 'evidence-ledger.cjs'));
 
 function makeHarnessFixture(prefix) {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), prefix));
-  fs.mkdirSync(path.join(root, 'engine', 'scripts'), { recursive: true });
+  fs.mkdirSync(path.join(root, 'core', 'engine', 'scripts'), { recursive: true });
+  // Phase 1.2 起显式根须过 package.json 锚校验（isHarnessRoot）
+  fs.writeFileSync(path.join(root, 'package.json'), JSON.stringify({ name: 'harness', private: true, version: '0.0.0-fixture' }), 'utf8');
   fs.mkdirSync(path.join(root, 'docs', 'rules'), { recursive: true });
   fs.writeFileSync(path.join(root, 'AGENTS.md'), '# fixture\n', 'utf8');
   return root;
@@ -118,10 +120,10 @@ function lifecycle(input, fixture) {
 }
 
 test('consumer registry is structural and heartbeat distinguishes skipped, failed, and never-ran', () => {
-  const health = require(path.join(ROOT, 'engine', 'scripts', 'memory-health-check.cjs'));
-  const { openDb } = require(path.join(ROOT, 'engine', 'sqlite', 'index.cjs'));
-  const events = require(path.join(ROOT, 'engine', 'sqlite', 'store-events.cjs'));
-  const startup = require(path.join(ROOT, 'engine', 'scripts', 'dream-startup-inject.cjs'));
+  const health = require(path.join(ROOT, 'core', 'engine', 'scripts', 'memory-health-check.cjs'));
+  const { openDb } = require(path.join(ROOT, 'core', 'engine', 'sqlite', 'index.cjs'));
+  const events = require(path.join(ROOT, 'core', 'engine', 'sqlite', 'store-events.cjs'));
+  const startup = require(path.join(ROOT, 'core', 'engine', 'scripts', 'dream-startup-inject.cjs'));
   const wDb = openDb({ path: ':memory:' });
   for (let index = 0; index < 3; index += 1) {
     events.record({ sessionId: 'consumer-runtime', type: 'tool_fail', payload: {} }, null, { db: wDb.db });
@@ -172,8 +174,8 @@ test('consumer registry is structural and heartbeat distinguishes skipped, faile
 });
 
 test('registered event-stream consumers cannot disappear when their watermark row is missing', () => {
-  const health = require(path.join(ROOT, 'engine', 'scripts', 'memory-health-check.cjs'));
-  const { openDb } = require(path.join(ROOT, 'engine', 'sqlite', 'index.cjs'));
+  const health = require(path.join(ROOT, 'core', 'engine', 'scripts', 'memory-health-check.cjs'));
+  const { openDb } = require(path.join(ROOT, 'core', 'engine', 'sqlite', 'index.cjs'));
   const wDb = openDb({ path: ':memory:' });
   wDb.db.prepare("DELETE FROM runtime_consumer_watermarks WHERE consumer = 'dream'").run();
   const report = health.buildHealthReport({
@@ -189,9 +191,9 @@ test('registered event-stream consumers cannot disappear when their watermark ro
 });
 
 test('verified facts cannot report healthy without complete scope, trigger, evidence, and validity metadata', () => {
-  const health = require(path.join(ROOT, 'engine', 'scripts', 'memory-health-check.cjs'));
-  const { openDb } = require(path.join(ROOT, 'engine', 'sqlite', 'index.cjs'));
-  const { writeMemory } = require(path.join(ROOT, 'engine', 'sqlite', 'store-memory.cjs'));
+  const health = require(path.join(ROOT, 'core', 'engine', 'scripts', 'memory-health-check.cjs'));
+  const { openDb } = require(path.join(ROOT, 'core', 'engine', 'sqlite', 'index.cjs'));
+  const { writeMemory } = require(path.join(ROOT, 'core', 'engine', 'sqlite', 'store-memory.cjs'));
   const wDb = openDb({ path: ':memory:' });
   const incomplete = writeMemory({
     namespace: 'errors',
@@ -245,10 +247,10 @@ test('verified facts cannot report healthy without complete scope, trigger, evid
 });
 
 test('memory health exposes attribution progress and overdue candidate review', () => {
-  const health = require(path.join(ROOT, 'engine', 'scripts', 'memory-health-check.cjs'));
+  const health = require(path.join(ROOT, 'core', 'engine', 'scripts', 'memory-health-check.cjs'));
   const candidates = require(CANDIDATES);
-  const attribution = require(path.join(ROOT, 'engine', 'sqlite', 'store-memory-attribution.cjs'));
-  const { openDb } = require(path.join(ROOT, 'engine', 'sqlite', 'index.cjs'));
+  const attribution = require(path.join(ROOT, 'core', 'engine', 'sqlite', 'store-memory-attribution.cjs'));
+  const { openDb } = require(path.join(ROOT, 'core', 'engine', 'sqlite', 'index.cjs'));
   const fixture = makeHarnessFixture('memory-health-attribution-');
   const ledgerPath = path.join(fixture, 'var', 'maintenance', 'harness-rule-candidates.json');
   candidates.stageCandidate({
@@ -401,7 +403,7 @@ test('promoted advisory rule is indexed and injected in a fresh session', () => 
   assert.equal(tampered.status, 0, tampered.stderr);
   assert.doesNotMatch(tampered.stdout, /USE_PROMOTED_FRESH_SESSION_ACTION/,
     'tampered promoted artifact remained active in a fresh session');
-  const health = require(path.join(ROOT, 'engine', 'scripts', 'memory-health-check.cjs'));
+  const health = require(path.join(ROOT, 'core', 'engine', 'scripts', 'memory-health-check.cjs'));
   const integrity = health.inspectPromotedRuleIntegrity(fixture);
   assert.equal(integrity.invalid, 1, `health did not report tampered promotion: ${JSON.stringify(integrity)}`);
 });
@@ -455,8 +457,8 @@ test('explicitly approved promoted hard rule blocks its payload and permits a ne
   const allowed = invoke(path.join(fixture, 'allowed-neighbor.txt'));
   assert.equal(allowed.status, 0, allowed.stderr || allowed.stdout);
 
-  const { openDb } = require(path.join(ROOT, 'engine/sqlite/index.cjs'));
-  const { memoryProjectId } = require(path.join(ROOT, 'engine/scripts/lib/project-scope.cjs'));
+  const { openDb } = require(path.join(ROOT, 'core/engine/sqlite/index.cjs'));
+  const { memoryProjectId } = require(path.join(ROOT, 'core/engine/scripts/lib/project-scope.cjs'));
   const wDb = openDb({ path: dbPath });
   const exposures = wDb.db.prepare('SELECT * FROM memory_retrieval_exposures').all();
   const applications = wDb.db.prepare('SELECT * FROM memory_applications').all();

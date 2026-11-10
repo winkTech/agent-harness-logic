@@ -19,11 +19,11 @@ const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 
-const ROOT = path.resolve(__dirname, '..', '..', '..');
+const ROOT = path.resolve(__dirname, '..', '..', '..', '..');
 process.env.CLAUDE_HARNESS_NO_PERSIST = '1';
 
-const dashboard = require(path.join(ROOT, 'engine/scripts/ten-dimension-dashboard.cjs'));
-const postflight = require(path.join(ROOT, 'engine/scripts/hooks/postflight-router.cjs'));
+const dashboard = require(path.join(ROOT, 'core/engine/scripts/ten-dimension-dashboard.cjs'));
+const postflight = require(path.join(ROOT, 'core/engine/scripts/hooks/postflight-router.cjs'));
 
 const REQUIRED_DIMENSIONS = ['D1', 'D2', 'D3', 'D4', 'D5', 'D6', 'D7', 'D8', 'D9', 'D10'];
 

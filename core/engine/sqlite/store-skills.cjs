@@ -1,7 +1,7 @@
 'use strict';
 
 /**
- * engine/sqlite/store-skills.cjs — 技能注册表 (生命周期 + 使用统计 + 自动退役)。
+ * core/engine/sqlite/store-skills.cjs — 技能注册表 (生命周期 + 使用统计 + 自动退役)。
  *
  * 用法:
  *   const skills = require('./store-skills.cjs');

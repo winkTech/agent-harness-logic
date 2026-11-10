@@ -1,11 +1,11 @@
 #!/usr/bin/env node
 /**
- * engine/scripts/hooks/context-pressure-warn.cjs — 上下文压力警告 (P2)
+ * core/engine/scripts/hooks/context-pressure-warn.cjs — 上下文压力警告 (P2)
  *
  * PostToolUse/Stop hook: 检查上下文使用压力，在达到阈值时
  * 输出压缩建议。
  *
- * 依赖: node engine/scripts/context-monitor-gate.cjs 做实际告警，
+ * 依赖: node core/engine/scripts/context-monitor-gate.cjs 做实际告警，
  *       本脚本作为辅助检测，针对性输出用户可操作的建议。
  *
  * 退出码: 0 (仅建议，不阻断)

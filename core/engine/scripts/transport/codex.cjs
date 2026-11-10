@@ -1,7 +1,7 @@
 'use strict';
 
 /**
- * engine/scripts/transport/codex.cjs — Codex transport 适配器
+ * core/engine/scripts/transport/codex.cjs — Codex transport 适配器
  *
  * 职责：为 Codex（无 hook 机制）构造 harness-event-v1 事件。
  *

@@ -84,7 +84,7 @@ BRAM 用了 0 块、DSP 没吸收流水寄存器、Fmax 掉一半，工具不报
 - **模板标注**：`templates/alu/`、`templates/internet/` 共 11 个外源模板补齐元数据头，并标注"命名未按 ri_/ro_ 规范，复用前必须按 §1/§2 重写"
 - **死引用修复**：`RTL_DESIGN_RULE.md` 中指向不存在的 `phase-reflection.md` 的引用改为指向项目 Golden Model
 - **evals 修复**：`always @(posedge i_clk)` 等断言的括号按 regex 转义（原写法作为正则永远匹配不到真实代码）；新增红线 1/2/4/5 的断言（ri_/ro_/default/组合段）；版本号与技能对齐
-- **资产清理**：删除 `examples/`（仅剩一个 0 字节孤儿 PDF）；`matlab-rule.md`、`toolchain.md` 迁至 `engineering-assets/knowledge/references/`（非 HDL 编码规范内容）
+- **资产清理**：删除 `examples/`（仅剩一个 0 字节孤儿 PDF）；`matlab-rule.md`、`toolchain.md` 迁至 `packs/fpga/engineering-assets/knowledge/references/`（非 HDL 编码规范内容）
 - **模板 RTL 缺陷修复**（验证阶段用 iverilog 全量编译发现的预存缺陷）：
   - `templates/comm/axis_pipeline_reg.sv`、`templates/comm/pipe_delay.sv`：generate 循环变量 `integer i` → `genvar i`（IEEE 1800 要求）
   - `templates/internet/crc.sv`：解除 `crc_32_right`/`crc_32_left` 在 `crc32` 内的模块嵌套（嵌套模块工具支持度差，iverilog 无法解析 `crc_32_left`）；修复后两个叶子模块经公开校验值仿真验证 bit-true（CRC-32/IEEE `0xCBF43926`、CRC-32/BZIP2 `0xFC891918`）

@@ -7,7 +7,7 @@ const path = require('node:path');
 const crypto = require('node:crypto');
 const { spawnSync } = require('node:child_process');
 
-const HOME = path.resolve(__dirname, '..', '..', '..');
+const HOME = path.resolve(__dirname, '..', '..', '..', '..');
 const DEFAULT_RUN_ROOT = path.join(os.tmpdir(), 'claude-harness-agent-evals', 'rtl-managed-task');
 const TARGET_RTL = path.join('01_src', '00_hdl', 'axis_guard', 'axis_guard.sv');
 const TARGET_TB = path.join('02_sim', 'axis_guard', 'tb_axis_guard.sv');
@@ -36,9 +36,9 @@ const LABELS = {
 function usage() {
   return [
     'Usage:',
-    '  node engine/scripts/test-hooks/rtl-managed-task-eval.cjs --dry-run --out <dir>',
-    '  node engine/scripts/test-hooks/rtl-managed-task-eval.cjs --agent claude --max-attempts 3 --out <dir>',
-    '  node engine/scripts/test-hooks/rtl-managed-task-eval.cjs --agent codex --max-attempts 3 --out <dir>',
+    '  node core/engine/scripts/test-hooks/rtl-managed-task-eval.cjs --dry-run --out <dir>',
+    '  node core/engine/scripts/test-hooks/rtl-managed-task-eval.cjs --agent claude --max-attempts 3 --out <dir>',
+    '  node core/engine/scripts/test-hooks/rtl-managed-task-eval.cjs --agent codex --max-attempts 3 --out <dir>',
     '',
     'Managed RTL mode disables direct agent tools. The CLI returns a JSON action plan;',
     'the harness validates protocol, applies allowed files through gates, runs RTL',
@@ -653,15 +653,15 @@ function writeViaHarness(outDir, relPath, content) {
   const checks = [];
 
   if (normalizeRel(relPath) === TARGET_TB.replace(/\\/g, '/')) {
-    const vq = runHook('engine/scripts/hooks/verification-quality-guard.cjs', payload, outDir);
+    const vq = runHook('core/engine/scripts/hooks/verification-quality-guard.cjs', payload, outDir);
     checks.push({ name: 'prewrite-verification-quality-gate', path: relPath, status: vq.status === 0 ? 'passed' : 'failed', stderrTail: vq.stderr.slice(-1000) });
   }
   if (normalizeRel(relPath) === TARGET_RTL.replace(/\\/g, '/')) {
-    const req = runHook('engine/scripts/hooks/requirements-gate-guard.cjs', payload, outDir);
+    const req = runHook('core/engine/scripts/hooks/requirements-gate-guard.cjs', payload, outDir);
     checks.push({ name: 'prewrite-requirements-gate', path: relPath, status: req.status === 0 ? 'passed' : 'failed', stderrTail: req.stderr.slice(-1000) });
   }
 
-  const hdl = runHook('engine/scripts/hooks/hdl-gate.cjs', payload, outDir);
+  const hdl = runHook('core/engine/scripts/hooks/hdl-gate.cjs', payload, outDir);
   checks.push({ name: 'prewrite-hdl-gate', path: relPath, status: hdl.status === 0 ? 'passed' : 'failed', stderrTail: hdl.stderr.slice(-1000) });
 
   if (checks.every((check) => check.status === 'passed')) writeText(filePath, content);
@@ -688,7 +688,7 @@ function applyPlanThroughHarness(plan, outDir) {
 }
 
 function runHdlGate(filePath) {
-  return run(process.execPath, [path.join(HOME, 'engine/scripts/hooks/hdl-gate.cjs')], HOME, JSON.stringify({
+  return run(process.execPath, [path.join(HOME, 'core/engine/scripts/hooks/hdl-gate.cjs')], HOME, JSON.stringify({
     hook_event_name: 'PreToolUse',
     tool_name: 'Write',
     tool_input: {

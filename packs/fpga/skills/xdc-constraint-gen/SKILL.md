@@ -1,6 +1,6 @@
 ---
 name: xdc-constraint-gen
-description: 从 RTL 顶层端口自动生成 XDC 约束骨架 — 时钟周期 / 管脚分配 / 时序例外三类模板，端口全部带 TODO 标记待人工补值。用于新工程起约束、RTL 定稿后批量生成管脚骨架。已有 XDC 要做合规核查时用 engine/scripts/fpga-xdc-parser.cjs（解析方向），本技能只管生成方向。
+description: 从 RTL 顶层端口自动生成 XDC 约束骨架 — 时钟周期 / 管脚分配 / 时序例外三类模板，端口全部带 TODO 标记待人工补值。用于新工程起约束、RTL 定稿后批量生成管脚骨架。已有 XDC 要做合规核查时用 core/engine/scripts/fpga-xdc-parser.cjs（解析方向），本技能只管生成方向。
 version: 0.1.0
 ---
 
@@ -39,7 +39,7 @@ python scripts/gen_xdc_from_rtl.py path/to/top.v -o 03_xdc/top_skeleton.xdc
 ## 闭环用法
 
 1. 本脚本生成骨架 → 2. 人工补 TODO 值 → 3. `vivado-flow` 的 `-xdc` 消费该目录跑综合 →
-4. `engine/scripts/fpga-xdc-parser.cjs` 解析回读做约束核查。
+4. `core/engine/scripts/fpga-xdc-parser.cjs` 解析回读做约束核查。
    生成方向（本技能）与核查方向（parser）分离，互相不越界。
 
 ## 模板基准

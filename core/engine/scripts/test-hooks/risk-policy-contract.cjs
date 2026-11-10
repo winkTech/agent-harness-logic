@@ -6,7 +6,7 @@ const os = require('node:os');
 const path = require('node:path');
 const { HARNESS_ROOT } = require('../lib/harness-root.cjs');
 
-const policyPath = path.join(HARNESS_ROOT, 'engine', 'scripts', 'lib', 'risk-policy.cjs');
+const policyPath = path.join(HARNESS_ROOT, 'core', 'engine', 'scripts', 'lib', 'risk-policy.cjs');
 
 function assertBasicClassification(policy) {
   const observed = policy.classifyRisk({ toolName: 'Read', readOnly: true });
@@ -162,15 +162,15 @@ function assertAcceptanceCorpus(policy) {
 
 function assertVerificationEvidenceLevels(policy) {
   assert.equal(policy.verificationEvidenceLevel(
-    'node engine/scripts/test-hooks/risk-policy-contract.cjs',
+    'node core/engine/scripts/test-hooks/risk-policy-contract.cjs',
   ), 'R1');
   assert.equal(policy.verificationEvidenceLevel(
-    'node engine/scripts/test-hooks/postflight-router-contract.cjs',
+    'node core/engine/scripts/test-hooks/postflight-router-contract.cjs',
   ), 'R1');
   assert.equal(policy.verificationEvidenceLevel('pytest'), 'R2');
   assert.equal(policy.verificationEvidenceLevel('npm test'), 'R2');
   assert.equal(policy.verificationEvidenceLevel(
-    'node engine/scripts/test-hooks/run-all-tests.cjs',
+    'node core/engine/scripts/test-hooks/run-all-tests.cjs',
   ), 'R3');
   assert.equal(policy.verificationEvidenceLevel('vivado -mode batch -source post-route-signoff.tcl'), 'R3');
   assert.equal(policy.verificationEvidenceLevel('ruff check .'), 'R0',
@@ -239,7 +239,7 @@ function assertStickyRiskState(policy) {
   fs.writeFileSync(path.join(root, 'AGENTS.md'), '# fixture\n', 'utf8');
   fs.writeFileSync(stateFile, JSON.stringify({ version: 3, pending: {} }), 'utf8');
   const verificationStatePath = path.join(
-    HARNESS_ROOT, 'engine', 'scripts', 'lib', 'verification-state.cjs',
+    HARNESS_ROOT, 'core', 'engine', 'scripts', 'lib', 'verification-state.cjs',
   );
   delete require.cache[require.resolve(verificationStatePath)];
   const state = require(verificationStatePath);

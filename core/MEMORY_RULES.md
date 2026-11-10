@@ -10,7 +10,7 @@ metadata:
 
 记忆层的目标是让 Agent 在正确场景召回少量、有效、可验证的经验，不是保存全部过程。运行日志属于遥测；候选经验属于待审材料；只有经过验证且仍然适用的内容才是长期记忆。
 
-Harness 自身的稳定规则与晋升流程见 `docs/rules/05-harness.md`。
+Harness 自身的稳定规则与晋升流程见 `core/rules/05-harness.md`。
 
 ## Memory tiers
 
@@ -20,8 +20,8 @@ Harness 自身的稳定规则与晋升流程见 `docs/rules/05-harness.md`。
 | Working state | 当前目标、已验证证据、阻塞、下一动作 | `var/active-task.yaml`、`var/work/` | 仅 `/start` 或明确恢复任务 |
 | Candidate experience | 错误根因、可能修法、Dream 模式、规则候选 | `memory/errors/`、候选账本 | 否，触发匹配时检索摘要 |
 | Validated learning | 已复现根因、已通过行为验证、可复用预防动作 | `memory/learnings/`、SQLite facts | 按精确触发条件召回 |
-| Durable harness rule | 跨任务稳定且显式批准的 Harness 约束 | `docs/rules/05-harness.md` 等仓库规则 | 由 Rule Loader 按场景加载 |
-| Domain knowledge | 与单次会话无关的技术资料与规范 | `engineering-assets/knowledge/` | 按任务主题检索 |
+| Durable harness rule | 跨任务稳定且显式批准的 Harness 约束 | `core/rules/05-harness.md` 等仓库规则 | 由 Rule Loader 按场景加载 |
+| Domain knowledge | 与单次会话无关的技术资料与规范 | `packs/fpga/engineering-assets/knowledge/` | 按任务主题检索 |
 
 `tool_success` / `tool_error` 是运行遥测，不是记忆；单次 Hook 成功、命令回显、空模板、未分析失败和重复 session 摘要不得进入长期记忆。
 
@@ -46,7 +46,7 @@ Markdown 经验同步到 SQLite 时使用以下适用性 frontmatter；仓库/pa
 ```yaml
 scope_kind: repository
 project_id: project-<stable-hash>
-path_scope: engine/scripts/**
+path_scope: core/engine/scripts/**
 trigger_kind: file_edit
 trigger_signature: memory_retrieval
 verification_state: verified

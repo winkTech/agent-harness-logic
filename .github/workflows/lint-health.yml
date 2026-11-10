@@ -43,12 +43,12 @@ jobs:
         run: |
           set -o pipefail
           mkdir -p var/ci
-          node --test engine/scripts/test-hooks/git-ci-repro-contract.test.cjs \
-            engine/scripts/test-hooks/gate-bypass-contract.test.cjs 2>&1 \
+          node --test core/engine/scripts/test-hooks/git-ci-repro-contract.test.cjs \
+            core/engine/scripts/test-hooks/gate-bypass-contract.test.cjs 2>&1 \
             | tee "var/ci/git-ci-contract-${RUNNER_OS}.log"
 
       # agent-managed-action-eval 的 functional 维度真的会跑 `python -m pytest -q`
-      # （fixture 在 engine/scripts/test-hooks/fixtures/long-task/，入库的），
+      # （fixture 在 core/engine/scripts/test-hooks/fixtures/long-task/，入库的），
       # 而 setup-python 只装解释器不装包。缺 pytest → functionalStatus=failed → exit 1，
       # 表现为 "coverage-runner 测试运行 exit=1"。与 LongTaskEval 不同：那个缺的是
       # var/ 下未入库的历史产物只能跳过，这个缺的只是依赖，装上就能真跑。
@@ -68,10 +68,10 @@ jobs:
           CLAUDE_HARNESS_ROOT: ${{ github.workspace }}
         run: |
           set -o pipefail
-          node engine/scripts/render-hook-settings.cjs
-          node engine/scripts/render-hook-settings.cjs --check
-          node engine/scripts/sync-workflow-mirror.cjs
-          node engine/scripts/sync-workflow-mirror.cjs --check
+          node core/engine/scripts/render-hook-settings.cjs
+          node core/engine/scripts/render-hook-settings.cjs --check
+          node core/engine/scripts/sync-workflow-mirror.cjs
+          node core/engine/scripts/sync-workflow-mirror.cjs --check
 
       - name: Run the fail-closed Harness gate
         shell: bash
@@ -82,7 +82,7 @@ jobs:
           CLAUDE_NO_DIAGNOSTIC_WRITES: '1'
         run: |
           set -o pipefail
-          node engine/scripts/harness-ci.cjs 2>&1 \
+          node core/engine/scripts/harness-ci.cjs 2>&1 \
             | tee "var/ci/harness-ci-${RUNNER_OS}.log"
 
       - name: Write immutable-run provenance

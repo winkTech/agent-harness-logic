@@ -32,7 +32,7 @@ If the previous session crashed unexpectedly without going through `/handoff`, t
 
 If harness has a memory-track.sh, run it as a crash safety net:
 ```bash
-bash ~/.claude/engine/scripts/hooks/memory-track.sh session-start 2>/dev/null || true
+bash ~/.claude/core/engine/scripts/hooks/memory-track.sh session-start 2>/dev/null || true
 ```
 
 When pending is empty it's a no-op. `|| true` guarantees it won't block /start, **but stderr stays visible** (on non-zero exit you see the provider error / drift signal).
@@ -124,7 +124,7 @@ If a semantic memory layer is available, retrieve relevant prior context. Otherw
 
 ```bash
 # use the existing memory-retrieve script if available
-. ~/.claude/engine/scripts/memory-retrieve.sh 2>/dev/null || true
+. ~/.claude/core/engine/scripts/memory-retrieve.sh 2>/dev/null || true
 ```
 
 **Output spec**: skip if not available — mark as `_(no semantic memory layer)_`, no error.

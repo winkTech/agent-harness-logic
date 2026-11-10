@@ -9,10 +9,10 @@ const path = require('node:path');
 const { spawnSync } = require('node:child_process');
 const test = require('node:test');
 
-const ROOT = path.resolve(__dirname, '..', '..', '..');
-const SESSION_BOOTSTRAP = path.join(ROOT, 'engine', 'scripts', 'hooks', 'session-bootstrap.cjs');
-const STOP_SUMMARY = path.join(ROOT, 'engine', 'scripts', 'hooks', 'stop-summary.cjs');
-const REGISTRATIONS = path.join(ROOT, 'engine', 'hooks', 'registrations.json');
+const ROOT = path.resolve(__dirname, '..', '..', '..', '..');
+const SESSION_BOOTSTRAP = path.join(ROOT, 'core', 'engine', 'scripts', 'hooks', 'session-bootstrap.cjs');
+const STOP_SUMMARY = path.join(ROOT, 'core', 'engine', 'scripts', 'hooks', 'stop-summary.cjs');
+const REGISTRATIONS = path.join(ROOT, 'hosts', 'claude-code', 'registrations.json');
 const SESSION_SOURCES = ['startup', 'resume', 'clear', 'compact', 'fork'];
 
 function readSource(filePath) {
@@ -182,7 +182,7 @@ test('Stop delivery risk is shadow-first, enforceable, and permits explicit unve
     effectiveRiskLevel: 'R2',
     riskReasons: ['interface-change'],
     requiredEvidence: ['affected-regression'],
-    targets: [path.join(ROOT, 'engine', 'scripts', 'hooks', 'postflight-router.cjs')],
+    targets: [path.join(ROOT, 'core', 'engine', 'scripts', 'hooks', 'postflight-router.cjs')],
   }];
 
   let stdout = [];
@@ -246,7 +246,7 @@ test('Stop reuses exact R1/R2 cache entries but never R3 signoff evidence', () =
     effectiveRiskLevel: 'R2',
     riskReasons: ['interface-change'],
     requiredEvidence: ['affected-regression'],
-    targets: [path.join(ROOT, 'engine', 'scripts', 'hooks', 'postflight-router.cjs')],
+    targets: [path.join(ROOT, 'core', 'engine', 'scripts', 'hooks', 'postflight-router.cjs')],
   };
   let lookups = 0;
   let result = runDeliveryRisk(payload, { stdout() {}, stderr() {} }, {
@@ -280,7 +280,7 @@ test('Stop reuses exact R1/R2 cache entries but never R3 signoff evidence', () =
 
 test('Stop cache matches equivalent project-root paths', () => {
   const { findCachedEvidence } = require(STOP_SUMMARY);
-  const policy = require(path.join(ROOT, 'engine', 'scripts', 'lib', 'risk-policy.cjs'));
+  const policy = require(path.join(ROOT, 'core', 'engine', 'scripts', 'lib', 'risk-policy.cjs'));
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'stop-cache-root-'));
   try {
     const source = path.join(root, 'source.cjs');

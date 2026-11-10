@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * engine/scripts/lib/check-templates.cjs — HDL 模板元数据检查。
+ * core/engine/scripts/lib/check-templates.cjs — HDL 模板元数据检查。
  *
  * 由 diagnostics.cjs --templates 调用。
  * 检查 packs/fpga/skills/hdl-coding/templates/ 下所有模板是否包含规范头部元数据。

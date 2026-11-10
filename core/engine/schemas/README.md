@@ -1,11 +1,11 @@
 # Harness JSON Schemas
 
-`engine/schemas/` contains the Harness JSON Schema inventory.
+`core/engine/schemas/` contains the Harness JSON Schema inventory.
 
 - Active schema files: **22**
 - Machine-readable inventory: `catalog.json`
-- Catalog validator: `engine/scripts/lib/schema-catalog.cjs`
-- Regression entry: `node engine/scripts/test-hooks/run-all-tests.cjs --no-persist`
+- Catalog validator: `core/engine/scripts/lib/schema-catalog.cjs`
+- Regression entry: `node core/engine/scripts/test-hooks/run-all-tests.cjs --no-persist`
 
 ## Contract
 

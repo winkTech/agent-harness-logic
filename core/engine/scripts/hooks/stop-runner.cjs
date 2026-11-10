@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * engine/scripts/hooks/stop-runner.cjs — Stop hook 统一运行器。
+ * core/engine/scripts/hooks/stop-runner.cjs — Stop hook 统一运行器。
  *
  * 替代 settings.local.json 中 Stop/SessionEnd 下 6 处内联 node -e 模式。
  * 这些 hook 需要：

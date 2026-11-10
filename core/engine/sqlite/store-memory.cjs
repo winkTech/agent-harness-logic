@@ -1,7 +1,7 @@
 'use strict';
 
 /**
- * engine/sqlite/store-memory.cjs — 记忆仓库 (CRUD + FTS5 + 链接)。
+ * core/engine/sqlite/store-memory.cjs — 记忆仓库 (CRUD + FTS5 + 链接)。
  *
  * 依赖:
  *   const { openDb } = require('./index.cjs');

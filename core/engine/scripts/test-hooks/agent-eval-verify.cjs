@@ -7,7 +7,7 @@ const { spawnSync } = require('node:child_process');
 const crypto = require('node:crypto');
 const { parseJsonl, readText, verifyEvents, verifyTranscript } = require('./agent-transcript-compliance.cjs');
 
-const HOME = path.resolve(__dirname, '..', '..', '..');
+const HOME = path.resolve(__dirname, '..', '..', '..', '..');
 const FIXTURE_ROOT = path.join(__dirname, 'fixtures', 'long-task');
 const SCENARIO = path.join(FIXTURE_ROOT, 'scenario');
 
@@ -27,9 +27,9 @@ function argValues(args, name) {
 function usage() {
   return [
     'Usage:',
-    '  node engine/scripts/test-hooks/agent-eval-verify.cjs --kind implementation --dir var/agent-evals/long-task/agent-run',
-    '  node engine/scripts/test-hooks/agent-eval-verify.cjs --kind ambiguous --dir var/agent-evals/long-task/agent-ambiguous --response response.txt',
-    '  node engine/scripts/test-hooks/agent-eval-verify.cjs --kind ambiguous --dir run --response response.txt --transcript claude.jsonl',
+    '  node core/engine/scripts/test-hooks/agent-eval-verify.cjs --kind implementation --dir var/agent-evals/long-task/agent-run',
+    '  node core/engine/scripts/test-hooks/agent-eval-verify.cjs --kind ambiguous --dir var/agent-evals/long-task/agent-ambiguous --response response.txt',
+    '  node core/engine/scripts/test-hooks/agent-eval-verify.cjs --kind ambiguous --dir run --response response.txt --transcript claude.jsonl',
   ].join('\n');
 }
 

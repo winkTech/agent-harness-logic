@@ -11,6 +11,7 @@
 
 const fs = require('node:fs');
 const path = require('node:path');
+const { kbPath } = require('../config.cjs');
 const { HARNESS_ROOT } = require('./lib/harness-root.cjs');
 const { STATE_ROOT, varPath } = require('./lib/harness-state.cjs');
 const { shouldIndexSemanticFile } = require('./lib/memory-file-policy.cjs');
@@ -41,7 +42,7 @@ const STOP_WORDS = new Set([
 ]);
 
 function pathsFor(home = HARNESS_ROOT) {
-  const knowledgeDir = path.join(home, 'engineering-assets', 'knowledge');
+  const knowledgeDir = kbPath(home);
   const indexDir = varUnder(home, 'index');
   return {
     home,
@@ -381,7 +382,7 @@ function optionValue(argv, name, fallback = null) {
 }
 
 const DEFAULT_EVAL_CASES = path.join(
-  'engine', 'scripts', 'test-hooks', 'fixtures', 'retrieval-eval-cases.json',
+  'core', 'engine', 'scripts', 'test-hooks', 'fixtures', 'retrieval-eval-cases.json',
 );
 
 /**

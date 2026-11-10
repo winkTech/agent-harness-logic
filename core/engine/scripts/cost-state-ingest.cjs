@@ -8,7 +8,7 @@
  *  - per-session cost-state cumulative records (type === 'cost-state')
  *  - assistant message.usage token records
  * and cross-checks recorded per-model costUSD against tokens x unit price
- * (engine/config/cost-prices.json), flagging deviations > 2%.
+ * (core/engine/config/cost-prices.json), flagging deviations > 2%.
  *
  * Dedupe keys (validated against real transcripts):
  *  - cost-state: sessionId + startTime + totalCostUSD
@@ -32,7 +32,7 @@ function usage() {
     'Usage: node cost-state-ingest.cjs [options]',
     '  --glob   <pattern>   transcript glob (default: projects/**/*.jsonl)',
     '  --out    <path>      report output path (default: var/metrics/cost-state-report.json)',
-    '  --prices <path>      price table (default: engine/config/cost-prices.json)',
+    '  --prices <path>      price table (default: core/engine/config/cost-prices.json)',
     '  --json               print the report JSON to stdout',
     '',
   ].join('\n'));
@@ -42,7 +42,7 @@ function parseArgs(argv) {
   const args = {
     glob: 'projects/**/*.jsonl',
     out: 'var/metrics/cost-state-report.json',
-    prices: 'engine/config/cost-prices.json',
+    prices: 'core/engine/config/cost-prices.json',
     json: false,
   };
   for (let i = 0; i < argv.length; i++) {

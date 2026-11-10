@@ -1,5 +1,5 @@
 /**
- * engine/scripts/lib/judge-service.cjs — Judge 服务模块 (P2)
+ * core/engine/scripts/lib/judge-service.cjs — Judge 服务模块 (P2)
  *
  * 共享库: 提供基于规则的 judge、ELO 评分、多 judge 投票。
  * 替代 judge-calibration.cjs 中的 mockJudge()。

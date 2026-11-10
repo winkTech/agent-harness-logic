@@ -14,7 +14,7 @@ const {
   placementViolations,
 } = require('../lib/project-directory-contract.cjs');
 
-const HOME = path.resolve(__dirname, '..', '..', '..');
+const HOME = path.resolve(__dirname, '..', '..', '..', '..');
 const DEFAULT_RUN_ROOT = path.join(os.tmpdir(), 'claude-harness-agent-evals', 'hdl-project-directory');
 const MODULE = 'tone_fsk_demod';
 const EXPECTED_CLASSIFICATION = 'hdl_project_directory_plan';

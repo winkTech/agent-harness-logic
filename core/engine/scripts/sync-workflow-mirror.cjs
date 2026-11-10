@@ -1,19 +1,19 @@
 #!/usr/bin/env node
 /**
- * engine/scripts/sync-workflow-mirror.cjs — 把 workflows/ 同步到 .claude/workflows/。
+ * core/engine/scripts/sync-workflow-mirror.cjs — 把 workflows/ 同步到 .claude/workflows/。
  *
  * 背景：
- *   workflows/ 是入库的权威源；.claude/workflows/ 是 Claude Code 实际读取的位置，
+ *   core/workflows/ 是入库的权威源；.claude/workflows/ 是 Claude Code 实际读取的位置，
  *   而整个 .claude/ 在 .gitignore 里。于是全新 checkout（含 CI）没有镜像目录，
  *   workflow-contracts 的 "root and platform workflow directories do not drift"
  *   会直接 ENOENT。
  *
- *   本脚本按权威源重建镜像。**只从 workflows/ 往 .claude/workflows/ 单向复制** ——
+ *   本脚本按权威源重建镜像。**只从 core/workflows/ 往 .claude/workflows/ 单向复制** ——
  *   反向同步会让手工改镜像的错误被"修复"掉，那正是漂移检查要抓的东西。
  *
  * 用法：
- *   node engine/scripts/sync-workflow-mirror.cjs           # 同步
- *   node engine/scripts/sync-workflow-mirror.cjs --check   # 只比对，漂移则 exit 1
+ *   node core/engine/scripts/sync-workflow-mirror.cjs           # 同步
+ *   node core/engine/scripts/sync-workflow-mirror.cjs --check   # 只比对，漂移则 exit 1
  *
  * 退出码：
  *   0 — 成功 / 无漂移
@@ -28,7 +28,7 @@ const path = require('node:path');
 
 const { HARNESS_ROOT } = require('./lib/harness-root.cjs');
 
-const SOURCE_RELATIVE = 'workflows';
+const SOURCE_RELATIVE = 'core/workflows'; // Phase 1.4：权威源随拆层迁 core/workflows/
 const MIRROR_RELATIVE = path.join('.claude', 'workflows');
 
 function jsFiles(dir) {
@@ -113,11 +113,11 @@ function main() {
       const result = checkMirror();
       if (result.drift) {
         process.stderr.write(`[sync-workflow-mirror] ✖ 镜像漂移: ${result.reasons.join('；')}\n`);
-        process.stderr.write('[sync-workflow-mirror]   workflows/ 是权威源。跑 '
-          + 'node engine/scripts/sync-workflow-mirror.cjs 重建镜像\n');
+        process.stderr.write('[sync-workflow-mirror]   core/workflows/ 是权威源。跑 '
+          + 'node core/engine/scripts/sync-workflow-mirror.cjs 重建镜像\n');
         return 1;
       }
-      process.stdout.write(`[sync-workflow-mirror] ✓ 镜像与 workflows/ 一致 (${result.names.length} 个)\n`);
+      process.stdout.write(`[sync-workflow-mirror] ✓ 镜像与 core/workflows/ 一致 (${result.names.length} 个)\n`);
       return 0;
     }
 

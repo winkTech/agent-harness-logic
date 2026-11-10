@@ -1,7 +1,7 @@
 'use strict';
 
 /**
- * engine/scripts/transport/workbuddy.cjs — WorkBuddy transport 适配器
+ * core/engine/scripts/transport/workbuddy.cjs — WorkBuddy transport 适配器
  *
  * 职责：把 WorkBuddy 插件 hook 的原始 payload 归一化为 harness-event-v1。
  *

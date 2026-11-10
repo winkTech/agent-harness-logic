@@ -5,6 +5,7 @@
 
 const fs = require('node:fs');
 const path = require('node:path');
+const { kbPath } = require('../config.cjs');
 const { HARNESS_ROOT } = require('./lib/harness-root.cjs');
 const { STATE_ROOT, varPath } = require('./lib/harness-state.cjs');
 const { shouldIndexSemanticFile } = require('./lib/memory-file-policy.cjs');
@@ -22,7 +23,7 @@ function varUnder(home, ...parts) {
 }
 
 function locationsFor(home = HARNESS_ROOT) {
-  const knowledgeDir = path.join(home, 'engineering-assets', 'knowledge');
+  const knowledgeDir = kbPath(home);
   return {
     home,
     knowledgeDir,
@@ -191,7 +192,7 @@ function checkKnowledge(opts = {}) {
   const issues = [];
 
   if (!indexContent) {
-    issues.push({ code: 'knowledge_index_missing', message: 'engineering-assets/knowledge/INDEX.md is missing' });
+    issues.push({ code: 'knowledge_index_missing', message: 'packs/fpga/engineering-assets/knowledge/INDEX.md is missing' });
   } else {
     const dateMatch = indexContent.match(/(?:last\s+updated|最后更新)\s*[:：]?\s*(\d{4}-\d{2}-\d{2})/i);
     const countMatch = indexContent.match(/文档:\s*(\d+)\s*篇\s*primary\s*\+\s*(\d+)\s*篇\s*source\s*\+\s*(\d+)\s*篇\s*鸢尾花书蒸馏\s*\+\s*(\d+)\s*篇\s*methodology\s*\+\s*(\d+)\s*篇\s*references\s*\+\s*(\d+)\s*篇\s*templates/i);

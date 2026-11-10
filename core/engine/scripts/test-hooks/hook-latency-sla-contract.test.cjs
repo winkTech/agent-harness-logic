@@ -2,7 +2,7 @@
 'use strict';
 
 /**
- * engine/scripts/test-hooks/hook-latency-sla-contract.test.cjs — 延迟档位硬门契约（M4a E2）
+ * core/engine/scripts/test-hooks/hook-latency-sla-contract.test.cjs — 延迟档位硬门契约（M4a E2）
  *
  * 覆盖断言：
  *   1. 档位判定：preflight-router 200ms / postflight-router 250ms / prompt-context 300ms /
@@ -21,7 +21,7 @@ const assert = require('node:assert/strict');
 const path = require('node:path');
 const { test } = require('node:test');
 
-const ROOT = path.resolve(__dirname, '..', '..', '..');
+const ROOT = path.resolve(__dirname, '..', '..', '..', '..');
 const {
   budgetFor,
   registrationIndex,
@@ -30,15 +30,15 @@ const {
   scriptNamesFromCommand,
   SCRIPT_BUDGETS_MS,
   DEFAULT_SYNC_BUDGET_MS,
-} = require(path.join(ROOT, 'engine', 'scripts', 'lib', 'hook-latency.cjs'));
-const { evaluateSla } = require(path.join(ROOT, 'engine', 'scripts', 'lib', 'bench-hooks.cjs'));
+} = require(path.join(ROOT, 'core', 'engine', 'scripts', 'lib', 'hook-latency.cjs'));
+const { evaluateSla } = require(path.join(ROOT, 'core', 'engine', 'scripts', 'lib', 'bench-hooks.cjs'));
 
 /** 注入的 registrations：同步入口 4 条、async-only 1 条、同步+async 混合 1 条。 */
 function syncHook(script) {
-  return { type: 'command', command: `node {{HARNESS_ROOT}}/engine/scripts/hooks/${script}.cjs` };
+  return { type: 'command', command: `node {{HARNESS_ROOT}}/core/engine/scripts/hooks/${script}.cjs` };
 }
 function asyncHook(script, args = '') {
-  return { type: 'command', command: `node {{HARNESS_ROOT}}/engine/scripts/hooks/${script}.cjs${args}`, async: true };
+  return { type: 'command', command: `node {{HARNESS_ROOT}}/core/engine/scripts/hooks/${script}.cjs${args}`, async: true };
 }
 
 const REGISTRATIONS = {
@@ -61,9 +61,9 @@ const INDEX = registrationIndex({ registrations: REGISTRATIONS });
 function benchResult(script, warmP95, extra = {}) {
   return {
     point: 'PreToolUse',
-    cmd: `node C:/Users/Lihan/.claude/engine/scripts/hooks/${script}.cjs`,
-    id: `node C:/Users/Lihan/.claude/engine/scripts/hooks/${script}.cjs`,
-    script: `node C:/Users/Lihan/.claude/engine/scripts/hooks/${script}`.slice(0, 60),
+    cmd: `node C:/Users/Lihan/.claude/core/engine/scripts/hooks/${script}.cjs`,
+    id: `node C:/Users/Lihan/.claude/core/engine/scripts/hooks/${script}.cjs`,
+    script: `node C:/Users/Lihan/.claude/core/engine/scripts/hooks/${script}`.slice(0, 60),
     ok: true,
     skipped: false,
     isAsync: false,

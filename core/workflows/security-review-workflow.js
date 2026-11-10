@@ -43,7 +43,7 @@ const evidenceScanRequest = {
   runner: 'argv',
   argv: [
     'node',
-    'engine/scripts/workflow-evidence-scan.cjs',
+    'core/engine/scripts/workflow-evidence-scan.cjs',
     '--json',
     '--root',
     '.',

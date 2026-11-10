@@ -349,7 +349,7 @@ function renderRule(candidate) {
 }
 
 function promotedRulePath(candidate, requestedPath) {
-  const requested = path.resolve(requestedPath || path.join(HARNESS_ROOT, 'docs', 'rules'));
+  const requested = path.resolve(requestedPath || path.join(HARNESS_ROOT, 'core', 'rules'));
   const rulesDir = path.extname(requested).toLowerCase() === '.md' ? path.dirname(requested) : requested;
   return path.join(rulesDir, `90-promoted-${candidate.id}.md`);
 }
@@ -406,7 +406,7 @@ function atomicWrite(filePath, content) {
 
 function promoteCandidate(id, opts = {}) {
   const ledgerPath = opts.ledgerPath || defaultLedgerPath();
-  const requestedRulesPath = opts.rulesPath || path.join(HARNESS_ROOT, 'docs', 'rules');
+  const requestedRulesPath = opts.rulesPath || path.join(HARNESS_ROOT, 'core', 'rules');
   const ledger = readLedger(ledgerPath);
   const candidate = findCandidate(ledger, id);
   if (candidate.status !== 'approved' && candidate.status !== 'promoted') {
@@ -445,7 +445,7 @@ function promoteCandidate(id, opts = {}) {
     };
     writeLedger(ledgerPath, ledger, now);
   }
-  if (path.dirname(rulesPath) === path.join(HARNESS_ROOT, 'docs', 'rules')) {
+  if (path.dirname(rulesPath) === path.join(HARNESS_ROOT, 'core', 'rules')) {
     try { require('./rule-loader.cjs').invalidateRuleIndex(); } catch { /* fresh process still reloads */ }
   }
   return candidate;
@@ -476,7 +476,7 @@ function main(argv = process.argv.slice(2)) {
   } else if (command === 'promote') {
     result = promoteCandidate(id, {
       ledgerPath,
-      rulesPath: optionValue(argv, '--rules', path.join(HARNESS_ROOT, 'docs', 'rules')),
+      rulesPath: optionValue(argv, '--rules', path.join(HARNESS_ROOT, 'core', 'rules')),
       promotedBy: optionValue(argv, '--by'),
     });
   } else if (command === 'list') {

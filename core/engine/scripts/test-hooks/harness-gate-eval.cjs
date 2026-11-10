@@ -22,7 +22,7 @@ const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 
-const HOME = path.resolve(__dirname, '..', '..', '..');
+const HOME = path.resolve(__dirname, '..', '..', '..', '..');
 const DEFAULT_CORPUS = path.join(__dirname, 'fixtures', 'harness-gate-cases.json');
 const VARIANCE_RUNS = 3;
 const MIN_CASES_PER_ENTRY = 5;

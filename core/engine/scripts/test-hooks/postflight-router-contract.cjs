@@ -8,7 +8,7 @@ const { spawnSync } = require('node:child_process');
 const { HARNESS_ROOT } = require('../lib/harness-root.cjs');
 
 const routerPath = path.join(
-  HARNESS_ROOT, 'engine', 'scripts', 'hooks', 'postflight-router.cjs',
+  HARNESS_ROOT, 'core', 'engine', 'scripts', 'hooks', 'postflight-router.cjs',
 );
 
 function payload(eventName, toolName, extra = {}) {
@@ -16,7 +16,7 @@ function payload(eventName, toolName, extra = {}) {
     hook_event_name: eventName,
     tool_name: toolName,
     tool_input: toolName === 'Bash' || toolName === 'PowerShell'
-      ? { command: 'node engine/scripts/test-hooks/example.cjs' }
+      ? { command: 'node core/engine/scripts/test-hooks/example.cjs' }
       : { file_path: path.join(HARNESS_ROOT, 'rtl', 'example.sv') },
     cwd: HARNESS_ROOT,
     session_id: 'postflight-router-contract',
@@ -146,7 +146,7 @@ async function assertRiskAdaptivePostflight(router) {
   };
   let input = payload('PostToolUse', 'Edit', {
     tool_input: {
-      file_path: path.join(HARNESS_ROOT, 'engine', 'scripts', 'hooks', 'postflight-router.cjs'),
+      file_path: path.join(HARNESS_ROOT, 'core', 'engine', 'scripts', 'hooks', 'postflight-router.cjs'),
       old_string: 'const value = 1;',
       new_string: 'const value = 2;',
     },
@@ -171,7 +171,7 @@ async function assertRiskAdaptivePostflight(router) {
   input = payload('PostToolUseFailure', 'Edit', {
     failure_count: 2,
     tool_input: {
-      file_path: path.join(HARNESS_ROOT, 'engine', 'scripts', 'hooks', 'postflight-router.cjs'),
+      file_path: path.join(HARNESS_ROOT, 'core', 'engine', 'scripts', 'hooks', 'postflight-router.cjs'),
       old_string: 'const value = 1;',
       new_string: 'const value = 2;',
     },
@@ -192,7 +192,7 @@ async function assertRiskAdaptivePostflight(router) {
 
   input = payload('PostToolUse', 'Edit', {
     tool_input: {
-      file_path: path.join(HARNESS_ROOT, 'engine', 'scripts', 'hooks', 'postflight-router.cjs'),
+      file_path: path.join(HARNESS_ROOT, 'core', 'engine', 'scripts', 'hooks', 'postflight-router.cjs'),
       old_string: 'module.exports = { route };',
       new_string: 'module.exports = { route, evaluate };',
     },
@@ -246,7 +246,7 @@ async function assertRiskClearsOnlyWithProportionalGreen(router) {
     },
   };
   let input = payload('PostToolUse', 'Bash', {
-    tool_input: { command: 'node engine/scripts/test-hooks/risk-policy-contract.cjs' },
+    tool_input: { command: 'node core/engine/scripts/test-hooks/risk-policy-contract.cjs' },
   });
   let result = await router.evaluatePostflightRisk(input, {
     riskState,
@@ -256,7 +256,7 @@ async function assertRiskClearsOnlyWithProportionalGreen(router) {
   assert.equal(clearCalls.at(-1).evidenceRiskLevel, 'R1');
 
   input = payload('PostToolUse', 'Bash', {
-    tool_input: { command: 'node engine/scripts/test-hooks/run-all-tests.cjs' },
+    tool_input: { command: 'node core/engine/scripts/test-hooks/run-all-tests.cjs' },
   });
   result = await router.evaluatePostflightRisk(input, {
     riskState,
@@ -268,7 +268,7 @@ async function assertRiskClearsOnlyWithProportionalGreen(router) {
 
   const beforeFailure = clearCalls.length;
   input = payload('PostToolUseFailure', 'Bash', {
-    tool_input: { command: 'node engine/scripts/test-hooks/run-all-tests.cjs' },
+    tool_input: { command: 'node core/engine/scripts/test-hooks/run-all-tests.cjs' },
   });
   result = await router.evaluatePostflightRisk(input, {
     riskState,
@@ -293,7 +293,7 @@ async function assertRiskClearsOnlyWithProportionalGreen(router) {
 
 async function assertAcceptedEvidenceFeedsOnlyReusableCache(router) {
   const recorded = [];
-  const target = path.join(HARNESS_ROOT, 'engine', 'scripts', 'hooks', 'postflight-router.cjs');
+  const target = path.join(HARNESS_ROOT, 'core', 'engine', 'scripts', 'hooks', 'postflight-router.cjs');
   const active = [{
     projectRoot: HARNESS_ROOT,
     sessionId: 'postflight-router-contract',
@@ -321,7 +321,7 @@ async function assertAcceptedEvidenceFeedsOnlyReusableCache(router) {
   assert(recorded[0].inputs.fileHashes.some(entry => path.basename(entry.path) === 'postflight-router.cjs'));
 
   input = payload('PostToolUse', 'Bash', {
-    tool_input: { command: 'node engine/scripts/test-hooks/run-all-tests.cjs' },
+    tool_input: { command: 'node core/engine/scripts/test-hooks/run-all-tests.cjs' },
   });
   result = await router.evaluatePostflightRisk(input, {
     riskState,
@@ -464,12 +464,12 @@ async function assertTrustedVerificationAttribution(router) {
 }
 
 async function assertStoredVerificationChain(router) {
-  const sqlite = require(path.join(HARNESS_ROOT, 'engine/sqlite/index.cjs'));
+  const sqlite = require(path.join(HARNESS_ROOT, 'core/engine/sqlite/index.cjs'));
   const attribution = require(path.join(
-    HARNESS_ROOT, 'engine/sqlite/store-memory-attribution.cjs',
+    HARNESS_ROOT, 'core/engine/sqlite/store-memory-attribution.cjs',
   ));
   const { memoryProjectId } = require(path.join(
-    HARNESS_ROOT, 'engine/scripts/lib/project-scope.cjs',
+    HARNESS_ROOT, 'core/engine/scripts/lib/project-scope.cjs',
   ));
   const fixture = fs.mkdtempSync(path.join(os.tmpdir(), 'postflight-attribution-chain-'));
   const dbPath = path.join(fixture, 'memory.db');

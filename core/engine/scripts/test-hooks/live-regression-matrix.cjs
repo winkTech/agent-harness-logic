@@ -15,7 +15,7 @@ function argValue(args, name, fallback = '') {
 
 function runNode(args, opts = {}) {
   return spawnSync(process.execPath, args, {
-    cwd: path.resolve(__dirname, '..', '..', '..'),
+    cwd: path.resolve(__dirname, '..', '..', '..', '..'),
     encoding: 'utf8',
     timeout: opts.timeout || 20 * 60 * 1000,
     windowsHide: true,

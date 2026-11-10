@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * engine/scripts/resolve-wiki-links.cjs — P1-M2: wiki-link 解析器
+ * core/engine/scripts/resolve-wiki-links.cjs — P1-M2: wiki-link 解析器
  *
  * 将 memory/ MEMORY.md 中的 [[name]] 引用解析为实际文件路径和摘要。
  *
@@ -26,6 +26,7 @@
 
 const fs = require('node:fs');
 const path = require('node:path');
+const { kbPath } = require('../config.cjs');
 const { HARNESS_ROOT } = require('./lib/harness-root.cjs');
 
 const MEMORY_DIR = path.join(HARNESS_ROOT, 'memory');
@@ -114,9 +115,9 @@ function buildNameIndex() {
   scanDir(MEMORY_DIR);
   scanDir(path.join(MEMORY_DIR, 'references'));
   scanDir(path.join(MEMORY_DIR, 'agents'));
-  scanDir(path.join(HARNESS_ROOT, 'engineering-assets', 'knowledge','methodology'));
-  scanDir(path.join(HARNESS_ROOT, 'engineering-assets', 'knowledge','primary'));
-  scanDir(path.join(HARNESS_ROOT, 'engineering-assets', 'knowledge','references'));
+  scanDir(path.join(kbPath(HARNESS_ROOT), 'methodology'));
+  scanDir(path.join(kbPath(HARNESS_ROOT), 'primary'));
+  scanDir(path.join(kbPath(HARNESS_ROOT), 'references'));
 
   // 从 MEMORY.md 补充索引（仅取名称，路径从索引行推断）
   if (fs.existsSync(MEMORY_INDEX)) {

@@ -18,7 +18,7 @@
  *  - dry-run mode performs zero shim invocations
  *  - budget stop marks aborted:budget and skips remaining tasks
  *  - anti-tamper: shim tampers a tracked file under the default restorePaths
- *    (engine/scripts/test-hooks); the pass task's eval only sees the ORIGINAL
+ *    (core/engine/scripts/test-hooks); the pass task's eval only sees the ORIGINAL
  *    content, proving git checkout -- restored it before eval
  *  - child env: read-only switches (CLAUDE_HARNESS_NO_PERSIST /
  *    CLAUDE_HARNESS_VERIFY_READONLY / CLAUDE_NO_DIAGNOSTIC_WRITES /
@@ -95,7 +95,7 @@ fs.writeFileSync(path.join(dir, sessionId + '.jsonl'), lines.join('\\n') + '\\n'
 // Simulate a misbehaving agent: tamper a tracked file under the harness's
 // default restorePaths so the contract can prove eval sees restored content.
 try {
-  const guard = path.join(cwd, 'engine', 'scripts', 'test-hooks', 'guard.txt');
+  const guard = path.join(cwd, 'core', 'engine', 'scripts', 'test-hooks', 'guard.txt');
   fs.mkdirSync(path.dirname(guard), { recursive: true });
   fs.writeFileSync(guard, 'GUARD-TAMPERED', 'utf8');
 } catch { /* tamper is best-effort */ }
@@ -103,7 +103,7 @@ try {
 // git checkout -- does NOT revert untracked files, so only the re-place step
 // can bring the canonical content back before eval.
 try {
-  const canary = path.join(cwd, 'engine', 'scripts', 'test-hooks', 'injected-canary.txt');
+  const canary = path.join(cwd, 'core', 'engine', 'scripts', 'test-hooks', 'injected-canary.txt');
   if (fs.existsSync(canary)) fs.writeFileSync(canary, 'CANARY-TAMPERED', 'utf8');
 } catch { /* tamper is best-effort */ }
 const READONLY_KEYS = ['CLAUDE_HARNESS_NO_PERSIST', 'CLAUDE_HARNESS_VERIFY_READONLY', 'CLAUDE_NO_DIAGNOSTIC_WRITES', 'CLAUDE_HOOK_NO_WRITE'];
@@ -143,8 +143,8 @@ function setupScratchRepo(root) {
   fs.writeFileSync(path.join(repo, 'README.md'), '# scratch\n', 'utf8');
   // Tracked file under the harness's default restorePaths: the shim tampers it
   // and the pass eval asserts the replayer restored the original content.
-  fs.mkdirSync(path.join(repo, 'engine', 'scripts', 'test-hooks'), { recursive: true });
-  fs.writeFileSync(path.join(repo, 'engine', 'scripts', 'test-hooks', 'guard.txt'), 'GUARD-ORIGINAL', 'utf8');
+  fs.mkdirSync(path.join(repo, 'core', 'engine', 'scripts', 'test-hooks'), { recursive: true });
+  fs.writeFileSync(path.join(repo, 'core', 'engine', 'scripts', 'test-hooks', 'guard.txt'), 'GUARD-ORIGINAL', 'utf8');
   // Tracked file targeted by the task package's applyPatch (start-state mutation).
   fs.mkdirSync(path.join(repo, 'src'), { recursive: true });
   fs.writeFileSync(path.join(repo, 'src', 'app.js'), "module.exports.tag = 'ORIGINAL';\n", 'utf8');
@@ -197,9 +197,9 @@ function main() {
     write(passScript, `
 'use strict';
 const fs = require('node:fs');
-const observed = fs.readFileSync('engine/scripts/test-hooks/guard.txt', 'utf8');
+const observed = fs.readFileSync('core/engine/scripts/test-hooks/guard.txt', 'utf8');
 const app = fs.readFileSync('src/app.js', 'utf8');
-const canary = fs.readFileSync('engine/scripts/test-hooks/injected-canary.txt', 'utf8');
+const canary = fs.readFileSync('core/engine/scripts/test-hooks/injected-canary.txt', 'utf8');
 fs.writeFileSync(process.env.GOLDEN_RESTORE_OBSERVED, JSON.stringify({ guard: observed, app, canary }), 'utf8');
 const pass = observed === 'GUARD-ORIGINAL'
   && app.includes("module.exports.tag = 'MUTATED';")
@@ -232,7 +232,7 @@ process.exit(pass ? 0 : 1);
         { id: 't-pass', category: 'cat-a', commit: sha, promptFile: promptPass, maxTurns: 30, evalCommand: `node "${passScript}"`, runs: 1,
           applyPatch: mutationPatch,
           sparsePaths: ['engine', 'src'],
-          injectFiles: [{ src: canarySrc, dst: 'engine/scripts/test-hooks/injected-canary.txt' }] },
+          injectFiles: [{ src: canarySrc, dst: 'core/engine/scripts/test-hooks/injected-canary.txt' }] },
         { id: 't-fail', category: 'cat-b', commit: sha, promptFile: promptFail, maxTurns: 30, evalCommand: `node "${failScript}"`, runs: 1 },
       ],
     };
@@ -335,7 +335,7 @@ process.exit(pass ? 0 : 1);
       observed.canary === 'INJECT-CANARY', JSON.stringify(observed.canary));
     assert('run entry records restorePaths restore ok',
       Array.isArray(rPass.restore) && rPass.restore.length === 1
-      && rPass.restore[0].path === 'engine/scripts/test-hooks' && rPass.restore[0].ok === true,
+      && rPass.restore[0].path === 'core/engine/scripts/test-hooks' && rPass.restore[0].ok === true,
       JSON.stringify(rPass.restore));
     assert('run entry records setup.patch ok, setup.inject ok, reinject ok',
       rPass.setup && rPass.setup.patch && rPass.setup.patch.ok === true

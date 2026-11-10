@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * engine/scripts/delivery-tracker.cjs — 交付率追踪器
+ * core/engine/scripts/delivery-tracker.cjs — 交付率追踪器
  *
  * 🔍 P0-2: 交付率追踪
  * 参照: [8] "The Harness Gap" — 测量产出→交付的转化效率
@@ -9,11 +9,11 @@
  * 数据写入 SQLite store-events 表，供 Dashboard 查询。
  *
  * 用法:
- *   node engine/scripts/delivery-tracker.cjs init           # 初始化迁移 (首次)
- *   node engine/scripts/delivery-tracker.cjs record         # 记录一次交付事件 + 交互式输入
- *   node engine/scripts/delivery-tracker.cjs record --phase=P4 --status=pass --modules=3 --retries=1
- *   node engine/scripts/delivery-tracker.cjs report         # 生成交付报告
- *   node engine/scripts/delivery-tracker.cjs report --json  # JSON 格式
+ *   node core/engine/scripts/delivery-tracker.cjs init           # 初始化迁移 (首次)
+ *   node core/engine/scripts/delivery-tracker.cjs record         # 记录一次交付事件 + 交互式输入
+ *   node core/engine/scripts/delivery-tracker.cjs record --phase=P4 --status=pass --modules=3 --retries=1
+ *   node core/engine/scripts/delivery-tracker.cjs report         # 生成交付报告
+ *   node core/engine/scripts/delivery-tracker.cjs report --json  # JSON 格式
  *
  * 自动触发: 在 hdl-coding-dag-workflow 的 Phase 8 收尾时自动调用。
  */
@@ -33,7 +33,7 @@ const HOME = HARNESS_ROOT;
 
 function getDb() {
   try {
-    const { openDb } = require(path.join(HOME, 'engine/sqlite/index.cjs'));
+    const { openDb } = require(path.join(HOME, 'core/engine/sqlite/index.cjs'));
     const wright = openDb();
     return wright && wright.db ? wright.db : null;
   } catch (e) {
@@ -44,7 +44,7 @@ function getDb() {
 // ── 迁移: 表结构由统一迁移账本 (_migrations) 管理 ──────────────────────────
 //
 // delivery_events 的 DDL (建表 + uncovered 归因列) 已收编进
-// engine/sqlite/migrations/013-delivery-events.cjs, 由 openDb() 自动应用。
+// core/engine/sqlite/migrations/013-delivery-events.cjs, 由 openDb() 自动应用。
 // 此处的私有 _delivery_migration 账本已删除 —— 旧库残留的该表只是只读历史。
 // 注入 opts.db 的调用方须通过 openDb() 取连接 (迁移在开库时已跑)。
 
@@ -240,7 +240,7 @@ function generateReport(jsonOutput, opts = {}) {
       console.log(JSON.stringify(deliveryReport(opts), null, 2));
       return;
     }
-    console.log('[delivery-tracker] 暂无交付数据。运行 node engine/scripts/delivery-tracker.cjs record 记录首次。');
+    console.log('[delivery-tracker] 暂无交付数据。运行 node core/engine/scripts/delivery-tracker.cjs record 记录首次。');
     return;
   }
 
@@ -305,10 +305,10 @@ function main() {
     default:
       console.log(`
 用法:
-  node engine/scripts/delivery-tracker.cjs init              # 初始化
-  node engine/scripts/delivery-tracker.cjs record [options]  # 记录事件
-  node engine/scripts/delivery-tracker.cjs report            # 查看报告
-  node engine/scripts/delivery-tracker.cjs report --json     # JSON 格式
+  node core/engine/scripts/delivery-tracker.cjs init              # 初始化
+  node core/engine/scripts/delivery-tracker.cjs record [options]  # 记录事件
+  node core/engine/scripts/delivery-tracker.cjs report            # 查看报告
+  node core/engine/scripts/delivery-tracker.cjs report --json     # JSON 格式
 
 选项:
   --phase=<名称>  阶段名 (P1a/P1b/P2/P3/P4/P4.5/P5/P6/P7/P8)

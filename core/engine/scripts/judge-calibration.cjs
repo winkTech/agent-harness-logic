@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * engine/scripts/judge-calibration.cjs — LLM-as-Judge 校准度评估
+ * core/engine/scripts/judge-calibration.cjs — LLM-as-Judge 校准度评估
  *
  * 🔍 P2-1: Judge 校准度评估
  * 参照: [3] MT-Bench / Chatbot Arena — "judge 本身也需要被评估"
@@ -9,10 +9,10 @@
  * 支持导入标注集、运行 Judge 对比、生成校准报告。
  *
  * 用法:
- *   node engine/scripts/judge-calibration.cjs init              # 创建基准样本模板
- *   node engine/scripts/judge-calibration.cjs run <sample-file>  # 运行校准
- *   node engine/scripts/judge-calibration.cjs report             # 查看校准报告
- *   node engine/scripts/judge-calibration.cjs report --json      # JSON
+ *   node core/engine/scripts/judge-calibration.cjs init              # 创建基准样本模板
+ *   node core/engine/scripts/judge-calibration.cjs run <sample-file>  # 运行校准
+ *   node core/engine/scripts/judge-calibration.cjs report             # 查看校准报告
+ *   node core/engine/scripts/judge-calibration.cjs report --json      # JSON
  */
 
 'use strict';
@@ -287,12 +287,12 @@ function main() {
     default:
       console.log(`
 用法:
-  node engine/scripts/judge-calibration.cjs init                    # 初始化基准样本
-  node engine/scripts/judge-calibration.cjs run [sample-file]       # 运行校准
-  node engine/scripts/judge-calibration.cjs run --judges=3 [file]   # 多 judge 投票
-  node engine/scripts/judge-calibration.cjs run --elo               # 含 ELO 评分
-  node engine/scripts/judge-calibration.cjs report [--json]         # 查看报告
-  node engine/scripts/judge-calibration.cjs elo                     # 查看 ELO 排行榜
+  node core/engine/scripts/judge-calibration.cjs init                    # 初始化基准样本
+  node core/engine/scripts/judge-calibration.cjs run [sample-file]       # 运行校准
+  node core/engine/scripts/judge-calibration.cjs run --judges=3 [file]   # 多 judge 投票
+  node core/engine/scripts/judge-calibration.cjs run --elo               # 含 ELO 评分
+  node core/engine/scripts/judge-calibration.cjs report [--json]         # 查看报告
+  node core/engine/scripts/judge-calibration.cjs elo                     # 查看 ELO 排行榜
 `);
   }
 }

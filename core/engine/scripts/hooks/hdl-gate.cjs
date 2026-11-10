@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * engine/scripts/hooks/hdl-gate.cjs — HDL 编码规则硬门禁 (P0)
+ * core/engine/scripts/hooks/hdl-gate.cjs — HDL 编码规则硬门禁 (P0)
  *
  * 强制执行 docs/rules/01-hdl.md 和 packs/fpga/skills/hdl-coding/SKILL.md 中的关键规则:
  *

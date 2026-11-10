@@ -25,7 +25,7 @@ const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 
-const ROOT = path.resolve(__dirname, '..', '..', '..');
+const ROOT = path.resolve(__dirname, '..', '..', '..', '..');
 const TMP = fs.mkdtempSync(path.join(os.tmpdir(), 'evidence-attribution-'));
 // 账本/门禁状态路径先隔离再 require; NO_PERSIST 只挡图边与遥测, 账本写入不受其影响。
 process.env.CLAUDE_HARNESS_NO_PERSIST = '1';
@@ -33,11 +33,11 @@ process.env.CLAUDE_VERIFY_GATE_STATE_FILE = path.join(TMP, 'verify-gate.json');
 process.env.CLAUDE_VERIFICATION_LEDGER_FILE = path.join(TMP, 'verification-ledger.json');
 process.on('exit', () => { try { fs.rmSync(TMP, { recursive: true, force: true }); } catch { /* cleanup */ } });
 
-const { openDb } = require(path.join(ROOT, 'engine/sqlite/index.cjs'));
-const delivery = require(path.join(ROOT, 'engine/scripts/delivery-tracker.cjs'));
-const router = require(path.join(ROOT, 'engine/scripts/hooks/postflight-router.cjs'));
-const verificationGate = require(path.join(ROOT, 'engine/scripts/hooks/verification-gate.cjs'));
-const evidenceGate = require(path.join(ROOT, 'engine/scripts/hdl-evidence-gate.cjs'));
+const { openDb } = require(path.join(ROOT, 'core/engine/sqlite/index.cjs'));
+const delivery = require(path.join(ROOT, 'core/engine/scripts/delivery-tracker.cjs'));
+const router = require(path.join(ROOT, 'core/engine/scripts/hooks/postflight-router.cjs'));
+const verificationGate = require(path.join(ROOT, 'core/engine/scripts/hooks/verification-gate.cjs'));
+const evidenceGate = require(path.join(ROOT, 'core/engine/scripts/hdl-evidence-gate.cjs'));
 
 const LEDGER_FILE = process.env.CLAUDE_VERIFICATION_LEDGER_FILE;
 

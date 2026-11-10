@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * engine/scripts/rule-loader.cjs — 规则加载机 L1 边界层
+ * core/engine/scripts/rule-loader.cjs — 规则加载机 L1 边界层
  *
  * 解析 rules/*.md 的 trigger/skip frontmatter，在对应场景程序化注入规则。
  * 这是从"Claude 自觉遵守"到"程序化强制加载"的关键转变。
@@ -38,7 +38,7 @@ const { varPath } = require('./lib/harness-state.cjs');
 /**
  * 规则目录。
  *
- * 规则文件放在 `docs/rules/` 而不是 `.claude/rules/`: 后者会被 Claude Code
+ * 规则真源在 `core/rules/` + `packs/fpga/rules/`（拆层后双根），而不是 `.claude/rules/`: 后者会被 Claude Code
  * 当作常驻全局指令**全文注入**每个会话, 与本加载机按需注入的 capsule 形成
  * 双重加权 —— 同一份规则既常驻又被摘要, 既浪费 token 又让"capsule 足够时
  * 不读全文"的加载纪律失效。移出后 capsule 成为唯一路由信号, 全文只在
@@ -46,10 +46,20 @@ const { varPath } = require('./lib/harness-state.cjs');
  *
  * 保留旧路径回退, 以便未迁移的副本仍能工作。
  */
-const RULES_DIR = (() => {
-  const preferred = path.join(HARNESS_ROOT, 'docs', 'rules');
-  if (fs.existsSync(preferred)) return preferred;
-  return path.join(HARNESS_ROOT, 'rules');
+// Phase 1.4：拆层后扫描 core/rules + packs/fpga/rules 双根（核心规则与域包规则
+// 各自持有）；旧布局 docs/rules / rules 保留为兼容回退（未迁移副本仍能工作）。
+const RULES_DIRS = (() => {
+  const split = [
+    path.join(HARNESS_ROOT, 'core', 'rules'),
+    path.join(HARNESS_ROOT, 'packs', 'fpga', 'rules'),
+  ];
+  const existing = split.filter((dir) => fs.existsSync(dir));
+  if (existing.length) return existing;
+  const legacy = [
+    path.join(HARNESS_ROOT, 'docs', 'rules'),
+    path.join(HARNESS_ROOT, 'rules'),
+  ];
+  return legacy.filter((dir) => fs.existsSync(dir));
 })();
 const STATE_FILE = varPath('index', 'runtime-state.json');
 const DEFAULT_CAPSULE_MAX_CHARS = 1800;
@@ -108,17 +118,18 @@ function buildRuleIndex() {
 
   const rules = [];
 
-  if (!fs.existsSync(RULES_DIR)) {
-    _ruleIndex = rules;
-    return rules;
+  // 双根收集：按文件名全局排序保证确定性；同名冲突时 core 根优先（数组序）。
+  const entries = new Map();
+  for (const dir of RULES_DIRS) {
+    const files = fs.readdirSync(dir)
+      .filter(f => f.endsWith('.md'));
+    for (const file of files) {
+      if (!entries.has(file)) entries.set(file, path.join(dir, file));
+    }
   }
+  const sortedEntries = [...entries.entries()].sort(([a], [b]) => a.localeCompare(b));
 
-  const files = fs.readdirSync(RULES_DIR)
-    .filter(f => f.endsWith('.md'))
-    .sort(); // 按文件名排序，保证确定性
-
-  for (const file of files) {
-    const filePath = path.join(RULES_DIR, file);
+  for (const [file, filePath] of sortedEntries) {
     try {
       if (/^90-promoted-hrc-.*\.md$/i.test(file)) {
         const { validatePromotedRuleArtifact } = require('./harness-rule-candidates.cjs');
@@ -301,8 +312,12 @@ function matchTriggerPatterns(input, patterns, openFiles, toolNames, strict) {
  * @returns {string|null}
  */
 function loadRuleContent(fileName) {
-  const filePath = path.join(RULES_DIR, fileName);
-  if (!fs.existsSync(filePath)) return null;
+  let filePath = null;
+  for (const dir of RULES_DIRS) {
+    const candidate = path.join(dir, fileName);
+    if (fs.existsSync(candidate)) { filePath = candidate; break; }
+  }
+  if (!filePath) return null;
   try {
     return fs.readFileSync(filePath, 'utf8');
   } catch (e) {

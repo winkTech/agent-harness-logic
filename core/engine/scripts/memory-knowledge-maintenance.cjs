@@ -3,6 +3,7 @@
 
 const fs = require('node:fs');
 const path = require('node:path');
+const { kbPath } = require('../config.cjs');
 const { spawnSync } = require('node:child_process');
 const { HARNESS_ROOT } = require('./lib/harness-root.cjs');
 const { STATE_ROOT, varPath } = require('./lib/harness-state.cjs');
@@ -199,7 +200,7 @@ function collectMemoryCandidates(opts, now = new Date(), runtime = {}) {
 
 function collectKnowledgeCandidates(opts, now = new Date(), runtime = {}) {
   const home = path.resolve(runtime.home || opts.home || HARNESS_ROOT);
-  const sourceDir = path.join(home, 'engineering-assets', 'knowledge', 'archive', 'sources');
+  const sourceDir = path.join(kbPath(home), 'archive', 'sources');
   const candidates = [];
   for (const filePath of walkMarkdown(sourceDir)) {
     const content = readText(filePath);
@@ -541,7 +542,7 @@ function defaultWriteWeeklyReport(_plan, context) {
 }
 
 function defaultRebuildIndex(_plan, context) {
-  const script = path.join(context.home, 'engine', 'scripts', 'semantic-search.cjs');
+  const script = path.join(context.home, 'core', 'engine', 'scripts', 'semantic-search.cjs');
   const result = spawnSync(process.execPath, [script, 'index', '--rebuild', '--home', context.home], {
     cwd: context.home,
     encoding: 'utf8',

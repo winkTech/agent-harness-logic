@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * engine/scripts/quality-regression-dashboard.cjs — 质量退化仪表盘
+ * core/engine/scripts/quality-regression-dashboard.cjs — 质量退化仪表盘
  *
  * 🔍 P2-2: 质量退化仪表盘
  * 参照: [6] LangSmith — 追踪 + 可观测性
@@ -13,10 +13,10 @@
  *   - 交付通过率
  *
  * 用法:
- *   node engine/scripts/quality-regression-dashboard.cjs record --metric=fmax --value=250 --unit=MHz
- *   node engine/scripts/quality-regression-dashboard.cjs record --metric=lut --value=1234 --project=ofdm
- *   node engine/scripts/quality-regression-dashboard.cjs report [--json]
- *   node engine/scripts/quality-regression-dashboard.cjs trend --metric=fmax --days=30
+ *   node core/engine/scripts/quality-regression-dashboard.cjs record --metric=fmax --value=250 --unit=MHz
+ *   node core/engine/scripts/quality-regression-dashboard.cjs record --metric=lut --value=1234 --project=ofdm
+ *   node core/engine/scripts/quality-regression-dashboard.cjs report [--json]
+ *   node core/engine/scripts/quality-regression-dashboard.cjs trend --metric=fmax --days=30
  */
 
 'use strict';
@@ -267,9 +267,9 @@ function main() {
     default:
       console.log(`
 用法:
-  node engine/scripts/quality-regression-dashboard.cjs record --metric=<name> --value=<n> [--unit=MHz] [--project=ofdm]
-  node engine/scripts/quality-regression-dashboard.cjs report [--json]
-  node engine/scripts/quality-regression-dashboard.cjs trend --metric=fmax --days=30
+  node core/engine/scripts/quality-regression-dashboard.cjs record --metric=<name> --value=<n> [--unit=MHz] [--project=ofdm]
+  node core/engine/scripts/quality-regression-dashboard.cjs report [--json]
+  node core/engine/scripts/quality-regression-dashboard.cjs trend --metric=fmax --days=30
 
 指标:
   fmax, lut, dsp, bram, error_rate, hook_block_rate, delivery_pass, module_count, retry_count

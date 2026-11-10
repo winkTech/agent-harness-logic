@@ -19,11 +19,11 @@ const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 
-const ROOT = path.resolve(__dirname, '..', '..', '..');
-const { openDb } = require(path.join(ROOT, 'engine/sqlite/index.cjs'));
-const planAccuracy = require(path.join(ROOT, 'engine/scripts/plan-accuracy.cjs'));
-const delivery = require(path.join(ROOT, 'engine/scripts/delivery-tracker.cjs'));
-const evidenceGate = require(path.join(ROOT, 'engine/scripts/hdl-evidence-gate.cjs'));
+const ROOT = path.resolve(__dirname, '..', '..', '..', '..');
+const { openDb } = require(path.join(ROOT, 'core/engine/sqlite/index.cjs'));
+const planAccuracy = require(path.join(ROOT, 'core/engine/scripts/plan-accuracy.cjs'));
+const delivery = require(path.join(ROOT, 'core/engine/scripts/delivery-tracker.cjs'));
+const evidenceGate = require(path.join(ROOT, 'core/engine/scripts/hdl-evidence-gate.cjs'));
 
 const NOW = Date.parse('2026-07-30T00:00:00.000Z');
 const DAY = 86_400_000;

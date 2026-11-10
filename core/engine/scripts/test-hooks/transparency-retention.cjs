@@ -8,8 +8,8 @@ const os = require('node:os');
 const path = require('node:path');
 const { spawnSync } = require('node:child_process');
 
-const ROOT = path.resolve(__dirname, '..', '..', '..');
-const LEDGER = path.join(ROOT, 'engine', 'scripts', 'hooks', 'agent-transparency-ledger.cjs');
+const ROOT = path.resolve(__dirname, '..', '..', '..', '..');
+const LEDGER = path.join(ROOT, 'core', 'engine', 'scripts', 'hooks', 'agent-transparency-ledger.cjs');
 
 function runLedger(payload, env) {
   return spawnSync(process.execPath, [LEDGER], {

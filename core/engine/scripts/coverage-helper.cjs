@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * engine/scripts/coverage-helper.cjs — 覆盖率报告解析器。
+ * core/engine/scripts/coverage-helper.cjs — 覆盖率报告解析器。
  *
  * 解析 ModelSim/Vivado 的覆盖率报告，提取结构化指标。
  * 用于工作流 Phase 6 (回归覆盖率) 的自动化评估。

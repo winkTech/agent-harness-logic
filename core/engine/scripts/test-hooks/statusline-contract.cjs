@@ -7,8 +7,8 @@ const os = require('node:os');
 const path = require('node:path');
 const { spawnSync } = require('node:child_process');
 
-const ROOT = path.resolve(__dirname, '..', '..', '..');
-const STATUSLINE = path.join(ROOT, 'scripts', 'statusline.cjs');
+const ROOT = path.resolve(__dirname, '..', '..', '..', '..');
+const STATUSLINE = path.join(ROOT, 'hosts', 'claude-code', 'statusline.cjs');
 
 function main() {
   const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'statusline-contract-'));

@@ -7,7 +7,7 @@ const path = require('node:path');
 const crypto = require('node:crypto');
 const { spawnSync } = require('node:child_process');
 
-const HOME = path.resolve(__dirname, '..', '..', '..');
+const HOME = path.resolve(__dirname, '..', '..', '..', '..');
 const FIXTURE_ROOT = path.join(__dirname, 'fixtures', 'long-task');
 const SCENARIO = path.join(FIXTURE_ROOT, 'scenario');
 const DEFAULT_RUN_ROOT = path.join(os.tmpdir(), 'claude-harness-agent-evals', 'managed-action');
@@ -31,9 +31,9 @@ const VERIFICATION_USER_INSTRUCTION_SNIPPETS = [
 function usage() {
   return [
     'Usage:',
-    '  node engine/scripts/test-hooks/agent-managed-action-eval.cjs --dry-run --kind implementation --out <dir>',
-    '  node engine/scripts/test-hooks/agent-managed-action-eval.cjs --dry-run --kind ambiguous --out <dir>',
-    '  node engine/scripts/test-hooks/agent-managed-action-eval.cjs --agent claude --kind implementation --check-readiness --command "claude -p --tools \\"\\" --output-format json" --out <dir>',
+    '  node core/engine/scripts/test-hooks/agent-managed-action-eval.cjs --dry-run --kind implementation --out <dir>',
+    '  node core/engine/scripts/test-hooks/agent-managed-action-eval.cjs --dry-run --kind ambiguous --out <dir>',
+    '  node core/engine/scripts/test-hooks/agent-managed-action-eval.cjs --agent claude --kind implementation --check-readiness --command "claude -p --tools \\"\\" --output-format json" --out <dir>',
     '',
     'Managed mode disables direct agent tools. The agent returns a JSON action plan; the harness validates intent, writes files, and runs verification.',
   ].join('\n');

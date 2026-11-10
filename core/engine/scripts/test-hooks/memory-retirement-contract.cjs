@@ -19,10 +19,10 @@ const path = require('node:path');
 
 process.env.CLAUDE_HARNESS_NO_PERSIST = '1';
 
-const ROOT = path.resolve(__dirname, '..', '..', '..');
-const { openDb } = require(path.join(ROOT, 'engine/sqlite/index.cjs'));
-const storeMemory = require(path.join(ROOT, 'engine/sqlite/store-memory.cjs'));
-const maintenance = require(path.join(ROOT, 'engine/scripts/memory-knowledge-maintenance.cjs'));
+const ROOT = path.resolve(__dirname, '..', '..', '..', '..');
+const { openDb } = require(path.join(ROOT, 'core/engine/sqlite/index.cjs'));
+const storeMemory = require(path.join(ROOT, 'core/engine/sqlite/store-memory.cjs'));
+const maintenance = require(path.join(ROOT, 'core/engine/scripts/memory-knowledge-maintenance.cjs'));
 
 const DAY = 86_400_000;
 const NOW = Date.now();

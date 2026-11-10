@@ -10,9 +10,9 @@ const CONTROLLED_TOOLS = new Set(['Bash', 'Edit', 'Write', 'Agent', 'Workflow'])
 function usage() {
   return [
     'Usage:',
-    '  node engine/scripts/test-hooks/agent-transcript-compliance.cjs',
-    '  node engine/scripts/test-hooks/agent-transcript-compliance.cjs --transcript run.jsonl',
-    '  node engine/scripts/test-hooks/agent-transcript-compliance.cjs --transcript run.jsonl --expect-command "node test.cjs"',
+    '  node core/engine/scripts/test-hooks/agent-transcript-compliance.cjs',
+    '  node core/engine/scripts/test-hooks/agent-transcript-compliance.cjs --transcript run.jsonl',
+    '  node core/engine/scripts/test-hooks/agent-transcript-compliance.cjs --transcript run.jsonl --expect-command "node test.cjs"',
     '',
     'Without --transcript, runs parser/compliance regression tests.',
   ].join('\n');

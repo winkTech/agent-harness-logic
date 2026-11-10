@@ -2,7 +2,7 @@
 'use strict';
 
 /**
- * engine/scripts/weekly-report.cjs — 周报表统一汇总入口。
+ * core/engine/scripts/weekly-report.cjs — 周报表统一汇总入口。
  *
  * 为什么要这个文件 (2026-07-30): 五张报表原先各自写在 `weekly-maintenance.sh`
  * 里, 而那个 shell 脚本**在本机没有任何调度** —— 没有 cron, 计划任务里也没有。
@@ -12,7 +12,7 @@
  *
  * 现在报表逻辑只有这一份, 两条路径共用:
  *   - 已调度路径: maintenance 的 execute 分支调 collectWeeklyReport({write:true})
- *   - 人工路径:   node engine/scripts/weekly-report.cjs [--json]
+ *   - 人工路径:   node core/engine/scripts/weekly-report.cjs [--json]
  *
  * 硬约束:
  *   - **只读采集**: 除了写自己的快照文件, 不改任何遥测/状态

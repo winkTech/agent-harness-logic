@@ -20,7 +20,7 @@
  *   C3 声称"阻断/拦截"的脚本必须真的有 exit(2) 路径
  *   C4 注册面与实现的工具矩阵必须一致(matcher 覆盖的工具, 代码要认)
  *
- * 用法: node engine/scripts/test-hooks/gate-registry-contract.cjs
+ * 用法: node core/engine/scripts/test-hooks/gate-registry-contract.cjs
  * 退出码: 0 全通过 / 1 有不一致
  */
 
@@ -60,7 +60,7 @@ function registeredScripts(opts = {}) {
     }
   }
   if (opts.includeRouterDependencies !== false && names.has('preflight-router.cjs')) {
-    const router = path.join(HOME, 'engine', 'scripts', 'hooks', 'preflight-router.cjs');
+    const router = path.join(HOME, 'core', 'engine', 'scripts', 'hooks', 'preflight-router.cjs');
     for (const ref of staticRouterDependencies(router)) names.add(path.basename(ref.script));
   }
   return names;
@@ -69,8 +69,8 @@ function registeredScripts(opts = {}) {
 /** 所有门禁类脚本。 */
 function gateScripts() {
   const dirs = [
-    path.join(HOME, 'engine/scripts/hooks'),
-    path.join(HOME, 'engine/hooks/safety'),
+    path.join(HOME, 'core/engine/scripts/hooks'),
+    path.join(HOME, 'core/engine/hooks/safety'),
   ];
   const out = [];
   for (const d of dirs) {

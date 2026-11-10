@@ -177,7 +177,7 @@ DSP 没吸收流水寄存器、Fmax 掉一半，而工具**不报任何错**。
 
 ### 10.1 三条硬要求
 
-0. **[MUST] 查文档先锚版本。** 先用 `node engine/scripts/eda-detect.cjs --json` 查出本机
+0. **[MUST] 查文档先锚版本。** 先用 `node core/engine/scripts/eda-detect.cjs --json` 查出本机
    实际版本，再把 docs.amd.com 切到同一版——它默认显示最新发行版，而本机通常落后若干版。
    照新版抄来的 TCL 选项、综合属性、器件型号，在旧版上会报 `invalid option`、被静默忽略
    或找不到 part。UG 地图与细则见 `references/vivado-doc-map.md`。

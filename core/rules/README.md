@@ -66,8 +66,8 @@
 ## 开发与观测入口
 
 ```bash
-node engine/scripts/test-hooks/live-regression-matrix.cjs --live --agents claude,codex --kinds implementation,ambiguous --out var/evals/live-regression
-node engine/scripts/transparency-dashboard.cjs --out var/agent-transparency-dashboard.html
+node core/engine/scripts/test-hooks/live-regression-matrix.cjs --live --agents claude,codex --kinds implementation,ambiguous --out var/evals/live-regression
+node core/engine/scripts/transparency-dashboard.cjs --out var/agent-transparency-dashboard.html
 ```
 
 Hook 实现分层：

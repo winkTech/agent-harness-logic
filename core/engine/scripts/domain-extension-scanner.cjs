@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * engine/scripts/domain-extension-scanner.cjs — 领域扩展扫描器
+ * core/engine/scripts/domain-extension-scanner.cjs — 领域扩展扫描器
  *
  * 🔍 P2-3: 领域扩展
  * 参照: [2] SWE-bench — 将评估体系扩展到更多领域
@@ -10,9 +10,9 @@
  * Python/MATLAB/C 等领域。
  *
  * 用法:
- *   node engine/scripts/domain-extension-scanner.cjs scan [dir]
- *   node engine/scripts/domain-extension-scanner.cjs report
- *   node engine/scripts/domain-extension-scanner.cjs analyze <file>
+ *   node core/engine/scripts/domain-extension-scanner.cjs scan [dir]
+ *   node core/engine/scripts/domain-extension-scanner.cjs report
+ *   node core/engine/scripts/domain-extension-scanner.cjs analyze <file>
  */
 
 'use strict';
@@ -115,7 +115,7 @@ function scanDirectory(dir) {
     if (stats[domain].files === 0) continue;
     // 检查是否有对应的 gate 或 hook
     const gateFiles = {
-      python: fs.existsSync(path.join(HOME, 'engine/scripts/hooks/hdl-gate.cjs')) ? 'hdl-gate (不适用)' : '无专用 gate',
+      python: fs.existsSync(path.join(HOME, 'core/engine/scripts/hooks/hdl-gate.cjs')) ? 'hdl-gate (不适用)' : '无专用 gate',
       matlab: '无专用 gate (受 golden model 保护规则保护)',
       javascript: '通过 verification-gate 和 commit-gate 部分覆盖',
       c_cpp: '无专用 gate',
@@ -164,7 +164,7 @@ function generateReport(scanned) {
       const def = DOMAINS[domain];
       console.log(`   ${domain} — ${def.description}`);
       console.log(`     创建: engine/rules/${domain}.md`);
-      console.log(`     创建: engine/scripts/hooks/${domain}-gate.cjs`);
+      console.log(`     创建: core/engine/scripts/hooks/${domain}-gate.cjs`);
       console.log(`     集成: commit-gate 中注册 ${domain}-lint`);
     }
     console.log('');
@@ -260,9 +260,9 @@ function main() {
     default:
       console.log(`
 用法:
-  node engine/scripts/domain-extension-scanner.cjs scan [dir]    # 扫描目录
-  node engine/scripts/domain-extension-scanner.cjs report        # 查看报告
-  node engine/scripts/domain-extension-scanner.cjs analyze <file> # 单文件分析
+  node core/engine/scripts/domain-extension-scanner.cjs scan [dir]    # 扫描目录
+  node core/engine/scripts/domain-extension-scanner.cjs report        # 查看报告
+  node core/engine/scripts/domain-extension-scanner.cjs analyze <file> # 单文件分析
 `);
   }
 

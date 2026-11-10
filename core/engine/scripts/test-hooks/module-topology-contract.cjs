@@ -31,7 +31,7 @@ const cg = require('../cg-queries.cjs');
 const topology = require('../lib/module-topology.cjs');
 const indexer = require('../code-graph-index.cjs');
 
-const CLI = path.join(HARNESS_ROOT, 'engine', 'scripts', 'module-order.cjs');
+const CLI = path.join(HARNESS_ROOT, 'core', 'engine', 'scripts', 'module-order.cjs');
 
 function mod(name, children = []) {
   const body = children.map((c, i) => `  ${c} u_${c}_${i} (.clk(clk), .d(d), .q(q));`).join('\n');

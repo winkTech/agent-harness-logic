@@ -2,7 +2,7 @@
 'use strict';
 
 /**
- * engine/scripts/test-hooks/harness-state-contract.test.cjs — 状态根解析与迁移契约
+ * core/engine/scripts/test-hooks/harness-state-contract.test.cjs — 状态根解析与迁移契约
  *
  * 覆盖 M1（状态分离）合同的 10 条断言：
  *   1. env.HARNESS_STATE_DIR 覆盖优先于一切；

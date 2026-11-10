@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * engine/scripts/fpga-wave-helper.cjs — 波形辅助工具。
+ * core/engine/scripts/fpga-wave-helper.cjs — 波形辅助工具。
  *
  * 在仿真失败时自动 dump VCD/FSDB 波形。
  * 自动检测仿真器并生成对应的波形 dump 命令。

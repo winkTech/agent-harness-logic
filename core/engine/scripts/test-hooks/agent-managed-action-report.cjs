@@ -7,8 +7,8 @@ const path = require('node:path');
 function usage() {
   return [
     'Usage:',
-    '  node engine/scripts/test-hooks/agent-managed-action-report.cjs <manifest-or-run-dir>',
-    '  node engine/scripts/test-hooks/agent-managed-action-report.cjs --json <manifest-or-run-dir>',
+    '  node core/engine/scripts/test-hooks/agent-managed-action-report.cjs <manifest-or-run-dir>',
+    '  node core/engine/scripts/test-hooks/agent-managed-action-report.cjs --json <manifest-or-run-dir>',
     '',
     'Reads managed-action or managed-action-matrix evidence and prints a human-readable report.',
   ].join('\n');

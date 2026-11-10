@@ -1,7 +1,7 @@
 'use strict';
 
 /**
- * engine/scripts/lib/utils.js — 基础工具函数库
+ * core/engine/scripts/lib/utils.js — 基础工具函数库
  *
  * 供 ecc-runner 等脚本需要的通用工具函数。
  * 该文件的存在标志 ECC 插件根目录的合法性。

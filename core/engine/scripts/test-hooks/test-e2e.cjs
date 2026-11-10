@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * engine/scripts/test-hooks/test-e2e.cjs — E2E 恢复测试 (P2)
+ * core/engine/scripts/test-hooks/test-e2e.cjs — E2E 恢复测试 (P2)
  *
  * 端到端测试 Harness 核心功能的完整性:
  *   1. Hook 注册完整性 — 所有 settings.json 中的 hook 文件存在
@@ -9,9 +9,9 @@
  *   4. Commit gate 语法
  *
  * 用法:
- *   node engine/scripts/test-hooks/test-e2e.cjs
- *   node engine/scripts/test-hooks/test-e2e.cjs --verbose
- *   node engine/scripts/test-hooks/test-e2e.cjs --json
+ *   node core/engine/scripts/test-hooks/test-e2e.cjs
+ *   node core/engine/scripts/test-hooks/test-e2e.cjs --verbose
+ *   node core/engine/scripts/test-hooks/test-e2e.cjs --json
  */
 
 'use strict';
@@ -64,7 +64,7 @@ test('Hook 注册完整性', () => {
 // ═════════════════════════════════════════════════════════════════════════════
 
 test('Verification Gate 全周期 (write → block → verify → clear → allow)', () => {
-  const gatePath = path.join(HOME, 'engine/scripts/hooks/verification-gate.cjs');
+  const gatePath = path.join(HOME, 'core/engine/scripts/hooks/verification-gate.cjs');
   if (!fs.existsSync(gatePath)) return { ok: false, detail: 'verification-gate.cjs 不存在' };
 
   // Step 1: 模拟编辑操作写状态文件
@@ -139,7 +139,7 @@ test('Verification Gate 全周期 (write → block → verify → clear → allo
 // ═════════════════════════════════════════════════════════════════════════════
 
 test('Pre-compact 检查点', () => {
-  const preCompactPath = path.join(HOME, 'engine/scripts/pre-compact.cjs');
+  const preCompactPath = path.join(HOME, 'core/engine/scripts/pre-compact.cjs');
   if (!fs.existsSync(preCompactPath)) return { ok: false, detail: 'pre-compact.cjs 不存在' };
 
   const result = spawnSync('node', [preCompactPath], {
@@ -162,7 +162,7 @@ test('Pre-compact 检查点', () => {
 // ═════════════════════════════════════════════════════════════════════════════
 
 test('Commit gate 语法', () => {
-  const gatePath = path.join(HOME, 'engine/scripts/gates/commit-gate.cjs');
+  const gatePath = path.join(HOME, 'core/engine/scripts/gates/commit-gate.cjs');
   if (!fs.existsSync(gatePath)) return { ok: true, detail: 'commit-gate.cjs 未注册，跳过' };
 
   const r = spawnSync('node', ['--check', gatePath], {
@@ -177,13 +177,13 @@ test('Commit gate 语法', () => {
 
 test('新 gate 文件存在性', () => {
   const gateFiles = [
-    'engine/scripts/hooks/python-gate.cjs',
-    'engine/scripts/hooks/matlab-gate.cjs',
-    'engine/scripts/hooks/fpr-calibration-hook.cjs',
-    'engine/scripts/coverage-runner.cjs',
-    'engine/scripts/hooks/coverage-gate.cjs',
-    'engine/scripts/dashboard-html.cjs',
-    'engine/scripts/lib/judge-service.cjs',
+    'core/engine/scripts/hooks/python-gate.cjs',
+    'core/engine/scripts/hooks/matlab-gate.cjs',
+    'core/engine/scripts/hooks/fpr-calibration-hook.cjs',
+    'core/engine/scripts/coverage-runner.cjs',
+    'core/engine/scripts/hooks/coverage-gate.cjs',
+    'core/engine/scripts/dashboard-html.cjs',
+    'core/engine/scripts/lib/judge-service.cjs',
   ];
   const settingsText = fs.existsSync(path.join(HOME, 'settings.json'))
     ? fs.readFileSync(path.join(HOME, 'settings.json'), 'utf8')
@@ -202,13 +202,13 @@ test('新 gate 文件存在性', () => {
 
 test('新 gate 语法检查', () => {
   const gateFiles = [
-    'engine/scripts/hooks/python-gate.cjs',
-    'engine/scripts/hooks/matlab-gate.cjs',
-    'engine/scripts/hooks/fpr-calibration-hook.cjs',
-    'engine/scripts/coverage-runner.cjs',
-    'engine/scripts/hooks/coverage-gate.cjs',
-    'engine/scripts/dashboard-html.cjs',
-    'engine/scripts/lib/judge-service.cjs',
+    'core/engine/scripts/hooks/python-gate.cjs',
+    'core/engine/scripts/hooks/matlab-gate.cjs',
+    'core/engine/scripts/hooks/fpr-calibration-hook.cjs',
+    'core/engine/scripts/coverage-runner.cjs',
+    'core/engine/scripts/hooks/coverage-gate.cjs',
+    'core/engine/scripts/dashboard-html.cjs',
+    'core/engine/scripts/lib/judge-service.cjs',
   ];
   const failed = [];
   for (const f of gateFiles) {
@@ -224,7 +224,7 @@ test('新 gate 语法检查', () => {
 });
 
 test('P0 痛点回归', () => {
-  const p = path.join(HOME, 'engine/scripts/test-hooks/harness-painpoints.cjs');
+  const p = path.join(HOME, 'core/engine/scripts/test-hooks/harness-painpoints.cjs');
   if (!fs.existsSync(p)) return { ok: false, detail: 'harness-painpoints.cjs 不存在' };
   // painpoints 单独跑 ~14s, 但全量负载下曾 30s/90s 两次被砍断 (spawnSync 对多级
   // 孙进程的回收在 Windows 上开销大; 2026-08-26 实测 90s 仍 ETIMEDOUT)。

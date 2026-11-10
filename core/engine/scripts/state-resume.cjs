@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * engine/scripts/state-resume.cjs — L3 交接增强: 跨 session 状态恢复
+ * core/engine/scripts/state-resume.cjs — L3 交接增强: 跨 session 状态恢复
  *
  * 在 SessionStart 时读取 runtime-state.json，将前 session 的关键状态
  * （failureCount、currentMode、lastActivityAt）注入新 session 的上下文。

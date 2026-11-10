@@ -20,8 +20,8 @@ const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 
-const ROOT = path.resolve(__dirname, '..', '..', '..');
-const semantic = require(path.join(ROOT, 'engine/scripts/semantic-search.cjs'));
+const ROOT = path.resolve(__dirname, '..', '..', '..', '..');
+const semantic = require(path.join(ROOT, 'core/engine/scripts/semantic-search.cjs'));
 
 const MIN_PRECISION = 0.8;
 const MIN_HIT_RATE = 0.9;

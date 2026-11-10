@@ -7,7 +7,7 @@ const os = require('node:os');
 const path = require('node:path');
 const { spawn } = require('node:child_process');
 
-const ROOT = path.resolve(__dirname, '..', '..', '..');
+const ROOT = path.resolve(__dirname, '..', '..', '..', '..');
 
 function runNode(args, opts = {}) {
   return new Promise((resolve, reject) => {
@@ -48,15 +48,15 @@ function runNodeResult(args, opts = {}) {
 
 async function main() {
   const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'claude-state-concurrency-'));
-  const projectScopePath = path.join(ROOT, 'engine', 'scripts', 'lib', 'project-scope.cjs');
-  const verificationPath = path.join(ROOT, 'engine', 'scripts', 'lib', 'verification-state.cjs');
-  const evidencePath = path.join(ROOT, 'engine', 'scripts', 'lib', 'evidence-ledger.cjs');
-  const runtimeStatePath = path.join(ROOT, 'engine', 'scripts', 'runtime-state.cjs');
-  const preCompactPath = path.join(ROOT, 'engine', 'scripts', 'pre-compact.cjs');
-  const isolationCheckPath = path.join(ROOT, 'engine', 'scripts', 'hooks', 'isolation-check.cjs');
-  const frustrationPath = path.join(ROOT, 'engine', 'scripts', 'hooks', 'frustration-detector.cjs');
-  const watchdogPath = path.join(ROOT, 'engine', 'hooks', 'session', 'progress-watchdog.cjs');
-  const sqlitePath = path.join(ROOT, 'engine', 'sqlite', 'index.cjs');
+  const projectScopePath = path.join(ROOT, 'core', 'engine', 'scripts', 'lib', 'project-scope.cjs');
+  const verificationPath = path.join(ROOT, 'core', 'engine', 'scripts', 'lib', 'verification-state.cjs');
+  const evidencePath = path.join(ROOT, 'core', 'engine', 'scripts', 'lib', 'evidence-ledger.cjs');
+  const runtimeStatePath = path.join(ROOT, 'core', 'engine', 'scripts', 'runtime-state.cjs');
+  const preCompactPath = path.join(ROOT, 'core', 'engine', 'scripts', 'pre-compact.cjs');
+  const isolationCheckPath = path.join(ROOT, 'core', 'engine', 'scripts', 'hooks', 'isolation-check.cjs');
+  const frustrationPath = path.join(ROOT, 'core', 'engine', 'scripts', 'hooks', 'frustration-detector.cjs');
+  const watchdogPath = path.join(ROOT, 'core', 'engine', 'hooks', 'session', 'progress-watchdog.cjs');
+  const sqlitePath = path.join(ROOT, 'core', 'engine', 'sqlite', 'index.cjs');
   const workerPath = path.join(tempRoot, 'worker.cjs');
 
   const projectScope = require(projectScopePath);

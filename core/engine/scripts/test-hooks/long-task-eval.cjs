@@ -6,7 +6,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const { spawnSync } = require('node:child_process');
 
-const HOME = path.resolve(__dirname, '..', '..', '..');
+const HOME = path.resolve(__dirname, '..', '..', '..', '..');
 const FIXTURE_ROOT = path.join(__dirname, 'fixtures', 'long-task');
 const RUN_ROOT = path.join(HOME, 'var', 'agent-evals', 'long-task');
 const SCENARIO = path.join(FIXTURE_ROOT, 'scenario');

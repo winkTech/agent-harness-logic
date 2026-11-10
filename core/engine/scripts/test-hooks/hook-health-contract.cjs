@@ -17,9 +17,9 @@ const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 
-const ROOT = path.resolve(__dirname, '..', '..', '..');
-const PREFLIGHT = path.join(ROOT, 'engine', 'scripts', 'hooks', 'preflight-router.cjs');
-const POSTFLIGHT = path.join(ROOT, 'engine', 'scripts', 'hooks', 'postflight-router.cjs');
+const ROOT = path.resolve(__dirname, '..', '..', '..', '..');
+const PREFLIGHT = path.join(ROOT, 'core', 'engine', 'scripts', 'hooks', 'preflight-router.cjs');
+const POSTFLIGHT = path.join(ROOT, 'core', 'engine', 'scripts', 'hooks', 'postflight-router.cjs');
 
 // HARNESS_STATE_DIR 必须在任何 require 之前设置 —— harness-state / hook-health
 // 都在模块加载期解析一次状态根。只读类环境变量全部清掉，保证遥测可写。
@@ -32,7 +32,7 @@ for (const key of [
   'CLAUDE_HOOK_NO_WRITE',
 ]) delete process.env[key];
 
-const { recordHealth, readHealthLog, STORE_FILE } = require(path.join(ROOT, 'engine', 'scripts', 'lib', 'hook-health.cjs'));
+const { recordHealth, readHealthLog, STORE_FILE } = require(path.join(ROOT, 'core', 'engine', 'scripts', 'lib', 'hook-health.cjs'));
 
 /** 子进程用同一套净化环境：HARNESS_STATE_DIR 指到各自独立临时目录。 */
 function spawnEnv(stateDir) {

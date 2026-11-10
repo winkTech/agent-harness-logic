@@ -118,7 +118,7 @@ async function runWorkflow(name, args = {}, opts = {}) {
         dependencyIssues: [],
         automatedEvidence: {
           runner: 'argv',
-          argv: ['node', 'engine/scripts/workflow-evidence-scan.cjs', '--json', '--root', '.', '--targets-json', '["src"]'],
+          argv: ['node', 'core/engine/scripts/workflow-evidence-scan.cjs', '--json', '--root', '.', '--targets-json', '["src"]'],
           scanner: 'workflow-evidence-scan',
           schemaVersion: 2,
           exitCode: 0,

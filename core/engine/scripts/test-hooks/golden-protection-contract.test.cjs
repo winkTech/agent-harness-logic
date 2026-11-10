@@ -9,7 +9,7 @@
  * 因此判据应落在"有没有可被倒置的对象"和"消费方 RTL 是不是刚被动过"这类硬事实上,
  * 而不是一律要人签一次字。新建豁免只放开结构上无从倒置的那一类, 其余原样收紧。
  *
- * 用法: node --test engine/scripts/test-hooks/golden-protection-contract.test.cjs
+ * 用法: node --test core/engine/scripts/test-hooks/golden-protection-contract.test.cjs
  */
 'use strict';
 
@@ -22,7 +22,7 @@ const test = require('node:test');
 const ROOT = path.resolve(__dirname, '../../..');
 // 默认测线上守卫; GOLDEN_GUARD_PATH 可指向待评审的副本, 用于"补丁应用前先验证"。
 const GUARD = process.env.GOLDEN_GUARD_PATH
-  || path.join(ROOT, 'engine', 'scripts', 'hooks', 'file-protection-guard.cjs');
+  || path.join(ROOT, 'core', 'engine', 'scripts', 'hooks', 'file-protection-guard.cjs');
 const { evaluate } = require(GUARD);
 
 const FOUR_HOURS_MS = 4 * 60 * 60 * 1000;
@@ -34,13 +34,13 @@ function fixture(t) {
 
   fs.writeFileSync(path.join(root, 'CLAUDE.md'), '# fixture root marker\n', 'utf8');
 
-  const withConsumer = path.join(root, 'engineering-assets', 'models', 'comm', 'withconsumer');
+  const withConsumer = path.join(root, 'packs', 'fpga', 'engineering-assets', 'models', 'comm', 'withconsumer');
   fs.mkdirSync(path.join(withConsumer, 'src'), { recursive: true });
   fs.writeFileSync(path.join(withConsumer, 'manifest.json'),
     JSON.stringify({ asset_uid: 'model_withconsumer', kind: 'golden-model', implements_for: ['modx'] }), 'utf8');
   fs.writeFileSync(path.join(withConsumer, 'src', 'existing.m'), '% 既有 golden\n', 'utf8');
 
-  const noConsumer = path.join(root, 'engineering-assets', 'models', 'comm', 'noconsumer');
+  const noConsumer = path.join(root, 'packs', 'fpga', 'engineering-assets', 'models', 'comm', 'noconsumer');
   fs.mkdirSync(path.join(noConsumer, 'src'), { recursive: true });
   fs.writeFileSync(path.join(noConsumer, 'manifest.json'),
     JSON.stringify({ asset_uid: 'model_noconsumer', kind: 'golden-model' }), 'utf8');
@@ -55,7 +55,7 @@ function fixture(t) {
     newFile: path.join(withConsumer, 'src', 'brand_new.m'),      // 故意不创建
     existingFile: path.join(withConsumer, 'src', 'existing.m'),
     orphanNewFile: path.join(noConsumer, 'src', 'orphan_new.m'), // 目录无 implements_for
-    unprotected: path.join(root, 'engineering-assets', 'cbb', 'notes.md'),
+    unprotected: path.join(root, 'packs', 'fpga', 'engineering-assets', 'cbb', 'notes.md'),
   };
 }
 
@@ -157,8 +157,8 @@ function tokenFixture(t, remainingWrites = 2) {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'protected-write-'));
   t.after(() => fs.rmSync(root, { recursive: true, force: true }));
 
-  const hooks = path.join(root, 'engine', 'scripts', 'hooks');
-  const lib = path.join(root, 'engine', 'scripts', 'lib');
+  const hooks = path.join(root, 'core', 'engine', 'scripts', 'hooks');
+  const lib = path.join(root, 'core', 'engine', 'scripts', 'lib');
   fs.mkdirSync(hooks, { recursive: true });
   fs.mkdirSync(lib, { recursive: true });
   fs.copyFileSync(GUARD, path.join(hooks, 'file-protection-guard.cjs'));
@@ -170,12 +170,12 @@ function tokenFixture(t, remainingWrites = 2) {
     'harness-root.cjs',
     'risk-policy.cjs',
   ]) {
-    fs.copyFileSync(path.join(ROOT, 'engine', 'scripts', 'lib', dep), path.join(lib, dep));
+    fs.copyFileSync(path.join(ROOT, 'core', 'engine', 'scripts', 'lib', dep), path.join(lib, dep));
   }
 
   fs.writeFileSync(path.join(root, 'CLAUDE.md'), '# fixture root marker\n', 'utf8');
 
-  const model = path.join(root, 'engineering-assets', 'models', 'comm', 'withconsumer');
+  const model = path.join(root, 'packs', 'fpga', 'engineering-assets', 'models', 'comm', 'withconsumer');
   fs.mkdirSync(path.join(model, 'src'), { recursive: true });
   fs.writeFileSync(path.join(model, 'manifest.json'),
     JSON.stringify({ asset_uid: 'model_withconsumer', kind: 'golden-model', implements_for: ['modx'] }), 'utf8');
@@ -191,7 +191,7 @@ function tokenFixture(t, remainingWrites = 2) {
   const approvals = path.join(root, 'var', 'audit', 'protected-write-approvals.json');
   fs.mkdirSync(path.dirname(approvals), { recursive: true });
   fs.writeFileSync(approvals, JSON.stringify([{
-    scope: 'engineering-assets/models/comm/withconsumer',
+    scope: 'packs/fpga/engineering-assets/models/comm/withconsumer',
     decision: 'test-ruling-001',
     remainingWrites,
     expiresAt: new Date(Date.now() + FOUR_HOURS_MS).toISOString(),

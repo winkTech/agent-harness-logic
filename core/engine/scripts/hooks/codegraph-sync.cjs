@@ -2,7 +2,7 @@
 'use strict';
 
 /**
- * engine/scripts/hooks/codegraph-sync.cjs — 代码图索引调度器。
+ * core/engine/scripts/hooks/codegraph-sync.cjs — 代码图索引调度器。
  *
  * 图查询链 (cg-queries / codegraph MCP / getBlastRadius) 早就建好了, 但从来没有
  * 任何东西触发过索引 —— 实测 cg_nodes=0, cg_edges=0, 于是所有图查询恒返回空。

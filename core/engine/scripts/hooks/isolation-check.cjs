@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * engine/scripts/hooks/isolation-check.cjs — 隔离环境检查 (P0)
+ * core/engine/scripts/hooks/isolation-check.cjs — 隔离环境检查 (P0)
  *
  * SessionStart hook: 检查当前是否运行在隔离环境（容器/VM）中。
  * 如果在 bare-metal Windows/Git-Bash 中使用了 bypassPermissions 模式，

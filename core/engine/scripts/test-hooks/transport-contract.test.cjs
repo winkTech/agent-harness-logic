@@ -1,7 +1,7 @@
 'use strict';
 
 /**
- * engine/scripts/test-hooks/transport-contract.test.cjs — transport 归一化层契约测试
+ * core/engine/scripts/test-hooks/transport-contract.test.cjs — transport 归一化层契约测试
  *
  * 验证 harness-event-v1 契约（S1 基础画像）在三 transport（claude-code /
  * workbuddy / codex）上的一致性：
@@ -20,7 +20,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const { HARNESS_ROOT } = require('../lib/harness-root.cjs');
 
-const transportRoot = path.join(HARNESS_ROOT, 'engine', 'scripts', 'transport');
+const transportRoot = path.join(HARNESS_ROOT, 'core', 'engine', 'scripts', 'transport');
 const {
   normalize,
   TRANSPORTS,
@@ -29,10 +29,10 @@ const {
   toCanonicalPayload,
 } = require(path.join(transportRoot, 'index.cjs'));
 
-const FIXTURES_ROOT = path.join(HARNESS_ROOT, 'engine', 'scripts', 'test-hooks', 'fixtures');
+const FIXTURES_ROOT = path.join(HARNESS_ROOT, 'core', 'engine', 'scripts', 'test-hooks', 'fixtures');
 const FIXTURE_DIRS = ['transport-claude-code', 'transport-workbuddy', 'transport-codex'];
 
-const SCHEMA_PATH = path.join(HARNESS_ROOT, 'engine', 'schemas', 'harness-event-v1.schema.json');
+const SCHEMA_PATH = path.join(HARNESS_ROOT, 'core', 'engine', 'schemas', 'harness-event-v1.schema.json');
 const schema = JSON.parse(fs.readFileSync(SCHEMA_PATH, 'utf8'));
 
 const ALLOWED_EVENT_TYPES = new Set(schema.properties.eventType.enum);

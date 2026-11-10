@@ -1,7 +1,7 @@
 'use strict';
 
 /**
- * engine/scripts/test-hooks/router-transport-equivalence.test.cjs
+ * core/engine/scripts/test-hooks/router-transport-equivalence.test.cjs
  *   —— 路由层 transport 等价性契约（M3 D2）
  *
  * M3 的核心命题：核心只在**边界**识别一次运行时。同一个逻辑动作，
@@ -50,10 +50,10 @@ test.after(() => {
   } catch { /* Windows 句柄占用时留待系统清理 */ }
 });
 
-const hooksRoot = path.join(HARNESS_ROOT, 'engine', 'scripts', 'hooks');
+const hooksRoot = path.join(HARNESS_ROOT, 'core', 'engine', 'scripts', 'hooks');
 const preflight = require(path.join(hooksRoot, 'preflight-router.cjs'));
 const postflight = require(path.join(hooksRoot, 'postflight-router.cjs'));
-const { ingest } = require(path.join(HARNESS_ROOT, 'engine', 'scripts', 'transport', 'index.cjs'));
+const { ingest } = require(path.join(HARNESS_ROOT, 'core', 'engine', 'scripts', 'transport', 'index.cjs'));
 
 const CWD = String(HARNESS_ROOT).replace(/\\/g, '/');
 const SESSION = 'm3-transport-equivalence';

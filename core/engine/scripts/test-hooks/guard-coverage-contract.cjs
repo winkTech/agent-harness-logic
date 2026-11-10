@@ -18,11 +18,11 @@ const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 
-const ROOT = path.resolve(__dirname, '..', '..', '..');
+const ROOT = path.resolve(__dirname, '..', '..', '..', '..');
 process.env.CLAUDE_HARNESS_NO_PERSIST = '1';
 
-const guardCoverage = require(path.join(ROOT, 'engine/scripts/guard-coverage.cjs'));
-const health = require(path.join(ROOT, 'engine/scripts/memory-health-check.cjs'));
+const guardCoverage = require(path.join(ROOT, 'core/engine/scripts/guard-coverage.cjs'));
+const health = require(path.join(ROOT, 'core/engine/scripts/memory-health-check.cjs'));
 
 function main() {
   // ── 1+2. 覆盖率: 每个类别都被真实 case 命中 ──
@@ -98,7 +98,7 @@ function main() {
     //
     // 判定范围取"既遍历资产集、又写文件"的工具: 只有这类才可能把写落进 models/**。
     // 豁免必须写明理由, **且理由要由 check() 真跑一遍**, 免得日后数据变了理由还挂着。
-    const toolsDir = path.join(ROOT, 'engineering-assets', 'tools');
+    const toolsDir = path.join(ROOT, 'packs', 'fpga', 'engineering-assets', 'tools');
     const { isProtected } = require(path.join(toolsDir, 'lib', 'protected-write.cjs'));
     const catalogGen = require(path.join(toolsDir, 'catalog-gen.cjs'));
     const EA = 'engineering-assets';
@@ -322,7 +322,7 @@ function main() {
     // (与 golden-protection-contract 的 tokenFixture 同一手法)。
     {
       const libRoot = path.join(tmp, 'lib-fixture');
-      const libDir = path.join(libRoot, 'engineering-assets', 'tools', 'lib');
+      const libDir = path.join(libRoot, 'packs', 'fpga', 'engineering-assets', 'tools', 'lib');
       fs.mkdirSync(libDir, { recursive: true });
       fs.copyFileSync(path.join(toolsDir, 'lib', 'protected-write.cjs'),
         path.join(libDir, 'protected-write.cjs'));
@@ -332,7 +332,7 @@ function main() {
       const ledger = path.join(auditDir2, 'protected-writes.jsonl');
 
       const TOKEN = {
-        scope: 'engineering-assets/models/comm/fixture',
+        scope: 'packs/fpga/engineering-assets/models/comm/fixture',
         decision: 'FIXTURE-1',
         reason: '契约夹具: 验证库侧放行会消费令牌并留痕',
         basis: { kind: 'maintenance', ref: 'guard-coverage-contract' },
@@ -342,7 +342,7 @@ function main() {
       fs.writeFileSync(approvals, JSON.stringify([TOKEN], null, 1), 'utf8');
 
       const lib = require(path.join(libDir, 'protected-write.cjs'));
-      const target = 'engineering-assets/models/comm/fixture/manifest.json';
+      const target = 'packs/fpga/engineering-assets/models/comm/fixture/manifest.json';
       const remaining = () => {
         const list = JSON.parse(fs.readFileSync(approvals, 'utf8'));
         return list.length ? Number(list[0].remainingWrites) : 0;
@@ -352,7 +352,7 @@ function main() {
         : []);
 
       // 未受保护路径: 放行, 但**不得**消费令牌、不得留痕
-      assert.equal(lib.blockReason('engineering-assets/cbb/x/rtl/x.sv', { tool: 'fx' }), null);
+      assert.equal(lib.blockReason('packs/fpga/engineering-assets/cbb/x/rtl/x.sv', { tool: 'fx' }), null);
       assert.equal(remaining(), 2, '未受保护的写入不该消费令牌');
       assert.equal(ledgerLines().length, 0, '未受保护的写入不该进审计账本');
 

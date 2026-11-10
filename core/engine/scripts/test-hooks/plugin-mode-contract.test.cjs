@@ -2,7 +2,7 @@
 'use strict';
 
 /**
- * engine/scripts/test-hooks/plugin-mode-contract.test.cjs — 插件模式判定与 SessionStart 插件组件契约
+ * core/engine/scripts/test-hooks/plugin-mode-contract.test.cjs — 插件模式判定与 SessionStart 插件组件契约
  *
  * 覆盖 M2 合同 C2 的断言：
  *   1. detectPluginMode 三种形态：非插件 / dev checkout / 已安装插件根；
@@ -24,10 +24,10 @@ const os = require('node:os');
 const path = require('node:path');
 const { test, after } = require('node:test');
 
-const ROOT = path.resolve(__dirname, '..', '..', '..');
-const PLUGIN_MODE = path.join(ROOT, 'engine', 'scripts', 'lib', 'plugin-mode.cjs');
-const PLUGIN_CONTEXT = path.join(ROOT, 'engine', 'scripts', 'hooks', 'plugin-session-context.cjs');
-const SESSION_BOOTSTRAP = path.join(ROOT, 'engine', 'scripts', 'hooks', 'session-bootstrap.cjs');
+const ROOT = path.resolve(__dirname, '..', '..', '..', '..');
+const PLUGIN_MODE = path.join(ROOT, 'core', 'engine', 'scripts', 'lib', 'plugin-mode.cjs');
+const PLUGIN_CONTEXT = path.join(ROOT, 'core', 'engine', 'scripts', 'hooks', 'plugin-session-context.cjs');
+const SESSION_BOOTSTRAP = path.join(ROOT, 'core', 'engine', 'scripts', 'hooks', 'session-bootstrap.cjs');
 
 const { detectPluginMode } = require(PLUGIN_MODE);
 const {
@@ -191,7 +191,7 @@ test('5. registrationOverlap warns only when user settings also register a harne
     hooks: {
       SessionStart: [{
         matcher: 'startup|resume',
-        hooks: [{ type: 'command', command: 'node C:/Users/x/.claude/engine/scripts/hooks/session-bootstrap.cjs' }],
+        hooks: [{ type: 'command', command: 'node C:/Users/x/.claude/core/engine/scripts/hooks/session-bootstrap.cjs' }],
       }],
     },
   });
@@ -204,7 +204,7 @@ test('5. registrationOverlap warns only when user settings also register a harne
   assert.equal(overlap.exitCode, 0);
   assert.match(overlap.context, /^\[logical-paradox\] 检测到用户级 settings\.json 也注册了 harness hook/);
   assert.match(overlap.context, /插件副本与用户副本会各跑一次/);
-  assert.ok(overlap.context.includes(path.join(pluginRoot, 'engine', 'scripts', 'render-hook-settings.cjs')),
+  assert.ok(overlap.context.includes(path.join(pluginRoot, 'core', 'engine', 'scripts', 'render-hook-settings.cjs')),
     'the warning must name the plugin-root remediation script');
   assert.match(overlap.context, /--remove-user-hooks/);
 
@@ -240,7 +240,7 @@ test('5b. registrationOverlap warns on a dev checkout too (that is the double ru
   const homeDir = makeHome(base, {
     'settings.json': JSON.stringify({
       hooks: {
-        PreToolUse: [{ hooks: [{ type: 'command', command: 'node ~/.claude/engine/scripts/hooks/preflight-router.cjs' }] }],
+        PreToolUse: [{ hooks: [{ type: 'command', command: 'node ~/.claude/core/engine/scripts/hooks/preflight-router.cjs' }] }],
       },
     }),
   });

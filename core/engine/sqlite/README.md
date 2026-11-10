@@ -1,13 +1,13 @@
 # SQLite 持久层
 
-> 位置: `engine/sqlite/`
+> 位置: `core/engine/sqlite/`
 > 数据库: `~/.claude/.wright/memory.db` (默认, git 不可见)
 > 运行时: `node:sqlite` (Node ≥22 内置, 零依赖)
 
 ## 架构
 
 ```
-engine/sqlite/
+core/engine/sqlite/
 ├── index.cjs           # 统一入口: openDb / closeDb / backupDb
 ├── schema.cjs          # 迁移管理: 扫描 + 幂等执行
 ├── migrations/
@@ -45,7 +45,7 @@ closeAll(); // 全关
 ### 记忆操作
 
 ```js
-const mem = require('./engine/sqlite/store-memory.cjs');
+const mem = require('./core/engine/sqlite/store-memory.cjs');
 
 // 写入
 const { id } = mem.writeMemory({
@@ -101,7 +101,7 @@ console.log(mem.memoryStats());
 ### 事件操作
 
 ```js
-const events = require('./engine/sqlite/store-events.cjs');
+const events = require('./core/engine/sqlite/store-events.cjs');
 
 // 记录事件
 events.record({
@@ -136,7 +136,7 @@ events.countByType();
 ### 技能操作
 
 ```js
-const skills = require('./engine/sqlite/store-skills.cjs');
+const skills = require('./core/engine/sqlite/store-skills.cjs');
 
 // 注册
 skills.register('sk_hdl_coding', 'hdl-coding', 'core', 'HDL 编码规范');

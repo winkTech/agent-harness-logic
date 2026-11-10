@@ -13,13 +13,13 @@
  * 用法 (settings.local.json 中注册):
  *
  *   PostToolUseFailure:
- *     node engine/hooks/learning/signal-collector.cjs tool_fail
+ *     node core/engine/hooks/learning/signal-collector.cjs tool_fail
  *
  *   PostMessage:
- *     node engine/hooks/learning/signal-collector.cjs drift_stuck {检测到"不对"/"又错了"关键词}
+ *     node core/engine/hooks/learning/signal-collector.cjs drift_stuck {检测到"不对"/"又错了"关键词}
  *
  * 程序内调用:
- *   const { emit } = require('./engine/hooks/learning/signal-collector.cjs');
+ *   const { emit } = require('./core/engine/hooks/learning/signal-collector.cjs');
  *   await emit('rule_load', { file: '01-hdl.md', priority: 'L1' });
  */
 

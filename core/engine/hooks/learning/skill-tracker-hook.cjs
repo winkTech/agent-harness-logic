@@ -8,7 +8,7 @@
  *
  * 注册 (settings.local.json):
  *   PostToolUse:
- *     node engine/hooks/learning/skill-tracker-hook.cjs
+ *     node core/engine/hooks/learning/skill-tracker-hook.cjs
  */
 
 'use strict';

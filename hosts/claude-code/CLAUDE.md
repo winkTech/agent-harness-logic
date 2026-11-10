@@ -19,12 +19,12 @@
 
 - 回答、审查、诊断和规划：读取并报告；除非用户要求修改，否则不进入写入门禁。
 - 修改已有文件且正确行为明确：直接做范围内的最小修改，不要求二次确认。
-- 新代码文件、新模块/功能、接口或行为契约变化、正确行为不明的修复：进入 `docs/rules/03-gates.md` 的需求门禁。
-- 新 TB、Testbench、测试文件或验证方案：进入 `docs/rules/03-gates.md` 的验证质量门禁。
+- 新代码文件、新模块/功能、接口或行为契约变化、正确行为不明的修复：进入 `core/rules/03-gates.md` 的需求门禁。
+- 新 TB、Testbench、测试文件或验证方案：进入 `core/rules/03-gates.md` 的验证质量门禁。
 - 门禁信息先从规格、现有代码、测试、Golden Model 和知识库提取；只询问仍会实质改变结果的未知项。
-- RTL、Testbench、FPGA/ASIC 架构或 HDL 审查：加载 `hdl-coding` 与 `docs/rules/01-hdl.md`。
-- Python：加载 `docs/rules/02-python.md`；硬件调试任务使用 `python-hardware-debug`。
-- Harness 记忆、Dream、Hook 遥测、检索、维护或规则晋升：加载 `docs/rules/05-harness.md`。
+- RTL、Testbench、FPGA/ASIC 架构或 HDL 审查：加载 `hdl-coding` 与 `packs/fpga/rules/01-hdl.md`。
+- Python：加载 `packs/fpga/rules/02-python.md`；硬件调试任务使用 `python-hardware-debug`。
+- Harness 记忆、Dream、Hook 遥测、检索、维护或规则晋升：加载 `core/rules/05-harness.md`。
 - 调试、代码审查、Git：分别加载对应 Skill 与规则；其他任务不加载 HDL 流程。
 
 ## 验证
@@ -35,7 +35,7 @@
 - RTL 行为改动：运行 lint 与针对性仿真；共享核心或高风险改动再运行相关回归。
 - 验证应证明通用行为，而不是只迎合固定样例；测试或 Golden Model 疑似错误时，先报告证据和预期契约。
 - 无法运行验证时，说明原因和下一最佳检查。
-- 门禁状态过期或损坏时，不把旧文件当作放行证据；说明原因后用 `docs/rules/03-gates.md` 的 v2 当前任务状态替换。只有确有事故审计需要时才归档旧状态，不为普通任务累积历史文件。
+- 门禁状态过期或损坏时，不把旧文件当作放行证据；说明原因后用 `core/rules/03-gates.md` 的 v2 当前任务状态替换。只有确有事故审计需要时才归档旧状态，不为普通任务累积历史文件。
 
 ## 长任务状态
 

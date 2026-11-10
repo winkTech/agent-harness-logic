@@ -3,6 +3,7 @@
 
 const fs = require('node:fs');
 const path = require('node:path');
+const { kbPath } = require('../config.cjs');
 const { HARNESS_ROOT } = require('./lib/harness-root.cjs');
 const { STATE_ROOT, varPath } = require('./lib/harness-state.cjs');
 const {
@@ -324,7 +325,7 @@ function scanMarkdown(home, db) {
 
 function currentSemanticFiles(home) {
   const memoryDir = path.join(home, 'memory');
-  const knowledgeDir = path.join(home, 'engineering-assets', 'knowledge');
+  const knowledgeDir = kbPath(home);
   const roots = [
     memoryDir,
     path.join(knowledgeDir, 'primary'),
@@ -562,7 +563,7 @@ function settingsCommandsFor(home, event) {
 }
 
 function loadConsumerRegistry(home) {
-  const manifest = readJson(path.join(home, 'engine', 'hooks', 'manifest.json'), {
+  const manifest = readJson(path.join(home, 'core', 'engine', 'hooks', 'manifest.json'), {
     entries: [], consumerRegistry: [],
   });
   const entries = Array.isArray(manifest.entries) ? manifest.entries : [];

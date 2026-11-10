@@ -6,16 +6,16 @@ const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 
-const ROOT = path.resolve(__dirname, '..', '..', '..');
-const { openDb } = require(path.join(ROOT, 'engine', 'sqlite', 'index.cjs'));
+const ROOT = path.resolve(__dirname, '..', '..', '..', '..');
+const { openDb } = require(path.join(ROOT, 'core', 'engine', 'sqlite', 'index.cjs'));
 const {
   retrieveMemory,
   writeMemory,
-} = require(path.join(ROOT, 'engine', 'sqlite', 'store-memory.cjs'));
+} = require(path.join(ROOT, 'core', 'engine', 'sqlite', 'store-memory.cjs'));
 const {
   collectHookEntries,
   validateHookScripts,
-} = require(path.join(ROOT, 'engine', 'scripts', 'lib', 'hook-registry.cjs'));
+} = require(path.join(ROOT, 'core', 'engine', 'scripts', 'lib', 'hook-registry.cjs'));
 
 function main() {
   const wDb = openDb({ path: ':memory:' });
@@ -113,7 +113,7 @@ function main() {
   assert.ok(reviewResults.some(result => result.id === dreamCandidate.id),
     'explicit candidate review can no longer retrieve Dream candidates');
 
-  const dreamStartup = require(path.join(ROOT, 'engine', 'scripts', 'dream-startup-inject.cjs'));
+  const dreamStartup = require(path.join(ROOT, 'core', 'engine', 'scripts', 'dream-startup-inject.cjs'));
   const dreamClaim = writeMemory({
     namespace: 'learnings',
     name: 'dream-text-claimed-verified',
@@ -170,7 +170,7 @@ function main() {
     'Dream startup retrieval leaked a verified fact from another project');
   wDb.close();
 
-  const observer = require(path.join(ROOT, 'engine', 'hooks', 'learning', 'postflight-observer.cjs'));
+  const observer = require(path.join(ROOT, 'core', 'engine', 'hooks', 'learning', 'postflight-observer.cjs'));
   const parseRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'memory-verified-qualification-'));
   const parseDir = path.join(parseRoot, 'learnings');
   const parseErrorsDir = path.join(parseRoot, 'errors');
@@ -281,7 +281,7 @@ function main() {
     }
   }
 
-  const ruleLoader = require(path.join(ROOT, 'engine', 'scripts', 'rule-loader.cjs'));
+  const ruleLoader = require(path.join(ROOT, 'core', 'engine', 'scripts', 'rule-loader.cjs'));
   assert.equal(typeof ruleLoader.injectionMemoPath, 'function');
   const memoPath = ruleLoader.injectionMemoPath('session/test', {
     tempRoot: path.join(os.tmpdir(), 'claude-readonly-contract'),
@@ -309,13 +309,13 @@ function main() {
   assert.ok(ragSkill.includes('rg -n') && ragSkill.includes('^##'),
     'rag-skill must locate scene sections by stable Markdown heading anchors');
   const sceneCards = fs.readFileSync(
-    path.join(ROOT, 'engineering-assets', 'knowledge', 'SCENE_CARDS.md'),
+    path.join(ROOT, 'packs', 'fpga', 'engineering-assets', 'knowledge', 'SCENE_CARDS.md'),
     'utf8',
   );
   assert.ok(!/L\d+-L\d+/.test(sceneCards.slice(0, 2000)),
     'SCENE_CARDS overview still publishes self-invalidating line ranges');
 
-  const memoryHook = require(path.join(ROOT, 'engine', 'scripts', 'memory-retrieve-hook.cjs'));
+  const memoryHook = require(path.join(ROOT, 'core', 'engine', 'scripts', 'memory-retrieve-hook.cjs'));
   const wikiBypass = memoryHook.retrieveContext({
     hook_event_name: 'UserPromptSubmit',
     prompt: '请检查记忆 wiki 链接',
@@ -364,7 +364,7 @@ function main() {
   assert.ok(promptContext && !promptContext.isAsync,
     'prompt-time rule and memory retrieval router is missing');
   const promptSource = fs.readFileSync(
-    path.join(ROOT, 'engine', 'scripts', 'hooks', 'prompt-context.cjs'), 'utf8');
+    path.join(ROOT, 'core', 'engine', 'scripts', 'hooks', 'prompt-context.cjs'), 'utf8');
   assert.match(promptSource, /memory-retrieve-hook\.cjs/,
     'prompt router lost read-only memory retrieval');
   assert.match(promptSource, /postflight-observer\.cjs/,
@@ -385,7 +385,7 @@ function main() {
     'cross-link must synchronously inject through the current failure router');
 
   const retrieveScript = fs.readFileSync(
-    path.join(ROOT, 'engine', 'scripts', 'memory-retrieve.sh'),
+    path.join(ROOT, 'core', 'engine', 'scripts', 'memory-retrieve.sh'),
     'utf8'
   );
   assert.match(retrieveScript, /engineering-assets\/knowledge/,
@@ -416,7 +416,7 @@ function main() {
   assert.ok(stopObserver && stopObserver.isAsync,
     'Skill-Evolve must run inside the bounded async Stop observer so retention can advance');
   const observerSource = fs.readFileSync(
-    path.join(ROOT, 'engine', 'hooks', 'learning', 'postflight-observer.cjs'), 'utf8');
+    path.join(ROOT, 'core', 'engine', 'hooks', 'learning', 'postflight-observer.cjs'), 'utf8');
   assert.match(observerSource, /skill-evolve\.cjs/,
     'Stop observer lost the Skill-Evolve consumer');
 

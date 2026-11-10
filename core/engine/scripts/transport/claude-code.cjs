@@ -1,10 +1,10 @@
 'use strict';
 
 /**
- * engine/scripts/transport/claude-code.cjs — Claude Code transport 适配器
+ * core/engine/scripts/transport/claude-code.cjs — Claude Code transport 适配器
  *
  * 职责：把 Claude Code hook 的原始 stdin payload 归一化为 harness-event-v1
- * 事件对象（契约见 engine/schemas/harness-event-v1.schema.json）。
+ * 事件对象（契约见 core/engine/schemas/harness-event-v1.schema.json）。
  *
  * D1 真实事件语义（本适配器是守门人）：
  *   - PostToolUseFailure → status=failed（事件名本身即失败证据，不算臆测）

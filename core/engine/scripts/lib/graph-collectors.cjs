@@ -1,7 +1,7 @@
 'use strict';
 
 /**
- * engine/scripts/lib/graph-collectors.cjs — 跨域边采集器。
+ * core/engine/scripts/lib/graph-collectors.cjs — 跨域边采集器。
  *
  * 三条边, 全部内联在既有写路径上采集, **不新增事件消费者**:
  *   evidence → file    (proves)       证据账本写入时 —— 哪次运行证明了哪个文件

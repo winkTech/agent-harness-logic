@@ -309,9 +309,9 @@ GIT_TRACE_PERFORMANCE=1 git status
 | 主题 | 文件 | 说明 |
 |------|------|------|
 | Git约束规则 | `references/git-rule.md` | 提交流程、分支管理、lint规则、hookify规则 |
-| 大文件/大 diff 提醒 | `engine/scripts/hooks/diff-size-gate.cjs` | PreToolUse **建议**拆分超大改动（exit 1 = 提醒，不阻断；大规模重构是合法操作，刻意不硬拦） |
-| 提交前 lint | `engine/scripts/hooks/pre-commit-lint.cjs` | 提交前强制 lint |
-| 仿真产物/危险命令拦截 | `engine/scripts/hooks/bash-safety-guard.cjs` | 拦截危险命令与绕过写入 |
+| 大文件/大 diff 提醒 | `core/engine/scripts/hooks/diff-size-gate.cjs` | PreToolUse **建议**拆分超大改动（exit 1 = 提醒，不阻断；大规模重构是合法操作，刻意不硬拦） |
+| 提交前 lint | `core/engine/scripts/hooks/pre-commit-lint.cjs` | 提交前强制 lint |
+| 仿真产物/危险命令拦截 | `core/engine/scripts/hooks/bash-safety-guard.cjs` | 拦截危险命令与绕过写入 |
 
 ## Memory Protocol (MANDATORY)
 

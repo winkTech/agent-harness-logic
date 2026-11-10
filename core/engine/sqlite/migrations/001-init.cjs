@@ -123,10 +123,11 @@ module.exports = {
     -- ── 事实的 FTS5 内容同步触发器 (content 同步更新) ─────────────────────
     -- 这个 AFTER UPDATE 已经涵盖了 content 变更, 上面 facts_au 已经做 delete+insert
 
-    -- ── 默认技能种子数据 ────────────────────────────────────────────────────
+    -- ── 默认技能种子数据（core 域）─────────────────────────────────────────
+    -- Phase 1.4：FPGA pack 域种子（hdl-coding/project-init/doc-gen/rtl-gen）
+    -- 已抽出至 packs/fpga/seed/skills.json，由安装器写入；core 迁移只保留 core 域种子。
     INSERT OR IGNORE INTO skills (id, name, description, tier, created_at)
     VALUES
-      ('sk_hdl_coding',     'hdl-coding',     'HDL 编码规范 — Verilog/SystemVerilog FPGA 设计', 'core',       strftime('%s','now') * 1000),
       ('sk_tdd',            'tdd',            '测试驱动开发',                                    'core',       strftime('%s','now') * 1000),
       ('sk_debugging',      'debugging',      '系统化调试 — 4 阶段根因分析',                     'core',       strftime('%s','now') * 1000),
       ('sk_code_review',    'code-review',    '代码审查统一入口',                                'core',       strftime('%s','now') * 1000),
@@ -134,9 +135,6 @@ module.exports = {
       ('sk_git_expert',     'git-expert',     'Git 操作专家',                                   'core',       strftime('%s','now') * 1000),
       ('sk_handoff',        'handoff',        'Session 收尾仪式',                               'core',       strftime('%s','now') * 1000),
       ('sk_start',          'start',          'Session 开局仪式',                               'core',       strftime('%s','now') * 1000),
-      ('sk_project_init',   'project-init',   'FPGA 项目/模块脚手架',                            'core',       strftime('%s','now') * 1000),
-      ('sk_doc_gen',        'doc-gen',        '文档生成',                                       'on-demand',  strftime('%s','now') * 1000),
-      ('sk_security_review','security-review','安全审查',                                       'on-demand',  strftime('%s','now') * 1000),
-      ('sk_doc_gen_rtl',    'rtl-gen',        'RTL 快速代码生成',                               'on-demand',  strftime('%s','now') * 1000)
+      ('sk_security_review','security-review','安全审查',                                       'on-demand',  strftime('%s','now') * 1000)
   `,
 };

@@ -1,17 +1,17 @@
 #!/usr/bin/env node
 /**
- * engine/scripts/context-resume.cjs — 压缩后上下文恢复
+ * core/engine/scripts/context-resume.cjs — 压缩后上下文恢复
  *
  * 在 /compact 后执行，读取 pre-compact 保存的状态，
  * 向当前上下文注入关键信息，确保压缩后不丢失进度。
  *
  * 用法:
- *   node engine/scripts/context-resume.cjs          — 输出恢复摘要到 stdout
- *   node engine/scripts/context-resume.cjs --inject  — 输出 JSON 供 hook 注入
- *   node engine/scripts/context-resume.cjs --check   — 仅检查是否有可恢复的状态
+ *   node core/engine/scripts/context-resume.cjs          — 输出恢复摘要到 stdout
+ *   node core/engine/scripts/context-resume.cjs --inject  — 输出 JSON 供 hook 注入
+ *   node core/engine/scripts/context-resume.cjs --check   — 仅检查是否有可恢复的状态
  *
  * 整合:
- *   与 engine/scripts/pre-compact.cjs 配对使用。
+ *   与 core/engine/scripts/pre-compact.cjs 配对使用。
  *   pre-compact save → /compact → context-resume → 继续工作
  */
 

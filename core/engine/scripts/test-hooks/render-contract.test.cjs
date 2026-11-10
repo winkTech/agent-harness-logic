@@ -1,9 +1,9 @@
 'use strict';
 
 /**
- * engine/scripts/test-hooks/render-contract.test.cjs — transport 输出渲染层契约测试
+ * core/engine/scripts/test-hooks/render-contract.test.cjs — transport 输出渲染层契约测试
  *
- * 验证 engine/scripts/transport/render.cjs 的 renderDecision：
+ * 验证 core/engine/scripts/transport/render.cjs 的 renderDecision：
  *   1. 三 transport × {allow 有 context, allow 无 context, block} 的输出矩阵；
  *   2. claude-code / workbuddy 的 stdout 与路由现有 emit() 逐字节一致
  *      （基线函数 preflightEmitBaseline / postflightEmitBaseline 复现
@@ -20,7 +20,7 @@ const assert = require('node:assert/strict');
 const path = require('node:path');
 const { HARNESS_ROOT } = require('../lib/harness-root.cjs');
 
-const transportRoot = path.join(HARNESS_ROOT, 'engine', 'scripts', 'transport');
+const transportRoot = path.join(HARNESS_ROOT, 'core', 'engine', 'scripts', 'transport');
 const { renderDecision } = require(path.join(transportRoot, 'render.cjs'));
 
 // ── 现有 emit() 的字节基线（复现，不引入路由依赖） ─────────────────────────
