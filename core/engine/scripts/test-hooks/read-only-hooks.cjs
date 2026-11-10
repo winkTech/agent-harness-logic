@@ -303,7 +303,8 @@ function main() {
   assert.ok(featureRefs.includes('03-gates.md'),
     `explicit new feature no longer loads the requirements gate: ${featureRefs.join(',')}`);
 
-  const ragSkill = fs.readFileSync(path.join(ROOT, 'skills', 'rag-skill', 'SKILL.md'), 'utf8');
+  // Phase 1.5: skills/ 是投放镜像（gitignored）；真源在 core/skills/。
+  const ragSkill = fs.readFileSync(path.join(ROOT, 'core', 'skills', 'rag-skill', 'SKILL.md'), 'utf8');
   assert.ok(!/SCENE_CARDS[^\n]*L\d+|L\d+-L\d+/.test(ragSkill),
     'rag-skill still binds mutable scene cards to stale line ranges');
   assert.ok(ragSkill.includes('rg -n') && ragSkill.includes('^##'),

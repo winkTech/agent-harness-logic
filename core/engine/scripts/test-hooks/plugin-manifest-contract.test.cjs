@@ -85,9 +85,14 @@ test('plugin.json is parseable and every declared path resolves', () => {
       assert.ok(fs.existsSync(path.resolve(ROOT, entry)), `plugin agent file does not exist: ${entry}`);
     }
   }
+  // M4b 后 agent 定义迁 packs/fpga/agents/（域包资产），根 agents/ 仅在历史
+  // 工作区残留空目录——git 不跟踪空目录，全新 clone 上不存在是常态。插件形态
+  // 的 agents 发现走 packs（清单不声明 agents 字段），因此目录缺失不再构成
+  // 契约违规；只有清单声明了 agents 字段而目录缺失才是真问题（上方已断言）。
   const agentsDir = path.resolve(ROOT, 'agents');
-  assert.ok(fs.existsSync(agentsDir) && fs.statSync(agentsDir).isDirectory(),
-    'default plugin agents directory agents/ does not exist');
+  if (fs.existsSync(agentsDir)) {
+    assert.ok(fs.statSync(agentsDir).isDirectory(), 'agents exists but is not a directory');
+  }
 
   assert.ok(manifest.mcpServers && typeof manifest.mcpServers === 'object',
     'plugin must declare mcpServers');

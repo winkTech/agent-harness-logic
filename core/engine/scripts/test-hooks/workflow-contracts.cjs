@@ -321,6 +321,12 @@ test('core workflow truth and platform mirror do not drift', () => {
   // Phase 1.1 后真源 = core/workflows（sync-workflow-mirror 单向镜像到 .claude/workflows）
   const rootDir = path.join(HOME, 'core', 'workflows');
   const platformDir = path.join(HOME, '.claude', 'workflows');
+  // 镜像是安装态产物（本机仓库根 = ~/.claude 时由 CI/harness-ci 投放）；
+  // 全新 clone / CI 上不存在属正常，跳过字节比对（sync-workflow-mirror --check
+  // 在 harness-ci 里守 drift，那里会在投放后跑）。
+  if (!fs.existsSync(platformDir)) {
+    return;
+  }
   const jsNames = (dir) => fs.readdirSync(dir).filter((name) => name.endsWith('.js')).sort();
   const rootNames = jsNames(rootDir);
   const platformNames = jsNames(platformDir);

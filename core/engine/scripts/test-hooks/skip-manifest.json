@@ -1,9 +1,10 @@
 {
-  "maxSkips": 1,
+  "maxSkips": 2,
   "allowedIds": [
-    "LongTaskEval::固定历史产物不再计为 fresh live 通过"
+    "LongTaskEval::固定历史产物不再计为 fresh live 通过",
+    "EngineeringAssets::catalog/audit 契约"
   ],
-  "reason": "唯一允许的跳过是环境条件跳过：LongTaskEval 复算 var/agent-evals/long-task 下已捕获的真实 agent 运行产物，var/ 不入版本库，全新 checkout 与 CI 上无对象可复算；本机有产物时照常执行，因此本机实际跳过数为 0，CI 为 1。原先白名单里的 13 条 PythonGate/MatlabGate/CoverageGate/FPRHook/CommitGate 已随测试一并删除——它们的目标脚本在本仓库任何位置都不存在，属门禁移除后的测试残骸，在所有环境恒定跳过，不是环境条件跳过。新增跳过在明确复核前一律失败。",
+  "reason": "允许的跳过均为环境条件跳过：①LongTaskEval 复算 var/agent-evals/long-task 下已捕获的真实 agent 运行产物，var/ 不入版本库，全新 checkout 与 CI 上无对象可复算；本机有产物时照常执行，因此本机实际跳过数为 0，CI 为 1。②catalog/audit 契约（Phase 1 C-5 增）深度绑定安装态——var/ 下 waiver 账本、maintenance 报告与证据源都在 gitignored 运行时目录，干净 clone / CI 上前置不满足时跳过篡改演练；安装并跑过 gate 的机器照常全量校验（本机执行数 1）。原先白名单里的 13 条 PythonGate/MatlabGate/CoverageGate/FPRHook/CommitGate 已随测试一并删除——它们的目标脚本在本仓库任何位置都不存在，属门禁移除后的测试残骸，在所有环境恒定跳过，不是环境条件跳过。新增跳过在明确复核前一律失败。",
   "coverageThresholdAdjustment": {
     "date": "2026-11-09",
     "threshold": 66,

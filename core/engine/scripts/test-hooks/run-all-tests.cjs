@@ -2409,6 +2409,13 @@ for (const entry of ASSET_TEST_SUITES) {
   define('EngineeringAssets', label, () => {
     const p = path.join(HOME, 'packs/fpga/engineering-assets/tools', script);
     if (!fs.existsSync(p)) return { pass: true, skip: true, detail: `${script} 不存在` };
+    // catalog/audit 深度绑定安装态（var/ 下 waiver 账本 + maintenance 报告 +
+    // 证据源都在 gitignored 运行时目录）。干净 clone / CI 上前置不满足时 SKIP，
+    // 不判失败——安装并跑过 gate 的机器上照常全量校验。
+    if (script === 'test-catalog-audit.cjs'
+      && !fs.existsSync(path.join(HOME, 'packs/fpga/engineering-assets/var/cbb/waiver-ledger.json'))) {
+      return { pass: true, skip: true, detail: '安装态前置缺失（var/cbb/waiver-ledger.json）——干净 clone 跳过篡改演练' };
+    }
     // 防御: 清掉上次中断残留的篡改演练文件 (它未被 git 跟踪, 出现即残留)
     const staleExtra = path.join(HOME, 'packs/fpga/engineering-assets/evidence/rrc_polyphase_fir/0.4.0/extra-file.bin');
     if (fs.existsSync(staleExtra)) {
@@ -2600,16 +2607,31 @@ define('WorkflowDocs', 'hdl md/js 阶段数与证据路径一致', () => {
 });
 
 define('WorkflowDocs', 'workflow md 引用的本地路径全部存在', () => {
+  // Phase 1.5 起读真源（core/skills/workflows + packs/fpga/skills/workflows），
+  // 不读 skills/ 运行时镜像（gitignored，干净 clone 上不存在——C-5 语义）。
+  const candidates = (doc) => [
+    path.join(HOME, 'core/skills/workflows', doc),
+    path.join(HOME, 'packs/fpga/skills/workflows', doc),
+  ];
   const docs = ['hdl-coding-workflow.md', 'code-review-workflow.md', 'architecture-review-workflow.md'];
   const missing = [];
+  // Phase 1.5 起 skills/ 是三宿主投放镜像（gitignored）。文档引用镜像路径对
+  // 安装态成立；干净 clone 上须回真源解析：skills/X → core/skills/X ∪
+  // packs/fpga/skills/X（任一存在即视为引用有效）。
+  const resolveRef = (rel) => {
+    if (fs.existsSync(path.join(HOME, rel))) return true;
+    const m = /^skills\/(.+)$/.exec(rel);
+    if (!m) return false;
+    return fs.existsSync(path.join(HOME, 'core/skills', m[1]))
+      || fs.existsSync(path.join(HOME, 'packs/fpga/skills', m[1]));
+  };
   for (const doc of docs) {
-    const docPath = path.join(HOME, 'skills/workflows', doc);
-    if (!fs.existsSync(docPath)) { missing.push(`skills/workflows/${doc} 本身不存在`); continue; }
+    const docPath = candidates(doc).find((p) => fs.existsSync(p));
+    if (!docPath) { missing.push(`真源 workflows/${doc} 不存在（core/skills 与 packs/fpga/skills 均无）`); continue; }
     const text = fs.readFileSync(docPath, 'utf8');
     // 反引号内的仓库相对路径 (含扩展名或以 / 结尾的目录)
-    for (const m of text.matchAll(/`((?:workflows|skills|engine|agents|schemas|engineering-assets)\/[\w./-]+)`/g)) {
-      const target = path.join(HOME, m[1]);
-      if (!fs.existsSync(target)) missing.push(`${doc} → ${m[1]}`);
+    for (const m of text.matchAll(/`((?:workflows|skills|engine|agents|schemas|engineering-assets|core|packs)\/[\w./-]+)`/g)) {
+      if (!resolveRef(m[1])) missing.push(`${doc} → ${m[1]}`);
     }
   }
   return missing.length === 0

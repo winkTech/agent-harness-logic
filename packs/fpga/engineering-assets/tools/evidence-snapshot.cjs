@@ -181,7 +181,11 @@ function resealSnapshot(root, uid, reason) {
   return { snapshot, changed };
 }
 
-function verifySnapshot(root, uid, version) {
+function verifySnapshot(root, uid, version, opts = {}) {
+  // mode: 'verify'（默认，fail-closed——单快照显式校验与篡改演练走这里，
+  // 证据源缺失/文件缺失一律红）| 'check'（遍历模式，--check/--verify-all 用，
+  // 干净 clone 上源缺失降级 envelope 校验——封套结构 + manifest 哈希仍全验）。
+  const mode = opts.mode || 'verify';
   const scan = scanRepository(root);
   const asset = manifestFor(scan, uid);
   const actualVersion = version || asset.version;
@@ -206,6 +210,18 @@ function verifySnapshot(root, uid, version) {
   const sourceDir = path.join(root, 'var', 'gates', 'pg', uid);
   const listed = new Set(snapshot.files.map((file) => file.path));
   if (listed.size !== snapshot.files.length) throw new Error('duplicate snapshot file path');
+  // Phase 1 C-5（干净 clone 语义，仅 check 模式）：current 快照的证据源在 var/
+  // （运行时 gate 产物，gitignored）。全新 clone / 半安装态上源目录或其文件缺失
+  // 不是封存损坏——check 模式降级为 envelope 校验（结构 + manifest 哈希已验）。
+  // verify 模式保持 fail-closed：显式单快照校验/篡改演练必须红。
+  if (mode === 'check') {
+    const sourcePresent = fs.existsSync(sourceDir)
+      && snapshot.files.every((file) => file.path === 'synth-warnings.json'
+        || fs.existsSync(path.join(sourceDir, file.path)));
+    if (!sourcePresent) {
+      return { ...snapshot, source_verified: false, skipped_reason: 'evidence source (var/gates) incomplete on this checkout' };
+    }
+  }
   const expectedSource = sourceFiles(sourceDir).map((item) => item.rel);
   const unexpected = allFiles(sourceDir).filter(({ rel }) => !EXCLUDED.test(rel) && !ALLOWED.test(rel));
   if (unexpected.length) throw new Error(`non-whitelisted evidence file: ${unexpected.map((file) => file.rel).join(', ')}`);
@@ -235,7 +251,7 @@ function main(argv = process.argv.slice(2)) {
         const uidDir = path.join(evidenceRoot, uid);
         if (!fs.statSync(uidDir).isDirectory()) continue;
         for (const version of fs.readdirSync(uidDir)) if (fs.existsSync(path.join(uidDir, version, 'SNAPSHOT.json'))) {
-          verifySnapshot(root, uid, version);
+          verifySnapshot(root, uid, version, { mode: 'check' });
           count += 1;
         }
       }
@@ -260,7 +276,7 @@ function main(argv = process.argv.slice(2)) {
         for (const version of fs.readdirSync(uidDir)) if (fs.existsSync(path.join(uidDir, version, 'SNAPSHOT.json'))) refs.push([uid, version]);
       }
       if (!refs.length) throw new Error('no versioned snapshots found');
-      const results = refs.map(([uid, version]) => verifySnapshot(root, uid, version));
+      const results = refs.map(([uid, version]) => verifySnapshot(root, uid, version, { mode: 'check' }));
       console.log(`[evidence-snapshot] verified ${refs.length} snapshots historical=${results.filter((result) => result.historical).length}`);
       return 0;
     }
