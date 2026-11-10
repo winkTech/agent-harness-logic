@@ -65,20 +65,13 @@ core/engine/hooks/workbuddy.hooks.json
 #
 # 同理，.claude/workflows/ 镜像由 engine/scripts/sync-workflow-mirror.cjs 从 workflows/ 重建。
 #
-# M4b（2026-09-08）起 pack 技能的权威源在 packs/{fpga,office}/skills/，
-# skills/ 下同名目录是运行时发现镜像，由 engine/scripts/sync-pack-skills.cjs
-# 单向重建（--check 校验漂移）。镜像不入库，避免与权威源重复。
-# 必须锚定仓库根（/skills/...）：未锚定会任意深度匹配，静默吞掉
-# packs/{fpga,office}/skills/ 下的权威源新文件（lessons：/plans/ 锚定事故）。
-/skills/vivado-flow/
-/skills/rtl-gen/
-/skills/hdl-coding/
-/skills/python-hardware-debug/
-/skills/xdc-constraint-gen/
-/skills/doc-gen/
-/skills/markitdown-converter/
-/skills/pdf/
-/skills/presentation/
+# Phase 1.5 起 skills/ 是 sync-skills.cjs 的全量投放镜像（真源 core/skills/ +
+# packs/{fpga,office}/skills/，frontmatter 归一后单向渲染到三宿主目录；
+# 本机 ~/.claude 即仓库根，故 ~/.claude/skills = skills/）。
+# 镜像整体不入库，避免与真源重复。必须锚定仓库根（/skills/）：未锚定会
+# 任意深度匹配，静默吞掉 packs/{fpga,office}/skills/ 下的权威源
+# （lessons：/plans/ 锚定事故）。
+/skills/
 #
 # settings.local.json 未列入，仍需版本控制：现在只承载 permissions / enabledPlugins / env，
 # 不再放 hook。
@@ -221,8 +214,6 @@ memory/.last-active
 stats-cache.json
 var_build/
 
-# Phase 1.1（2026-11-10，refactor/core-split）：根 CLAUDE.md / AGENTS.md 改为渲染产物——
-# 模板真源随拆层迁入 hosts/claude-code/，宿主读取路径固定在仓库根（v2.1 修订 A3 机制，
-# 移走即静默停止全局指令注入），与 settings.json 同理不入库，后续由渲染器重建 + --check 防漂移。
-/CLAUDE.md
-/AGENTS.md
+# Phase 1.5（2026-11-10，refactor/core-split）：根 CLAUDE.md / AGENTS.md 为渲染产物但
+# **入库跟踪**（§3.5：git 跟踪 + --check 防漂移）——全新 clone 即有宿主指令注入；
+# 由 sync-skills.cjs 从 hosts/claude-code/ 模板渲染重建，漂移即 --check exit 1。

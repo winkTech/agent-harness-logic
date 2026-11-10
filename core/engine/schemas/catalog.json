@@ -1,6 +1,6 @@
 {
   "schemaVersion": "1.0",
-  "schemaCount": 24,
+  "schemaCount": 25,
   "entries": [
     {
       "file": "adr-template.schema.json",
@@ -68,6 +68,11 @@
       "title": "CAT7 Memory Record Schema"
     },
     {
+      "file": "check-result.schema.json",
+      "id": "https://claude-code/schemas/check-result",
+      "title": "HDL Module Verification Evidence Schema"
+    },
+    {
       "file": "checklist-halt-condition.schema.json",
       "id": "checklist-halt-condition",
       "title": "Checklist Item with Halt Condition"
@@ -93,19 +98,9 @@
       "title": "Database Architecture Schema"
     },
     {
-      "file": "fpga-constraints.schema.json",
-      "id": null,
-      "title": "FPGA Constraints Schema"
-    },
-    {
-      "file": "hdl-layer-status.schema.json",
-      "id": "https://claude-code.anthropic.com/schemas/hdl-layer-status",
-      "title": "HDL Layer Status"
-    },
-    {
-      "file": "hdl-project-spec.schema.json",
-      "id": "https://claude-code.anthropic.com/schemas/hdl-project-spec",
-      "title": "HDL Project Specification"
+      "file": "harness-eval-case.schema.json",
+      "id": "https://claude-code/schemas/harness-eval-case",
+      "title": "Harness Evaluation Case"
     },
     {
       "file": "harness-event-v1.schema.json",
@@ -113,9 +108,19 @@
       "title": "Harness Event v1"
     },
     {
+      "file": "plan.schema.json",
+      "id": "https://claude-code/schemas/plan-snapshot",
+      "title": "Plan Snapshot"
+    },
+    {
       "file": "plugin-lock.schema.json",
       "id": "https://local.harness/schemas/plugin-lock.schema.json",
       "title": "Enabled Plugin Lock"
+    },
+    {
+      "file": "repair-spec.schema.json",
+      "id": "https://claude-code/schemas/repair-spec",
+      "title": "Harness Repair Specification"
     },
     {
       "file": "workflow-definition.schema.json",

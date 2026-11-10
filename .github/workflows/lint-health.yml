@@ -73,6 +73,17 @@ jobs:
           node core/engine/scripts/sync-workflow-mirror.cjs
           node core/engine/scripts/sync-workflow-mirror.cjs --check
 
+      # Phase 1.5：技能三宿主投放（~/.claude/skills、~/.agents/skills、~/.codex/skills）
+      # + 根 CLAUDE.md/AGENTS.md 入口渲染——全新 runner 上重建后供 harness-ci 渲染族校验。
+      - name: Materialize the skill mirrors for all hosts
+        shell: bash
+        env:
+          CLAUDE_HARNESS_ROOT: ${{ github.workspace }}
+        run: |
+          set -o pipefail
+          node core/engine/scripts/sync-skills.cjs
+          node core/engine/scripts/sync-skills.cjs --check
+
       - name: Run the fail-closed Harness gate
         shell: bash
         env:

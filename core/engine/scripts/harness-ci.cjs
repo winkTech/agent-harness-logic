@@ -148,6 +148,33 @@ function checkPythonSyntax(files) {
   return [result.error?.message || result.stdout || result.stderr || result.signal || 'Python syntax check failed'];
 }
 
+// 渲染零漂移族（Phase 1.5）：单一真源的三个渲染/同步器必须 --check 全绿。
+// 漂移 = 有人改了产物没改真源，或改了真源忘重渲染——都在这里被抓住。
+function runRenderFamilyChecks() {
+  const scripts = [
+    'core/engine/scripts/render-hook-settings.cjs',
+    'core/engine/scripts/sync-workflow-mirror.cjs',
+    'core/engine/scripts/sync-skills.cjs',
+  ];
+  const errors = [];
+  const checks = [];
+  for (const relative of scripts) {
+    const result = spawnSync(process.execPath, [path.join(HARNESS_ROOT, relative), '--check'], {
+      cwd: HARNESS_ROOT,
+      encoding: 'utf8',
+      timeout: 120000,
+      windowsHide: true,
+    });
+    if (result.status !== 0) {
+      const firstLine = String(result.stderr || result.stdout || '').trim().split('\n')[0] || '';
+      errors.push(`render family: ${relative} --check exit=${result.status}${firstLine ? ` — ${firstLine}` : ''}`);
+    } else {
+      checks.push(path.basename(relative, '.cjs').replace(/\.cjs$/, ''));
+    }
+  }
+  return { errors, checks };
+}
+
 // Hook 延迟档位硬门 (M4a): warm p95 按 hook-latency.cjs 的档位表判定。
 // CI 机器比 dev 机器慢, 用 CLAUDE_HARNESS_LATENCY_SCALE=3 整体放大预算 ——
 // 放大的是绝对阈值, 档位之间的相对关系不变。
@@ -241,6 +268,10 @@ function main() {
   const schemas = validateSchemaCatalog();
   if (schemas.errors.length > 0) fail(schemas.errors);
   console.log(`[harness-ci] schema catalog passed (${schemas.files.length} schemas)`);
+
+  const renderFamily = runRenderFamilyChecks();
+  if (renderFamily.errors.length > 0) fail(renderFamily.errors);
+  console.log(`[harness-ci] render family passed (${renderFamily.checks.join(' + ')})`);
 
   const latency = runLatencySla();
   if (latency.errors) fail(latency.errors);
