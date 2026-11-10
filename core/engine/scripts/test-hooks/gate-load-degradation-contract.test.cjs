@@ -15,7 +15,7 @@ const assert = require('node:assert/strict');
 const path = require('node:path');
 const test = require('node:test');
 
-const ROOT = path.resolve(__dirname, '../../..');
+const ROOT = path.resolve(__dirname, '..', '..', '..', '..');
 // 副本协议：替换前可用 PREFLIGHT_ROUTER_PATH 指向 preflight-router.next.cjs 先验证副本。
 const ROUTER_PATH = process.env.PREFLIGHT_ROUTER_PATH
   ? path.resolve(ROOT, process.env.PREFLIGHT_ROUTER_PATH)

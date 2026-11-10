@@ -19,7 +19,7 @@ const os = require('node:os');
 const path = require('node:path');
 const test = require('node:test');
 
-const ROOT = path.resolve(__dirname, '../../..');
+const ROOT = path.resolve(__dirname, '..', '..', '..', '..');
 // 默认测线上守卫; GOLDEN_GUARD_PATH 可指向待评审的副本, 用于"补丁应用前先验证"。
 const GUARD = process.env.GOLDEN_GUARD_PATH
   || path.join(ROOT, 'core', 'engine', 'scripts', 'hooks', 'file-protection-guard.cjs');

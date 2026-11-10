@@ -8,7 +8,7 @@ const path = require('node:path');
 const { spawnSync } = require('node:child_process');
 const test = require('node:test');
 
-const ROOT = path.resolve(__dirname, '../../../..'); // Phase 1.1 后 test-hooks 上溯 4 级
+const ROOT = path.resolve(__dirname, '..', '..', '..', '..'); // Phase 1.1 后 test-hooks 上溯 4 级
 const PRE_COMMIT = path.join(ROOT, '.githooks', 'pre-commit');
 const WORKFLOW = path.join(ROOT, '.github', 'workflows', 'lint-health.yml');
 const MCP_CONFIG = path.join(ROOT, '.mcp.json');

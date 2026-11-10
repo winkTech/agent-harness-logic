@@ -1026,7 +1026,7 @@ async function main() {
       console.error('║  ⚠️  LINT PASSED — 仍需功能验证                           ║');
       console.error('╠══════════════════════════════════════════════════════════════╣');
       console.error('║  语法检查通过，但验证门禁仍为「待验证」状态。                ║');
-      console.error('║  根据 docs/rules/00-core.md: "验证 = 功能验证，不只是语法检查"     ║');
+      console.error('║  根据 core/rules/00-core.md: "验证 = 功能验证，不只是语法检查"     ║');
       console.error('║                                                              ║');
       console.error('║  请继续运行功能验证命令 (如 pytest / vsim / E2E stdin 调用):  ║');
       console.error('║  - Hook 脚本 → echo \'{"hook_event":...}\' | node hook.cjs   ║');
@@ -1050,7 +1050,7 @@ async function main() {
     console.error('╠══════════════════════════════════════════════════════════════╣');
     console.error('║                                                              ║');
     console.error('║  已编辑文件但尚未通过功能验证。                               ║');
-    console.error('║  验证要求见 docs/rules/00-core.md。                           ║');
+    console.error('║  验证要求见 core/rules/00-core.md。                           ║');
     console.error('║                                                              ║');
     console.error('║  ❌ 仅跑语法检查不算验证。                                     ║');
     console.error('║  ✅ 请运行功能验证 (pytest / vsim / iverilog / check_*.py)    ║');

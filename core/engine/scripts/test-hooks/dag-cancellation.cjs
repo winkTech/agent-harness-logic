@@ -10,7 +10,7 @@ const root = path.resolve(__dirname, '..', '..', '..', '..');
 const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'dag-cancellation-'));
 const previousDbPath = process.env.CLAUDE_SQLITE_PATH;
 process.env.CLAUDE_SQLITE_PATH = path.join(tempRoot, 'events.db');
-const dag = require(path.join(root, 'engine', 'dag-engine.cjs'));
+const dag = require(path.join(root, 'core', 'engine', 'dag-engine.cjs'));
 
 function wait(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));

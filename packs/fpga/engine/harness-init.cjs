@@ -4,12 +4,12 @@
 const fs = require('node:fs');
 const path = require('node:path');
 const { detect: detectEda, pickLintTool } = require('./eda-detect.cjs');
-const { HARNESS_ROOT } = require('./lib/harness-root.cjs');
+const { HARNESS_ROOT } = require('../../../core/engine/scripts/lib/harness-root.cjs');
 const {
   ensureProjectDirs,
   modulePaths,
   writeDirectoryContract,
-} = require('./lib/project-directory-contract.cjs');
+} = require('../../../core/engine/scripts/lib/project-directory-contract.cjs');
 
 function usage() {
   return [

@@ -8,7 +8,7 @@ const path = require('node:path');
 const { withFileLockSync } = require('./project-scope.cjs');
 const { STATE_ROOT, varPath } = require('./harness-state.cjs');
 
-const HARNESS_ROOT = path.resolve(__dirname, '../../..');
+const HARNESS_ROOT = path.resolve(__dirname, '..', '..', '..', '..');
 const MIN_REASON_LENGTH = 16;
 const MAX_REASON_LENGTH = 512;
 const MIN_ACTOR_LENGTH = 3;

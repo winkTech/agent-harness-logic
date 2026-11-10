@@ -101,7 +101,7 @@ function main() {
     const toolsDir = path.join(ROOT, 'packs', 'fpga', 'engineering-assets', 'tools');
     const { isProtected } = require(path.join(toolsDir, 'lib', 'protected-write.cjs'));
     const catalogGen = require(path.join(toolsDir, 'catalog-gen.cjs'));
-    const EA = 'engineering-assets';
+    const EA = 'packs/fpga/engineering-assets'; // Phase 1.1 后资产库随 pack 迁移
 
     const EXEMPT = {
       'manifest-render.cjs': {

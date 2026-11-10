@@ -135,8 +135,8 @@ test('rule loader scopes gates to new assets while preserving HDL/Python file ru
 test('persistent prompts share a scoped evidence-driven contract with a Claude delta', () => {
   const agents = fs.readFileSync(path.join(HOME, 'AGENTS.md'), 'utf8').replace(/\r\n/g, '\n');
   const claude = fs.readFileSync(path.join(HOME, 'CLAUDE.md'), 'utf8').replace(/\r\n/g, '\n');
-  const core = fs.readFileSync(path.join(HOME, 'docs/rules/00-core.md'), 'utf8');
-  const gates = fs.readFileSync(path.join(HOME, 'docs/rules/03-gates.md'), 'utf8');
+  const core = fs.readFileSync(path.join(HOME, 'core/rules/00-core.md'), 'utf8');
+  const gates = fs.readFileSync(path.join(HOME, 'core/rules/03-gates.md'), 'utf8');
 
   const normalizedAgents = agents.replace(/^# Codex 项目指导/m, '# 共享项目指导').trim();
   const claudeCommon = claude.split('\n## Claude 模型校准\n')[0]
@@ -2183,7 +2183,7 @@ test('verification gate cites the rule file without copying stale rule text', ()
     path.join(HOME, 'core/engine/scripts/hooks/verification-gate.cjs'),
     'utf8'
   );
-  assert(gate.includes('docs/rules/00-core.md'), 'verification gate no longer cites docs/rules/00-core.md');
+  assert(gate.includes('core/rules/00-core.md'), 'verification gate no longer cites core/rules/00-core.md');
   assert(!gate.includes('rules/00-core.md 验证闭环铁律'), 'verification gate still labels stale text as an iron rule');
   assert(!gate.includes('改代码后必须跑对应的验证，不验证不提交'), 'verification gate still copies removed rule text');
 });
@@ -2210,7 +2210,7 @@ test('context compression preserves constitution and dynamic rules', () => {
 });
 
 test('workflow evidence gates are not based on agent self-report or catch-and-continue', () => {
-  const workflowPath = path.join(HOME, 'workflows/hdl-coding-dag-workflow.js');
+  const workflowPath = path.join(HOME, 'packs/fpga/workflows/hdl-coding-dag-workflow.js');
   const workflow = fs.readFileSync(workflowPath, 'utf8');
 
   assert(!workflow.includes('Does file exist:'), 'workflow still delegates file existence checks to agent self-report');

@@ -30,7 +30,7 @@ function runAll() {
   const results = [];
 
   results.push(test('harness eval case schema is valid JSON', () => {
-    JSON.parse(fs.readFileSync(path.join(HOME, 'schemas/harness-eval-case.schema.json'), 'utf8'));
+    JSON.parse(fs.readFileSync(path.join(HOME, 'core/engine/schemas/harness-eval-case.schema.json'), 'utf8'));
     return 'schema parsed';
   }));
 

@@ -93,7 +93,7 @@ function runAll() {
   }));
 
   results.push(test('repair spec schema file is valid JSON', () => {
-    const schemaPath = path.join(HOME, 'schemas/repair-spec.schema.json');
+    const schemaPath = path.join(HOME, 'core/engine/schemas/repair-spec.schema.json');
     JSON.parse(fs.readFileSync(schemaPath, 'utf8'));
     return 'schema parsed';
   }));

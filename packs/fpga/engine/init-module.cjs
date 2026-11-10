@@ -8,7 +8,7 @@ const {
   modulePaths,
   readDirectoryContract,
   writeDirectoryContract,
-} = require('./lib/project-directory-contract.cjs');
+} = require('../../../core/engine/scripts/lib/project-directory-contract.cjs');
 
 function usage() {
   return [

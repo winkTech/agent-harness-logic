@@ -31,7 +31,7 @@ const path = require('node:path');
 const { shouldSyncMemoryFile } = require('../../scripts/lib/memory-file-policy.cjs');
 
 // 仅在 memory/ 目录下的 .md 文件才处理
-const MEMORY_DIR = path.resolve(__dirname, '..', '..', '..', 'memory');
+const MEMORY_DIR = path.resolve(__dirname, '../..', '..', '..', 'memory');
 
 /**
  * Windows 路径兼容: 将 Unix 风格 /c/Users/... 转为 C:\Users\...

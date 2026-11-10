@@ -8,7 +8,7 @@ const path = require('node:path');
 const { spawnSync } = require('node:child_process');
 const test = require('node:test');
 
-const ROOT = path.resolve(__dirname, '../../..');
+const ROOT = path.resolve(__dirname, '..', '..', '..', '..');
 const BYPASS_MODULE = path.join(ROOT, 'core', 'engine', 'scripts', 'lib', 'gate-bypass.cjs');
 const GUARDS = [
   path.join(ROOT, 'core', 'engine', 'hooks', 'safety', 'fix-in-place-guard.cjs'),

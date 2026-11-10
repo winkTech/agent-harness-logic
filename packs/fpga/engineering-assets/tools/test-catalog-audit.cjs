@@ -53,7 +53,7 @@ assert(
   'reference-assets must have migrated out of engineering-assets (M4b packs migration)',
 );
 assert(
-  fs.existsSync(path.resolve(engineeringRoot, '..', 'packs', 'fpga', 'references', 'vendor')),
+  fs.existsSync(path.resolve(engineeringRoot, '..', '..', '..', 'packs', 'fpga', 'references', 'vendor')),
   'migrated vendor archive must exist at packs/fpga/references/vendor',
 );
 const visibilityScratch = fs.mkdtempSync(path.join(os.tmpdir(), 'cbb-catalog-vis-'));
