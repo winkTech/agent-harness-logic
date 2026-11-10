@@ -55,7 +55,7 @@ const PHASES = {
     },
     {
       id: 'P-2', desc: 'gate-runner 抽样: cdc_sync',
-      cmd: [process.execPath, R('packs/fpga/engineering-assets/tools/gate-runner.cjs'), R('packs/fpga/engineering-assets/cbb/cdc_sync'), '--repo-root', HARNESS_ROOT],
+      cmd: [process.execPath, R('packs/fpga/engineering-assets/tools/gate-runner.cjs'), R('packs/fpga/engineering-assets/cbb/cdc_sync'), '--repo-root', R('packs/fpga')],
       json: 'file',
       jsonFile: R('packs/fpga/engineering-assets/var/gates/pg/cdc_sync/gate-results.json'),
       timeoutMs: 60000,
@@ -78,9 +78,25 @@ const PHASES = {
       baselineFailures: 4,
     },
     {
-      id: 'H-1', desc: 'render/sync 全家 --check (渲染零漂移族: settings+workbuddy+plugin+skills+workflow)',
-      cmd: [process.execPath, R('core/engine/scripts/harness-ci.cjs')],
-      json: null, timeoutMs: 180000,
+      // H-1 判据 = 渲染零漂移族全 exit 0（方案 §4.2：'各宿主 render --check'）。
+      // 不复用 harness-ci 整体——它含 coverage 段与全量测试, 超出 H-1 语义且超时。
+      id: 'H-1', desc: '渲染零漂移族 --check (settings+workbuddy+plugin+skills+workflow)',
+      cmd: [process.execPath, '-e', [
+        `const {spawnSync}=require('node:child_process');`,
+        `const checks=[`,
+        `  ['render-hook-settings',${JSON.stringify(R('core/engine/scripts/render-hook-settings.cjs'))}],`,
+        `  ['sync-skills',${JSON.stringify(R('core/engine/scripts/sync-skills.cjs'))}],`,
+        `  ['sync-workflow-mirror',${JSON.stringify(R('core/engine/scripts/sync-workflow-mirror.cjs'))}],`,
+        `];`,
+        `let bad=0;`,
+        `for(const [name,script] of checks){`,
+        `  const r=spawnSync(process.execPath,[script,'--check'],{encoding:'utf8',timeout:60000,windowsHide:true});`,
+        `  if(r.status!==0){bad=1;console.error('['+name+'] '+((r.stderr||'').trim().split('\\n')[0]||'exit '+r.status));}`,
+        `}`,
+        `if(!bad)console.log('render family: 3/3 checks clean');`,
+        `process.exit(bad);`,
+      ].join('')],
+      json: null, timeoutMs: 200000,
     },
     {
       id: 'P-1a', desc: 'asset-audit (packs 迁移后工程资产体检)',
@@ -94,7 +110,9 @@ const PHASES = {
     },
     {
       id: 'P-2', desc: 'gate-runner 抽样: cdc_sync (packs 迁移后 21 门)',
-      cmd: [process.execPath, R('packs/fpga/engineering-assets/tools/gate-runner.cjs'), R('packs/fpga/engineering-assets/cbb/cdc_sync'), '--repo-root', HARNESS_ROOT],
+      // gate-runner 的 --repo-root 语义 = engineering-assets 父目录（工具内部拼
+      // repoRoot/engineering-assets/...），拆层后即 packs/fpga。
+      cmd: [process.execPath, R('packs/fpga/engineering-assets/tools/gate-runner.cjs'), R('packs/fpga/engineering-assets/cbb/cdc_sync'), '--repo-root', R('packs/fpga')],
       json: 'file',
       jsonFile: R('packs/fpga/engineering-assets/var/gates/pg/cdc_sync/gate-results.json'),
       timeoutMs: 60000,
