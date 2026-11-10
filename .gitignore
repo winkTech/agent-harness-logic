@@ -48,8 +48,9 @@ config.json
 settings.json
 
 # WorkBuddy 目标渲染产物（含本机绝对路径，与 settings.json 同理，不入库；
-# 由 engine/scripts/render-hook-settings.cjs 从 registrations.json 重建）
-engine/hooks/workbuddy.hooks.json
+# 由 core/engine/scripts/render-hook-settings.cjs 从 hosts/claude-code/registrations.json 重建）
+# Phase 1.1（2026-11-10）随 hooks 骨架迁移至新路径
+core/engine/hooks/workbuddy.hooks.json
 
 # 2026-07-27 起：**所有 hook 统一放 settings.json**（见 README「Hook 事件」一节）。
 # 该文件被忽略，因为 hook 命令里含 C:/Users/<name>/... 本机绝对路径
@@ -219,3 +220,9 @@ memory/.last-active
 # 运行时统计缓存（自动生成，无需版本控制）
 stats-cache.json
 var_build/
+
+# Phase 1.1（2026-11-10，refactor/core-split）：根 CLAUDE.md / AGENTS.md 改为渲染产物——
+# 模板真源随拆层迁入 hosts/claude-code/，宿主读取路径固定在仓库根（v2.1 修订 A3 机制，
+# 移走即静默停止全局指令注入），与 settings.json 同理不入库，后续由渲染器重建 + --check 防漂移。
+/CLAUDE.md
+/AGENTS.md
