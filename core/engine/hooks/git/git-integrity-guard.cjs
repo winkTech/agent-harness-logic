@@ -20,7 +20,7 @@ const { execFileSync } = require('child_process');
 const fs = require('fs');
 const path = require('path');
 
-const HOME = path.resolve(__dirname, '..', '..', '..'); // engine/hooks/git/ → repo root
+const HOME = path.resolve(__dirname, '..', '..', '..', '..'); // core/engine/hooks/git/ → repo root（Phase 1.1 拆层后上溯 4 级）
 const GIT_DIR = path.join(HOME, '.git');
 
 function git(args, opts) {

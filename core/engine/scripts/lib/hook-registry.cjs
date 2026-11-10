@@ -8,8 +8,9 @@ const { HARNESS_ROOT, settingsFiles } = require('./harness-root.cjs');
 
 const HOME = HARNESS_ROOT;
 const DEFAULT_SETTINGS_FILES = settingsFiles(HOME);
-const MANIFEST_RELATIVE_PATH = path.join('engine', 'hooks', 'manifest.json');
-const PLUGIN_HOOKS_RELATIVE_PATH = path.join('engine', 'hooks', 'plugin.hooks.json');
+// Phase 1.1/1.3：manifest 与 plugin.hooks.json 随拆层迁至 core/engine/hooks/。
+const MANIFEST_RELATIVE_PATH = path.join('core', 'engine', 'hooks', 'manifest.json');
+const PLUGIN_HOOKS_RELATIVE_PATH = path.join('core', 'engine', 'hooks', 'plugin.hooks.json');
 const PLUGIN_ROOT_PLACEHOLDER = /\$\{CLAUDE_PLUGIN_ROOT\}/g;
 const TOOL_EVENTS = new Set(['PreToolUse', 'PostToolUse', 'PostToolUseFailure']);
 const COMPOSITE_HOOKS = new Set([
@@ -100,7 +101,7 @@ function pluginSourceEnabled(opts = {}) {
 }
 
 /**
- * 读取入库的 engine/hooks/plugin.hooks.json，把 ${CLAUDE_PLUGIN_ROOT} 展开为 root。
+ * 读取入库的 core/engine/hooks/plugin.hooks.json，把 ${CLAUDE_PLUGIN_ROOT} 展开为 root。
  * 文件缺失不是错误（未渲染的克隆），返回空 hooks。
  */
 function readPluginHooks(opts = {}) {
@@ -130,8 +131,15 @@ function collectHookEntries(opts = {}) {
 
 function harnessRelativeParts(arg) {
   const normalized = String(arg || '').replace(/\\/g, '/');
+  const lower = normalized.toLowerCase();
+  // Phase 1.1 起命令指向 core/engine/...（新布局优先）；
+  // 旧布局 /engine/... 保留兼容（快照逃生、拆层前检出）。
+  const coreIndex = lower.lastIndexOf('/core/engine/');
+  if (coreIndex >= 0) {
+    return normalized.slice(coreIndex + 1).split('/').filter(Boolean);
+  }
   const marker = '/engine/';
-  const markerIndex = normalized.toLowerCase().lastIndexOf(marker);
+  const markerIndex = lower.lastIndexOf(marker);
   if (markerIndex < 0) return null;
   return normalized.slice(markerIndex + 1).split('/').filter(Boolean);
 }
@@ -152,7 +160,11 @@ function batchScriptsFromCommand(command, root = HOME) {
   for (const name of parts[batchIndex + 1].split(',')) {
     const trimmed = name.trim();
     if (!trimmed) continue;
-    scripts.push(path.join(root, 'engine', 'scripts', 'hooks', trimmed));
+    // Phase 1.1 起 batch 脚本位于 core/engine/scripts/hooks/；旧布局回退保留。
+    const corePath = path.join(root, 'core', 'engine', 'scripts', 'hooks', trimmed);
+    scripts.push(fs.existsSync(corePath)
+      ? corePath
+      : path.join(root, 'engine', 'scripts', 'hooks', trimmed));
   }
   return scripts;
 }

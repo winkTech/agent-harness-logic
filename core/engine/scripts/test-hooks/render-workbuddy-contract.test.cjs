@@ -2,15 +2,15 @@
 'use strict';
 
 /**
- * engine/scripts/test-hooks/render-workbuddy-contract.test.cjs — WorkBuddy 渲染目标契约
+ * core/engine/scripts/test-hooks/render-workbuddy-contract.test.cjs — WorkBuddy 渲染目标契约
  *
  * 验证 Task #7 的多目标渲染器：
- *   1. engine/hooks/workbuddy.hooks.json 必须存在（由 render-hook-settings.cjs 从
- *      registrations.json 渲染，CI 已先行执行渲染步骤）；
+ *   1. core/engine/hooks/workbuddy.hooks.json 必须存在（由 render-hook-settings.cjs 从
+ *      hosts/claude-code/registrations.json 渲染，CI 已先行执行渲染步骤）；
  *   2. 与单一契约源 registrations.json 的渲染结果一致（--check 语义，无漂移）；
  *   3. 渲染产物不得残留 {{HARNESS_ROOT}} 占位符（绝对路径已展开）；
  *   4. WorkBuddy 目标的 hooks 块与 Claude 目标同构（事件名集合一致）——这是
- *      transport 归一化层（engine/scripts/transport/）可复用的前提；
+ *      transport 归一化层（core/engine/scripts/transport/）可复用的前提；
  *   5. WorkBuddy 渲染结果仍能让 manifest 的 active 条目全部有据可依
  *      （validateHookManifest 用该 hooks 块校验无错误）。
  *
@@ -21,16 +21,18 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
 
-const ROOT = path.resolve(__dirname, '..', '..', '..');
-const RENDERER = path.join(ROOT, 'engine', 'scripts', 'render-hook-settings.cjs');
-const REGISTRATIONS = path.join(ROOT, 'engine', 'hooks', 'registrations.json');
-const WORKBUDDY_HOOKS = path.join(ROOT, 'engine', 'hooks', 'workbuddy.hooks.json');
+// Phase 1.1/1.3 起布局：core/engine/scripts/test-hooks 上溯 4 级 = 仓库根；
+// 模板真源在 hosts/claude-code/，渲染产物在 core/engine/hooks/。
+const ROOT = path.resolve(__dirname, '..', '..', '..', '..');
+const RENDERER = path.join(ROOT, 'core', 'engine', 'scripts', 'render-hook-settings.cjs');
+const REGISTRATIONS = path.join(ROOT, 'hosts', 'claude-code', 'registrations.json');
+const WORKBUDDY_HOOKS = path.join(ROOT, 'core', 'engine', 'hooks', 'workbuddy.hooks.json');
 const { renderHooks, renderWorkbuddyHooks } = require(RENDERER);
-const { validateHookManifest } = require(path.join(ROOT, 'engine', 'scripts', 'lib', 'hook-registry.cjs'));
+const { validateHookManifest } = require(path.join(ROOT, 'core', 'engine', 'scripts', 'lib', 'hook-registry.cjs'));
 
 function main() {
   // 1. 目标文件必须存在（CI 渲染步骤先行）
-  assert.ok(fs.existsSync(WORKBUDDY_HOOKS), 'engine/hooks/workbuddy.hooks.json is missing (run render-hook-settings.cjs)');
+  assert.ok(fs.existsSync(WORKBUDDY_HOOKS), 'core/engine/hooks/workbuddy.hooks.json is missing (run render-hook-settings.cjs)');
 
   // 2. 与单一契约源渲染结果一致（canonical 比对，避免键序噪声）
   const canonical = (value) => JSON.stringify(value, Object.keys(value).sort());

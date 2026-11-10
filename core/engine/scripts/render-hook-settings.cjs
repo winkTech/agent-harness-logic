@@ -1,27 +1,27 @@
 #!/usr/bin/env node
 /**
- * engine/scripts/render-hook-settings.cjs — 多目标 hook 注册渲染器。
+ * core/engine/scripts/render-hook-settings.cjs — 多目标 hook 注册渲染器。
  *
  * 背景：
  *   settings.json 被 .gitignore 忽略（hook 命令必须写本机绝对路径，改用 $HOME 会导致 hook
- *   静默不触发）。代价是新克隆与 CI 拿不到任何 hook 注册，而 engine/hooks/manifest.json
+ *   静默不触发）。代价是新克隆与 CI 拿不到任何 hook 注册，而 core/engine/hooks/manifest.json
  *   声称 active 的条目会因此全部核对不上 —— GitHub CI 上表现为
  *   "hook registry passed (0 script references)" 后跟一串
  *   "manifest marks an unregistered hook active"。
  *
- *   engine/hooks/registrations.json 入库、用 {{HARNESS_ROOT}} 占位，是注册的唯一权威声明；
+ *   hosts/claude-code/registrations.json 入库、用 {{HARNESS_ROOT}} 占位，是注册的唯一权威声明；
  *   本脚本把它展开成绝对路径写入目标。Phase 1 起为**多目标渲染器**：
  *     - Claude Code：settings.json（hooks 块，向后兼容，历史渲染语义不变）
- *     - WorkBuddy：engine/hooks/workbuddy.hooks.json（插件 hooks.json 结构与 Claude
+ *     - WorkBuddy：core/engine/hooks/workbuddy.hooks.json（插件 hooks.json 结构与 Claude
  *       同构 —— 事件名/matcher/hooks/type:command 一致，已对真实插件样例核对）
- *     - Claude Code 插件：engine/hooks/plugin.hooks.json（入库产物，命令用 exec 形式
+ *     - Claude Code 插件：core/engine/hooks/plugin.hooks.json（入库产物，命令用 exec 形式
  *       {command:"node", args:["${CLAUDE_PLUGIN_ROOT}/..."]}，插件根每次更新都换目录，
  *       写死绝对路径必然失效）
  *
  * 用法：
- *   node engine/scripts/render-hook-settings.cjs            # 渲染并写入三个目标
- *   node engine/scripts/render-hook-settings.cjs --check    # 只比对，不写；任一目标漂移则 exit 1
- *   node engine/scripts/render-hook-settings.cjs --print    # 打印 Claude 目标 hooks 到 stdout
+ *   node core/engine/scripts/render-hook-settings.cjs          # 渲染并写入三个目标
+ *   node core/engine/scripts/render-hook-settings.cjs --check    # 只比对，不写；任一目标漂移则 exit 1
+ *   node core/engine/scripts/render-hook-settings.cjs --print    # 打印 Claude 目标 hooks 到 stdout
  *   node engine/scripts/render-hook-settings.cjs --print-workbuddy  # 打印 WorkBuddy 目标到 stdout
  *   node engine/scripts/render-hook-settings.cjs --print-plugin     # 打印插件目标到 stdout
  *
@@ -38,9 +38,11 @@ const path = require('node:path');
 
 const { HARNESS_ROOT } = require('./lib/harness-root.cjs');
 
-const TEMPLATE_RELATIVE = path.join('engine', 'hooks', 'registrations.json');
-const WORKBUDDY_TARGET_RELATIVE = path.join('engine', 'hooks', 'workbuddy.hooks.json');
-const PLUGIN_TARGET_RELATIVE = path.join('engine', 'hooks', 'plugin.hooks.json');
+// Phase 1.1/1.3：真源与产物随拆层迁移——模板在 hosts/claude-code/（宿主层），
+// workbuddy / plugin 渲染产物落 core/engine/hooks/（框架层）。
+const TEMPLATE_RELATIVE = path.join('hosts', 'claude-code', 'registrations.json');
+const WORKBUDDY_TARGET_RELATIVE = path.join('core', 'engine', 'hooks', 'workbuddy.hooks.json');
+const PLUGIN_TARGET_RELATIVE = path.join('core', 'engine', 'hooks', 'plugin.hooks.json');
 const PLUGIN_ROOT_PLACEHOLDER = '${CLAUDE_PLUGIN_ROOT}';
 const PLACEHOLDER = /\{\{HARNESS_ROOT\}\}/g;
 
@@ -420,7 +422,7 @@ function main() {
       if (failures.length) {
         for (const failure of failures) process.stderr.write(`[render-hook-settings] ✖ hook 注册漂移: ${failure}\n`);
         process.stderr.write('[render-hook-settings]   模板是权威声明。修好模板后跑 '
-          + 'node engine/scripts/render-hook-settings.cjs 重新生成\n');
+          + 'node core/engine/scripts/render-hook-settings.cjs 重新生成\n');
         return 1;
       }
       const bits = [];

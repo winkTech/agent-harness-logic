@@ -9,7 +9,7 @@
             "command": "node",
             "timeout": 20,
             "args": [
-              "${CLAUDE_PLUGIN_ROOT}/engine/scripts/hooks/preflight-router.cjs"
+              "${CLAUDE_PLUGIN_ROOT}/core/engine/scripts/hooks/preflight-router.cjs"
             ]
           }
         ]
@@ -25,7 +25,7 @@
             "timeout": 5,
             "async": true,
             "args": [
-              "${CLAUDE_PLUGIN_ROOT}/engine/hooks/learning/postflight-observer.cjs"
+              "${CLAUDE_PLUGIN_ROOT}/core/engine/hooks/learning/postflight-observer.cjs"
             ]
           }
         ]
@@ -38,7 +38,7 @@
             "command": "node",
             "timeout": 8,
             "args": [
-              "${CLAUDE_PLUGIN_ROOT}/engine/scripts/hooks/postflight-router.cjs"
+              "${CLAUDE_PLUGIN_ROOT}/core/engine/scripts/hooks/postflight-router.cjs"
             ]
           }
         ]
@@ -52,7 +52,7 @@
             "timeout": 10,
             "async": true,
             "args": [
-              "${CLAUDE_PLUGIN_ROOT}/engine/scripts/hooks/codegraph-sync.cjs",
+              "${CLAUDE_PLUGIN_ROOT}/core/engine/scripts/hooks/codegraph-sync.cjs",
               "--file"
             ]
           }
@@ -69,7 +69,7 @@
             "timeout": 5,
             "async": true,
             "args": [
-              "${CLAUDE_PLUGIN_ROOT}/engine/hooks/learning/postflight-observer.cjs"
+              "${CLAUDE_PLUGIN_ROOT}/core/engine/hooks/learning/postflight-observer.cjs"
             ]
           },
           {
@@ -77,7 +77,7 @@
             "command": "node",
             "timeout": 12,
             "args": [
-              "${CLAUDE_PLUGIN_ROOT}/engine/scripts/hooks/postflight-router.cjs"
+              "${CLAUDE_PLUGIN_ROOT}/core/engine/scripts/hooks/postflight-router.cjs"
             ]
           }
         ]
@@ -92,7 +92,7 @@
             "command": "node",
             "timeout": 8,
             "args": [
-              "${CLAUDE_PLUGIN_ROOT}/engine/scripts/hooks/prompt-context.cjs"
+              "${CLAUDE_PLUGIN_ROOT}/core/engine/scripts/hooks/prompt-context.cjs"
             ]
           }
         ]
@@ -107,7 +107,7 @@
             "command": "node",
             "timeout": 12,
             "args": [
-              "${CLAUDE_PLUGIN_ROOT}/engine/scripts/hooks/session-bootstrap.cjs"
+              "${CLAUDE_PLUGIN_ROOT}/core/engine/scripts/hooks/session-bootstrap.cjs"
             ]
           }
         ]
@@ -121,7 +121,7 @@
             "timeout": 120,
             "async": true,
             "args": [
-              "${CLAUDE_PLUGIN_ROOT}/engine/scripts/memory-knowledge-maintenance.cjs",
+              "${CLAUDE_PLUGIN_ROOT}/core/engine/scripts/memory-knowledge-maintenance.cjs",
               "--auto",
               "--execute"
             ]
@@ -137,7 +137,7 @@
             "timeout": 60,
             "async": true,
             "args": [
-              "${CLAUDE_PLUGIN_ROOT}/engine/scripts/hooks/codegraph-sync.cjs",
+              "${CLAUDE_PLUGIN_ROOT}/core/engine/scripts/hooks/codegraph-sync.cjs",
               "--session"
             ]
           },
@@ -146,7 +146,7 @@
             "command": "node",
             "timeout": 15,
             "args": [
-              "${CLAUDE_PLUGIN_ROOT}/engine/hooks/git/git-integrity-guard.cjs"
+              "${CLAUDE_PLUGIN_ROOT}/core/engine/hooks/git/git-integrity-guard.cjs"
             ]
           }
         ]
@@ -161,7 +161,7 @@
             "command": "node",
             "timeout": 40,
             "args": [
-              "${CLAUDE_PLUGIN_ROOT}/engine/scripts/hooks/stop-summary.cjs"
+              "${CLAUDE_PLUGIN_ROOT}/core/engine/scripts/hooks/stop-summary.cjs"
             ]
           },
           {
@@ -170,7 +170,7 @@
             "timeout": 30,
             "async": true,
             "args": [
-              "${CLAUDE_PLUGIN_ROOT}/engine/hooks/learning/postflight-observer.cjs"
+              "${CLAUDE_PLUGIN_ROOT}/core/engine/hooks/learning/postflight-observer.cjs"
             ]
           },
           {
@@ -179,7 +179,7 @@
             "timeout": 15,
             "async": true,
             "args": [
-              "${CLAUDE_PLUGIN_ROOT}/engine/hooks/git/git-integrity-guard.cjs"
+              "${CLAUDE_PLUGIN_ROOT}/core/engine/hooks/git/git-integrity-guard.cjs"
             ]
           }
         ]
@@ -195,7 +195,7 @@
             "timeout": 10,
             "async": true,
             "args": [
-              "${CLAUDE_PLUGIN_ROOT}/engine/scripts/hooks/subagent-verdict.cjs"
+              "${CLAUDE_PLUGIN_ROOT}/core/engine/scripts/hooks/subagent-verdict.cjs"
             ]
           }
         ]
@@ -209,7 +209,7 @@
             "type": "command",
             "command": "node",
             "args": [
-              "${CLAUDE_PLUGIN_ROOT}/engine/scripts/pre-compact.cjs"
+              "${CLAUDE_PLUGIN_ROOT}/core/engine/scripts/pre-compact.cjs"
             ]
           }
         ]

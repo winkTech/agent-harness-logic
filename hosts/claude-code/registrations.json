@@ -4,8 +4,8 @@
     "Hook 注册的**唯一权威声明**，入版本库。",
     "settings.json 本身被 .gitignore 忽略（hook 命令必须写本机绝对路径，改用 $HOME 会导致",
     "hook 静默不触发），所以新克隆和 CI 都拿不到",
-    "任何 hook 注册 —— engine/hooks/manifest.json 声称 active 的条目会全部核对不上。",
-    "本文件用 {{HARNESS_ROOT}} 占位符保持可移植，由 engine/scripts/render-hook-settings.cjs",
+    "任何 hook 注册 —— core/engine/hooks/manifest.json 声称 active 的条目会全部核对不上。",
+    "本文件用 {{HARNESS_ROOT}} 占位符保持可移植，由 core/engine/scripts/render-hook-settings.cjs",
     "渲染成带绝对路径的 settings.json。改 hook 注册请改这里，然后跑渲染器。"
   ],
   "hooks": {
@@ -15,7 +15,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node {{HARNESS_ROOT}}/engine/scripts/hooks/preflight-router.cjs",
+            "command": "node {{HARNESS_ROOT}}/core/engine/scripts/hooks/preflight-router.cjs",
             "timeout": 20
           }
         ]
@@ -27,7 +27,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node {{HARNESS_ROOT}}/engine/hooks/learning/postflight-observer.cjs",
+            "command": "node {{HARNESS_ROOT}}/core/engine/hooks/learning/postflight-observer.cjs",
             "timeout": 5,
             "async": true
           }
@@ -38,7 +38,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node {{HARNESS_ROOT}}/engine/scripts/hooks/postflight-router.cjs",
+            "command": "node {{HARNESS_ROOT}}/core/engine/scripts/hooks/postflight-router.cjs",
             "timeout": 8
           }
         ]
@@ -48,7 +48,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node {{HARNESS_ROOT}}/engine/scripts/hooks/codegraph-sync.cjs --file",
+            "command": "node {{HARNESS_ROOT}}/core/engine/scripts/hooks/codegraph-sync.cjs --file",
             "timeout": 10,
             "async": true
           }
@@ -61,13 +61,13 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node {{HARNESS_ROOT}}/engine/hooks/learning/postflight-observer.cjs",
+            "command": "node {{HARNESS_ROOT}}/core/engine/hooks/learning/postflight-observer.cjs",
             "timeout": 5,
             "async": true
           },
           {
             "type": "command",
-            "command": "node {{HARNESS_ROOT}}/engine/scripts/hooks/postflight-router.cjs",
+            "command": "node {{HARNESS_ROOT}}/core/engine/scripts/hooks/postflight-router.cjs",
             "timeout": 12
           }
         ]
@@ -79,7 +79,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node {{HARNESS_ROOT}}/engine/scripts/hooks/prompt-context.cjs",
+            "command": "node {{HARNESS_ROOT}}/core/engine/scripts/hooks/prompt-context.cjs",
             "timeout": 8
           }
         ]
@@ -91,7 +91,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node {{HARNESS_ROOT}}/engine/scripts/hooks/session-bootstrap.cjs",
+            "command": "node {{HARNESS_ROOT}}/core/engine/scripts/hooks/session-bootstrap.cjs",
             "timeout": 12
           }
         ]
@@ -101,7 +101,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node {{HARNESS_ROOT}}/engine/scripts/memory-knowledge-maintenance.cjs --auto --execute",
+            "command": "node {{HARNESS_ROOT}}/core/engine/scripts/memory-knowledge-maintenance.cjs --auto --execute",
             "timeout": 120,
             "async": true
           }
@@ -112,13 +112,13 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node {{HARNESS_ROOT}}/engine/scripts/hooks/codegraph-sync.cjs --session",
+            "command": "node {{HARNESS_ROOT}}/core/engine/scripts/hooks/codegraph-sync.cjs --session",
             "timeout": 60,
             "async": true
           },
           {
             "type": "command",
-            "command": "node {{HARNESS_ROOT}}/engine/hooks/git/git-integrity-guard.cjs",
+            "command": "node {{HARNESS_ROOT}}/core/engine/hooks/git/git-integrity-guard.cjs",
             "timeout": 15
           }
         ]
@@ -130,18 +130,18 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node {{HARNESS_ROOT}}/engine/scripts/hooks/stop-summary.cjs",
+            "command": "node {{HARNESS_ROOT}}/core/engine/scripts/hooks/stop-summary.cjs",
             "timeout": 40
           },
           {
             "type": "command",
-            "command": "node {{HARNESS_ROOT}}/engine/hooks/learning/postflight-observer.cjs",
+            "command": "node {{HARNESS_ROOT}}/core/engine/hooks/learning/postflight-observer.cjs",
             "timeout": 30,
             "async": true
           },
           {
             "type": "command",
-            "command": "node {{HARNESS_ROOT}}/engine/hooks/git/git-integrity-guard.cjs",
+            "command": "node {{HARNESS_ROOT}}/core/engine/hooks/git/git-integrity-guard.cjs",
             "timeout": 15,
             "async": true
           }
@@ -154,7 +154,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node {{HARNESS_ROOT}}/engine/scripts/hooks/subagent-verdict.cjs",
+            "command": "node {{HARNESS_ROOT}}/core/engine/scripts/hooks/subagent-verdict.cjs",
             "timeout": 10,
             "async": true
           }
@@ -167,7 +167,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node {{HARNESS_ROOT}}/engine/scripts/pre-compact.cjs"
+            "command": "node {{HARNESS_ROOT}}/core/engine/scripts/pre-compact.cjs"
           }
         ]
       }

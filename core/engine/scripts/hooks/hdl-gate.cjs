@@ -22,7 +22,10 @@
 const fs = require('fs');
 const path = require('path');
 const os = require('os');
-const logicAnalyzer = require('../hdl-lint/logic-analyzer.cjs');
+// Phase 1.1 后 hdl-lint/ 随 F 切片迁至 packs/fpga/engine/——此跨层 require 为保断链的
+// 最小修复；hdl-gate 整体迁 packs 的裁决留给 1.6 layer-boundary（core→packs 依赖会
+// 被检查器标记，登记为已知债务）。
+const logicAnalyzer = require('../../../../packs/fpga/engine/hdl-lint/logic-analyzer.cjs');
 const { evaluateGuardBypass } = require('../lib/gate-bypass.cjs');
 
 const GATE_ID = 'hdl-gate.cjs';
