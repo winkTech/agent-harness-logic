@@ -577,7 +577,30 @@
       "note": "事件与 claude-code 同构(M3 实证); 命令带 --transport workbuddy"
     },
     "grok": {
-      "note": "长钩子剖面——超时放宽至 timeoutSeconds*5; 事件子集见 eventsSubset(Phase 3 落地时填充)"
+      "note": "长钩子剖面(Phase 3.2 落地)——Grok 经 ~/.claude/settings.json 兼容并入; async 条目按前台执行, 故长钩子跳过/降级",
+      "eventsSubset": [
+        "PreToolUse",
+        "PostToolUse",
+        "PostToolUseFailure",
+        "SessionStart",
+        "Stop"
+      ],
+      "dropAsync": true,
+      "skip": [
+        {
+          "script": "core/engine/scripts/memory-knowledge-maintenance.cjs",
+          "reason": "120s 长钩子——grok 侧跳过, 改由 telemetry-spool-drain 消费者调度(2.5)"
+        },
+        {
+          "script": "core/engine/scripts/hooks/codegraph-sync.cjs",
+          "argPattern": "--session",
+          "reason": "60s 全量同步——grok 侧跳过, 仅保留 --file 增量条目"
+        }
+      ],
+      "matcherTranslation": {
+        "startup": "new",
+        "resume": "load"
+      }
     },
     "codex": {
       "note": "事件以中性 eventType 直供(无 native 层); 遥测走 spool(2.5)"

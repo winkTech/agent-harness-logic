@@ -157,6 +157,8 @@ function runRenderFamilyChecks() {
     'core/engine/scripts/sync-skills.cjs',
     // Phase 3.1：Codex 双产物（hooks.json + AGENTS.md 投影）零漂移看守。
     'core/engine/scripts/render-codex-hooks.cjs',
+    // Phase 3.2：Grok 剖面投影零漂移看守。
+    'core/engine/scripts/render-grok-hooks.cjs',
   ];
   const errors = [];
   const checks = [];

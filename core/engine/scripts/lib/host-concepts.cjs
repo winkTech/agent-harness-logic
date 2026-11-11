@@ -166,6 +166,32 @@ const HOST_DIALECTS = Object.freeze({
     toolAliases: Object.freeze({}),
     matcherSeparator: null,
   }),
+  grok: Object.freeze({
+    // Phase 3.2：Grok 经 claude settings 兼容并入（claude 式 hook 注册
+    // 四系统同构——§3.2 契约 3）。差异点收敛在此：
+    //   - SessionStart matcher 词汇差异（grok 用 new|load，等价 claude startup|resume）
+    //   - 工具别名（Grok 工具面 run_terminal_command；引擎读 canonical Bash）
+    //   - async 剥离（Grok 对 async 条目按前台执行——长钩子经 hostPresets.grok 跳过）
+    events: Object.freeze({
+      PreToolUse: 'before_tool',
+      PostToolUse: 'after_tool',
+      PostToolUseFailure: 'after_tool_failure',
+      SessionStart: 'session_start',
+      Stop: 'turn_end',
+    }),
+    eventTypeToAction: Object.freeze({}),
+    sessionStartSources: Object.freeze(['new', 'load']),
+    /** claude matcher → grok matcher 词汇翻译。 */
+    matcherTranslation: Object.freeze({
+      startup: 'new',
+      resume: 'load',
+    }),
+    /** native（grok）→ canonical 工具名。 */
+    toolAliases: Object.freeze({
+      run_terminal_command: 'Bash',
+    }),
+    matcherSeparator: '|',
+  }),
 });
 
 // ── 查询函数 ────────────────────────────────────────────────────────────────
