@@ -6,11 +6,25 @@ const { HARNESS_ROOT } = require('./harness-root.cjs');
 
 const SCHEMA_DIR = path.join(HARNESS_ROOT, 'core', 'engine', 'schemas');
 const CATALOG_FILE = path.join(SCHEMA_DIR, 'catalog.json');
+// Phase 2.3：payload schema 落 io/schemas/（claude-hook/*-v1 标签），catalog 扫双根。
+// entry.file 用相对 engine/ 的路径（io/schemas/xxx.schema.json）。
+const IO_SCHEMA_DIR = path.join(HARNESS_ROOT, 'core', 'engine', 'io', 'schemas');
 
 function schemaFiles(schemaDir = SCHEMA_DIR) {
-  return fs.readdirSync(schemaDir)
+  const own = fs.readdirSync(schemaDir)
     .filter((name) => name.endsWith('.schema.json'))
-    .sort();
+    .sort()
+    .map((name) => ({ rel: name, abs: path.join(schemaDir, name) }));
+  let io = [];
+  try {
+    io = fs.readdirSync(IO_SCHEMA_DIR)
+      .filter((name) => name.endsWith('.schema.json'))
+      .sort()
+      .map((name) => ({ rel: path.join('io', 'schemas', name).replace(/\\/g, '/'), abs: path.join(IO_SCHEMA_DIR, name) }));
+  } catch {
+    io = [];
+  }
+  return [...own, ...io];
 }
 
 function readJson(filePath) {
@@ -35,7 +49,7 @@ function validateSchemaCatalog(options = {}) {
     errors.push(`catalog.schemaCount=${catalog.schemaCount} does not match entries=${entries.length}`);
   }
 
-  const files = schemaFiles(schemaDir);
+  const files = schemaFiles(schemaDir).map((f) => f.rel);
   const catalogFiles = entries.map((entry) => entry && entry.file).filter(Boolean).sort();
   const duplicateFiles = catalogFiles.filter((file, index) => catalogFiles.indexOf(file) !== index);
   if (duplicateFiles.length > 0) errors.push(`duplicate catalog entries: ${[...new Set(duplicateFiles)].join(', ')}`);

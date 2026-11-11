@@ -13,10 +13,12 @@ const MANIFEST_RELATIVE_PATH = path.join('core', 'engine', 'hooks', 'manifest.js
 const PLUGIN_HOOKS_RELATIVE_PATH = path.join('core', 'engine', 'hooks', 'plugin.hooks.json');
 const PLUGIN_ROOT_PLACEHOLDER = /\$\{CLAUDE_PLUGIN_ROOT\}/g;
 // Phase 2.1：工具事件集读 host-concepts 合同（原硬编码 Set）。
+const HOST_CONCEPTS_MODULE = require('./host-concepts.cjs');
 const TOOL_EVENTS = new Set(Object.entries(
-  require('./host-concepts.cjs').HOST_DIALECTS['claude-code'].events,
+  HOST_CONCEPTS_MODULE.HOST_DIALECTS['claude-code'].events,
 ).filter(([, action]) => action === 'before_tool' || action === 'after_tool' || action === 'after_tool_failure')
   .map(([nativeEvent]) => nativeEvent));
+const { ACTIONS } = HOST_CONCEPTS_MODULE;
 const COMPOSITE_HOOKS = new Set([
   'preflight-router.cjs',
   'postflight-router.cjs',
@@ -337,7 +339,9 @@ function validateHookManifest(opts = {}) {
     'sideEffects', 'timeoutSeconds', 'owner', 'fixture', 'active',
   ];
 
-  if (manifest?.version !== 2) errors.push(`unsupported hook manifest version: ${manifest?.version}`);
+  if (manifest?.version !== 2 && manifest?.version !== 3) {
+    errors.push(`unsupported hook manifest version: ${manifest?.version}`);
+  }
   if (!Array.isArray(manifest?.entries)) {
     return { checked: 0, errors: [...errors, 'hook manifest entries must be an array'], manifest, registrations };
   }
@@ -360,6 +364,38 @@ function validateHookManifest(opts = {}) {
     }
     if (!entry?.payloadSchema || typeof entry.payloadSchema !== 'string') {
       errors.push(`${label} payloadSchema must be a string`);
+    }
+    // v3 增补字段（只增不改）：timeoutOverrides / action / 通道声明 / hostPresets。
+    if (manifest?.version === 3) {
+      if (entry.timeoutOverrides !== undefined) {
+        if (!Array.isArray(entry.timeoutOverrides) || entry.timeoutOverrides.length === 0) {
+          errors.push(`${label} timeoutOverrides must be a non-empty array when present`);
+        } else {
+          for (const ov of entry.timeoutOverrides) {
+            if (!ov || typeof ov.event !== 'string' || !entry.events.includes(ov.event)) {
+              errors.push(`${label} timeoutOverrides references unknown event: ${ov?.event}`);
+            }
+            if (!Number.isFinite(ov?.timeoutSeconds) || ov.timeoutSeconds <= 0) {
+              errors.push(`${label} timeoutOverrides ${ov?.event} timeoutSeconds must be positive`);
+            }
+          }
+        }
+      }
+      if (entry.action !== undefined) {
+        const actions = Array.isArray(entry.action) ? entry.action : [entry.action];
+        for (const a of actions) {
+          if (!ACTIONS.includes(a)) errors.push(`${label} action not in §3.7 word list: ${a}`);
+        }
+      }
+      if (entry.blockChannel !== undefined && !['exit_code_2', 'json_decision', 'none'].includes(entry.blockChannel)) {
+        errors.push(`${label} blockChannel must be exit_code_2|json_decision|none`);
+      }
+      if (entry.injectChannel !== undefined && !['additionalContext', 'stdout', 'none'].includes(entry.injectChannel)) {
+        errors.push(`${label} injectChannel must be additionalContext|stdout|none`);
+      }
+      if (entry.toolMatcher !== undefined && !['*', 'capability'].includes(entry.toolMatcher)) {
+        errors.push(`${label} toolMatcher must be *|capability`);
+      }
     }
     if (!entry?.owner || typeof entry.owner !== 'string') errors.push(`${label} owner must be a string`);
     if (!entry?.fixture || !fs.existsSync(path.resolve(root, entry.fixture))) {
@@ -475,6 +511,18 @@ function validateHookManifest(opts = {}) {
     const configuredTimeout = Number(registration.raw?.timeout);
     if (Number.isFinite(configuredTimeout) && configuredTimeout > declaration.timeoutSeconds) {
       errors.push(`${registration.point} ${registration.matcher}: ${relative} timeout ${configuredTimeout}s exceeds manifest ${declaration.timeoutSeconds}s`);
+    }
+    // v3 双向交叉校验：注册超时若与 manifest timeoutSeconds 不同，必须被
+    // timeoutOverrides 精确声明（per-event 实况表——派生 registrations 的输入真源）。
+    if (manifest?.version === 3 && Number.isFinite(configuredTimeout)
+        && configuredTimeout !== declaration.timeoutSeconds) {
+      const ov = (declaration.timeoutOverrides || [])
+        .find((o) => o.event === registration.point);
+      if (!ov) {
+        errors.push(`${registration.point}: ${relative} registered timeout ${configuredTimeout}s differs from manifest ${declaration.timeoutSeconds}s but has no timeoutOverrides entry`);
+      } else if (ov.timeoutSeconds !== configuredTimeout) {
+        errors.push(`${registration.point}: ${relative} timeoutOverrides declares ${ov.timeoutSeconds}s but registration says ${configuredTimeout}s`);
+      }
     }
   }
 

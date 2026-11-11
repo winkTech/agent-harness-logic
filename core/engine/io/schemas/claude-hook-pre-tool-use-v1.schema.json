@@ -1,0 +1,21 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "claude-hook/pre-tool-use-v1",
+  "title": "Claude Code hook payload: PreToolUse",
+  "description": "Phase 2.3 §3.7 payloadSchemaRef 实例化——PreToolUse 事件的 stdin 载荷契约（claude-hook/*-v1 标签第一份）。字段只增不改。",
+  "type": "object",
+  "required": ["hook_event_name", "tool_name"],
+  "properties": {
+    "hook_event_name": { "const": "PreToolUse" },
+    "session_id": { "type": "string" },
+    "transcript_path": { "type": "string" },
+    "cwd": { "type": "string" },
+    "tool_name": { "type": "string", "minLength": 1 },
+    "tool_input": {
+      "type": "object",
+      "description": "工具入参；形态探测唯一实现在 core/engine/scripts/io/index.cjs（tool_input / toolInput / tool.input / input / arguments 并集）。"
+    },
+    "user_message": { "type": "string" }
+  },
+  "additionalProperties": true
+}

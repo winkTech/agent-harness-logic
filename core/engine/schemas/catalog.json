@@ -1,6 +1,6 @@
 {
   "schemaVersion": "1.0",
-  "schemaCount": 25,
+  "schemaCount": 30,
   "entries": [
     {
       "file": "adr-template.schema.json",
@@ -106,6 +106,31 @@
       "file": "harness-event-v1.schema.json",
       "id": "https://local.harness/schemas/harness-event-v1.schema.json",
       "title": "Harness Event v1"
+    },
+    {
+      "file": "io/schemas/claude-hook-post-tool-use-v1.schema.json",
+      "id": "claude-hook/post-tool-use-v1",
+      "title": "Claude Code hook payload: PostToolUse / PostToolUseFailure"
+    },
+    {
+      "file": "io/schemas/claude-hook-pre-tool-use-v1.schema.json",
+      "id": "claude-hook/pre-tool-use-v1",
+      "title": "Claude Code hook payload: PreToolUse"
+    },
+    {
+      "file": "io/schemas/claude-hook-session-start-v1.schema.json",
+      "id": "claude-hook/session-start-v1",
+      "title": "Claude Code hook payload: SessionStart"
+    },
+    {
+      "file": "io/schemas/claude-hook-stop-v1.schema.json",
+      "id": "claude-hook/stop-v1",
+      "title": "Claude Code hook payload: Stop / SubagentStop / PreCompact"
+    },
+    {
+      "file": "io/schemas/claude-hook-user-prompt-submit-v1.schema.json",
+      "id": "claude-hook/user-prompt-submit-v1",
+      "title": "Claude Code hook payload: UserPromptSubmit"
     },
     {
       "file": "plan.schema.json",

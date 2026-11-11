@@ -16,7 +16,8 @@ function main() {
   assert.ok(fs.existsSync(MANIFEST), 'active hook manifest is missing');
 
   const manifest = registry.loadHookManifest({ root: ROOT });
-  assert.equal(manifest.version, 2, 'hook manifest version must be 2');
+  // Phase 2.3：v3 = v2 全字段 + 增补（timeoutOverrides/action/通道声明/hostPresets）。
+  assert.equal(manifest.version, 3, 'hook manifest version must be 3 (v2 fields + §3.7 additions)');
   assert.ok(Array.isArray(manifest.entries) && manifest.entries.length > 0,
     'hook manifest must declare active entries');
   assert.ok(Array.isArray(manifest.consumerRegistry) && manifest.consumerRegistry.length > 0,
@@ -94,6 +95,47 @@ function main() {
   const ciSource = fs.readFileSync(path.join(ROOT, 'core', 'engine', 'scripts', 'harness-ci.cjs'), 'utf8');
   assert.match(ciSource, /validateHookManifest\s*\(/,
     'harness-ci does not enforce the active hook manifest');
+
+  // ── v3 增补字段合同（Phase 2.3，§3.7）──
+  // timeoutOverrides：注册超时与 manifest 单值不同的事件必须被精确声明。
+  const postflight = manifest.entries.find((e) => e.script.endsWith('postflight-router.cjs'));
+  assert.ok(postflight, 'postflight-router entry missing');
+  assert.deepEqual(postflight.timeoutOverrides,
+    [{ event: 'PostToolUse', timeoutSeconds: 8 }, { event: 'PostToolUseFailure', timeoutSeconds: 12 }],
+    'postflight-router per-event timeout reality (8s/12s) must be declared in timeoutOverrides');
+
+  // action 词表：全部条目 action ∈ §3.7 八动作。
+  const hc = require(path.join(ROOT, 'core', 'engine', 'scripts', 'lib', 'host-concepts.cjs'));
+  for (const entry of manifest.entries) {
+    if (entry.action === undefined) continue;
+    const actions = Array.isArray(entry.action) ? entry.action : [entry.action];
+    for (const a of actions) {
+      assert.ok(hc.ACTIONS.includes(a), `entry action outside §3.7 word list: ${entry.script} → ${a}`);
+    }
+  }
+  // 通道声明枚举。
+  for (const entry of manifest.entries) {
+    if (entry.blockChannel !== undefined) {
+      assert.ok(['exit_code_2', 'json_decision', 'none'].includes(entry.blockChannel),
+        `${entry.script} bad blockChannel`);
+    }
+    if (entry.injectChannel !== undefined) {
+      assert.ok(['additionalContext', 'stdout', 'none'].includes(entry.injectChannel),
+        `${entry.script} bad injectChannel`);
+    }
+  }
+  // hostPresets：三宿主剖面声明存在（v2.3 O2——特判前置为声明）。
+  for (const host of ['claude-code', 'workbuddy', 'grok', 'codex']) {
+    assert.ok(manifest.hostPresets && manifest.hostPresets[host],
+      `hostPresets missing profile for ${host}`);
+  }
+  // 交叉校验负例：注册超时偏离且无 overrides → 必须报错。
+  const noOverrides = JSON.parse(JSON.stringify(manifest));
+  const pfNoOv = noOverrides.entries.find((e) => e.script.endsWith('postflight-router.cjs'));
+  delete pfNoOv.timeoutOverrides;
+  const crossCheck = registry.validateHookManifest({ root: ROOT, manifest: noOverrides });
+  assert.ok(crossCheck.errors.some((e) => /timeoutOverrides/.test(e)),
+    'registration timeout drift without timeoutOverrides declaration must fail cross-check');
 
   process.stdout.write('HOOK_MANIFEST_CONTRACT_RESULT: PASS\n');
 }
