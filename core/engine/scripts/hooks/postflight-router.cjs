@@ -10,6 +10,7 @@ const { recordHealth } = require('../lib/hook-health.cjs');
 
 // Phase 2.1：工具能力唯一事实源 lib/host-concepts.cjs（postflight 侧小写比对）。
 const HOST_CONCEPTS = require('../lib/host-concepts.cjs');
+const { toolInputOf } = require('../io/index.cjs');
 const WRITE_TOOLS = new Set(HOST_CONCEPTS.WRITE_TOOLS.map((t) => t.toLowerCase()));
 const SHELL_TOOLS = new Set(HOST_CONCEPTS.SHELL_TOOLS.map((t) => t.toLowerCase()));
 
@@ -287,7 +288,7 @@ async function evaluatePostflightRisk(payload, injected = {}, opts = {}) {
  * 成功与失败两条路都要结算: 失败路上是"释放"，没写就不该扣次数。
  */
 function settleProtectedWrite(payload, deps) {
-  const input = payload?.tool_input || payload?.tool?.input || payload?.input || {};
+  const input = toolInputOf(payload);
   const filePath = String(input.file_path || input.filePath || '').trim();
   if (!filePath) return { decision: 'allow', diagnostics: [] };
   const outcome = deps.fileProtection.settlePendingWrites({ filePath });

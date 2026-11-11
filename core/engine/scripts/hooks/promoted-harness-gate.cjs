@@ -5,6 +5,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const { HARNESS_ROOT } = require('../lib/harness-root.cjs');
 const { parseFrontmatter } = require('../rule-loader.cjs');
+const { toolInputOf } = require('../io/index.cjs');
 
 const RULES_DIR = path.join(HARNESS_ROOT, 'docs', 'rules');
 const ALLOWED_FIELDS = new Set(['command', 'file_path']);
@@ -48,7 +49,7 @@ function loadPolicies(opts = {}) {
 }
 
 function valueFor(payload, runtime, field) {
-  const input = payload?.tool_input || payload?.tool?.input || {};
+  const input = toolInputOf(payload);
   if (field === 'command') return String(runtime?.command || input.command || input.cmd || '');
   return String(runtime?.filePath || input.file_path || input.path || '');
 }

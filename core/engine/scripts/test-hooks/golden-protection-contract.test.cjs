@@ -164,8 +164,10 @@ function tokenFixture(t, remainingWrites = 2) {
 
   const hooks = path.join(root, 'core', 'engine', 'scripts', 'hooks');
   const lib = path.join(root, 'core', 'engine', 'scripts', 'lib');
+  const io = path.join(root, 'core', 'engine', 'scripts', 'io');
   fs.mkdirSync(hooks, { recursive: true });
   fs.mkdirSync(lib, { recursive: true });
+  fs.mkdirSync(io, { recursive: true });
   fs.copyFileSync(GUARD, path.join(hooks, 'file-protection-guard.cjs'));
   for (const dep of [
     'gate-bypass.cjs',
@@ -177,6 +179,9 @@ function tokenFixture(t, remainingWrites = 2) {
   ]) {
     fs.copyFileSync(path.join(ROOT, 'core', 'engine', 'scripts', 'lib', dep), path.join(lib, dep));
   }
+  // Phase 2.2：守卫经 io/index.cjs 解析 tool_input，fixture 树须连同拷贝。
+  fs.copyFileSync(path.join(ROOT, 'core', 'engine', 'scripts', 'io', 'index.cjs'),
+    path.join(io, 'index.cjs'));
 
   fs.writeFileSync(path.join(root, 'CLAUDE.md'), '# fixture root marker\n', 'utf8');
   // 同上：tmp 树补 package.json 锚点，隔离令牌/审计写入。

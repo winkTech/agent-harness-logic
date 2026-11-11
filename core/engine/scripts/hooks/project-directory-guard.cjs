@@ -3,6 +3,7 @@
 
 const fs = require('node:fs');
 const path = require('node:path');
+const { toolInputOf } = require('../io/index.cjs');
 const {
   validateActionPath,
   CONTRACT_FILE,
@@ -28,7 +29,7 @@ function toolName(payload) {
 }
 
 function toolInput(payload) {
-  return payload?.tool_input || payload?.tool?.input || payload?.input || payload?.arguments || {};
+  return toolInputOf(payload);
 }
 
 function cwdFromPayload(payload) {

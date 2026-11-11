@@ -45,9 +45,13 @@ function normalizePayload(raw) {
   };
 }
 
-/** 工具入参多形态探测（原 14 处内联副本的唯一实现）。 */
+/** 工具入参多形态探测（原 16 处内联副本的唯一实现）。
+ * 形态并集：tool_input / toolInput / tool.input / input / arguments
+ * （各消费方原内联版本是此并集的子集——统一到超集安全：多认的形态
+ * 只影响「从未出现过」的载荷，不改变任何既有输入的判定结果。） */
 function toolInputOf(payload) {
-  const input = payload.tool_input ?? payload.tool?.input ?? payload.input ?? payload.arguments;
+  const input = payload?.tool_input ?? payload?.toolInput ?? payload?.tool?.input
+    ?? payload?.input ?? payload?.arguments;
   return input && typeof input === 'object' && !Array.isArray(input) ? input : {};
 }
 

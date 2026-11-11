@@ -32,6 +32,7 @@ const os = require('node:os');
 const path = require('node:path');
 const { HARNESS_ROOT } = require('./lib/harness-root.cjs');
 const { varPath } = require('./lib/harness-state.cjs');
+const { toolInputOf } = require('./io/index.cjs');
 
 // ── 配置 ────────────────────────────────────────────────────────────────────
 
@@ -572,7 +573,7 @@ function saveInjected(sessionId, files) {
 
 function retrieveContext(payload = {}, deps = {}) {
   const eventName = payload.hook_event_name || '';
-  const toolInput = payload.tool_input || payload.tool?.input || {};
+  const toolInput = toolInputOf(payload);
 
   // UserPromptSubmit 是主路径; PreToolUse 时退化为按文件类型匹配。
   const userMessage = payload.prompt

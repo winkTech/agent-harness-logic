@@ -8,6 +8,7 @@ const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 const crypto = require('node:crypto');
+const { toolInputOf } = require('../io/index.cjs');
 
 const {
   atomicWriteJson,
@@ -148,7 +149,7 @@ function eventNameFrom(payload) {
 }
 
 function toolInputFrom(payload) {
-  return payload?.tool_input || payload?.tool?.input || payload?.input || payload?.arguments || {};
+  return toolInputOf(payload);
 }
 
 function canonicalJson(value) {

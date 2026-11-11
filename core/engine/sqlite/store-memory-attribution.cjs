@@ -80,8 +80,8 @@ function createRetrievalId() {
 }
 
 function toolInputFrom(payload = {}) {
-  return payload.tool_input || payload.toolInput || payload.tool?.input
-    || payload.input || payload.arguments || {};
+  // Phase 2.2：多形态探测唯一实现在 scripts/io/index.cjs（toolInputOf）。
+  return require('../scripts/io/index.cjs').toolInputOf(payload);
 }
 
 function toolNameFrom(payload = {}) {

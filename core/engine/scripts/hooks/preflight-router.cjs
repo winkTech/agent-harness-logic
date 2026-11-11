@@ -11,6 +11,7 @@ const { recordHealth } = require('../lib/hook-health.cjs');
 // preflight 侧用小写 key 比对（toolKey 已 toLowerCase），从规范形派生；
 // 成员判定走 isControlledTool/isReadOnlyTool（真不可变，见 host-concepts 注释）。
 const HOST_CONCEPTS = require('../lib/host-concepts.cjs');
+const { toolInputOf } = require('../io/index.cjs');
 const { isControlledTool, isReadOnlyTool } = HOST_CONCEPTS;
 const SHELL_TOOLS = new Set(HOST_CONCEPTS.SHELL_TOOLS.map((t) => t.toLowerCase()));
 const WRITE_TOOLS = new Set(HOST_CONCEPTS.WRITE_TOOLS.filter((t) => t !== 'NotebookEdit').map((t) => t.toLowerCase()));
@@ -37,7 +38,7 @@ function readPayload() {
 }
 
 function toolInputFrom(payload) {
-  return payload?.tool_input || payload?.tool?.input || payload?.input || payload?.arguments || {};
+  return toolInputOf(payload);
 }
 
 function runtimeFrom(payload) {

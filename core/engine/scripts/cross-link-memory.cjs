@@ -3,6 +3,7 @@
 
 const fs = require('node:fs');
 const { memoryScopeFromPayload } = require('./lib/project-scope.cjs');
+const { toolInputOf } = require('./io/index.cjs');
 
 const DEFAULT_FRESH_MS = 5 * 60 * 1000;
 
@@ -34,7 +35,7 @@ function isFreshFailure(payload = {}, opts = {}) {
 }
 
 function buildQuery(payload = {}) {
-  const toolInput = payload.tool_input || payload.toolInput || payload.tool?.input || {};
+  const toolInput = toolInputOf(payload);
   const response = payload.tool_response || payload.tool_result || payload.response || {};
   return [
     compact(payload.error || response.error || response.stderr || response.message || payload.message, 300),

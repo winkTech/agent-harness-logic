@@ -22,6 +22,7 @@
 const fs = require('node:fs');
 const { evaluateGuardBypass } = require('../lib/gate-bypass.cjs');
 const { statePath, varPath } = require('../lib/harness-state.cjs');
+const { toolInputOf } = require('../io/index.cjs');
 const {
   findProjectRoot,
   readDirectoryContract,
@@ -597,7 +598,7 @@ function evaluate(payload, runtime = {}) {
     return { source, decision: 'allow', diagnostics: [] };
   }
   const toolName = String(payload?.tool_name || payload?.tool?.name || payload?.name || '').trim();
-  const input = payload?.tool_input || payload?.tool?.input || payload?.input || payload?.arguments || {};
+  const input = toolInputOf(payload);
   const filePath = String(runtime.filePath || input.file_path || input.filePath || '').trim();
   const writeTools = new Set(['Edit', 'Write', 'MultiEdit', 'NotebookEdit']);
   if (!writeTools.has(toolName) || !filePath) return { source, decision: 'allow', diagnostics: [] };

@@ -30,6 +30,7 @@ const path = require('path');
 const { findProjectRoot, stateHasTaskTargetForFile } = require('../lib/project-scope.cjs');
 const { varPath } = require('../lib/harness-state.cjs');
 const { evaluateGuardBypass } = require('../lib/gate-bypass.cjs');
+const { toolInputOf } = require('../io/index.cjs');
 
 const GATE_ID = 'requirements-gate-guard.cjs';
 
@@ -207,7 +208,7 @@ function evaluate(payload, runtime = {}) {
   if (eventName && eventName !== 'pretooluse') return { source: GATE_ID, decision: 'allow', diagnostics: [] };
   const toolName = String(payload?.tool?.name || payload?.tool_name || payload?.name || '').toLowerCase();
   if (toolName !== 'write' && toolName !== 'edit') return { source: GATE_ID, decision: 'allow', diagnostics: [] };
-  const input = payload?.tool_input || payload?.tool?.input || payload?.input || payload?.arguments || {};
+  const input = toolInputOf(payload);
   const filePath = String(runtime.filePath || input.file_path || input.filePath || '').trim();
   if (!filePath) return { source: GATE_ID, decision: 'allow', diagnostics: [] };
   const advisory = checkGate(filePath);

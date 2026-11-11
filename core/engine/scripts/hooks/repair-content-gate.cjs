@@ -3,6 +3,7 @@
 
 const fs = require('node:fs');
 const path = require('node:path');
+const { toolInputOf } = require('../io/index.cjs');
 
 const {
   evaluateOutputText,
@@ -100,7 +101,7 @@ function payloadMode(payload) {
 
 function postEditContent(payload, filePath, runtime = {}) {
   if (runtime.content !== undefined) return String(runtime.content);
-  const input = payload?.tool_input || payload?.tool?.input || payload?.input || payload?.arguments || {};
+  const input = toolInputOf(payload);
   if (Object.prototype.hasOwnProperty.call(input, 'content')) return String(input.content ?? '');
 
   const edits = Array.isArray(input.edits) ? input.edits

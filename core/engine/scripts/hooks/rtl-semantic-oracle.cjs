@@ -3,6 +3,7 @@
 
 const path = require('node:path');
 const fs = require('node:fs');
+const { toolInputOf } = require('../io/index.cjs');
 
 const {
   payloadCwd,
@@ -19,7 +20,7 @@ function eventNameFrom(payload) {
 }
 
 function toolInputFrom(payload) {
-  return payload?.tool_input || payload?.tool?.input || payload?.input || payload?.arguments || {};
+  return toolInputOf(payload);
 }
 
 /**

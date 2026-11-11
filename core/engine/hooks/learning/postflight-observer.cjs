@@ -9,6 +9,7 @@ const { varPath } = require('../../scripts/lib/harness-state.cjs');
 const { shouldSyncMemoryFile } = require('../../scripts/lib/memory-file-policy.cjs');
 const { withFileLockSync } = require('../../scripts/lib/project-scope.cjs');
 const { ingest } = require('../../scripts/transport/index.cjs');
+const { toolInputOf } = require('../../scripts/io/index.cjs');
 
 const RAW_RISK_RETENTION_MS = 14 * 24 * 60 * 60 * 1000;
 const AGGREGATE_RISK_RETENTION_MS = 90 * 24 * 60 * 60 * 1000;
@@ -31,7 +32,7 @@ function toolNameFrom(payload = {}) {
 }
 
 function toolInputFrom(payload = {}) {
-  return payload.tool_input || payload.toolInput || payload.tool?.input || payload.input || payload.arguments || {};
+  return toolInputOf(payload);
 }
 
 function compact(value, limit = 200) {

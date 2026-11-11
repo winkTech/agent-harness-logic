@@ -21,6 +21,7 @@
 
 const p = require('node:path');
 const { evaluateGuardBypass } = require('../../scripts/lib/gate-bypass.cjs');
+const { toolInputOf } = require('../../scripts/io/index.cjs');
 
 const GATE_ID = 'fix-in-place-guard.cjs';
 
@@ -204,7 +205,7 @@ function evaluate(payload, runtime = {}) {
     return { source: 'fix-in-place-guard', decision: 'allow', diagnostics: [], skipped: true };
   }
   const toolName = payload?.tool_name || payload?.tool?.name || payload?.name || '';
-  const input = payload?.tool_input || payload?.tool?.input || payload?.input || payload?.arguments || {};
+  const input = toolInputOf(payload);
   return evaluateToolUse({ name: toolName, input }, runtime.context || payload);
 }
 
@@ -245,7 +246,7 @@ async function main() {
   try { payload = JSON.parse(raw); } catch { process.exit(0); }
 
   const toolName = payload?.tool_name || payload?.tool?.name || payload?.name || '';
-  const input = payload?.tool_input || payload?.tool?.input || payload?.input || payload?.arguments || {};
+  const input = toolInputOf(payload);
   let outcome;
   try {
     outcome = module.exports({ name: toolName, input }, payload);

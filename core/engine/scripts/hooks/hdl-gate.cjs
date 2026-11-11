@@ -26,6 +26,7 @@ const os = require('os');
 // gate 家族整体 packs 化 + manifest 数据化分发留 Phase 2 host-concepts/manifest v3）。
 const logicAnalyzer = require('../hdl-lint/logic-analyzer.cjs');
 const { evaluateGuardBypass } = require('../lib/gate-bypass.cjs');
+const { toolInputOf } = require('../io/index.cjs');
 
 const GATE_ID = 'hdl-gate.cjs';
 
@@ -333,7 +334,7 @@ const HDL_WRITE_TOOLS = new Set(['write', 'edit', 'multiedit']);
 
 /** 还原「本次操作完成后」的文件全文。Write 直接给, Edit/MultiEdit 需叠加替换。 */
 function postEditContent(payload, filePath, runtime = {}) {
-  const input = payload?.tool_input || payload?.tool?.input || payload?.input || payload?.arguments || {};
+  const input = toolInputOf(payload);
   const direct = runtime.content !== undefined ? runtime.content : (input.content || payload?.content || '');
   if (direct) return String(direct);
 
@@ -364,7 +365,7 @@ function evaluate(payload, runtime = {}) {
   }
   const eventName = payload?.hook_event_name || payload?.event || '';
   const toolName = String(payload?.tool?.name || payload?.tool_name || payload?.name || '').toLowerCase();
-  const input = payload?.tool_input || payload?.tool?.input || payload?.input || payload?.arguments || {};
+  const input = toolInputOf(payload);
   const filePath = String(runtime.filePath || input.file_path || input.filePath || '').trim();
   if (!HDL_WRITE_TOOLS.has(toolName) || !filePath || !/\.(sv|v)$/i.test(filePath)) {
     return { source, decision: 'allow', diagnostics: [] };
