@@ -2511,6 +2511,7 @@ const AUDIT_REMEDIATION_CONTRACTS = [
   ['env translation contract', 'env-translation-contract.test.cjs', 60000],
   ['telemetry spool contract', 'spool-telemetry-contract.test.cjs', 120000],
   ['pack externalization contract', 'pack-externalization-contract.test.cjs', 120000],
+  ['codex render contract', 'codex-render-contract.test.cjs', 120000],
   ['workbuddy render target', 'render-workbuddy-contract.test.cjs', 30000],
   ['claude code plugin manifest', 'plugin-manifest-contract.test.cjs', 300000],
   ['harness state root and migration', 'harness-state-contract.test.cjs', 60000],

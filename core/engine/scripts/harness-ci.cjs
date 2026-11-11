@@ -155,6 +155,8 @@ function runRenderFamilyChecks() {
     'core/engine/scripts/render-hook-settings.cjs',
     'core/engine/scripts/sync-workflow-mirror.cjs',
     'core/engine/scripts/sync-skills.cjs',
+    // Phase 3.1：Codex 双产物（hooks.json + AGENTS.md 投影）零漂移看守。
+    'core/engine/scripts/render-codex-hooks.cjs',
   ];
   const errors = [];
   const checks = [];

@@ -45,6 +45,8 @@ const SANCTIONED_DISTRIBUTION = new Set([
   'config.cjs',
   // Phase 2.6：pack 规则表加载器本体（config 目录解析是它的全部职责）
   'scripts/lib/pack-config.cjs',
+  // Phase 3.1：Codex 宿主适配器渲染器（真源在 hosts/codex，产物到 ~/.codex）
+  'scripts/render-codex-hooks.cjs',
   // §6.1.4：rule-loader 双根扫描（core/rules + packs/fpga/rules）
   'scripts/rule-loader.cjs',
   // §3.5：技能/规则单一真源同步器与渲染器
@@ -71,6 +73,7 @@ const SANCTIONED_ENTRY_SHELL = new Set([
   'scripts/lib/plugin-mode.cjs',
   // 渲染器/同步器（宿主产物面）
   'scripts/render-hook-settings.cjs',
+  'scripts/render-codex-hooks.cjs',
   'scripts/sync-skills.cjs',
   'scripts/sync-pack-skills.cjs',
   // CI 总门禁（读 settings 与宿主注册做核对）

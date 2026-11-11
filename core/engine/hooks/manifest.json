@@ -92,7 +92,8 @@
       "active": true,
       "transports": [
         "claude-code",
-        "workbuddy"
+        "workbuddy",
+        "codex"
       ],
       "$comment": "2026-08-26 五次 Codex/宿主 safe-delete 删 .git refs/pack 事故的检测+自动恢复兜底。契约测试在临时仓演练五种事故形态。",
       "action": [
@@ -148,7 +149,8 @@
       "active": true,
       "transports": [
         "claude-code",
-        "workbuddy"
+        "workbuddy",
+        "codex"
       ],
       "action": [
         "after_tool",
@@ -200,7 +202,8 @@
       "active": true,
       "transports": [
         "claude-code",
-        "workbuddy"
+        "workbuddy",
+        "codex"
       ],
       "action": [
         "after_tool",
@@ -255,6 +258,9 @@
           "event": "UserPromptSubmit",
           "timeoutSeconds": 8
         }
+      ],
+      "hostOnly": [
+        "UserPromptSubmit 仅 claude-code 有原生注入语义; codex 无此注册面, grok 待 3.2 实测"
       ]
     },
     {
@@ -279,7 +285,8 @@
       "active": true,
       "transports": [
         "claude-code",
-        "workbuddy"
+        "workbuddy",
+        "codex"
       ],
       "action": "pre_compact",
       "blockChannel": "none",
@@ -314,7 +321,8 @@
       "active": true,
       "transports": [
         "claude-code",
-        "workbuddy"
+        "workbuddy",
+        "codex"
       ],
       "action": "before_tool",
       "blockChannel": "exit_code_2",
@@ -359,6 +367,9 @@
           "event": "SubagentStop",
           "timeoutSeconds": 10
         }
+      ],
+      "hostOnly": [
+        "SubagentStop 是 claude-code 独占事件"
       ]
     },
     {
@@ -382,7 +393,8 @@
       "active": false,
       "transports": [
         "claude-code",
-        "workbuddy"
+        "workbuddy",
+        "codex"
       ],
       "action": "turn_end",
       "blockChannel": "exit_code_2",
@@ -432,6 +444,9 @@
           "event": "PostToolUse",
           "timeoutSeconds": 10
         }
+      ],
+      "hostOnly": [
+        "60s 长钩子——grok 剖面降级为 --file 增量(3.2)"
       ]
     },
     {
@@ -461,7 +476,8 @@
       "active": true,
       "transports": [
         "claude-code",
-        "workbuddy"
+        "workbuddy",
+        "codex"
       ],
       "action": "session_start",
       "blockChannel": "none",
@@ -510,6 +526,9 @@
           "event": "SessionStart",
           "timeoutSeconds": 120
         }
+      ],
+      "hostOnly": [
+        "120s 长钩子——grok 剖面改由 spool 消费者调度(3.2)"
       ]
     },
     {
@@ -535,7 +554,8 @@
       "active": true,
       "transports": [
         "claude-code",
-        "workbuddy"
+        "workbuddy",
+        "codex"
       ],
       "action": "turn_end",
       "blockChannel": "exit_code_2",
