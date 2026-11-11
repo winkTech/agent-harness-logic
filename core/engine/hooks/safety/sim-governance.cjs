@@ -28,16 +28,32 @@
 
 const fs = require('node:fs');
 const path = require('node:path');
+// Phase 2.6：仿真治理规则（触发命令/产物清单/证据目录）外置到 fpga pack 规则目录。
+// pack 缺席（P-4 可卸性）时降级——shouldTrigger 恒 false，hook 静默不动作。
+const { loadPackConfig, compileRegexField } = require('../../scripts/lib/pack-config.cjs');
+const RULES = loadPackConfig('sim-governance-rules');
+const TRIGGER_COMMAND = compileRegexField(RULES, 'triggerCommand');
+const TRIGGER_TOOL = RULES ? String(RULES.toolName || 'Bash') : 'Bash';
+const ARTIFACT_TESTS = (RULES && Array.isArray(RULES.artifactFiles) ? RULES.artifactFiles : [])
+  .map((spec) => {
+    try {
+      if (spec.endsWith('^')) return { kind: 'prefix', test: (s) => s.startsWith(spec.slice(0, -1)) };
+      return { kind: 'regex', test: (s) => new RegExp(spec).test(s) };
+    } catch { return { kind: 'never', test: () => false }; }
+  });
+const EVIDENCE_DIR = (RULES && RULES.evidenceDir) || 'check_results';
+const EVIDENCE_FILE = (RULES && RULES.evidenceFile) || 'governance-evidence.json';
 
 /**
- * 判断是否应该触发清理。
+ * 判断是否应该触发清理（规则缺席 → 恒 false，P-4 可卸性降级）。
  * @param {object} toolUse
  * @returns {boolean}
  */
 function shouldTrigger(toolUse) {
-  if (!toolUse || toolUse.name !== 'Bash') return false;
+  if (!TRIGGER_COMMAND) return false;
+  if (!toolUse || toolUse.name !== TRIGGER_TOOL) return false;
   const cmd = toolUse.input && toolUse.input.command ? toolUse.input.command : '';
-  return /\bvsim\b/.test(cmd) || /\bxsim\b/.test(cmd) || /\bvlog\s+-sv\b/.test(cmd);
+  return TRIGGER_COMMAND.test(cmd);
 }
 
 /**
@@ -56,72 +72,38 @@ function cleanSimArtifacts(cwd) {
     return filesRemoved;
   }
 
-  // 1) 清理 wlft* 文件（ModelSim/Questa 临时文件）
+  // 1) 规则表驱动的产物清理（前缀 ^ 与正则两种形态；原 wlft*/transcript/*.wlf/
+  // stacktrace 四类规则全部收敛进 artifactFiles）。
   for (const entry of entries) {
-    if (/^wlft/.test(entry)) {
-      try {
-        fs.unlinkSync(path.join(cwd, entry));
-        filesRemoved.push(entry);
-      } catch (e) {
-        // 忽略删除失败
-      }
-    }
-  }
-
-  // 2) 清理 transcript 文件
-  if (entries.includes('transcript')) {
-    try {
-      fs.unlinkSync(path.join(cwd, 'transcript'));
-      filesRemoved.push('transcript');
-    } catch (e) {
-      // 忽略
-    }
-  }
-
-  // 3) 清理 *.wlf 波形文件 (含 vsim.wlf)
-  for (const entry of entries) {
-    if (/\.wlf$/i.test(entry)) {
-      try {
-        fs.unlinkSync(path.join(cwd, entry));
-        if (!filesRemoved.includes(entry)) {
-          filesRemoved.push(entry);
+    for (const t of ARTIFACT_TESTS) {
+      if (t.test(entry)) {
+        try {
+          fs.unlinkSync(path.join(cwd, entry));
+          if (!filesRemoved.includes(entry)) filesRemoved.push(entry);
+        } catch (e) {
+          // 忽略删除失败
         }
-      } catch (e) {
-        // 忽略
+        break;
       }
     }
   }
 
-  // 4) 清理 stacktrace 文件
-  const stackFiles = ['vish_stacktrace.vstf', 'vsim_stacktrace.vstf'];
-  for (const sf of stackFiles) {
-    if (entries.includes(sf)) {
-      try {
-        fs.unlinkSync(path.join(cwd, sf));
-        filesRemoved.push(sf);
-      } catch (e) {
-        // 忽略
-      }
-    }
-  }
-
-  // 5) 检查 check_results/ 目录
-  const checkResultsPath = path.join(cwd, 'check_results');
+  // 2) 检查证据目录（check_results/），空目录则写入基础 JSON 证据
+  const checkResultsPath = path.join(cwd, EVIDENCE_DIR);
   if (fs.existsSync(checkResultsPath)) {
     try {
       const stat = fs.statSync(checkResultsPath);
       if (stat.isDirectory()) {
         const checkEntries = fs.readdirSync(checkResultsPath);
         if (checkEntries.length === 0) {
-          // 空目录 → 写入基础 JSON 证据文件
           const evidence = {
             timestamp: new Date().toISOString(),
             tool: 'sim-governance',
             check: 'empty'
           };
-          const evidenceFile = path.join(checkResultsPath, 'governance-evidence.json');
+          const evidenceFile = path.join(checkResultsPath, EVIDENCE_FILE);
           fs.writeFileSync(evidenceFile, JSON.stringify(evidence, null, 2), 'utf-8');
-          filesRemoved.push('check_results/governance-evidence.json (created)');
+          filesRemoved.push(`${EVIDENCE_DIR}/${EVIDENCE_FILE} (created)`);
         }
       }
     } catch (e) {

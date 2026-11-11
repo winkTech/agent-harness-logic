@@ -60,15 +60,13 @@ function extractRedirectTargets(command) {
 
 /**
  * "重复变体"正则列表。
- * 每个条目: { name, re }
+ * Phase 2.6：RTL 模式表外置到 fpga pack 规则目录（guard 骨架留 core；
+ * pack 缺席时降级空表——变体检测关闭，其余 guard 逻辑不受影响）。
  */
-const VARIANT_PATTERNS = [
-  { name: 'versioned-sv', re: /_v\d+\.(sv|v)$/i },
-  { name: 'numbered-sv',  re: /_\d+\.(sv|v)$/i },
-  { name: 'keyword-sv',   re: /_(new|final|basic|clk|stim|fast)\d*\.(sv|v)$/i },
-  { name: 'check-rtl',    re: /^check_rtl_\w+\d+\.sv$/i },
-  { name: 'run-debug',    re: /^run_debug\d+\.do$/i },
-];
+const { loadPackConfig, compileRegexRules } = require('../../scripts/lib/pack-config.cjs');
+const VARIANT_PATTERNS = compileRegexRules(
+  (loadPackConfig('fix-in-place-variant-rules') || {}).variantPatterns,
+);
 
 /**
  * 「基名存在」才算变体。

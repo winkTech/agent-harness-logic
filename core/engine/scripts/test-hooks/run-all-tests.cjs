@@ -70,6 +70,17 @@ function define(suite, name, fn) {
   tests.push({ id: `${suite}::${name}`, suite, name, fn });
 }
 
+// Phase 2.6（P-4 可卸性）：这些 suite 的被测语义是 FPGA 域规则（pack 外置表），
+// HARNESS_PACKS_DISABLED=1 下规则降级是设计行为——P-4 口径（core 不依赖 packs）
+// 对它们的正确期望是 skip 而非红。基线 4 项（E2E/painpoints/managed-action/
+// long-task）是行为级基线，与 packs 无关，不在此列。
+const PACK_DEPENDENT_SUITES = new Set([
+  'RTLSemanticOracle', 'HDLGate', 'FileProtectionGuard', // 域规则语义
+  'AuditRemediationContracts', // gate-bypass/preflight/eval/red-team 含 golden 保护语义
+  'PackExternalization', // 套件自身验证 pack 在场/禁用两态——P-4 下"在场"用例语义不适用
+]);
+const packsDisabledRun = ['1', 'true'].includes(String(process.env.HARNESS_PACKS_DISABLED || ''));
+
 // ── 工具 ───────────────────────────────────────────────────────────────────
 
 const RESULTS_DIR = path.join(HOME, 'var', 'index');
@@ -2499,6 +2510,7 @@ const AUDIT_REMEDIATION_CONTRACTS = [
   ['io channels contract', 'io-contract.test.cjs', 60000],
   ['env translation contract', 'env-translation-contract.test.cjs', 60000],
   ['telemetry spool contract', 'spool-telemetry-contract.test.cjs', 120000],
+  ['pack externalization contract', 'pack-externalization-contract.test.cjs', 120000],
   ['workbuddy render target', 'render-workbuddy-contract.test.cjs', 30000],
   ['claude code plugin manifest', 'plugin-manifest-contract.test.cjs', 300000],
   ['harness state root and migration', 'harness-state-contract.test.cjs', 60000],
@@ -4774,6 +4786,7 @@ function runSuite() {
   }
 
   let passed = 0, failed = 0, skipped = 0;
+  let p4Skipped = 0; // P-4 pack 禁用下的显式跳过——与 manifest 预算分账
   const skipManifest = loadSkipManifest();
   const unknownSkips = [];
   // 子套件内部的跳过不能计进 skipped —— 那三个计数是父层自己的测试数, 混进子套件的
@@ -4786,6 +4799,16 @@ function runSuite() {
 
     for (const t of suiteTests) {
       process.stdout.write(`  ${t.name.padEnd(42)} `);
+      // P-4 可卸性（Phase 2.6）：域规则套件在 packs 禁用下降级是设计行为——
+      // 记为显式 skip（独立分账，不吃 skip-manifest 预算——预算管的是"未知降级"）。
+      // ProgressWatchdog 混合通用/FPGA 用例，只跳 FPGA 单条（用例名含 FPGA）。
+      if (packsDisabledRun
+          && (PACK_DEPENDENT_SUITES.has(t.suite)
+              || (t.suite === 'ProgressWatchdog' && t.name.includes('FPGA')))) {
+        console.log(warn('跳过(P-4 pack 禁用)'));
+        p4Skipped++;
+        continue;
+      }
       try {
         const result = t.fn();
         if (Array.isArray(result.harnessCases)) {
@@ -4862,7 +4885,7 @@ function runSuite() {
   const grade = score === 100 ? '🟢' : score >= 80 ? '🟡' : '🔴';
 
   console.log('\n━━━ 汇总 ━━━');
-  console.log(`  总计: ${total}  |  通过: ${passed}  |  失败: ${failed}  |  跳过: ${skipped}`);
+  console.log(`  总计: ${total}  |  通过: ${passed}  |  失败: ${failed}  |  跳过: ${skipped}${p4Skipped ? `  |  P-4 pack 禁用跳过: ${p4Skipped}` : ''}`);
   console.log(`  分数: ${grade} ${score}%`);
   // 上面那个"跳过"只统计父层自己的测试。子套件在自己进程里降级掉的判据不在其中,
   // 只扫汇总行的人会把它读成"全都验过了" —— 所以另起一行点名, 不动计数语义。

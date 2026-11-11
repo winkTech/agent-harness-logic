@@ -61,15 +61,13 @@ const PORT_DECL_KEYWORDS = new Set([
   'tri', 'var',
 ]);
 
-/** 综合禁止的模式 (exit 2) */
-const SYNTHESIS_VIOLATIONS = [
-  { pattern: /\binitial\b/,          message: '禁止使用 initial 语句（不可综合）' },
-  { pattern: /\bdisable\b/,          message: '禁止使用 disable 语句（不可综合）' },
-  { pattern: /\bwait\s+[^;]*;/,     message: '禁止在综合代码中使用 wait（不可综合）' },
-  { pattern: /\bassign\s+ri_/,      message: '输入信号(ri_)不应被 assign 驱动' },
-  { pattern: /#\d+\s/,              message: '禁止使用延时 #delay（不可综合）' },
-  { pattern: /\bforce\b/,           message: '禁止使用 force 语句（不可综合）' },
-];
+/** 综合禁止的模式 (exit 2)
+ * Phase 2.6：RTL 红线正则表外置到 fpga pack 规则目录（gate 骨架留 core；
+ * pack 缺席时降级空表——综合检查关闭，命名/TB 检查不受影响）。 */
+const { loadPackConfig, compileRegexRules } = require('../lib/pack-config.cjs');
+const SYNTHESIS_VIOLATIONS = compileRegexRules(
+  (loadPackConfig('hdl-gate-synthesis-rules') || {}).synthesisViolations,
+);
 
 /** 命名规范检查 — check(line, fileName, filePath) 签名 */
 function normalizedForMatch(p) {
@@ -306,7 +304,7 @@ function checkSynthesisViolations(content) {
   const violations = [];
   const scanContent = stripMemInitBlocks(stripComments(content));
   for (const v of SYNTHESIS_VIOLATIONS) {
-    if (v.pattern.test(scanContent)) {
+    if (v.re.test(scanContent)) {
       violations.push(v.message);
     }
   }

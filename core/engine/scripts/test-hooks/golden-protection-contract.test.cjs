@@ -185,6 +185,16 @@ function tokenFixture(t, remainingWrites = 2) {
   // Phase 2.4：守卫防写开关经 io/env.cjs 双名兼容，同样拷入 fixture 树。
   fs.copyFileSync(path.join(ROOT, 'core', 'engine', 'scripts', 'io', 'env.cjs'),
     path.join(io, 'env.cjs'));
+  // Phase 2.6：守卫受保护模式经 lib/pack-config.cjs 外置读取，同样拷入。
+  fs.copyFileSync(path.join(ROOT, 'core', 'engine', 'scripts', 'lib', 'pack-config.cjs'),
+    path.join(lib, 'pack-config.cjs'));
+  // 受保护模式表现在 packs/fpga/config——fixture 树须连同拷贝（否则守卫降级空表）。
+  const fpgaConfig = path.join(root, 'packs', 'fpga', 'config');
+  fs.mkdirSync(fpgaConfig, { recursive: true });
+  fs.copyFileSync(
+    path.join(ROOT, 'packs', 'fpga', 'config', 'file-protection-patterns.json'),
+    path.join(fpgaConfig, 'file-protection-patterns.json'),
+  );
 
   fs.writeFileSync(path.join(root, 'CLAUDE.md'), '# fixture root marker\n', 'utf8');
   // 同上：tmp 树补 package.json 锚点，隔离令牌/审计写入。

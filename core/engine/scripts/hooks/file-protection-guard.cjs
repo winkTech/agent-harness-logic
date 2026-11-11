@@ -46,12 +46,10 @@ const GATE_ID = 'file-protection-guard.cjs';
 //
 // See docs/rules-archive/08-constraints.md for the rationale behind each pattern.
 
-const PROTECTED_PATTERNS = [
-  '**/matlab/**',
-  '**/07_mat/**',
-  '**/golden_model*/**',
-  '**/engineering-assets/models/**',
-];
+// Phase 2.6：受保护路径模式外置到 fpga pack 规则目录（CBB/golden 布局归 pack；
+// guard 骨架留 core。pack 缺席时降级空表——仅项目级 pattern 仍生效）。
+const { loadPackConfig } = require('../lib/pack-config.cjs');
+const PROTECTED_PATTERNS = (loadPackConfig('file-protection-patterns') || {}).protectedPatterns || [];
 
 // ── Helpers ────────────────────────────────────────────────────────────────
 

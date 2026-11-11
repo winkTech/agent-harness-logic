@@ -127,6 +127,12 @@ const PHASES = {
       // H-5 全程临时目录/临时 DB 隔离——必须解除 runner 的防写注入，否则 writer 直接 skip。
       envOverride: { CLAUDE_HARNESS_NO_PERSIST: '0', HARNESS_NO_PERSIST: '0' },
     },
+    {
+      id: 'P-4', desc: '可卸性烟测 (HARNESS_PACKS_DISABLED=1 下 core 套件全绿)',
+      cmd: [process.execPath, R('core/engine/scripts/bench-p4-removable.js')],
+      json: null, timeoutMs: 480000,
+      envOverride: { CLAUDE_HARNESS_NO_PERSIST: '0', HARNESS_NO_PERSIST: '0' },
+    },
   ],
 };
 

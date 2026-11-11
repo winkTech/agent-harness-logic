@@ -36,7 +36,12 @@ const {
 
 
 const VERIFICATION_COMMAND = /\b(pytest|npm\s+(?:test|run\s+test)|pnpm\s+(?:test|run\s+test)|node\s+.*(?:test-hooks|\.test\.|spec)|ruff\s+check|vlog|vsim|iverilog|verilator|make\s+(?:test|sim|lint|compile|verify)|git\s+commit)\b/i;
-const FPGA_VERIFICATION_COMMAND = /\b(?:vivado(?:\.bat|\.exe)?\s+.*(?:-mode\s+batch|-source\b)|node(?:\.exe)?\s+.*(?:pg-synth|fpga-timing-parser|auto-parse-fpga-reports)\.cjs\b)/i;
+// Phase 2.6：FPGA 验证命令表外置到 fpga pack 规则目录（watchdog 骨架留 core）。
+// pack 缺席（P-4 可卸性）时降级 null——通用 VERIFICATION_COMMAND 仍生效。
+const { compileRegexField, loadPackConfig } = require('../../scripts/lib/pack-config.cjs');
+const FPGA_VERIFICATION_COMMAND = compileRegexField(
+  loadPackConfig('progress-watchdog-rules'), 'fpgaVerificationCommand',
+);
 const READ_ONLY_COMMAND = /^\s*(?:pwd|cd\b|ls\b|dir\b|echo\b|cat\b|type\b|Get-Content\b|rg\b|grep\b|findstr\b)/i;
 const LONG_TASK_TEXT = /\b(?:long[- ]?running|monitor|watch|babysit|repair loop|keep going|do not stop)\b|长任务|持续监控|不要停止|修复循环/i;
 const RISK_LEVELS = ['R0', 'R1', 'R2', 'R3'];
@@ -295,7 +300,7 @@ function classifyEvent(payload, event) {
     if (READ_ONLY_COMMAND.test(command)) {
       return { kind: 'activity', evidence: `read-only shell exploration: ${command.slice(0, 160)}` };
     }
-    if (VERIFICATION_COMMAND.test(command) || FPGA_VERIFICATION_COMMAND.test(command)) {
+    if (VERIFICATION_COMMAND.test(command) || (FPGA_VERIFICATION_COMMAND && FPGA_VERIFICATION_COMMAND.test(command))) {
       if (hookEvent === 'PostToolUse' || hookEvent === 'PostToolUseFailure' || (event && event.eventType === 'tool.post')) {
         const result = resultFromPayload(payload);
         const outcome = verificationOutcome(hookEvent, result, event);
@@ -913,6 +918,8 @@ module.exports = {
   shouldTrackProgress,
   updateProgress,
   stableSessionKey,
+  // Phase 2.6：pack 外置合同测试观察位（null = pack 禁用/缺席降级）。
+  FPGA_VERIFICATION_COMMAND,
   watchdogMode,
   DEFAULT_STATE_FILE,
   DEFAULT_ARCHIVE_DIR,

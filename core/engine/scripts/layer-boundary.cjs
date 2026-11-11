@@ -43,6 +43,8 @@ const SANCTIONED_DISTRIBUTION = new Set([
   'scripts/kb-stats.cjs',
   // §6.1.4：KB_PATH 注入点（默认解析 pack 内知识库）
   'config.cjs',
+  // Phase 2.6：pack 规则表加载器本体（config 目录解析是它的全部职责）
+  'scripts/lib/pack-config.cjs',
   // §6.1.4：rule-loader 双根扫描（core/rules + packs/fpga/rules）
   'scripts/rule-loader.cjs',
   // §3.5：技能/规则单一真源同步器与渲染器
