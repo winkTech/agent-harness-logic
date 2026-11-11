@@ -2,7 +2,7 @@
   "$schema": "http://json-schema.org/draft-07/schema#",
   "$id": "https://local.harness/schemas/harness-event-v1.schema.json",
   "title": "Harness Event v1",
-  "description": "归一化内部事件契约（harness-event-v1）：所有 transport（claude-code / workbuddy / codex）的原始 payload 由 transport 层归一化为本形状，hook 只消费本形状，不直接解析各工具原始载荷。D1 真实事件语义：status 三值 succeeded|failed|unknown，原始载荷缺 status 时 transport 一律归一化为 unknown（绝不臆测成功/失败）；eventType 是中性事件名（tool.pre/tool.post/...），与结果无关，结果判定只由 status 承载。hook 层（如 progress-watchdog）可再按输出证据把 unknown 细化，但不得在契约层越权判定。",
+  "description": "归一化内部事件契约（harness-event-v1）：所有 transport（claude-code / workbuddy / codex / grok）的原始 payload 由 transport 层归一化为本形状，hook 只消费本形状，不直接解析各工具原始载荷。D1 真实事件语义：status 三值 succeeded|failed|unknown，原始载荷缺 status 时 transport 一律归一化为 unknown（绝不臆测成功/失败）；eventType 是中性事件名（tool.pre/tool.post/...），与结果无关，结果判定只由 status 承载。hook 层（如 progress-watchdog）可再按输出证据把 unknown 细化，但不得在契约层越权判定。",
   "type": "object",
   "required": [
     "schema",
@@ -47,7 +47,12 @@
     },
     "transport": {
       "type": "string",
-      "enum": ["claude-code", "workbuddy", "codex"],
+      "enum": [
+        "claude-code",
+        "workbuddy",
+        "codex",
+        "grok"
+      ],
       "description": "原始载荷来源工具。hook 需要按来源区分行为时使用；同一事件类型在不同 transport 下的归一化结果必须语义一致。"
     },
     "occurredAt": {
@@ -74,36 +79,73 @@
     },
     "status": {
       "type": "string",
-      "enum": ["succeeded", "failed", "unknown"],
+      "enum": [
+        "succeeded",
+        "failed",
+        "unknown"
+      ],
       "description": "事件结果判定（D1 核心）。succeeded=原始载荷有明确成功证据；failed=原始载荷有明确失败证据（如 PostToolUseFailure 事件名本身即失败证据）；unknown=原始载荷无 status 信息（如 Claude PostToolUse 通常如此）——hook 层可再按输出证据细化，契约层绝不臆测。"
     },
     "toolName": {
-      "type": ["string", "null"],
+      "type": [
+        "string",
+        "null"
+      ],
       "description": "工具名（工具事件）。非工具事件为 null。Claude: tool_name → toolName。"
     },
     "toolInput": {
-      "type": ["object", "null"],
+      "type": [
+        "object",
+        "null"
+      ],
       "description": "工具输入参数（工具事件）。Claude: tool_input → toolInput。可能包含命令等敏感内容，hook 不得写入日志。"
     },
     "toolUseId": {
-      "type": ["string", "null"],
+      "type": [
+        "string",
+        "null"
+      ],
       "description": "工具调用标识（工具事件），供事件关联。Claude: tool_use_id → toolUseId。"
     },
     "actor": {
-      "type": ["object", "null"],
+      "type": [
+        "object",
+        "null"
+      ],
       "default": null,
       "description": "发起者信息（可选）。Claude/WorkBuddy 原始载荷无此概念时为 null；Codex 等可携带。",
       "additionalProperties": false,
       "properties": {
-        "kind": { "type": "string", "description": "main | subagent | external" },
-        "id": { "type": ["string", "null"] },
-        "type": { "type": ["string", "null"] },
-        "parentId": { "type": ["string", "null"] }
+        "kind": {
+          "type": "string",
+          "description": "main | subagent | external"
+        },
+        "id": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "type": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "parentId": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
       }
     },
     "source": {
       "type": "object",
-      "required": ["nativeEventName", "adapter"],
+      "required": [
+        "nativeEventName",
+        "adapter"
+      ],
       "additionalProperties": false,
       "properties": {
         "nativeEventName": {
@@ -123,13 +165,19 @@
           "description": "true 表示 occurredAt 由 transport 推断（原始载荷缺时间戳），审计用。"
         },
         "payloadHash": {
-          "type": ["string", "null"],
+          "type": [
+            "string",
+            "null"
+          ],
           "description": "原始 payload 的 sha256 指纹（可选，审计/去重用），格式 'sha256:<hex>'。"
         }
       }
     },
     "raw": {
-      "type": ["object", "null"],
+      "type": [
+        "object",
+        "null"
+      ],
       "default": null,
       "description": "原始 payload 保留（默认 null，不持久化）。需要原始字段细节的 hook 显式要求 transport 附带；含敏感内容时 hook 负保密责任。"
     },

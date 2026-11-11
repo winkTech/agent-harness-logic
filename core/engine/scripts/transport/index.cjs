@@ -24,6 +24,7 @@
 const claudeCode = require('./claude-code.cjs');
 const workbuddy = require('./workbuddy.cjs');
 const codex = require('./codex.cjs');
+const grok = require('./grok.cjs');
 // Phase 2.4：宿主 env 翻译（CLAUDE_SESSION_ID 等 → HARNESS_*）在边界识别一次。
 const { translateHostEnv } = require('../io/env.cjs');
 
@@ -31,7 +32,7 @@ const EVENT_SCHEMA = 'harness.event';
 const EVENT_VERSION = 1;
 
 /** 与 harness-event-v1.schema.json transport 枚举保持一致 */
-const TRANSPORTS = ['claude-code', 'workbuddy', 'codex'];
+const TRANSPORTS = ['claude-code', 'workbuddy', 'codex', 'grok'];
 
 /**
  * 按 transport 分发归一化。
@@ -56,6 +57,8 @@ function normalize(raw, transport) {
       return workbuddy.normalizeWorkbuddyEvent(raw);
     case 'codex':
       return codex.normalizeCodexEvent(raw);
+    case 'grok':
+      return grok.normalizeGrokEvent(raw);
     /* c8 ignore next 2 */
     default:
       throw Object.assign(new Error(`transport: unreachable transport '${transport}'`), { code: 'EVENT_INVALID' });

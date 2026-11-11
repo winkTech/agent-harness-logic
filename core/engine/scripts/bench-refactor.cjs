@@ -133,6 +133,11 @@ const PHASES = {
       json: null, timeoutMs: 480000,
       envOverride: { CLAUDE_HARNESS_NO_PERSIST: '0', HARNESS_NO_PERSIST: '0' },
     },
+    {
+      id: 'H-4', desc: '跨宿主引擎层等价性 (样例×四方言路径同判 100%)',
+      cmd: [process.execPath, R('core/engine/scripts/bench-h4-equivalence.cjs')],
+      json: null, timeoutMs: 300000,
+    },
   ],
 };
 

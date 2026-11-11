@@ -2514,6 +2514,7 @@ const AUDIT_REMEDIATION_CONTRACTS = [
   ['codex render contract', 'codex-render-contract.test.cjs', 120000],
   ['grok render contract', 'grok-render-contract.test.cjs', 180000],
   ['claude host closure contract', 'claude-host-closure-contract.test.cjs', 120000],
+  ['cross-host consistency contract', 'cross-host-consistency-contract.test.cjs', 300000],
   ['workbuddy render target', 'render-workbuddy-contract.test.cjs', 30000],
   ['claude code plugin manifest', 'plugin-manifest-contract.test.cjs', 300000],
   ['harness state root and migration', 'harness-state-contract.test.cjs', 60000],
