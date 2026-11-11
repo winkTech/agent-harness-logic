@@ -12,7 +12,11 @@ const DEFAULT_SETTINGS_FILES = settingsFiles(HOME);
 const MANIFEST_RELATIVE_PATH = path.join('core', 'engine', 'hooks', 'manifest.json');
 const PLUGIN_HOOKS_RELATIVE_PATH = path.join('core', 'engine', 'hooks', 'plugin.hooks.json');
 const PLUGIN_ROOT_PLACEHOLDER = /\$\{CLAUDE_PLUGIN_ROOT\}/g;
-const TOOL_EVENTS = new Set(['PreToolUse', 'PostToolUse', 'PostToolUseFailure']);
+// Phase 2.1：工具事件集读 host-concepts 合同（原硬编码 Set）。
+const TOOL_EVENTS = new Set(Object.entries(
+  require('./host-concepts.cjs').HOST_DIALECTS['claude-code'].events,
+).filter(([, action]) => action === 'before_tool' || action === 'after_tool' || action === 'after_tool_failure')
+  .map(([nativeEvent]) => nativeEvent));
 const COMPOSITE_HOOKS = new Set([
   'preflight-router.cjs',
   'postflight-router.cjs',

@@ -18,6 +18,7 @@
 'use strict';
 
 const { HARNESS_ROOT } = require('./harness-root.cjs');
+const HOST_CONCEPTS = require('./host-concepts.cjs');
 
 const fs = require('node:fs');
 const path = require('node:path');
@@ -37,6 +38,11 @@ function createBenchSandbox() {
   const root = path.join(base, '.claude');
   fs.mkdirSync(path.join(root, 'core', 'engine', 'scripts'), { recursive: true });
   fs.mkdirSync(path.join(root, 'var'), { recursive: true });
+  // Phase 2.1 修（Phase 1 拆层遗留）：sandbox 树补 package.json 锚点(name=harness)，
+  // CLAUDE_HARNESS_ROOT 显式校验（isHarnessRoot）才能通过——旧布局标记
+  // (engine/scripts + AGENTS.md) 在 core/engine 布局下不再命中。
+  fs.writeFileSync(path.join(root, 'package.json'),
+    JSON.stringify({ name: 'harness', private: true }), 'utf8');
   const agentsSource = path.join(HOME, 'AGENTS.md');
   const agentsTarget = path.join(root, 'AGENTS.md');
   if (fs.existsSync(agentsSource)) fs.copyFileSync(agentsSource, agentsTarget);
@@ -194,7 +200,9 @@ function payloadForEntry(entry, cwd) {
     return { ...base, prompt: 'Benchmark hook lifecycle latency.' };
   }
   if (point === 'SessionStart') {
-    const source = matcher.split('|').find(value => ['startup', 'resume', 'clear', 'compact'].includes(value)) || 'startup';
+    // Phase 2.1：source 枚举读 host-concepts 合同（原反推补偿逻辑废弃）。
+    const known = HOST_CONCEPTS.sessionStartSourcesFromMatcher(matcher);
+    const source = known.find((v) => HOST_CONCEPTS.HOST_DIALECTS['claude-code'].sessionStartSources.includes(v)) || 'startup';
     return { ...base, source };
   }
   if (point === 'Stop') {
@@ -207,10 +215,12 @@ function payloadForEntry(entry, cwd) {
     return { ...base, notification_type: 'benchmark', message: 'Benchmark notification.' };
   }
 
-  const toolName = matcher.split('|').find(value => value && value !== '*') || 'Bash';
-  const toolInput = ['Bash', 'PowerShell'].includes(toolName)
+  // Phase 2.1：工具名/形态读 host-concepts 合同（matcher 展开用 toolsFromMatcher，
+  // 工具输入形态按能力谓词选择——shell 给 command、write 给 file_path+content）。
+  const toolName = HOST_CONCEPTS.toolsFromMatcher(matcher)[0] || 'Bash';
+  const toolInput = HOST_CONCEPTS.hasCapability(toolName, 'shell')
     ? { command: 'git status' }
-    : ['Write', 'Edit', 'MultiEdit'].includes(toolName)
+    : HOST_CONCEPTS.hasCapability(toolName, 'write')
       ? { file_path: path.join(cwd, 'benchmark.txt'), content: 'benchmark' }
       : {};
   const payload = { ...base, tool_name: toolName, tool_input: toolInput };

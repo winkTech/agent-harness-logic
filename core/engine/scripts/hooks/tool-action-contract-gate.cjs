@@ -11,7 +11,8 @@ const {
   requiresActionContract,
 } = require('./agent-transparency-ledger.cjs');
 
-const CONTROLLED_TOOLS = new Set(['Bash', 'Edit', 'Write', 'MultiEdit', 'Agent', 'Task', 'Workflow']);
+// Phase 2.1：受控工具集唯一事实源在 lib/host-concepts.cjs（原三副本之一）。
+const { isControlledTool } = require('../lib/host-concepts.cjs');
 const DEFAULT_MAX_AGE_MS = 30 * 1000;
 
 // 可由"ledger 与本 gate 并发、写入晚于读取"解释的失败: 读到的是上一次调用
@@ -113,7 +114,7 @@ function validate(ctx, contract) {
 
 function evaluate(payload, runtime = {}) {
   const ctx = runtime.context || buildContext(payload);
-  if (!CONTROLLED_TOOLS.has(ctx.toolName)) {
+  if (!isControlledTool(ctx.toolName)) {
     return { source: 'tool-action-contract', decision: 'allow', skipped: true };
   }
   if ((ctx.eventName || '') !== 'PreToolUse' || !requiresActionContract(ctx)) {
@@ -145,7 +146,7 @@ function evaluate(payload, runtime = {}) {
 
 function run(payload) {
   const ctx = buildContext(payload);
-  if (!CONTROLLED_TOOLS.has(ctx.toolName)) return { ok: true, skipped: true };
+  if (!isControlledTool(ctx.toolName)) return { ok: true, skipped: true };
   if ((ctx.eventName || '') !== 'PreToolUse') return { ok: true, skipped: true };
   if (!requiresActionContract(ctx)) return { ok: true, skipped: true, reason: 'not-high-risk' };
 

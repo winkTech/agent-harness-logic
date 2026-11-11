@@ -7,7 +7,8 @@ const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 
-const CONTROLLED_TOOLS = new Set(['Bash', 'Edit', 'Write', 'MultiEdit', 'Agent', 'Task', 'Workflow']);
+// Phase 2.1：受控工具集唯一事实源在 lib/host-concepts.cjs（原三副本之一）。
+const { isControlledTool } = require('../lib/host-concepts.cjs');
 const MAX_TAIL_BYTES = 1024 * 1024;
 const CLAUDE_HOME = HARNESS_ROOT;
 
@@ -267,7 +268,7 @@ async function main() {
 
   const payload = parsePayload(await readStdin());
   const toolName = toolNameFrom(payload);
-  if (!CONTROLLED_TOOLS.has(toolName)) process.exit(0);
+  if (!isControlledTool(toolName)) process.exit(0);
 
   const transcriptPath = resolveTranscriptPath(payload);
   if (!transcriptPath) {
@@ -301,7 +302,7 @@ async function main() {
 main();
 
 module.exports = {
-  CONTROLLED_TOOLS,
+  isControlledTool,
   checklistStatus,
   latestAssistantText,
   parseJsonLines,

@@ -39,7 +39,8 @@ const TRANSCRIPT_TAIL_WINDOWS = [...new Set([
 ].filter((value) => value <= TRANSCRIPT_MAX_BYTES))].sort((a, b) => a - b);
 const MAX_EVENTS_BYTES = 5 * 1024 * 1024;
 
-const CONTROLLED_TOOLS = new Set(['Bash', 'Edit', 'Write', 'MultiEdit', 'Agent', 'Task', 'Workflow']);
+// Phase 2.1：受控工具集唯一事实源在 lib/host-concepts.cjs（原三副本之一）。
+const { isControlledTool } = require('../lib/host-concepts.cjs');
 const HIGH_RISK_BASH_COMMAND = /\b(?:git\s+(?:push|reset\s+--hard|clean\s+-\S*f|branch\s+-D)|gh\s+(?:pr\s+(?:create|merge)|issue\s+(?:create|edit|close)|release\s+create|repo\s+delete)|npm\s+publish|docker\s+(?:push|system\s+prune)|kubectl\s+(?:apply|delete)|terraform\s+apply)\b|\b(?:curl|Invoke-RestMethod|irm)\b[^\r\n]*(?:-X|--request|Method)\s*(?:POST|PUT|PATCH|DELETE)\b|\b(?:rm\s+-rf|Remove-Item\b[^\r\n]*-Recurse)\b/i;
 
 function sha256(value) {
@@ -461,7 +462,7 @@ function buildContext(payload) {
 function shouldCapture(ctx) {
   if (process.env.CLAUDE_TRANSPARENCY_CAPTURE_ALL === '1') return true;
   if ((ctx.eventName || '') === 'Stop') return true;
-  return CONTROLLED_TOOLS.has(ctx.toolName);
+  return isControlledTool(ctx.toolName);
 }
 
 function actionContractMode() {
@@ -472,7 +473,7 @@ function actionContractMode() {
 
 function requiresActionContract(ctx) {
   const mode = actionContractMode();
-  if (!CONTROLLED_TOOLS.has(ctx.toolName)) return false;
+  if (!isControlledTool(ctx.toolName)) return false;
   if (ctx.loopScope?.isDelegation) return true;
   if (mode === 'off') return false;
   if (mode === 'all') return true;
@@ -483,7 +484,7 @@ function mayRequireActionContract(payload) {
   const mode = actionContractMode();
   if (mode === 'off') return false;
   const toolName = toolNameFrom(payload);
-  if (!CONTROLLED_TOOLS.has(toolName)) return false;
+  if (!isControlledTool(toolName)) return false;
   if (mode === 'all') return true;
   if (toolName === 'Bash' && HIGH_RISK_BASH_COMMAND.test(commandFrom(payload))) return true;
   if (['Agent', 'Task', 'Workflow'].includes(toolName)) return true;
@@ -589,7 +590,7 @@ function buildGateLedger(ctx, plan) {
   const gates = [
     { name: 'task-contract', status: 'created', evidence: 'task-contract.json' },
     { name: 'skill-plan', status: 'created', evidence: 'skill-plan.json' },
-    { name: 'rule-trace', status: CONTROLLED_TOOLS.has(ctx.toolName) ? 'created' : 'not-applicable', evidence: 'rule-trace.md' },
+    { name: 'rule-trace', status: isControlledTool(ctx.toolName) ? 'created' : 'not-applicable', evidence: 'rule-trace.md' },
     {
       name: 'requirements-gate',
       status: isNewCodeFile(ctx) ? (requirements.completed ? 'completed' : 'required-not-completed') : 'not-applicable',
@@ -740,7 +741,7 @@ function buildRuleTrace(ctx, plan, ledger) {
 }
 
 function writeRuleTrace(ctx, plan, ledger) {
-  if (!CONTROLLED_TOOLS.has(ctx.toolName)) return '';
+  if (!isControlledTool(ctx.toolName)) return '';
   const trace = buildRuleTrace(ctx, plan, ledger);
   fs.writeFileSync(path.join(ctx.runDir, 'rule-trace.md'), trace, 'utf8');
   return trace;

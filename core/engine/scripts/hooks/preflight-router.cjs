@@ -7,12 +7,15 @@ const { ingest } = require('../transport/index.cjs');
 const { renderDecision } = require('../transport/render.cjs');
 const { recordHealth } = require('../lib/hook-health.cjs');
 
-const SHELL_TOOLS = new Set(['bash', 'powershell']);
-const WRITE_TOOLS = new Set(['edit', 'write', 'multiedit']);
-const ACTION_CONTRACT_TOOLS = new Set(['Bash', 'Edit', 'Write', 'MultiEdit', 'Agent', 'Task', 'Workflow']);
-const ALWAYS_READ_ONLY_TOOLS = new Set([
-  'Read', 'Grep', 'Glob', 'LS', 'WebFetch', 'WebSearch', 'TodoRead', 'AskUserQuestion',
-]);
+// Phase 2.1：工具能力/集合唯一事实源 lib/host-concepts.cjs。
+// preflight 侧用小写 key 比对（toolKey 已 toLowerCase），从规范形派生；
+// 成员判定走 isControlledTool/isReadOnlyTool（真不可变，见 host-concepts 注释）。
+const HOST_CONCEPTS = require('../lib/host-concepts.cjs');
+const { isControlledTool, isReadOnlyTool } = HOST_CONCEPTS;
+const SHELL_TOOLS = new Set(HOST_CONCEPTS.SHELL_TOOLS.map((t) => t.toLowerCase()));
+const WRITE_TOOLS = new Set(HOST_CONCEPTS.WRITE_TOOLS.filter((t) => t !== 'NotebookEdit').map((t) => t.toLowerCase()));
+
+
 
 const CODE_EXTENSIONS = new Set([
   '.c', '.cc', '.cjs', '.cpp', '.go', '.h', '.hpp', '.js', '.mjs', '.py', '.rs', '.sv', '.ts', '.tsx', '.v', '.vhd', '.vh',
@@ -90,7 +93,7 @@ function riskFactsFromRuntime(runtime, opts = {}) {
   const isWrite = WRITE_TOOLS.has(runtime.toolKey);
   const isShell = SHELL_TOOLS.has(runtime.toolKey);
   const command = String(runtime.command || '');
-  const readOnly = ALWAYS_READ_ONLY_TOOLS.has(runtime.toolName)
+  const readOnly = isReadOnlyTool(runtime.toolName)
     || (isShell && isReadOnlyShellCommand(command));
   const changedText = changedTextFromRuntime(runtime);
   const semanticText = `${runtime.filePath}\n${changedText}`;
@@ -448,7 +451,7 @@ async function runCommon(runtime, opts = {}) {
   // contract, validate that exact payload, and only then inspect watchdog state.
   // Read-only and ordinary low-risk calls still skip the heavy ledger path.
   if (!noPersist && env.CLAUDE_TRANSPARENCY_LEDGER_DISABLED !== '1'
-      && ACTION_CONTRACT_TOOLS.has(runtime.toolName)) {
+      && isControlledTool(runtime.toolName)) {
     const ledger = loadGuarded(runtime, 'agent-transparency-ledger',
       loaderFor(opts, 'agent-transparency-ledger'));
     if (ledger && ledger.mayRequireActionContract(runtime.payload)) {
@@ -496,7 +499,7 @@ async function runCommon(runtime, opts = {}) {
     }
   }
 
-  if (!noPersist && !ALWAYS_READ_ONLY_TOOLS.has(runtime.toolName)) {
+  if (!noPersist && !isReadOnlyTool(runtime.toolName)) {
     const watchdog = loadGuarded(runtime, 'progress-watchdog', loaderFor(opts, 'progress-watchdog'));
     if (!watchdog) return commonResult;
     if (watchdog.isReadOnlyAction(runtime.payload)) return commonResult;

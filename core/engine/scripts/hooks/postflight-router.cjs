@@ -8,8 +8,10 @@ const { ingest } = require('../transport/index.cjs');
 const { renderDecision } = require('../transport/render.cjs');
 const { recordHealth } = require('../lib/hook-health.cjs');
 
-const WRITE_TOOLS = new Set(['edit', 'write', 'multiedit']);
-const SHELL_TOOLS = new Set(['bash', 'powershell']);
+// Phase 2.1：工具能力唯一事实源 lib/host-concepts.cjs（postflight 侧小写比对）。
+const HOST_CONCEPTS = require('../lib/host-concepts.cjs');
+const WRITE_TOOLS = new Set(HOST_CONCEPTS.WRITE_TOOLS.map((t) => t.toLowerCase()));
+const SHELL_TOOLS = new Set(HOST_CONCEPTS.SHELL_TOOLS.map((t) => t.toLowerCase()));
 
 let mainStartedAt = null;
 /** 当前调用的事件名；invoke() 的 per-gate 遥测与顶层崩溃遥测共用。 */

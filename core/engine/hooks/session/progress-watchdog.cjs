@@ -26,27 +26,14 @@ const HISTORY_LIMIT = 16;
 const BYPASS_AUDIT_LIMIT = 16;
 const MIN_BYPASS_REASON_LENGTH = 12;
 
-const READ_ONLY_TOOLS = new Set([
-  'Read',
-  'Grep',
-  'Glob',
-  'LS',
-  'WebFetch',
-  'WebSearch',
-  'TodoRead',
-  'AskUserQuestion',
-]);
+// Phase 2.1：工具语义分组唯一事实源 lib/host-concepts.cjs（原四张本地表）。
+const {
+  isReadOnlyTool, isDirectProgressTool, isLongTaskTool, isNotifyTool,
+} = require('../../scripts/lib/host-concepts.cjs');
 
-const DIRECT_PROGRESS_TOOLS = new Set([
-  'Write',
-  'Edit',
-  'MultiEdit',
-  'NotebookEdit',
-  'Agent',
-  'Workflow',
-]);
-const LONG_TASK_TOOLS = new Set(['Agent', 'Workflow', 'Task']);
-const NOTIFY_TOOLS = new Set(['AskUserQuestion', 'PushNotification', 'SendMessage', 'TodoWrite', 'ToolSearch']);
+
+
+
 
 const VERIFICATION_COMMAND = /\b(pytest|npm\s+(?:test|run\s+test)|pnpm\s+(?:test|run\s+test)|node\s+.*(?:test-hooks|\.test\.|spec)|ruff\s+check|vlog|vsim|iverilog|verilator|make\s+(?:test|sim|lint|compile|verify)|git\s+commit)\b/i;
 const FPGA_VERIFICATION_COMMAND = /\b(?:vivado(?:\.bat|\.exe)?\s+.*(?:-mode\s+batch|-source\b)|node(?:\.exe)?\s+.*(?:pg-synth|fpga-timing-parser|auto-parse-fpga-reports)\.cjs\b)/i;
@@ -127,7 +114,7 @@ function normalizeRiskLevel(value) {
 }
 
 function payloadDeclaresLongTask(payload) {
-  if (LONG_TASK_TOOLS.has(toolName(payload))) return true;
+  if (isLongTaskTool(toolName(payload))) return true;
   const explicit = payload?.long_running
     ?? payload?.longRunning
     ?? payload?.task?.long_running
@@ -300,7 +287,7 @@ function classifyEvent(payload, event) {
     return { kind: explicit, evidence: `explicit progress classification: ${explicit}` };
   }
 
-  if (DIRECT_PROGRESS_TOOLS.has(name)) {
+  if (isDirectProgressTool(name)) {
     return { kind: 'activity', evidence: `${name} tool use without verification outcome` };
   }
 
@@ -334,7 +321,7 @@ function classifyEvent(payload, event) {
     return { kind: 'activity', evidence: `shell command without artifact proof: ${command.slice(0, 160)}` };
   }
 
-  if (READ_ONLY_TOOLS.has(name)) {
+  if (isReadOnlyTool(name)) {
     return { kind: 'activity', evidence: `${name} read-only exploration` };
   }
 
@@ -370,7 +357,7 @@ function sessionRecord(state, cwd, sessionId = '', objectiveHash = '') {
 
 function isReadOnlyAction(payload) {
   const name = toolName(payload);
-  if (READ_ONLY_TOOLS.has(name)) return true;
+  if (isReadOnlyTool(name)) return true;
   return (name === 'Bash' || name === 'PowerShell') && READ_ONLY_COMMAND.test(commandText(payload));
 }
 
@@ -379,15 +366,15 @@ function frozenActionAccess(payload) {
   const command = commandText(payload);
   const hookEvent = eventName(payload);
   const isAuditReset = /(?:progress-watchdog\.cjs|verification-gate\.cjs)\s+(?:--)?reset\b/.test(command);
-  const isReadOnly = READ_ONLY_TOOLS.has(name)
+  const isReadOnly = isReadOnlyTool(name)
     || ((name === 'Bash' || name === 'PowerShell') && READ_ONLY_COMMAND.test(command));
-  const allowed = isAuditReset || isReadOnly || NOTIFY_TOOLS.has(name) || hookEvent === 'Stop';
+  const allowed = isAuditReset || isReadOnly || isNotifyTool(name) || hookEvent === 'Stop';
   return {
     allowed,
     evidence: isAuditReset ? 'audited reset'
       : isReadOnly ? 'read-only'
         : hookEvent === 'Stop' ? 'stop checkpoint'
-          : NOTIFY_TOOLS.has(name) ? 'notification' : 'blocked',
+          : isNotifyTool(name) ? 'notification' : 'blocked',
   };
 }
 
