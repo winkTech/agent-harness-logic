@@ -53,6 +53,20 @@
       "requiresHeartbeat": false,
       "timeoutSeconds": 20,
       "active": true
+    },
+    {
+      "id": "telemetry-spool-drain",
+      "kind": "event-stream",
+      "event": "Stop",
+      "hostScript": "core/engine/hooks/learning/postflight-observer.cjs",
+      "component": "spoolDrain",
+      "requiresWatermark": true,
+      "requiresHeartbeat": true,
+      "minBatch": 1,
+      "maxBatch": 500,
+      "maxPendingAgeSeconds": 86400,
+      "timeoutSeconds": 10,
+      "active": true
     }
   ],
   "entries": [
@@ -125,7 +139,8 @@
       ],
       "consumers": [
         "skill-evolve",
-        "fp-rate"
+        "fp-rate",
+        "telemetry-spool-drain"
       ],
       "timeoutSeconds": 30,
       "owner": "harness-observability",

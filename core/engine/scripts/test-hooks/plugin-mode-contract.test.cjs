@@ -321,6 +321,11 @@ test('7. session-bootstrap routes both plugin components before stateResume and 
           calls.push('dreamStartup');
           return { exitCode: 0 };
         },
+        // Phase 2.5：route 新增 spoolDrain（尾位）——stub 掉避免真跑 drain。
+        spoolDrain() {
+          calls.push('spoolDrain');
+          return { exitCode: 0 };
+        },
       },
       stdout: line => stdout.push(line),
       stderr: line => stderr.push(line),
@@ -329,6 +334,7 @@ test('7. session-bootstrap routes both plugin components before stateResume and 
 
   assert.deepEqual(calls, [
     'coreCapsule', 'registrationOverlap', 'stateResume', 'contextResumeInject', 'dreamStartup',
+    'spoolDrain',
   ]);
   assert.equal(result.exitCode, 0, 'plugin component failures must not fail SessionStart');
   assert.equal(result.componentsRun[0], 'coreCapsule');

@@ -59,6 +59,18 @@ function defaultComponents() {
       const output = dreamStartup.runStartup({ payload });
       return { exitCode: 0, output, context: output?.brief || '' };
     },
+    // Phase 2.5：spool 搬运消费者挂 SessionStart 维护路径（§3.6）。
+    // 有界批量 + ms 预算内完成；fail-soft（spool 是兜底通道，失败不阻塞启动注入）。
+    spoolDrain(payload, io) {
+      const { drainSpool } = require('../io/spool-drain-lib.cjs');
+      const result = drainSpool({ consumerId: 'telemetry-spool-drain' });
+      // 只在有实际搬运时汇报——空转静默（lifecycle 契约对 startup stderr 有
+      // 精确断言，空转噪音会破坏顺序契约）。
+      if ((result.moved > 0 || result.dropped > 0) && io && typeof io.stderr === 'function') {
+        io.stderr(JSON.stringify({ source: 'telemetry-spool-drain', type: 'drain', moved: result.moved, dropped: result.dropped }));
+      }
+      return { exitCode: 0, output: null, context: '' };
+    },
     isolationCheck() {
       return isolation.main();
     },
@@ -103,6 +115,9 @@ function runSessionBootstrap(raw, opts = {}) {
   const components = { ...defaultComponents(), ...(opts.components || {}) };
   const route = ['coreCapsule', 'registrationOverlap', 'stateResume', 'contextResumeInject', 'dreamStartup'];
   if (source === 'startup') route.push('isolationCheck');
+  // Phase 2.5：spool 搬运放最后——不与既有组件的 stderr 输出顺序契约竞争
+  //（lifecycle 契约断言 startup 首行 = isolation:startup）。
+  route.push('spoolDrain');
 
   let exitCode = 0;
   const contextBlocks = [];

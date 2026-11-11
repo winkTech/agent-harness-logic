@@ -118,6 +118,16 @@ const PHASES = {
       timeoutMs: 60000,
     },
   ],
+  // Phase 2：合同正式化（host-concepts/io/manifest v3/env/spool）。
+  2: [
+    {
+      id: 'H-5', desc: '遥测 spool bench (100 合成事件损失 0 + 水位 + 心跳)',
+      cmd: [process.execPath, R('core/engine/scripts/bench-h5-telemetry.js')],
+      json: null, timeoutMs: 120000,
+      // H-5 全程临时目录/临时 DB 隔离——必须解除 runner 的防写注入，否则 writer 直接 skip。
+      envOverride: { CLAUDE_HARNESS_NO_PERSIST: '0', HARNESS_NO_PERSIST: '0' },
+    },
+  ],
 };
 
 function record(metric, value, note) {
@@ -135,7 +145,7 @@ function runEntry(entry) {
     encoding: 'utf8',
     timeout: entry.timeoutMs,
     windowsHide: true,
-    env: { ...process.env, CLAUDE_HARNESS_NO_PERSIST: '1' },
+    env: { ...process.env, CLAUDE_HARNESS_NO_PERSIST: '1', ...(entry.envOverride || {}) },
   });
   const durationMs = Date.now() - startedAt;
   const exitOk = result.status === 0 && !result.error && !result.signal;

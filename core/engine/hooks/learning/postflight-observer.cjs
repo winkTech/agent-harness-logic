@@ -210,6 +210,17 @@ function runAuxiliaryServices(payload = {}, opts = {}) {
       args: [],
     });
   }
+  // Phase 2.5：spool→events 搬运消费者（§3.6 遥测降级）。Stop 观察路径有界调度；
+  // Claude Code 保留 async 快路径，spool 搬运是全宿主兜底（Grok/Codex 唯一通道）。
+  if (eventName === 'Stop' && (typeof opts.spoolDrain === 'function' || !injectedRuntime)) {
+    services.push({
+      source: 'telemetry-spool-drain',
+      run: opts.spoolDrain || (() => require('../../scripts/io/spool-drain-lib.cjs').drainSpool({
+        consumerId: 'telemetry-spool-drain',
+      })),
+      args: [],
+    });
+  }
   // 规划对账 (D2): 会话收尾时按已完成的需求门禁记录做 计划→实际 对账。
   // 只读门禁文件 + 已落库遥测, 不做模型自评; harvest 内部 fail-open。
   if (eventName === 'Stop' && (typeof opts.planAccuracy === 'function' || !injectedRuntime)) {
