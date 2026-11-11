@@ -84,7 +84,7 @@ async function main() {
     const call = parseToolCall(input) || parseToolCallFromEnv();
     if (!call || call.toolName !== 'Skill') return; // 只关心 Skill 工具
 
-    const sessionId = process.env.CLAUDE_SESSION_ID || `s-${Date.now()}`;
+    const sessionId = process.env.HARNESS_SESSION_ID || `s-${Date.now()}`;
 
     // 动态 require (静默失败)
     let skills, events, openDb;

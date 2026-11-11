@@ -22,6 +22,8 @@ const ROOT = path.resolve(__dirname, '..', '..', '..', '..');
 // 门禁模块在加载时解析状态/账本路径, 必须先隔离再 require, 否则测试会写真实账本。
 const TMP = fs.mkdtempSync(path.join(os.tmpdir(), 'evidence-basis-'));
 process.env.CLAUDE_HARNESS_NO_PERSIST = '1';
+
+process.env.HARNESS_NO_PERSIST = '1';
 process.env.CLAUDE_VERIFY_GATE_STATE_FILE = path.join(TMP, 'verify-gate.json');
 process.env.CLAUDE_VERIFICATION_LEDGER_FILE = path.join(TMP, 'verification-ledger.json');
 process.on('exit', () => { try { fs.rmSync(TMP, { recursive: true, force: true }); } catch { /* cleanup */ } });

@@ -78,7 +78,7 @@ function saveCheckpoint() {
     state.compactCount = (state.compactCount || 0) + 1;
     event = {
       timestamp: state.lastCompactCheckpoint,
-      sessionId: process.env.CLAUDE_SESSION_ID || 'unknown',
+      sessionId: process.env.HARNESS_SESSION_ID || 'unknown',
       toolCallsAtCompact: state.lastCompactToolCalls,
       compactNumber: state.compactCount,
     };

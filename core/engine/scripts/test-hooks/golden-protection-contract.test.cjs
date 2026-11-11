@@ -182,6 +182,9 @@ function tokenFixture(t, remainingWrites = 2) {
   // Phase 2.2：守卫经 io/index.cjs 解析 tool_input，fixture 树须连同拷贝。
   fs.copyFileSync(path.join(ROOT, 'core', 'engine', 'scripts', 'io', 'index.cjs'),
     path.join(io, 'index.cjs'));
+  // Phase 2.4：守卫防写开关经 io/env.cjs 双名兼容，同样拷入 fixture 树。
+  fs.copyFileSync(path.join(ROOT, 'core', 'engine', 'scripts', 'io', 'env.cjs'),
+    path.join(io, 'env.cjs'));
 
   fs.writeFileSync(path.join(root, 'CLAUDE.md'), '# fixture root marker\n', 'utf8');
   // 同上：tmp 树补 package.json 锚点，隔离令牌/审计写入。

@@ -37,7 +37,7 @@ const MODES = ['根因分析', '第一性原理', '减法', '搜索优先', '倒
 function defaultState() {
   return {
     version: 2,
-    sessionId: process.env.CLAUDE_SESSION_ID || 'unknown',
+    sessionId: process.env.HARNESS_SESSION_ID || 'unknown',
     startedAt: new Date().toISOString(),
     lastActivityAt: new Date().toISOString(),
 

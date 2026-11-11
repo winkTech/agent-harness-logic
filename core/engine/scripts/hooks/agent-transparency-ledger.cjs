@@ -58,7 +58,7 @@ function threadIdFrom(payload) {
     || payload?.threadId
     || payload?.conversation?.thread_id
     || payload?.conversation?.threadId
-    || process.env.CLAUDE_SESSION_ID
+    || process.env.HARNESS_SESSION_ID
     || ''
   ).trim();
 }
@@ -305,7 +305,7 @@ function userInstructionFrom(payload, transcriptPath) {
     payload?.user_message
     || payload?.userMessage
     || payload?.prompt
-    || process.env.CLAUDE_USER_MESSAGE
+    || process.env.HARNESS_USER_MESSAGE
     || latestUserText(transcriptPath)
     || ''
   ).trim();
@@ -459,7 +459,7 @@ function mayRequireActionContract(payload) {
     payload?.user_message
     || payload?.userMessage
     || payload?.prompt
-    || process.env.CLAUDE_USER_MESSAGE
+    || process.env.HARNESS_USER_MESSAGE
     || ''
   );
   return /^\s*<codex_delegation(?:\s[^>]*)?>/i.test(decodeDelegationMarkup(explicitInstruction));

@@ -23,6 +23,13 @@ const path = require('node:path');
 const { varPath } = require('./harness-state.cjs');
 const { HARNESS_ROOT } = require('./harness-root.cjs');
 
+// Phase 2.4：防写开关双名兼容（宿主名映射集中在 io/env.cjs，本文件不出现宿主词）。
+const { envValue } = require('../io/env.cjs');
+function envFlag(name) {
+  const v = envValue(process.env, name);
+  return v === '1' || v === 'true';
+}
+
 const STORE_FILE = varPath('metrics', 'hook-latency.jsonl');
 const MAX_BYTES = 5 * 1024 * 1024;
 
@@ -38,9 +45,9 @@ const P95_BUDGET_MS = DEFAULT_SYNC_BUDGET_MS;
 const REGISTRATIONS_FILE = path.join(HARNESS_ROOT, 'core', 'engine', 'hooks', 'registrations.json');
 
 function persistenceDisabled() {
-  return process.env.CLAUDE_HARNESS_NO_PERSIST === '1'
-    || process.env.CLAUDE_HARNESS_VERIFY_READONLY === '1'
-    || process.env.CLAUDE_NO_DIAGNOSTIC_WRITES === '1'
+  return envFlag('HARNESS_NO_PERSIST')
+    || envFlag('HARNESS_VERIFY_READONLY')
+    || envFlag('HARNESS_NO_DIAGNOSTIC_WRITES')
     || process.env.CLAUDE_HOOK_NO_WRITE === '1';
 }
 

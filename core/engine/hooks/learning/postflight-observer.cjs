@@ -21,7 +21,7 @@ function sessionIdFrom(payload = {}) {
     || payload.sessionId
     || payload.thread_id
     || payload.threadId
-    || process.env.CLAUDE_SESSION_ID
+    || process.env.HARNESS_SESSION_ID
     || '',
   );
 }

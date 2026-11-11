@@ -94,7 +94,7 @@ function readJSON(filePath) {
  * Claude Code 环境变量: CLAUDE_SESSION_DIR 或根据 session ID 推断。
  */
 function getTranscriptInfo() {
-  const sessionId = process.env.CLAUDE_SESSION_ID || '';
+  const sessionId = process.env.HARNESS_SESSION_ID || '';
   const sessionDir = process.env.CLAUDE_SESSION_DIR || '';
 
   let transcriptPath = '';

@@ -87,7 +87,7 @@ function recordMetric(args) {
     unit,
     project,
     timestamp: new Date().toISOString(),
-    sessionId: process.env.CLAUDE_SESSION_ID || 'unknown',
+    sessionId: process.env.HARNESS_SESSION_ID || 'unknown',
     note: args.note || '',
   };
 

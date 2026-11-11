@@ -20,8 +20,14 @@ const path = require('node:path');
 
 // 全链持久化由注入的临时 DB 承载, 环境守卫必须清掉, 否则 delivery 分支静默跳过。
 delete process.env.CLAUDE_HARNESS_NO_PERSIST;
+
+delete process.env.HARNESS_NO_PERSIST;
 delete process.env.CLAUDE_HARNESS_VERIFY_READONLY;
+
+delete process.env.HARNESS_VERIFY_READONLY;
 delete process.env.CLAUDE_NO_DIAGNOSTIC_WRITES;
+
+delete process.env.HARNESS_NO_DIAGNOSTIC_WRITES;
 delete process.env.CLAUDE_HOOK_NO_WRITE;
 
 const ROOT = path.resolve(__dirname, '..', '..', '..', '..');

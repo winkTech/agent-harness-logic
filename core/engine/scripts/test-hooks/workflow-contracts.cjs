@@ -1606,12 +1606,15 @@ test('postflight observer invokes memory attribution fail-open only for identifi
   // 宿主环境会把会话 ID 注入子进程 env (CLAUDE_SESSION_ID/CODEBUDDY_SESSION_ID)，
   // 令"匿名"载荷在 sessionIdFrom 回退读取 env 时变成"已识别"→ 先摘掉 env 再验证匿名路径
   // (与 harness-painpoints 的 postflight 匿名遥测修复同款)。
+  // Phase 2.4：translateHostEnv 会物化 HARNESS_SESSION_ID 留在进程 env —— 三名都摘。
   const savedSessionEnv = {
     CLAUDE_SESSION_ID: process.env.CLAUDE_SESSION_ID,
     CODEBUDDY_SESSION_ID: process.env.CODEBUDDY_SESSION_ID,
+    HARNESS_SESSION_ID: process.env.HARNESS_SESSION_ID,
   };
   delete process.env.CLAUDE_SESSION_ID;
   delete process.env.CODEBUDDY_SESSION_ID;
+  delete process.env.HARNESS_SESSION_ID;
   let anonymous;
   try {
     anonymous = observer.handlePayload({ ...payload, session_id: '' }, {
@@ -1619,7 +1622,7 @@ test('postflight observer invokes memory attribution fail-open only for identifi
       attributionObserver() { throw new Error('anonymous event reached attribution'); },
     });
   } finally {
-    for (const key of ['CLAUDE_SESSION_ID', 'CODEBUDDY_SESSION_ID']) {
+    for (const key of ['CLAUDE_SESSION_ID', 'CODEBUDDY_SESSION_ID', 'HARNESS_SESSION_ID']) {
       if (savedSessionEnv[key] !== undefined) process.env[key] = savedSessionEnv[key];
       else delete process.env[key];
     }

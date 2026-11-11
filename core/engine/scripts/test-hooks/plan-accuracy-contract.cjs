@@ -142,7 +142,7 @@ function main() {
       // ── 6. hdl-evidence-gate 阶段判定 → delivery 记录 ──
       // 落库分支受三个环境守卫保护 (套件会同时设上三个)。本段验证的是**落库映射**,
       // 因此显式解除守卫再断言, 守卫本身的效力在第 7 段单独验证。
-      const GUARDS = ['CLAUDE_HARNESS_NO_PERSIST', 'CLAUDE_HARNESS_VERIFY_READONLY', 'CLAUDE_NO_DIAGNOSTIC_WRITES'];
+      const GUARDS = ['CLAUDE_HARNESS_NO_PERSIST', 'CLAUDE_HARNESS_VERIFY_READONLY', 'CLAUDE_NO_DIAGNOSTIC_WRITES', 'HARNESS_NO_PERSIST', 'HARNESS_VERIFY_READONLY', 'HARNESS_NO_DIAGNOSTIC_WRITES'];
       const savedGuards = Object.fromEntries(GUARDS.map((key) => [key, process.env[key]]));
       const restoreGuards = () => {
         for (const key of GUARDS) {

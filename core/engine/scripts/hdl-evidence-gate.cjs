@@ -31,6 +31,13 @@
 const fs = require('node:fs');
 const path = require('node:path');
 
+// Phase 2.4：防写开关双名兼容（宿主名映射集中在 io/env.cjs，本文件不出现宿主词）。
+const { envValue } = require('./io/env.cjs');
+function envFlag(name) {
+  const v = envValue(process.env, name);
+  return v === '1' || v === 'true';
+}
+
 // 进程启动 (模块加载) 时刻 —— duration_sec 唯一可信的计时起点。
 // 本脚本是工作流真实调用的进程, 加载→证据检查→落库的 elapsed 全程可测。
 const PROCESS_STARTED_AT = Date.now();
@@ -120,9 +127,9 @@ function checkModule(projectRoot, mod) {
  * 落库点。fail-open: 落库失败绝不影响门禁判定 (判定是本脚本的主职责)。
  */
 function recordPhaseDelivery(report, opts, deps = {}) {
-  if (process.env.CLAUDE_HARNESS_NO_PERSIST === '1'
-    || process.env.CLAUDE_HARNESS_VERIFY_READONLY === '1'
-    || process.env.CLAUDE_NO_DIAGNOSTIC_WRITES === '1') return { skipped: true };
+  if (envFlag('HARNESS_NO_PERSIST')
+    || envFlag('HARNESS_VERIFY_READONLY')
+    || envFlag('HARNESS_NO_DIAGNOSTIC_WRITES')) return { skipped: true };
   try {
     const { recordDelivery } = deps.deliveryTracker || require('./delivery-tracker.cjs');
     const phase = opts.arch && opts.modules.length > 0 ? 'P1b+P4.5'

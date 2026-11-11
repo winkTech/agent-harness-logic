@@ -23,6 +23,13 @@ const fs = require('node:fs');
 const { evaluateGuardBypass } = require('../lib/gate-bypass.cjs');
 const { statePath, varPath } = require('../lib/harness-state.cjs');
 const { toolInputOf } = require('../io/index.cjs');
+
+// Phase 2.4：防写开关双名兼容（宿主名映射集中在 io/env.cjs，本文件不出现宿主词）。
+const { envValue } = require('../io/env.cjs');
+function envFlag(name) {
+  const v = envValue(process.env, name);
+  return v === '1' || v === 'true';
+}
 const {
   findProjectRoot,
   readDirectoryContract,
@@ -691,7 +698,7 @@ function evaluate(payload, runtime = {}) {
  * 审计留痕。CI / 只读诊断场景下跳过写盘，不影响放行判定。
  */
 function auditApprovedWrite(filePath, pattern, reason, basis, inversion) {
-  if (process.env.CLAUDE_NO_DIAGNOSTIC_WRITES === '1' || process.env.CLAUDE_HARNESS_NO_PERSIST === '1') return;
+  if (envFlag('HARNESS_NO_DIAGNOSTIC_WRITES') || envFlag('HARNESS_NO_PERSIST')) return;
   try {
     const path = require('node:path');
     const dir = varPath('audit');
@@ -758,7 +765,7 @@ function parseToolCall() {
           toolName: envName,
           filePath,
           payload: {
-            session_id: process.env.CLAUDE_SESSION_ID || '',
+            session_id: process.env.HARNESS_SESSION_ID || '',
             tool_name: envName,
             tool_input: parsed,
           },

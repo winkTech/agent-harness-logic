@@ -22,6 +22,8 @@ const path = require('node:path');
 const ROOT = path.resolve(__dirname, '..', '..', '..', '..');
 process.env.CLAUDE_HARNESS_NO_PERSIST = '1';
 
+process.env.HARNESS_NO_PERSIST = '1';
+
 const dashboard = require(path.join(ROOT, 'core/engine/scripts/ten-dimension-dashboard.cjs'));
 const postflight = require(path.join(ROOT, 'core/engine/scripts/hooks/postflight-router.cjs'));
 
@@ -96,7 +98,8 @@ function main() {
   const deps = { deliveryTracker: { recordDelivery: (args) => { recorded.push(args); return true; } } };
   // 落库分支受三个环境守卫保护 (套件会同时设上三个)。本段要验证的是**状态映射**,
   // 因此临时全部解除; recordDelivery 已被注入替换, 不会碰真实库。
-  const GUARDS = ['CLAUDE_HARNESS_NO_PERSIST', 'CLAUDE_HARNESS_VERIFY_READONLY', 'CLAUDE_NO_DIAGNOSTIC_WRITES'];
+  const GUARDS = ['CLAUDE_HARNESS_NO_PERSIST', 'CLAUDE_HARNESS_VERIFY_READONLY', 'CLAUDE_NO_DIAGNOSTIC_WRITES',
+    'HARNESS_NO_PERSIST', 'HARNESS_VERIFY_READONLY', 'HARNESS_NO_DIAGNOSTIC_WRITES'];
   const savedGuards = Object.fromEntries(GUARDS.map((key) => [key, process.env[key]]));
   for (const key of GUARDS) delete process.env[key];
   const cases = [

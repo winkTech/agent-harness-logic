@@ -23,6 +23,13 @@ const fs = require('node:fs');
 const path = require('node:path');
 const os = require('node:os');
 
+// Phase 2.4：防写开关双名兼容（宿主名映射集中在 io/env.cjs，本文件不出现宿主词）。
+const { envValue } = require('./io/env.cjs');
+function envFlag(name) {
+  const v = envValue(process.env, name);
+  return v === '1' || v === 'true';
+}
+
 const HOME = HARNESS_ROOT;
 const STORE_FILE = varPath('fp-rate-log.jsonl');
 
@@ -60,7 +67,7 @@ function record(args) {
     correct,
     note,
     timestamp: new Date().toISOString(),
-    sessionId: process.env.CLAUDE_SESSION_ID || 'unknown',
+    sessionId: process.env.HARNESS_SESSION_ID || 'unknown',
   };
 
   ensureDir(path.dirname(STORE_FILE));
@@ -173,9 +180,9 @@ const HARVEST_MAX_BATCH = 100;
  * 扫过的事件无论是否命中门禁都推进水位; 失败不推进水位、留 failed 心跳。
  */
 function harvestFpRate(opts = {}) {
-  if (process.env.CLAUDE_HARNESS_NO_PERSIST === '1'
-    || process.env.CLAUDE_HARNESS_VERIFY_READONLY === '1'
-    || process.env.CLAUDE_NO_DIAGNOSTIC_WRITES === '1') return { skipped: true };
+  if (envFlag('HARNESS_NO_PERSIST')
+    || envFlag('HARNESS_VERIFY_READONLY')
+    || envFlag('HARNESS_NO_DIAGNOSTIC_WRITES')) return { skipped: true };
   const crypto = require('node:crypto');
   const { openDb } = require(path.join(HOME, 'core/engine/sqlite/index.cjs'));
   const events = require(path.join(HOME, 'core/engine/sqlite/store-events.cjs'));

@@ -81,7 +81,7 @@ function main(opts = {}) {
   }
 
   // 检查是否与当前 session 相同
-  const currentSessionId = process.env.CLAUDE_SESSION_ID || '';
+  const currentSessionId = process.env.HARNESS_SESSION_ID || '';
   if (state.sessionId === currentSessionId) {
     // 同一 session 继续 → 不输出 handoff 摘要
     return;

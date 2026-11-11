@@ -432,7 +432,9 @@ test('explicitly approved promoted hard rule blocks its payload and permits a ne
     CLAUDE_HARNESS_ROOT: fixture,
     CLAUDE_SQLITE_PATH: dbPath,
     CLAUDE_HARNESS_NO_PERSIST: '0',
+    HARNESS_NO_PERSIST: '0',
     CLAUDE_HARNESS_VERIFY_READONLY: '0',
+    HARNESS_VERIFY_READONLY: '0',
     CLAUDE_TRANSPARENCY_LEDGER_DISABLED: '1',
   };
   const invoke = (filePath) => spawnSync(process.execPath, [PREFLIGHT], {

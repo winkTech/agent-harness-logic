@@ -33,6 +33,8 @@ process.env.CLAUDE_VERIFY_GATE_STATE_FILE = path.join(EVAL_TMP, 'verify-gate.jso
 process.env.CLAUDE_VERIFICATION_LEDGER_FILE = path.join(EVAL_TMP, 'verification-ledger.json');
 process.env.CLAUDE_HARNESS_NO_PERSIST = '1';
 
+process.env.HARNESS_NO_PERSIST = '1';
+
 const {
   computeHarnessMetrics,
   formatHarnessMetrics,

@@ -35,7 +35,11 @@ const SCOPE = scopeId(PROJECT_ROOT);
 // :memory: 库, 不触碰 var/ 与真实 memory.db, 因此在进程内清掉开关;
 // 只读语义本身另由 assertReadOnlyHonored 显式打开开关来验证。
 delete process.env.CLAUDE_HARNESS_NO_PERSIST;
+
+delete process.env.HARNESS_NO_PERSIST;
 delete process.env.CLAUDE_NO_DIAGNOSTIC_WRITES;
+
+delete process.env.HARNESS_NO_DIAGNOSTIC_WRITES;
 
 /**
  * 每个断言拿到一个干净的库。
@@ -410,6 +414,9 @@ function assertReadOnlyHonored() {
   }, { db });
 
   process.env.CLAUDE_HARNESS_NO_PERSIST = '1';
+
+
+  process.env.HARNESS_NO_PERSIST = '1';
   try {
     const result = controller.evaluateStop(stopPayload(), {
       db,
@@ -426,6 +433,8 @@ function assertReadOnlyHonored() {
     assert.equal(store.listIterations(loop.id, { db }).length, 0);
   } finally {
     delete process.env.CLAUDE_HARNESS_NO_PERSIST;
+
+    delete process.env.HARNESS_NO_PERSIST;
   }
 }
 

@@ -526,16 +526,22 @@ function assertReadOnlyMemoryHitDoesNotCache() {
     'CLAUDE_MEMORY_HINT_CACHE_FILE',
     'CLAUDE_MEMORY_HINT_CACHE_DISABLED',
     'CLAUDE_HOOK_NO_WRITE',
+  'HARNESS_HOOK_NO_WRITE',
     'CLAUDE_BENCH',
     'CLAUDE_HARNESS_NO_PERSIST',
+  'HARNESS_NO_PERSIST',
     'CLAUDE_HARNESS_VERIFY_READONLY',
+  'HARNESS_VERIFY_READONLY',
     'CLAUDE_NO_DIAGNOSTIC_WRITES',
+  'HARNESS_NO_DIAGNOSTIC_WRITES',
   ];
   const previous = Object.fromEntries(envNames.map((name) => [name, process.env[name]]));
   try {
     for (const name of envNames) delete process.env[name];
     process.env.CLAUDE_MEMORY_HINT_CACHE_FILE = cacheFile;
     process.env.CLAUDE_HARNESS_NO_PERSIST = '1';
+
+    process.env.HARNESS_NO_PERSIST = '1';
     const memoryHook = require(path.join(
       HARNESS_ROOT, 'core', 'engine', 'scripts', 'memory-retrieve-hook.cjs',
     ));
@@ -706,7 +712,9 @@ function assertReadOnlyDoesNotPersist() {
       file_path: path.join(HARNESS_ROOT, 'docs', 'rules', '00-core.md'),
     }), {
       CLAUDE_HARNESS_NO_PERSIST: '0',
+    HARNESS_NO_PERSIST: '0',
       CLAUDE_HARNESS_VERIFY_READONLY: '0',
+    HARNESS_VERIFY_READONLY: '0',
       CLAUDE_TRANSPARENCY_LEDGER_DISABLED: '1',
       PROGRESS_WATCHDOG_STATE_FILE: stateFile,
       PROGRESS_WATCHDOG_ARCHIVE_DIR: path.join(root, 'archive'),

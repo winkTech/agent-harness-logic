@@ -11,6 +11,13 @@ const { recordHealth } = require('../lib/hook-health.cjs');
 // Phase 2.1：工具能力唯一事实源 lib/host-concepts.cjs（postflight 侧小写比对）。
 const HOST_CONCEPTS = require('../lib/host-concepts.cjs');
 const { toolInputOf } = require('../io/index.cjs');
+
+// Phase 2.4：防写开关双名兼容（宿主名映射集中在 io/env.cjs，本文件不出现宿主词）。
+const { envValue } = require('../io/env.cjs');
+function envFlag(name) {
+  const v = envValue(process.env, name);
+  return v === '1' || v === 'true';
+}
 const WRITE_TOOLS = new Set(HOST_CONCEPTS.WRITE_TOOLS.map((t) => t.toLowerCase()));
 const SHELL_TOOLS = new Set(HOST_CONCEPTS.SHELL_TOOLS.map((t) => t.toLowerCase()));
 
@@ -304,9 +311,9 @@ const { UNREADABLE_VERDICT_REASONS } = require('../lib/verification-markers.cjs'
 
 /** 验证判定 → delivery 事件 (D1 自动喂数): PASS/FAIL 不再依赖手工 record。 */
 function recordDeliveryFromVerdict(payload, gateResult, deps) {
-  if (process.env.CLAUDE_HARNESS_NO_PERSIST === '1'
-    || process.env.CLAUDE_HARNESS_VERIFY_READONLY === '1'
-    || process.env.CLAUDE_NO_DIAGNOSTIC_WRITES === '1') return { skipped: true };
+  if (envFlag('HARNESS_NO_PERSIST')
+    || envFlag('HARNESS_VERIFY_READONLY')
+    || envFlag('HARNESS_NO_DIAGNOSTIC_WRITES')) return { skipped: true };
   const verification = gateResult.verification;
   const reason = String(verification.reason || verification.detail || '');
   const status = verification.ok ? 'pass'

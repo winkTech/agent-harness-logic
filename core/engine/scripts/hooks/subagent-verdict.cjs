@@ -25,6 +25,13 @@ const { payloadCwd, findProjectRoot, scopeId } = require('../lib/project-scope.c
 const { markerVerdict, isUnreadableVerdict } = require('../lib/verification-markers.cjs');
 const { ingest } = require('../transport/index.cjs');
 
+// Phase 2.4：防写开关双名兼容（宿主名映射集中在 io/env.cjs，本文件不出现宿主词）。
+const { envValue } = require('../io/env.cjs');
+function envFlag(name) {
+  const v = envValue(process.env, name);
+  return v === '1' || v === 'true';
+}
+
 const BOM = new RegExp('^' + String.fromCharCode(0xFEFF));
 /** transcript 只读尾部这么多字节 —— 判定标记总在最后, 没必要读整个会话。 */
 const TRANSCRIPT_TAIL_BYTES = 16 * 1024;
@@ -37,8 +44,8 @@ function readPayload() {
 }
 
 function readOnlyMode() {
-  return process.env.CLAUDE_HARNESS_NO_PERSIST === '1'
-    || process.env.CLAUDE_NO_DIAGNOSTIC_WRITES === '1';
+  return envFlag('HARNESS_NO_PERSIST')
+    || envFlag('HARNESS_NO_DIAGNOSTIC_WRITES');
 }
 
 /** 读 transcript 尾部, 抽出最后的文本内容。 */

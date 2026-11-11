@@ -160,9 +160,13 @@ if (mode === 'counter') {
     // The parent audit suite is read-only, but this fixture is fully isolated
     // under tempRoot and explicitly verifies the CLI persistence contract.
     CLAUDE_HARNESS_NO_PERSIST: '0',
+    HARNESS_NO_PERSIST: '0',
     CLAUDE_HARNESS_VERIFY_READONLY: '0',
+    HARNESS_VERIFY_READONLY: '0',
     CLAUDE_NO_DIAGNOSTIC_WRITES: '0',
+    HARNESS_NO_DIAGNOSTIC_WRITES: '0',
     CLAUDE_HOOK_NO_WRITE: '0',
+    HARNESS_HOOK_NO_WRITE: '0',
   };
   await runNode([isolationCheckPath], { env: hookStateEnv });
   const isolatedState = JSON.parse(fs.readFileSync(hookRuntimeFile, 'utf8'));

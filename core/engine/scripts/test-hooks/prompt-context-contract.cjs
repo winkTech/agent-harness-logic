@@ -145,10 +145,12 @@ function assertFrustrationContextIsRequireSafeAndReadOnly() {
   const previous = {
     runtime: process.env.CLAUDE_RUNTIME_STATE_FILE,
     noPersist: process.env.CLAUDE_HARNESS_NO_PERSIST,
+    noPersistNew: process.env.HARNESS_NO_PERSIST,
   };
   try {
     process.env.CLAUDE_RUNTIME_STATE_FILE = stateFile;
     process.env.CLAUDE_HARNESS_NO_PERSIST = '1';
+    process.env.HARNESS_NO_PERSIST = '1';
     delete require.cache[require.resolve(frustrationPath)];
     const detector = require(frustrationPath);
     assert.equal(typeof detector.retrieveContext, 'function',
@@ -183,6 +185,8 @@ function assertFrustrationContextIsRequireSafeAndReadOnly() {
     else process.env.CLAUDE_RUNTIME_STATE_FILE = previous.runtime;
     if (previous.noPersist === undefined) delete process.env.CLAUDE_HARNESS_NO_PERSIST;
     else process.env.CLAUDE_HARNESS_NO_PERSIST = previous.noPersist;
+    if (previous.noPersistNew === undefined) delete process.env.HARNESS_NO_PERSIST;
+    else process.env.HARNESS_NO_PERSIST = previous.noPersistNew;
     delete require.cache[require.resolve(frustrationPath)];
     fs.rmSync(root, { recursive: true, force: true });
   }
@@ -194,12 +198,18 @@ function assertStaleFailureEvidenceFailsClosed() {
     noWrite: process.env.CLAUDE_HOOK_NO_WRITE,
     readonly: process.env.CLAUDE_HARNESS_VERIFY_READONLY,
     noDiag: process.env.CLAUDE_NO_DIAGNOSTIC_WRITES,
+    noPersistNew: process.env.HARNESS_NO_PERSIST,
+    readonlyNew: process.env.HARNESS_VERIFY_READONLY,
+    noDiagNew: process.env.HARNESS_NO_DIAGNOSTIC_WRITES,
   };
   try {
     delete process.env.CLAUDE_HARNESS_NO_PERSIST;
     delete process.env.CLAUDE_HOOK_NO_WRITE;
     delete process.env.CLAUDE_HARNESS_VERIFY_READONLY;
     delete process.env.CLAUDE_NO_DIAGNOSTIC_WRITES;
+    delete process.env.HARNESS_NO_PERSIST;
+    delete process.env.HARNESS_VERIFY_READONLY;
+    delete process.env.HARNESS_NO_DIAGNOSTIC_WRITES;
     delete require.cache[require.resolve(frustrationPath)];
     const detector = require(frustrationPath);
     const neutralPayload = (session) => ({
@@ -259,12 +269,20 @@ function assertStaleFailureEvidenceFailsClosed() {
   } finally {
     if (previous.noPersist === undefined) delete process.env.CLAUDE_HARNESS_NO_PERSIST;
     else process.env.CLAUDE_HARNESS_NO_PERSIST = previous.noPersist;
+    if (previous.noPersistNew === undefined) delete process.env.HARNESS_NO_PERSIST;
+    else process.env.HARNESS_NO_PERSIST = previous.noPersistNew;
     if (previous.noWrite === undefined) delete process.env.CLAUDE_HOOK_NO_WRITE;
     else process.env.CLAUDE_HOOK_NO_WRITE = previous.noWrite;
     if (previous.readonly === undefined) delete process.env.CLAUDE_HARNESS_VERIFY_READONLY;
     else process.env.CLAUDE_HARNESS_VERIFY_READONLY = previous.readonly;
     if (previous.noDiag === undefined) delete process.env.CLAUDE_NO_DIAGNOSTIC_WRITES;
     else process.env.CLAUDE_NO_DIAGNOSTIC_WRITES = previous.noDiag;
+    if (previous.noPersistNew === undefined) delete process.env.HARNESS_NO_PERSIST;
+    else process.env.HARNESS_NO_PERSIST = previous.noPersistNew;
+    if (previous.readonlyNew === undefined) delete process.env.HARNESS_VERIFY_READONLY;
+    else process.env.HARNESS_VERIFY_READONLY = previous.readonlyNew;
+    if (previous.noDiagNew === undefined) delete process.env.HARNESS_NO_DIAGNOSTIC_WRITES;
+    else process.env.HARNESS_NO_DIAGNOSTIC_WRITES = previous.noDiagNew;
     delete require.cache[require.resolve(frustrationPath)];
   }
 }
@@ -332,6 +350,8 @@ function assertRuleContextIsRequireSafeAndReadOnly() {
     else process.env.CLAUDE_RULE_LOADER_MEMO_DIR = previous.memo;
     if (previous.noPersist === undefined) delete process.env.CLAUDE_HARNESS_NO_PERSIST;
     else process.env.CLAUDE_HARNESS_NO_PERSIST = previous.noPersist;
+    if (previous.noPersistNew === undefined) delete process.env.HARNESS_NO_PERSIST;
+    else process.env.HARNESS_NO_PERSIST = previous.noPersistNew;
     if (previous.signal === undefined) delete process.env.CLAUDE_RULE_SIGNAL_DISABLED;
     else process.env.CLAUDE_RULE_SIGNAL_DISABLED = previous.signal;
     fs.rmSync(root, { recursive: true, force: true });

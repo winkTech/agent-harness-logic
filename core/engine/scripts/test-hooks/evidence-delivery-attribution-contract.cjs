@@ -29,6 +29,8 @@ const ROOT = path.resolve(__dirname, '..', '..', '..', '..');
 const TMP = fs.mkdtempSync(path.join(os.tmpdir(), 'evidence-attribution-'));
 // 账本/门禁状态路径先隔离再 require; NO_PERSIST 只挡图边与遥测, 账本写入不受其影响。
 process.env.CLAUDE_HARNESS_NO_PERSIST = '1';
+
+process.env.HARNESS_NO_PERSIST = '1';
 process.env.CLAUDE_VERIFY_GATE_STATE_FILE = path.join(TMP, 'verify-gate.json');
 process.env.CLAUDE_VERIFICATION_LEDGER_FILE = path.join(TMP, 'verification-ledger.json');
 process.on('exit', () => { try { fs.rmSync(TMP, { recursive: true, force: true }); } catch { /* cleanup */ } });
@@ -47,7 +49,7 @@ const LEDGER_FILE = process.env.CLAUDE_VERIFICATION_LEDGER_FILE;
  */
 function withPersistence(fn) {
   const saved = {};
-  for (const key of ['CLAUDE_HARNESS_NO_PERSIST', 'CLAUDE_HARNESS_VERIFY_READONLY', 'CLAUDE_NO_DIAGNOSTIC_WRITES']) {
+  for (const key of ['CLAUDE_HARNESS_NO_PERSIST', 'CLAUDE_HARNESS_VERIFY_READONLY', 'CLAUDE_NO_DIAGNOSTIC_WRITES', 'HARNESS_NO_PERSIST', 'HARNESS_VERIFY_READONLY', 'HARNESS_NO_DIAGNOSTIC_WRITES']) {
     saved[key] = process.env[key];
     delete process.env[key];
   }

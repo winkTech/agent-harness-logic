@@ -142,6 +142,90 @@ function checkWhitelistFile() {
   return [];
 }
 
+// ── ④ env 泄漏（C-6，Phase 2.4）────────────────────────────────────────────
+// core 引擎统一读 HARNESS_*；宿主前缀（CLAUDE_/GROK_/CODEX_）只允许出现在
+// io/env.cjs 翻译层。豁免面 = 翻译层 + 既有清单（迁移期 grandfather，逐批清零）。
+const ENV_SANCTIONED = new Set([
+  // 翻译层本体（宿主名映射的唯一合法位置）
+  'scripts/io/env.cjs',
+  // ── 迁移期 grandfather（Phase 2.4 批次一后剩余 53 文件/175 处，2.6 收口清零）──
+  // 高频五件(SESSION_ID/NO_PERSIST/NO_DIAGNOSTIC_WRITES/VERIFY_READONLY/USER_MESSAGE)
+  // 已迁 HARNESS_*；以下文件仍持低频宿主名，逐批迁移后从此清单移除。
+  'hooks/learning/postflight-observer.cjs',
+  'hooks/learning/skill-tracker-hook.cjs',
+  'hooks/memory/memory-sqlite-sync.cjs',
+  'hooks/session/progress-watchdog.cjs',
+  'scripts/bench-refactor.cjs',
+  'scripts/cg-queries.cjs',
+  'scripts/code-graph-index.cjs',
+  'scripts/context-monitor-gate.cjs',
+  'scripts/coverage-runner.cjs',
+  'scripts/ecc-root-resolver.cjs',
+  'scripts/golden-replay.cjs',
+  'scripts/harness-ci.cjs',
+  'scripts/hooks/agent-transparency-ledger.cjs',
+  'scripts/hooks/codegraph-sync.cjs',
+  'scripts/hooks/file-protection-guard.cjs',
+  'scripts/hooks/frustration-detector.cjs',
+  'scripts/hooks/isolation-check.cjs',
+  'scripts/hooks/local-runner.cjs',
+  'scripts/hooks/postflight-router.cjs',
+  'scripts/hooks/preflight-router.cjs',
+  'scripts/hooks/promoted-harness-gate.cjs',
+  'scripts/hooks/prompt-context.cjs',
+  'scripts/hooks/repair-content-gate.cjs',
+  'scripts/hooks/rtl-semantic-oracle.cjs',
+  'scripts/hooks/stop-runner.cjs',
+  'scripts/hooks/subagent-verdict.cjs',
+  'scripts/hooks/test-hooks.cjs',
+  'scripts/hooks/tool-action-contract-gate.cjs',
+  'scripts/hooks/verification-gate.cjs',
+  'scripts/hooks/visible-checklist-gate.cjs',
+  'scripts/io/transcript-source.cjs',
+  'scripts/layer-boundary.cjs',
+  'scripts/lib/bench-hooks.cjs',
+  'scripts/lib/evidence-ledger.cjs',
+  'scripts/lib/gate-bypass.cjs',
+  'scripts/lib/harness-root.cjs',
+  'scripts/lib/harness-state.cjs',
+  'scripts/lib/hook-health.cjs',
+  'scripts/lib/hook-latency.cjs',
+  'scripts/lib/hook-registry.cjs',
+  'scripts/lib/loop-criteria.cjs',
+  'scripts/lib/plugin-mode.cjs',
+  'scripts/lib/risk-policy.cjs',
+  'scripts/lib/verification-state.cjs',
+  'scripts/memory-retrieve-hook.cjs',
+  'scripts/pre-compact.cjs',
+  'scripts/render-hook-settings.cjs',
+  'scripts/rule-loader.cjs',
+  'scripts/runtime-state.cjs',
+  'scripts/sync-skills.cjs',
+  'scripts/ten-dimension-dashboard.cjs',
+  'scripts/transparency-dashboard.cjs',
+  'scripts/transport/index.cjs',
+  'sqlite/index.cjs',
+]);
+
+const HOST_ENV_PATTERN = /\b(?:CLAUDE|GROK|CODEX)_[A-Z0-9_]+\b/;
+
+function checkEnvLeaks(files) {
+  const violations = [];
+  for (const file of files) {
+    const rel = relToEngine(file);
+    if (ENV_SANCTIONED.has(rel)) continue;
+    const source = fs.readFileSync(file, 'utf8');
+    const lines = source.split('\n');
+    lines.forEach((line, i) => {
+      const trimmed = line.trim();
+      if (trimmed.startsWith('//') || trimmed.startsWith('*') || trimmed.startsWith('/*')) return; // 注释豁免
+      const m = line.match(HOST_ENV_PATTERN);
+      if (m) violations.push(`${rel}:${i + 1}  ${m[0]}  |  ${trimmed.slice(0, 90)}`);
+    });
+  }
+  return violations;
+}
+
 function main() {
   const checkOnly = process.argv.includes('--check');
   const coreFiles = walkCjs(path.join(HARNESS_ROOT, 'core'));
@@ -157,21 +241,23 @@ function main() {
   const stringViolations = violationsOf(coreFiles, PACK_PATH_PATTERNS, SANCTIONED_DISTRIBUTION);
   const topologyViolations = violationsOf(coreFiles, HOST_TOPOLOGY_PATTERNS, SANCTIONED_ENTRY_SHELL);
   const whitelistViolations = checkWhitelistFile();
+  const envViolations = checkEnvLeaks(coreFiles);
 
   const all = [
     ...whitelistViolations.map((v) => `[白名单] ${v}`),
     ...requireViolations.map((v) => `[①require方向] ${v}`),
     ...stringViolations.map((v) => `[②路径字面量] ${v}`),
     ...topologyViolations.map((v) => `[③宿主拓扑] ${v}`),
+    ...envViolations.map((v) => `[④env泄漏C-6] ${v}`),
   ];
 
   if (all.length) {
     for (const v of all) process.stdout.write(`[layer-boundary] ✖ ${v}\n`);
-    process.stdout.write(`[layer-boundary] 共 ${all.length} 处违规（①${requireViolations.length} ②${stringViolations.length} ③${topologyViolations.length} 白名单${whitelistViolations.length}）\n`);
+    process.stdout.write(`[layer-boundary] 共 ${all.length} 处违规（①${requireViolations.length} ②${stringViolations.length} ③${topologyViolations.length} ④env${envViolations.length} 白名单${whitelistViolations.length}）\n`);
     if (checkOnly) return 1;
     return 1;
   }
-  process.stdout.write(`[layer-boundary] ✓ violations=0（①require ②字面量[${SANCTIONED_DISTRIBUTION.size} 文件面] ③拓扑[${SANCTIONED_ENTRY_SHELL.size} 文件面] 白名单空；扫描 ${coreFiles.length} 文件）\n`);
+  process.stdout.write(`[layer-boundary] ✓ violations=0（①require ②字面量[${SANCTIONED_DISTRIBUTION.size} 文件面] ③拓扑[${SANCTIONED_ENTRY_SHELL.size} 文件面] ④env[${ENV_SANCTIONED.size} 文件面] 白名单空；扫描 ${coreFiles.length} 文件）\n`);
   return 0;
 }
 

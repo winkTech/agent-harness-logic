@@ -26,7 +26,14 @@ const { WRIGHT_DIR } = require('../scripts/lib/harness-state.cjs');
 
 /** 状态根下的 .wright（见 harness-state.cjs）下的默认数据库文件名 */
 const DEFAULT_DB_DIR = WRIGHT_DIR;
-const DEFAULT_DB_PATH = process.env.CLAUDE_SQLITE_PATH || path.join(DEFAULT_DB_DIR, 'memory.db');
+// Phase 2.4：env 求值从 require 期移到 openDb 调用期（修方案 §6 2.4 显式缺陷：
+// require 期求值让测试无法在同进程内通过 env 切换库路径）。HARNESS_SQLITE_PATH
+// 为主名，CLAUDE_SQLITE_PATH 保留为兼容别名（io/ 翻译层负责宿主变量归一）。
+function defaultDbPath() {
+  return process.env.HARNESS_SQLITE_PATH
+    || process.env.CLAUDE_SQLITE_PATH
+    || path.join(DEFAULT_DB_DIR, 'memory.db');
+}
 
 // ── 连接缓存 ──────────────────────────────────────────────────────────────
 
@@ -57,7 +64,7 @@ const connectionCache = new Map();
  * @returns {WrightDb}
  */
 function openDb(opts = {}) {
-  const dbPath = opts.path || DEFAULT_DB_PATH;
+  const dbPath = opts.path || defaultDbPath();
   const isMemory = dbPath === ':memory:';
   const resolvedPath = isMemory ? ':memory:' : path.resolve(dbPath);
   const openMode = opts.readonly ? 'readonly' : opts.noInit ? 'no-init' : 'managed';
@@ -86,7 +93,7 @@ function openDb(opts = {}) {
   }
 
   const configuredBusyTimeout = Number.parseInt(
-    opts.busyTimeoutMs ?? process.env.CLAUDE_SQLITE_BUSY_TIMEOUT_MS ?? '5000',
+    opts.busyTimeoutMs ?? process.env.HARNESS_SQLITE_BUSY_TIMEOUT_MS ?? process.env.CLAUDE_SQLITE_BUSY_TIMEOUT_MS ?? '5000',
     10,
   );
   const busyTimeoutMs = Number.isFinite(configuredBusyTimeout)
@@ -177,7 +184,7 @@ function backupDb(dest, opts = {}) {
   }
 
   const backupPath = dest || path.join(
-    path.dirname(DEFAULT_DB_PATH),
+    path.dirname(defaultDbPath()),
     'backups',
     `${new Date().toISOString().replace(/[:.]/g, '-')}-memory.db`,
   );
@@ -220,5 +227,5 @@ module.exports = {
   backupDb,
   isAvailable,
   resolveDb,
-  DEFAULT_DB_PATH,
+  defaultDbPath,
 };

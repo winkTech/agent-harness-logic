@@ -21,6 +21,8 @@ const path = require('node:path');
 const ROOT = path.resolve(__dirname, '..', '..', '..', '..');
 process.env.CLAUDE_HARNESS_NO_PERSIST = '1';
 
+process.env.HARNESS_NO_PERSIST = '1';
+
 const guardCoverage = require(path.join(ROOT, 'core/engine/scripts/guard-coverage.cjs'));
 const health = require(path.join(ROOT, 'core/engine/scripts/memory-health-check.cjs'));
 

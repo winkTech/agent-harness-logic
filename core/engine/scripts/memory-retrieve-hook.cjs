@@ -23,6 +23,13 @@ const path = require('node:path');
 const os = require('node:os');
 const crypto = require('node:crypto');
 const { memoryScopeFromPayload } = require('./lib/project-scope.cjs');
+
+// Phase 2.4：防写开关双名兼容（宿主名映射集中在 io/env.cjs，本文件不出现宿主词）。
+const { envValue } = require('./io/env.cjs');
+function envFlag(name) {
+  const v = envValue(process.env, name);
+  return v === '1' || v === 'true';
+}
 const HARNESS = HARNESS_ROOT;
 const DEFAULT_CACHE_TTL_MS = 10 * 60 * 1000;
 
@@ -38,18 +45,18 @@ function cacheDisabled() {
   return process.env.CLAUDE_MEMORY_HINT_CACHE_DISABLED === '1'
     || process.env.CLAUDE_HOOK_NO_WRITE === '1'
     || process.env.CLAUDE_BENCH === '1'
-    || process.env.CLAUDE_HARNESS_NO_PERSIST === '1'
-    || process.env.CLAUDE_HARNESS_VERIFY_READONLY === '1'
-    || process.env.CLAUDE_NO_DIAGNOSTIC_WRITES === '1';
+    || envFlag('HARNESS_NO_PERSIST')
+    || envFlag('HARNESS_VERIFY_READONLY')
+    || envFlag('HARNESS_NO_DIAGNOSTIC_WRITES');
 }
 
 function attributionPersistenceDisabled() {
   return process.env.CLAUDE_MEMORY_ATTRIBUTION_DISABLED === '1'
     || process.env.CLAUDE_HOOK_NO_WRITE === '1'
     || process.env.CLAUDE_BENCH === '1'
-    || process.env.CLAUDE_HARNESS_NO_PERSIST === '1'
-    || process.env.CLAUDE_HARNESS_VERIFY_READONLY === '1'
-    || process.env.CLAUDE_NO_DIAGNOSTIC_WRITES === '1';
+    || envFlag('HARNESS_NO_PERSIST')
+    || envFlag('HARNESS_VERIFY_READONLY')
+    || envFlag('HARNESS_NO_DIAGNOSTIC_WRITES');
 }
 
 // ── 层1: 用户消息触发模式 ──────────────────────────────────────────────────
@@ -370,7 +377,7 @@ function recordInjectedExposures(payload, matches, detail, deps = {}) {
 }
 
 function retrieveContext(payload = {}, deps = {}) {
-  const msg = payload.prompt || payload.user_prompt || process.env.CLAUDE_USER_MESSAGE || '';
+  const msg = payload.prompt || payload.user_prompt || process.env.HARNESS_USER_MESSAGE || '';
   const toolName = String(
     payload.tool_name || payload.toolName || payload.tool?.name
     || (typeof payload.tool === 'string' ? payload.tool : '')

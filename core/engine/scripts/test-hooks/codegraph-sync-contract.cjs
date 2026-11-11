@@ -54,6 +54,9 @@ function runHook(ws, mode, payload, extraEnv = {}) {
       // 写入目标全部指向临时 DB 与临时状态文件, 不碰 var/ 和真实 memory.db。
       // 只读语义另由 assertReadOnly 显式打开开关来验证。
       CLAUDE_HARNESS_NO_PERSIST: '',
+      HARNESS_NO_PERSIST: '',
+      HARNESS_VERIFY_READONLY: '',
+      HARNESS_NO_DIAGNOSTIC_WRITES: '',
       CLAUDE_NO_DIAGNOSTIC_WRITES: '',
       CLAUDE_SQLITE_PATH: ws.dbPath,
       CLAUDE_CG_SYNC_STATE_FILE: ws.statePath,
@@ -176,6 +179,9 @@ function assertBadInput(ws) {
     env: {
       ...process.env,
       CLAUDE_HARNESS_NO_PERSIST: '',
+      HARNESS_NO_PERSIST: '',
+      HARNESS_VERIFY_READONLY: '',
+      HARNESS_NO_DIAGNOSTIC_WRITES: '',
       CLAUDE_NO_DIAGNOSTIC_WRITES: '',
       CLAUDE_SQLITE_PATH: ws.dbPath,
       CLAUDE_CG_SYNC_STATE_FILE: ws.statePath,

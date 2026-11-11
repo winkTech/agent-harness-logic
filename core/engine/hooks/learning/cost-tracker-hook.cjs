@@ -21,7 +21,7 @@ async function main() {
 
     if (!input || input.length < 10) return;
 
-    const sessionId = process.env.CLAUDE_SESSION_ID || `s-${Date.now()}`;
+    const sessionId = process.env.HARNESS_SESSION_ID || `s-${Date.now()}`;
 
     const { estimate } = require('../../sqlite/store-costs.cjs');
     const { openDb } = require('../../sqlite/index.cjs');

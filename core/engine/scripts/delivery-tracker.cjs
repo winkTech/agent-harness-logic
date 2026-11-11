@@ -84,7 +84,7 @@ function recordDelivery(args, opts = {}) {
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, COALESCE(?, datetime('now')))
   `);
 
-  const sessionId = args.sessionId || process.env.CLAUDE_SESSION_ID || 'unknown';
+  const sessionId = args.sessionId || process.env.HARNESS_SESSION_ID || 'unknown';
 
   stmt.run(
     args.workflow || 'hdl-coding-dag-workflow',
@@ -137,7 +137,7 @@ function recordEventFile(args) {
     uncovered: serializeUncovered(args.uncovered),
     project: args.project || path.basename(process.cwd()),
     timestamp: new Date().toISOString(),
-    sessionId: process.env.CLAUDE_SESSION_ID || 'unknown',
+    sessionId: process.env.HARNESS_SESSION_ID || 'unknown',
   };
 
   const dir = path.dirname(FILE_STORE);

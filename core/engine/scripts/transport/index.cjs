@@ -24,6 +24,8 @@
 const claudeCode = require('./claude-code.cjs');
 const workbuddy = require('./workbuddy.cjs');
 const codex = require('./codex.cjs');
+// Phase 2.4：宿主 env 翻译（CLAUDE_SESSION_ID 等 → HARNESS_*）在边界识别一次。
+const { translateHostEnv } = require('../io/env.cjs');
 
 const EVENT_SCHEMA = 'harness.event';
 const EVENT_VERSION = 1;
@@ -260,6 +262,9 @@ function toCanonicalPayload(event, raw) {
  * 由调用方决定是否降级（fail-closed 的判定证据仍是 event.status=unknown）。
  */
 function ingest(raw, { transport, argv, env } = {}) {
+  // Phase 2.4：宿主原生变量物化为 HARNESS_*（进程级一次；幂等——已有
+  // HARNESS_* 值不覆盖）。引擎其余代码统一读 HARNESS_*。
+  translateHostEnv(env && typeof env === 'object' ? env : process.env);
   let transportName = DEFAULT_TRANSPORT;
   let error = null;
   try {

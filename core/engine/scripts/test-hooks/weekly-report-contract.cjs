@@ -27,6 +27,8 @@ const path = require('node:path');
 const ROOT = path.resolve(__dirname, '..', '..', '..', '..');
 process.env.CLAUDE_HARNESS_NO_PERSIST = '1';
 
+process.env.HARNESS_NO_PERSIST = '1';
+
 const weeklyReport = require(path.join(ROOT, 'core/engine/scripts/weekly-report.cjs'));
 const maintenance = require(path.join(ROOT, 'core/engine/scripts/memory-knowledge-maintenance.cjs'));
 const health = require(path.join(ROOT, 'core/engine/scripts/memory-health-check.cjs'));

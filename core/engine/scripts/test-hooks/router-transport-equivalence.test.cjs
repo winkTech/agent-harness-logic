@@ -28,6 +28,9 @@
 
 process.env.CLAUDE_HARNESS_NO_PERSIST = '1';
 
+
+process.env.HARNESS_NO_PERSIST = '1';
+
 // 状态根隔离（必须在下方 require 路由器之前）：路由器的重复失败检测会读取
 // 状态根下累积的真实事件历史——本机反复跑过该用例后，PostToolUseFailure Bash
 // 会被"同一错误签名第二次出现"逻辑判 warn 而非 allow，10s 慢路径即历史扫描。

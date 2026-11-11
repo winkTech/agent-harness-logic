@@ -19,6 +19,9 @@ const path = require('node:path');
 
 process.env.CLAUDE_HARNESS_NO_PERSIST = '1';
 
+
+process.env.HARNESS_NO_PERSIST = '1';
+
 const ROOT = path.resolve(__dirname, '..', '..', '..', '..');
 const { openDb } = require(path.join(ROOT, 'core/engine/sqlite/index.cjs'));
 const storeMemory = require(path.join(ROOT, 'core/engine/sqlite/store-memory.cjs'));

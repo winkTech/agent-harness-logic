@@ -57,7 +57,7 @@ function sessionIdFor(payload) {
     || payload?.sessionId
     || payload?.thread_id
     || payload?.threadId
-    || process.env.CLAUDE_SESSION_ID
+    || process.env.HARNESS_SESSION_ID
     || ''
   ).trim().slice(0, 128);
 }
@@ -67,7 +67,7 @@ function objectiveHashFor(payload) {
     payload?.user_message
     || payload?.userMessage
     || payload?.prompt
-    || process.env.CLAUDE_USER_MESSAGE
+    || process.env.HARNESS_USER_MESSAGE
     || ''
   ).trim();
   return instruction ? sha1(instruction) : '';

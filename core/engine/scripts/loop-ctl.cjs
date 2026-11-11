@@ -49,7 +49,7 @@ function currentScope(flags) {
 }
 
 function sessionIdFromEnv(flags) {
-  return String(flags.session || process.env.CLAUDE_SESSION_ID || '').trim();
+  return String(flags.session || process.env.HARNESS_SESSION_ID || '').trim();
 }
 
 function loadCriteria(flags) {

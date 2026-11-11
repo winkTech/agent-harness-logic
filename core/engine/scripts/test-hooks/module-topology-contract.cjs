@@ -25,7 +25,11 @@ const { HARNESS_ROOT } = require('../lib/harness-root.cjs');
 const WORKSPACE = fs.mkdtempSync(path.join(os.tmpdir(), 'cg-topo-'));
 process.env.CLAUDE_SQLITE_PATH = path.join(WORKSPACE, 'topo.db');
 delete process.env.CLAUDE_HARNESS_NO_PERSIST;
+
+delete process.env.HARNESS_NO_PERSIST;
 delete process.env.CLAUDE_NO_DIAGNOSTIC_WRITES;
+
+delete process.env.HARNESS_NO_DIAGNOSTIC_WRITES;
 
 const cg = require('../cg-queries.cjs');
 const topology = require('../lib/module-topology.cjs');

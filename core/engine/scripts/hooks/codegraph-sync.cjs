@@ -23,6 +23,13 @@ const fs = require('node:fs');
 const path = require('node:path');
 
 const { varPath } = require('../lib/harness-state.cjs');
+
+// Phase 2.4：防写开关双名兼容（宿主名映射集中在 io/env.cjs，本文件不出现宿主词）。
+const { envValue } = require('../io/env.cjs');
+function envFlag(name) {
+  const v = envValue(process.env, name);
+  return v === '1' || v === 'true';
+}
 const {
   findProjectRoot,
   payloadCwd,
@@ -48,8 +55,8 @@ const SYNC_BUDGET_MS = (() => {
 })();
 
 function readOnlyMode() {
-  return process.env.CLAUDE_HARNESS_NO_PERSIST === '1'
-    || process.env.CLAUDE_NO_DIAGNOSTIC_WRITES === '1';
+  return envFlag('HARNESS_NO_PERSIST')
+    || envFlag('HARNESS_NO_DIAGNOSTIC_WRITES');
 }
 
 const BOM = new RegExp('^' + String.fromCharCode(0xFEFF)); // UTF-8 BOM

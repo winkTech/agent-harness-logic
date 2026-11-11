@@ -137,7 +137,7 @@ tr:hover td{background:#334155}
 <body>
 <div class="dash">
 <h1>🔍 Harness Dashboard</h1>
-<p class="sub">Generated: ${new Date().toISOString().slice(0,19).replace('T',' ')} | Session: ${escapeHtml(process.env.CLAUDE_SESSION_ID || 'N/A')}</p>
+<p class="sub">Generated: ${new Date().toISOString().slice(0,19).replace('T',' ')} | Session: ${escapeHtml(process.env.HARNESS_SESSION_ID || 'N/A')}</p>
 
 <div class="stat-row" id="kpiRow"></div>
 

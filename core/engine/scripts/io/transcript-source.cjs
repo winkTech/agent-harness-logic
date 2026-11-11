@@ -45,7 +45,7 @@ function resolveTranscriptPath(payload, opts = {}) {
     }
   }
 
-  const sessionId = payload?.session_id || payload?.sessionId || process.env.CLAUDE_SESSION_ID || '';
+  const sessionId = payload?.session_id || payload?.sessionId || process.env.HARNESS_SESSION_ID || '';
   const projectsDir = home ? path.join(home, 'projects') : '';
   if (sessionId && projectsDir && fs.existsSync(projectsDir)) {
     const found = findBySessionId(projectsDir, sessionId, searchBudgetMs);

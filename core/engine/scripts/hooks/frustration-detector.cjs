@@ -19,6 +19,13 @@ const { updateJsonFileSync } = require('../lib/project-scope.cjs');
 const p = require('node:path');
 const f = require('node:fs');
 
+// Phase 2.4：防写开关双名兼容（宿主名映射集中在 io/env.cjs，本文件不出现宿主词）。
+const { envValue } = require('../io/env.cjs');
+function envFlag(name) {
+  const v = envValue(process.env, name);
+  return v === '1' || v === 'true';
+}
+
 const STATE_FILE = process.env.CLAUDE_RUNTIME_STATE_FILE || varPath('index', 'runtime-state.json');
 const FAILURE_SIGNAL_THROTTLE_MS = 60 * 1000;
 // failureCount 的语义是"连续失败"——证据超过时效窗口后不再构成强制切换的依据。
@@ -271,10 +278,10 @@ function checkToolFailure(state, opts = {}) {
 
 function persistenceDisabled(deps = {}) {
   return deps.persist === false
-    || process.env.CLAUDE_HARNESS_NO_PERSIST === '1'
+    || envFlag('HARNESS_NO_PERSIST')
     || process.env.CLAUDE_HOOK_NO_WRITE === '1'
-    || process.env.CLAUDE_HARNESS_VERIFY_READONLY === '1'
-    || process.env.CLAUDE_NO_DIAGNOSTIC_WRITES === '1';
+    || envFlag('HARNESS_VERIFY_READONLY')
+    || envFlag('HARNESS_NO_DIAGNOSTIC_WRITES');
 }
 
 function emitModeSignal(type, payload, deps = {}) {
@@ -414,7 +421,7 @@ function retrieveContext(payload = {}, deps = {}) {
 }
 
 function readCliInput(deps = {}) {
-  let input = deps.argv?.[0] || process.argv[2] || process.env.CLAUDE_USER_MESSAGE || '';
+  let input = deps.argv?.[0] || process.argv[2] || process.env.HARNESS_USER_MESSAGE || '';
   if (!input && !process.stdin.isTTY) {
     try {
       const raw = (deps.readStdin || (() => f.readFileSync(0, 'utf8')))();

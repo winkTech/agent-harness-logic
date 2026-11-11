@@ -1327,7 +1327,8 @@ define('HookRegistry', 'legacy dry-run 入口使用统一注册表', () => {
     env: {
       ...process.env,
       CLAUDE_HARNESS_VERIFY_READONLY: '1',
-      CLAUDE_NO_DIAGNOSTIC_WRITES: '1',
+      HARNESS_NO_DIAGNOSTIC_WRITES: '1',
+  CLAUDE_NO_DIAGNOSTIC_WRITES: '1',
     },
   });
   return { pass: r.status === 0, detail: `exit=${r.status}` };
@@ -2091,6 +2092,7 @@ define('DiagnosticWrites', '只读验证模式跳过 auto-record 写入', () => 
     const prelude = [
       'export HOME=/tmp/auto-record-readonly-test',
       'export CLAUDE_HARNESS_VERIFY_READONLY=1',
+      'export HARNESS_NO_DIAGNOSTIC_WRITES=1',
       'export CLAUDE_NO_DIAGNOSTIC_WRITES=1',
       '',
     ].join('\n');
@@ -2495,6 +2497,7 @@ const AUDIT_REMEDIATION_CONTRACTS = [
   ['router transport equivalence', 'router-transport-equivalence.test.cjs', 60000],
   ['host concepts dialect contract', 'host-concepts-contract.cjs', 30000],
   ['io channels contract', 'io-contract.test.cjs', 60000],
+  ['env translation contract', 'env-translation-contract.test.cjs', 60000],
   ['workbuddy render target', 'render-workbuddy-contract.test.cjs', 30000],
   ['claude code plugin manifest', 'plugin-manifest-contract.test.cjs', 300000],
   ['harness state root and migration', 'harness-state-contract.test.cjs', 60000],
@@ -2517,9 +2520,13 @@ for (const [name, relative, timeout, extraArgs = []] of AUDIT_REMEDIATION_CONTRA
       windowsHide: true,
       env: {
         ...process.env,
+        HARNESS_NO_PERSIST: '1',
         CLAUDE_HARNESS_NO_PERSIST: '1',
+        HARNESS_VERIFY_READONLY: '1',
         CLAUDE_HARNESS_VERIFY_READONLY: '1',
-        CLAUDE_NO_DIAGNOSTIC_WRITES: '1',
+        HARNESS_NO_DIAGNOSTIC_WRITES: '1',
+        HARNESS_NO_DIAGNOSTIC_WRITES: '1',
+  CLAUDE_NO_DIAGNOSTIC_WRITES: '1',
       },
     });
     const passed = r.status === 0 && !r.error && !r.signal;
@@ -3676,12 +3683,16 @@ define('MemoryLifecycle', 'collector refuses events without a stable session ide
   let wDb;
   // 宿主会把会话 ID 注入本进程 env (CLAUDE_SESSION_ID/CODEBUDDY_SESSION_ID)，
   // 令 "没有 session 身份" 的事件被 env 兜底成稳定身份 → 摘掉 env 再验证拒绝路径。
+  // Phase 2.4：ingest 的 translateHostEnv 会把宿主名物化为 HARNESS_SESSION_ID
+  // 留在本进程 env —— 三个名字都要摘。
   const savedSessionEnv = {
     CLAUDE_SESSION_ID: process.env.CLAUDE_SESSION_ID,
     CODEBUDDY_SESSION_ID: process.env.CODEBUDDY_SESSION_ID,
+    HARNESS_SESSION_ID: process.env.HARNESS_SESSION_ID,
   };
   delete process.env.CLAUDE_SESSION_ID;
   delete process.env.CODEBUDDY_SESSION_ID;
+  delete process.env.HARNESS_SESSION_ID;
   try {
     wDb = openDb({ path: ':memory:' });
     const missing = collector.emitSync('user_correct', { message: 'missing session' }, { db: wDb.db });
@@ -3696,7 +3707,7 @@ define('MemoryLifecycle', 'collector refuses events without a stable session ide
       && rows[0].sessionId === 'memory-lifecycle-session';
     return { pass, detail: `missing=${missing} stable=${stable} rows=${JSON.stringify(rows)}` };
   } finally {
-    for (const key of ['CLAUDE_SESSION_ID', 'CODEBUDDY_SESSION_ID']) {
+    for (const key of ['CLAUDE_SESSION_ID', 'CODEBUDDY_SESSION_ID', 'HARNESS_SESSION_ID']) {
       if (savedSessionEnv[key] !== undefined) process.env[key] = savedSessionEnv[key];
       else delete process.env[key];
     }
@@ -4240,6 +4251,7 @@ define('ProjectDirectoryGuard', 'uncontracted HDL projects are not forced into t
 const FPG = 'core/engine/scripts/hooks/file-protection-guard.cjs';
 const fpgCall = (file) => JSON.stringify({ tool_name: 'Write', tool_input: { file_path: file } });
 const fpgEnv = (approval, reason, basis) => ({
+  HARNESS_NO_DIAGNOSTIC_WRITES: '1',
   CLAUDE_NO_DIAGNOSTIC_WRITES: '1',
   CLAUDE_PROTECTED_WRITE_APPROVAL: approval || '',
   CLAUDE_PROTECTED_WRITE_REASON: reason || '',

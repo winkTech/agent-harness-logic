@@ -34,6 +34,13 @@ const { HARNESS_ROOT } = require('./lib/harness-root.cjs');
 const { varPath } = require('./lib/harness-state.cjs');
 const { toolInputOf } = require('./io/index.cjs');
 
+// Phase 2.4：防写开关双名兼容（宿主名映射集中在 io/env.cjs，本文件不出现宿主词）。
+const { envValue } = require('./io/env.cjs');
+function envFlag(name) {
+  const v = envValue(process.env, name);
+  return v === '1' || v === 'true';
+}
+
 // ── 配置 ────────────────────────────────────────────────────────────────────
 
 /**
@@ -483,7 +490,7 @@ function main() {
 
     case 'match':
       // 测试匹配: node rule-loader.cjs match "写RTL" --files="top.sv"
-      const input = args[1] || process.env.CLAUDE_USER_MESSAGE || '';
+      const input = args[1] || process.env.HARNESS_USER_MESSAGE || '';
       const files = args.find(a => a.startsWith('--files='))?.split('=')[1]?.split(',') || [];
       const result = evaluate(input, { openFiles: files, verbose: args.includes('--verbose') });
       if (result) {
@@ -544,9 +551,9 @@ function injectionMemoPath(sessionId, opts = {}) {
 function persistenceDisabled() {
   return process.env.CLAUDE_HOOK_NO_WRITE === '1'
     || process.env.CLAUDE_BENCH === '1'
-    || process.env.CLAUDE_HARNESS_NO_PERSIST === '1'
-    || process.env.CLAUDE_HARNESS_VERIFY_READONLY === '1'
-    || process.env.CLAUDE_NO_DIAGNOSTIC_WRITES === '1';
+    || envFlag('HARNESS_NO_PERSIST')
+    || envFlag('HARNESS_VERIFY_READONLY')
+    || envFlag('HARNESS_NO_DIAGNOSTIC_WRITES');
 }
 
 function loadInjected(sessionId) {
@@ -578,7 +585,7 @@ function retrieveContext(payload = {}, deps = {}) {
   // UserPromptSubmit 是主路径; PreToolUse 时退化为按文件类型匹配。
   const userMessage = payload.prompt
     || payload.user_prompt
-    || process.env.CLAUDE_USER_MESSAGE
+    || process.env.HARNESS_USER_MESSAGE
     || '';
   const openFiles = [toolInput.file_path, toolInput.notebook_path]
     .filter(Boolean)

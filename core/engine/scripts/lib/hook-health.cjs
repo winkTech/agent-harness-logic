@@ -18,15 +18,22 @@ const fs = require('node:fs');
 const path = require('node:path');
 const { varPath } = require('./harness-state.cjs');
 
+// Phase 2.4：防写开关双名兼容（宿主名映射集中在 io/env.cjs，本文件不出现宿主词）。
+const { envValue } = require('../io/env.cjs');
+function envFlag(name) {
+  const v = envValue(process.env, name);
+  return v === '1' || v === 'true';
+}
+
 const STORE_FILE = varPath('metrics', 'hook-health.jsonl');
 /** 单条 error 文本截断上限，防止超长 stack 撑爆 JSONL。 */
 const ERROR_TEXT_LIMIT = 2000;
 const OUTCOMES = new Set(['ok', 'error', 'fail-open']);
 
 function persistenceDisabled() {
-  return process.env.CLAUDE_HARNESS_NO_PERSIST === '1'
-    || process.env.CLAUDE_HARNESS_VERIFY_READONLY === '1'
-    || process.env.CLAUDE_NO_DIAGNOSTIC_WRITES === '1'
+  return envFlag('HARNESS_NO_PERSIST')
+    || envFlag('HARNESS_VERIFY_READONLY')
+    || envFlag('HARNESS_NO_DIAGNOSTIC_WRITES')
     || process.env.CLAUDE_HOOK_NO_WRITE === '1';
 }
 
