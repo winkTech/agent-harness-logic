@@ -2494,6 +2494,7 @@ const AUDIT_REMEDIATION_CONTRACTS = [
   ['transport decision render contract', 'render-contract.test.cjs', 30000],
   ['router transport equivalence', 'router-transport-equivalence.test.cjs', 60000],
   ['host concepts dialect contract', 'host-concepts-contract.cjs', 30000],
+  ['io channels contract', 'io-contract.test.cjs', 60000],
   ['workbuddy render target', 'render-workbuddy-contract.test.cjs', 30000],
   ['claude code plugin manifest', 'plugin-manifest-contract.test.cjs', 300000],
   ['harness state root and migration', 'harness-state-contract.test.cjs', 60000],

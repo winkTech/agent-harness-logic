@@ -41,6 +41,8 @@ const MAX_EVENTS_BYTES = 5 * 1024 * 1024;
 
 // Phase 2.1：受控工具集唯一事实源在 lib/host-concepts.cjs（原三副本之一）。
 const { isControlledTool } = require('../lib/host-concepts.cjs');
+// Phase 2.2：transcript 路径解析唯一实现（原与 checklist-gate 各持一份 60 行副本）。
+const { resolveTranscriptPath: resolveTranscriptPathShared } = require('../io/transcript-source.cjs');
 const HIGH_RISK_BASH_COMMAND = /\b(?:git\s+(?:push|reset\s+--hard|clean\s+-\S*f|branch\s+-D)|gh\s+(?:pr\s+(?:create|merge)|issue\s+(?:create|edit|close)|release\s+create|repo\s+delete)|npm\s+publish|docker\s+(?:push|system\s+prune)|kubectl\s+(?:apply|delete)|terraform\s+apply)\b|\b(?:curl|Invoke-RestMethod|irm)\b[^\r\n]*(?:-X|--request|Method)\s*(?:POST|PUT|PATCH|DELETE)\b|\b(?:rm\s+-rf|Remove-Item\b[^\r\n]*-Recurse)\b/i;
 
 function sha256(value) {
@@ -219,46 +221,10 @@ function relativeTo(root, value) {
   }
 }
 
+// Phase 2.2：本函数本体已收敛至 io/transcript-source.cjs；此处保留同名薄壳
+// 维持模块导出兼容（HOME 由 ledger 侧传入，行为与原 60 行实现逐字一致）。
 function resolveTranscriptPath(payload) {
-  const explicit = payload?.transcript_path
-    || payload?.transcriptPath
-    || payload?.conversation?.transcript_path
-    || payload?.session?.transcript_path
-    || process.env.CLAUDE_TRANSCRIPT_PATH
-    || '';
-  if (explicit && fs.existsSync(explicit)) return explicit;
-
-  const sessionDir = payload?.session_dir || process.env.CLAUDE_SESSION_DIR || '';
-  if (sessionDir && fs.existsSync(sessionDir)) {
-    for (const name of ['transcript.jsonl', 'conversation.jsonl', 'messages.jsonl']) {
-      const candidate = path.join(sessionDir, name);
-      if (fs.existsSync(candidate)) return candidate;
-    }
-  }
-
-  const sessionId = payload?.session_id || payload?.sessionId || process.env.CLAUDE_SESSION_ID || '';
-  if (!sessionId) return '';
-
-  const projectsDir = path.join(HOME, 'projects');
-  if (!fs.existsSync(projectsDir)) return '';
-  const expected = `${sessionId}.jsonl`.toLowerCase();
-  const stack = [projectsDir];
-  const deadline = Date.now() + 400;
-  while (stack.length > 0 && Date.now() < deadline) {
-    const current = stack.pop();
-    let entries = [];
-    try {
-      entries = fs.readdirSync(current, { withFileTypes: true });
-    } catch {
-      continue;
-    }
-    for (const entry of entries) {
-      const fullPath = path.join(current, entry.name);
-      if (entry.isFile() && entry.name.toLowerCase() === expected) return fullPath;
-      if (entry.isDirectory()) stack.push(fullPath);
-    }
-  }
-  return '';
+  return resolveTranscriptPathShared(payload, { home: HOME });
 }
 
 function readTail(filePath, maxBytes = MAX_TRANSCRIPT_TAIL) {

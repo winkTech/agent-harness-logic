@@ -9,6 +9,8 @@ const path = require('node:path');
 
 // Phase 2.1：受控工具集唯一事实源在 lib/host-concepts.cjs（原三副本之一）。
 const { isControlledTool } = require('../lib/host-concepts.cjs');
+// Phase 2.2：transcript 路径解析唯一实现（原与 ledger 各持一份副本）。
+const { resolveTranscriptPath: resolveTranscriptPathShared } = require('../io/transcript-source.cjs');
 const MAX_TAIL_BYTES = 1024 * 1024;
 const CLAUDE_HOME = HARNESS_ROOT;
 
@@ -35,99 +37,11 @@ function toolNameFrom(payload) {
   return payload?.tool?.name || payload?.tool_name || payload?.name || '';
 }
 
+// Phase 2.2：transcript 解析四函数（resolve/find/recent/slug，约 95 行）已收敛至
+// io/transcript-source.cjs。此薄壳保留原语义：home=CLAUDE_HOME，启用 cwd 近期
+// 回退（清单门独有——原 findRecentProjectTranscript 默认行为）。
 function resolveTranscriptPath(payload) {
-  const explicit = payload?.transcript_path
-    || payload?.transcriptPath
-    || payload?.conversation?.transcript_path
-    || payload?.session?.transcript_path
-    || process.env.CLAUDE_TRANSCRIPT_PATH
-    || '';
-  if (explicit && fs.existsSync(explicit)) return explicit;
-
-  const sessionDir = payload?.session_dir || process.env.CLAUDE_SESSION_DIR || '';
-  if (sessionDir && fs.existsSync(sessionDir)) {
-    for (const name of ['transcript.jsonl', 'conversation.jsonl', 'messages.jsonl']) {
-      const candidate = path.join(sessionDir, name);
-      if (fs.existsSync(candidate)) return candidate;
-    }
-  }
-
-  const sessionId = payload?.session_id || payload?.sessionId || process.env.CLAUDE_SESSION_ID || '';
-  if (sessionId) {
-    const found = findClaudeProjectTranscript(sessionId);
-    if (found) return found;
-  }
-
-  const recent = findRecentProjectTranscript(payload?.cwd || process.cwd());
-  if (recent) return recent;
-
-  return '';
-}
-
-function findClaudeProjectTranscript(sessionId) {
-  const projectsDir = path.join(CLAUDE_HOME, 'projects');
-  if (!fs.existsSync(projectsDir)) return '';
-  const expected = `${sessionId}.jsonl`.toLowerCase();
-  const stack = [projectsDir];
-  const deadline = Date.now() + 500;
-
-  while (stack.length > 0 && Date.now() < deadline) {
-    const current = stack.pop();
-    let entries;
-    try {
-      entries = fs.readdirSync(current, { withFileTypes: true });
-    } catch {
-      continue;
-    }
-    for (const entry of entries) {
-      const fullPath = path.join(current, entry.name);
-      if (entry.isFile() && entry.name.toLowerCase() === expected) return fullPath;
-      if (entry.isDirectory()) stack.push(fullPath);
-    }
-  }
-  return '';
-}
-
-function projectSlugForCwd(cwd) {
-  if (!cwd) return '';
-  return path.resolve(cwd).replace(/[^A-Za-z0-9]/g, '-');
-}
-
-function findRecentProjectTranscript(cwd, maxAgeMs = 2 * 60 * 1000) {
-  const projectsDir = path.join(CLAUDE_HOME, 'projects');
-  const slug = projectSlugForCwd(cwd);
-  if (!slug) return '';
-
-  const preferredDir = path.join(projectsDir, slug);
-  const roots = fs.existsSync(preferredDir) ? [preferredDir] : [];
-  if (roots.length === 0) return '';
-
-  const now = Date.now();
-  const candidates = [];
-  for (const root of roots) {
-    let entries;
-    try {
-      entries = fs.readdirSync(root, { withFileTypes: true });
-    } catch {
-      continue;
-    }
-    for (const entry of entries) {
-      if (!entry.isFile() || !entry.name.endsWith('.jsonl')) continue;
-      const fullPath = path.join(root, entry.name);
-      let stat;
-      try {
-        stat = fs.statSync(fullPath);
-      } catch {
-        continue;
-      }
-      if (now - stat.mtimeMs <= maxAgeMs) {
-        candidates.push({ path: fullPath, mtimeMs: stat.mtimeMs });
-      }
-    }
-  }
-
-  candidates.sort((a, b) => b.mtimeMs - a.mtimeMs);
-  return candidates[0]?.path || '';
+  return resolveTranscriptPathShared(payload, { home: CLAUDE_HOME, allowRecentFallback: true });
 }
 
 function readTail(filePath) {
