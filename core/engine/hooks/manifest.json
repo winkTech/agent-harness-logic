@@ -291,7 +291,10 @@
       "action": "pre_compact",
       "blockChannel": "none",
       "injectChannel": "none",
-      "toolMatcher": "*"
+      "toolMatcher": "*",
+      "hostOnly": [
+        "PreCompact 原生事件仅 claude-code 注册面; codex 侧经 session.precompact 中性事件(transport 适配), grok 剖面无此族——降级为压缩前状态检查由 preflight 兜底(fallback)"
+      ]
     },
     {
       "script": "core/engine/scripts/hooks/preflight-router.cjs",
@@ -369,7 +372,7 @@
         }
       ],
       "hostOnly": [
-        "SubagentStop 是 claude-code 独占事件"
+        "SubagentStop 是 claude-code 独占事件; workbuddy 同构实证保留; codex/grok 无子代理停止事件——降级为 subagent.stop 中性事件(consumer 侧消费, fallback)"
       ]
     },
     {

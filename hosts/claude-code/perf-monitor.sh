@@ -72,3 +72,8 @@ fi
 
 echo ""
 echo "=== 完成 ==="
+
+# ── Phase 3.3 归位说明 ──
+# 本脚本为历史性能巡检工具（读 ~/.claude 配置体积与 hooks 面积），
+# 无引擎依赖、无被引用方。归位 hosts/claude-code/（claude-code 宿主
+# 运维面）；core/engine/scripts 保持纯引擎目录。

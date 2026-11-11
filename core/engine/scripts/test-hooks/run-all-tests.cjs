@@ -2513,6 +2513,7 @@ const AUDIT_REMEDIATION_CONTRACTS = [
   ['pack externalization contract', 'pack-externalization-contract.test.cjs', 120000],
   ['codex render contract', 'codex-render-contract.test.cjs', 120000],
   ['grok render contract', 'grok-render-contract.test.cjs', 180000],
+  ['claude host closure contract', 'claude-host-closure-contract.test.cjs', 120000],
   ['workbuddy render target', 'render-workbuddy-contract.test.cjs', 30000],
   ['claude code plugin manifest', 'plugin-manifest-contract.test.cjs', 300000],
   ['harness state root and migration', 'harness-state-contract.test.cjs', 60000],
