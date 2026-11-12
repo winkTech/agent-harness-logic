@@ -1,0 +1,15 @@
+{
+  "name": "agent-harness-logic",
+  "owner": {
+    "name": "__OWNER__"
+  },
+  "plugins": [
+    {
+      "name": "logical-paradox",
+      "source": "__REPO_URL__",
+      "subdir": "dist/plugin",
+      "description": "UnVudGltZS1uZXV0cmFsIGFnZW50IGhhcm5lc3Mgd2l0aCBzYWZldHkgZ2F0ZXMsIHZlcmlmaWNhdGlvbiBsb29wLCBtZW1vcnkgKyBEcmVhbS4gTXVsdGktaG9zdDogY2xhdWRlLWNvZGUgLyBncm9rIC8gY29kZXggLyB3b3JrYnVkZHku",
+      "sha": "221f59351077a356e86c653df4ed3dd0fa1af184"
+    }
+  ]
+}

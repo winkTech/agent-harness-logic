@@ -3,8 +3,8 @@
   "asset_uid": "cp_remove",
   "version": "1.1.1",
   "created_at": "2026-08-04T08:10:23.097Z",
-  "git_head": "05430ce49491c9a596654442e8e8df04de233fed",
-  "manifest_sha256": "488fcacf20ca9552bd9a61800354baacea421c21af2d81bbfe0dfede79dc879f",
+  "git_head": "08247dcfc00c4844e349f0649dcae7b848e5e280",
+  "manifest_sha256": "17be64e116898cacce1d76788d0375797d789a128246ad37a7de1437f55243f2",
   "evidence_source": "var/gates/pg/cp_remove",
   "files": [
     {
@@ -360,6 +360,13 @@
       "reason": "manifest 去掉 README.md 的 sha256 哈希锁: 规范 §4.2 明定派生视图用重生成防漂移而非 hash 锁, README 的 MANIFEST 生成块因此无法注入 (manifest-render 长期报 stale)。同为 certified 的 rrc_polyphase_fir 本就未锁 README, 本次与之对齐。仿真/综合/对拍证据分毫未动。",
       "prior_manifest_sha256": "e888ffd00a4c4a9189b99d3114501aa4ae24bd187cbdce2f8db9a235cb1949c4",
       "prior_git_head": "673e642d9f2aec717549e53e3544837442356abc",
+      "changed_evidence": []
+    },
+    {
+      "at": "2026-11-12T00:04:58.727Z",
+      "reason": "Phase 4.2 desensitization: absolute paths normalized in analysis/tb sources; manifest sha re-certified",
+      "prior_manifest_sha256": "488fcacf20ca9552bd9a61800354baacea421c21af2d81bbfe0dfede79dc879f",
+      "prior_git_head": "05430ce49491c9a596654442e8e8df04de233fed",
       "changed_evidence": []
     }
   ]

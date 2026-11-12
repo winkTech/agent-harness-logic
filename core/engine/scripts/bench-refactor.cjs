@@ -139,6 +139,19 @@ const PHASES = {
       json: null, timeoutMs: 300000,
     },
   ],
+  // Phase 4：插件化分发面 + 脱敏。
+  4: [
+    {
+      id: 'D-1', desc: '脱敏扫描 (tracked 树零个人信息)',
+      cmd: [process.execPath, R('core/engine/scripts/bench-d1-desens.cjs')],
+      json: null, timeoutMs: 120000,
+    },
+    {
+      id: 'D-2', desc: '插件结构校验 (dist/plugin 布局+引用闭包+marketplace 双形态)',
+      cmd: [process.execPath, R('core/engine/scripts/bench-d2-plugin-validate.cjs')],
+      json: null, timeoutMs: 180000,
+    },
+  ],
 };
 
 function record(metric, value, note) {

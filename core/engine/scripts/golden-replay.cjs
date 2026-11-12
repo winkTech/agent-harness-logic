@@ -87,7 +87,7 @@
  *    are kept. usage summed per kept record; tool_use counted per kept record.
  *  - tool call count: tool_use blocks in kept assistant records
  * cwd-slug rule (validated against real samples, e.g.
- * C:\Users\Lihan\.claude -> C--Users-Lihan--claude): every non-alphanumeric
+ * C:\Users\<user>\.claude -> C--Users-<user>--claude): every non-alphanumeric
  * character replaced with '-'.
  */
 

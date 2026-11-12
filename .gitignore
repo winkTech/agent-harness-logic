@@ -217,3 +217,4 @@ var_build/
 # Phase 1.5（2026-11-10，refactor/core-split）：根 CLAUDE.md / AGENTS.md 为渲染产物但
 # **入库跟踪**（§3.5：git 跟踪 + --check 防漂移）——全新 clone 即有宿主指令注入；
 # 由 sync-skills.cjs 从 hosts/claude-code/ 模板渲染重建，漂移即 --check exit 1。
+dist/

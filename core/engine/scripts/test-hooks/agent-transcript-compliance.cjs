@@ -295,7 +295,7 @@ function runSelfTests() {
       const parsed = parseJsonl([
         assistant([{ type: 'text', text: checklist }]),
         assistant([toolUse('Bash', { command: 'node test.cjs' })]),
-        assistant([toolUse('Read', { file_path: 'C:\\Users\\Lihan\\.claude\\AGENTS.md' })]),
+        assistant([toolUse('Read', { file_path: 'C:\\Users\\<user>\\.claude\\AGENTS.md' })]),
       ].join('\n'));
       const result = verifyEvents(parsed.events, parsed.parseErrors);
       assert(result.status === 'failed', 'late AGENTS read transcript passed');

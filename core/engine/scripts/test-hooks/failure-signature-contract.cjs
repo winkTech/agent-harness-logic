@@ -17,7 +17,7 @@ const {
 
 function assertNoiseInvariance() {
   const a = signature('Error: ENOENT: no such file or directory, open '
-    + "'C:\\Users\\Lihan\\proj\\rtl\\top.sv' at top.js:120:15 (took 1350ms)");
+    + "'C:\\Users\\someone\\proj\\rtl\\top.sv' at top.js:120:15 (took 1350ms)");
   const b = signature('Error: ENOENT: no such file or directory, open '
     + "'D:\\other\\place\\rtl\\top.sv' at top.js:998:3 (took 12ms)");
   assert.equal(a.fingerprint, b.fingerprint, '路径/行号/耗时不同不应产生新指纹');

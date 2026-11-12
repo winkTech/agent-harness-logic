@@ -7,7 +7,7 @@
 | Author | _TBD_ |
 | Date | 2026-08-08 |
 | Status | Draft — design approval required before implementation |
-| Repository | `C:\Users\Lihan\.claude` |
+| Repository | `C:\Users\<user>\.claude` |
 | Phase | Phase 1, four approval-gated milestones (M1–M4) |
 | Decision authority | The 29 decisions supplied for this design are final and are treated as requirements, not open design questions. |
 
@@ -30,8 +30,8 @@ The table separates observations from the prior grilling session, observations r
 
 | ID | Classification | Evidence | Architectural consequence |
 |---|---|---|---|
-| E1 | Observed in prior grilling | Grok 1.0.0 `grok inspect --json` discovered global rules under `C:\Users\Lihan\.claude\Agents.md`, `Claude.md`, and a Codex `Agents.md` in the then-current directory. | Compatibility discovery can duplicate cross-runtime instructions. The installer must render one Grok-owned entry and disable overlapping Claude rules/agents scans. |
-| E2 | Observed in prior grilling | Skills were discovered from `C:\Users\Lihan\.agents\skills\...`. | Keep `.agents/skills/**` as the shared Skill authority; do not clone Skills into runtime-specific trees. |
+| E1 | Observed in prior grilling | Grok 1.0.0 `grok inspect --json` discovered global rules under `C:\Users\<user>\.claude\Agents.md`, `Claude.md`, and a Codex `Agents.md` in the then-current directory. | Compatibility discovery can duplicate cross-runtime instructions. The installer must render one Grok-owned entry and disable overlapping Claude rules/agents scans. |
+| E2 | Observed in prior grilling | Skills were discovered from `C:\Users\<user>\.agents\skills\...`. | Keep `.agents/skills/**` as the shared Skill authority; do not clone Skills into runtime-specific trees. |
 | E3 | Observed in prior grilling | Grok discovered 15 Hooks from Claude `settings.json` and MATLAB MCP from `.claude.json`. | Claude compatibility scanning currently makes Grok depend on Claude outputs and permits duplicate execution. Native Grok Hook/MCP renderers must replace that path, then `compat.claude.hooks=false` and `compat.claude.mcps=false`. |
 | E4 | Observed in prior grilling | Only built-in agents `general-purpose`, `explore`, and `plan` were discovered; existing professional Claude agents were not. | Phase 1 validates only those three built-ins. Professional-agent migration is correctly deferred. |
 | E5 | Observed in prior grilling | Codegraph was absent from the effective Grok MCP list. | M3 requires a neutral MCP registry and behavioral codegraph E2E, rather than assuming Claude-compatible discovery. |
@@ -1550,7 +1550,7 @@ Minimal existing-file changes:
 - `engine/scripts/hooks/codegraph-sync.cjs`
 - `engine/hooks/learning/postflight-observer.cjs`
 - `settings.json`, `settings.local.json`, `.mcp.json`, `.claude.json`
-- `C:\Users\Lihan\.grok\config.toml` and all live Grok Hook/agent/rule files
+- `C:\Users\<user>\.grok\config.toml` and all live Grok Hook/agent/rule files
 - existing rules, Skills, agents, and workflows
 
 **Artifacts/tests**

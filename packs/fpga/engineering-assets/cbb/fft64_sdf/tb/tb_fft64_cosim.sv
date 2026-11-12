@@ -66,7 +66,7 @@ module tb_fft64_cosim;
 
     initial begin
         if (!$value$plusargs("VEC_DIR=%s", vdir))
-            vdir = "c:/Users/Lihan/.claude/engineering-assets/cbb/fft64_sdf/vectors";
+            vdir = "<HARNESS_ROOT>/engineering-assets/cbb/fft64_sdf/vectors";
         $readmemh({vdir, "/fft_in.hex"},                vec_in);
         $readmemh({vdir, "/fft_expected_natural.hex"},  vec_exp);
 

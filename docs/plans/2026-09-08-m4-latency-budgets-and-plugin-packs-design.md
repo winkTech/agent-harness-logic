@@ -6,7 +6,7 @@
 |---|---|
 | Date | 2026-09-08 |
 | Status | M4a 已实现；M4b 目录重构**已于同日落地**（见 §2.5 实施记录） |
-| Repository | `C:\Users\Lihan\.claude`（分支 `feat/logical-paradox-m1-state-dir`） |
+| Repository | `C:\Users\<user>\.claude`（分支 `feat/logical-paradox-m1-state-dir`） |
 | 决策来源 | 2026-09 会话收敛决策（M4a 档位 + M4b pack 划分），本文档为其首次落库固化 |
 | 前序里程碑 | M1 状态分离（c619a47）、M2 Claude Code 插件形态（9fb59c8）、M3 传输层闭环（5357877） |
 

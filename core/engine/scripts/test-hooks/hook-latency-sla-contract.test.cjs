@@ -59,11 +59,12 @@ const REGISTRATIONS = {
 const INDEX = registrationIndex({ registrations: REGISTRATIONS });
 
 function benchResult(script, warmP95, extra = {}) {
+  const root = process.env.HARNESS_ROOT || require("path").join(process.env.USERPROFILE || process.env.HOME, ".claude");
   return {
     point: 'PreToolUse',
-    cmd: `node C:/Users/Lihan/.claude/core/engine/scripts/hooks/${script}.cjs`,
-    id: `node C:/Users/Lihan/.claude/core/engine/scripts/hooks/${script}.cjs`,
-    script: `node C:/Users/Lihan/.claude/core/engine/scripts/hooks/${script}`.slice(0, 60),
+    cmd: `node ${root}/core/engine/scripts/hooks/${script}.cjs`,
+    id: `node ${root}/core/engine/scripts/hooks/${script}.cjs`,
+    script: `node ${root}/core/engine/scripts/hooks/${script}`.slice(0, 60),
     ok: true,
     skipped: false,
     isAsync: false,

@@ -149,7 +149,7 @@
     },
     {
       "file": "workflow-definition.schema.json",
-      "id": "https://lihan.local/schemas/workflow-definition.schema.json",
+      "id": "https://harness.example/schemas/workflow-definition.schema.json",
       "title": "Workflow Definition Contract"
     }
   ]

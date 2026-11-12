@@ -3,8 +3,8 @@
   "asset_uid": "fft64_sdf",
   "version": "1.0.2",
   "created_at": "2026-08-04T08:10:22.334Z",
-  "git_head": "05430ce49491c9a596654442e8e8df04de233fed",
-  "manifest_sha256": "89d8fafd6d6d7a95a8fe40126f3df8ba87d1b6d92dda0410c3709292895780e1",
+  "git_head": "08247dcfc00c4844e349f0649dcae7b848e5e280",
+  "manifest_sha256": "bde68daaa1c3d81df7da04302b79c40cbb505584f75c25362bd50eeec8010d0e",
   "evidence_source": "var/gates/pg/fft64_sdf",
   "files": [
     {
@@ -360,6 +360,13 @@
       "reason": "manifest 去掉 README.md 的 sha256 哈希锁: 规范 §4.2 明定派生视图用重生成防漂移而非 hash 锁, README 的 MANIFEST 生成块因此无法注入 (manifest-render 长期报 stale)。同为 certified 的 rrc_polyphase_fir 本就未锁 README, 本次与之对齐。仿真/综合/对拍证据分毫未动。",
       "prior_manifest_sha256": "17ea22388c80980b4e79051f90f1dbd9a18a6d678f066918f7a206c445c3df55",
       "prior_git_head": "673e642d9f2aec717549e53e3544837442356abc",
+      "changed_evidence": []
+    },
+    {
+      "at": "2026-11-12T00:04:59.066Z",
+      "reason": "Phase 4.2 desensitization: absolute paths normalized in analysis/tb sources; manifest sha re-certified",
+      "prior_manifest_sha256": "89d8fafd6d6d7a95a8fe40126f3df8ba87d1b6d92dda0410c3709292895780e1",
+      "prior_git_head": "05430ce49491c9a596654442e8e8df04de233fed",
       "changed_evidence": []
     }
   ]

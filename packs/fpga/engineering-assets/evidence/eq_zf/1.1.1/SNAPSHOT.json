@@ -3,8 +3,8 @@
   "asset_uid": "eq_zf",
   "version": "1.1.1",
   "created_at": "2026-08-09T03:29:31.971Z",
-  "git_head": "eea4fc4f51506e832f35c5519c9db98daeb24107",
-  "manifest_sha256": "3c52371150da34ffc2654e6d9516a610cc44a282e34ac7db5cf683b1b20d224b",
+  "git_head": "08247dcfc00c4844e349f0649dcae7b848e5e280",
+  "manifest_sha256": "b384e4d3fc77438be08cda7a70ea9d4249cc30b460a3323a7f67ca463c16bf3a",
   "evidence_source": "var/gates/pg/eq_zf",
   "files": [
     {
@@ -353,5 +353,14 @@
         "severity": "high"
       }
     ]
-  }
+  },
+  "reseal_history": [
+    {
+      "at": "2026-11-12T00:04:58.895Z",
+      "reason": "Phase 4.2 desensitization: absolute paths normalized in analysis/tb sources; manifest sha re-certified",
+      "prior_manifest_sha256": "3c52371150da34ffc2654e6d9516a610cc44a282e34ac7db5cf683b1b20d224b",
+      "prior_git_head": "eea4fc4f51506e832f35c5519c9db98daeb24107",
+      "changed_evidence": []
+    }
+  ]
 }

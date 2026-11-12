@@ -25,7 +25,7 @@ function demap_fp_proto()
 %
 %   用法: matlab -batch "addpath(<pkg>/analysis); demap_fp_proto"
 
-    EA   = 'C:/Users/Lihan/.claude/engineering-assets';
+    EA   = '<HARNESS_ROOT>/engineering-assets';
     OFDM = fullfile(EA, 'models', 'comm', 'ofdm');
     addpath(fullfile(OFDM, 'src'));
     fprintf('  which(mod_demapper_llr) = %s\n\n', which('mod_demapper_llr'));

@@ -36,7 +36,7 @@ function gen_demap_vectors(mod_type)
 
     if nargin < 1 || isempty(mod_type), mod_type = '16QAM'; end
 
-    EA   = 'C:/Users/Lihan/.claude/engineering-assets';
+    EA   = '<HARNESS_ROOT>/engineering-assets';
     addpath(fullfile(EA, 'models', 'comm', 'ofdm', 'src'));
     if isempty(which('rtl_mirror_demap'))
         error('gen_demap_vectors:golden', ...

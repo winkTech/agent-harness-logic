@@ -26,7 +26,7 @@ function gen_eq_vectors()
 %   打包字序 **{im, re}** —— 与 cp_remove / channel_est_top 一致。本链路上
 %   fft64_sdf 的判卷 TB 用的是 {re, im}, 本轮曾因此产生 2327/2560 的假失配。
 
-    EA   = 'C:/Users/Lihan/.claude/engineering-assets';
+    EA   = '<HARNESS_ROOT>/engineering-assets';
     OFDM = fullfile(EA, 'models', 'comm', 'ofdm');
     % 输出目录由**本文件位置**推出, 不写死 —— 包从 incubator/intake/eq_zf 迁到
     % cbb/eq_zf 时写死的路径会把向量写回旧位置 (并把已删除的目录又建出来), 而 TB

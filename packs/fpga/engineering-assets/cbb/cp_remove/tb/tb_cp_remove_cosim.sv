@@ -85,7 +85,7 @@ module tb_cp_remove_cosim;
 
     initial begin
         if (!$value$plusargs("VEC_DIR=%s", vdir))
-            vdir = "c:/Users/Lihan/.claude/engineering-assets/cbb/cp_remove/vectors";
+            vdir = "<HARNESS_ROOT>/engineering-assets/cbb/cp_remove/vectors";
         $readmemh({vdir, "/cp_in.hex"},       vec_in);
         $readmemh({vdir, "/cp_expected.hex"}, vec_exp);
 

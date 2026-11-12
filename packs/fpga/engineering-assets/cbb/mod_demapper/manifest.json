@@ -236,31 +236,31 @@
       "path": "analysis/gen_demap_vectors.m",
       "role": "vector_gen",
       "note": "边界符号逐条给出**为什么它危险**; 覆盖自查硬断言 (饱和点>0 / sh' 须含 >=48 那一支 / erasure 全 0), 任一不满足直接报错不产出向量",
-      "sha256": "6bc1532bf25600365fe53f945e836d726c0b937453da5d89e805ed920469c35b"
+      "sha256": "dcf1bce040a32c3e1c9a1534d700bb1552afcc614fa67bcbd4af488480f2364e"
     },
     {
       "path": "analysis/demap_axis_check.m",
       "role": "reference",
       "note": "两轴可分性判定 —— 前提'比特标号也按轴划分'是查出来的, 不是'方形 QAM 一般都这样'",
-      "sha256": "94a399ff1532b45c299baa07750cc5541a24a0acb1fcecb78679d264d150fce4"
+      "sha256": "16a9f6b45e43fed2b1379c56ee57d482dceceee917e2f1c763ea85bf797e7a4b"
     },
     {
       "path": "analysis/demap_e2e_ber.m",
       "role": "reference",
       "note": "标度 K 的判据: **端到端 BER** 穿过真实 LDPC 译码器。代理指标 (量化为 0 比例 / 饱和率) 定不了 K, 两者代价不对等",
-      "sha256": "d2ae2ae57b5f74d0dd9ece7517e053ca71d3bf09a6eb6ca4cba45c50ff8ce44c"
+      "sha256": "071b28d0454a1769b935e505a462474a20025905d19a63ab27c17c042517930b"
     },
     {
       "path": "analysis/demap_fixed_point_study.m",
       "role": "reference",
       "note": "o_conf 位宽; 参照系是 LLR 自身 Q(10,4) 的量化相对误差",
-      "sha256": "d19bc432643be1e9782eea3b514ac308539788dc7fe371523e77cb5b7fa13c6e"
+      "sha256": "38d9c0b390f9f4972222a3c38189c4779359b0ffc71d19d33382cc6d76caf13f"
     },
     {
       "path": "analysis/demap_fp_proto.m",
       "role": "reference",
       "note": "整数通路原型: 位宽上界与定标常数 67 的推导与实测",
-      "sha256": "c54ede33516a6fa9252b73a34a616241976af4d37c92641e4025945682e49ce2"
+      "sha256": "ac31a813e64234e5b6b0e697ee0cf59ae7e5a838f3ecb3360b1485d0ab25ca2e"
     },
     {
       "path": "analysis/fixed-point-study.md",

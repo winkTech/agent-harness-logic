@@ -138,7 +138,7 @@
     {
       "path": "tb/tb_cp_remove_cosim.sv",
       "role": "tb",
-      "sha256": "246373cb2b4b00f7a2776ad14b60bfbed6a40e848ccffd0958a48047f5ebbb12",
+      "sha256": "ab0f6e0b4bdc322bc8155f181122d2d11c926b06ae3582ace11ae4423976e255",
       "note": "**bit-true 判据**: 对治理 golden 0 容差, 2176 点"
     },
     {

@@ -15,7 +15,7 @@ function demap_e2e_ber()
 %
 %   用法: matlab -batch "addpath(<pkg>/analysis); demap_e2e_ber"
 
-    EA   = 'C:/Users/Lihan/.claude/engineering-assets';
+    EA   = '<HARNESS_ROOT>/engineering-assets';
     OFDM = fullfile(EA, 'models', 'comm', 'ofdm');
     CE   = fullfile(EA, 'models', 'comm', 'channel_est');
     LDPC = fullfile(EA, 'models', 'comm', 'ldpc');

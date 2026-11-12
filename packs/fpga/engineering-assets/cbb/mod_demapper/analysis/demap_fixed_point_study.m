@@ -18,7 +18,7 @@ function demap_fixed_point_study()
 %
 %   用法: matlab -batch "addpath(<pkg>/analysis); demap_fixed_point_study"
 
-    EA   = 'C:/Users/Lihan/.claude/engineering-assets';
+    EA   = '<HARNESS_ROOT>/engineering-assets';
     OFDM = fullfile(EA, 'models', 'comm', 'ofdm');
     CE   = fullfile(EA, 'models', 'comm', 'channel_est');
     addpath(fullfile(OFDM, 'src'), OFDM, CE);

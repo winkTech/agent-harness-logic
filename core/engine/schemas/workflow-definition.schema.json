@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://lihan.local/schemas/workflow-definition.schema.json",
+  "$id": "https://harness.example/schemas/workflow-definition.schema.json",
   "title": "Workflow Definition Contract",
   "type": "object",
   "required": ["name", "description", "phases", "contract"],

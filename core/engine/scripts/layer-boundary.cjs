@@ -45,9 +45,13 @@ const SANCTIONED_DISTRIBUTION = new Set([
   'config.cjs',
   // Phase 2.6：pack 规则表加载器本体（config 目录解析是它的全部职责）
   'scripts/lib/pack-config.cjs',
+  // Phase 4.1: dist 组装器
+  'scripts/sync-plugin-dist.cjs',
   // Phase 3.1：Codex 宿主适配器渲染器（真源在 hosts/codex，产物到 ~/.codex）
   'scripts/render-codex-hooks.cjs',
   'scripts/render-grok-hooks.cjs',
+  // Phase 4.1: dist 组装器（读 skills/packs/core 组装分发面）
+  'scripts/sync-plugin-dist.cjs',
   // §6.1.4：rule-loader 双根扫描（core/rules + packs/fpga/rules）
   'scripts/rule-loader.cjs',
   // §3.5：技能/规则单一真源同步器与渲染器
@@ -155,6 +159,8 @@ function checkWhitelistFile() {
 const ENV_SANCTIONED = new Set([
   // 翻译层本体（宿主名映射的唯一合法位置）
   'scripts/io/env.cjs',
+  // Phase 4.1：插件分发契约占位符校验（插件根占位词是分发契约，非 env 读取）
+  'scripts/bench-d2-plugin-validate.cjs',
   // ── 迁移期 grandfather（Phase 2.4 批次一后剩余 53 文件/175 处，2.6 收口清零）──
   // 高频五件(SESSION_ID/NO_PERSIST/NO_DIAGNOSTIC_WRITES/VERIFY_READONLY/USER_MESSAGE)
   // 已迁 HARNESS_*；以下文件仍持低频宿主名，逐批迁移后从此清单移除。
