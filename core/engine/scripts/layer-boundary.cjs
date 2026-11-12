@@ -47,6 +47,8 @@ const SANCTIONED_DISTRIBUTION = new Set([
   'scripts/lib/pack-config.cjs',
   // Phase 4.1: dist 组装器
   'scripts/sync-plugin-dist.cjs',
+  // Phase 4.3: 文档干跑校验器（文档路径引用面）
+  'scripts/bench-d3-docs-dryrun.cjs',
   // Phase 3.1：Codex 宿主适配器渲染器（真源在 hosts/codex，产物到 ~/.codex）
   'scripts/render-codex-hooks.cjs',
   'scripts/render-grok-hooks.cjs',

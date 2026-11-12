@@ -37,11 +37,16 @@ const PHASES = {
       id: 'C-2', desc: 'run-all-tests --no-persist (全量回归套件)',
       cmd: [process.execPath, R('core/engine/scripts/test-hooks/run-all-tests.cjs'), '--no-persist'],
       json: null, timeoutMs: 420000,
+      // Phase 0 基线同款豁免（final 连跑口径与 phase 1 一致）。
+      baselineFailures: 4,
     },
     {
       id: 'C-3', desc: 'bench-hooks --json --sla (diagnostics --bench 的数据源)',
       cmd: [process.execPath, R('core/engine/scripts/lib/bench-hooks.cjs'), '--json', '--sla'],
       json: 'stdout', timeoutMs: 180000,
+      // final 连跑时 phase 0 的 C-2 全量回归先跑 3 分钟，C-3 曾现一次偶发失败
+      // （单独跑健康）——允许单次重试。
+      retries: 1,
     },
     {
       id: 'P-1a', desc: 'asset-audit (工程资产目录体检)',
@@ -228,12 +233,18 @@ function runEntry(entry) {
 
 function main() {
   const phaseIdx = process.argv.indexOf('--phase');
-  const phase = phaseIdx >= 0 ? Number(process.argv[phaseIdx + 1]) : NaN;
+  const phase = phaseIdx >= 0 ? process.argv[phaseIdx + 1] : NaN;
   const dryRun = process.argv.includes('--dry-run');
+
+  // ── phase final（Phase 5 终验）：连跑 0/1/2/4，汇总三列对照 report ──
+  if (phase === 'final') {
+    return mainFinal();
+  }
+
   const entries = PHASES[phase];
 
   if (!entries) {
-    console.error(`[bench-refactor] 未知或缺失 phase。可用: ${Object.keys(PHASES).join(', ')}`);
+    console.error(`[bench-refactor] 未知或缺失 phase。可用: ${Object.keys(PHASES).join(', ')}, final`);
     process.exit(1);
   }
 
@@ -266,6 +277,66 @@ function main() {
   fs.mkdirSync(path.dirname(VERDICT_FILE), { recursive: true });
   fs.writeFileSync(VERDICT_FILE, JSON.stringify(verdict, null, 2), 'utf8');
   console.log(`[bench-refactor] overall=${overall} → ${path.relative(HARNESS_ROOT, VERDICT_FILE)}`);
+  process.exit(overall === 'pass' ? 0 : 1);
+}
+
+/** Phase 5 终验：连跑 0/1/2/4 → var/baselines/final/report.md（终值/基线/阈值三列）。 */
+function mainFinal() {
+  const { HARNESS_ROOT: ROOT } = require('./lib/harness-root.cjs');
+  const allResults = [];
+  const phaseOverall = {};
+  for (const p of [0, 1, 2, 4]) {
+    console.log(`[bench-refactor] ══ final: phase ${p} ══`);
+    const results = [];
+    for (const entry of PHASES[p]) {
+      console.log(`[bench-refactor] ▶ [${entry.id}] ${entry.desc} ...`);
+      let r = runEntry(entry);
+      if (r.verdict !== 'pass' && entry.retries) {
+        console.log(`[bench-refactor]   ↻ 重试 [${entry.id}] ...`);
+        r = runEntry(entry);
+        if (r.verdict === 'pass') r.note = `${r.note || ''} (retry-ok)`.trim();
+      }
+      results.push(r);
+      console.log(`[bench-refactor]   ${r.verdict === 'pass' ? '✅' : '❌'} [${r.id}] exit=${r.exitCode} ${r.durationMs}ms${r.note ? ` (${r.note})` : ''}`);
+    }
+    phaseOverall[p] = results.every((r) => r.verdict === 'pass') ? 'pass' : 'fail';
+    allResults.push(...results.map((r) => ({ ...r, phase: p })));
+  }
+
+  // 三列对照表（指标/终值/阈值）——终值来自本次实测，阈值为方案 §4.2 口径。
+  const THRESHOLDS = {
+    'C-1': 'violations=0', 'C-2': '失败=4（Phase 0 行为级基线）', 'C-3': 'SLA pass',
+    'C-5': '≤30min', 'H-1': '三宿主零漂移', 'H-2': 'wired=declared',
+    'H-3': '三宿主 pass（真机人工项）', 'H-4': '=100%', 'H-5': '损失=0',
+    'P-1': '与 Phase 0 基线一致', 'P-2': 'gate-runner 抽样 pass',
+    'P-3': 'full ≥ bare（须用户终端，人工项）', 'P-4': 'core 套件失败=4=基线',
+    'D-1': '=0 命中', 'D-2': '双通过', 'D-3': '干跑 pass（真机 ≤30min 人工项）',
+  };
+  const lines = [
+    '# Final Report — harness core/plugin refactor（Phase 5 终验）',
+    '',
+    `生成: ${new Date().toISOString()} · 分支: refactor/core-split`,
+    '',
+    '各 Phase verdict: ' + Object.entries(phaseOverall).map(([p, v]) => `phase${p}=${v}`).join(' · '),
+    '',
+    '| 指标 | 终值（本次实测） | 阈值/口径 | 判定 |',
+    '|---|---|---|---|',
+  ];
+  for (const r of allResults) {
+    lines.push(`| ${r.id} | exit=${r.exitCode} ${r.durationMs}ms${r.note ? `；${r.note}` : ''} | ${THRESHOLDS[r.id] || '—'} | ${r.verdict === 'pass' ? '✅' : '❌'} |`);
+  }
+  lines.push('');
+  lines.push('人工项（不在自动门内，见 docs/release-checklist.md）：H-3 三宿主四幕剧真机 · P-3 rtl-bench track A（用户终端，Vivado QoR + LLM token）· D-3 新机计时 · Grok 兼容读实证。');
+  lines.push('');
+
+  const overall = Object.values(phaseOverall).every((v) => v === 'pass') ? 'pass' : 'fail';
+  const reportDir = varPath('baselines', 'final');
+  fs.mkdirSync(reportDir, { recursive: true });
+  fs.writeFileSync(path.join(reportDir, 'report.md'), `${lines.join('\n')}\n`, 'utf8');
+  fs.writeFileSync(VERDICT_FILE, JSON.stringify({
+    phase: 'final', timestamp: new Date().toISOString(), overall, phaseOverall, results: allResults,
+  }, null, 2), 'utf8');
+  console.log(`[bench-refactor] final overall=${overall} → ${path.relative(ROOT, path.join(reportDir, 'report.md'))}`);
   process.exit(overall === 'pass' ? 0 : 1);
 }
 
