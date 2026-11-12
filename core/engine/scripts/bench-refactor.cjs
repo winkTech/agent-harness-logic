@@ -151,6 +151,11 @@ const PHASES = {
       cmd: [process.execPath, R('core/engine/scripts/bench-d2-plugin-validate.cjs')],
       json: null, timeoutMs: 180000,
     },
+    {
+      id: 'D-3', desc: '文档干跑 (SETUP 命令面+渲染器 check+smoke；真机计时留人工)',
+      cmd: [process.execPath, R('core/engine/scripts/bench-d3-docs-dryrun.cjs')],
+      json: null, timeoutMs: 300000,
+    },
   ],
 };
 
