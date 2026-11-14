@@ -1,0 +1,219 @@
+{
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node",
+            "timeout": 20,
+            "args": [
+              "${CLAUDE_PLUGIN_ROOT}/core/engine/scripts/hooks/preflight-router.cjs"
+            ]
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write|MultiEdit|Bash|PowerShell|Skill",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node",
+            "timeout": 5,
+            "async": true,
+            "args": [
+              "${CLAUDE_PLUGIN_ROOT}/core/engine/hooks/learning/postflight-observer.cjs"
+            ]
+          }
+        ]
+      },
+      {
+        "matcher": "Edit|Write|MultiEdit|Bash|PowerShell",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node",
+            "timeout": 8,
+            "args": [
+              "${CLAUDE_PLUGIN_ROOT}/core/engine/scripts/hooks/postflight-router.cjs"
+            ]
+          }
+        ]
+      },
+      {
+        "matcher": "Edit|Write|MultiEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node",
+            "timeout": 10,
+            "async": true,
+            "args": [
+              "${CLAUDE_PLUGIN_ROOT}/core/engine/scripts/hooks/codegraph-sync.cjs",
+              "--file"
+            ]
+          }
+        ]
+      }
+    ],
+    "PostToolUseFailure": [
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node",
+            "timeout": 5,
+            "async": true,
+            "args": [
+              "${CLAUDE_PLUGIN_ROOT}/core/engine/hooks/learning/postflight-observer.cjs"
+            ]
+          },
+          {
+            "type": "command",
+            "command": "node",
+            "timeout": 12,
+            "args": [
+              "${CLAUDE_PLUGIN_ROOT}/core/engine/scripts/hooks/postflight-router.cjs"
+            ]
+          }
+        ]
+      }
+    ],
+    "UserPromptSubmit": [
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node",
+            "timeout": 8,
+            "args": [
+              "${CLAUDE_PLUGIN_ROOT}/core/engine/scripts/hooks/prompt-context.cjs"
+            ]
+          }
+        ]
+      }
+    ],
+    "SessionStart": [
+      {
+        "matcher": "startup|resume|clear|compact|fork",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node",
+            "timeout": 12,
+            "args": [
+              "${CLAUDE_PLUGIN_ROOT}/core/engine/scripts/hooks/session-bootstrap.cjs"
+            ]
+          }
+        ]
+      },
+      {
+        "matcher": "startup",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node",
+            "timeout": 120,
+            "async": true,
+            "args": [
+              "${CLAUDE_PLUGIN_ROOT}/core/engine/scripts/memory-knowledge-maintenance.cjs",
+              "--auto",
+              "--execute"
+            ]
+          }
+        ]
+      },
+      {
+        "matcher": "startup|resume",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node",
+            "timeout": 60,
+            "async": true,
+            "args": [
+              "${CLAUDE_PLUGIN_ROOT}/core/engine/scripts/hooks/codegraph-sync.cjs",
+              "--session"
+            ]
+          },
+          {
+            "type": "command",
+            "command": "node",
+            "timeout": 15,
+            "args": [
+              "${CLAUDE_PLUGIN_ROOT}/core/engine/hooks/git/git-integrity-guard.cjs"
+            ]
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node",
+            "timeout": 40,
+            "args": [
+              "${CLAUDE_PLUGIN_ROOT}/core/engine/scripts/hooks/stop-summary.cjs"
+            ]
+          },
+          {
+            "type": "command",
+            "command": "node",
+            "timeout": 30,
+            "async": true,
+            "args": [
+              "${CLAUDE_PLUGIN_ROOT}/core/engine/hooks/learning/postflight-observer.cjs"
+            ]
+          },
+          {
+            "type": "command",
+            "command": "node",
+            "timeout": 15,
+            "async": true,
+            "args": [
+              "${CLAUDE_PLUGIN_ROOT}/core/engine/hooks/git/git-integrity-guard.cjs"
+            ]
+          }
+        ]
+      }
+    ],
+    "SubagentStop": [
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node",
+            "timeout": 10,
+            "async": true,
+            "args": [
+              "${CLAUDE_PLUGIN_ROOT}/core/engine/scripts/hooks/subagent-verdict.cjs"
+            ]
+          }
+        ]
+      }
+    ],
+    "PreCompact": [
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node",
+            "args": [
+              "${CLAUDE_PLUGIN_ROOT}/core/engine/scripts/pre-compact.cjs"
+            ]
+          }
+        ]
+      }
+    ]
+  }
+}

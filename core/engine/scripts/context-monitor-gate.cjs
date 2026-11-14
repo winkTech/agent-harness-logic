@@ -1,0 +1,357 @@
+#!/usr/bin/env node
+/**
+ * core/engine/scripts/context-monitor-gate.cjs — 上下文监测门禁 (P2)
+ *
+ * 实时监测上下文使用情况，在阈值处自动报警/触发压缩。
+ * 这是实现"上下文不得超过 50% 红线"的监控层。
+ *
+ * 工作原理:
+ *   1. 读取 session 转录文件大小 + 工具调用计数
+ *   2. 计算估算的上下文占比
+ *   3. 对比阈值: >50% → 报警 | >60% → 红 X + 强制
+ *   4. 输出 JSON 注入到 Claude 上下文
+ *
+ * 代理指标（因为无法直接读取 Claude 内部 context usage）:
+ *   - 工具调用计数 / 消息轮数（runtime-state.json toolCalls[]）
+ *   - 会话转录文件大小（CLAUDE_SESSION_DIR/transcript.jsonl）
+ *   - 距上次压缩的消息数（ctx-checkpoint 时间戳）
+ *   - 上次压缩后的工具调用数
+ *
+ * 注册:
+ *   settings.local.json PostMessage — 每次用户消息后评估
+ *
+ * 阈值:
+ *   GREEN  < 50%: 正常，无输出
+ *   YELLOW 50-60%: 输出压缩建议
+ *   RED    > 60%: 输出红 X + 强制压缩信号
+ */
+
+'use strict';
+
+const fs = require('fs');
+const path = require('path');
+const { varPath } = require('./lib/harness-state.cjs');
+
+// ── 配置 ────────────────────────────────────────────────────────────────────
+
+const STATE_FILE = varPath('index', 'runtime-state.json');
+const COMPACT_LOG = varPath('sessions', 'compaction-log.txt');
+
+if (process.env.CLAUDE_BENCH === '1') process.exit(0);
+
+// 阈值配置（上下文占比估算）
+const THRESHOLDS = {
+  YELLOW: 0.50,  // ≥50% → 建议压缩
+  RED: 0.60,     // ≥60% → 红 X + 强制压缩信号
+};
+
+// ── 降级计数器（环境变量缺失时的后备方案）──────────
+const COUNTER_FILE = varPath('index', 'post-counter.json');
+// 当 env 指标全为零时的硬阈值:
+// 10 次 PostMessage = YELLOW, 20 次 = RED
+const FALLBACK_YELLOW_AFTER = 10;
+const FALLBACK_RED_AFTER = 20;
+
+/**
+ * 基于 PostMessage 调用次数的降级估算。
+ * 每次调用递增计数器，用调用次数估算上下文使用率。
+ * 这是在不依赖 env 变量/会话文件时的最终后备。
+ */
+function getFallbackRatio() {
+  let count = 0;
+  try {
+    if (fs.existsSync(COUNTER_FILE)) {
+      const data = JSON.parse(fs.readFileSync(COUNTER_FILE, 'utf8'));
+      count = (data.count || 0) + 1;
+    } else {
+      count = 1;
+    }
+    fs.writeFileSync(COUNTER_FILE, JSON.stringify({ count, updated: new Date().toISOString() }), 'utf8');
+  } catch { count = 1; }
+
+  // 10次 → 50%, 20次 → 100%, 线性插值
+  const ratio = count >= FALLBACK_RED_AFTER
+    ? 1.0
+    : count <= FALLBACK_YELLOW_AFTER
+      ? count / (FALLBACK_YELLOW_AFTER * 2)  // 10次=50%
+      : 0.5 + (count - FALLBACK_YELLOW_AFTER) / (FALLBACK_RED_AFTER - FALLBACK_YELLOW_AFTER) * 0.5;
+  return { ratio, count };
+}
+
+// ── 辅助函数 ────────────────────────────────────────────────────────────────
+
+function readJSON(filePath) {
+  try {
+    if (fs.existsSync(filePath)) {
+      return JSON.parse(fs.readFileSync(filePath, 'utf8'));
+    }
+  } catch { /* ignore */ }
+  return null;
+}
+
+/**
+ * 获取 session 转录文件的路径和大小。
+ * Claude Code 环境变量: CLAUDE_SESSION_DIR 或根据 session ID 推断。
+ */
+function getTranscriptInfo() {
+  const sessionId = process.env.HARNESS_SESSION_ID || '';
+  const sessionDir = process.env.CLAUDE_SESSION_DIR || '';
+
+  let transcriptPath = '';
+  if (sessionDir && fs.existsSync(sessionDir)) {
+    // 尝试常见的转录文件名
+    const candidates = ['transcript.jsonl', 'conversation.jsonl', 'messages.jsonl'];
+    for (const f of candidates) {
+      const p = path.join(sessionDir, f);
+      if (fs.existsSync(p)) { transcriptPath = p; break; }
+    }
+  }
+
+  if (!transcriptPath) {
+    // fallback: 在 var/sessions/ 下按时间找最近的文件
+    const sessionsDir = varPath('sessions');
+    if (fs.existsSync(sessionsDir)) {
+      const files = fs.readdirSync(sessionsDir)
+        .filter(f => f.endsWith('.jsonl') || f.endsWith('.log'))
+        .map(f => ({ name: f, path: path.join(sessionsDir, f), mtime: fs.statSync(path.join(sessionsDir, f)).mtimeMs }))
+        .sort((a, b) => b.mtime - a.mtime);
+      if (files.length > 0) transcriptPath = files[0].path;
+    }
+  }
+
+  let sizeBytes = 0;
+  if (transcriptPath && fs.existsSync(transcriptPath)) {
+    sizeBytes = fs.statSync(transcriptPath).size;
+  }
+
+  return { transcriptPath, sizeBytes };
+}
+
+/**
+ * 计算估算的上下文占比。
+ *
+ * 算法:
+ *   使用多个代理指标加权计算:
+ *   1. 文件大小指数: sizeKB / 500KB (假设 500KB ≈ 100%)
+ *   2. 工具调用指数: toolCalls / 200  (假设 200 次 ≈ 100%)
+ *   3. 距上次压缩: lastCompactAgo / 100 工具调用
+ *
+ *   最终结果 = max(指标1, 指标2, 指标3)，但 clamped 到 [0, 1]
+ *   如果系统已自动压缩，默认低水位。
+ *
+ * @returns {{ ratio: number, details: object }}
+ */
+function estimateContextRatio() {
+  const state = readJSON(STATE_FILE);
+  const transcript = getTranscriptInfo();
+
+  // 指标1: 转录文件大小指数
+  const transcriptKB = transcript.sizeBytes / 1024;
+  const SIZE_BASELINE_KB = 500; // 500KB ≈ 100% context
+  const fileRatio = Math.min(transcriptKB / SIZE_BASELINE_KB, 1.0);
+
+  // 指标2: 工具调用指数
+  const toolCalls = state?.toolCalls?.length || 0;
+  const CALL_BASELINE = 200; // 200 calls ≈ 100% context
+  const callRatio = Math.min(toolCalls / CALL_BASELINE, 1.0);
+
+  // 指标3: 距上次压缩
+  let compactAgo = toolCalls; // 默认: 从未压缩
+  try {
+    if (fs.existsSync(COMPACT_LOG)) {
+      const logContent = fs.readFileSync(COMPACT_LOG, 'utf8');
+      const lines = logContent.trim().split('\n').filter(Boolean);
+      if (lines.length > 0) {
+        // 取最后一次压缩后的工具调用数作为"距上次压缩的消息数"
+        // 这里简化: 用工具调用数 - 压缩日志条数 * 20（假设每次压缩重置计数）
+        compactAgo = Math.max(0, toolCalls - lines.length * 20);
+      }
+    }
+  } catch { /* ignore */ }
+  const compactRatio = Math.min(compactAgo / 100, 1.0);
+
+  // 综合: 取最大值（最悲观的估计）
+  const envRatio = Math.max(fileRatio, callRatio, compactRatio);
+
+  // ── 指标不可用 → 沉默 ────────────────────────────────────────────────
+  // 三项真实指标全为 0 说明数据源不存在 (var/sessions/*.jsonl 为空、
+  // state.toolCalls 无写入方), 而不是"上下文很空"。
+  //
+  // 早期版本在这里退化到一个**全局单调累加**的调用计数器: 它从不按会话
+  // 复位, 实测已累加到 6000+ (阈值 20), 于是每次 Edit/Write 都稳定输出
+  // "上下文使用率 100%" 的假警报。编造的数字比没有数字更有害 —— 它会让
+  // 真的告警失去意义。故改为: 拿不到证据就不说话。
+  if (envRatio === 0 && toolCalls === 0 && transcriptKB === 0) {
+    return { ratio: 0, unavailable: true, details: { reason: 'no-metric-source' } };
+  }
+
+  return {
+    ratio: envRatio,
+    details: {
+      transcriptKB: Math.round(transcriptKB * 10) / 10,
+      toolCalls,
+      compactAgo,
+      fileRatio: Math.round(fileRatio * 100) / 100,
+      callRatio: Math.round(callRatio * 100) / 100,
+      compactRatio: Math.round(compactRatio * 100) / 100,
+    },
+  };
+}
+
+/**
+ * 获取上下文健康级别。
+ * @returns { 'GREEN' | 'YELLOW' | 'RED' }
+ */
+function getHealthLevel(ratio) {
+  if (ratio >= THRESHOLDS.RED) return 'RED';
+  if (ratio >= THRESHOLDS.YELLOW) return 'YELLOW';
+  return 'GREEN';
+}
+
+/**
+ * 生成人类可读的状态条。
+ */
+function statusBar(ratio, width = 20) {
+  const filled = Math.round(ratio * width);
+  const empty = width - filled;
+  const bar = '█'.repeat(Math.min(filled, width)) + '░'.repeat(Math.max(empty, 0));
+  const pct = Math.round(ratio * 100);
+  return `${bar} ${pct}%`;
+}
+
+// ── 导入 ───────────────────────────────────────────────────────────────────
+
+function preCompact() {
+  return require('./pre-compact.cjs');
+}
+
+function maybeCheckpoint(level) {
+  if (process.env.CLAUDE_CONTEXT_MONITOR_AUTO_CHECKPOINT !== '1') return false;
+  try {
+    if (level === 'RED') preCompact().signalCompact();
+    else preCompact().saveCheckpoint();
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+// ── 主入口 ───────────────────────────────────────────────────────────────────
+
+/**
+ * 评估当前上下文状态。
+ * @returns {object|null} GREEN → null (不注入), YELLOW/RED → 报警对象
+ */
+function evaluate(opts = {}) {
+  const measurement = opts.measurement || estimateContextRatio();
+  const { ratio, details } = measurement;
+
+  // 指标源不存在 → 不报警。见 estimateContextRatio 的说明。
+  if (measurement.unavailable) return null;
+
+  const level = getHealthLevel(ratio);
+
+  // GREEN: 无需输出
+  if (level === 'GREEN') return null;
+
+  const bar = statusBar(ratio);
+  const toolCalls = details.toolCalls;
+  const checkpointed = maybeCheckpoint(level);
+
+  let flag, message, suggestion;
+  if (level === 'RED') {
+    flag = '❌';
+    message = `上下文使用率 ${Math.round(ratio * 100)}%，超过 60% 红线！`;
+
+    suggestion = checkpointed
+      ? '已按显式配置保存压缩检查点。'
+      : '这是启发式估算；由模型根据当前任务相关性决定是否压缩。';
+  } else {
+    flag = '⚠️';
+    message = `上下文使用率 ${Math.round(ratio * 100)}%，超过 50% 警戒线。`;
+
+    suggestion = checkpointed
+      ? '已按显式配置保存检查点。'
+      : '这是启发式估算；可继续使用仍与任务相关的上下文，必要时再压缩。';
+  }
+
+  // Emit signal: 上下文压力事件
+  try {
+    const { emitSync } = require('../hooks/learning/signal-collector.cjs');
+    emitSync('context_pressure', {
+      level,
+      estimatedRatio: Math.round(ratio * 100),
+      toolCalls: details.toolCalls,
+      transcriptKB: details.transcriptKB,
+    });
+  } catch { /* 静默 */ }
+
+  return {
+    source: 'context-monitor-gate',
+    type: 'context-pressure',
+    level,
+    estimatedRatio: Math.round(ratio * 100),
+    details,
+    statusBar: bar,
+    flag,
+    message,
+    suggestion,
+    mode: checkpointed ? 'auto-checkpoint' : 'advisory',
+    checkpointed,
+    instruction: '【上下文提示】该比例来自代理指标，仅供参考。保留仍与当前任务直接相关的上下文；仅在收益明确时压缩。',
+  };
+}
+
+// ── CLI ──────────────────────────────────────────────────────────────────────
+
+function main() {
+  const args = process.argv.slice(2);
+
+  if (args.includes('--status')) {
+    const { ratio, details } = estimateContextRatio();
+    const level = getHealthLevel(ratio);
+    const bar = statusBar(ratio);
+    console.log(`状态: ${level} ${bar}`);
+    console.log(`转录文件: ${details.transcriptKB} KB`);
+    console.log(`工具调用: ${details.toolCalls} 次`);
+    console.log(`距上次压缩: ${details.compactAgo} 次调用`);
+    console.log(`文件指数: ${details.fileRatio} | 调用指数: ${details.callRatio} | 压缩指数: ${details.compactRatio}`);
+    process.exit(0);
+  }
+
+  if (args.includes('--force')) {
+    // 强制输出评估（绕过 GREEN 静默）
+    const { ratio, details } = estimateContextRatio();
+    const level = getHealthLevel(ratio);
+    const bar = statusBar(ratio);
+    console.log(JSON.stringify({
+      source: 'context-monitor-gate',
+      type: 'context-pressure',
+      level,
+      estimatedRatio: Math.round(ratio * 100),
+      details,
+      statusBar: bar,
+      force: true,
+    }));
+    process.exit(0);
+  }
+
+  // 默认模式: PostMessage hook 调用，输出 JSON 或静默
+  const result = evaluate();
+  if (result) {
+    console.log(JSON.stringify(result));
+  }
+  // GREEN → 无输出 (0 token 开销)
+}
+
+if (require.main === module) {
+  main();
+}
+
+module.exports = {
+  estimateContextRatio,
+  getHealthLevel,
+  evaluate,
+  maybeCheckpoint,
+  THRESHOLDS,
+};

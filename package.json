@@ -1,0 +1,11 @@
+{
+  "name": "harness",
+  "private": true,
+  "version": "0.9.0",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "check": "node core/engine/scripts/harness-ci.cjs"
+  }
+}

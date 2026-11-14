@@ -1,0 +1,127 @@
+{
+  "version": 1,
+  "note": "Codex 注册真源——render-codex-hooks.cjs 从此渲染 ~/.codex/hooks.json；命令用 ${HARNESS_ROOT} 占位（渲染期解析为绝对路径）",
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node ${HARNESS_ROOT}/core/engine/scripts/hooks/frustration-detector.cjs"
+          },
+          {
+            "type": "command",
+            "command": "node ${HARNESS_ROOT}/core/engine/scripts/rule-loader.cjs"
+          },
+          {
+            "type": "command",
+            "command": "node ${HARNESS_ROOT}/core/engine/scripts/memory-retrieve-hook.cjs"
+          }
+        ]
+      },
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node ${HARNESS_ROOT}/core/engine/scripts/hooks/local-runner.cjs --batch \"verification-gate.cjs,pre-commit-lint.cjs,diff-size-gate.cjs,resource-budget-gate.cjs,bash-safety-guard.cjs\""
+          }
+        ]
+      },
+      {
+        "matcher": "Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node ${HARNESS_ROOT}/core/engine/scripts/context-monitor-gate.cjs"
+          },
+          {
+            "type": "command",
+            "command": "node ${HARNESS_ROOT}/core/engine/scripts/hooks/file-protection-guard.cjs"
+          }
+        ]
+      },
+      {
+        "matcher": "Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node ${HARNESS_ROOT}/core/engine/scripts/hooks/local-runner.cjs --batch \"hdl-gate.cjs,requirements-gate-guard.cjs,verification-quality-guard.cjs\""
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write|MultiEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node ${HARNESS_ROOT}/core/engine/scripts/hooks/verification-gate.cjs"
+          }
+        ]
+      }
+    ],
+    "PreCompact": [
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node ${HARNESS_ROOT}/core/engine/scripts/pre-compact.cjs"
+          }
+        ]
+      }
+    ],
+    "SessionStart": [
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash ${HARNESS_ROOT}/core/engine/scripts/hooks/resolve-plugin-path.sh session-start.js",
+            "timeout": 10000
+          },
+          {
+            "type": "command",
+            "command": "node ${HARNESS_ROOT}/core/engine/scripts/state-resume.cjs"
+          },
+          {
+            "type": "command",
+            "command": "node ${HARNESS_ROOT}/core/engine/scripts/context-resume.cjs --inject",
+            "timeout": 5000
+          },
+          {
+            "type": "command",
+            "command": "node ${HARNESS_ROOT}/core/engine/scripts/dream-startup-inject.cjs"
+          },
+          {
+            "type": "command",
+            "command": "node ${HARNESS_ROOT}/core/engine/scripts/hooks/isolation-check.cjs"
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node ${HARNESS_ROOT}/core/engine/scripts/hooks/lint-auto-gate.cjs"
+          },
+          {
+            "type": "command",
+            "command": "node ${HARNESS_ROOT}/core/engine/scripts/hooks/context-pressure-warn.cjs"
+          },
+          {
+            "type": "command",
+            "command": "node ${HARNESS_ROOT}/core/engine/hooks/git/git-integrity-guard.cjs",
+            "timeout": 15000
+          }
+        ]
+      }
+    ]
+  }
+}

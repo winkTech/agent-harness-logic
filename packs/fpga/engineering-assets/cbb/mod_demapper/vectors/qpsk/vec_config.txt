@@ -1,0 +1,13 @@
+MOD=QPSK
+BPS=2
+K=2
+ND=48
+NSYM=48
+NLEV=2
+SHIFT_MIN=32
+SHIFT_MAX=66
+N_SAT=96
+N_ERASURE=48
+SPEC=d2 u32 | metric s33 | wman u16 (<=65024) | metric*wman s49 | >>> (67-sh-log2(2)) | sat10
+WORD_ORDER={im,re}
+LLR_ORDER=b0_first

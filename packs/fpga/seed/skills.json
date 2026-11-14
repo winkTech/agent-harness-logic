@@ -1,0 +1,14 @@
+{
+  "$comment": [
+    "Phase 1.4（refactor/core-split）：FPGA pack 域技能种子数据。",
+    "自 core/engine/sqlite/migrations/001-init.cjs 抽出——core 迁移只建表结构与 core 域种子，",
+    "本文件由安装器（Phase 4 dist/plugin 组装器）写入 skills 表，列序与 INSERT 一致：",
+    "id, name, description, tier（created_at 由写入方生成）。"
+  ],
+  "skills": [
+    { "id": "sk_hdl_coding", "name": "hdl-coding", "description": "HDL 编码规范 — Verilog/SystemVerilog FPGA 设计", "tier": "core" },
+    { "id": "sk_project_init", "name": "project-init", "description": "FPGA 项目/模块脚手架", "tier": "core" },
+    { "id": "sk_doc_gen", "name": "doc-gen", "description": "文档生成", "tier": "on-demand" },
+    { "id": "sk_doc_gen_rtl", "name": "rtl-gen", "description": "RTL 快速代码生成", "tier": "on-demand" }
+  ]
+}

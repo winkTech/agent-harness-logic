@@ -10,11 +10,11 @@ paste-cache/
 # 生成器已修：hook_failure 按 shell 退出码误触发；tool_success 因取错载荷字段
 # 每次 Write/Edit 都写一条 "工具 tool_success 执行成功"（7 天 110 个）。
 # memory-knowledge-maintenance.cjs:119 早已把这两类排除在索引外，此处补上 git 侧。
-memory/errors/*hook_failure*
-memory/work/*tool_success*
+personal/errors/*hook_failure*
+personal/work/*tool_success*
 # auto-record-success 的每日汇总记录（运行时产物，memory-file-policy 的
 # shouldSyncMemoryFile 本就跳过 work/，无任何消费者）。TEMPLATE.md 仍入库。
-memory/work/20??-??-??-*.md
+personal/work/20??-??-??-*.md
 
 # SQLite 运行时数据库（自动创建）
 .wright/
@@ -47,9 +47,14 @@ Thumbs.db
 config.json
 settings.json
 
+# WorkBuddy 目标渲染产物（含本机绝对路径，与 settings.json 同理，不入库；
+# 由 core/engine/scripts/render-hook-settings.cjs 从 hosts/claude-code/registrations.json 重建）
+# Phase 1.1（2026-11-10）随 hooks 骨架迁移至新路径
+core/engine/hooks/workbuddy.hooks.json
+
 # 2026-07-27 起：**所有 hook 统一放 settings.json**（见 README「Hook 事件」一节）。
 # 该文件被忽略，因为 hook 命令里含 C:/Users/<name>/... 本机绝对路径
-# （历史教训：改用 $HOME 会导致 hook 静默不触发，见 memory/reference/hooks-fix-2026-06-24.md）。
+# （历史教训：改用 $HOME 会导致 hook 静默不触发）。
 #
 # 2026-07-29 起不再需要手工重建：注册的权威声明入库在 engine/hooks/registrations.json
 # （用 {{HARNESS_ROOT}} 占位保持可移植），换机/新克隆跑
@@ -59,6 +64,14 @@ settings.json
 # 会全部核对不上（表现为 "hook registry passed (0 script references)"）。
 #
 # 同理，.claude/workflows/ 镜像由 engine/scripts/sync-workflow-mirror.cjs 从 workflows/ 重建。
+#
+# Phase 1.5 起 skills/ 是 sync-skills.cjs 的全量投放镜像（真源 core/skills/ +
+# packs/{fpga,office}/skills/，frontmatter 归一后单向渲染到三宿主目录；
+# 本机 ~/.claude 即仓库根，故 ~/.claude/skills = skills/）。
+# 镜像整体不入库，避免与真源重复。必须锚定仓库根（/skills/）：未锚定会
+# 任意深度匹配，静默吞掉 packs/{fpga,office}/skills/ 下的权威源
+# （lessons：/plans/ 锚定事故）。
+/skills/
 #
 # settings.local.json 未列入，仍需版本控制：现在只承载 permissions / enabledPlugins / env，
 # 不再放 hook。
@@ -134,7 +147,7 @@ transcript
 work/
 # ModelSim 会在任何执行目录建 work/，故保留宽匹配；但 memory/work/ 是记忆源目录，
 # 曾被本条静默吞掉 109 个文件（git 连 ?? 都不显示），此处显式放行。
-!memory/work/
+!personal/work/
 *.wlf
 *.vstf
 *.mem
@@ -192,8 +205,16 @@ venv/
 *.swo
 
 # 记忆库运行时状态（自动更新，不应入库）
-memory/.last-active
+personal/.last-active
+
+# WorkBuddy 应用运行时数据（memory/ 等，非 harness 仓库内容）
+.workbuddy/
 
 # 运行时统计缓存（自动生成，无需版本控制）
 stats-cache.json
 var_build/
+
+# Phase 1.5（2026-11-10，refactor/core-split）：根 CLAUDE.md / AGENTS.md 为渲染产物但
+# **入库跟踪**（§3.5：git 跟踪 + --check 防漂移）——全新 clone 即有宿主指令注入；
+# 由 sync-skills.cjs 从 hosts/claude-code/ 模板渲染重建，漂移即 --check exit 1。
+dist/

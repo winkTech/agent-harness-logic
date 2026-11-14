@@ -1,0 +1,10 @@
+{
+  "name": "logical-paradox-fpga",
+  "displayName": "logical-paradox FPGA Pack",
+  "version": "0.1.0",
+  "description": "FPGA/算法协同域 pack：Vivado 工具流（vivado-flow）、RTL 生成（rtl-gen）、HDL 编码规范（hdl-coding）、硬件调试 Python 工具箱（python-hardware-debug），以及领域专家（logic-engineer、algorithm-engineer）与 ce-* 微架构评审团。",
+  "author": { "name": "Lihan" },
+  "repository": "https://github.com/winkTech/agent-harness-logic",
+  "license": "MIT",
+  "keywords": ["fpga", "vivado", "rtl", "hdl", "rfsoc"]
+}

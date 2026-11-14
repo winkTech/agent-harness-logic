@@ -1,0 +1,11 @@
+{
+  "name": "agent-harness-logic",
+  "plugins": [
+    {
+      "name": "logical-paradox",
+      "source": "__REPO_URL__",
+      "plugin_subdir": "dist/plugin",
+      "sha": "221f59351077a356e86c653df4ed3dd0fa1af184"
+    }
+  ]
+}

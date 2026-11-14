@@ -1,0 +1,12 @@
+{
+  "$schema": "fpga-pack/hdl-gate-synthesis-rules-v1",
+  "description": "hdl-gate 的 RTL 综合红线规则表（Phase 2.6 外置——gate 骨架留 core，红线正则归 pack）",
+  "synthesisViolations": [
+    { "pattern": "\\binitial\\b", "flags": "", "message": "禁止使用 initial 语句（不可综合）" },
+    { "pattern": "\\bdisable\\b", "flags": "", "message": "禁止使用 disable 语句（不可综合）" },
+    { "pattern": "\\bwait\\s+[^;]*;", "flags": "", "message": "禁止在综合代码中使用 wait（不可综合）" },
+    { "pattern": "\\bassign\\s+ri_", "flags": "", "message": "输入信号(ri_)不应被 assign 驱动" },
+    { "pattern": "#\\d+\\s", "flags": "", "message": "禁止使用延时 #delay（不可综合）" },
+    { "pattern": "\\bforce\\b", "flags": "", "message": "禁止使用 force 语句（不可综合）" }
+  ]
+}

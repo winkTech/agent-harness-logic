@@ -1,0 +1,140 @@
+{
+  "schema_version": "1.0",
+  "asset_uid": "model_comm_channel_est",
+  "name": "ls_channel_est_golden",
+  "kind": "golden-model",
+  "version": "1.4.0",
+  "owner": "lihan",
+  "maturity": {
+    "level": "intake"
+  },
+  "requirement_ref": "engineering-assets/knowledge/primary/domains/comm/channel_est/algorithm_spec.md",
+  "implements_for": [
+    "channel_est_top"
+  ],
+  "models": [
+    {
+      "role": "reference",
+      "trait": "普遍性",
+      "path": "lts_channel_est.m",
+      "note": "默认估计基础 (ADR-002): 2×LTS 平均全用载波 LS, 无插值; 配 lts_seq.m (802.11a LTS 序列) 与 pilot_phase_track.m (4 导频 CPE 跟踪)"
+    },
+    {
+      "role": "reference",
+      "trait": "普遍性",
+      "path": "sim_frame.m",
+      "note": "帧级激励 (ADR-002 配套): 2×LTS + nsym 数据符号同一信道实现, 可注入残余 CFO"
+    },
+    {
+      "role": "reference",
+      "trait": "普遍性",
+      "path": "ls_channel_est.m",
+      "note": "备选路径 (受采样定理约束, ADR-002): 浮点 LS + linear/spline/dft 插值; dft 已修归一化与网格偏移补偿; DC/保护子载波置 1"
+    },
+    {
+      "role": "reference",
+      "trait": "普遍性",
+      "path": "sim_channel.m",
+      "note": "信道模型激励生成 (rayleigh/awgn/pedestrian), 供 run_channel_sim.m 端到端仿真"
+    },
+    {
+      "role": "fixed_point",
+      "trait": "设计特性",
+      "path": "src/generate_vectors.m",
+      "note": "帧级 RTL 位真镜像 (ADR-002): LTS 平均舍入/导频积/CORDIC 14 迭代求角与旋转/round+饱和, 与 channel_est_top rtl/ 整数语义逐字对应; 导出激励+0容差期望。规范调用: generate_vectors(struct('nsym',32)) (G-B-03 要求 total>=2048)"
+    }
+  ],
+  "vectors": {
+    "config": "802.11a OFDM: N=64, 帧=2×LTS+32 数据符号, 验收信道 rayleigh [0,0.2,0.5,0.8]us, SNR=20dB, 残余 CFO 300Hz, rng_seed=20260731, Q2.14",
+    "provenance": "generate_vectors(struct('nsym',32)) (MATLAB R2022a, 2026-08-01): rx_chEst_frame.hex 2176 行 + expected_chEst_frame.hex 2048 行 (位真镜像期望, CPE 镜像 vs 浮点最大偏差 1.8e-4 rad)。cosim 实证: channel_est_top 0.2.0 tb_chEst_cosim 2048 样点 0 失配 bit-true PASS (alignment-report.json)。旧 rx_chEst.bin/expected_chEst.bin 单符号向量语义作废已删。"
+  },
+  "sources": [
+    {
+      "path": "lts_seq.m",
+      "role": "reference",
+      "sha256": "20b3c8accee082ece1cdc6433fd04af4b8abb3a1dcc11e1136270019838deb4e"
+    },
+    {
+      "path": "lts_channel_est.m",
+      "role": "reference",
+      "sha256": "ad3c7de3b49eb67c4b010f3f9b9850aef2065c422af1211e7200b73540790470"
+    },
+    {
+      "path": "pilot_phase_track.m",
+      "role": "reference",
+      "sha256": "bf91e4c792bf9019bd8409b5c0cb895a6d02e03b45c80c4b7c58f9a07c13207c"
+    },
+    {
+      "path": "sim_frame.m",
+      "role": "reference",
+      "sha256": "d408d04d190b08795eb0c2de956325b863d15c7634e151a2196d4dd31c965183"
+    },
+    {
+      "path": "ls_channel_est.m",
+      "role": "reference",
+      "sha256": "ef26634b09ebfda977de5e6d8e09e955858e9e8f95c4d18674d21c850a81e4eb"
+    },
+    {
+      "path": "sim_channel.m",
+      "role": "reference",
+      "sha256": "1ab722d1c321ba07715dde66950835bb89e6629f8378969646fd6715fc8632c4"
+    },
+    {
+      "path": "config.m",
+      "role": "config",
+      "sha256": "4a9ab5a70c2ae739084f0c20382cef52481e9c2632ce6c62844d23350d28e50f"
+    },
+    {
+      "path": "run_channel_sim.m",
+      "role": "harness",
+      "sha256": "05c66196c977c26e92d9b07535d551119e307da1e6cb76e7838e225df0ce0021"
+    },
+    {
+      "path": "run_all_tests.m",
+      "role": "harness",
+      "sha256": "4cb01e24adc9c739584b04114580e752c665d31034dc597d429cb777632e068a"
+    },
+    {
+      "path": "src/generate_vectors.m",
+      "role": "fixed_point",
+      "sha256": "1af10547aab052e6ccd9ebc18f2b4dbadcac3a5b325187566cbce58c01f4c90f"
+    },
+    {
+      "path": "tests/test_lts_ls.m",
+      "role": "test",
+      "sha256": "662eaea24d51f80093ff397bda6d279a5acf758bbf72184553805f4962670bb7"
+    },
+    {
+      "path": "tests/test_phase_track.m",
+      "role": "test",
+      "sha256": "f2bb3a89a0c49a19dab31487687cf18bbe01efbbd0b7e9591122f8acd6ca636f"
+    },
+    {
+      "path": "tests/test_ls_linear.m",
+      "role": "test",
+      "sha256": "4d949ee11fa7b45076f52e2e4c60a75e9cd23f0b495ffad880c5e96071d8499a"
+    },
+    {
+      "path": "tests/test_ls_dft.m",
+      "role": "test",
+      "sha256": "6e09caa5700a0766d32a4053b85192bf59b8f6b7219a95d64a6c73498f64cc19"
+    },
+    {
+      "path": "tests/test_awgn.m",
+      "role": "test",
+      "sha256": "96f3cae2a292b450bf8793410ea07657c01ad3a68a9bdaad1a0fc267097722bb"
+    },
+    {
+      "path": "tests/test_snr_range.m",
+      "role": "test",
+      "sha256": "1b7fb03efdb5cf5f278cae1b02292abe179c1cd69874410f92c73ac97c6f4412"
+    },
+    {
+      "path": "tests/test_mod_order.m",
+      "role": "test",
+      "sha256": "22a9e3e628a8d310d887a534bf102e1acb2a7c9a09b31e40101645822cc63ceb"
+    }
+  ],
+  "waivers": [],
+  "superseded_by": null
+}

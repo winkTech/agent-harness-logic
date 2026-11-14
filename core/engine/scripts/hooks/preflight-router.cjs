@@ -1,0 +1,747 @@
+#!/usr/bin/env node
+'use strict';
+
+const fs = require('node:fs');
+const path = require('node:path');
+const { ingest } = require('../transport/index.cjs');
+const { renderDecision } = require('../transport/render.cjs');
+const { recordHealth } = require('../lib/hook-health.cjs');
+
+// Phase 2.1：工具能力/集合唯一事实源 lib/host-concepts.cjs。
+// preflight 侧用小写 key 比对（toolKey 已 toLowerCase），从规范形派生；
+// 成员判定走 isControlledTool/isReadOnlyTool（真不可变，见 host-concepts 注释）。
+const HOST_CONCEPTS = require('../lib/host-concepts.cjs');
+const { toolInputOf } = require('../io/index.cjs');
+const { isControlledTool, isReadOnlyTool } = HOST_CONCEPTS;
+const SHELL_TOOLS = new Set(HOST_CONCEPTS.SHELL_TOOLS.map((t) => t.toLowerCase()));
+const WRITE_TOOLS = new Set(HOST_CONCEPTS.WRITE_TOOLS.filter((t) => t !== 'NotebookEdit').map((t) => t.toLowerCase()));
+
+
+
+const CODE_EXTENSIONS = new Set([
+  '.c', '.cc', '.cjs', '.cpp', '.go', '.h', '.hpp', '.js', '.mjs', '.py', '.rs', '.sv', '.ts', '.tsx', '.v', '.vhd', '.vh',
+]);
+
+function readPayload() {
+  let raw = '';
+  try {
+    raw = fs.readFileSync(0, 'utf8').replace(/^\uFEFF/, '');
+  } catch {
+    return {};
+  }
+  if (!raw.trim()) return {};
+  try {
+    return JSON.parse(raw);
+  } catch (error) {
+    throw new Error(`invalid PreToolUse JSON: ${error.message}`);
+  }
+}
+
+function toolInputFrom(payload) {
+  return toolInputOf(payload);
+}
+
+function runtimeFrom(payload) {
+  const input = toolInputFrom(payload);
+  const toolName = String(payload?.tool_name || payload?.tool?.name || payload?.name || '');
+  const cwd = path.resolve(String(payload?.cwd || process.cwd()));
+  const fileValue = input.file_path || input.path || payload?.file_path || '';
+  const hasDirectContent = Object.prototype.hasOwnProperty.call(input, 'content')
+    || Object.prototype.hasOwnProperty.call(payload || {}, 'content');
+  return {
+    payload,
+    eventName: String(payload?.hook_event_name || payload?.event || 'PreToolUse'),
+    toolName,
+    toolKey: toolName.toLowerCase(),
+    input,
+    command: String(input.command || payload?.command || '').trim(),
+    cwd,
+    filePath: fileValue ? path.resolve(cwd, String(fileValue)) : '',
+    content: hasDirectContent ? String(input.content ?? payload?.content ?? '') : undefined,
+    commits: [],
+    diagnostics: [],
+    advisories: [],
+    additionalContexts: [],
+  };
+}
+
+function changedTextFromRuntime(runtime) {
+  const edits = Array.isArray(runtime.input?.edits) ? runtime.input.edits : [];
+  return [
+    runtime.content,
+    runtime.input?.old_string,
+    runtime.input?.new_string,
+    runtime.input?.oldString,
+    runtime.input?.newString,
+    ...edits.flatMap(edit => [edit?.old_string, edit?.new_string, edit?.oldString, edit?.newString]),
+  ].filter(value => value !== undefined && value !== null).join('\n');
+}
+
+function isReadOnlyShellCommand(command) {
+  const value = String(command || '').trim();
+  if (!value) return true;
+  return [
+    /^git(?:\.exe)?\s+(?:status|diff|log|show|rev-parse|branch)(?:\s|$)/i,
+    /^(?:rg|grep|findstr|Get-Content|Select-String|Test-Path|Get-Item|Get-ChildItem|ls|dir|pwd)(?:\s|$)/i,
+    /\b(?:pytest|py\.test|xsim|vsim|vvp|iverilog|cargo\s+test|go\s+test|npm\s+(?:run\s+)?test|pnpm\s+(?:run\s+)?test)\b/i,
+    /\bnode(?:\.exe)?\s+[^\n]*(?:test-hooks|contract|regression|--check)\b/i,
+  ].some(pattern => pattern.test(value));
+}
+
+function riskFactsFromRuntime(runtime, opts = {}) {
+  const fileExists = opts.fileExists || fs.existsSync;
+  const signals = runtime.input?.risk_signals || runtime.payload?.risk_signals || {};
+  const isWrite = WRITE_TOOLS.has(runtime.toolKey);
+  const isShell = SHELL_TOOLS.has(runtime.toolKey);
+  const command = String(runtime.command || '');
+  const readOnly = isReadOnlyTool(runtime.toolName)
+    || (isShell && isReadOnlyShellCommand(command));
+  const changedText = changedTextFromRuntime(runtime);
+  const semanticText = `${runtime.filePath}\n${changedText}`;
+  const destructive = Boolean(signals.destructive) || [
+    /\bgit\s+(?:reset\s+--hard|clean\s+-[a-z]*f)/i,
+    /\brm\s+-[a-z]*r[a-z]*f|\bRemove-Item\b[^\n]*(?:-Recurse|-Force)/i,
+    /\b(?:drop|truncate)\s+(?:database|table)\b/i,
+    /\bformat\s+[a-z]:/i,
+  ].some(pattern => pattern.test(command));
+  const releaseAction = Boolean(signals.releaseAction) || [
+    /\bgit\s+(?:commit|push)\b/i,
+    /\b(?:npm|pnpm|yarn)\s+publish\b/i,
+    /\b(?:deploy|release)\b/i,
+  ].some(pattern => pattern.test(command));
+  const ext = path.extname(runtime.filePath || '').toLowerCase();
+  const existingFile = Boolean(runtime.filePath) && fileExists(runtime.filePath);
+  const newModule = Boolean(signals.newModule)
+    || (isWrite && Boolean(runtime.filePath) && CODE_EXTENSIONS.has(ext) && !existingFile);
+  const interfaceChange = Boolean(signals.interfaceChange) || [
+    /\bmodule\.exports\b|\bexports\.[A-Za-z_$]/,
+    /\bexport\s+(?:default\s+)?(?:async\s+)?(?:function|class|const|let|var|interface|type)\b/,
+    /\b(?:schemaVersion|publicApi|apiVersion)\b/,
+    /\b(?:input|output|inout)\s+(?:wire|logic|reg|signed|unsigned|\[)/i,
+  ].some(pattern => pattern.test(changedText));
+  const clockResetCdcChange = Boolean(signals.clockResetCdcChange)
+    || /\b(?:clock|clk|reset|rst|cdc|async_fifo|synchroni[sz]er)\b/i.test(changedText);
+  const goldenChange = Boolean(signals.goldenChange)
+    || /[/\\](?:golden|models?)[/\\]/i.test(runtime.filePath)
+    || /\bgolden\s+model\b/i.test(changedText);
+  // Phase 1 拆层修正: 布局根目录更名为 core/ 后, 原 [/\](?:lib|shared|core|cbb)[/\]
+  // 会把 core/engine/** 一切编辑误判为 shared-core-change(全仓库 R2 化)。
+  // 语义不变: shared-core 指"被多方共享的库/组件目录"(lib/ shared/ cbb/ 及
+  // 名为 core 的叶子目录), 不是本仓库的 core/ 布局层。core/engine/** 的普通
+  // 修改回归 R1; 引擎文件的 interface-change/golden 等文本信号照旧生效。
+  const sharedCoreChange = Boolean(signals.sharedCoreChange)
+    || /[/\\](?:lib|shared|cbb)[/\\]/i.test(runtime.filePath)
+    || /[/\\]core[/\\](?!engine[/\\])/i.test(runtime.filePath);
+  const repeatedFailure = Boolean(signals.repeatedFailure)
+    || Number(runtime.payload?.failure_count || runtime.payload?.failureCount || 0) >= 2;
+  return {
+    toolName: runtime.toolName,
+    readOnly,
+    mutating: isWrite || (isShell && !readOnly),
+    existingFile,
+    internalChange: isWrite && existingFile && !interfaceChange && !clockResetCdcChange && !goldenChange,
+    newModule,
+    interfaceChange,
+    clockResetCdcChange,
+    goldenChange,
+    sharedCoreChange,
+    repeatedFailure,
+    destructive,
+    releaseAction,
+    protectedTarget: Boolean(signals.protectedTarget),
+    crossProject: Boolean(signals.crossProject),
+    graphStale: Boolean(signals.graphStale || opts.graphStale),
+    uncertain: Boolean(signals.uncertain),
+    agentRiskLevel: runtime.input?.risk_level || runtime.payload?.risk_level,
+  };
+}
+
+function evaluateRiskPolicy(runtime, opts = {}) {
+  const policy = require('../lib/risk-policy.cjs');
+  const env = opts.env || process.env;
+  const mode = policy.riskPolicyMode(env);
+  if (mode === 'off') {
+    const assessment = policy.classifyRisk({ toolName: runtime.toolName, readOnly: true });
+    return { ...policy.applyRiskPolicy(assessment, { mode }), assessment };
+  }
+
+  const facts = riskFactsFromRuntime(runtime, opts);
+  let assessment = policy.classifyRisk(facts);
+  if (assessment.effectiveRiskLevel !== 'R0') {
+    try {
+      const stateApi = opts.stateApi || require('../lib/verification-state.cjs');
+      const readVerificationState = opts.readVerificationState || stateApi.readVerificationState;
+      const riskForPayload = opts.riskForPayload || stateApi.riskForPayload;
+      const active = riskForPayload(readVerificationState(), runtime.payload);
+      const persistedRiskLevel = active.reduce(
+        (level, entry) => policy.maxRiskLevel(level, entry.effectiveRiskLevel),
+        'R0',
+      );
+      assessment = policy.classifyRisk({ ...facts, persistedRiskLevel });
+    } catch {
+      assessment = policy.classifyRisk({ ...facts, uncertain: true });
+    }
+  }
+
+  let authorization = { requested: false, allowed: false, errors: [] };
+  if (mode === 'enforce' && assessment.effectiveRiskLevel === 'R3') {
+    const evaluateBypass = opts.evaluateBypass
+      || require('../lib/gate-bypass.cjs').evaluateGuardBypass;
+    authorization = evaluateBypass({
+      gateId: 'risk-policy.cjs',
+      payload: runtime.payload,
+      context: runtime.context,
+      env,
+      actionHash: policy.riskActionHash({
+        toolName: runtime.toolName,
+        cwd: runtime.cwd,
+        filePath: runtime.filePath,
+        command: runtime.command,
+        input: runtime.input,
+      }),
+      requireActionBinding: true,
+      oneShot: true,
+    });
+  }
+  return {
+    ...policy.applyRiskPolicy(assessment, { mode, authorized: authorization.allowed }),
+    assessment,
+    authorization,
+  };
+}
+
+function normalizedResult(source, value) {
+  if (!value || typeof value !== 'object') return { source, decision: 'allow' };
+  const decision = ['allow', 'warn', 'block'].includes(value.decision) ? value.decision : 'allow';
+  return { ...value, source, decision };
+}
+
+function recordPromotedAttribution(runtime, gateResult, deps = {}) {
+  let wDb;
+  try {
+    const openAttributionDb = deps.openAttributionDb || require('../../sqlite/index.cjs').openDb;
+    const memoryAttribution = deps.memoryAttribution
+      || require('../../sqlite/store-memory-attribution.cjs');
+    wDb = openAttributionDb({});
+    return memoryAttribution.observePromotedHarnessGateResult(
+      runtime.payload,
+      gateResult,
+      { db: wDb.db },
+    );
+  } catch (error) {
+    runtime.diagnostics.push({
+      source: 'memory-attribution',
+      message: `promoted rule attribution dropped: ${error.stack || error.message}`,
+    });
+    return { recorded: 0, rejected: true, reason: 'attribution-write-failed' };
+  } finally {
+    try { wDb?.close(); } catch { /* blocking decision must survive cleanup failure */ }
+  }
+}
+
+function appendResult(runtime, result) {
+  const diagnostics = Array.isArray(result.diagnostics)
+    ? result.diagnostics
+    : result.diagnostics ? [result.diagnostics] : [];
+  for (const item of diagnostics) {
+    let message;
+    if (typeof item === 'string') message = item;
+    else if (item instanceof Error) message = item.stack || item.message;
+    else if (item && typeof item === 'object') message = item.message || JSON.stringify(item);
+    else message = String(item);
+    runtime.diagnostics.push({ source: result.source, decision: result.decision, message });
+  }
+  const advisories = Array.isArray(result.advisories)
+    ? result.advisories
+    : result.advisory ? [result.advisory] : [];
+  for (const advisory of advisories) {
+    runtime.advisories.push(typeof advisory === 'string'
+      ? { source: result.source, message: advisory }
+      : { source: result.source, ...advisory });
+  }
+  if (result.decision === 'warn' && advisories.length === 0) {
+    runtime.advisories.push({
+      source: result.source,
+      message: diagnostics.map((entry) => String(entry)).join('; ') || 'advisory warning',
+    });
+  }
+  if (typeof result.commit === 'function') {
+    runtime.commits.push({
+      source: result.source,
+      run: result.commit,
+      critical: result.commitCritical !== false,
+    });
+  }
+}
+
+async function runGate(runtime, spec) {
+  try {
+    const moduleValue = spec.load();
+    const evaluate = moduleValue?.evaluate;
+    if (typeof evaluate !== 'function') throw new Error('evaluate(payload, runtime) export is missing');
+    const result = normalizedResult(spec.source, await evaluate(runtime.payload, runtime));
+    appendResult(runtime, result);
+    return result;
+  } catch (error) {
+    const result = {
+      source: spec.source,
+      decision: spec.failClosed ? 'block' : 'warn',
+      diagnostics: [`internal error: ${error.stack || error.message}`],
+    };
+    appendResult(runtime, result);
+    recordGateHealth(runtime, result.decision, error);
+    return result;
+  }
+}
+
+const DEFAULT_LOADERS = {
+  'agent-transparency-ledger': () => require('./agent-transparency-ledger.cjs'),
+  'tool-action-contract-gate': () => require('./tool-action-contract-gate.cjs'),
+  'progress-watchdog': () => require('../../hooks/session/progress-watchdog.cjs'),
+  'bash-safety-guard': () => require('./bash-safety-guard.cjs'),
+  'file-protection-guard': () => require('./file-protection-guard.cjs'),
+};
+
+/** 取模块加载器；opts.loaders 可注入（契约测试用），否则用默认 require。 */
+function loaderFor(opts, key) {
+  const injected = opts && opts.loaders ? opts.loaders[key] : undefined;
+  return typeof injected === 'function' ? injected : DEFAULT_LOADERS[key];
+}
+
+/**
+ * 受保护加载：模块加载失败时记一条 warn 诊断并返回 null，由调用方跳过该段继续。
+ * 裸 require 失败会让路由进程 fatal → 全机 exit 2（见 memory/learnings/hot-path-hook-edit-atomicity.md）。
+ */
+function loadGuarded(runtime, source, loader) {
+  try {
+    if (typeof loader !== 'function') throw new Error(`no loader registered for ${source}`);
+    const moduleValue = loader();
+    if (!moduleValue) throw new Error('module export is empty');
+    return moduleValue;
+  } catch (error) {
+    appendResult(runtime, {
+      source,
+      decision: 'warn',
+      diagnostics: [`load failed: ${error.stack || error.message}`],
+    });
+    recordGateHealth(runtime, 'warn', error);
+    return null;
+  }
+}
+
+function shellSpecs(command, opts = {}) {
+  const { gitSubcommand } = require('./verification-gate.cjs');
+  const gitAction = gitSubcommand(command);
+  const specs = [
+    { source: 'bash-safety', tier: 'core', failClosed: true, load: loaderFor(opts, 'bash-safety-guard') },
+    { source: 'fix-in-place', tier: 'core', failClosed: false, load: () => require('../../hooks/safety/fix-in-place-guard.cjs') },
+    { source: 'verification-gate', tier: 'core', failClosed: false, load: () => require('./verification-gate.cjs') },
+  ];
+  if (gitAction === 'commit') {
+    // diff-size 在 commit 时只跑范围溢出检查 —— 噪声要在进历史之前说, 等到 push
+    // 才提示已经晚了。规模阈值仍只在 push 时按分支累计判定。
+    specs.push(
+      { source: 'diff-size', tier: 'core', failClosed: false, load: () => require('./diff-size-gate.cjs') },
+      { source: 'resource-budget', tier: 'core', failClosed: false, load: () => require('./resource-budget-gate.cjs') },
+    );
+  } else if (gitAction === 'push') {
+    specs.push(
+      { source: 'diff-size', tier: 'core', failClosed: false, load: () => require('./diff-size-gate.cjs') },
+      { source: 'resource-budget', tier: 'core', failClosed: false, load: () => require('./resource-budget-gate.cjs') },
+    );
+  }
+  return specs;
+}
+
+function writeSpecs(runtime = {}, opts = {}) {
+  const specs = [
+    { source: 'project-directory', tier: 'core', failClosed: false, load: () => require('./project-directory-guard.cjs') },
+    { source: 'repair-content', tier: 'core', failClosed: false, load: () => require('./repair-content-gate.cjs') },
+    { source: 'file-protection', tier: 'core', failClosed: true, load: loaderFor(opts, 'file-protection-guard') },
+    { source: 'fix-in-place', tier: 'core', failClosed: false, load: () => require('../../hooks/safety/fix-in-place-guard.cjs') },
+  ];
+  const filePath = String(runtime.filePath || '').trim();
+  const ext = path.extname(filePath).toLowerCase();
+  const isNewFile = Boolean(filePath) && !fs.existsSync(filePath);
+  const isRtl = ext === '.sv' || ext === '.v';
+  const isCode = ['.sv', '.v', '.vh', '.py', '.c', '.cpp', '.h', '.vhd'].includes(ext);
+  const isTest = [
+    /[/\\]tb_[\w-]+\.(sv|v|vhd)$/i,
+    /[\w-]+_tb\.(sv|v|vhd)$/i,
+    /[/\\]test_[\w-]+\.py$/i,
+    /[\w-]+_test\.(py|cpp)$/i,
+    /[/\\]testbench[\w-]*\.(sv|v|vhd)$/i,
+    /[/\\]sim[/\\].+\.(sv|v)$/i,
+    /[/\\]tb[/\\].+\.(sv|v)$/i,
+  ].some((pattern) => pattern.test(filePath));
+  const excludedFromRequirements = isTest
+    || /[/\\](?:golden|matlab)[/\\]/i.test(filePath);
+
+  if (isRtl) {
+    specs.push({ source: 'hdl-gate', tier: 'fpga', failClosed: false, load: () => require('./hdl-gate.cjs') });
+  }
+  if (isNewFile && isCode && !excludedFromRequirements
+      && (runtime.toolKey === 'write' || runtime.toolKey === 'edit')) {
+    specs.push({ source: 'requirements-gate', tier: 'core', failClosed: false, load: () => require('./requirements-gate-guard.cjs') });
+  }
+  if (isNewFile && isTest && runtime.toolKey === 'write') {
+    specs.push({ source: 'verification-quality', tier: 'core', failClosed: false, load: () => require('./verification-quality-guard.cjs') });
+  }
+  if (isRtl) {
+    specs.push({ source: 'rtl-semantic-oracle', tier: 'fpga', failClosed: false, load: () => require('./rtl-semantic-oracle.cjs') });
+  }
+  return specs;
+}
+
+function compactAdvisory(advisory) {
+  if (typeof advisory === 'string') return advisory.trim();
+  if (!advisory || typeof advisory !== 'object') return '';
+  const source = String(advisory.source || 'preflight').trim();
+  const summary = String(
+    advisory.message
+      || advisory.summary
+      || advisory.reason
+      || advisory.code
+      || advisory.status
+      || 'review required',
+  ).trim();
+  const targetValue = String(advisory.target || '').trim();
+  const target = targetValue ? path.basename(targetValue) : '';
+  return `[${source}] ${summary}${target ? ` (target: ${target})` : ''}`;
+}
+
+function formatAdditionalContext(runtime) {
+  const blocks = (runtime.additionalContexts || [])
+    .map((entry) => String(entry?.message || '').trim())
+    .filter(Boolean);
+  if (runtime.advisories.length > 0) {
+    blocks.push(...runtime.advisories.map(compactAdvisory).filter(Boolean));
+  }
+  return require('./prompt-context.cjs').mergeContextBlocks(blocks, 320);
+}
+
+function watchdogResult(payload, result) {
+  const blocking = result.status === 'bypass_reason_required'
+    || (result.status === 'frozen_escalation_required'
+      && result.mode === 'enforce'
+      && String(payload?.hook_event_name || '') !== 'Stop');
+  if (blocking) {
+    return {
+      source: 'progress-watchdog',
+      decision: 'block',
+      diagnostics: [result.session?.freezeReason || result.status],
+    };
+  }
+  if (['warning', 'frozen_notice', 'frozen_escalation_required', 'bypassed'].includes(result.status)) {
+    return {
+      source: 'progress-watchdog',
+      decision: 'warn',
+      advisories: [{ status: result.status, blocking: false }],
+    };
+  }
+  return { source: 'progress-watchdog', decision: 'allow' };
+}
+
+async function runCommon(runtime, opts = {}) {
+  const env = opts.env || process.env;
+  const noPersist = env.CLAUDE_HARNESS_NO_PERSIST === '1'
+    || env.CLAUDE_HARNESS_VERIFY_READONLY === '1';
+  let commonResult = { source: 'common', decision: 'allow' };
+
+  // Preserve the security/audit order for controlled actions: write one fresh
+  // contract, validate that exact payload, and only then inspect watchdog state.
+  // Read-only and ordinary low-risk calls still skip the heavy ledger path.
+  if (!noPersist && env.CLAUDE_TRANSPARENCY_LEDGER_DISABLED !== '1'
+      && isControlledTool(runtime.toolName)) {
+    const ledger = loadGuarded(runtime, 'agent-transparency-ledger',
+      loaderFor(opts, 'agent-transparency-ledger'));
+    if (ledger && ledger.mayRequireActionContract(runtime.payload)) {
+      let context;
+      try {
+        context = ledger.buildContext(runtime.payload);
+        runtime.context = context;
+      } catch (error) {
+        const result = {
+          source: 'tool-action-contract',
+          decision: 'warn',
+          diagnostics: [`context build failed: ${error.stack || error.message}`],
+        };
+        appendResult(runtime, result);
+        recordGateHealth(runtime, result.decision, error);
+        commonResult = result;
+      }
+
+      if (context) {
+        try {
+          const written = ledger.run(runtime.payload, { context });
+          const contractGate = loadGuarded(runtime, 'tool-action-contract',
+            loaderFor(opts, 'tool-action-contract-gate'));
+          if (contractGate) {
+            const result = normalizedResult('tool-action-contract', contractGate.evaluate(runtime.payload, {
+              context,
+              contract: written.artifacts?.toolActionContract,
+            }));
+            appendResult(runtime, result);
+            commonResult = result;
+            if (result.decision === 'block') return result;
+          }
+        } catch (error) {
+          const result = {
+            source: 'tool-action-contract',
+            decision: context.loopScope?.status === 'blocked' ? 'block' : 'warn',
+            diagnostics: [`ledger write failed: ${error.stack || error.message}`],
+          };
+          appendResult(runtime, result);
+          recordGateHealth(runtime, result.decision, error);
+          commonResult = result;
+          if (result.decision === 'block') return result;
+        }
+      }
+    }
+  }
+
+  if (!noPersist && !isReadOnlyTool(runtime.toolName)) {
+    const watchdog = loadGuarded(runtime, 'progress-watchdog', loaderFor(opts, 'progress-watchdog'));
+    if (!watchdog) return commonResult;
+    if (watchdog.isReadOnlyAction(runtime.payload)) return commonResult;
+    try {
+      const result = watchdogResult(runtime.payload, watchdog.inspectProgress(runtime.payload, {
+        riskLevel: opts.riskLevel,
+      }));
+      appendResult(runtime, result);
+      if (result.decision === 'block') return result;
+    } catch (error) {
+      appendResult(runtime, {
+        source: 'progress-watchdog',
+        decision: 'warn',
+        diagnostics: [`internal error: ${error.stack || error.message}`],
+      });
+      recordGateHealth(runtime, 'warn', error);
+    }
+  }
+
+  return commonResult;
+}
+
+async function commitDeferred(runtime) {
+  for (const entry of runtime.commits) {
+    try {
+      await entry.run();
+    } catch (error) {
+      const result = {
+        source: entry.source,
+        decision: entry.critical ? 'block' : 'warn',
+        diagnostics: [`deferred commit failed: ${error.stack || error.message}`],
+      };
+      appendResult(runtime, result);
+      recordGateHealth(runtime, result.decision, error);
+      if (result.decision === 'block') return result;
+    }
+  }
+  return { source: 'deferred-commit', decision: 'allow' };
+}
+
+function emit(runtime, decision) {
+  const blocked = decision === 'block';
+  if (blocked) {
+    for (const item of runtime.diagnostics) {
+      process.stderr.write(`[preflight-router:${item.source}] ${item.message}\n`);
+    }
+    process.stderr.write('[preflight-router] BLOCKED\n');
+  }
+  // preflight 的既有形态：block 时不注入 additionalContext（emitContextOnBlock 默认 false）。
+  const rendered = renderDecision(runtime.transport || 'claude-code', {
+    decision: blocked ? 'block' : 'allow',
+    eventName: runtime.eventName || 'PreToolUse',
+    additionalContext: blocked ? '' : formatAdditionalContext(runtime),
+    diagnostics: runtime.diagnostics.map((item) => `[${item.source}] ${item.message}`),
+  });
+  if (rendered.stdout) process.stdout.write(rendered.stdout);
+  if (rendered.exitCode) process.exitCode = rendered.exitCode;
+}
+
+const FALLBACK_GUARDS = [
+  { source: 'bash-safety', key: 'bash-safety-guard' },
+  { source: 'file-protection', key: 'file-protection-guard' },
+];
+
+/**
+ * 崩溃兜底：路由自身抛出未知异常时，只重新判定两个 fail-closed 硬拦截。
+ * 任一 block（含其加载/判定抛错）→ exit 2；否则写 degraded 警告并以 exit 0 放行，
+ * 让运行期异常只降级、不锁死整机。
+ * @returns {{exitCode: number, decision: 'allow'|'block', stderr: string}}
+ */
+function fallbackDecision(payload, error, opts = {}) {
+  const reason = (error && (error.message || String(error))) || 'unknown error';
+  let runtime;
+  try {
+    runtime = runtimeFrom(payload || {});
+  } catch {
+    return { exitCode: 0, decision: 'allow', stderr: `[preflight-router] degraded: ${reason}\n` };
+  }
+  const lines = [];
+  let blocked = false;
+  for (const guard of FALLBACK_GUARDS) {
+    try {
+      const loader = loaderFor(opts, guard.key);
+      if (typeof loader !== 'function') throw new Error(`no loader registered for ${guard.key}`);
+      const moduleValue = loader();
+      const evaluate = moduleValue && moduleValue.evaluate;
+      if (typeof evaluate !== 'function') throw new Error('evaluate(payload, runtime) export is missing');
+      const result = normalizedResult(guard.source, evaluate(runtime.payload, runtime));
+      if (result.decision === 'block') {
+        blocked = true;
+        const diagnostics = Array.isArray(result.diagnostics) ? result.diagnostics : [];
+        const detail = diagnostics
+          .map((item) => (typeof item === 'string' ? item : (item && item.message) || String(item)))
+          .join('; ');
+        lines.push(`[preflight-router:${guard.source}] ${detail || 'blocked'}`);
+      }
+    } catch (guardError) {
+      blocked = true;
+      lines.push(`[preflight-router:${guard.source}] fallback guard unavailable: ${guardError.message}`);
+    }
+  }
+  if (blocked) {
+    lines.push(`[preflight-router] degraded: ${reason}`);
+    lines.push('[preflight-router] BLOCKED');
+    return { exitCode: 2, decision: 'block', stderr: `${lines.join('\n')}\n` };
+  }
+  return { exitCode: 0, decision: 'allow', stderr: `[preflight-router] degraded: ${reason}\n` };
+}
+
+/** main() 已摄入的载荷；崩溃兜底要在 catch 里拿到它。 */
+let fatalPayload = null;
+let mainStartedAt = null;
+let mainEventName = 'PreToolUse';
+
+/** 健康遥测统一入口：startedAt 传 null 表示非整调用级事件（per-gate，无计时）。 */
+function recordRouterHealth(event, outcome, startedAt, error) {
+  recordHealth({
+    hook: 'preflight-router',
+    event,
+    outcome,
+    ms: startedAt == null ? null : Date.now() - startedAt,
+    error: error ? (error.stack || error.message || String(error)) : null,
+  });
+}
+
+/** gate 级内部错误 → outcome 按既有降级语义：block（fail-closed 保持）记 error，降级 advisory 记 fail-open。 */
+function recordGateHealth(runtime, decision, error) {
+  recordRouterHealth(runtime.eventName, decision === 'block' ? 'error' : 'fail-open', null, error);
+}
+
+async function main() {
+  mainStartedAt = Date.now();
+  let rawPayload;
+  try {
+    rawPayload = readPayload();
+  } catch (error) {
+    process.stderr.write(`[preflight-router] ${error.message}\n`);
+    process.exitCode = 2;
+    recordRouterHealth(mainEventName, 'error', mainStartedAt, error);
+    return;
+  }
+  fatalPayload = rawPayload;
+  const { transport, payload } = ingest(rawPayload, { argv: process.argv });
+  fatalPayload = payload;
+  mainEventName = String(payload?.hook_event_name || 'PreToolUse');
+  await require('../lib/hook-latency.cjs').timed(
+    'preflight-router',
+    mainEventName,
+    () => mainWithPayload(payload, { transport }),
+  );
+  recordRouterHealth(mainEventName, 'ok', mainStartedAt, null);
+}
+
+/** 跑完全部门禁，返回中立判定 'allow' | 'block'；不写 stdout / 不设 exitCode。 */
+async function evaluateRuntime(runtime, opts = {}) {
+  const promotedPolicy = await runGate(runtime, {
+    source: 'promoted-harness-gate',
+    tier: 'core',
+    failClosed: false,
+    load: () => require('./promoted-harness-gate.cjs'),
+  });
+  if (promotedPolicy.decision === 'block') {
+    recordPromotedAttribution(runtime, promotedPolicy);
+    return 'block';
+  }
+  const riskPolicy = normalizedResult('risk-policy', evaluateRiskPolicy(runtime));
+  appendResult(runtime, riskPolicy);
+  if (riskPolicy.decision === 'block') return 'block';
+
+  const specs = SHELL_TOOLS.has(runtime.toolKey)
+    ? shellSpecs(runtime.command, opts)
+    : WRITE_TOOLS.has(runtime.toolKey) ? writeSpecs(runtime, opts) : [];
+
+  for (const spec of specs) {
+    const result = await runGate(runtime, spec);
+    if (result.decision === 'block') return 'block';
+  }
+
+  const common = await runCommon(runtime, {
+    ...opts,
+    riskLevel: riskPolicy.assessment?.effectiveRiskLevel,
+  });
+  if (common.decision === 'block') return 'block';
+
+  const committed = await commitDeferred(runtime);
+  return committed.decision;
+}
+
+async function mainWithPayload(payload, opts = {}) {
+  const runtime = runtimeFrom(payload);
+  runtime.transport = opts.transport || 'claude-code';
+  emit(runtime, await evaluateRuntime(runtime));
+}
+
+/**
+ * 进程内判定入口（等价测试用）：不写 stdout / stderr、不设 exitCode。
+ * @returns {{transport, decision, eventName, diagnosticsSources, diagnostics, additionalContext}}
+ */
+async function decide(raw, opts = {}) {
+  const { transport, payload } = ingest(raw, {
+    transport: opts.transport,
+    argv: opts.argv || [],
+    env: opts.env || {},
+  });
+  const runtime = runtimeFrom(payload);
+  runtime.transport = transport;
+  const decision = await evaluateRuntime(runtime, opts);
+  return {
+    transport,
+    decision,
+    eventName: runtime.eventName,
+    diagnosticsSources: [...new Set(runtime.diagnostics.map((item) => item.source))].sort(),
+    diagnostics: runtime.diagnostics.map((item) => `[${item.source}] ${item.message}`),
+    additionalContext: decision === 'block' ? '' : formatAdditionalContext(runtime),
+  };
+}
+
+if (require.main === module) {
+  main().catch((error) => {
+    const fallback = fallbackDecision(fatalPayload, error);
+    if (fallback.stderr) process.stderr.write(fallback.stderr);
+    process.exitCode = fallback.exitCode;
+    recordRouterHealth(
+      mainEventName,
+      fallback.decision === 'block' ? 'error' : 'fail-open',
+      mainStartedAt,
+      error,
+    );
+  });
+}
+
+module.exports = {
+  main,
+  mainWithPayload,
+  decide,
+  runtimeFrom,
+  riskFactsFromRuntime,
+  isReadOnlyShellCommand,
+  evaluateRiskPolicy,
+  writeSpecs,
+  fallbackDecision,
+  formatAdditionalContext,
+  recordPromotedAttribution,
+};

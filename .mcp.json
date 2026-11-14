@@ -6,10 +6,8 @@
     },
     "codegraph": {
       "command": "node",
-      "args": ["engine/mcp/codegraph-server.cjs"],
-      "env": {
-        "CODEGRAPH_DB": "${HOME}/.claude/.wright/memory.db"
-      }
+      "args": ["core/engine/mcp/codegraph-server.cjs"],
+      "env": {}
     }
   }
 }

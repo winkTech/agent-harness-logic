@@ -1,0 +1,832 @@
+{
+  "schema_version": "1.0",
+  "summary": {
+    "asset_count": 28,
+    "by_level": {
+      "certified": 21,
+      "intake": 4,
+      "qualification": 3
+    },
+    "red_count": 0,
+    "yellow_count": 0,
+    "unregistered_root_count": 0
+  },
+  "unregistered_roots": [],
+  "drift": {
+    "red": [],
+    "yellow": []
+  },
+  "assets": [
+    {
+      "asset_uid": "axis_skid_buffer",
+      "name": "axis_skid_buffer",
+      "kind": "primitive",
+      "version": "1.0.2",
+      "owner": "lihan",
+      "level": "certified",
+      "dir": "cbb/axis_skid_buffer",
+      "top": "axis_skid_buffer",
+      "golden_model_ref": null,
+      "fidelity": "na",
+      "device": "xc7k325tffg900-2",
+      "target_fmax": "250MHz",
+      "signoff_at": "2026-07-31",
+      "waiver_count": 0,
+      "used_by": [],
+      "badge_gap": [],
+      "documents": {
+        "readme": true,
+        "changelog": true,
+        "limitations": false
+      },
+      "gates": {
+        "cleared_level": "certified",
+        "blocking_at": null,
+        "pass_count": 22
+      }
+    },
+    {
+      "asset_uid": "cdc_sync",
+      "name": "cdc_sync",
+      "kind": "primitive",
+      "version": "1.0.1",
+      "owner": "lihan",
+      "level": "certified",
+      "dir": "cbb/cdc_sync",
+      "top": "cdc_sync",
+      "golden_model_ref": null,
+      "fidelity": "na",
+      "device": "xc7k325tffg900-2",
+      "target_fmax": "150MHz",
+      "signoff_at": "2026-08-01",
+      "waiver_count": 0,
+      "used_by": [],
+      "badge_gap": [],
+      "documents": {
+        "readme": true,
+        "changelog": true,
+        "limitations": true
+      },
+      "gates": {
+        "cleared_level": "certified",
+        "blocking_at": null,
+        "pass_count": 22
+      }
+    },
+    {
+      "asset_uid": "channel_est_top",
+      "name": "channel_est_top",
+      "kind": "rtl",
+      "version": "1.0.4",
+      "owner": "lihan",
+      "level": "certified",
+      "dir": "cbb/channel_est_top",
+      "top": "channel_est_top",
+      "golden_model_ref": "model_comm_channel_est",
+      "fidelity": "bit_true",
+      "device": "xc7k325tffg900-2",
+      "target_fmax": "100MHz",
+      "signoff_at": "2026-08-01",
+      "waiver_count": 0,
+      "used_by": [],
+      "badge_gap": [],
+      "documents": {
+        "readme": true,
+        "changelog": true,
+        "limitations": true
+      },
+      "gates": {
+        "cleared_level": "certified",
+        "blocking_at": null,
+        "pass_count": 22
+      }
+    },
+    {
+      "asset_uid": "complex_multiplier",
+      "name": "complex_multiplier",
+      "kind": "primitive",
+      "version": "1.0.1",
+      "owner": "lihan",
+      "level": "certified",
+      "dir": "cbb/complex_multiplier",
+      "top": "complex_multiplier",
+      "golden_model_ref": null,
+      "fidelity": "na",
+      "device": "xc7k325tffg900-2",
+      "target_fmax": "250MHz",
+      "signoff_at": "2026-08-01",
+      "waiver_count": 0,
+      "used_by": [],
+      "badge_gap": [],
+      "documents": {
+        "readme": true,
+        "changelog": true,
+        "limitations": true
+      },
+      "gates": {
+        "cleared_level": "certified",
+        "blocking_at": null,
+        "pass_count": 22
+      }
+    },
+    {
+      "asset_uid": "cp_remove",
+      "name": "cp_remove",
+      "kind": "rtl",
+      "version": "1.1.1",
+      "owner": "lihan",
+      "level": "certified",
+      "dir": "cbb/cp_remove",
+      "top": "cp_remove",
+      "golden_model_ref": "model_comm_ofdm",
+      "fidelity": "bit_true",
+      "device": "xc7k325tffg900-2",
+      "target_fmax": "100MHz",
+      "signoff_at": "2026-08-04",
+      "waiver_count": 0,
+      "used_by": [],
+      "badge_gap": [],
+      "documents": {
+        "readme": true,
+        "changelog": true,
+        "limitations": true
+      },
+      "gates": {
+        "cleared_level": "certified",
+        "blocking_at": null,
+        "pass_count": 22
+      }
+    },
+    {
+      "asset_uid": "crc32",
+      "name": "crc32",
+      "kind": "primitive",
+      "version": "1.0.1",
+      "owner": "lihan",
+      "level": "certified",
+      "dir": "cbb/crc32",
+      "top": "crc32",
+      "golden_model_ref": null,
+      "fidelity": "na",
+      "device": "xc7k325tffg900-2",
+      "target_fmax": "200MHz",
+      "signoff_at": "2026-08-01",
+      "waiver_count": 0,
+      "used_by": [],
+      "badge_gap": [],
+      "documents": {
+        "readme": true,
+        "changelog": true,
+        "limitations": true
+      },
+      "gates": {
+        "cleared_level": "certified",
+        "blocking_at": null,
+        "pass_count": 22
+      }
+    },
+    {
+      "asset_uid": "ddr_axi4_controller",
+      "name": "ddr_axi4_controller",
+      "kind": "primitive",
+      "version": "1.0.1",
+      "owner": "lihan",
+      "level": "certified",
+      "dir": "cbb/ddr_axi4_controller",
+      "top": "ddr_axi4_controller",
+      "golden_model_ref": null,
+      "fidelity": "na",
+      "device": "xc7k325tffg900-2",
+      "target_fmax": "200MHz",
+      "signoff_at": "2026-08-01",
+      "waiver_count": 0,
+      "used_by": [],
+      "badge_gap": [],
+      "documents": {
+        "readme": true,
+        "changelog": true,
+        "limitations": true
+      },
+      "gates": {
+        "cleared_level": "certified",
+        "blocking_at": null,
+        "pass_count": 22
+      }
+    },
+    {
+      "asset_uid": "delay_line",
+      "name": "delay_line",
+      "kind": "primitive",
+      "version": "1.0.1",
+      "owner": "lihan",
+      "level": "certified",
+      "dir": "cbb/delay_line",
+      "top": "delay_line",
+      "golden_model_ref": null,
+      "fidelity": "na",
+      "device": "xc7k325tffg900-2",
+      "target_fmax": "250MHz",
+      "signoff_at": "2026-08-01",
+      "waiver_count": 0,
+      "used_by": [],
+      "badge_gap": [],
+      "documents": {
+        "readme": true,
+        "changelog": true,
+        "limitations": true
+      },
+      "gates": {
+        "cleared_level": "certified",
+        "blocking_at": null,
+        "pass_count": 22
+      }
+    },
+    {
+      "asset_uid": "eq_zf",
+      "name": "eq_zf",
+      "kind": "primitive",
+      "version": "1.1.1",
+      "owner": "lihan",
+      "level": "certified",
+      "dir": "cbb/eq_zf",
+      "top": "eq_zf",
+      "golden_model_ref": null,
+      "fidelity": "bit_true",
+      "device": "xc7k325tffg900-2",
+      "target_fmax": "100MHz",
+      "signoff_at": "2026-08-05",
+      "waiver_count": 0,
+      "used_by": [],
+      "badge_gap": [],
+      "documents": {
+        "readme": true,
+        "changelog": true,
+        "limitations": false
+      },
+      "gates": {
+        "cleared_level": "certified",
+        "blocking_at": null,
+        "pass_count": 22
+      }
+    },
+    {
+      "asset_uid": "fft64_sdf",
+      "name": "fft64_sdf",
+      "kind": "rtl",
+      "version": "1.0.2",
+      "owner": "lihan",
+      "level": "certified",
+      "dir": "cbb/fft64_sdf",
+      "top": "fft64_sdf",
+      "golden_model_ref": "model_comm_ofdm",
+      "fidelity": "bit_true",
+      "device": "xc7k325tffg900-2",
+      "target_fmax": "100MHz",
+      "signoff_at": "2026-08-04",
+      "waiver_count": 0,
+      "used_by": [],
+      "badge_gap": [],
+      "documents": {
+        "readme": true,
+        "changelog": true,
+        "limitations": true
+      },
+      "gates": {
+        "cleared_level": "certified",
+        "blocking_at": null,
+        "pass_count": 22
+      }
+    },
+    {
+      "asset_uid": "frame_sync",
+      "name": "frame_sync",
+      "kind": "primitive",
+      "version": "1.0.1",
+      "owner": "lihan",
+      "level": "certified",
+      "dir": "cbb/frame_sync",
+      "top": "frame_sync",
+      "golden_model_ref": null,
+      "fidelity": "na",
+      "device": "xc7k325tffg900-2",
+      "target_fmax": "250MHz",
+      "signoff_at": "2026-08-01",
+      "waiver_count": 0,
+      "used_by": [],
+      "badge_gap": [],
+      "documents": {
+        "readme": true,
+        "changelog": true,
+        "limitations": true
+      },
+      "gates": {
+        "cleared_level": "certified",
+        "blocking_at": null,
+        "pass_count": 22
+      }
+    },
+    {
+      "asset_uid": "ldpc_codec",
+      "name": "ldpc_codec",
+      "kind": "rtl",
+      "version": "1.1.0",
+      "owner": "lihan",
+      "level": "certified",
+      "dir": "cbb/ldpc_codec",
+      "top": "ldpc_decoder_top",
+      "golden_model_ref": "model_comm_ldpc",
+      "fidelity": "bit_true",
+      "device": "xc7k325tffg900-2",
+      "target_fmax": "100MHz",
+      "signoff_at": "2026-07-31",
+      "waiver_count": 0,
+      "used_by": [],
+      "badge_gap": [],
+      "documents": {
+        "readme": true,
+        "changelog": true,
+        "limitations": true
+      },
+      "gates": {
+        "cleared_level": "certified",
+        "blocking_at": null,
+        "pass_count": 22
+      }
+    },
+    {
+      "asset_uid": "lfsr_gen",
+      "name": "lfsr_gen",
+      "kind": "primitive",
+      "version": "1.0.1",
+      "owner": "lihan",
+      "level": "certified",
+      "dir": "cbb/lfsr_gen",
+      "top": "lfsr_gen",
+      "golden_model_ref": null,
+      "fidelity": "na",
+      "device": "xc7k325tffg900-2",
+      "target_fmax": "250MHz",
+      "signoff_at": "2026-08-01",
+      "waiver_count": 0,
+      "used_by": [],
+      "badge_gap": [],
+      "documents": {
+        "readme": true,
+        "changelog": true,
+        "limitations": true
+      },
+      "gates": {
+        "cleared_level": "certified",
+        "blocking_at": null,
+        "pass_count": 22
+      }
+    },
+    {
+      "asset_uid": "mod_demapper",
+      "name": "mod_demapper",
+      "kind": "primitive",
+      "version": "1.0.1",
+      "owner": "lihan",
+      "level": "certified",
+      "dir": "cbb/mod_demapper",
+      "top": "mod_demapper",
+      "golden_model_ref": null,
+      "fidelity": "bit_true",
+      "device": "xc7k325tffg900-2",
+      "target_fmax": "100MHz",
+      "signoff_at": "2026-08-09",
+      "waiver_count": 0,
+      "used_by": [],
+      "badge_gap": [
+        "board-validation"
+      ],
+      "documents": {
+        "readme": true,
+        "changelog": true,
+        "limitations": false
+      },
+      "gates": {
+        "cleared_level": "certified",
+        "blocking_at": null,
+        "pass_count": 22
+      }
+    },
+    {
+      "asset_uid": "model_comm_channel_est",
+      "name": "ls_channel_est_golden",
+      "kind": "golden-model",
+      "version": "1.4.0",
+      "owner": "lihan",
+      "level": "intake",
+      "dir": "models/comm/channel_est",
+      "top": null,
+      "golden_model_ref": null,
+      "fidelity": null,
+      "device": null,
+      "target_fmax": null,
+      "signoff_at": null,
+      "waiver_count": 0,
+      "used_by": [
+        "channel_est_top"
+      ],
+      "badge_gap": [],
+      "documents": {
+        "readme": false,
+        "changelog": false,
+        "limitations": false
+      },
+      "gates": {
+        "cleared_level": null,
+        "blocking_at": null,
+        "pass_count": 0
+      }
+    },
+    {
+      "asset_uid": "model_comm_ldpc",
+      "name": "ldpc_min_sum_golden",
+      "kind": "golden-model",
+      "version": "1.0.0",
+      "owner": "lihan",
+      "level": "intake",
+      "dir": "models/comm/ldpc",
+      "top": null,
+      "golden_model_ref": null,
+      "fidelity": null,
+      "device": null,
+      "target_fmax": null,
+      "signoff_at": null,
+      "waiver_count": 0,
+      "used_by": [
+        "ldpc_codec"
+      ],
+      "badge_gap": [],
+      "documents": {
+        "readme": false,
+        "changelog": false,
+        "limitations": false
+      },
+      "gates": {
+        "cleared_level": null,
+        "blocking_at": null,
+        "pass_count": 0
+      }
+    },
+    {
+      "asset_uid": "model_comm_ofdm",
+      "name": "ofdm_tx_golden",
+      "kind": "golden-model",
+      "version": "1.8.0",
+      "owner": "lihan",
+      "level": "intake",
+      "dir": "models/comm/ofdm",
+      "top": null,
+      "golden_model_ref": null,
+      "fidelity": null,
+      "device": null,
+      "target_fmax": null,
+      "signoff_at": null,
+      "waiver_count": 0,
+      "used_by": [
+        "cp_remove",
+        "fft64_sdf",
+        "ofdm_tx_top"
+      ],
+      "badge_gap": [],
+      "documents": {
+        "readme": false,
+        "changelog": false,
+        "limitations": false
+      },
+      "gates": {
+        "cleared_level": null,
+        "blocking_at": null,
+        "pass_count": 0
+      }
+    },
+    {
+      "asset_uid": "model_comm_rrc",
+      "name": "rrc_pulse_shaping_golden",
+      "kind": "golden-model",
+      "version": "1.1.0",
+      "owner": "lihan",
+      "level": "qualification",
+      "dir": "models/comm/rrc",
+      "top": null,
+      "golden_model_ref": null,
+      "fidelity": null,
+      "device": null,
+      "target_fmax": null,
+      "signoff_at": null,
+      "waiver_count": 0,
+      "used_by": [
+        "rrc_polyphase_fir"
+      ],
+      "badge_gap": [],
+      "documents": {
+        "readme": false,
+        "changelog": false,
+        "limitations": false
+      },
+      "gates": {
+        "cleared_level": null,
+        "blocking_at": null,
+        "pass_count": 0
+      }
+    },
+    {
+      "asset_uid": "model_comm_synch",
+      "name": "ofdm_synch_golden",
+      "kind": "golden-model",
+      "version": "1.1.0",
+      "owner": "lihan",
+      "level": "intake",
+      "dir": "models/comm/synch",
+      "top": null,
+      "golden_model_ref": null,
+      "fidelity": null,
+      "device": null,
+      "target_fmax": null,
+      "signoff_at": null,
+      "waiver_count": 0,
+      "used_by": [
+        "sync_top"
+      ],
+      "badge_gap": [],
+      "documents": {
+        "readme": false,
+        "changelog": false,
+        "limitations": false
+      },
+      "gates": {
+        "cleared_level": null,
+        "blocking_at": null,
+        "pass_count": 0
+      }
+    },
+    {
+      "asset_uid": "ofdm_tx_top",
+      "name": "ofdm_tx_top",
+      "kind": "rtl",
+      "version": "1.0.1",
+      "owner": "lihan",
+      "level": "certified",
+      "dir": "cbb/ofdm_tx_top",
+      "top": "ofdm_tx_top",
+      "golden_model_ref": "model_comm_ofdm",
+      "fidelity": "bit_true",
+      "device": "xc7k325tffg900-2",
+      "target_fmax": "100MHz",
+      "signoff_at": "2026-08-01",
+      "waiver_count": 0,
+      "used_by": [],
+      "badge_gap": [],
+      "documents": {
+        "readme": true,
+        "changelog": true,
+        "limitations": true
+      },
+      "gates": {
+        "cleared_level": "certified",
+        "blocking_at": null,
+        "pass_count": 22
+      }
+    },
+    {
+      "asset_uid": "pulse_merge",
+      "name": "pulse_merge",
+      "kind": "rtl",
+      "version": "1.0.2",
+      "owner": "lihan",
+      "level": "certified",
+      "dir": "cbb/pulse_merge",
+      "top": "pulse_merge",
+      "golden_model_ref": "pulse_merge_golden",
+      "fidelity": "bit_true",
+      "device": "xc7a35tcpg236-1",
+      "target_fmax": "100MHz",
+      "signoff_at": "2026-08-02",
+      "waiver_count": 0,
+      "used_by": [],
+      "badge_gap": [
+        "board-validation"
+      ],
+      "documents": {
+        "readme": true,
+        "changelog": true,
+        "limitations": true
+      },
+      "gates": {
+        "cleared_level": "certified",
+        "blocking_at": null,
+        "pass_count": 22
+      }
+    },
+    {
+      "asset_uid": "pulse_merge_golden",
+      "name": "pulse_merge_credit_golden",
+      "kind": "golden-model",
+      "version": "0.1.0",
+      "owner": "lihan",
+      "level": "qualification",
+      "dir": "models/comm/pulse_merge",
+      "top": null,
+      "golden_model_ref": null,
+      "fidelity": null,
+      "device": null,
+      "target_fmax": null,
+      "signoff_at": null,
+      "waiver_count": 0,
+      "used_by": [
+        "pulse_merge"
+      ],
+      "badge_gap": [],
+      "documents": {
+        "readme": false,
+        "changelog": false,
+        "limitations": false
+      },
+      "gates": {
+        "cleared_level": null,
+        "blocking_at": null,
+        "pass_count": 0
+      }
+    },
+    {
+      "asset_uid": "rrc_polyphase_fir",
+      "name": "rrc_polyphase_fir",
+      "kind": "rtl",
+      "version": "1.0.2",
+      "owner": "lihan",
+      "level": "certified",
+      "dir": "cbb/rrc_polyphase_fir",
+      "top": "rrc_polyphase_fir",
+      "golden_model_ref": "model_comm_rrc",
+      "fidelity": "bit_true",
+      "device": "xc7k325tffg900-2",
+      "target_fmax": "250MHz",
+      "signoff_at": "2026-08-02",
+      "waiver_count": 0,
+      "used_by": [
+        "cbb/rrc_polyphase_fir/tb/tb_rrc_polyphase_fir.sv"
+      ],
+      "badge_gap": [
+        "board-validation",
+        "hold-closure"
+      ],
+      "documents": {
+        "readme": true,
+        "changelog": true,
+        "limitations": true
+      },
+      "gates": {
+        "cleared_level": "certified",
+        "blocking_at": null,
+        "pass_count": 22
+      }
+    },
+    {
+      "asset_uid": "sb_align",
+      "name": "sb_align",
+      "kind": "primitive",
+      "version": "1.0.0",
+      "owner": "lihan",
+      "level": "certified",
+      "dir": "cbb/sb_align",
+      "top": "sb_align",
+      "golden_model_ref": null,
+      "fidelity": "na",
+      "device": "xc7k325tffg900-2",
+      "target_fmax": "100MHz",
+      "signoff_at": "2026-08-04",
+      "waiver_count": 0,
+      "used_by": [],
+      "badge_gap": [],
+      "documents": {
+        "readme": true,
+        "changelog": true,
+        "limitations": true
+      },
+      "gates": {
+        "cleared_level": "certified",
+        "blocking_at": null,
+        "pass_count": 22
+      }
+    },
+    {
+      "asset_uid": "sdp_ram",
+      "name": "sdp_ram",
+      "kind": "primitive",
+      "version": "1.0.1",
+      "owner": "lihan",
+      "level": "certified",
+      "dir": "cbb/sdp_ram",
+      "top": "sdp_ram",
+      "golden_model_ref": null,
+      "fidelity": "na",
+      "device": "xc7k325tffg900-2",
+      "target_fmax": "250MHz",
+      "signoff_at": "2026-08-01",
+      "waiver_count": 0,
+      "used_by": [],
+      "badge_gap": [],
+      "documents": {
+        "readme": true,
+        "changelog": true,
+        "limitations": true
+      },
+      "gates": {
+        "cleared_level": "certified",
+        "blocking_at": null,
+        "pass_count": 22
+      }
+    },
+    {
+      "asset_uid": "stream_elastic_pipeline",
+      "name": "stream_elastic_pipeline",
+      "kind": "rtl",
+      "version": "1.0.2",
+      "owner": "lihan",
+      "level": "certified",
+      "dir": "cbb/stream_elastic_pipeline",
+      "top": "stream_elastic_pipeline",
+      "golden_model_ref": "stream_elastic_pipeline_golden",
+      "fidelity": "bit_true",
+      "device": "xc7a35tcpg236-1",
+      "target_fmax": "100MHz",
+      "signoff_at": "2026-08-02",
+      "waiver_count": 0,
+      "used_by": [],
+      "badge_gap": [
+        "board-validation"
+      ],
+      "documents": {
+        "readme": true,
+        "changelog": true,
+        "limitations": true
+      },
+      "gates": {
+        "cleared_level": "certified",
+        "blocking_at": null,
+        "pass_count": 22
+      }
+    },
+    {
+      "asset_uid": "stream_elastic_pipeline_golden",
+      "name": "stream_elastic_pipeline_queue_golden",
+      "kind": "golden-model",
+      "version": "0.1.0",
+      "owner": "lihan",
+      "level": "qualification",
+      "dir": "models/comm/stream_elastic_pipeline",
+      "top": null,
+      "golden_model_ref": null,
+      "fidelity": null,
+      "device": null,
+      "target_fmax": null,
+      "signoff_at": null,
+      "waiver_count": 0,
+      "used_by": [
+        "stream_elastic_pipeline"
+      ],
+      "badge_gap": [],
+      "documents": {
+        "readme": false,
+        "changelog": false,
+        "limitations": false
+      },
+      "gates": {
+        "cleared_level": null,
+        "blocking_at": null,
+        "pass_count": 0
+      }
+    },
+    {
+      "asset_uid": "sync_top",
+      "name": "ofdm_sync_top",
+      "kind": "rtl",
+      "version": "1.0.2",
+      "owner": "lihan",
+      "level": "certified",
+      "dir": "cbb/sync_top",
+      "top": "sync_top",
+      "golden_model_ref": "model_comm_synch",
+      "fidelity": "bit_true",
+      "device": "xc7k325tffg900-2",
+      "target_fmax": "100MHz",
+      "signoff_at": "2026-08-01",
+      "waiver_count": 0,
+      "used_by": [],
+      "badge_gap": [],
+      "documents": {
+        "readme": true,
+        "changelog": true,
+        "limitations": true
+      },
+      "gates": {
+        "cleared_level": "certified",
+        "blocking_at": null,
+        "pass_count": 22
+      }
+    }
+  ]
+}

@@ -1,0 +1,612 @@
+{
+  "version": 3,
+  "consumerRegistry": [
+    {
+      "id": "dream",
+      "kind": "event-stream",
+      "event": "SessionStart",
+      "hostScript": "core/engine/scripts/hooks/session-bootstrap.cjs",
+      "component": "dreamStartup",
+      "requiresWatermark": true,
+      "requiresHeartbeat": true,
+      "minBatch": 5,
+      "maxBatch": 100,
+      "maxPendingAgeSeconds": 86400,
+      "timeoutSeconds": 12,
+      "active": true
+    },
+    {
+      "id": "skill-evolve",
+      "kind": "event-stream",
+      "event": "Stop",
+      "hostScript": "core/engine/hooks/learning/postflight-observer.cjs",
+      "component": "skill-evolve",
+      "requiresWatermark": true,
+      "requiresHeartbeat": true,
+      "minBatch": 1,
+      "maxBatch": 100,
+      "maxPendingAgeSeconds": 86400,
+      "timeoutSeconds": 30,
+      "active": true
+    },
+    {
+      "id": "fp-rate",
+      "kind": "event-stream",
+      "event": "Stop",
+      "hostScript": "core/engine/hooks/learning/postflight-observer.cjs",
+      "component": "fp-rate",
+      "requiresWatermark": true,
+      "requiresHeartbeat": true,
+      "minBatch": 1,
+      "maxBatch": 100,
+      "maxPendingAgeSeconds": 86400,
+      "timeoutSeconds": 15,
+      "active": true
+    },
+    {
+      "id": "promoted-harness-gate",
+      "kind": "policy",
+      "event": "PreToolUse",
+      "hostScript": "core/engine/scripts/hooks/preflight-router.cjs",
+      "component": "promotedHarnessGate",
+      "requiresWatermark": false,
+      "requiresHeartbeat": false,
+      "timeoutSeconds": 20,
+      "active": true
+    },
+    {
+      "id": "telemetry-spool-drain",
+      "kind": "event-stream",
+      "event": "Stop",
+      "hostScript": "core/engine/hooks/learning/postflight-observer.cjs",
+      "component": "spoolDrain",
+      "requiresWatermark": true,
+      "requiresHeartbeat": true,
+      "minBatch": 1,
+      "maxBatch": 500,
+      "maxPendingAgeSeconds": 86400,
+      "timeoutSeconds": 10,
+      "active": true
+    }
+  ],
+  "entries": [
+    {
+      "script": "core/engine/hooks/git/git-integrity-guard.cjs",
+      "kind": "maintenance",
+      "tier": "core",
+      "events": [
+        "SessionStart",
+        "Stop"
+      ],
+      "tools": [
+        "*"
+      ],
+      "payloadSchema": "harness-event-v1",
+      "blocking": true,
+      "sideEffects": [
+        "git-refs-recovery"
+      ],
+      "timeoutSeconds": 15,
+      "owner": "harness-gates",
+      "fixture": "core/engine/scripts/test-hooks/git-integrity-guard-contract.cjs",
+      "active": true,
+      "transports": [
+        "claude-code",
+        "workbuddy",
+        "codex"
+      ],
+      "$comment": "2026-08-26 五次 Codex/宿主 safe-delete 删 .git refs/pack 事故的检测+自动恢复兜底。契约测试在临时仓演练五种事故形态。",
+      "action": [
+        "session_start",
+        "turn_end"
+      ],
+      "blockChannel": "exit_code_2",
+      "injectChannel": "additionalContext",
+      "toolMatcher": "*",
+      "timeoutOverrides": [
+        {
+          "event": "SessionStart",
+          "timeoutSeconds": 15
+        },
+        {
+          "event": "Stop",
+          "timeoutSeconds": 15
+        }
+      ]
+    },
+    {
+      "script": "core/engine/hooks/learning/postflight-observer.cjs",
+      "kind": "observer",
+      "tier": "core",
+      "events": [
+        "PostToolUse",
+        "PostToolUseFailure",
+        "Stop"
+      ],
+      "tools": [
+        "*"
+      ],
+      "payloadSchema": "harness-event-v1",
+      "blocking": false,
+      "sideEffects": [
+        "sqlite-events",
+        "sqlite-memory",
+        "cost-ledger",
+        "transparency-ledger",
+        "skill-candidates",
+        "fp-rate-log",
+        "plan-accuracy",
+        "risk-telemetry"
+      ],
+      "consumers": [
+        "skill-evolve",
+        "fp-rate",
+        "telemetry-spool-drain"
+      ],
+      "timeoutSeconds": 30,
+      "owner": "harness-observability",
+      "fixture": "core/engine/scripts/test-hooks/observer-consolidation-contract.cjs",
+      "active": true,
+      "transports": [
+        "claude-code",
+        "workbuddy",
+        "codex"
+      ],
+      "action": [
+        "after_tool",
+        "after_tool_failure",
+        "turn_end"
+      ],
+      "blockChannel": "none",
+      "injectChannel": "none",
+      "toolMatcher": "*",
+      "timeoutOverrides": [
+        {
+          "event": "PostToolUse",
+          "timeoutSeconds": 5
+        },
+        {
+          "event": "PostToolUseFailure",
+          "timeoutSeconds": 5
+        },
+        {
+          "event": "Stop",
+          "timeoutSeconds": 30
+        }
+      ]
+    },
+    {
+      "script": "core/engine/scripts/hooks/postflight-router.cjs",
+      "kind": "router",
+      "tier": "core",
+      "events": [
+        "PostToolUse",
+        "PostToolUseFailure"
+      ],
+      "tools": [
+        "*"
+      ],
+      "payloadSchema": "harness-event-v1",
+      "blocking": true,
+      "sideEffects": [
+        "verification-state",
+        "risk-state",
+        "evidence-cache",
+        "watchdog-state",
+        "toolchain-health",
+        "readonly-memory"
+      ],
+      "timeoutSeconds": 12,
+      "owner": "harness-gates",
+      "fixture": "core/engine/scripts/test-hooks/postflight-router-contract.cjs",
+      "active": true,
+      "transports": [
+        "claude-code",
+        "workbuddy",
+        "codex"
+      ],
+      "action": [
+        "after_tool",
+        "after_tool_failure"
+      ],
+      "blockChannel": "exit_code_2",
+      "injectChannel": "none",
+      "toolMatcher": "*",
+      "timeoutOverrides": [
+        {
+          "event": "PostToolUse",
+          "timeoutSeconds": 8
+        },
+        {
+          "event": "PostToolUseFailure",
+          "timeoutSeconds": 12
+        }
+      ]
+    },
+    {
+      "script": "core/engine/scripts/hooks/prompt-context.cjs",
+      "kind": "router",
+      "tier": "core",
+      "events": [
+        "UserPromptSubmit"
+      ],
+      "tools": [
+        "*"
+      ],
+      "payloadSchema": "harness-event-v1",
+      "blocking": false,
+      "sideEffects": [
+        "rule-cache",
+        "readonly-memory",
+        "runtime-state",
+        "sqlite-events"
+      ],
+      "timeoutSeconds": 8,
+      "owner": "harness-context",
+      "fixture": "core/engine/scripts/test-hooks/prompt-context-contract.cjs",
+      "active": true,
+      "transports": [
+        "claude-code",
+        "workbuddy"
+      ],
+      "action": "prompt_submit",
+      "blockChannel": "none",
+      "injectChannel": "additionalContext",
+      "toolMatcher": "*",
+      "timeoutOverrides": [
+        {
+          "event": "UserPromptSubmit",
+          "timeoutSeconds": 8
+        }
+      ],
+      "hostOnly": [
+        "UserPromptSubmit 仅 claude-code 有原生注入语义; codex 无此注册面, grok 待 3.2 实测"
+      ]
+    },
+    {
+      "script": "core/engine/scripts/pre-compact.cjs",
+      "kind": "checkpoint",
+      "tier": "core",
+      "events": [
+        "PreCompact"
+      ],
+      "tools": [
+        "*"
+      ],
+      "payloadSchema": "harness-event-v1",
+      "blocking": false,
+      "sideEffects": [
+        "runtime-state",
+        "checkpoint-files"
+      ],
+      "timeoutSeconds": 60,
+      "owner": "harness-context",
+      "fixture": "core/engine/scripts/test-hooks/harness-painpoints.cjs",
+      "active": true,
+      "transports": [
+        "claude-code",
+        "workbuddy",
+        "codex"
+      ],
+      "action": "pre_compact",
+      "blockChannel": "none",
+      "injectChannel": "none",
+      "toolMatcher": "*",
+      "hostOnly": [
+        "PreCompact 原生事件仅 claude-code 注册面; codex 侧经 session.precompact 中性事件(transport 适配), grok 剖面无此族——降级为压缩前状态检查由 preflight 兜底(fallback)"
+      ]
+    },
+    {
+      "script": "core/engine/scripts/hooks/preflight-router.cjs",
+      "kind": "router",
+      "tier": "core",
+      "events": [
+        "PreToolUse"
+      ],
+      "tools": [
+        "*"
+      ],
+      "payloadSchema": "harness-event-v1",
+      "blocking": true,
+      "sideEffects": [
+        "gate-state",
+        "action-contract",
+        "readonly-risk-state",
+        "risk-bypass-audit",
+        "readonly-memory"
+      ],
+      "consumers": [
+        "promoted-harness-gate"
+      ],
+      "timeoutSeconds": 20,
+      "owner": "harness-gates",
+      "fixture": "core/engine/scripts/test-hooks/preflight-router-contract.cjs",
+      "active": true,
+      "transports": [
+        "claude-code",
+        "workbuddy",
+        "codex"
+      ],
+      "action": "before_tool",
+      "blockChannel": "exit_code_2",
+      "injectChannel": "none",
+      "toolMatcher": "*",
+      "timeoutOverrides": [
+        {
+          "event": "PreToolUse",
+          "timeoutSeconds": 20
+        }
+      ]
+    },
+    {
+      "script": "core/engine/scripts/hooks/subagent-verdict.cjs",
+      "kind": "observer",
+      "tier": "core",
+      "events": [
+        "SubagentStop"
+      ],
+      "tools": [
+        "*"
+      ],
+      "payloadSchema": "harness-event-v1",
+      "blocking": false,
+      "sideEffects": [
+        "task-loops"
+      ],
+      "timeoutSeconds": 10,
+      "owner": "harness-loop",
+      "fixture": "core/engine/scripts/test-hooks/loop-controller-contract.cjs",
+      "active": true,
+      "transports": [
+        "claude-code",
+        "workbuddy"
+      ],
+      "action": "subagent_end",
+      "blockChannel": "none",
+      "injectChannel": "none",
+      "toolMatcher": "*",
+      "timeoutOverrides": [
+        {
+          "event": "SubagentStop",
+          "timeoutSeconds": 10
+        }
+      ],
+      "hostOnly": [
+        "SubagentStop 是 claude-code 独占事件; workbuddy 同构实证保留; codex/grok 无子代理停止事件——降级为 subagent.stop 中性事件(consumer 侧消费, fallback)"
+      ]
+    },
+    {
+      "script": "core/engine/scripts/hooks/loop-controller.cjs",
+      "kind": "controller",
+      "tier": "lab",
+      "events": [
+        "Stop"
+      ],
+      "tools": [
+        "*"
+      ],
+      "payloadSchema": "harness-event-v1",
+      "blocking": true,
+      "sideEffects": [
+        "task-loops"
+      ],
+      "timeoutSeconds": 40,
+      "owner": "harness-loop",
+      "fixture": "core/engine/scripts/test-hooks/loop-controller-contract.cjs",
+      "active": false,
+      "transports": [
+        "claude-code",
+        "workbuddy",
+        "codex"
+      ],
+      "action": "turn_end",
+      "blockChannel": "exit_code_2",
+      "injectChannel": "none",
+      "toolMatcher": "*"
+    },
+    {
+      "script": "core/engine/scripts/hooks/codegraph-sync.cjs",
+      "kind": "indexer",
+      "tier": "codegraph",
+      "events": [
+        "SessionStart",
+        "PostToolUse"
+      ],
+      "tools": [
+        "Edit",
+        "Write",
+        "MultiEdit"
+      ],
+      "payloadSchema": "harness-event-v1",
+      "blocking": false,
+      "sideEffects": [
+        "code-graph",
+        "codegraph-sync-state"
+      ],
+      "timeoutSeconds": 60,
+      "owner": "harness-graph",
+      "fixture": "core/engine/scripts/test-hooks/codegraph-sync-contract.cjs",
+      "active": true,
+      "transports": [
+        "claude-code",
+        "workbuddy"
+      ],
+      "action": [
+        "session_start",
+        "after_tool"
+      ],
+      "blockChannel": "none",
+      "injectChannel": "additionalContext",
+      "toolMatcher": "capability",
+      "timeoutOverrides": [
+        {
+          "event": "SessionStart",
+          "timeoutSeconds": 60
+        },
+        {
+          "event": "PostToolUse",
+          "timeoutSeconds": 10
+        }
+      ],
+      "hostOnly": [
+        "60s 长钩子——grok 剖面降级为 --file 增量(3.2)"
+      ]
+    },
+    {
+      "script": "core/engine/scripts/hooks/session-bootstrap.cjs",
+      "kind": "router",
+      "tier": "core",
+      "events": [
+        "SessionStart"
+      ],
+      "tools": [
+        "*"
+      ],
+      "payloadSchema": "harness-event-v1",
+      "blocking": false,
+      "sideEffects": [
+        "runtime-state",
+        "work-memory",
+        "sqlite-events",
+        "readonly-memory"
+      ],
+      "consumers": [
+        "dream"
+      ],
+      "timeoutSeconds": 12,
+      "owner": "harness-context",
+      "fixture": "core/engine/scripts/test-hooks/lifecycle-router-contract.cjs",
+      "active": true,
+      "transports": [
+        "claude-code",
+        "workbuddy",
+        "codex"
+      ],
+      "action": "session_start",
+      "blockChannel": "none",
+      "injectChannel": "additionalContext",
+      "toolMatcher": "*",
+      "timeoutOverrides": [
+        {
+          "event": "SessionStart",
+          "timeoutSeconds": 12
+        }
+      ]
+    },
+    {
+      "script": "core/engine/scripts/memory-knowledge-maintenance.cjs",
+      "kind": "maintenance",
+      "tier": "core",
+      "events": [
+        "SessionStart"
+      ],
+      "tools": [
+        "*"
+      ],
+      "payloadSchema": "harness-event-v1",
+      "blocking": false,
+      "sideEffects": [
+        "sqlite-retention",
+        "memory-reconcile",
+        "rule-candidates",
+        "semantic-index",
+        "maintenance-state"
+      ],
+      "timeoutSeconds": 120,
+      "owner": "harness-memory",
+      "fixture": "core/engine/scripts/test-hooks/read-only-hooks.cjs",
+      "active": true,
+      "transports": [
+        "claude-code",
+        "workbuddy"
+      ],
+      "action": "session_start",
+      "blockChannel": "none",
+      "injectChannel": "additionalContext",
+      "toolMatcher": "*",
+      "timeoutOverrides": [
+        {
+          "event": "SessionStart",
+          "timeoutSeconds": 120
+        }
+      ],
+      "hostOnly": [
+        "120s 长钩子——grok 剖面改由 spool 消费者调度(3.2)"
+      ]
+    },
+    {
+      "script": "core/engine/scripts/hooks/stop-summary.cjs",
+      "kind": "router",
+      "tier": "core",
+      "events": [
+        "Stop"
+      ],
+      "tools": [
+        "*"
+      ],
+      "payloadSchema": "harness-event-v1",
+      "blocking": true,
+      "sideEffects": [
+        "watchdog-state",
+        "task-loops",
+        "delivery-risk"
+      ],
+      "timeoutSeconds": 40,
+      "owner": "harness-context",
+      "fixture": "core/engine/scripts/test-hooks/lifecycle-router-contract.cjs",
+      "active": true,
+      "transports": [
+        "claude-code",
+        "workbuddy",
+        "codex"
+      ],
+      "action": "turn_end",
+      "blockChannel": "exit_code_2",
+      "injectChannel": "none",
+      "toolMatcher": "*",
+      "timeoutOverrides": [
+        {
+          "event": "Stop",
+          "timeoutSeconds": 40
+        }
+      ]
+    }
+  ],
+  "hostPresets": {
+    "claude-code": {
+      "note": "全事件剖面; Stop 阻断语义为宿主独占(hostOnly)"
+    },
+    "workbuddy": {
+      "note": "事件与 claude-code 同构(M3 实证); 命令带 --transport workbuddy"
+    },
+    "grok": {
+      "note": "长钩子剖面(Phase 3.2 落地)——Grok 经 ~/.claude/settings.json 兼容并入; async 条目按前台执行, 故长钩子跳过/降级",
+      "eventsSubset": [
+        "PreToolUse",
+        "PostToolUse",
+        "PostToolUseFailure",
+        "SessionStart",
+        "Stop"
+      ],
+      "dropAsync": true,
+      "skip": [
+        {
+          "script": "core/engine/scripts/memory-knowledge-maintenance.cjs",
+          "reason": "120s 长钩子——grok 侧跳过, 改由 telemetry-spool-drain 消费者调度(2.5)"
+        },
+        {
+          "script": "core/engine/scripts/hooks/codegraph-sync.cjs",
+          "argPattern": "--session",
+          "reason": "60s 全量同步——grok 侧跳过, 仅保留 --file 增量条目"
+        }
+      ],
+      "matcherTranslation": {
+        "startup": "new",
+        "resume": "load"
+      }
+    },
+    "codex": {
+      "note": "事件以中性 eventType 直供(无 native 层); 遥测走 spool(2.5)"
+    }
+  }
+}

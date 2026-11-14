@@ -1,0 +1,12 @@
+N 64
+NSYM 48
+NDATA 48
+NLTS 2
+POINTS 2304
+PACK {im,re}
+Y_FMT Q2.14
+H_FMT Q2.14
+X_FMT Q4.12
+SOURCE rtl_mirror_eq.m (models/comm/ofdm/src) — 0 容差判卷
+SAT 100
+ERASURE 7

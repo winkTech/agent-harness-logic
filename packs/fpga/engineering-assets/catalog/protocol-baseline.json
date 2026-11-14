@@ -1,0 +1,23 @@
+{
+  "schema_version": "1.0",
+  "owner": "lihan",
+  "decided_at": "2026-08-02",
+  "decision_basis": "owner 裁定 2026-08-02。触发原因：库内前端三件 (sync_top / channel_est_top / ofdm_tx_top) 锚在 802.11a，而 ldpc_codec 是 802.11n 的 QC-LDPC —— 802.11a 本身不含 LDPC，链路实为跨版组合，此前无处可查。基线定在 Clause 17 的理由：三个已认证子系统本就按它做，四套 WiFi golden 也是 Clause 17 就绪，且 11g 基带波形与 11a 相同、n/ac/ax 的 legacy 前导沿用同一 numerology —— 兼容面最宽且返工最少。",
+  "baseline": {
+    "standard": "IEEE 802.11-2020",
+    "clause": "17",
+    "profile": "11a/g OFDM 20MHz",
+    "scope": "DATA 场通路。PLCP 层 (SIGNAL 速率/长度编解码、打孔变速率) 在基线范围之外 —— 闭环链路的 rate/length 由参数或寄存器侧带静态给定 (owner 裁定 2026-08-02 决策⑧)。",
+    "parameters": {
+      "bw_mhz": 20,
+      "n_fft": 64,
+      "n_data_sc": 48,
+      "n_pilot_sc": 4,
+      "cp_len": 16,
+      "modulations": ["BPSK", "QPSK", "16QAM", "64QAM"]
+    }
+  },
+  "anchor_basis": "standard 与 profile 由 owner 裁定直接给定。clause='17' 与各资产的 sections 沿用库内既有引用 —— knowledge/primary/domains/comm/wifi/golden_models/ 下 scrambler 引 802.11-2016 §17.3.5.5、bcc_encoder 引 802.11-2016 §17.3.5.6、qam_mapper 引 802.11-2016 §17.3.5.8，golden_model_setup.md 引 802.11-2020 §17.3.5.4；四处一致指向 Clause 17 = OFDM PHY。**未经标准原文核对**：条款号随版次变动 (OFDM PHY 在 802.11a-1999 为 Clause 17、802.11-2012 为 Clause 18)，且库内已存在 2016 vs 2020 的小节号分歧 (scrambler 被分别引为 §17.3.5.5 与 §17.3.5.4)。故 clause/sections 只作人读溯源，机械匹配以 parameters 为准。",
+  "cross_version_policy": "跨版资产合法但必须显式声明 baseline_relation=cross_version 并在 notes 说明理由。当前唯一跨版件是 ldpc_codec (802.11n-2009 QC-LDPC)：首条 TX→RX 闭环按『演示闭环』定位交付 —— 11a 帧结构 + 11n LDPC，不声明任何单版合规 (owner 裁定 2026-08-02 决策②)。严格 Clause 17 合规闭环需 BCC+Viterbi，按需触发立项 (决策⑨)。",
+  "notes": "本文件是 G-B-04 的比对基准，缺失或非法时 G-B-04 对非中立锚 fail-closed。不承诺 11n/ac 兼容：前向兼容只在 RTL 参数上留口 (FFT 点数、交织器 NCBPS 等)，认证只对 11a 配置做 (决策①)。"
+}

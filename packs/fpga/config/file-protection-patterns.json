@@ -1,0 +1,10 @@
+{
+  "$schema": "fpga-pack/file-protection-patterns-v1",
+  "description": "file-protection-guard 的受保护路径模式（CBB/golden 布局——Phase 2.6 外置，guard 骨架留 core）",
+  "protectedPatterns": [
+    "**/matlab/**",
+    "**/07_mat/**",
+    "**/golden_model*/**",
+    "**/engineering-assets/models/**"
+  ]
+}

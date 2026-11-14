@@ -123,7 +123,7 @@ fi
 FORBIDDEN_STAGED=()
 for f in "${STAGED_FILES[@]}"; do
   case "$f" in
-    memory/work/*|plugins/cache/*|knowledge/*|engineering-assets/*/vectors/*|engineering-assets/*/vectors-ref/*|engineering-assets/reference-assets/*|engineering-assets/var/build/*|engineering-assets/var/gates/*|engineering-assets/evidence/*) continue ;;
+    memory/work/*|plugins/cache/*|knowledge/*|engineering-assets/*/vectors/*|engineering-assets/*/vectors-ref/*|engineering-assets/reference-assets/*|packs/fpga/references/*|engineering-assets/var/build/*|engineering-assets/var/gates/*|engineering-assets/evidence/*) continue ;;
   esac
   case "$f" in
     transcript|*/transcript|vsim.wlf|*/vsim.wlf|*.vcd|*.wlftmp|vsim.dump|*/vsim.dump|*.wdb|xsim.jou|*/xsim.jou|xsim.log|*/xsim.log|xsim.tcl|*/xsim.tcl|xelab.pb|*/xelab.pb|xvlog.pb|*/xvlog.pb|tr_db.log|*/tr_db.log|wev.log|*/wev.log|vlog.log|*/vlog.log)
@@ -167,7 +167,7 @@ for f in "${STAGED_FILES[@]}"; do
   case "$f" in
     *.py)
       case "$f" in
-        */examples/*|*/reference-assets/vendor/*|*/templates/*|*node_modules/*|*/plugins/cache/*|*/skills/*/scripts/*|*/skills/*/tools/*) ;;
+        */examples/*|*/reference-assets/vendor/*|packs/fpga/references/vendor/*|*/templates/*|*node_modules/*|*/plugins/cache/*|*/skills/*/scripts/*|*/skills/*/tools/*) ;;
         *) PY_FILES+=("$f") ;;
       esac
       ;;
@@ -218,7 +218,7 @@ for f in "${STAGED_FILES[@]}"; do
   case "$f" in
     *.tcl|*.do|*.xdc|*.sdc)
       case "$f" in
-        */examples/*|*/reference-assets/vendor/*|*/templates/*) ;;
+        */examples/*|*/reference-assets/vendor/*|packs/fpga/references/vendor/*|*/templates/*) ;;
         *) TCL_FILES+=("$f") ;;
       esac
       ;;

@@ -1,0 +1,16 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "claude-hook/session-start-v1",
+  "title": "Claude Code hook payload: SessionStart",
+  "description": "Phase 2.3 payload 契约第四份——会话启动。source 枚举与 host-concepts.cjs HOST_DIALECTS['claude-code'].sessionStartSources 同源（startup|resume|clear|compact|fork）。",
+  "type": "object",
+  "required": ["hook_event_name"],
+  "properties": {
+    "hook_event_name": { "const": "SessionStart" },
+    "session_id": { "type": "string" },
+    "transcript_path": { "type": "string" },
+    "cwd": { "type": "string" },
+    "source": { "enum": ["startup", "resume", "clear", "compact", "fork"] }
+  },
+  "additionalProperties": true
+}
