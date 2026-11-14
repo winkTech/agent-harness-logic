@@ -2,6 +2,20 @@
 
 每次对外发布（push 主分支 / marketplace 更新）前逐项过。
 
+## 合入/切分支后复位（先于一切检查）
+
+merge 或 checkout 后，旧分支同名 tracked 产物会覆盖渲染版、gitignore 的运行时镜像（skills/）会残缺、dist sha 与 marketplace 断链——依次重建并全验：
+
+```bash
+node core/engine/scripts/sync-skills.cjs
+node core/engine/scripts/sync-workflow-mirror.cjs
+node core/engine/scripts/render-hook-settings.cjs
+node core/engine/scripts/render-codex-hooks.cjs
+node core/engine/scripts/render-grok-hooks.cjs
+node core/engine/scripts/sync-plugin-dist.cjs   # marketplace 与 dist 产物须同 commit 提交
+node core/engine/scripts/harness-ci.cjs          # render family 六渲染器须全绿
+```
+
 ## 分发面
 
 - [ ] `node core/engine/scripts/sync-plugin-dist.cjs`（重建 dist）
