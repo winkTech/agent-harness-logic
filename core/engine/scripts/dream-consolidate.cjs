@@ -23,6 +23,9 @@ const {
   getWatermark,
   setWatermark,
   countByType,
+  beginConsumerRun,
+  completeConsumerRun,
+  getConsumerRun,
 } = require('../sqlite/store-events.cjs');
 const { writeMemory } = require('../sqlite/store-memory.cjs');
 const { decayCandidates, setTier } = require('../sqlite/store-skills.cjs');
@@ -412,12 +415,46 @@ function runDream(opts = {}) {
     log(`🧠 Dream 提炼${isDryRun ? ' (DRY RUN)' : ''}`);
     log('');
 
+    // 0. 消费者心跳 begin（非 dry-run 才落库；与 skill-evolve 同口径，
+    //    供 consumer-scheduler 到期调度与 memory-health 心跳检查）。
+    let heartbeatRunId = null;
+    if (!isDryRun) {
+      try {
+        const prior = getConsumerRun('dream', { db });
+        heartbeatRunId = (prior && prior.runId) || `dream-${Date.now()}`;
+        beginConsumerRun('dream', {
+          db,
+          runId: heartbeatRunId,
+          pending: countSinceWatermark(getWatermark({ db, consumer: 'dream' }), { db }),
+          processedThrough: getWatermark({ db, consumer: 'dream' }),
+          at: new Date().toISOString(),
+        });
+      } catch { heartbeatRunId = null; /* 心跳失败不阻塞提炼 */ }
+    }
+    const finishHeartbeat = (status, watermarkAt) => {
+      if (!heartbeatRunId) return;
+      try {
+        completeConsumerRun('dream', {
+          db,
+          runId: heartbeatRunId,
+          status,
+          processedThrough: watermarkAt,
+          processed: 0,
+          pending: countSinceWatermark(watermarkAt, { db }),
+          // 到期节奏：有积压 1h 后再跑；清空则 24h
+          nextDueAt: Date.now() + (countSinceWatermark(watermarkAt, { db }) > 0 ? 3600_000 : 86_400_000),
+          at: new Date().toISOString(),
+        });
+      } catch { /* 同上 */ }
+    };
+
     // 1. 读取事件
     const committedWatermark = getWatermark({ db, consumer: 'dream' });
     const watermark = force ? 0 : committedWatermark;
     const events = sinceWatermark(watermark, maxEvents, { db });
     if (events.length === 0) {
       log('无新事件。跳过提炼。');
+      finishHeartbeat('skipped', committedWatermark);
       return {
         inspected: 0,
         processed: 0,
@@ -471,6 +508,7 @@ function runDream(opts = {}) {
     const byType = countByType({ db });
     for (const item of byType) log(`  ${item.type}: ${item.count}`);
     log('\n✅ Dream 完成');
+    finishHeartbeat('success', watermarkAfter);
     return {
       inspected: events.length,
       processed: isDryRun ? 0 : events.length,
