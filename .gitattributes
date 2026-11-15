@@ -25,3 +25,4 @@
 *.wlf   binary
 *.bit   binary
 *.vvp   binary
+core/rules/90-promoted-*.md text eol=lf
