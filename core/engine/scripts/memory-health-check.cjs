@@ -38,7 +38,11 @@ function tableExists(db, name) {
 
 function inspectPromotedRuleIntegrity(home = HARNESS_ROOT) {
   const root = path.resolve(home);
-  const rulesDir = path.join(root, 'docs', 'rules');
+  // Phase 1 拆层后规则真源在 core/rules（rule-loader 消费面）；docs/rules 仅为
+  // 兼容回退。promote 工具默认写 core/rules——检查器必须同口径（2026-11-15 修：
+  // 旧硬编码 docs/rules 导致合法晋升被判 integrity_failed）。
+  const primaryRulesDir = path.join(root, 'core', 'rules');
+  const fallbackRulesDir = path.join(root, 'docs', 'rules');
   const ledgerPath = varUnder(root, 'maintenance', 'harness-rule-candidates.json');
   const {
     readLedger,
@@ -57,16 +61,25 @@ function inspectPromotedRuleIntegrity(home = HARNESS_ROOT) {
       error: error.message,
     };
   }
-  const files = fs.existsSync(rulesDir)
-    ? fs.readdirSync(rulesDir).filter((name) => /^90-promoted-hrc-.*\.md$/i.test(name))
-    : [];
+  // 收集两目录的 promoted 文件（真源 core/rules 优先，docs/rules 兼容回退）。
+  const listPromoted = (dir) => (fs.existsSync(dir)
+    ? fs.readdirSync(dir).filter((name) => /^90-promoted-hrc-.*\.md$/i.test(name))
+    : []);
+  const primary = listPromoted(primaryRulesDir);
+  const fallback = listPromoted(fallbackRulesDir);
   const expectedFiles = candidates.map((candidate) => candidate.promotion?.rulesFile
     || path.basename(String(candidate.promotion?.rulesPath || `90-promoted-${candidate.id}.md`)));
-  const names = [...new Set([...files, ...expectedFiles])].sort();
+  const names = [...new Set([...primary, ...fallback, ...expectedFiles])].sort();
   const records = names.map((name) => {
-    const filePath = path.join(rulesDir, name);
+    // 文件按真源→回退顺序定位；expected 但不存在的路径交 validator 判 invalid。
+    const inPrimary = primary.includes(name);
+    const inFallback = fallback.includes(name);
+    const filePath = inPrimary
+      ? path.join(primaryRulesDir, name)
+      : inFallback ? path.join(fallbackRulesDir, name)
+        : path.join(primaryRulesDir, name);
     const result = validatePromotedRuleArtifact(filePath, { ledgerPath });
-    return { file: name, candidateId: result.candidateId || null, valid: result.valid, reason: result.reason };
+    return { file: name, dir: inPrimary ? 'core/rules' : inFallback ? 'docs/rules' : 'missing', candidateId: result.candidateId || null, valid: result.valid, reason: result.reason };
   });
   return {
     total: records.length,
