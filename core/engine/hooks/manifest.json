@@ -535,6 +535,29 @@
       ]
     },
     {
+      "script": "core/engine/scripts/consumer-scheduler.cjs",
+      "kind": "scheduler",
+      "tier": "core",
+      "events": [
+        "SessionStart"
+      ],
+      "tools": [
+        "*"
+      ],
+      "payloadSchema": "harness-event-v1",
+      "blocking": false,
+      "sideEffects": [
+        "consumer-heartbeat",
+        "dream-consolidate",
+        "skill-evolve"
+      ],
+      "timeoutSeconds": 45,
+      "owner": "harness-memory",
+      "notes": "层 2 激活(2026-11-15): 到期消费者调度——读 runtime_consumer_heartbeats.next_due_at, 到期才 spawn runner; 未到期 <100ms 退出; 调度器永不阻塞会话启动",
+      "active": true,
+      "fixture": "core/engine/scripts/test-hooks/read-only-hooks.cjs"
+    },
+    {
       "script": "core/engine/scripts/hooks/stop-summary.cjs",
       "kind": "router",
       "tier": "core",

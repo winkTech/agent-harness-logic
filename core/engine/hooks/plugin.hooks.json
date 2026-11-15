@@ -125,6 +125,15 @@
               "--auto",
               "--execute"
             ]
+          },
+          {
+            "type": "command",
+            "command": "node",
+            "timeout": 45,
+            "args": [
+              "${CLAUDE_PLUGIN_ROOT}/core/engine/scripts/consumer-scheduler.cjs",
+              "--auto"
+            ]
           }
         ]
       },
