@@ -25,15 +25,24 @@ const CONSUMERS = [
   {
     id: 'dream',
     runner: path.join(HARNESS_ROOT, 'core', 'engine', 'scripts', 'dream-consolidate.cjs'),
-    timeoutMs: 12_000,
     // 到期节奏：成功后 24h 再跑（dream 蒸馏不需要高频）
     reDueAfterSuccessMs: 24 * 3600_000,
+    timeoutMs: 12_000,
   },
   {
     id: 'skill-evolve',
     runner: path.join(HARNESS_ROOT, 'core', 'engine', 'scripts', 'skill-evolve.cjs'),
-    timeoutMs: 30_000,
     reDueAfterSuccessMs: 24 * 3600_000,
+    timeoutMs: 30_000,
+  },
+  {
+    // fp-rate 挂 Stop 事件消费门禁拦截评估；runner 需 auto-record 子命令
+    id: 'fp-rate',
+    runner: null,
+    runnerArgs: ['auto-record'],
+    script: path.join(HARNESS_ROOT, 'core', 'engine', 'scripts', 'fp-rate-tracker.cjs'),
+    reDueAfterSuccessMs: 12 * 3600_000,
+    timeoutMs: 15_000,
   },
 ];
 
@@ -55,7 +64,9 @@ function isDue(run, reDueMs, now = Date.now()) {
 
 function runConsumer(consumer) {
   return new Promise((resolve) => {
-    const child = spawn(process.execPath, [consumer.runner], {
+    const script = consumer.runner || consumer.script;
+    if (!script) return resolve({ id: consumer.id, verdict: 'no-runner' });
+    const child = spawn(process.execPath, [script, ...(consumer.runnerArgs || [])], {
       cwd: HARNESS_ROOT,
       windowsHide: true,
       stdio: ['ignore', 'ignore', 'ignore'], // 守护进程不抢会话输出
