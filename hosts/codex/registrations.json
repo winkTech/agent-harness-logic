@@ -99,6 +99,16 @@
           {
             "type": "command",
             "command": "node ${HARNESS_ROOT}/core/engine/scripts/hooks/isolation-check.cjs"
+          },
+          {
+            "type": "command",
+            "command": "node {{HARNESS_ROOT}}/core/engine/scripts/memory-knowledge-maintenance.cjs --auto --execute",
+            "timeout": 120
+          },
+          {
+            "type": "command",
+            "command": "node {{HARNESS_ROOT}}/core/engine/scripts/consumer-scheduler.cjs --auto",
+            "timeout": 45
           }
         ]
       }

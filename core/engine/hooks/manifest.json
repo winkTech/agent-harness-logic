@@ -518,7 +518,8 @@
       "active": true,
       "transports": [
         "claude-code",
-        "workbuddy"
+        "workbuddy",
+        "codex"
       ],
       "action": "session_start",
       "blockChannel": "none",
@@ -555,7 +556,13 @@
       "owner": "harness-memory",
       "notes": "层 2 激活(2026-11-15): 到期消费者调度——读 runtime_consumer_heartbeats.next_due_at, 到期才 spawn runner; 未到期 <100ms 退出; 调度器永不阻塞会话启动",
       "active": true,
-      "fixture": "core/engine/scripts/test-hooks/read-only-hooks.cjs"
+      "fixture": "core/engine/scripts/test-hooks/read-only-hooks.cjs",
+      "transports": [
+        "claude-code",
+        "workbuddy",
+        "codex",
+        "grok"
+      ]
     },
     {
       "script": "core/engine/scripts/hooks/stop-summary.cjs",
