@@ -417,11 +417,14 @@ function runDream(opts = {}) {
 
     // 0. 消费者心跳 begin（非 dry-run 才落库；与 skill-evolve 同口径，
     //    供 consumer-scheduler 到期调度与 memory-health 心跳检查）。
+    //    仅生产入口（opts.db 未注入）落心跳——embedded 调用（测试/注入 db）
+    //    自管心跳生命周期，此处插手会令调用方的 completeConsumerRun 撞
+    //    "stale or not running"（runId 被覆盖/状态被提前置终）。
     let heartbeatRunId = null;
-    if (!isDryRun) {
+    const ownsHeartbeat = !isDryRun && !opts.db;
+    if (ownsHeartbeat) {
       try {
-        const prior = getConsumerRun('dream', { db });
-        heartbeatRunId = (prior && prior.runId) || `dream-${Date.now()}`;
+        heartbeatRunId = `dream-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
         beginConsumerRun('dream', {
           db,
           runId: heartbeatRunId,
