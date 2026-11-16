@@ -42,12 +42,12 @@ test('envOf: 布尔归一——1/true/yes 真，其余假；空串视为缺席',
   assert.equal(envOf({ HARNESS_NO_PERSIST: 'YES' }).noPersist, true);
   assert.equal(envOf({ HARNESS_NO_PERSIST: '0' }).noPersist, false);
   assert.equal(envOf({ HARNESS_NO_PERSIST: '' }).noPersist, false);
-  assert.equal(envOf({ CLAUDE_HARNESS_NO_PERSIST: '1' }).noPersist, true);
+  assert.equal(envOf({ HARNESS_NO_PERSIST: '1' }).noPersist, true);
 });
 
 test('envValue: 通用 canonical 读取（未列入语义视图的变量）', () => {
   assert.equal(envValue({ HARNESS_SQLITE_PATH: '/a.db' }, 'HARNESS_SQLITE_PATH'), '/a.db');
-  assert.equal(envValue({ CLAUDE_SQLITE_PATH: '/b.db' }, 'HARNESS_SQLITE_PATH'), '/b.db');
+  assert.equal(envValue({ HARNESS_SQLITE_PATH: '/b.db' }, 'HARNESS_SQLITE_PATH'), '/b.db');
   assert.equal(envValue({}, 'HARNESS_SQLITE_PATH'), undefined);
 });
 

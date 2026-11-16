@@ -22,7 +22,7 @@ const ROUTER_PATH = process.env.PREFLIGHT_ROUTER_PATH
   : path.join(ROOT, 'core', 'engine', 'scripts', 'hooks', 'preflight-router.cjs');
 const router = require(ROUTER_PATH);
 
-const NO_PERSIST_ENV = { CLAUDE_HARNESS_NO_PERSIST: '1' };
+const NO_PERSIST_ENV = { HARNESS_NO_PERSIST: '1' };
 
 function writePayload() {
   return {

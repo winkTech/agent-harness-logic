@@ -99,11 +99,11 @@ function appendHookEntries(entries, hooks, source) {
 
 /**
  * 插件来源默认关闭 —— 只读 settings 文件是历史行为。
- * 通过 opts.includePlugin 或 env CLAUDE_HARNESS_REGISTRY_INCLUDE_PLUGIN=1 打开。
+ * 通过 opts.includePlugin 或 env HARNESS_REGISTRY_INCLUDE_PLUGIN=1 打开。
  */
 function pluginSourceEnabled(opts = {}) {
   if (typeof opts.includePlugin === 'boolean') return opts.includePlugin;
-  return String(process.env.CLAUDE_HARNESS_REGISTRY_INCLUDE_PLUGIN || '') === '1';
+  return String(process.env.HARNESS_REGISTRY_INCLUDE_PLUGIN || '') === '1';
 }
 
 /**

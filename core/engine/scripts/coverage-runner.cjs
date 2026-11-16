@@ -52,8 +52,8 @@ function resolveRoot() {
 
 const ROOT = resolveRoot();
 const RUNNER = path.join(ROOT, 'core/engine/scripts/test-hooks/run-all-tests.cjs');
-const SUMMARY_FILE = process.env.CLAUDE_COVERAGE_SUMMARY_FILE
-  ? path.resolve(process.env.CLAUDE_COVERAGE_SUMMARY_FILE)
+const SUMMARY_FILE = process.env.HARNESS_COVERAGE_SUMMARY_FILE
+  ? path.resolve(process.env.HARNESS_COVERAGE_SUMMARY_FILE)
   : varPath('coverage', 'coverage-summary.json');
 const SUMMARY_DIR = path.dirname(SUMMARY_FILE);
 

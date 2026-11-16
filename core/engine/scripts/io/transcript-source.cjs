@@ -1,5 +1,7 @@
 'use strict';
 
+const { envOf } = require('./env.cjs');
+
 /**
  * core/engine/scripts/io/transcript-source.cjs — transcript 路径解析唯一实现
  *
@@ -33,11 +35,11 @@ function resolveTranscriptPath(payload, opts = {}) {
     || payload?.transcriptPath
     || payload?.conversation?.transcript_path
     || payload?.session?.transcript_path
-    || process.env.CLAUDE_TRANSCRIPT_PATH
+    || envOf(process.env).transcriptPath
     || '';
   if (explicit && fs.existsSync(explicit)) return explicit;
 
-  const sessionDir = payload?.session_dir || process.env.CLAUDE_SESSION_DIR || '';
+  const sessionDir = payload?.session_dir || envOf(process.env).sessionDir;
   if (sessionDir && fs.existsSync(sessionDir)) {
     for (const name of SESSION_FILE_CANDIDATES) {
       const candidate = path.join(sessionDir, name);

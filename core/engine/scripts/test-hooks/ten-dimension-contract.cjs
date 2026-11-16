@@ -20,7 +20,7 @@ const os = require('node:os');
 const path = require('node:path');
 
 const ROOT = path.resolve(__dirname, '..', '..', '..', '..');
-process.env.CLAUDE_HARNESS_NO_PERSIST = '1';
+process.env.HARNESS_NO_PERSIST = '1';
 
 process.env.HARNESS_NO_PERSIST = '1';
 
@@ -46,16 +46,16 @@ function main() {
   // 固化, 于是评测执行器把合成判定写进了生产账本。
   const sentinelDir = fs.mkdtempSync(path.join(os.tmpdir(), 'ten-dim-sentinel-'));
   const sentinelLedger = path.join(sentinelDir, 'verification-ledger.json');
-  const savedLedgerEnv = process.env.CLAUDE_VERIFICATION_LEDGER_FILE;
-  process.env.CLAUDE_VERIFICATION_LEDGER_FILE = sentinelLedger;
+  const savedLedgerEnv = process.env.HARNESS_VERIFICATION_LEDGER_FILE;
+  process.env.HARNESS_VERIFICATION_LEDGER_FILE = sentinelLedger;
   let report;
   try {
     report = dashboard.buildTenDimensionReport({});
     assert.equal(fs.existsSync(sentinelLedger), false,
       'the dashboard (and the evaluators it runs) must not write verification evidence');
   } finally {
-    if (savedLedgerEnv === undefined) delete process.env.CLAUDE_VERIFICATION_LEDGER_FILE;
-    else process.env.CLAUDE_VERIFICATION_LEDGER_FILE = savedLedgerEnv;
+    if (savedLedgerEnv === undefined) delete process.env.HARNESS_VERIFICATION_LEDGER_FILE;
+    else process.env.HARNESS_VERIFICATION_LEDGER_FILE = savedLedgerEnv;
     try { fs.rmSync(sentinelDir, { recursive: true, force: true }); } catch { /* cleanup */ }
   }
 
@@ -98,7 +98,7 @@ function main() {
   const deps = { deliveryTracker: { recordDelivery: (args) => { recorded.push(args); return true; } } };
   // 落库分支受三个环境守卫保护 (套件会同时设上三个)。本段要验证的是**状态映射**,
   // 因此临时全部解除; recordDelivery 已被注入替换, 不会碰真实库。
-  const GUARDS = ['CLAUDE_HARNESS_NO_PERSIST', 'CLAUDE_HARNESS_VERIFY_READONLY', 'CLAUDE_NO_DIAGNOSTIC_WRITES',
+  const GUARDS = ['HARNESS_NO_PERSIST', 'HARNESS_VERIFY_READONLY', 'HARNESS_NO_DIAGNOSTIC_WRITES',
     'HARNESS_NO_PERSIST', 'HARNESS_VERIFY_READONLY', 'HARNESS_NO_DIAGNOSTIC_WRITES'];
   const savedGuards = Object.fromEntries(GUARDS.map((key) => [key, process.env[key]]));
   for (const key of GUARDS) delete process.env[key];

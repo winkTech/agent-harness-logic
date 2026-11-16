@@ -10,7 +10,7 @@
  *   4. 两种模式都不产生 stdout —— stdout 会被 Claude Code 当成 hook 协议解析
  *   5. 危险根路径 (盘符根 / 用户主目录) 一律拒绝遍历
  *
- * 全程用临时 DB (CLAUDE_SQLITE_PATH) 与临时节流文件, 不碰 var/ 与真实 memory.db。
+ * 全程用临时 DB (HARNESS_SQLITE_PATH) 与临时节流文件, 不碰 var/ 与真实 memory.db。
  */
 
 const assert = require('node:assert/strict');
@@ -53,14 +53,14 @@ function runHook(ws, mode, payload, extraEnv = {}) {
       // 本契约就是要验证"写入路径"本身, 因此显式清掉 runner 注入的只读开关;
       // 写入目标全部指向临时 DB 与临时状态文件, 不碰 var/ 和真实 memory.db。
       // 只读语义另由 assertReadOnly 显式打开开关来验证。
-      CLAUDE_HARNESS_NO_PERSIST: '',
+      HARNESS_NO_PERSIST: '',
       HARNESS_NO_PERSIST: '',
       HARNESS_VERIFY_READONLY: '',
       HARNESS_NO_DIAGNOSTIC_WRITES: '',
-      CLAUDE_NO_DIAGNOSTIC_WRITES: '',
-      CLAUDE_SQLITE_PATH: ws.dbPath,
-      CLAUDE_CG_SYNC_STATE_FILE: ws.statePath,
-      CLAUDE_CG_SYNC_DEBUG: '1',
+      HARNESS_NO_DIAGNOSTIC_WRITES: '',
+      HARNESS_SQLITE_PATH: ws.dbPath,
+      HARNESS_CG_SYNC_STATE_FILE: ws.statePath,
+      HARNESS_CG_SYNC_DEBUG: '1',
       ...extraEnv,
     },
   });
@@ -135,7 +135,7 @@ function assertSessionMode(ws) {
   assert.equal(second.report?.reason, 'throttled', `期望 throttled, 实得 ${second.report?.reason}`);
 
   // 节流窗口设为 0 → 必须重新同步 (证明跳过来自节流而不是别的原因)
-  const forced = runHook(ws, '--session', payload, { CLAUDE_CG_SYNC_INTERVAL_MS: '0' });
+  const forced = runHook(ws, '--session', payload, { HARNESS_CG_SYNC_INTERVAL_MS: '0' });
   assert.equal(forced.report?.synced, true, '节流窗口归零后应重新同步');
 }
 
@@ -149,7 +149,7 @@ function assertReadOnly(ws) {
       tool_name: 'Write',
       cwd: fresh.project,
       tool_input: { file_path: path.join(fresh.project, 'rtl', 'leaf.sv') },
-    }, { CLAUDE_HARNESS_NO_PERSIST: '1' });
+    }, { HARNESS_NO_PERSIST: '1' });
 
     assert.equal(result.report?.indexed, false);
     assert.equal(result.report?.reason, 'read_only');
@@ -178,13 +178,13 @@ function assertBadInput(ws) {
     encoding: 'utf8',
     env: {
       ...process.env,
-      CLAUDE_HARNESS_NO_PERSIST: '',
+      HARNESS_NO_PERSIST: '',
       HARNESS_NO_PERSIST: '',
       HARNESS_VERIFY_READONLY: '',
       HARNESS_NO_DIAGNOSTIC_WRITES: '',
-      CLAUDE_NO_DIAGNOSTIC_WRITES: '',
-      CLAUDE_SQLITE_PATH: ws.dbPath,
-      CLAUDE_CG_SYNC_STATE_FILE: ws.statePath,
+      HARNESS_NO_DIAGNOSTIC_WRITES: '',
+      HARNESS_SQLITE_PATH: ws.dbPath,
+      HARNESS_CG_SYNC_STATE_FILE: ws.statePath,
     },
   });
   assert.equal(result.status, 0, '非法 JSON 输入必须 fail-open');

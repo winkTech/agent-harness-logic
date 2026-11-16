@@ -191,7 +191,7 @@ test('Stop delivery risk is shadow-first, enforceable, and permits explicit unve
     stdout: line => stdout.push(line),
     stderr: line => stderr.push(line),
   }, {
-    env: { CLAUDE_RISK_POLICY_MODE: 'shadow' },
+    env: { HARNESS_RISK_POLICY_MODE: 'shadow' },
     riskEntries: active,
   });
   assert.equal(result.decision, 'allow');
@@ -205,7 +205,7 @@ test('Stop delivery risk is shadow-first, enforceable, and permits explicit unve
     stdout: line => stdout.push(line),
     stderr: line => stderr.push(line),
   }, {
-    env: { CLAUDE_RISK_POLICY_MODE: 'enforce' },
+    env: { HARNESS_RISK_POLICY_MODE: 'enforce' },
     riskEntries: active,
   });
   assert.equal(result.decision, 'block');
@@ -221,7 +221,7 @@ test('Stop delivery risk is shadow-first, enforceable, and permits explicit unve
     stdout: line => stdout.push(line),
     stderr: line => stderr.push(line),
   }, {
-    env: { CLAUDE_RISK_POLICY_MODE: 'enforce' },
+    env: { HARNESS_RISK_POLICY_MODE: 'enforce' },
     riskEntries: [{
       ...active[0],
       verificationStatus: 'unavailable',
@@ -250,7 +250,7 @@ test('Stop reuses exact R1/R2 cache entries but never R3 signoff evidence', () =
   };
   let lookups = 0;
   let result = runDeliveryRisk(payload, { stdout() {}, stderr() {} }, {
-    env: { CLAUDE_RISK_POLICY_MODE: 'enforce' },
+    env: { HARNESS_RISK_POLICY_MODE: 'enforce' },
     riskEntries: [base],
     findCacheEvidence() {
       lookups += 1;
@@ -266,7 +266,7 @@ test('Stop reuses exact R1/R2 cache entries but never R3 signoff evidence', () =
     stdout: line => stdout.push(line),
     stderr() {},
   }, {
-    env: { CLAUDE_RISK_POLICY_MODE: 'enforce' },
+    env: { HARNESS_RISK_POLICY_MODE: 'enforce' },
     riskEntries: [{ ...base, minimumRiskLevel: 'R3', effectiveRiskLevel: 'R3' }],
     findCacheEvidence() {
       lookups += 1;
@@ -329,7 +329,7 @@ test('Stop passes unresolved delivery risk into watchdog scope selection', () =>
       cwd: root,
       session_id: 'stop-risk-scope',
     }), {
-      env: { CLAUDE_RISK_POLICY_MODE: 'shadow' },
+      env: { HARNESS_RISK_POLICY_MODE: 'shadow' },
       riskEntries: [{
         projectRoot: root,
         sessionId: 'stop-risk-scope',

@@ -21,7 +21,7 @@ const HOME_STATE_FILES = [
   path.join('var', 'gates', 'verification-quality.json'),
   path.join('var', 'verify-gate.json'),
 ];
-const CODEX_NPX_EXEC_COMMAND = process.platform === 'win32'
+const HARNESS_NPX_EXEC_COMMAND = process.platform === 'win32'
   ? 'cmd.exe /d /s /c "npx -y @openai/codex@0.142.5 exec --ignore-user-config --json --sandbox read-only --skip-git-repo-check --ephemeral --color never"'
   : 'npx -y @openai/codex@0.142.5 exec --ignore-user-config --json --sandbox read-only --skip-git-repo-check --ephemeral --color never';
 const LABELS = {
@@ -176,16 +176,16 @@ function runCommandLine(command, cwd, input = '', timeoutMs = 10 * 60 * 1000, en
 
 function defaultCommandFor(agent) {
   if (agent === 'claude') {
-    return process.env.CLAUDE_RTL_MANAGED_EVAL_COMMAND
+    return process.env.HARNESS_RTL_MANAGED_EVAL_COMMAND
       || 'claude -p --tools "" --output-format json --permission-mode bypassPermissions --no-session-persistence';
   }
-  if (agent === 'codex') return process.env.CODEX_RTL_MANAGED_EVAL_COMMAND || CODEX_NPX_EXEC_COMMAND;
+  if (agent === 'codex') return process.env.HARNESS_RTL_MANAGED_EVAL_COMMAND || HARNESS_NPX_EXEC_COMMAND;
   return '';
 }
 
 function versionCommandFor(agent) {
-  if (agent === 'claude') return process.env.CLAUDE_READINESS_COMMAND || 'claude --version';
-  if (agent === 'codex') return process.env.CODEX_READINESS_COMMAND || 'codex --version';
+  if (agent === 'claude') return process.env.HARNESS_READINESS_COMMAND || 'claude --version';
+  if (agent === 'codex') return process.env.HARNESS_READINESS_COMMAND || 'codex --version';
   return '';
 }
 
@@ -638,7 +638,7 @@ function validatePlan(plan, outDir) {
 
 function runHook(scriptRel, payload, cwd) {
   return run(process.execPath, [path.join(HOME, scriptRel)], cwd, JSON.stringify(payload), 30000, {
-    CLAUDE_VERIFY_GATE_STATE_FILE: path.join(cwd, 'var', 'verify-gate.json'),
+    HARNESS_VERIFY_GATE_STATE_FILE: path.join(cwd, 'var', 'verify-gate.json'),
   });
 }
 
@@ -928,7 +928,7 @@ function runAttempt({ agent, command, outDir, attempt, dryRun, previous }) {
     rawOutput = responseText;
   } else {
     agentRun = runCommandLine(command, outDir, prompt, 10 * 60 * 1000, {
-      CLAUDE_VERIFY_GATE_STATE_FILE: path.join(outDir, 'var', 'verify-gate.json'),
+      HARNESS_VERIFY_GATE_STATE_FILE: path.join(outDir, 'var', 'verify-gate.json'),
     });
     rawOutput = `${agentRun.stdout}${agentRun.stderr}`;
     responseText = extractResponseText(rawOutput);

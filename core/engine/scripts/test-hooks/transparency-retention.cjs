@@ -53,8 +53,8 @@ function main() {
   const instructionHash = crypto.createHash('sha256').update(instruction).digest('hex');
   const explicitRunDir = path.join(root, 'explicit-run');
   const first = runLedger(payload(root, instruction), {
-    CLAUDE_TRANSPARENCY_RUN_DIR: explicitRunDir,
-    CLAUDE_TOOL_ACTION_CONTRACT_MODE: 'all',
+    HARNESS_TRANSPARENCY_RUN_DIR: explicitRunDir,
+    HARNESS_TOOL_ACTION_CONTRACT_MODE: 'all',
   });
   assert.equal(first.status, 0, first.stderr || first.stdout);
   const persisted = allText(explicitRunDir);
@@ -77,10 +77,10 @@ function main() {
     fs.utimesSync(oldDir, when, when);
   }
   const retained = runLedger(payload(root, 'retention instruction'), {
-    CLAUDE_TRANSPARENCY_RUNS_DIR: runsRoot,
-    CLAUDE_TRANSPARENCY_RUN_ID: 'new-run',
-    CLAUDE_TRANSPARENCY_MAX_RUNS: '50',
-    CLAUDE_TOOL_ACTION_CONTRACT_MODE: 'all',
+    HARNESS_TRANSPARENCY_RUNS_DIR: runsRoot,
+    HARNESS_TRANSPARENCY_RUN_ID: 'new-run',
+    HARNESS_TRANSPARENCY_MAX_RUNS: '50',
+    HARNESS_TOOL_ACTION_CONTRACT_MODE: 'all',
   });
   assert.equal(retained.status, 0, retained.stderr || retained.stdout);
   assert.equal(fs.readdirSync(runsRoot, { withFileTypes: true }).filter((entry) => entry.isDirectory()).length, 50);
@@ -94,9 +94,9 @@ function main() {
       tool_response: { status: 0, stdout: `event-${index}` },
     };
     const rotated = runLedger(rotatePayload, {
-      CLAUDE_TRANSPARENCY_RUN_DIR: rotateRunDir,
-      CLAUDE_TRANSPARENCY_MAX_EVENTS_BYTES: '1',
-      CLAUDE_TRANSPARENCY_MAX_ROTATED_EVENTS: '3',
+      HARNESS_TRANSPARENCY_RUN_DIR: rotateRunDir,
+      HARNESS_TRANSPARENCY_MAX_EVENTS_BYTES: '1',
+      HARNESS_TRANSPARENCY_MAX_ROTATED_EVENTS: '3',
     });
     assert.equal(rotated.status, 0, rotated.stderr || rotated.stdout);
   }

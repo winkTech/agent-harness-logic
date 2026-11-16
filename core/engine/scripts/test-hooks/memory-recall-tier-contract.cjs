@@ -17,7 +17,7 @@ const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 
-process.env.CLAUDE_HARNESS_NO_PERSIST = '1';
+process.env.HARNESS_NO_PERSIST = '1';
 
 
 process.env.HARNESS_NO_PERSIST = '1'; // 关缓存与归因持久化, 测试纯净

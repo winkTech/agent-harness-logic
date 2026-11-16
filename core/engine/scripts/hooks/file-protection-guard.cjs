@@ -273,7 +273,7 @@ function latestRtlTouch(root, modules) {
 
 function inversionSignal(filePath, cwd, nowMs = Date.now()) {
   try {
-    const windowMs = Number(process.env.CLAUDE_GOLDEN_INVERSION_WINDOW_MS || INVERSION_WINDOW_MS);
+    const windowMs = Number(process.env.HARNESS_GOLDEN_INVERSION_WINDOW_MS || INVERSION_WINDOW_MS);
     if (!(windowMs > 0)) return null;
     const model = findModelDir(filePath);
     const modules = model?.manifest?.implements_for;
@@ -331,9 +331,9 @@ function creationExemption(filePath, approval, inversion) {
  * 策略（用户 2026-07-27 确认，2026-08-01 细化）：受保护文件**可以修改，但不能随便
  * 修改**。批准仍是必要条件，但不再是充分条件 —— 还要通过依据方向判定。
  *
- *   CLAUDE_PROTECTED_WRITE_APPROVAL="<路径>[,<路径>...]"   逐个文件，禁止通配符
- *   CLAUDE_PROTECTED_WRITE_REASON="<一句话说明>"           必填，写入审计
- *   CLAUDE_PROTECTED_WRITE_BASIS="<kind>|<ref>[|<ruling>]" 必填，依据方向
+ *   HARNESS_PROTECTED_WRITE_APPROVAL="<路径>[,<路径>...]"   逐个文件，禁止通配符
+ *   HARNESS_PROTECTED_WRITE_REASON="<一句话说明>"           必填，写入审计
+ *   HARNESS_PROTECTED_WRITE_BASIS="<kind>|<ref>[|<ruling>]" 必填，依据方向
  *
  * 令牌文件通道支持两种粒度:
  *   逐文件  {path, reason, basis, expiresAt}              —— 一次性, 命中即消费
@@ -396,10 +396,10 @@ function basisFromEnv(raw) {
  * 避免"门禁判定通过但写入没发生"时白白烧掉一张令牌。
  */
 function inspectFileApproval(normalizedPath, env = process.env) {
-  const raw = String(env.CLAUDE_PROTECTED_WRITE_APPROVAL || '').trim();
+  const raw = String(env.HARNESS_PROTECTED_WRITE_APPROVAL || '').trim();
   if (raw) {
-    const reason = String(env.CLAUDE_PROTECTED_WRITE_REASON || '').trim();
-    if (!reason) return { ok: false, why: 'approval reason is required (CLAUDE_PROTECTED_WRITE_REASON)' };
+    const reason = String(env.HARNESS_PROTECTED_WRITE_REASON || '').trim();
+    if (!reason) return { ok: false, why: 'approval reason is required (HARNESS_PROTECTED_WRITE_REASON)' };
     const targets = raw.split(',').map((item) => item.trim().replace(/\\/g, '/')).filter(Boolean);
     if (targets.some((item) => item.includes('*') || item.includes('?'))) {
       return { ok: false, why: 'approval paths must not contain wildcards' };
@@ -408,7 +408,7 @@ function inspectFileApproval(normalizedPath, env = process.env) {
     return {
       ok: true,
       reason,
-      basis: basisFromEnv(env.CLAUDE_PROTECTED_WRITE_BASIS),
+      basis: basisFromEnv(env.HARNESS_PROTECTED_WRITE_BASIS),
       kind: 'environment',
     };
   }
@@ -752,8 +752,8 @@ function parseToolCall() {
   }
 
   // Strategy 2: Environment variables
-  const envName = process.env.CLAUDE_TOOL_NAME || '';
-  const envInput = process.env.CLAUDE_TOOL_INPUT || '';
+  const envName = process.env.HARNESS_TOOL_NAME || '';
+  const envInput = process.env.HARNESS_TOOL_INPUT || '';
   if (envName && envInput) {
     try {
       const parsed = JSON.parse(envInput);
@@ -791,12 +791,12 @@ function blockHint(code) {
       '  依据方向不成立。golden 可以改, 但依据必须指向需求侧(上游), 不能指向 RTL 行为(下游)。',
       `  basis.kind 可选: ${Object.keys(BASIS_DIRECTION).join(' | ')}`,
       '  令牌: {scope|path, decision, reason, basis:{kind,ref[,ruling]}, expiresAt[, remainingWrites]}',
-      '  环境: CLAUDE_PROTECTED_WRITE_BASIS="<kind>|<ref>[|<ruling>]"',
+      '  环境: HARNESS_PROTECTED_WRITE_BASIS="<kind>|<ref>[|<ruling>]"',
     ];
   }
   return [
     '  受保护文件需要用户批准。取得批准后二选一:',
-    '    环境变量 CLAUDE_PROTECTED_WRITE_APPROVAL + _REASON + _BASIS (逐文件)',
+    '    环境变量 HARNESS_PROTECTED_WRITE_APPROVAL + _REASON + _BASIS (逐文件)',
     '    令牌文件 var/audit/protected-write-approvals.json (逐文件或裁决级 scope)',
   ];
 }

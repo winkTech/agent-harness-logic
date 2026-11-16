@@ -22,7 +22,7 @@ const path = require('node:path');
 // 只读跳过行为由「writer: 防写开关命中静默跳过」用例内的局部 env 模拟覆盖）。
 const GATE_VARS = [
   'HARNESS_NO_PERSIST', 'HARNESS_VERIFY_READONLY', 'HARNESS_NO_DIAGNOSTIC_WRITES',
-  'CLAUDE_HARNESS_NO_PERSIST', 'CLAUDE_HARNESS_VERIFY_READONLY', 'CLAUDE_NO_DIAGNOSTIC_WRITES',
+  'HARNESS_NO_PERSIST', 'HARNESS_VERIFY_READONLY', 'HARNESS_NO_DIAGNOSTIC_WRITES',
 ];
 const savedGates = Object.fromEntries(GATE_VARS.map((k) => [k, process.env[k]]));
 for (const k of GATE_VARS) delete process.env[k];

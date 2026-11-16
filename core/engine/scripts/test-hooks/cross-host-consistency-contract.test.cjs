@@ -24,7 +24,7 @@ const ROOT = path.resolve(__dirname, '..', '..', '..', '..');
 // 状态根隔离（同 bench-h4：decide 的重复失败检测读真实状态根）
 process.env.HARNESS_STATE_DIR = fs.mkdtempSync(path.join(os.tmpdir(), 'h4c-state-'));
 process.env.HARNESS_NO_PERSIST = '1';
-process.env.CLAUDE_HARNESS_NO_PERSIST = '1';
+process.env.HARNESS_NO_PERSIST = '1';
 
 const { loadSamples, synth } = require(path.join(ROOT, 'hosts/tests/dialect-synth.cjs'));
 const { ingest } = require('../transport/index.cjs');

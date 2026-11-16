@@ -7,7 +7,7 @@
  * 覆盖断言：
  *   1. 档位判定：preflight-router 200ms / postflight-router 250ms / prompt-context 300ms /
  *      其余同步入口 500ms；
- *   2. scale 生效：CLAUDE_HARNESS_LATENCY_SCALE=3 时 450ms 的 preflight 通过（预算 600ms）；
+ *   2. scale 生效：HARNESS_LATENCY_SCALE=3 时 450ms 的 preflight 通过（预算 600ms）；
  *   3. async-only 入口不计入判定，落在 skipped 里；同一脚本既有同步又有 async 注册时按同步算；
  *   4. 任一超标样本让 evaluateSla 判定为 fail 并列进 violations。
  *
@@ -125,8 +125,8 @@ test('命令行/路径形式的脚本名归一化到同一档位', () => {
 
 // ── 2. scale 生效 ───────────────────────────────────────────────────────────
 
-test('CLAUDE_HARNESS_LATENCY_SCALE=3 时 450ms 的 preflight 通过', () => {
-  const env = { CLAUDE_HARNESS_LATENCY_SCALE: '3' };
+test('HARNESS_LATENCY_SCALE=3 时 450ms 的 preflight 通过', () => {
+  const env = { HARNESS_LATENCY_SCALE: '3' };
   assert.equal(latencyScale(env), 3);
 
   const budget = budgetFor('preflight-router', { index: INDEX, env });
@@ -144,8 +144,8 @@ test('CLAUDE_HARNESS_LATENCY_SCALE=3 时 450ms 的 preflight 通过', () => {
 
   // 非法/缺省 scale 回落到 1，不得意外放宽门槛。
   assert.equal(latencyScale({}), 1);
-  assert.equal(latencyScale({ CLAUDE_HARNESS_LATENCY_SCALE: '0' }), 1);
-  assert.equal(latencyScale({ CLAUDE_HARNESS_LATENCY_SCALE: 'abc' }), 1);
+  assert.equal(latencyScale({ HARNESS_LATENCY_SCALE: '0' }), 1);
+  assert.equal(latencyScale({ HARNESS_LATENCY_SCALE: 'abc' }), 1);
 });
 
 // ── 3. async 不计入 ─────────────────────────────────────────────────────────

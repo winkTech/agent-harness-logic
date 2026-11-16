@@ -62,7 +62,7 @@ function warnOpen(reason, detail = '') {
 }
 
 function maxAgeMs() {
-  const value = Number(process.env.CLAUDE_TOOL_ACTION_CONTRACT_MAX_AGE_MS || DEFAULT_MAX_AGE_MS);
+  const value = Number(process.env.HARNESS_TOOL_ACTION_CONTRACT_MAX_AGE_MS || DEFAULT_MAX_AGE_MS);
   return Number.isFinite(value) && value > 0 ? value : DEFAULT_MAX_AGE_MS;
 }
 
@@ -105,7 +105,7 @@ function validate(ctx, contract) {
   }
 
   if (contract.match?.status === 'missing-user-instruction'
-      && process.env.CLAUDE_TOOL_ACTION_CONTRACT_ALLOW_MISSING_USER !== '1') {
+      && process.env.HARNESS_TOOL_ACTION_CONTRACT_ALLOW_MISSING_USER !== '1') {
     return 'latest user instruction was not captured; cannot prove this action matches user intent';
   }
 
@@ -195,7 +195,7 @@ function main() {
   const payload = parsePayload(readStdin());
   try {
     const ctx = buildContext(payload);
-    if (process.env.CLAUDE_TOOL_ACTION_CONTRACT_GATE_DISABLED === '1'
+    if (process.env.HARNESS_TOOL_ACTION_CONTRACT_GATE_DISABLED === '1'
         && ctx.loopScope?.status !== 'blocked') process.exit(0);
     run(payload);
     process.exit(0);

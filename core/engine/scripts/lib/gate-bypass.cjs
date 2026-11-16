@@ -21,7 +21,7 @@ function digest(value) {
 }
 
 function bypassRequested(env) {
-  return ['1', 'true'].includes(String(env?.CLAUDE_GATES_DISABLED || '').trim().toLowerCase());
+  return ['1', 'true'].includes(String(env?.HARNESS_GATES_DISABLED || '').trim().toLowerCase());
 }
 
 function isWithin(root, candidate) {
@@ -32,7 +32,7 @@ function isWithin(root, candidate) {
 function resolveAuditPath(explicitPath, env) {
   const selected = String(
     explicitPath
-      || env?.CLAUDE_GATES_DISABLE_AUDIT_PATH
+      || env?.HARNESS_GATES_DISABLE_AUDIT_PATH
       || varPath('audit', 'gate-bypass.jsonl'),
   ).trim();
   if (!selected || !path.isAbsolute(selected) || path.extname(selected).toLowerCase() !== '.jsonl') {
@@ -81,19 +81,19 @@ function evaluateGateBypass({
   const requested = bypassRequested(env);
   if (!requested) return { requested: false, allowed: false, errors: [] };
 
-  const reason = String(env.CLAUDE_GATES_DISABLE_REASON || '').trim();
-  const actor = String(env.CLAUDE_GATES_DISABLE_ACTOR || '').trim();
-  const target = String(env.CLAUDE_GATES_DISABLE_TARGET || '').trim();
-  const boundSession = String(env.CLAUDE_GATES_DISABLE_SESSION || '').trim();
+  const reason = String(env.HARNESS_GATES_DISABLE_REASON || '').trim();
+  const actor = String(env.HARNESS_GATES_DISABLE_ACTOR || '').trim();
+  const target = String(env.HARNESS_GATES_DISABLE_TARGET || '').trim();
+  const boundSession = String(env.HARNESS_GATES_DISABLE_SESSION || '').trim();
   const currentSession = String(sessionId || '').trim();
-  const issuedAtRaw = String(env.CLAUDE_GATES_DISABLE_ISSUED_AT || '').trim();
-  const ttlRaw = String(env.CLAUDE_GATES_DISABLE_TTL_MS || '').trim();
+  const issuedAtRaw = String(env.HARNESS_GATES_DISABLE_ISSUED_AT || '').trim();
+  const ttlRaw = String(env.HARNESS_GATES_DISABLE_TTL_MS || '').trim();
   const issuedAt = /^\d+$/.test(issuedAtRaw) ? Number(issuedAtRaw) : Date.parse(issuedAtRaw);
   const issuedAtValid = Number.isFinite(issuedAt) && Number.isFinite(new Date(issuedAt).getTime());
   const ttlMs = /^\d+$/.test(ttlRaw) ? Number(ttlRaw) : Number.NaN;
-  const boundActionHash = String(env.CLAUDE_GATES_DISABLE_ACTION_SHA256 || '').trim().toLowerCase();
+  const boundActionHash = String(env.HARNESS_GATES_DISABLE_ACTION_SHA256 || '').trim().toLowerCase();
   const currentActionHash = String(actionHash || '').trim().toLowerCase();
-  const nonce = String(env.CLAUDE_GATES_DISABLE_NONCE || '').trim();
+  const nonce = String(env.HARNESS_GATES_DISABLE_NONCE || '').trim();
   const errors = [];
 
   if (reason.length < MIN_REASON_LENGTH) errors.push('reason_too_short');
@@ -195,7 +195,7 @@ function sessionIdFrom(payload, context, env = process.env) {
       || context?.session_id
       || context?.sessionId
       || context?.session?.id
-      || env.CLAUDE_SESSION_ID
+      || env.HARNESS_SESSION_ID
       || '',
   ).trim();
 }

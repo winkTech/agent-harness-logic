@@ -97,9 +97,9 @@ function runHookCommand(cmd, isAsync, configuredTimeoutSec) {
     windowsHide: true,
     env: {
       ...process.env,
-      CLAUDE_SKIP_HOOK: '1',
-      CLAUDE_HARNESS_VERIFY_READONLY: '1',
-      CLAUDE_NO_DIAGNOSTIC_WRITES: '1',
+      HARNESS_SKIP_HOOK: '1',
+      HARNESS_VERIFY_READONLY: '1',
+      HARNESS_NO_DIAGNOSTIC_WRITES: '1',
       PROGRESS_WATCHDOG_STATE_FILE: path.join(DRY_RUN_STATE_DIR, 'progress-watchdog-state.json'),
       PROGRESS_WATCHDOG_ARCHIVE_DIR: path.join(DRY_RUN_STATE_DIR, 'progress-watchdog-archive'),
     },

@@ -142,7 +142,7 @@ function buildRuleIndex() {
       if (/^90-promoted-hrc-.*\.md$/i.test(file)) {
         const { validatePromotedRuleArtifact } = require('./harness-rule-candidates.cjs');
         const validation = validatePromotedRuleArtifact(filePath, {
-          ledgerPath: process.env.CLAUDE_HARNESS_RULE_LEDGER,
+          ledgerPath: process.env.HARNESS_RULE_LEDGER,
         });
         if (!validation.valid) continue;
       }
@@ -356,7 +356,7 @@ function ruleCapsuleLine(rule) {
 
 function buildRuleCapsule(rules, opts = {}) {
   const maxChars = Number.parseInt(
-    opts.maxChars || process.env.CLAUDE_RULE_CAPSULE_MAX_CHARS || DEFAULT_CAPSULE_MAX_CHARS,
+    opts.maxChars || process.env.HARNESS_RULE_CAPSULE_MAX_CHARS || DEFAULT_CAPSULE_MAX_CHARS,
     10
   );
   const lines = [
@@ -373,8 +373,8 @@ function buildRuleCapsule(rules, opts = {}) {
 
 function shouldIncludeRuleContents(opts = {}) {
   return opts.verbose === true ||
-    process.env.CLAUDE_RULE_VERBOSE === '1' ||
-    process.env.CLAUDE_RULE_FULL_CONTEXT === '1';
+    process.env.HARNESS_RULE_VERBOSE === '1' ||
+    process.env.HARNESS_RULE_FULL_CONTEXT === '1';
 }
 
 // ── 主逻辑 — 供 hook 调用 ────────────────────────────────────────────────────
@@ -400,7 +400,7 @@ function evaluate(userMessage, opts = {}) {
   const openFiles = opts.openFiles || [];
   const toolNames = opts.toolNames || [];
   const hasContextSignal = Boolean(userMessage) || openFiles.length > 0 || toolNames.length > 0;
-  if (!hasContextSignal && process.env.CLAUDE_RULE_ALWAYS_LOAD !== '1') {
+  if (!hasContextSignal && process.env.HARNESS_RULE_ALWAYS_LOAD !== '1') {
     return null;
   }
 
@@ -438,7 +438,7 @@ function evaluate(userMessage, opts = {}) {
   }
 
   // Emit signal: 规则加载事件
-  if (process.env.CLAUDE_RULE_SIGNAL_DISABLED !== '1') {
+  if (process.env.HARNESS_RULE_SIGNAL_DISABLED !== '1') {
     try {
       const { emitSync } = require('../hooks/learning/signal-collector.cjs');
       emitSync('rule_load', {
@@ -514,7 +514,7 @@ function main() {
     default:
       // 默认模式：作为 Claude Code hook 运行。
       // 输入走 stdin 的 hook payload —— 平台从不设置 CLAUDE_USER_MESSAGE /
-      // CLAUDE_OPEN_FILES, 早期版本只读这两个环境变量, 导致本 hook 永远
+      // HARNESS_OPEN_FILES, 早期版本只读这两个环境变量, 导致本 hook 永远
       // 拿不到上下文信号, evaluate() 每次直接 return null (触发率 0%)。
       // 环境变量保留为回退, 以兼容手工调用。
       runAsHook();
@@ -543,14 +543,14 @@ function injectionMemoPath(sessionId, opts = {}) {
   const safe = String(sessionId || 'no-session').replace(/[^A-Za-z0-9_-]/g, '_').slice(0, 80);
   const namespace = crypto.createHash('sha256').update(HARNESS_ROOT).digest('hex').slice(0, 16);
   const memoRoot = opts.tempRoot
-    || process.env.CLAUDE_RULE_LOADER_MEMO_DIR
+    || process.env.HARNESS_RULE_LOADER_MEMO_DIR
     || path.join(os.tmpdir(), 'claude-harness-cache', namespace, 'rule-loader');
   return path.join(memoRoot, `injected-${safe}.json`);
 }
 
 function persistenceDisabled() {
-  return process.env.CLAUDE_HOOK_NO_WRITE === '1'
-    || process.env.CLAUDE_BENCH === '1'
+  return process.env.HARNESS_HOOK_NO_WRITE === '1'
+    || process.env.HARNESS_BENCH === '1'
     || envFlag('HARNESS_NO_PERSIST')
     || envFlag('HARNESS_VERIFY_READONLY')
     || envFlag('HARNESS_NO_DIAGNOSTIC_WRITES');
@@ -589,7 +589,7 @@ function retrieveContext(payload = {}, deps = {}) {
     || '';
   const openFiles = [toolInput.file_path, toolInput.notebook_path]
     .filter(Boolean)
-    .concat((process.env.CLAUDE_OPEN_FILES || '').split(',').filter(Boolean));
+    .concat((process.env.HARNESS_OPEN_FILES || '').split(',').filter(Boolean));
   const toolNames = [payload.tool_name || payload.tool?.name].filter(Boolean);
 
   const evaluateRules = deps.evaluate || evaluate;

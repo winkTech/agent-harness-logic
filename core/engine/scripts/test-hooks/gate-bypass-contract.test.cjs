@@ -29,12 +29,12 @@ function makeAudit(t) {
 function cleanEnv(overrides = {}) {
   const env = { ...process.env };
   for (const key of Object.keys(env)) {
-    if (key.startsWith('CLAUDE_GATES_DISABLE')) delete env[key];
+    if (key.startsWith('HARNESS_GATES_DISABLE')) delete env[key];
   }
   return { ...env, ...overrides };
 }
 
-test('bare CLAUDE_GATES_DISABLED=true is requested but never authorized', (t) => {
+test('bare HARNESS_GATES_DISABLED=true is requested but never authorized', (t) => {
   const { evaluateGateBypass } = require(BYPASS_MODULE);
   const auditPath = makeAudit(t);
   const result = evaluateGateBypass({
@@ -42,7 +42,7 @@ test('bare CLAUDE_GATES_DISABLED=true is requested but never authorized', (t) =>
     sessionId: 'session-a',
     now: Date.parse('2026-07-28T12:00:00.000Z'),
     auditPath,
-    env: { CLAUDE_GATES_DISABLED: 'true' },
+    env: { HARNESS_GATES_DISABLED: 'true' },
   });
 
   assert.equal(result.requested, true);
@@ -65,13 +65,13 @@ test('complete short-lived bypass is exact-target/session bound and audited with
     now: issuedAt + 30_000,
     auditPath,
     env: {
-      CLAUDE_GATES_DISABLED: '1',
-      CLAUDE_GATES_DISABLE_REASON: reason,
-      CLAUDE_GATES_DISABLE_ACTOR: actor,
-      CLAUDE_GATES_DISABLE_TARGET: 'file-protection-guard.cjs',
-      CLAUDE_GATES_DISABLE_SESSION: sessionId,
-      CLAUDE_GATES_DISABLE_ISSUED_AT: String(issuedAt),
-      CLAUDE_GATES_DISABLE_TTL_MS: '60000',
+      HARNESS_GATES_DISABLED: '1',
+      HARNESS_GATES_DISABLE_REASON: reason,
+      HARNESS_GATES_DISABLE_ACTOR: actor,
+      HARNESS_GATES_DISABLE_TARGET: 'file-protection-guard.cjs',
+      HARNESS_GATES_DISABLE_SESSION: sessionId,
+      HARNESS_GATES_DISABLE_ISSUED_AT: String(issuedAt),
+      HARNESS_GATES_DISABLE_TTL_MS: '60000',
     },
   });
 
@@ -96,15 +96,15 @@ test('risk downgrade is exact-action bound, expiring, and consumed once', (t) =>
   const actionHash = 'a'.repeat(64);
   const nonce = 'risk-once-20260820-0001';
   const env = {
-    CLAUDE_GATES_DISABLED: '1',
-    CLAUDE_GATES_DISABLE_REASON: 'approved one-shot risk downgrade for this exact action',
-    CLAUDE_GATES_DISABLE_ACTOR: 'operator-lihan',
-    CLAUDE_GATES_DISABLE_TARGET: 'risk-policy.cjs',
-    CLAUDE_GATES_DISABLE_SESSION: sessionId,
-    CLAUDE_GATES_DISABLE_ISSUED_AT: String(issuedAt),
-    CLAUDE_GATES_DISABLE_TTL_MS: '60000',
-    CLAUDE_GATES_DISABLE_ACTION_SHA256: actionHash,
-    CLAUDE_GATES_DISABLE_NONCE: nonce,
+    HARNESS_GATES_DISABLED: '1',
+    HARNESS_GATES_DISABLE_REASON: 'approved one-shot risk downgrade for this exact action',
+    HARNESS_GATES_DISABLE_ACTOR: 'operator-lihan',
+    HARNESS_GATES_DISABLE_TARGET: 'risk-policy.cjs',
+    HARNESS_GATES_DISABLE_SESSION: sessionId,
+    HARNESS_GATES_DISABLE_ISSUED_AT: String(issuedAt),
+    HARNESS_GATES_DISABLE_TTL_MS: '60000',
+    HARNESS_GATES_DISABLE_ACTION_SHA256: actionHash,
+    HARNESS_GATES_DISABLE_NONCE: nonce,
   };
   const options = {
     gateId: 'risk-policy.cjs',
@@ -167,8 +167,8 @@ test('a real blocking guard fails closed when only the legacy global switch is s
     timeout: 5000,
     windowsHide: true,
     env: cleanEnv({
-      CLAUDE_GATES_DISABLED: 'true',
-      CLAUDE_GATES_DISABLE_AUDIT_PATH: auditPath,
+      HARNESS_GATES_DISABLED: 'true',
+      HARNESS_GATES_DISABLE_AUDIT_PATH: auditPath,
     }),
   });
 
@@ -183,7 +183,7 @@ test('every direct guard delegates bypass authorization to the shared contract',
   for (const guard of GUARDS) {
     const source = fs.readFileSync(guard, 'utf8');
     assert(source.includes('gate-bypass.cjs'), `${path.basename(guard)} does not use the shared bypass contract`);
-    assert(!/process\.env\.CLAUDE_GATES_DISABLED\s*={2,3}/.test(source),
+    assert(!/process\.env\.HARNESS_GATES_DISABLED\s*={2,3}/.test(source),
       `${path.basename(guard)} still contains an unaudited direct bypass`);
   }
 });
@@ -204,13 +204,13 @@ test('real guard accepts only an unexpired exact gate and session binding', (t) 
   });
   const issuedAt = Date.now();
   const base = {
-    CLAUDE_GATES_DISABLED: 'true',
-    CLAUDE_GATES_DISABLE_REASON: 'approved exact guard recovery',
-    CLAUDE_GATES_DISABLE_ACTOR: 'operator-lihan',
-    CLAUDE_GATES_DISABLE_TARGET: 'project-directory-guard.cjs',
-    CLAUDE_GATES_DISABLE_SESSION: sessionId,
-    CLAUDE_GATES_DISABLE_ISSUED_AT: String(issuedAt),
-    CLAUDE_GATES_DISABLE_TTL_MS: '60000',
+    HARNESS_GATES_DISABLED: 'true',
+    HARNESS_GATES_DISABLE_REASON: 'approved exact guard recovery',
+    HARNESS_GATES_DISABLE_ACTOR: 'operator-lihan',
+    HARNESS_GATES_DISABLE_TARGET: 'project-directory-guard.cjs',
+    HARNESS_GATES_DISABLE_SESSION: sessionId,
+    HARNESS_GATES_DISABLE_ISSUED_AT: String(issuedAt),
+    HARNESS_GATES_DISABLE_TTL_MS: '60000',
   };
   function run(overrides, name) {
     return spawnSync(process.execPath, [guard], {
@@ -222,19 +222,19 @@ test('real guard accepts only an unexpired exact gate and session binding', (t) 
       env: cleanEnv({
         ...base,
         ...overrides,
-        CLAUDE_GATES_DISABLE_AUDIT_PATH: path.join(projectRoot, `${name}.jsonl`),
+        HARNESS_GATES_DISABLE_AUDIT_PATH: path.join(projectRoot, `${name}.jsonl`),
       }),
     });
   }
 
   assert.equal(run({}, 'valid').status, 0, 'valid exact-target bypass was not honored');
-  assert.equal(run({ CLAUDE_GATES_DISABLE_TARGET: 'hdl-gate.cjs' }, 'wrong-target').status, 2,
+  assert.equal(run({ HARNESS_GATES_DISABLE_TARGET: 'hdl-gate.cjs' }, 'wrong-target').status, 2,
     'authorization for another gate leaked across targets');
-  assert.equal(run({ CLAUDE_GATES_DISABLE_SESSION: 'another-session' }, 'wrong-session').status, 2,
+  assert.equal(run({ HARNESS_GATES_DISABLE_SESSION: 'another-session' }, 'wrong-session').status, 2,
     'authorization for another session leaked across sessions');
   assert.equal(run({
-    CLAUDE_GATES_DISABLE_ISSUED_AT: String(issuedAt - 120_000),
-    CLAUDE_GATES_DISABLE_TTL_MS: '1000',
+    HARNESS_GATES_DISABLE_ISSUED_AT: String(issuedAt - 120_000),
+    HARNESS_GATES_DISABLE_TTL_MS: '1000',
   }, 'expired').status, 2, 'expired authorization was accepted');
 });
 
@@ -245,29 +245,29 @@ test('malformed, overbroad, stale, and unauditable requests all fail closed with
   const now = Date.parse('2026-07-28T12:00:00.000Z');
   const sessionId = 'session-invalid-matrix';
   const base = {
-    CLAUDE_GATES_DISABLED: 'true',
-    CLAUDE_GATES_DISABLE_REASON: 'approved narrowly scoped recovery',
-    CLAUDE_GATES_DISABLE_ACTOR: 'operator-lihan',
-    CLAUDE_GATES_DISABLE_TARGET: 'hdl-gate.cjs',
-    CLAUDE_GATES_DISABLE_SESSION: sessionId,
-    CLAUDE_GATES_DISABLE_ISSUED_AT: String(now - 1000),
-    CLAUDE_GATES_DISABLE_TTL_MS: '60000',
+    HARNESS_GATES_DISABLED: 'true',
+    HARNESS_GATES_DISABLE_REASON: 'approved narrowly scoped recovery',
+    HARNESS_GATES_DISABLE_ACTOR: 'operator-lihan',
+    HARNESS_GATES_DISABLE_TARGET: 'hdl-gate.cjs',
+    HARNESS_GATES_DISABLE_SESSION: sessionId,
+    HARNESS_GATES_DISABLE_ISSUED_AT: String(now - 1000),
+    HARNESS_GATES_DISABLE_TTL_MS: '60000',
   };
   const cases = [
-    ['short-reason', { CLAUDE_GATES_DISABLE_REASON: 'too short' }],
-    ['short-actor', { CLAUDE_GATES_DISABLE_ACTOR: 'x' }],
-    ['wildcard-target', { CLAUDE_GATES_DISABLE_TARGET: '*' }],
-    ['wrong-target', { CLAUDE_GATES_DISABLE_TARGET: 'secret-target-value' }],
-    ['wrong-session', { CLAUDE_GATES_DISABLE_SESSION: 'another-session' }],
-    ['zero-ttl', { CLAUDE_GATES_DISABLE_TTL_MS: '0' }],
-    ['long-ttl', { CLAUDE_GATES_DISABLE_TTL_MS: '300001' }],
+    ['short-reason', { HARNESS_GATES_DISABLE_REASON: 'too short' }],
+    ['short-actor', { HARNESS_GATES_DISABLE_ACTOR: 'x' }],
+    ['wildcard-target', { HARNESS_GATES_DISABLE_TARGET: '*' }],
+    ['wrong-target', { HARNESS_GATES_DISABLE_TARGET: 'secret-target-value' }],
+    ['wrong-session', { HARNESS_GATES_DISABLE_SESSION: 'another-session' }],
+    ['zero-ttl', { HARNESS_GATES_DISABLE_TTL_MS: '0' }],
+    ['long-ttl', { HARNESS_GATES_DISABLE_TTL_MS: '300001' }],
     ['expired', {
-      CLAUDE_GATES_DISABLE_ISSUED_AT: String(now - 10000),
-      CLAUDE_GATES_DISABLE_TTL_MS: '1000',
+      HARNESS_GATES_DISABLE_ISSUED_AT: String(now - 10000),
+      HARNESS_GATES_DISABLE_TTL_MS: '1000',
     }],
-    ['future', { CLAUDE_GATES_DISABLE_ISSUED_AT: String(now + 6000) }],
-    ['bad-issued-at', { CLAUDE_GATES_DISABLE_ISSUED_AT: 'not-a-time' }],
-    ['out-of-date-range', { CLAUDE_GATES_DISABLE_ISSUED_AT: '8640000000000001' }],
+    ['future', { HARNESS_GATES_DISABLE_ISSUED_AT: String(now + 6000) }],
+    ['bad-issued-at', { HARNESS_GATES_DISABLE_ISSUED_AT: 'not-a-time' }],
+    ['out-of-date-range', { HARNESS_GATES_DISABLE_ISSUED_AT: '8640000000000001' }],
   ];
 
   for (const [name, override] of cases) {
@@ -341,9 +341,9 @@ test('file protection uses explicit project paths while retaining known model di
       timeout: 5000,
       windowsHide: true,
       env: cleanEnv({
-        CLAUDE_NO_DIAGNOSTIC_WRITES: '1',
-        CLAUDE_PROTECTED_WRITE_APPROVAL: '',
-        CLAUDE_PROTECTED_WRITE_REASON: '',
+        HARNESS_NO_DIAGNOSTIC_WRITES: '1',
+        HARNESS_PROTECTED_WRITE_APPROVAL: '',
+        HARNESS_PROTECTED_WRITE_REASON: '',
       }),
     });
   }

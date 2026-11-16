@@ -70,9 +70,9 @@ function readJsonLines(filePath) {
 
 function recordRiskTelemetry(payload = {}, opts = {}) {
   const env = opts.env || process.env;
-  if (env.CLAUDE_HARNESS_NO_PERSIST === '1'
-      || env.CLAUDE_HARNESS_VERIFY_READONLY === '1'
-      || env.CLAUDE_NO_DIAGNOSTIC_WRITES === '1') {
+  if (env.HARNESS_NO_PERSIST === '1'
+      || env.HARNESS_VERIFY_READONLY === '1'
+      || env.HARNESS_NO_DIAGNOSTIC_WRITES === '1') {
     return { recorded: false, reason: 'persistence-disabled' };
   }
   const eventName = String(payload.hook_event_name || payload.event || '');
@@ -89,8 +89,8 @@ function recordRiskTelemetry(payload = {}, opts = {}) {
   const telemetryDir = path.resolve(opts.telemetryDir || varPath('telemetry'));
   const rawPath = path.join(telemetryDir, 'risk-events.jsonl');
   const dailyPath = path.join(telemetryDir, 'risk-daily.json');
-  const bypassRequested = ['1', 'true'].includes(String(env.CLAUDE_GATES_DISABLED || '').toLowerCase())
-    && String(env.CLAUDE_GATES_DISABLE_TARGET || '') === 'risk-policy.cjs';
+  const bypassRequested = ['1', 'true'].includes(String(env.HARNESS_GATES_DISABLED || '').toLowerCase())
+    && String(env.HARNESS_GATES_DISABLE_TARGET || '') === 'risk-policy.cjs';
   const kind = bypassRequested ? 'bypass'
     : eventName === 'PostToolUseFailure' ? 'failure'
       : ['R2', 'R3'].includes(assessment.effectiveRiskLevel) ? 'upgrade'
@@ -116,7 +116,7 @@ function recordRiskTelemetry(payload = {}, opts = {}) {
         projectHash,
         targetHash: digest(runtime.filePath),
         commandHash: digest(runtime.command),
-        bypassTargetHash: kind === 'bypass' ? digest(env.CLAUDE_GATES_DISABLE_TARGET) : null,
+        bypassTargetHash: kind === 'bypass' ? digest(env.HARNESS_GATES_DISABLE_TARGET) : null,
       });
     }
     const bounded = retained.slice(-MAX_RAW_RISK_EVENTS);
@@ -180,7 +180,7 @@ function runAuxiliaryServices(payload = {}, opts = {}) {
     services.push({
       source: 'agent-transparency-ledger',
       run: opts.ledgerRun || ((input) => {
-        if (process.env.CLAUDE_TRANSPARENCY_LEDGER_DISABLED === '1') return null;
+        if (process.env.HARNESS_TRANSPARENCY_LEDGER_DISABLED === '1') return null;
         return require('../../scripts/hooks/agent-transparency-ledger.cjs').run(input);
       }),
       args: [payload],

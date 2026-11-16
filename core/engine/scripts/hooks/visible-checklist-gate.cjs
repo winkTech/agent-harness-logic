@@ -12,7 +12,7 @@ const { isControlledTool } = require('../lib/host-concepts.cjs');
 // Phase 2.2：transcript 路径解析唯一实现（原与 ledger 各持一份副本）。
 const { resolveTranscriptPath: resolveTranscriptPathShared } = require('../io/transcript-source.cjs');
 const MAX_TAIL_BYTES = 1024 * 1024;
-const CLAUDE_HOME = HARNESS_ROOT;
+const HARNESS_HOME = HARNESS_ROOT;
 
 function readStdin() {
   return new Promise((resolve) => {
@@ -38,10 +38,10 @@ function toolNameFrom(payload) {
 }
 
 // Phase 2.2：transcript 解析四函数（resolve/find/recent/slug，约 95 行）已收敛至
-// io/transcript-source.cjs。此薄壳保留原语义：home=CLAUDE_HOME，启用 cwd 近期
+// io/transcript-source.cjs。此薄壳保留原语义：home=HARNESS_HOME，启用 cwd 近期
 // 回退（清单门独有——原 findRecentProjectTranscript 默认行为）。
 function resolveTranscriptPath(payload) {
-  return resolveTranscriptPathShared(payload, { home: CLAUDE_HOME, allowRecentFallback: true });
+  return resolveTranscriptPathShared(payload, { home: HARNESS_HOME, allowRecentFallback: true });
 }
 
 function readTail(filePath) {
@@ -136,8 +136,8 @@ function block(reason, details = {}) {
 }
 
 function strictMode() {
-  const mode = String(process.env.CLAUDE_VISIBLE_CHECKLIST_GATE_MODE || 'audit').toLowerCase();
-  return mode === 'strict' || mode === 'block' || process.env.CLAUDE_VISIBLE_CHECKLIST_GATE_STRICT === '1';
+  const mode = String(process.env.HARNESS_VISIBLE_CHECKLIST_GATE_MODE || 'audit').toLowerCase();
+  return mode === 'strict' || mode === 'block' || process.env.HARNESS_VISIBLE_CHECKLIST_GATE_STRICT === '1';
 }
 
 function requiredBlockLines() {
@@ -162,7 +162,7 @@ function warn(reason, details = {}) {
   for (const line of requiredBlockLines()) console.error(line);
   console.error('');
   console.error('Audit mode does not block because Claude Code PreToolUse cannot reliably see same-turn visible text before transcript flush.');
-  console.error('Set CLAUDE_VISIBLE_CHECKLIST_GATE_MODE=strict to restore hard blocking.');
+  console.error('Set HARNESS_VISIBLE_CHECKLIST_GATE_MODE=strict to restore hard blocking.');
   console.error('');
 }
 
@@ -176,7 +176,7 @@ function finishViolation(reason, details = {}) {
 }
 
 async function main() {
-  if (process.env.CLAUDE_SKIP_HOOK === '1' || process.env.CLAUDE_VISIBLE_CHECKLIST_GATE_DISABLED === '1') {
+  if (process.env.HARNESS_SKIP_HOOK === '1' || process.env.HARNESS_VISIBLE_CHECKLIST_GATE_DISABLED === '1') {
     process.exit(0);
   }
 

@@ -22,7 +22,7 @@ const fs = require('node:fs');
 
 /** 索引新鲜度窗口: 超过此时长未重新索引即视为陈旧 (默认 7 天)。 */
 const DEFAULT_FRESHNESS_MS = (() => {
-  const raw = Number.parseInt(process.env.CLAUDE_CG_FRESHNESS_MS || '', 10);
+  const raw = Number.parseInt(process.env.HARNESS_CG_FRESHNESS_MS || '', 10);
   return Number.isFinite(raw) && raw > 0 ? raw : 7 * 24 * 60 * 60 * 1000;
 })();
 

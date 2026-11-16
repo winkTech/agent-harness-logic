@@ -444,14 +444,14 @@ function watchdogResult(payload, result) {
 
 async function runCommon(runtime, opts = {}) {
   const env = opts.env || process.env;
-  const noPersist = env.CLAUDE_HARNESS_NO_PERSIST === '1'
-    || env.CLAUDE_HARNESS_VERIFY_READONLY === '1';
+  const noPersist = env.HARNESS_NO_PERSIST === '1'
+    || env.HARNESS_VERIFY_READONLY === '1';
   let commonResult = { source: 'common', decision: 'allow' };
 
   // Preserve the security/audit order for controlled actions: write one fresh
   // contract, validate that exact payload, and only then inspect watchdog state.
   // Read-only and ordinary low-risk calls still skip the heavy ledger path.
-  if (!noPersist && env.CLAUDE_TRANSPARENCY_LEDGER_DISABLED !== '1'
+  if (!noPersist && env.HARNESS_TRANSPARENCY_LEDGER_DISABLED !== '1'
       && isControlledTool(runtime.toolName)) {
     const ledger = loadGuarded(runtime, 'agent-transparency-ledger',
       loaderFor(opts, 'agent-transparency-ledger'));

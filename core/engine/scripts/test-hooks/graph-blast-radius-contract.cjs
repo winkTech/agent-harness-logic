@@ -25,11 +25,11 @@ const { HARNESS_ROOT } = require('../lib/harness-root.cjs');
 
 // 图写入需要真实库路径: 先指向临时文件, 再加载依赖 sqlite 的模块。
 const WORKSPACE = fs.mkdtempSync(path.join(os.tmpdir(), 'cg-blast-'));
-process.env.CLAUDE_SQLITE_PATH = path.join(WORKSPACE, 'graph.db');
-delete process.env.CLAUDE_HARNESS_NO_PERSIST;
+process.env.HARNESS_SQLITE_PATH = path.join(WORKSPACE, 'graph.db');
+delete process.env.HARNESS_NO_PERSIST;
 
 delete process.env.HARNESS_NO_PERSIST;
-delete process.env.CLAUDE_NO_DIAGNOSTIC_WRITES;
+delete process.env.HARNESS_NO_DIAGNOSTIC_WRITES;
 
 delete process.env.HARNESS_NO_DIAGNOSTIC_WRITES;
 

@@ -26,13 +26,13 @@ const POSTFLIGHT = path.join(ROOT, 'core', 'engine', 'scripts', 'hooks', 'postfl
 const TMP = fs.mkdtempSync(path.join(os.tmpdir(), 'hook-health-contract-'));
 process.env.HARNESS_STATE_DIR = path.join(TMP, 'state');
 for (const key of [
-  'CLAUDE_HARNESS_NO_PERSIST',
   'HARNESS_NO_PERSIST',
-  'CLAUDE_HARNESS_VERIFY_READONLY',
+  'HARNESS_NO_PERSIST',
   'HARNESS_VERIFY_READONLY',
-  'CLAUDE_NO_DIAGNOSTIC_WRITES',
+  'HARNESS_VERIFY_READONLY',
   'HARNESS_NO_DIAGNOSTIC_WRITES',
-  'CLAUDE_HOOK_NO_WRITE',
+  'HARNESS_NO_DIAGNOSTIC_WRITES',
+  'HARNESS_HOOK_NO_WRITE',
   'HARNESS_HOOK_NO_WRITE',
 ]) delete process.env[key];
 

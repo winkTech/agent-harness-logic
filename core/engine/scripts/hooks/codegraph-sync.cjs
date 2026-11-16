@@ -14,7 +14,7 @@
  * 两种模式都:
  *   - 只写图, 不产生任何 stdout (stdout 会被当成 hook 协议输出)
  *   - 任何异常都吞掉并以 0 退出 (索引是加速器, 不是门禁, 绝不能挡住会话)
- *   - 尊重 CLAUDE_HARNESS_NO_PERSIST / CLAUDE_NO_DIAGNOSTIC_WRITES 只读开关
+ *   - 尊重 HARNESS_NO_PERSIST / HARNESS_NO_DIAGNOSTIC_WRITES 只读开关
  *
  * 节流状态: var/index/codegraph-sync.json (scopeId → lastSyncAt)。
  */
@@ -39,18 +39,18 @@ const {
   readJson,
 } = require('../lib/project-scope.cjs');
 
-const STATE_FILE = process.env.CLAUDE_CG_SYNC_STATE_FILE
+const STATE_FILE = process.env.HARNESS_CG_SYNC_STATE_FILE
   || varPath('index', 'codegraph-sync.json');
 
 /** 会话级全量同步的最小间隔 (默认 30 分钟)。 */
 const SYNC_INTERVAL_MS = (() => {
-  const raw = Number.parseInt(process.env.CLAUDE_CG_SYNC_INTERVAL_MS || '', 10);
+  const raw = Number.parseInt(process.env.HARNESS_CG_SYNC_INTERVAL_MS || '', 10);
   return Number.isFinite(raw) && raw >= 0 ? raw : 30 * 60 * 1000;
 })();
 
 /** 单次会话同步的软上限, 超时后停止但保留已写入的部分。 */
 const SYNC_BUDGET_MS = (() => {
-  const raw = Number.parseInt(process.env.CLAUDE_CG_SYNC_BUDGET_MS || '', 10);
+  const raw = Number.parseInt(process.env.HARNESS_CG_SYNC_BUDGET_MS || '', 10);
   return Number.isFinite(raw) && raw > 0 ? raw : 45_000;
 })();
 
@@ -184,12 +184,12 @@ function main(argv = process.argv.slice(2)) {
   const payload = readPayload();
   try {
     const result = mode === 'file' ? runFileSync(payload) : runSessionSync(payload);
-    if (process.env.CLAUDE_CG_SYNC_DEBUG === '1') {
+    if (process.env.HARNESS_CG_SYNC_DEBUG === '1') {
       process.stderr.write(`[codegraph-sync:${mode}] ${JSON.stringify(result)}\n`);
     }
   } catch (error) {
     // 索引失败不得影响会话: 只在 debug 时出声
-    if (process.env.CLAUDE_CG_SYNC_DEBUG === '1') {
+    if (process.env.HARNESS_CG_SYNC_DEBUG === '1') {
       process.stderr.write(`[codegraph-sync:${mode}] ${error.stack || error.message}\n`);
     }
   }

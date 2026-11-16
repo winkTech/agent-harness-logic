@@ -45,12 +45,12 @@ const SHELL_METACHARS = /[|&;<>`$(){}\[\]!*?~\n\r]/;
 const COMMAND_TIMEOUT_MS = 30_000;
 
 function ledgerPath() {
-  return process.env.CLAUDE_EVIDENCE_LEDGER_FILE
+  return process.env.HARNESS_EVIDENCE_LEDGER_FILE
     || varPath('verification-ledger.json');
 }
 
 function gatesDir() {
-  return process.env.CLAUDE_GATES_DIR || varPath('gates');
+  return process.env.HARNESS_GATES_DIR || varPath('gates');
 }
 
 // ── 单项判据 ────────────────────────────────────────────────────────────────

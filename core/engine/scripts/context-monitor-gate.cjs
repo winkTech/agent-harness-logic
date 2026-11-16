@@ -29,6 +29,7 @@
 'use strict';
 
 const fs = require('fs');
+const { envOf } = require('./io/env.cjs');
 const path = require('path');
 const { varPath } = require('./lib/harness-state.cjs');
 
@@ -37,7 +38,7 @@ const { varPath } = require('./lib/harness-state.cjs');
 const STATE_FILE = varPath('index', 'runtime-state.json');
 const COMPACT_LOG = varPath('sessions', 'compaction-log.txt');
 
-if (process.env.CLAUDE_BENCH === '1') process.exit(0);
+if (process.env.HARNESS_BENCH === '1') process.exit(0);
 
 // 阈值配置（上下文占比估算）
 const THRESHOLDS = {
@@ -95,7 +96,7 @@ function readJSON(filePath) {
  */
 function getTranscriptInfo() {
   const sessionId = process.env.HARNESS_SESSION_ID || '';
-  const sessionDir = process.env.CLAUDE_SESSION_DIR || '';
+  const sessionDir = envOf(process.env).sessionDir;
 
   let transcriptPath = '';
   if (sessionDir && fs.existsSync(sessionDir)) {
@@ -226,7 +227,7 @@ function preCompact() {
 }
 
 function maybeCheckpoint(level) {
-  if (process.env.CLAUDE_CONTEXT_MONITOR_AUTO_CHECKPOINT !== '1') return false;
+  if (process.env.HARNESS_CONTEXT_MONITOR_AUTO_CHECKPOINT !== '1') return false;
   try {
     if (level === 'RED') preCompact().signalCompact();
     else preCompact().saveCheckpoint();

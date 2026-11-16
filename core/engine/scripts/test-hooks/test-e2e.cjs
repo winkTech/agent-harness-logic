@@ -73,8 +73,8 @@ test('Verification Gate 全周期 (write → block → verify → clear → allo
   const ledgerFile = path.join(stateDir, 'verification-ledger.json');
   const env = {
     ...process.env,
-    CLAUDE_VERIFY_GATE_STATE_FILE: stateFile,
-    CLAUDE_VERIFICATION_LEDGER_FILE: ledgerFile,
+    HARNESS_VERIFY_GATE_STATE_FILE: stateFile,
+    HARNESS_VERIFICATION_LEDGER_FILE: ledgerFile,
   };
   if (!fs.existsSync(stateDir)) fs.mkdirSync(stateDir, { recursive: true });
   fs.writeFileSync(stateFile, JSON.stringify({ edited: true, verified: false, editCount: 1 }), 'utf8');

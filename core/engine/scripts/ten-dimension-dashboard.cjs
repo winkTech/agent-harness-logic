@@ -262,7 +262,7 @@ function buildTenDimensionReport(opts = {}) {
   const transparency = safe(() => require('./transparency-dashboard.cjs')
     .buildReport(varPath('runs')));
   const ledgerAnomalies = safe(() => {
-    const file = process.env.CLAUDE_VERIFICATION_LEDGER_FILE
+    const file = process.env.HARNESS_VERIFICATION_LEDGER_FILE
       || varPath('verification-ledger.json');
     if (!fs.existsSync(file)) return { entries: 0, contradictory: 0, unknownStatus: 0 };
     const ledger = JSON.parse(fs.readFileSync(file, 'utf8'));

@@ -127,10 +127,10 @@ function extractFilePathFromStdin(input) {
 
 async function main() {
   try {
-    // 优先级: CLAUDE_TOOL env > stdin > CLAUDE_DATA env
+    // 优先级: HARNESS_TOOL env > stdin > HARNESS_DATA env
     let rawPath = null;
 
-    const toolEnv = process.env.CLAUDE_TOOL;
+    const toolEnv = process.env.HARNESS_TOOL;
     if (toolEnv) {
       try {
         const toolData = JSON.parse(toolEnv);
@@ -149,7 +149,7 @@ async function main() {
     }
 
     if (!rawPath) {
-      const dataEnv = process.env.CLAUDE_DATA;
+      const dataEnv = process.env.HARNESS_DATA;
       if (dataEnv) {
         try {
           const parsed = JSON.parse(dataEnv);

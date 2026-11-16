@@ -117,10 +117,10 @@ const HARNESS_STATE_DIRNAME = '.harness-state';
  * zero telemetry; replay must allow writes (isolated by HARNESS_STATE_DIR).
  */
 const READONLY_ENV_VARS = [
-  'CLAUDE_HARNESS_NO_PERSIST',
-  'CLAUDE_HARNESS_VERIFY_READONLY',
-  'CLAUDE_NO_DIAGNOSTIC_WRITES',
-  'CLAUDE_HOOK_NO_WRITE',
+  'HARNESS_NO_PERSIST',
+  'HARNESS_VERIFY_READONLY',
+  'HARNESS_NO_DIAGNOSTIC_WRITES',
+  'HARNESS_HOOK_NO_WRITE',
 ];
 /** Default restorePaths: harness-owned acceptance-test hooks. */
 const DEFAULT_RESTORE_PATHS = ['core/engine/scripts/test-hooks'];
@@ -338,7 +338,7 @@ function reinjectTaskFiles(injectFiles, worktreePath) {
 /* ---------------------------------------------------------------- claude */
 
 function resolveClaudeCmd() {
-  if (process.env.CLAUDE_CMD) return process.env.CLAUDE_CMD;
+  if (process.env.HARNESS_CMD) return process.env.HARNESS_CMD;
   if (process.platform === 'win32' && process.env.APPDATA) {
     const cmd = path.join(process.env.APPDATA, 'npm', 'claude.cmd');
     if (fs.existsSync(cmd)) return cmd;
@@ -404,7 +404,7 @@ function cwdSlug(cwd) {
 }
 
 function projectsDir() {
-  const configDir = process.env.CLAUDE_CONFIG_DIR || path.join(os.homedir(), '.claude');
+  const configDir = envGet('HARNESS_CONFIG_DIR') || path.join(os.homedir(), '.claude');
   return path.join(configDir, 'projects');
 }
 

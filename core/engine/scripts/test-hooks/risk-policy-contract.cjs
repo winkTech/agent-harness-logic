@@ -74,9 +74,9 @@ function assertMonotonicRisk(policy) {
 
 function assertPolicyModes(policy) {
   assert.equal(policy.riskPolicyMode({}), 'shadow');
-  assert.equal(policy.riskPolicyMode({ CLAUDE_RISK_POLICY_MODE: 'off' }), 'off');
-  assert.equal(policy.riskPolicyMode({ CLAUDE_RISK_POLICY_MODE: 'enforce' }), 'enforce');
-  assert.equal(policy.riskPolicyMode({ CLAUDE_RISK_POLICY_MODE: 'invalid' }), 'shadow');
+  assert.equal(policy.riskPolicyMode({ HARNESS_RISK_POLICY_MODE: 'off' }), 'off');
+  assert.equal(policy.riskPolicyMode({ HARNESS_RISK_POLICY_MODE: 'enforce' }), 'enforce');
+  assert.equal(policy.riskPolicyMode({ HARNESS_RISK_POLICY_MODE: 'invalid' }), 'shadow');
 
   const r0 = policy.applyRiskPolicy({ effectiveRiskLevel: 'R0', riskReasons: ['read-only'] }, {
     mode: 'shadow',
@@ -234,8 +234,8 @@ function assertContentAddressedEvidence(policy) {
 function assertStickyRiskState(policy) {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'risk-state-'));
   const stateFile = path.join(root, 'verify-gate.json');
-  const previousStateFile = process.env.CLAUDE_VERIFY_GATE_STATE_FILE;
-  process.env.CLAUDE_VERIFY_GATE_STATE_FILE = stateFile;
+  const previousStateFile = process.env.HARNESS_VERIFY_GATE_STATE_FILE;
+  process.env.HARNESS_VERIFY_GATE_STATE_FILE = stateFile;
   fs.writeFileSync(path.join(root, 'AGENTS.md'), '# fixture\n', 'utf8');
   fs.writeFileSync(stateFile, JSON.stringify({ version: 3, pending: {} }), 'utf8');
   const verificationStatePath = path.join(
@@ -399,8 +399,8 @@ function assertStickyRiskState(policy) {
     assert.equal(boundedState.evidenceCache[inserted[0]], undefined,
       'bounded cache must evict the oldest evidence first');
   } finally {
-    if (previousStateFile === undefined) delete process.env.CLAUDE_VERIFY_GATE_STATE_FILE;
-    else process.env.CLAUDE_VERIFY_GATE_STATE_FILE = previousStateFile;
+    if (previousStateFile === undefined) delete process.env.HARNESS_VERIFY_GATE_STATE_FILE;
+    else process.env.HARNESS_VERIFY_GATE_STATE_FILE = previousStateFile;
     delete require.cache[require.resolve(verificationStatePath)];
     fs.rmSync(root, { recursive: true, force: true });
   }

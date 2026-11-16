@@ -25,7 +25,7 @@ function raiseRiskLevel(value, steps = 1) {
 }
 
 function riskPolicyMode(env = process.env) {
-  const mode = String(env?.CLAUDE_RISK_POLICY_MODE || 'shadow').trim().toLowerCase();
+  const mode = String(env?.HARNESS_RISK_POLICY_MODE || 'shadow').trim().toLowerCase();
   return POLICY_MODES.includes(mode) ? mode : 'shadow';
 }
 

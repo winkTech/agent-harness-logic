@@ -3,6 +3,7 @@
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
+const { envOf } = require('../io/env.cjs');
 
 // Phase 1.2（refactor/core-split）：拆层后本模块位于 core/engine/scripts/lib/，
 // 仓库根 = 上溯 4 级（原 engine/scripts/lib/ 布局时代为 3 级）。
@@ -47,7 +48,7 @@ function hasHarnessAnchor(candidate) {
 /**
  * 旧布局目录标记（兼容回退，Phase 1.2 起降级）：
  * engine/scripts + 根级 AGENTS.md/CLAUDE.md。仅服务拆层前的检出、
- * robocopy 快照逃生等旧布局目录（CLAUDE_HARNESS_ROOT 指向旧布局时仍可命中）。
+ * robocopy 快照逃生等旧布局目录（HARNESS_ROOT 指向旧布局时仍可命中）。
  */
 function isLegacyHarnessRoot(candidate) {
   const root = normalizeRoot(candidate);
@@ -100,7 +101,7 @@ function findHarnessRoot(startPath) {
 
 /**
  * Phase 1.2 解析顺序：
- *   1. HARNESS_ROOT env（主）／CLAUDE_HARNESS_ROOT（兼容别名）／opts.root —— 校验后生效；
+ *   1. HARNESS_ROOT env（主）／HARNESS_ROOT（兼容别名）／opts.root —— 校验后生效；
  *   2. package.json 锚点向上发现（自 startPath/cwd）；
  *   3. cwd 向上发现（旧布局目录标记，兼容回退）；
  *   4. 模块位置兜底（本文件上溯 4 级）；
@@ -108,7 +109,7 @@ function findHarnessRoot(startPath) {
  */
 function resolveHarnessRoot(opts = {}) {
   const env = opts.env || process.env;
-  const explicit = normalizeRoot(opts.root || env.HARNESS_ROOT || env.CLAUDE_HARNESS_ROOT);
+  const explicit = normalizeRoot(opts.root || env.HARNESS_ROOT || envOf(env).get('HARNESS_ROOT'));
   if (explicit) {
     if (!isHarnessRoot(explicit)) {
       throw new Error(`Invalid Harness root: ${explicit}`);

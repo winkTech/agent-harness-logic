@@ -43,7 +43,7 @@ function check(dir) {
 }
 
 function eccRoot() {
-  const env = process.env.CLAUDE_PLUGIN_ROOT;
+  const env = envOf(process.env).get('HARNESS_PLUGIN_ROOT');
   if (env && env.trim()) return env.trim();
 
   const slugs = ['ecc', 'ecc@ecc', 'everything-claude-code', 'everything-claude-code@everything-claude-code'];

@@ -17,7 +17,7 @@ const {
 } = require('./project-scope.cjs');
 const { varPath } = require('./harness-state.cjs');
 
-const STATE_FILE = process.env.CLAUDE_VERIFY_GATE_STATE_FILE ||
+const STATE_FILE = process.env.HARNESS_VERIFY_GATE_STATE_FILE ||
   varPath('verify-gate.json');
 const DEFAULT_PENDING_TTL_MS = 24 * 60 * 60 * 1000;
 const {
@@ -41,7 +41,7 @@ function sessionIdFromPayload(payload = {}) {
 
 function pendingTtlMs(opts = {}) {
   const value = Number.parseInt(
-    opts.ttlMs ?? process.env.CLAUDE_VERIFY_GATE_TTL_MS ?? DEFAULT_PENDING_TTL_MS,
+    opts.ttlMs ?? process.env.HARNESS_VERIFY_GATE_TTL_MS ?? DEFAULT_PENDING_TTL_MS,
     10
   );
   return Number.isFinite(value) && value >= 0 ? value : DEFAULT_PENDING_TTL_MS;
@@ -50,8 +50,8 @@ function pendingTtlMs(opts = {}) {
 function riskTtlMs(opts = {}) {
   const value = Number.parseInt(
     opts.riskTtlMs ?? opts.ttlMs
-      ?? process.env.CLAUDE_RISK_STATE_TTL_MS
-      ?? process.env.CLAUDE_VERIFY_GATE_TTL_MS
+      ?? process.env.HARNESS_RISK_STATE_TTL_MS
+      ?? process.env.HARNESS_VERIFY_GATE_TTL_MS
       ?? DEFAULT_PENDING_TTL_MS,
     10
   );
@@ -61,7 +61,7 @@ function riskTtlMs(opts = {}) {
 function evidenceCacheTtlMs(opts = {}) {
   const value = Number.parseInt(
     opts.evidenceTtlMs ?? opts.ttlMs
-      ?? process.env.CLAUDE_RISK_EVIDENCE_CACHE_TTL_MS
+      ?? process.env.HARNESS_RISK_EVIDENCE_CACHE_TTL_MS
       ?? DEFAULT_EVIDENCE_CACHE_TTL_MS,
     10
   );
@@ -70,7 +70,7 @@ function evidenceCacheTtlMs(opts = {}) {
 
 function evidenceCacheMaxEntries(opts = {}) {
   const value = Number.parseInt(
-    opts.maxEntries ?? process.env.CLAUDE_RISK_EVIDENCE_CACHE_MAX_ENTRIES
+    opts.maxEntries ?? process.env.HARNESS_RISK_EVIDENCE_CACHE_MAX_ENTRIES
       ?? DEFAULT_EVIDENCE_CACHE_MAX_ENTRIES,
     10,
   );

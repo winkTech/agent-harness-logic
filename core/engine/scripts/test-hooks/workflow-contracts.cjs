@@ -293,7 +293,7 @@ test('RTL live eval fails closed before launching an agent without network opt-i
     encoding: 'utf8',
     timeout: 30000,
     windowsHide: true,
-    env: { ...process.env, CLAUDE_READINESS_COMMAND: `"${process.execPath}" --version` },
+    env: { ...process.env, HARNESS_READINESS_COMMAND: `"${process.execPath}" --version` },
   });
   assert(result.status === 2, `network-denied live eval exit=${result.status}\n${result.stderr || result.stdout}`);
   assert(!fs.existsSync(marker), 'agent launched before explicit network authorization');

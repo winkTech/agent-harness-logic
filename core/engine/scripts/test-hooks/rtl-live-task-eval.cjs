@@ -21,7 +21,7 @@ const HOME_STATE_FILES = [
   path.join('var', 'gates', 'verification-quality.json'),
   path.join('var', 'verify-gate.json'),
 ];
-const CODEX_NPX_EXEC_COMMAND = process.platform === 'win32'
+const HARNESS_NPX_EXEC_COMMAND = process.platform === 'win32'
   ? 'npx.cmd -y @openai/codex@0.142.5 exec --ignore-user-config --json --sandbox workspace-write --skip-git-repo-check --ephemeral --color never'
   : 'npx -y @openai/codex@0.142.5 exec --ignore-user-config --json --sandbox workspace-write --skip-git-repo-check --ephemeral --color never';
 const SAFE_ENV_KEYS = [
@@ -136,14 +136,14 @@ function buildIsolatedEnv(sandboxHome, sourceEnv = process.env) {
     TMP: tempDir,
     npm_config_cache: path.join(cacheDir, 'npm'),
   });
-  if (sourceEnv.CLAUDE_LIVE_EVAL_ANTHROPIC_API_KEY) {
-    env.ANTHROPIC_API_KEY = sourceEnv.CLAUDE_LIVE_EVAL_ANTHROPIC_API_KEY;
+  if (sourceEnv.HARNESS_LIVE_EVAL_ANTHROPIC_API_KEY) {
+    env.ANTHROPIC_API_KEY = sourceEnv.HARNESS_LIVE_EVAL_ANTHROPIC_API_KEY;
   }
-  if (sourceEnv.CLAUDE_LIVE_EVAL_OAUTH_TOKEN) {
-    env.CLAUDE_CODE_OAUTH_TOKEN = sourceEnv.CLAUDE_LIVE_EVAL_OAUTH_TOKEN;
+  if (sourceEnv.HARNESS_LIVE_EVAL_OAUTH_TOKEN) {
+    env.HARNESS_CODE_OAUTH_TOKEN = sourceEnv.HARNESS_LIVE_EVAL_OAUTH_TOKEN;
   }
-  if (sourceEnv.CODEX_LIVE_EVAL_OPENAI_API_KEY) {
-    env.OPENAI_API_KEY = sourceEnv.CODEX_LIVE_EVAL_OPENAI_API_KEY;
+  if (sourceEnv.HARNESS_LIVE_EVAL_OPENAI_API_KEY) {
+    env.OPENAI_API_KEY = sourceEnv.HARNESS_LIVE_EVAL_OPENAI_API_KEY;
   }
   return env;
 }
@@ -262,18 +262,18 @@ function runCommandLine(command, cwd, input = '', timeoutMs = 10 * 60 * 1000, en
 
 function defaultCommandFor(agent) {
   if (agent === 'claude') {
-    return process.env.CLAUDE_RTL_LIVE_EVAL_COMMAND
+    return process.env.HARNESS_RTL_LIVE_EVAL_COMMAND
       || `claude -p --verbose --output-format stream-json --permission-mode default --no-session-persistence --allowedTools Read,Write,Edit,Bash(${VERIFY_COMMAND}) --settings claude-live-settings.json`;
   }
   if (agent === 'codex') {
-    return process.env.CODEX_RTL_LIVE_EVAL_COMMAND || CODEX_NPX_EXEC_COMMAND;
+    return process.env.HARNESS_RTL_LIVE_EVAL_COMMAND || HARNESS_NPX_EXEC_COMMAND;
   }
   return '';
 }
 
 function versionCommandFor(agent) {
-  if (agent === 'claude') return process.env.CLAUDE_READINESS_COMMAND || 'claude --version';
-  if (agent === 'codex') return process.env.CODEX_READINESS_COMMAND || 'codex --version';
+  if (agent === 'claude') return process.env.HARNESS_READINESS_COMMAND || 'claude --version';
+  if (agent === 'codex') return process.env.HARNESS_READINESS_COMMAND || 'codex --version';
   return '';
 }
 
@@ -517,8 +517,8 @@ function verificationQualityState(outDir) {
 function claudeLiveSettings(outDir) {
   return JSON.stringify({
     env: {
-      CLAUDE_VISIBLE_CHECKLIST_GATE_MODE: 'strict',
-      CLAUDE_VERIFY_GATE_STATE_FILE: path.join(outDir, 'var', 'verify-gate.json'),
+      HARNESS_VISIBLE_CHECKLIST_GATE_MODE: 'strict',
+      HARNESS_VERIFY_GATE_STATE_FILE: path.join(outDir, 'var', 'verify-gate.json'),
     },
   }, null, 2);
 }
@@ -547,8 +547,8 @@ function prepareOutDir(outDir) {
 function liveAgentEnv(outDir, sourceEnv = process.env) {
   return {
     ...buildIsolatedEnv(path.join(outDir, '.sandbox-home'), sourceEnv),
-    CLAUDE_VISIBLE_CHECKLIST_GATE_MODE: 'strict',
-    CLAUDE_VERIFY_GATE_STATE_FILE: path.join(outDir, 'var', 'verify-gate.json'),
+    HARNESS_VISIBLE_CHECKLIST_GATE_MODE: 'strict',
+    HARNESS_VERIFY_GATE_STATE_FILE: path.join(outDir, 'var', 'verify-gate.json'),
   };
 }
 

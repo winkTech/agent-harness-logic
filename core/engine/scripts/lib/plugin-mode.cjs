@@ -24,10 +24,19 @@ const DEV_CHECKOUT_DIRNAME = '.claude';
  * @returns {{pluginRoot: string, isPlugin: boolean, isDevCheckout: boolean}}
  */
 function detectPluginMode(opts = {}) {
-  const env = opts.env || process.env;
+  const { CANONICAL_FOR, KNOWN_ENV_KEYS } = require('../io/env.cjs');
+  // opts.env 可能是宿主形态（测试模拟宿主注入 CLAUDE_PLUGIN_ROOT，甚至 hostile
+  // Proxy 只在显式键访问时抛错）——按已知键清单逐键访问并归一化为 canonical，
+  // 宿主名不出本文件。
+  const srcEnv = opts.env || process.env;
+  const env = {};
+  for (const k of KNOWN_ENV_KEYS) {
+    const v = srcEnv[k];
+    if (v !== undefined) env[CANONICAL_FOR[k] || k] = v;
+  }
   const homeDir = String(opts.homeDir || os.homedir());
 
-  const raw = env.CLAUDE_PLUGIN_ROOT ? String(env.CLAUDE_PLUGIN_ROOT).trim() : '';
+  const raw = env.HARNESS_PLUGIN_ROOT ? String(env.HARNESS_PLUGIN_ROOT).trim() : '';
   const isPlugin = Boolean(raw);
   const pluginRoot = isPlugin ? path.resolve(raw) : '';
   const isDevCheckout = isPlugin && pluginRoot === path.resolve(homeDir, DEV_CHECKOUT_DIRNAME);

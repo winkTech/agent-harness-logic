@@ -26,7 +26,7 @@ function envFlag(name) {
   return v === '1' || v === 'true';
 }
 
-const STATE_FILE = process.env.CLAUDE_RUNTIME_STATE_FILE || varPath('index', 'runtime-state.json');
+const STATE_FILE = process.env.HARNESS_RUNTIME_STATE_FILE || varPath('index', 'runtime-state.json');
 const FAILURE_SIGNAL_THROTTLE_MS = 60 * 1000;
 // failureCount 的语义是"连续失败"——证据超过时效窗口后不再构成强制切换的依据。
 // 没有可解析时间戳的计数同样视为陈旧:宁可少注入一次提醒,不可跨会话误报。
@@ -279,7 +279,7 @@ function checkToolFailure(state, opts = {}) {
 function persistenceDisabled(deps = {}) {
   return deps.persist === false
     || envFlag('HARNESS_NO_PERSIST')
-    || process.env.CLAUDE_HOOK_NO_WRITE === '1'
+    || process.env.HARNESS_HOOK_NO_WRITE === '1'
     || envFlag('HARNESS_VERIFY_READONLY')
     || envFlag('HARNESS_NO_DIAGNOSTIC_WRITES');
 }
@@ -296,7 +296,7 @@ function emitModeSignal(type, payload, deps = {}) {
 }
 
 function evaluateSignal(input, deps = {}, context = {}) {
-  if (process.env.CLAUDE_BENCH === '1' && deps.allowBench !== true) return null;
+  if (process.env.HARNESS_BENCH === '1' && deps.allowBench !== true) return null;
   const loadState = deps.readState || readState;
   const mutateState = deps.updateState || updateState;
   const canPersist = !persistenceDisabled(deps);

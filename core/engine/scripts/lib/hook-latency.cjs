@@ -15,7 +15,7 @@
  *   其余**同步**入口 500ms / async 入口不计入 (平台不阻塞等待, 延迟不进热路径)。
  * 同步还是 async 以 hosts/claude-code/registrations.json 里该脚本的 `async: true` 为准 —— 不硬编码
  * 脚本名单; 同一脚本既有同步又有 async 注册时按同步算 (同步那条仍在热路径上)。
- * env `CLAUDE_HARNESS_LATENCY_SCALE` (默认 1, CI 设 3) 把所有档位整体放大。
+ * env `HARNESS_LATENCY_SCALE` (默认 1, CI 设 3) 把所有档位整体放大。
  */
 
 const fs = require('node:fs');
@@ -48,7 +48,7 @@ function persistenceDisabled() {
   return envFlag('HARNESS_NO_PERSIST')
     || envFlag('HARNESS_VERIFY_READONLY')
     || envFlag('HARNESS_NO_DIAGNOSTIC_WRITES')
-    || process.env.CLAUDE_HOOK_NO_WRITE === '1';
+    || process.env.HARNESS_HOOK_NO_WRITE === '1';
 }
 
 /** 记一条 hook 执行耗时。任何失败静默 — 遥测绝不能影响 hook 本体。 */
@@ -132,7 +132,7 @@ function registrationIndex(opts = {}) {
 }
 
 function latencyScale(env = process.env) {
-  const raw = Number(env?.CLAUDE_HARNESS_LATENCY_SCALE);
+  const raw = Number(env?.HARNESS_LATENCY_SCALE);
   return Number.isFinite(raw) && raw > 0 ? raw : 1;
 }
 

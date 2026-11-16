@@ -34,7 +34,7 @@ function readStdinJson() {
 }
 
 function defaultSpecPath(projectRoot) {
-  if (process.env.CLAUDE_REPAIR_SPEC) return process.env.CLAUDE_REPAIR_SPEC;
+  if (process.env.HARNESS_REPAIR_SPEC) return process.env.HARNESS_REPAIR_SPEC;
   return path.join(projectRoot || process.cwd(), 'var', 'repair', 'repair-spec.json');
 }
 

@@ -77,7 +77,7 @@ if (mode === 'counter') {
     updateJsonFileSync(target, () => ({ count: 0 }), (state) => ({ count: state.count + 1 }));
   }
 } else if (mode === 'verification') {
-  process.env.CLAUDE_VERIFY_GATE_STATE_FILE = target;
+  process.env.HARNESS_VERIFY_GATE_STATE_FILE = target;
   const { markEdited } = require(${JSON.stringify(verificationPath)});
   markEdited({ cwd: process.argv[5], filePath: process.argv[6], sessionId: process.argv[7], toolName: 'Edit' });
 } else if (mode === 'evidence') {
@@ -142,7 +142,7 @@ if (mode === 'counter') {
 
   const runtimeFile = path.join(tempRoot, 'runtime-state.json');
   fs.writeFileSync(runtimeFile, JSON.stringify({ marker: 'isolated', failureCount: 0, failureHistory: [] }), 'utf8');
-  const runtimeEnv = { CLAUDE_RUNTIME_STATE_FILE: runtimeFile };
+  const runtimeEnv = { HARNESS_RUNTIME_STATE_FILE: runtimeFile };
   const runtimeRead = await runNode([runtimeStatePath, 'get'], { env: runtimeEnv });
   assert.equal(JSON.parse(runtimeRead.stdout).marker, 'isolated', 'runtime-state must honor its injected state path');
   await Promise.all(Array.from({ length: workers }, () =>
@@ -155,17 +155,17 @@ if (mode === 'counter') {
   const hookSqliteFile = path.join(tempRoot, 'hook-memory.db');
   fs.writeFileSync(hookRuntimeFile, JSON.stringify({ keep: true, failureCount: 0, failureHistory: [], toolCalls: [] }), 'utf8');
   const hookStateEnv = {
-    CLAUDE_RUNTIME_STATE_FILE: hookRuntimeFile,
-    CLAUDE_SQLITE_PATH: hookSqliteFile,
+    HARNESS_RUNTIME_STATE_FILE: hookRuntimeFile,
+    HARNESS_SQLITE_PATH: hookSqliteFile,
     // The parent audit suite is read-only, but this fixture is fully isolated
     // under tempRoot and explicitly verifies the CLI persistence contract.
-    CLAUDE_HARNESS_NO_PERSIST: '0',
     HARNESS_NO_PERSIST: '0',
-    CLAUDE_HARNESS_VERIFY_READONLY: '0',
+    HARNESS_NO_PERSIST: '0',
     HARNESS_VERIFY_READONLY: '0',
-    CLAUDE_NO_DIAGNOSTIC_WRITES: '0',
+    HARNESS_VERIFY_READONLY: '0',
     HARNESS_NO_DIAGNOSTIC_WRITES: '0',
-    CLAUDE_HOOK_NO_WRITE: '0',
+    HARNESS_NO_DIAGNOSTIC_WRITES: '0',
+    HARNESS_HOOK_NO_WRITE: '0',
     HARNESS_HOOK_NO_WRITE: '0',
   };
   await runNode([isolationCheckPath], { env: hookStateEnv });
@@ -182,9 +182,9 @@ if (mode === 'counter') {
   const compactSignalFile = path.join(tempRoot, 'compact-needed.json');
   fs.writeFileSync(compactRuntimeFile, JSON.stringify({ compactCount: 7, toolCalls: [] }), 'utf8');
   const compactEnv = {
-    CLAUDE_RUNTIME_STATE_FILE: compactRuntimeFile,
-    CLAUDE_COMPACTION_LOG_FILE: compactLogFile,
-    CLAUDE_COMPACT_SIGNAL_FILE: compactSignalFile,
+    HARNESS_RUNTIME_STATE_FILE: compactRuntimeFile,
+    HARNESS_COMPACTION_LOG_FILE: compactLogFile,
+    HARNESS_COMPACT_SIGNAL_FILE: compactSignalFile,
   };
   const compactStatus = await runNode([preCompactPath, '--status'], { env: compactEnv });
   assert.match(compactStatus.stdout, /压缩次数:\s*7/);

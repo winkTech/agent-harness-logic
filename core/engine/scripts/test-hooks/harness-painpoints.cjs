@@ -958,8 +958,8 @@ test('memory retrieval handles PreToolUse Edit and Write file path payload shape
 
   const hookPath = path.join(HOME, 'core/engine/scripts/memory-retrieve-hook.cjs');
   const env = {
-    CLAUDE_SQLITE_PATH: dbPath,
-    CLAUDE_MEMORY_HINT_CACHE_DISABLED: '1',
+    HARNESS_SQLITE_PATH: dbPath,
+    HARNESS_MEMORY_HINT_CACHE_DISABLED: '1',
   };
   const edit = runNode(hookPath, JSON.stringify({
     hook_event_name: 'PreToolUse',
@@ -1136,14 +1136,14 @@ test('memory retrieval records only injected exposures through a separate manage
     markInjected: () => {},
     resolveWikiLinks: () => ({ resolved: [] }),
   };
-  const previousCacheDisabled = process.env.CLAUDE_MEMORY_HINT_CACHE_DISABLED;
-  process.env.CLAUDE_MEMORY_HINT_CACHE_DISABLED = '1';
+  const previousCacheDisabled = process.env.HARNESS_MEMORY_HINT_CACHE_DISABLED;
+  process.env.HARNESS_MEMORY_HINT_CACHE_DISABLED = '1';
   let output;
   try {
     output = hook.retrieveContext(payload, deps);
   } finally {
-    if (previousCacheDisabled === undefined) delete process.env.CLAUDE_MEMORY_HINT_CACHE_DISABLED;
-    else process.env.CLAUDE_MEMORY_HINT_CACHE_DISABLED = previousCacheDisabled;
+    if (previousCacheDisabled === undefined) delete process.env.HARNESS_MEMORY_HINT_CACHE_DISABLED;
+    else process.env.HARNESS_MEMORY_HINT_CACHE_DISABLED = previousCacheDisabled;
   }
   const failOpen = hook.retrieveContext({ ...payload, tool_use_id: 'tool-use-write-failure' }, {
     ...deps,
@@ -1523,8 +1523,8 @@ test('local runner enforces one batch deadline and reports structured timeout st
   // 两个环境变量只为**自测降级路径**存在: 用它们喂回历史上那组必挂的参数
   // (sleep=180 / deadline=280), 就能验证本条在标定失真时走的是可见 SKIP 而不是 FAIL。
   // 不设时走实测标定, 与 CI 行为一致。
-  const forcedSleep = Number.parseInt(process.env.CLAUDE_PAINPOINT_SLEEP_MS || '', 10);
-  const forcedDeadline = Number.parseInt(process.env.CLAUDE_PAINPOINT_DEADLINE_MS || '', 10);
+  const forcedSleep = Number.parseInt(process.env.HARNESS_PAINPOINT_SLEEP_MS || '', 10);
+  const forcedDeadline = Number.parseInt(process.env.HARNESS_PAINPOINT_DEADLINE_MS || '', 10);
   const startupMs = measureNodeStartupMs();
   const sleepMs = Number.isFinite(forcedSleep) && forcedSleep > 0
     ? forcedSleep
@@ -1687,7 +1687,7 @@ test('hook benchmark redirects harness state writes into a disposable sandbox', 
   fs.writeFileSync(hook, [
     "const fs = require('node:fs');",
     "const path = require('node:path');",
-    "const target = path.join(process.env.CLAUDE_HARNESS_ROOT, 'var', process.env.BENCH_PROBE);",
+    "const target = path.join(process.env.HARNESS_ROOT, 'var', process.env.BENCH_PROBE);",
     "fs.mkdirSync(path.dirname(target), { recursive: true });",
     "fs.writeFileSync(target, 'sandboxed');",
     '',
@@ -1719,8 +1719,8 @@ test('benchmark entry runner always sandboxes sync hooks and never executes asyn
   fs.writeFileSync(syncHook, [
     "const fs = require('node:fs');",
     "const path = require('node:path');",
-    `fs.mkdirSync(path.join(process.env.CLAUDE_HARNESS_ROOT, 'var'), { recursive: true });`,
-    `fs.writeFileSync(path.join(process.env.CLAUDE_HARNESS_ROOT, 'var', ${JSON.stringify(syncProbe)}), 'sync');`,
+    `fs.mkdirSync(path.join(process.env.HARNESS_ROOT, 'var'), { recursive: true });`,
+    `fs.writeFileSync(path.join(process.env.HARNESS_ROOT, 'var', ${JSON.stringify(syncProbe)}), 'sync');`,
     '',
   ].join('\n'), 'utf8');
   fs.writeFileSync(asyncHook,
@@ -1791,7 +1791,7 @@ test('local permissions allow edits without bypassing all shell approvals', () =
 
 test('local settings do not force context compaction below fifty percent', () => {
   const local = readJson(path.join(HOME, 'settings.local.json'), {});
-  const raw = local.env?.CLAUDE_AUTOCOMPACT_PCT_OVERRIDE;
+  const raw = local.env?.HARNESS_AUTOCOMPACT_PCT_OVERRIDE;
   assert(raw === undefined || Number(raw) >= 50,
     `low autocompact override still amplifies SessionStart(compact): ${raw}`);
   // settings.json 不入版本库（hook 命令含本机绝对路径，见 hosts/claude-code/registrations.json）。
@@ -1859,7 +1859,7 @@ test('local runner gate bypass is short-lived, session-bound, target-exact, and 
   const cleanEnv = () => {
     const env = { ...process.env };
     for (const key of Object.keys(env)) {
-      if (key.startsWith('CLAUDE_GATES_DISABLE')) delete env[key];
+      if (key.startsWith('HARNESS_GATES_DISABLE')) delete env[key];
     }
     return env;
   };
@@ -1871,8 +1871,8 @@ test('local runner gate bypass is short-lived, session-bound, target-exact, and 
     windowsHide: true,
     env: {
       ...cleanEnv(),
-      CLAUDE_GATES_DISABLED: 'true',
-      CLAUDE_GATES_DISABLE_AUDIT_PATH: audit,
+      HARNESS_GATES_DISABLED: 'true',
+      HARNESS_GATES_DISABLE_AUDIT_PATH: audit,
     },
   });
   const invalidExecuted = fs.existsSync(marker);
@@ -1885,14 +1885,14 @@ test('local runner gate bypass is short-lived, session-bound, target-exact, and 
     windowsHide: true,
     env: {
       ...cleanEnv(),
-      CLAUDE_GATES_DISABLED: '1',
-      CLAUDE_GATES_DISABLE_REASON: reason,
-      CLAUDE_GATES_DISABLE_ACTOR: actor,
-      CLAUDE_GATES_DISABLE_TARGET: path.basename(hook),
-      CLAUDE_GATES_DISABLE_SESSION: sessionId,
-      CLAUDE_GATES_DISABLE_ISSUED_AT: String(issuedAt),
-      CLAUDE_GATES_DISABLE_TTL_MS: '60000',
-      CLAUDE_GATES_DISABLE_AUDIT_PATH: audit,
+      HARNESS_GATES_DISABLED: '1',
+      HARNESS_GATES_DISABLE_REASON: reason,
+      HARNESS_GATES_DISABLE_ACTOR: actor,
+      HARNESS_GATES_DISABLE_TARGET: path.basename(hook),
+      HARNESS_GATES_DISABLE_SESSION: sessionId,
+      HARNESS_GATES_DISABLE_ISSUED_AT: String(issuedAt),
+      HARNESS_GATES_DISABLE_TTL_MS: '60000',
+      HARNESS_GATES_DISABLE_AUDIT_PATH: audit,
     },
   });
   const validExecuted = fs.existsSync(marker);
@@ -1918,7 +1918,7 @@ test('local runner child environment preserves runtime context without inheritin
     "const fs = require('node:fs');",
     `fs.writeFileSync(${JSON.stringify(output)}, JSON.stringify({`,
     '  github: process.env.GITHUB_TOKEN || null,',
-    '  claudeOauth: process.env.CLAUDE_CODE_OAUTH_TOKEN || null,',
+    '  claudeOauth: process.env.HARNESS_CODE_OAUTH_TOKEN || null,',
     '  anthropic: process.env.ANTHROPIC_API_KEY || null,',
     '  path: process.env.PATH || process.env.Path || null,',
     '  session: process.env.CLAUDE_SESSION_ID || null,',
@@ -1933,7 +1933,7 @@ test('local runner child environment preserves runtime context without inheritin
     env: {
       ...process.env,
       GITHUB_TOKEN: 'sentinel-must-not-reach-hook',
-      CLAUDE_CODE_OAUTH_TOKEN: 'sentinel-oauth-must-not-reach-hook',
+      HARNESS_CODE_OAUTH_TOKEN: 'sentinel-oauth-must-not-reach-hook',
       ANTHROPIC_API_KEY: 'sentinel-api-key-must-not-reach-hook',
       CLAUDE_SESSION_ID: 'claude-session-preserved',
     },
@@ -1943,7 +1943,7 @@ test('local runner child environment preserves runtime context without inheritin
 
   assert(result.status === 0, `environment fixture hook failed: ${result.stderr}`);
   assert(captured.github === null, 'runner leaked GITHUB_TOKEN into a child gate');
-  assert(captured.claudeOauth === null, 'runner leaked CLAUDE_CODE_OAUTH_TOKEN into a child gate');
+  assert(captured.claudeOauth === null, 'runner leaked HARNESS_CODE_OAUTH_TOKEN into a child gate');
   assert(captured.anthropic === null, 'runner leaked ANTHROPIC_API_KEY into a child gate');
   assert(captured.path, 'runner stripped PATH required to execute toolchain probes');
   assert(captured.session === 'claude-session-preserved', 'runner stripped Claude session context');
@@ -2044,8 +2044,8 @@ test('verification gate only clears after successful PostToolUse evidence', () =
   const ledgerFile = path.join(tmpRoot, 'verification-ledger.json');
   const gate = path.join(HOME, 'core/engine/scripts/hooks/verification-gate.cjs');
   const env = {
-    CLAUDE_VERIFY_GATE_STATE_FILE: stateFile,
-    CLAUDE_VERIFICATION_LEDGER_FILE: ledgerFile,
+    HARNESS_VERIFY_GATE_STATE_FILE: stateFile,
+    HARNESS_VERIFICATION_LEDGER_FILE: ledgerFile,
   };
 
   try {
@@ -2093,8 +2093,8 @@ test('verification gate allows read-only echo chains but blocks echo redirection
   const gate = path.join(HOME, 'core/engine/scripts/hooks/verification-gate.cjs');
   const tmpRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'verify-echo-'));
   const env = {
-    CLAUDE_VERIFY_GATE_STATE_FILE: path.join(tmpRoot, 'verify-gate.json'),
-    CLAUDE_VERIFICATION_LEDGER_FILE: path.join(tmpRoot, 'verification-ledger.json'),
+    HARNESS_VERIFY_GATE_STATE_FILE: path.join(tmpRoot, 'verify-gate.json'),
+    HARNESS_VERIFICATION_LEDGER_FILE: path.join(tmpRoot, 'verification-ledger.json'),
   };
   const sessionId = 'echo-safety-session';
 
@@ -2130,9 +2130,9 @@ test('verification pending is session-scoped and expires by TTL', () => {
   const tmpRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'verify-session-'));
   const stateFile = path.join(tmpRoot, 'verify-gate.json');
   const env = {
-    CLAUDE_VERIFY_GATE_STATE_FILE: stateFile,
-    CLAUDE_VERIFICATION_LEDGER_FILE: path.join(tmpRoot, 'verification-ledger.json'),
-    CLAUDE_VERIFY_GATE_TTL_MS: '60000',
+    HARNESS_VERIFY_GATE_STATE_FILE: stateFile,
+    HARNESS_VERIFICATION_LEDGER_FILE: path.join(tmpRoot, 'verification-ledger.json'),
+    HARNESS_VERIFY_GATE_TTL_MS: '60000',
   };
 
   runNode(gate, JSON.stringify({

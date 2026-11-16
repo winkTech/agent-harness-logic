@@ -24,7 +24,7 @@ const { varPath } = require('../lib/harness-state.cjs');
 const { updateJsonFileSync } = require('../lib/project-scope.cjs');
 
 const HARNESS = HARNESS_ROOT;
-const STATE_FILE = process.env.CLAUDE_RUNTIME_STATE_FILE || varPath('index', 'runtime-state.json');
+const STATE_FILE = process.env.HARNESS_RUNTIME_STATE_FILE || varPath('index', 'runtime-state.json');
 
 // ── 隔离检测 ─────────────────────────────────────────────────────────────────
 
@@ -66,7 +66,7 @@ function detectIsolation() {
   // 方法 4: 环境变量标记
   const envFlags = [
     'RUNNING_IN_CONTAINER',
-    'CLAUDE_CODE_ISOLATED',
+    'HARNESS_CODE_ISOLATED',
     'DEVCONTAINER',
   ];
   for (const flag of envFlags) {

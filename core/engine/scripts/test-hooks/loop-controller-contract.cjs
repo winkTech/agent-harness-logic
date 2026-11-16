@@ -34,10 +34,10 @@ const SCOPE = scopeId(PROJECT_ROOT);
 // runner 会注入只读开关。本契约要验证的正是"写迭代"这条路径, 而写入目标全部是
 // :memory: 库, 不触碰 var/ 与真实 memory.db, 因此在进程内清掉开关;
 // 只读语义本身另由 assertReadOnlyHonored 显式打开开关来验证。
-delete process.env.CLAUDE_HARNESS_NO_PERSIST;
+delete process.env.HARNESS_NO_PERSIST;
 
 delete process.env.HARNESS_NO_PERSIST;
-delete process.env.CLAUDE_NO_DIAGNOSTIC_WRITES;
+delete process.env.HARNESS_NO_DIAGNOSTIC_WRITES;
 
 delete process.env.HARNESS_NO_DIAGNOSTIC_WRITES;
 
@@ -354,8 +354,8 @@ function assertCriteriaSemantics() {
 
   // 门禁绿判定
   const gatesDir = fs.mkdtempSync(path.join(os.tmpdir(), 'loop-gates-'));
-  const prev = process.env.CLAUDE_GATES_DIR;
-  process.env.CLAUDE_GATES_DIR = gatesDir;
+  const prev = process.env.HARNESS_GATES_DIR;
+  process.env.HARNESS_GATES_DIR = gatesDir;
   try {
     fs.writeFileSync(path.join(gatesDir, 'demo.json'), JSON.stringify({ status: 'completed' }));
     const green = criteriaLib.evaluate([{ type: 'gate_green', gate: 'demo' }], { projectRoot: PROJECT_ROOT });
@@ -370,8 +370,8 @@ function assertCriteriaSemantics() {
     );
     assert.match(traversal.results[0].detail, /非法/, 'gate 名必须防路径穿越');
   } finally {
-    if (prev === undefined) delete process.env.CLAUDE_GATES_DIR;
-    else process.env.CLAUDE_GATES_DIR = prev;
+    if (prev === undefined) delete process.env.HARNESS_GATES_DIR;
+    else process.env.HARNESS_GATES_DIR = prev;
     fs.rmSync(gatesDir, { recursive: true, force: true });
   }
 }
@@ -413,7 +413,7 @@ function assertReadOnlyHonored() {
     budgetIters: 3,
   }, { db });
 
-  process.env.CLAUDE_HARNESS_NO_PERSIST = '1';
+  process.env.HARNESS_NO_PERSIST = '1';
 
 
   process.env.HARNESS_NO_PERSIST = '1';
@@ -432,7 +432,7 @@ function assertReadOnlyHonored() {
     assert.equal(store.getLoop(loop.id, { db }).iteration, 0, '只读模式不得写迭代');
     assert.equal(store.listIterations(loop.id, { db }).length, 0);
   } finally {
-    delete process.env.CLAUDE_HARNESS_NO_PERSIST;
+    delete process.env.HARNESS_NO_PERSIST;
 
     delete process.env.HARNESS_NO_PERSIST;
   }
@@ -506,7 +506,7 @@ function assertCliBehavior() {
   // Stop 钩子拿到非法 JSON 必须 fail-open 且不产生 stdout
   const hook = spawnSync(process.execPath, [HOOK], {
     input: 'definitely not json', encoding: 'utf8', windowsHide: true,
-    env: { ...process.env, CLAUDE_HARNESS_NO_PERSIST: '1' },
+    env: { ...process.env, HARNESS_NO_PERSIST: '1' },
   });
   assert.equal(hook.status, 0, 'Stop 钩子异常必须 fail-open');
   assert.equal(hook.stdout, '', '放行路径不得写 stdout');

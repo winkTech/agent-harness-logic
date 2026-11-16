@@ -36,7 +36,7 @@ const { HARNESS_ROOT, resolveHarnessRoot } = require('../lib/harness-root.cjs');
 const HOME = HARNESS_ROOT;
 const VERBOSE = process.argv.includes('--verbose');
 const LIST_ONLY = process.argv.includes('--list');
-const NO_PERSIST = process.argv.includes('--no-persist') || process.env.CLAUDE_HARNESS_NO_PERSIST === '1';
+const NO_PERSIST = process.argv.includes('--no-persist') || process.env.HARNESS_NO_PERSIST === '1';
 const SUITE_FILTER = (() => {
   const arg = process.argv.find(value => value.startsWith('--suite='));
   return arg ? arg.slice('--suite='.length) : '';
@@ -113,7 +113,7 @@ function nodeCheck(filePath) {
  */
 function resolvePosixBash() {
   const candidates = [
-    process.env.CLAUDE_TEST_BASH,
+    process.env.HARNESS_TEST_BASH,
     'C:/Program Files/Git/bin/bash.exe',
     'C:/Program Files (x86)/Git/bin/bash.exe',
     'C:/Program Files/Git/usr/bin/bash.exe',
@@ -327,8 +327,8 @@ define('VerificationGate', '安全命令放行', () => {
   const p = path.join(HOME, 'core/engine/scripts/hooks/verification-gate.cjs');
   const tmpRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'verify-safe-'));
   const env = {
-    CLAUDE_VERIFY_GATE_STATE_FILE: path.join(tmpRoot, 'verify-gate.json'),
-    CLAUDE_VERIFICATION_LEDGER_FILE: path.join(tmpRoot, 'verification-ledger.json'),
+    HARNESS_VERIFY_GATE_STATE_FILE: path.join(tmpRoot, 'verify-gate.json'),
+    HARNESS_VERIFICATION_LEDGER_FILE: path.join(tmpRoot, 'verification-ledger.json'),
   };
   const stdin = JSON.stringify({ hook_event_name: 'PreToolUse', tool_name: 'Bash', cwd: tmpRoot, tool_input: { command: 'ls' } });
   const r = runNode(p, stdin, { cwd: tmpRoot, env });
@@ -340,8 +340,8 @@ define('VerificationGate', '功能验证清除标记', () => {
   const p = path.join(HOME, 'core/engine/scripts/hooks/verification-gate.cjs');
   const tmpRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'verify-post-'));
   const env = {
-    CLAUDE_VERIFY_GATE_STATE_FILE: path.join(tmpRoot, 'verify-gate.json'),
-    CLAUDE_VERIFICATION_LEDGER_FILE: path.join(tmpRoot, 'verification-ledger.json'),
+    HARNESS_VERIFY_GATE_STATE_FILE: path.join(tmpRoot, 'verify-gate.json'),
+    HARNESS_VERIFICATION_LEDGER_FILE: path.join(tmpRoot, 'verification-ledger.json'),
   };
   // 模拟编辑操作标记
   const editStdin = JSON.stringify({
@@ -392,8 +392,8 @@ define('VerificationGate', '合成违规命令被拦截', () => {
   const p = path.join(HOME, 'core/engine/scripts/hooks/verification-gate.cjs');
   const tmpRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'verify-block-'));
   const env = {
-    CLAUDE_VERIFY_GATE_STATE_FILE: path.join(tmpRoot, 'verify-gate.json'),
-    CLAUDE_VERIFICATION_LEDGER_FILE: path.join(tmpRoot, 'verification-ledger.json'),
+    HARNESS_VERIFY_GATE_STATE_FILE: path.join(tmpRoot, 'verify-gate.json'),
+    HARNESS_VERIFICATION_LEDGER_FILE: path.join(tmpRoot, 'verification-ledger.json'),
   };
   // 先标记编辑
   const editStdin = JSON.stringify({
@@ -417,8 +417,8 @@ define('VerificationGate', '合成违规命令被拦截', () => {
 function seedPendingGate(tag) {
   const tmpRoot = fs.mkdtempSync(path.join(os.tmpdir(), tag));
   const env = {
-    CLAUDE_VERIFY_GATE_STATE_FILE: path.join(tmpRoot, 'verify-gate.json'),
-    CLAUDE_VERIFICATION_LEDGER_FILE: path.join(tmpRoot, 'verification-ledger.json'),
+    HARNESS_VERIFY_GATE_STATE_FILE: path.join(tmpRoot, 'verify-gate.json'),
+    HARNESS_VERIFICATION_LEDGER_FILE: path.join(tmpRoot, 'verification-ledger.json'),
   };
   runNode(path.join(HOME, 'core/engine/scripts/hooks/verification-gate.cjs'), JSON.stringify({
     hook_event_name: 'PostToolUse',
@@ -544,8 +544,8 @@ define('VerificationGate', '待验证状态按项目隔离', () => {
   fs.writeFileSync(path.join(projectA, 'AGENTS.md'), '# a', 'utf8');
   fs.writeFileSync(path.join(projectB, 'AGENTS.md'), '# b', 'utf8');
   const env = {
-    CLAUDE_VERIFY_GATE_STATE_FILE: path.join(tmpRoot, 'verify-gate.json'),
-    CLAUDE_VERIFICATION_LEDGER_FILE: path.join(tmpRoot, 'verification-ledger.json'),
+    HARNESS_VERIFY_GATE_STATE_FILE: path.join(tmpRoot, 'verify-gate.json'),
+    HARNESS_VERIFICATION_LEDGER_FILE: path.join(tmpRoot, 'verification-ledger.json'),
   };
 
   runNode(p, JSON.stringify({
@@ -1197,7 +1197,7 @@ define('HookRegistry', 'relocates installed Windows hook paths into an arbitrary
     hooks: {
       PreToolUse: [{
         matcher: 'Bash',
-        hooks: [{ type: 'command', command: 'node [CLAUDE_HOME]/core/engine/scripts/hooks/sample.cjs' }],
+        hooks: [{ type: 'command', command: 'node [HARNESS_HOME]/core/engine/scripts/hooks/sample.cjs' }],
       }],
     },
   }), 'utf8');
@@ -1237,7 +1237,7 @@ define('HarnessRoot', 'explicit and arbitrary checkout roots resolve consistentl
       startPath: path.parse(checkout).root,
       moduleRoot: '',
       homeDir: path.join(checkout, 'missing-home'),
-      env: { CLAUDE_HARNESS_ROOT: checkout },
+      env: { HARNESS_ROOT: checkout },
     });
     const fromPrimaryEnv = resolveHarnessRoot({
       startPath: path.parse(checkout).root,
@@ -1337,9 +1337,9 @@ define('HookRegistry', 'legacy dry-run 入口使用统一注册表', () => {
     windowsHide: true,
     env: {
       ...process.env,
-      CLAUDE_HARNESS_VERIFY_READONLY: '1',
+      HARNESS_VERIFY_READONLY: '1',
       HARNESS_NO_DIAGNOSTIC_WRITES: '1',
-  CLAUDE_NO_DIAGNOSTIC_WRITES: '1',
+  HARNESS_NO_DIAGNOSTIC_WRITES: '1',
     },
   });
   return { pass: r.status === 0, detail: `exit=${r.status}` };
@@ -1647,8 +1647,8 @@ define('VerificationGate', '不含 status 的真实 PostToolUse 载荷可清除�
   const p = path.join(HOME, 'core/engine/scripts/hooks/verification-gate.cjs');
   const tmpRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'verify-realpayload-'));
   const env = {
-    CLAUDE_VERIFY_GATE_STATE_FILE: path.join(tmpRoot, 'verify-gate.json'),
-    CLAUDE_VERIFICATION_LEDGER_FILE: path.join(tmpRoot, 'verification-ledger.json'),
+    HARNESS_VERIFY_GATE_STATE_FILE: path.join(tmpRoot, 'verify-gate.json'),
+    HARNESS_VERIFICATION_LEDGER_FILE: path.join(tmpRoot, 'verification-ledger.json'),
   };
   runNode(p, JSON.stringify({
     hook_event_name: 'PostToolUse',
@@ -1839,8 +1839,8 @@ define('ProgressWatchdog', 'WorkBuddy transport: 显式 status:failed 的 PostTo
 
 define('ContextMonitor', 'context pressure is advisory unless auto-checkpoint is explicitly enabled', () => {
   const monitor = require(path.join(HOME, 'core/engine/scripts/context-monitor-gate.cjs'));
-  const previous = process.env.CLAUDE_CONTEXT_MONITOR_AUTO_CHECKPOINT;
-  process.env.CLAUDE_CONTEXT_MONITOR_AUTO_CHECKPOINT = '0';
+  const previous = process.env.HARNESS_CONTEXT_MONITOR_AUTO_CHECKPOINT;
+  process.env.HARNESS_CONTEXT_MONITOR_AUTO_CHECKPOINT = '0';
   let output;
   try {
     output = monitor.evaluate({
@@ -1850,8 +1850,8 @@ define('ContextMonitor', 'context pressure is advisory unless auto-checkpoint is
       },
     });
   } finally {
-    if (previous === undefined) delete process.env.CLAUDE_CONTEXT_MONITOR_AUTO_CHECKPOINT;
-    else process.env.CLAUDE_CONTEXT_MONITOR_AUTO_CHECKPOINT = previous;
+    if (previous === undefined) delete process.env.HARNESS_CONTEXT_MONITOR_AUTO_CHECKPOINT;
+    else process.env.HARNESS_CONTEXT_MONITOR_AUTO_CHECKPOINT = previous;
   }
   return {
     pass: output?.level === 'RED' && output.mode === 'advisory' && output.checkpointed === false,
@@ -1939,7 +1939,7 @@ define('VisibleChecklistGate', 'strict mode blocks missing transcript', () => {
   const r = runNode(
     p,
     JSON.stringify({ hook_event_name: 'PreToolUse', tool_name: 'Bash', tool_input: { command: 'ls' } }),
-    { env: { CLAUDE_VISIBLE_CHECKLIST_GATE_MODE: 'strict' } },
+    { env: { HARNESS_VISIBLE_CHECKLIST_GATE_MODE: 'strict' } },
   );
   return { pass: r.status === 2, detail: `exit=${r.status} (expected 2)` };
 });
@@ -2011,7 +2011,7 @@ define('VisibleChecklistGate', 'strict mode blocks missing checklist', () => {
     assistantTranscript([{ type: 'text', text: 'Now I will run tests.' }]),
   ]);
   const r = runNode(p, visibleChecklistPayload('Bash', transcript), {
-    env: { CLAUDE_VISIBLE_CHECKLIST_GATE_MODE: 'strict' },
+    env: { HARNESS_VISIBLE_CHECKLIST_GATE_MODE: 'strict' },
   });
   return { pass: r.status === 2, detail: `exit=${r.status} (expected 2)` };
 });
@@ -2033,7 +2033,7 @@ define('VisibleChecklistGate', 'strict mode blocks stale checklist reuse', () =>
     assistantTranscript([{ type: 'tool_use', name: 'Read', input: { file_path: 'src/telemetry.py' } }]),
   ]);
   const r = runNode(p, visibleChecklistPayload('Bash', transcript), {
-    env: { CLAUDE_VISIBLE_CHECKLIST_GATE_MODE: 'strict' },
+    env: { HARNESS_VISIBLE_CHECKLIST_GATE_MODE: 'strict' },
   });
   return { pass: r.status === 2, detail: `exit=${r.status} (expected 2)` };
 });
@@ -2102,9 +2102,9 @@ define('DiagnosticWrites', '只读验证模式跳过 auto-record 写入', () => 
     const scriptContent = fs.readFileSync(script, 'utf8');
     const prelude = [
       'export HOME=/tmp/auto-record-readonly-test',
-      'export CLAUDE_HARNESS_VERIFY_READONLY=1',
+      'export HARNESS_VERIFY_READONLY=1',
       'export HARNESS_NO_DIAGNOSTIC_WRITES=1',
-      'export CLAUDE_NO_DIAGNOSTIC_WRITES=1',
+      'export HARNESS_NO_DIAGNOSTIC_WRITES=1',
       '',
     ].join('\n');
     // Windows 上裸 `bash` 会解析到 C:\Windows\System32\bash.exe (WSL),
@@ -2154,7 +2154,7 @@ define('CoverageRunner', '--check fails closed without evidence and accepts vali
   if (!fs.existsSync(p)) return { pass: true, skip: true, detail: '文件不存在' };
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'coverage-check-'));
   const summaryFile = path.join(root, 'coverage-summary.json');
-  const env = { ...process.env, CLAUDE_COVERAGE_SUMMARY_FILE: summaryFile };
+  const env = { ...process.env, HARNESS_COVERAGE_SUMMARY_FILE: summaryFile };
   try {
     const missing = spawnSync(process.execPath, [p, '--check'], {
       encoding: 'utf8', timeout: 15000, windowsHide: true, env,
@@ -2538,12 +2538,12 @@ for (const [name, relative, timeout, extraArgs = []] of AUDIT_REMEDIATION_CONTRA
       env: {
         ...process.env,
         HARNESS_NO_PERSIST: '1',
-        CLAUDE_HARNESS_NO_PERSIST: '1',
+        HARNESS_NO_PERSIST: '1',
         HARNESS_VERIFY_READONLY: '1',
-        CLAUDE_HARNESS_VERIFY_READONLY: '1',
+        HARNESS_VERIFY_READONLY: '1',
         HARNESS_NO_DIAGNOSTIC_WRITES: '1',
         HARNESS_NO_DIAGNOSTIC_WRITES: '1',
-  CLAUDE_NO_DIAGNOSTIC_WRITES: '1',
+  HARNESS_NO_DIAGNOSTIC_WRITES: '1',
       },
     });
     const passed = r.status === 0 && !r.error && !r.signal;
@@ -3930,7 +3930,7 @@ define('MemoryLifecycle', 'Skill-Evolve is require-safe for injected lifecycle t
     encoding: 'utf8',
     timeout: 15_000,
     windowsHide: true,
-    env: { ...process.env, CLAUDE_SQLITE_PATH: dbPath },
+    env: { ...process.env, HARNESS_SQLITE_PATH: dbPath },
   });
   fs.rmSync(tmp, { recursive: true, force: true });
   const pass = result.status === 0 && result.stdout === 'loaded';
@@ -4041,7 +4041,7 @@ define('MemoryLifecycle', 'SessionStart Dream hook emits exactly one JSON line',
     encoding: 'utf8',
     timeout: 15_000,
     windowsHide: true,
-    env: { ...process.env, CLAUDE_SQLITE_PATH: dbPath },
+    env: { ...process.env, HARNESS_SQLITE_PATH: dbPath },
   });
   fs.rmSync(tmp, { recursive: true, force: true });
   const lines = result.stdout.trim().split(/\r?\n/).filter(Boolean);
@@ -4138,7 +4138,7 @@ define('MemoryLifecycle', 'Dream startup help is read-only and never consumes ev
     encoding: 'utf8',
     timeout: 15_000,
     windowsHide: true,
-    env: { ...process.env, CLAUDE_SQLITE_PATH: dbPath },
+    env: { ...process.env, HARNESS_SQLITE_PATH: dbPath },
   });
   db = openDb({ path: dbPath });
   const watermark = events.getWatermark({ db: db.db, consumer: 'dream' });
@@ -4269,13 +4269,13 @@ const FPG = 'core/engine/scripts/hooks/file-protection-guard.cjs';
 const fpgCall = (file) => JSON.stringify({ tool_name: 'Write', tool_input: { file_path: file } });
 const fpgEnv = (approval, reason, basis) => ({
   HARNESS_NO_DIAGNOSTIC_WRITES: '1',
-  CLAUDE_NO_DIAGNOSTIC_WRITES: '1',
-  CLAUDE_PROTECTED_WRITE_APPROVAL: approval || '',
-  CLAUDE_PROTECTED_WRITE_REASON: reason || '',
-  CLAUDE_PROTECTED_WRITE_BASIS: basis || '',
+  HARNESS_NO_DIAGNOSTIC_WRITES: '1',
+  HARNESS_PROTECTED_WRITE_APPROVAL: approval || '',
+  HARNESS_PROTECTED_WRITE_REASON: reason || '',
+  HARNESS_PROTECTED_WRITE_BASIS: basis || '',
   // 倒置签名依赖文件系统 mtime, 会随仓库状态漂移; 这些用例只考批准与依据方向,
   // 把窗口关掉以免测试结果取决于"最近有没有人改过 RTL"。
-  CLAUDE_GOLDEN_INVERSION_WINDOW_MS: '0',
+  HARNESS_GOLDEN_INVERSION_WINDOW_MS: '0',
 });
 
 define('FileProtectionGuard', 'golden model 目录内部的文件也受保护', () => {
@@ -4410,8 +4410,8 @@ define('AgentTransparencyLedger', 'writes task contract skill plan rule trace an
   const r = runNode(p, JSON.stringify(payload), {
     cwd: root,
     env: {
-      CLAUDE_TRANSPARENCY_RUN_DIR: outDir,
-      CLAUDE_TOOL_ACTION_CONTRACT_MODE: 'all',
+      HARNESS_TRANSPARENCY_RUN_DIR: outDir,
+      HARNESS_TOOL_ACTION_CONTRACT_MODE: 'all',
     },
   });
   if (r.status !== 0) return { pass: false, detail: `exit=${r.status}: ${r.stderr}` };
@@ -4446,7 +4446,7 @@ define('ToolActionContractGate', 'fresh transparency contract allows controlled 
     user_message: 'Push the current feature branch to origin.',
     tool_input: { command: 'git push origin feature/test' },
   };
-  const env = { CLAUDE_TRANSPARENCY_RUN_DIR: outDir };
+  const env = { HARNESS_TRANSPARENCY_RUN_DIR: outDir };
   const ledger = runNode(ledgerPath, JSON.stringify(payload), { cwd: root, env });
   if (ledger.status !== 0) return { pass: false, detail: `ledger exit=${ledger.status}: ${ledger.stderr}` };
   const gate = runNode(gatePath, JSON.stringify(payload), { cwd: root, env });
@@ -4474,7 +4474,7 @@ define('ToolActionContractGate', 'cross-thread delegation cannot authorize a con
     ].join('\n'),
     tool_input: { command: 'git push origin feature/test' },
   };
-  const env = { CLAUDE_TRANSPARENCY_RUN_DIR: outDir };
+  const env = { HARNESS_TRANSPARENCY_RUN_DIR: outDir };
   const ledger = runNode(ledgerPath, JSON.stringify(payload), { cwd: root, env });
   if (ledger.status !== 0) return { pass: false, detail: `ledger exit=${ledger.status}: ${ledger.stderr}` };
   const contract = JSON.parse(fs.readFileSync(path.join(outDir, 'tool-action-contract.json'), 'utf8'));
@@ -4510,8 +4510,8 @@ define('ToolActionContractGate', 'contract mode off cannot bypass cross-thread d
     tool_input: { command: 'git push origin feature/test' },
   };
   const env = {
-    CLAUDE_TRANSPARENCY_RUN_DIR: outDir,
-    CLAUDE_TOOL_ACTION_CONTRACT_MODE: 'off',
+    HARNESS_TRANSPARENCY_RUN_DIR: outDir,
+    HARNESS_TOOL_ACTION_CONTRACT_MODE: 'off',
   };
   const ledger = runNode(ledgerPath, JSON.stringify(payload), { cwd: root, env });
   if (ledger.status !== 0) return { pass: false, detail: `ledger exit=${ledger.status}: ${ledger.stderr}` };
@@ -4546,8 +4546,8 @@ define('ToolActionContractGate', 'disabled gate cannot bypass cross-thread deleg
     tool_input: { file_path: path.join(root, 'config.json'), content: '{}\n' },
   };
   const env = {
-    CLAUDE_TRANSPARENCY_RUN_DIR: outDir,
-    CLAUDE_TOOL_ACTION_CONTRACT_GATE_DISABLED: '1',
+    HARNESS_TRANSPARENCY_RUN_DIR: outDir,
+    HARNESS_TOOL_ACTION_CONTRACT_GATE_DISABLED: '1',
   };
   const ledger = runNode(ledgerPath, JSON.stringify(payload), { cwd: root, env });
   if (ledger.status !== 0) return { pass: false, detail: `ledger exit=${ledger.status}: ${ledger.stderr}` };
@@ -4585,7 +4585,7 @@ define('ToolActionContractGate', 'same-thread delegation keeps controlled tool c
     ].join('\n'),
     tool_input: { command: 'git push origin feature/test' },
   };
-  const env = { CLAUDE_TRANSPARENCY_RUN_DIR: outDir };
+  const env = { HARNESS_TRANSPARENCY_RUN_DIR: outDir };
   const ledger = runNode(ledgerPath, JSON.stringify(payload), { cwd: root, env });
   if (ledger.status !== 0) return { pass: false, detail: `ledger exit=${ledger.status}: ${ledger.stderr}` };
   const contract = JSON.parse(fs.readFileSync(path.join(outDir, 'tool-action-contract.json'), 'utf8'));
@@ -4618,7 +4618,7 @@ define('ToolActionContractGate', 'missing contract self-heals and never hard-blo
   };
   const gate = runNode(gatePath, JSON.stringify(payload), {
     cwd: root,
-    env: { CLAUDE_TRANSPARENCY_RUN_DIR: path.join(root, 'run') },
+    env: { HARNESS_TRANSPARENCY_RUN_DIR: path.join(root, 'run') },
   });
   // 放行(0), 且不得静默: 要么自产合同成功, 要么留下 WARN 证据。
   const quiet = gate.status === 0 && gate.stderr.trim() === '';
@@ -4642,7 +4642,7 @@ define('ToolActionContractGate', 'low-risk Bash is allowed without a contract', 
   };
   const gate = runNode(gatePath, JSON.stringify(payload), {
     cwd: root,
-    env: { CLAUDE_TRANSPARENCY_RUN_DIR: path.join(root, 'run') },
+    env: { HARNESS_TRANSPARENCY_RUN_DIR: path.join(root, 'run') },
   });
   return { pass: gate.status === 0, detail: `gate exit=${gate.status} stderr=${gate.stderr.slice(0, 200)}` };
 });
@@ -4661,7 +4661,7 @@ define('AgentTransparencyLedger', 'low-risk PreToolUse does not create audit art
   };
   const ledger = runNode(ledgerPath, JSON.stringify(payload), {
     cwd: root,
-    env: { CLAUDE_TRANSPARENCY_RUN_DIR: outDir },
+    env: { HARNESS_TRANSPARENCY_RUN_DIR: outDir },
   });
   return { pass: ledger.status === 0 && !fs.existsSync(outDir), detail: `exit=${ledger.status} artifacts=${fs.existsSync(outDir)}` };
 });
@@ -4682,8 +4682,8 @@ define('AgentTransparencyLedger', 'redacts command secrets in event previews', (
   const r = runNode(p, JSON.stringify(payload), {
     cwd: root,
     env: {
-      CLAUDE_TRANSPARENCY_RUN_DIR: outDir,
-      CLAUDE_TOOL_ACTION_CONTRACT_MODE: 'all',
+      HARNESS_TRANSPARENCY_RUN_DIR: outDir,
+      HARNESS_TOOL_ACTION_CONTRACT_MODE: 'all',
     },
   });
   if (r.status !== 0) return { pass: false, detail: `exit=${r.status}: ${r.stderr}` };
@@ -4713,8 +4713,8 @@ define('TransparencyDashboard', 'summarizes run artifacts without source content
   const ledger = runNode(ledgerPath, JSON.stringify(payload), {
     cwd: root,
     env: {
-      CLAUDE_TRANSPARENCY_RUN_DIR: runDir,
-      CLAUDE_TOOL_ACTION_CONTRACT_MODE: 'all',
+      HARNESS_TRANSPARENCY_RUN_DIR: runDir,
+      HARNESS_TOOL_ACTION_CONTRACT_MODE: 'all',
     },
   });
   if (ledger.status !== 0) return { pass: false, detail: `ledger exit=${ledger.status}: ${ledger.stderr}` };

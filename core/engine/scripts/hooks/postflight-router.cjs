@@ -198,9 +198,9 @@ async function evaluatePostflightRisk(payload, injected = {}, opts = {}) {
   const toolKey = String(payload?.tool_name || payload?.tool?.name || payload?.name || '').toLowerCase();
   const shouldPersist = assessment.effectiveRiskLevel !== 'R0'
     && (WRITE_TOOLS.has(toolKey) || riskRank(assessment.effectiveRiskLevel) >= riskRank('R2'));
-  const noPersist = env.CLAUDE_HARNESS_NO_PERSIST === '1'
-    || env.CLAUDE_HARNESS_VERIFY_READONLY === '1'
-    || env.CLAUDE_NO_DIAGNOSTIC_WRITES === '1';
+  const noPersist = env.HARNESS_NO_PERSIST === '1'
+    || env.HARNESS_VERIFY_READONLY === '1'
+    || env.HARNESS_NO_DIAGNOSTIC_WRITES === '1';
   let stateUpdated = false;
   let riskClear = null;
   let evidenceRiskLevel = 'R0';

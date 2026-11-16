@@ -110,8 +110,8 @@ function main() {
       telemetryDir,
       now: '2026-08-20T06:04:00.000Z',
       env: {
-        CLAUDE_GATES_DISABLED: '1',
-        CLAUDE_GATES_DISABLE_TARGET: 'risk-policy.cjs',
+        HARNESS_GATES_DISABLED: '1',
+        HARNESS_GATES_DISABLE_TARGET: 'risk-policy.cjs',
       },
     });
     const rawPath = path.join(telemetryDir, 'risk-events.jsonl');

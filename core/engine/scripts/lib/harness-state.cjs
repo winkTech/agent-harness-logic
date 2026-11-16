@@ -67,7 +67,7 @@ function assertLayoutSupported(stateRoot) {
  *  1. env.HARNESS_STATE_DIR 非空 → path.resolve 后返回（不校验存在性）           mode='env'
  *  2. 默认目录 <homedir>/.logical-paradox 下存在 state.json → 默认目录（已迁移） mode='migrated'
  *  3. harnessRoot 下存在 .wright 或 var → harnessRoot（legacy in-place）        mode='legacy'
- *  4. env.CLAUDE_PLUGIN_DATA 非空 → 该目录（插件安装模式，跨插件更新存活）        mode='plugin-data'
+ *  4. env.HARNESS_PLUGIN_DATA 非空 → 该目录（插件安装模式，跨插件更新存活）        mode='plugin-data'
  *  5. 否则 → <homedir>/.logical-paradox（首次运行，消费者自行 mkdir）           mode='default'
  * @param {{env?: object, harnessRoot?: string, homeDir?: string}} [opts]
  * @returns {{stateRoot: string, mode: 'env'|'migrated'|'legacy'|'plugin-data'|'default'}}
@@ -97,7 +97,7 @@ function resolveState(opts = {}) {
     return { stateRoot: harnessRoot, mode: 'legacy' };
   }
 
-  const pluginData = env.CLAUDE_PLUGIN_DATA ? String(env.CLAUDE_PLUGIN_DATA).trim() : '';
+  const pluginData = env.HARNESS_PLUGIN_DATA ? String(env.HARNESS_PLUGIN_DATA).trim() : '';
   if (pluginData) {
     const resolved = path.resolve(pluginData);
     assertLayoutSupported(resolved);

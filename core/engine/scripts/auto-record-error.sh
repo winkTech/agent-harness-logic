@@ -5,7 +5,7 @@
 
 set -euo pipefail
 
-if [[ "${CLAUDE_HARNESS_VERIFY_READONLY:-}" == "1" || "${CLAUDE_NO_DIAGNOSTIC_WRITES:-}" == "1" || "${CLAUDE_BENCH:-}" == "1" ]]; then
+if [[ "${HARNESS_VERIFY_READONLY:-}" == "1" || "${HARNESS_NO_DIAGNOSTIC_WRITES:-}" == "1" || "${HARNESS_BENCH:-}" == "1" ]]; then
   echo "auto-record-error: skipped in read-only verification mode" >&2
   exit 0
 fi

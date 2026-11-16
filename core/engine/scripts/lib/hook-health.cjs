@@ -34,7 +34,7 @@ function persistenceDisabled() {
   return envFlag('HARNESS_NO_PERSIST')
     || envFlag('HARNESS_VERIFY_READONLY')
     || envFlag('HARNESS_NO_DIAGNOSTIC_WRITES')
-    || process.env.CLAUDE_HOOK_NO_WRITE === '1';
+    || process.env.HARNESS_HOOK_NO_WRITE === '1';
 }
 
 /**

@@ -34,7 +34,7 @@ function main() {
       ...process.env,
       PATH: `${binDir}${path.delimiter}${process.env.PATH || ''}`,
       GIT_LOG: logFile,
-      CLAUDE_STATUSLINE_GIT: '0',
+      HARNESS_STATUSLINE_GIT: '0',
     },
     input: JSON.stringify(payload),
     encoding: 'utf8',
