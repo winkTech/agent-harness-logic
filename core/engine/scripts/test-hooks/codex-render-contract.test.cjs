@@ -5,7 +5,7 @@
  * core/engine/scripts/test-hooks/codex-render-contract.test.cjs — Phase 3.1 合同
  *
  * H-1(codex) 渲染零漂移 + H-2(codex) wired=declared：
- *   1. 真源形态：${HARNESS_ROOT} 占位、五事件族、17 条注册
+ *   1. 真源形态：${HARNESS_ROOT} 占位、五事件族、19 条注册(2026-11-15 +maintenance+scheduler)
  *   2. 渲染幂等：renderProduct 纯函数两次调用一致；展开后无占位残留
  *   3. manifest 一致性：注册脚本 ∈ manifest codex transports（负例：伪造 hostOnly 注册必须红）
  *   4. AGENTS.md 投影：真源 body 全文在内 + 渲染头注存在
@@ -37,7 +37,7 @@ test('真源形态：占位/事件族/条目数', () => {
   }
   assert.ok(!families.includes('UserPromptSubmit'), 'UserPromptSubmit 不注册（hostOnly）');
   const n = Object.values(reg.hooks).flat().reduce((a, g) => a + g.hooks.length, 0);
-  assert.equal(n, 17, '注册条目数');
+  assert.equal(n, 19, '注册条目数');
 });
 
 test('渲染幂等：--check 在零漂移态 exit 0', () => {
@@ -63,7 +63,7 @@ test('产物展开：无占位残留 + 无本机绝对路径以外的形态', ()
   for (const groups of Object.values(product.hooks)) {
     for (const g of groups) n += g.hooks.length;
   }
-  assert.equal(n, 17);
+  assert.equal(n, 19);
 });
 
 test('H-2(codex)：manifest transports 含全部注册主脚本', () => {

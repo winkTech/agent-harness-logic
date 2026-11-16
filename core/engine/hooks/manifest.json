@@ -560,8 +560,7 @@
       "transports": [
         "claude-code",
         "workbuddy",
-        "codex",
-        "grok"
+        "codex"
       ]
     },
     {
