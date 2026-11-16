@@ -15,7 +15,7 @@
  *      这里再钉一次，防止有人手改产物）；
  *   4. 非 `node ` 开头的模板命令必须让渲染器报错（exit 2），不静默降级 —— 插件目标不经 shell；
  *   5. 模拟触发：对每个事件用最小载荷真实 spawn 每条 hook，env 给 CLAUDE_PLUGIN_ROOT 与
- *      HARNESS_STATE_DIR（不设 CLAUDE_HARNESS_NO_PERSIST，要真写状态），断言无异常退出码，
+ *      HARNESS_STATE_DIR（不设 HARNESS_NO_PERSIST，要真写状态），断言无异常退出码，
  *      且状态落在临时状态根、仓库 var/ 不被写入（插件模式下运行时状态不落插件目录）。
  */
 
@@ -190,12 +190,12 @@ test('every plugin hook survives a minimal payload for its event', { timeout: 30
   const repoVar = path.join(ROOT, 'var');
   const repoVarBefore = fs.existsSync(repoVar) ? fs.statSync(repoVar).mtimeMs : null;
 
-  // 真写状态：CLAUDE_HARNESS_NO_PERSIST 等抑制开关必须**不设**，否则这条测试证明不了
+  // 真写状态：HARNESS_NO_PERSIST 等抑制开关必须**不设**，否则这条测试证明不了
   // "插件模式下状态落在状态根、不落插件目录"。
   const env = { ...process.env, CLAUDE_PLUGIN_ROOT: ROOT, HARNESS_STATE_DIR: stateDir };
-  delete env.CLAUDE_HARNESS_NO_PERSIST;
-  delete env.CLAUDE_HARNESS_VERIFY_READONLY;
-  delete env.CLAUDE_NO_DIAGNOSTIC_WRITES;
+  delete env.HARNESS_NO_PERSIST;
+  delete env.HARNESS_VERIFY_READONLY;
+  delete env.HARNESS_NO_DIAGNOSTIC_WRITES;
 
   try {
     for (const { event, hook } of flat) {

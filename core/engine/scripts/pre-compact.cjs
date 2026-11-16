@@ -27,10 +27,10 @@ const {
   withFileLockSync,
 } = require('./lib/project-scope.cjs');
 
-const STATE_FILE = process.env.CLAUDE_RUNTIME_STATE_FILE || varPath('index', 'runtime-state.json');
-const COMPACT_LOG = process.env.CLAUDE_COMPACTION_LOG_FILE || varPath('sessions', 'compaction-log.txt');
-const PRESSURE_SIGNAL = process.env.CLAUDE_COMPACT_SIGNAL_FILE || varPath('sessions', '.compact-needed');
-const COMPACT_LOG_MAX_ENTRIES = Math.max(10, Number.parseInt(process.env.CLAUDE_COMPACTION_LOG_MAX_ENTRIES || '500', 10));
+const STATE_FILE = process.env.HARNESS_RUNTIME_STATE_FILE || varPath('index', 'runtime-state.json');
+const COMPACT_LOG = process.env.HARNESS_COMPACTION_LOG_FILE || varPath('sessions', 'compaction-log.txt');
+const PRESSURE_SIGNAL = process.env.HARNESS_COMPACT_SIGNAL_FILE || varPath('sessions', '.compact-needed');
+const COMPACT_LOG_MAX_ENTRIES = Math.max(10, Number.parseInt(process.env.HARNESS_COMPACTION_LOG_MAX_ENTRIES || '500', 10));
 
 // ── 辅助 ─────────────────────────────────────────────────────────────────────
 

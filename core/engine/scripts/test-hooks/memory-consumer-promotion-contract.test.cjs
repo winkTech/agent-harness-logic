@@ -344,9 +344,9 @@ test('a handwritten promoted artifact without explicit ledger approval is ignore
     cwd: fixture,
     env: {
       ...process.env,
-      CLAUDE_HARNESS_ROOT: fixture,
-      CLAUDE_RULE_SIGNAL_DISABLED: '1',
-      CLAUDE_HARNESS_NO_PERSIST: '1',
+      HARNESS_ROOT: fixture,
+      HARNESS_RULE_SIGNAL_DISABLED: '1',
+      HARNESS_NO_PERSIST: '1',
     },
     encoding: 'utf8',
   });
@@ -377,9 +377,9 @@ test('promoted advisory rule is indexed and injected in a fresh session', () => 
     cwd: fixture,
     env: {
       ...process.env,
-      CLAUDE_HARNESS_ROOT: fixture,
-      CLAUDE_RULE_SIGNAL_DISABLED: '1',
-      CLAUDE_HARNESS_NO_PERSIST: '1',
+      HARNESS_ROOT: fixture,
+      HARNESS_RULE_SIGNAL_DISABLED: '1',
+      HARNESS_NO_PERSIST: '1',
     },
     encoding: 'utf8',
   });
@@ -394,9 +394,9 @@ test('promoted advisory rule is indexed and injected in a fresh session', () => 
     cwd: fixture,
     env: {
       ...process.env,
-      CLAUDE_HARNESS_ROOT: fixture,
-      CLAUDE_RULE_SIGNAL_DISABLED: '1',
-      CLAUDE_HARNESS_NO_PERSIST: '1',
+      HARNESS_ROOT: fixture,
+      HARNESS_RULE_SIGNAL_DISABLED: '1',
+      HARNESS_NO_PERSIST: '1',
     },
     encoding: 'utf8',
   });
@@ -429,13 +429,13 @@ test('explicitly approved promoted hard rule blocks its payload and permits a ne
 
   const env = {
     ...process.env,
-    CLAUDE_HARNESS_ROOT: fixture,
-    CLAUDE_SQLITE_PATH: dbPath,
-    CLAUDE_HARNESS_NO_PERSIST: '0',
+    HARNESS_ROOT: fixture,
+    HARNESS_SQLITE_PATH: dbPath,
     HARNESS_NO_PERSIST: '0',
-    CLAUDE_HARNESS_VERIFY_READONLY: '0',
+    HARNESS_NO_PERSIST: '0',
     HARNESS_VERIFY_READONLY: '0',
-    CLAUDE_TRANSPARENCY_LEDGER_DISABLED: '1',
+    HARNESS_VERIFY_READONLY: '0',
+    HARNESS_TRANSPARENCY_LEDGER_DISABLED: '1',
   };
   const invoke = (filePath) => spawnSync(process.execPath, [PREFLIGHT], {
     cwd: fixture,

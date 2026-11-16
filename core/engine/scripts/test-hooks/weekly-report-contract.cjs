@@ -25,7 +25,7 @@ const os = require('node:os');
 const path = require('node:path');
 
 const ROOT = path.resolve(__dirname, '..', '..', '..', '..');
-process.env.CLAUDE_HARNESS_NO_PERSIST = '1';
+process.env.HARNESS_NO_PERSIST = '1';
 
 process.env.HARNESS_NO_PERSIST = '1';
 

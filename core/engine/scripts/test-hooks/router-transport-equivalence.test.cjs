@@ -26,7 +26,7 @@
  * 判定必须落在不同取值上（allow / warn / block 三种都出现），否则"全等"没有区分力。
  */
 
-process.env.CLAUDE_HARNESS_NO_PERSIST = '1';
+process.env.HARNESS_NO_PERSIST = '1';
 
 
 process.env.HARNESS_NO_PERSIST = '1';

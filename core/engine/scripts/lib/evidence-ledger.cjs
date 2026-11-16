@@ -145,7 +145,7 @@ function collectGraphEdges(entry, opts = {}) {
 
 function writeEvidenceLedger(filePath, entry, opts = {}) {
   const configuredMax = Number.parseInt(
-    opts.maxEntries ?? process.env.CLAUDE_EVIDENCE_LEDGER_MAX_ENTRIES ?? '500',
+    opts.maxEntries ?? process.env.HARNESS_EVIDENCE_LEDGER_MAX_ENTRIES ?? '500',
     10,
   );
   const maxEntries = Number.isFinite(configuredMax) ? Math.max(10, configuredMax) : 500;

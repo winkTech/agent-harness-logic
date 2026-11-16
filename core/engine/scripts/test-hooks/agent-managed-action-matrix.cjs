@@ -10,7 +10,7 @@ const HOME = path.resolve(__dirname, '..', '..', '..', '..');
 const DEFAULT_OUT_ROOT = path.join(os.tmpdir(), 'claude-harness-agent-evals', 'managed-action-matrix');
 const DEFAULT_AGENTS = ['claude', 'codex'];
 const DEFAULT_KINDS = ['implementation', 'ambiguous'];
-const CODEX_NPX_EXEC_COMMAND = process.platform === 'win32'
+const HARNESS_NPX_EXEC_COMMAND = process.platform === 'win32'
   ? 'cmd.exe /d /s /c "npx -y @openai/codex@0.142.5 exec --ignore-user-config --json --sandbox read-only --ephemeral --skip-git-repo-check --color never"'
   : 'npx -y @openai/codex@0.142.5 exec --ignore-user-config --json --sandbox read-only --ephemeral --skip-git-repo-check --color never';
 
@@ -78,12 +78,12 @@ function readinessFor(agent) {
 
 function commandFor(agent) {
   if (agent === 'claude') {
-    return process.env.CLAUDE_MANAGED_EVAL_COMMAND
+    return process.env.HARNESS_MANAGED_EVAL_COMMAND
       || 'claude -p --tools "" --output-format json --permission-mode bypassPermissions --no-session-persistence';
   }
   if (agent === 'codex') {
-    return process.env.CODEX_MANAGED_EVAL_COMMAND
-      || CODEX_NPX_EXEC_COMMAND;
+    return process.env.HARNESS_MANAGED_EVAL_COMMAND
+      || HARNESS_NPX_EXEC_COMMAND;
   }
   return process.env.AGENT_MANAGED_EVAL_COMMAND || '';
 }

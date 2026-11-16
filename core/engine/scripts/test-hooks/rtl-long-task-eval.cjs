@@ -11,7 +11,7 @@ const HOME = path.resolve(__dirname, '..', '..', '..', '..');
 const DEFAULT_RUN_ROOT = path.join(os.tmpdir(), 'claude-harness-agent-evals', 'rtl-long-task');
 const TARGET_RTL = path.join('01_src', '00_hdl', 'skid_buffer', 'skid_buffer.sv');
 const VERIFY_COMMAND = 'node rtl_hidden_contract.cjs';
-const DEFAULT_CLAUDE_COMMAND = 'claude -p --tools "" --output-format json --permission-mode bypassPermissions --no-session-persistence';
+const DEFAULT_HARNESS_COMMAND = 'claude -p --tools "" --output-format json --permission-mode bypassPermissions --no-session-persistence';
 
 function usage() {
   return [
@@ -392,7 +392,7 @@ function main() {
 
   const dryRun = args.includes('--dry-run');
   const agent = argValue(args, '--agent', dryRun ? 'fixture' : 'claude');
-  const command = argValue(args, '--command', agent === 'claude' ? DEFAULT_CLAUDE_COMMAND : '');
+  const command = argValue(args, '--command', agent === 'claude' ? DEFAULT_HARNESS_COMMAND : '');
   const outDir = path.resolve(argValue(args, '--out', path.join(DEFAULT_RUN_ROOT, `${agent}-${new Date().toISOString().replace(/[:.]/g, '-')}`)));
   const startedAt = new Date().toISOString();
   prepareOutDir(outDir);

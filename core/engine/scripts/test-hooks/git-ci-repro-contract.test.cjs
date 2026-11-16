@@ -64,7 +64,7 @@ test('pre-commit ignores unrelated unstaged worktree artifacts', (t) => {
 
   const result = run(bash, [PRE_COMMIT], {
     cwd: repo,
-    env: { ...process.env, CLAUDE_HARNESS_ROOT: ROOT },
+    env: { ...process.env, HARNESS_ROOT: ROOT },
   });
 
   assert.equal(
@@ -88,7 +88,7 @@ test('pre-commit treats a staged path containing spaces as one file', (t) => {
 
   const result = run(bash, [PRE_COMMIT], {
     cwd: repo,
-    env: { ...process.env, CLAUDE_HARNESS_ROOT: ROOT },
+    env: { ...process.env, HARNESS_ROOT: ROOT },
   });
 
   assert.notEqual(
@@ -112,7 +112,7 @@ test('pre-commit Python syntax check leaves no bytecode beside source', (t) => {
 
   const result = run(bash, [PRE_COMMIT], {
     cwd: repo,
-    env: { ...process.env, CLAUDE_HARNESS_ROOT: ROOT },
+    env: { ...process.env, HARNESS_ROOT: ROOT },
   });
 
   assert.equal(result.status, 0, result.stderr || result.stdout);
@@ -153,7 +153,7 @@ test('pre-commit Tcl check never sources the staged script', (t) => {
     env: {
       ...process.env,
       PATH: `${fakeBin}${path.delimiter}${process.env.PATH}`,
-      CLAUDE_HARNESS_ROOT: ROOT,
+      HARNESS_ROOT: ROOT,
       HARNESS_PRECOMMIT_TCLSH: fakeTcl,
       TCL_ARGS_LOG: argsLog,
       TCL_SENTINEL: sentinel,
@@ -179,7 +179,7 @@ test('pre-commit declares advisory and required missing-tool policies', (t) => {
 
   const common = {
     ...process.env,
-    CLAUDE_HARNESS_ROOT: ROOT,
+    HARNESS_ROOT: ROOT,
     HARNESS_PRECOMMIT_PYTHON: '__missing_python_for_contract_test__',
   };
 
@@ -216,7 +216,7 @@ test('pre-commit checks staged blob size with space-safe paths', (t) => {
     cwd: repo,
     env: {
       ...process.env,
-      CLAUDE_HARNESS_ROOT: ROOT,
+      HARNESS_ROOT: ROOT,
       HARNESS_PRECOMMIT_MAX_BYTES: '16',
     },
   });
@@ -246,7 +246,7 @@ test('pre-commit checks staged Python content instead of unstaged edits', (t) =>
 
   const result = run(bash, [PRE_COMMIT], {
     cwd: repo,
-    env: { ...process.env, CLAUDE_HARNESS_ROOT: ROOT },
+    env: { ...process.env, HARNESS_ROOT: ROOT },
   });
   assert.equal(
     result.status,

@@ -217,10 +217,10 @@ function shouldIndex(filePath, stat) {
  * 的 instRe 修掉, 现在同一文件 54ms)。这个上限留作**兜底**: 将来再引入类似歧义
  * 时, 表现是少抽几个大文件的符号, 而不是整个索引调度卡死。
  * 超限文件仍登记进 cg_files, 跨域边照样挂得上, 只是不抽符号。
- * 与 shouldIndex 的 500KB 硬上限对齐; 可用 CLAUDE_CG_MAX_PARSE_BYTES 调整。
+ * 与 shouldIndex 的 500KB 硬上限对齐; 可用 HARNESS_CG_MAX_PARSE_BYTES 调整。
  */
 const MAX_PARSE_BYTES = (() => {
-  const raw = Number.parseInt(process.env.CLAUDE_CG_MAX_PARSE_BYTES || '', 10);
+  const raw = Number.parseInt(process.env.HARNESS_CG_MAX_PARSE_BYTES || '', 10);
   return Number.isFinite(raw) && raw > 0 ? raw : 512 * 1024;
 })();
 

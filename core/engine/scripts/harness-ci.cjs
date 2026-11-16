@@ -182,7 +182,7 @@ function runRenderFamilyChecks() {
 }
 
 // Hook 延迟档位硬门 (M4a): warm p95 按 hook-latency.cjs 的档位表判定。
-// CI 机器比 dev 机器慢, 用 CLAUDE_HARNESS_LATENCY_SCALE=3 整体放大预算 ——
+// CI 机器比 dev 机器慢, 用 HARNESS_LATENCY_SCALE=3 整体放大预算 ——
 // 放大的是绝对阈值, 档位之间的相对关系不变。
 // 无 hook 注册 / 无可测同步入口时**显式 skip 并说明原因**, 不静默通过 (规则 8)。
 function runLatencySla() {
@@ -194,10 +194,10 @@ function runLatencySla() {
     windowsHide: true,
     env: {
       ...process.env,
-      CLAUDE_HARNESS_ROOT: HARNESS_ROOT,
-      CLAUDE_HARNESS_LATENCY_SCALE: '3',
-      CLAUDE_HARNESS_NO_PERSIST: '1',
-      CLAUDE_NO_DIAGNOSTIC_WRITES: '1',
+      HARNESS_ROOT: HARNESS_ROOT,
+      HARNESS_LATENCY_SCALE: '3',
+      HARNESS_NO_PERSIST: '1',
+      HARNESS_NO_DIAGNOSTIC_WRITES: '1',
     },
   });
   if (result.error || result.signal) {
@@ -236,10 +236,10 @@ function runCoverage() {
     windowsHide: true,
     env: {
       ...process.env,
-      CLAUDE_HARNESS_ROOT: HARNESS_ROOT,
-      CLAUDE_HARNESS_NO_PERSIST: '1',
-      CLAUDE_HARNESS_VERIFY_READONLY: '1',
-      CLAUDE_NO_DIAGNOSTIC_WRITES: '1',
+      HARNESS_ROOT: HARNESS_ROOT,
+      HARNESS_NO_PERSIST: '1',
+      HARNESS_VERIFY_READONLY: '1',
+      HARNESS_NO_DIAGNOSTIC_WRITES: '1',
     },
   });
 }

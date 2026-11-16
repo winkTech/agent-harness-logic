@@ -18,7 +18,7 @@ const HOME = path.resolve(__dirname, '..', '..', '..', '..');
 const DEFAULT_RUN_ROOT = path.join(os.tmpdir(), 'claude-harness-agent-evals', 'hdl-project-directory');
 const MODULE = 'tone_fsk_demod';
 const EXPECTED_CLASSIFICATION = 'hdl_project_directory_plan';
-const CODEX_NPX_EXEC_COMMAND = process.platform === 'win32'
+const HARNESS_NPX_EXEC_COMMAND = process.platform === 'win32'
   ? 'cmd.exe /d /s /c "npx -y @openai/codex@0.142.5 exec --ignore-user-config --json --sandbox read-only --skip-git-repo-check --ephemeral --color never"'
   : 'npx -y @openai/codex@0.142.5 exec --ignore-user-config --json --sandbox read-only --skip-git-repo-check --ephemeral --color never';
 const REQUIRED_CHECKLIST = [
@@ -79,7 +79,7 @@ function runCommandLine(command, cwd, input, timeoutMs = 10 * 60 * 1000) {
     encoding: 'utf8',
     timeout: timeoutMs,
     windowsHide: false,
-    env: { ...process.env, CLAUDE_VERIFY_GATE_STATE_FILE: path.join(cwd, 'var', 'verify-gate.json') },
+    env: { ...process.env, HARNESS_VERIFY_GATE_STATE_FILE: path.join(cwd, 'var', 'verify-gate.json') },
   });
   return {
     commandArgv: argv,
@@ -92,8 +92,8 @@ function runCommandLine(command, cwd, input, timeoutMs = 10 * 60 * 1000) {
 }
 
 function defaultCommandFor(agent) {
-  if (agent === 'codex') return process.env.CODEX_EVAL_COMMAND || CODEX_NPX_EXEC_COMMAND;
-  return process.env.CLAUDE_EVAL_COMMAND
+  if (agent === 'codex') return process.env.HARNESS_EVAL_COMMAND || HARNESS_NPX_EXEC_COMMAND;
+  return process.env.HARNESS_EVAL_COMMAND
     || 'claude -p --tools "" --output-format json --permission-mode bypassPermissions --no-session-persistence';
 }
 

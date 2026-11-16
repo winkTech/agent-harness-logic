@@ -56,8 +56,8 @@ function parseToolCall(input) {
 
 /** 从环境变量获取工具调用信息（备选路径） */
 function parseToolCallFromEnv() {
-  const toolName = process.env.CLAUDE_TOOL_NAME || '';
-  const toolInput = process.env.CLAUDE_TOOL_INPUT || '';
+  const toolName = process.env.HARNESS_TOOL_NAME || '';
+  const toolInput = process.env.HARNESS_TOOL_INPUT || '';
   if (!toolName) return null;
   try {
     const data = JSON.parse(toolInput);

@@ -28,10 +28,10 @@ const { WRIGHT_DIR } = require('../scripts/lib/harness-state.cjs');
 const DEFAULT_DB_DIR = WRIGHT_DIR;
 // Phase 2.4：env 求值从 require 期移到 openDb 调用期（修方案 §6 2.4 显式缺陷：
 // require 期求值让测试无法在同进程内通过 env 切换库路径）。HARNESS_SQLITE_PATH
-// 为主名，CLAUDE_SQLITE_PATH 保留为兼容别名（io/ 翻译层负责宿主变量归一）。
+// 为主名，HARNESS_SQLITE_PATH 保留为兼容别名（io/ 翻译层负责宿主变量归一）。
 function defaultDbPath() {
   return process.env.HARNESS_SQLITE_PATH
-    || process.env.CLAUDE_SQLITE_PATH
+    || process.env.HARNESS_SQLITE_PATH
     || path.join(DEFAULT_DB_DIR, 'memory.db');
 }
 
@@ -93,7 +93,7 @@ function openDb(opts = {}) {
   }
 
   const configuredBusyTimeout = Number.parseInt(
-    opts.busyTimeoutMs ?? process.env.HARNESS_SQLITE_BUSY_TIMEOUT_MS ?? process.env.CLAUDE_SQLITE_BUSY_TIMEOUT_MS ?? '5000',
+    opts.busyTimeoutMs ?? process.env.HARNESS_SQLITE_BUSY_TIMEOUT_MS ?? process.env.HARNESS_SQLITE_BUSY_TIMEOUT_MS ?? '5000',
     10,
   );
   const busyTimeoutMs = Number.isFinite(configuredBusyTimeout)

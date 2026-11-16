@@ -7,7 +7,7 @@
  *  - builds a scratch git repo (one commit, one README) in a temp dir
  *  - installs a fake claude shim (writes a synthetic transcript with
  *    cost-state double-writes and assistant usage double-writes, exit 0)
- *    and injects it via CLAUDE_CMD + CLAUDE_CONFIG_DIR
+ *    and injects it via HARNESS_CMD + CLAUDE_CONFIG_DIR
  *  - runs the replayer on a synthetic 2-task config (one pass, one fail)
  * Asserts:
  *  - worktree established + cleaned up, shim invoked with correct cwd/args/stdin
@@ -20,9 +20,9 @@
  *  - anti-tamper: shim tampers a tracked file under the default restorePaths
  *    (core/engine/scripts/test-hooks); the pass task's eval only sees the ORIGINAL
  *    content, proving git checkout -- restored it before eval
- *  - child env: read-only switches (CLAUDE_HARNESS_NO_PERSIST /
- *    CLAUDE_HARNESS_VERIFY_READONLY / CLAUDE_NO_DIAGNOSTIC_WRITES /
- *    CLAUDE_HOOK_NO_WRITE) are stripped even when set by the parent
+ *  - child env: read-only switches (HARNESS_NO_PERSIST /
+ *    HARNESS_VERIFY_READONLY / HARNESS_NO_DIAGNOSTIC_WRITES /
+ *    HARNESS_HOOK_NO_WRITE) are stripped even when set by the parent
  *  - child env: HARNESS_STATE_DIR points inside the worktree and the shim
  *    observes the directory as existing at run time
  *  - task package: applyPatch applied at start (eval sees MUTATED app.js);
@@ -106,7 +106,7 @@ try {
   const canary = path.join(cwd, 'core', 'engine', 'scripts', 'test-hooks', 'injected-canary.txt');
   if (fs.existsSync(canary)) fs.writeFileSync(canary, 'CANARY-TAMPERED', 'utf8');
 } catch { /* tamper is best-effort */ }
-const READONLY_KEYS = ['CLAUDE_HARNESS_NO_PERSIST', 'CLAUDE_HARNESS_VERIFY_READONLY', 'CLAUDE_NO_DIAGNOSTIC_WRITES', 'CLAUDE_HOOK_NO_WRITE'];
+const READONLY_KEYS = ['HARNESS_NO_PERSIST', 'HARNESS_VERIFY_READONLY', 'HARNESS_NO_DIAGNOSTIC_WRITES', 'HARNESS_HOOK_NO_WRITE'];
 fs.appendFileSync(process.env.GOLDEN_SHIM_LOG, JSON.stringify({
   cwd, argv, stdin,
   env: {
@@ -244,17 +244,17 @@ process.exit(pass ? 0 : 1);
 
     const baseEnv = {
       ...process.env,
-      CLAUDE_CMD: claudeCmd,
+      HARNESS_CMD: claudeCmd,
       CLAUDE_CONFIG_DIR: path.join(root, 'claude-config'),
       GOLDEN_SHIM_LOG: shimLog,
       GOLDEN_SHIM_TRANSCRIPT: transcriptFixture,
       GOLDEN_RESTORE_OBSERVED: restoreObserved,
       // Deliberately set: the replayer must strip these from the claude child
       // env so hook telemetry writes stay enabled inside HARNESS_STATE_DIR.
-      CLAUDE_HARNESS_NO_PERSIST: '1',
-      CLAUDE_HARNESS_VERIFY_READONLY: '1',
-      CLAUDE_NO_DIAGNOSTIC_WRITES: '1',
-      CLAUDE_HOOK_NO_WRITE: '1',
+      HARNESS_NO_PERSIST: '1',
+      HARNESS_VERIFY_READONLY: '1',
+      HARNESS_NO_DIAGNOSTIC_WRITES: '1',
+      HARNESS_HOOK_NO_WRITE: '1',
     };
 
     /* -- dry-run: zero invocations ------------------------------------- */

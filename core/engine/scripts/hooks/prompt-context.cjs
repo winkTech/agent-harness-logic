@@ -33,7 +33,7 @@ function additionalContext(output) {
 
 function mergeContextBlocks(blocks, requestedMaxChars) {
   const configured = Number.parseInt(
-    requestedMaxChars ?? process.env.CLAUDE_PROMPT_CONTEXT_MAX_CHARS
+    requestedMaxChars ?? process.env.HARNESS_PROMPT_CONTEXT_MAX_CHARS
       ?? DEFAULT_CONTEXT_MAX_CHARS,
     10,
   );

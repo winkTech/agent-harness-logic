@@ -8,8 +8,8 @@ const path = require('node:path');
 
 const root = path.resolve(__dirname, '..', '..', '..', '..');
 const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'dag-cancellation-'));
-const previousDbPath = process.env.CLAUDE_SQLITE_PATH;
-process.env.CLAUDE_SQLITE_PATH = path.join(tempRoot, 'events.db');
+const previousDbPath = process.env.HARNESS_SQLITE_PATH;
+process.env.HARNESS_SQLITE_PATH = path.join(tempRoot, 'events.db');
 const dag = require(path.join(root, 'core', 'engine', 'dag-engine.cjs'));
 
 function wait(ms) {
@@ -300,8 +300,8 @@ async function testAllowedLoopSkipIsNotFailure() {
     try {
       require(path.join(root, 'core', 'engine', 'sqlite', 'index.cjs')).closeAll();
     } catch { /* best-effort test cleanup */ }
-    if (previousDbPath === undefined) delete process.env.CLAUDE_SQLITE_PATH;
-    else process.env.CLAUDE_SQLITE_PATH = previousDbPath;
+    if (previousDbPath === undefined) delete process.env.HARNESS_SQLITE_PATH;
+    else process.env.HARNESS_SQLITE_PATH = previousDbPath;
     fs.rmSync(tempRoot, { recursive: true, force: true });
   }
 })().catch((error) => {

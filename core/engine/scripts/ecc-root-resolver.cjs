@@ -2,6 +2,7 @@
 // 检查新旧两种路径以兼容目录重构前后
 // 替换 settings.local.json 中 21 处重复的 ~30 行 IIFE
 const p = require('node:path');
+const { envOf } = require('./io/env.cjs');
 const f = require('node:fs');
 const { HARNESS_ROOT } = require('./lib/harness-root.cjs');
 const { varPath } = require('./lib/harness-state.cjs');
@@ -16,7 +17,7 @@ function check(dir) {
 
 function resolve() {
   // 0. Env var override
-  const env = process.env.CLAUDE_PLUGIN_ROOT;
+  const env = envOf(process.env).get('HARNESS_PLUGIN_ROOT');
   if (env && env.trim()) return env.trim();
 
   // 1. Direct install paths: var/plugins/ (new) + plugins/ (old)

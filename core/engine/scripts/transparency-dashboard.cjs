@@ -34,7 +34,7 @@ function argValue(args, name, fallback = '') {
 }
 
 function runsDirFromArgs(args) {
-  return path.resolve(argValue(args, '--runs-dir', process.env.CLAUDE_TRANSPARENCY_RUNS_DIR || varPath('runs')));
+  return path.resolve(argValue(args, '--runs-dir', process.env.HARNESS_TRANSPARENCY_RUNS_DIR || varPath('runs')));
 }
 
 function collectRuns(runsDir) {

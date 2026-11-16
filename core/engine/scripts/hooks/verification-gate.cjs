@@ -66,12 +66,12 @@ const STATE_FILE = path.join(STATE_DIR, 'verify-gate.json');
  *
  * 旧实现在模块加载时就把路径固化成常量, 于是"谁先 require"决定了写哪儿:
  * 十维仪表盘先经 postflight-router 加载了本门禁 (拿到真实账本路径), 随后
- * 评测执行器再设 CLAUDE_VERIFICATION_LEDGER_FILE 已经太晚 —— 评测把 60 多条
+ * 评测执行器再设 HARNESS_VERIFICATION_LEDGER_FILE 已经太晚 —— 评测把 60 多条
  * 合成判定写进了生产账本。测量污染被测系统, 而且是静默污染。
  * 改成每次写入时读环境变量: 隔离由调用方决定, 与 require 顺序无关。
  */
 function ledgerFile() {
-  return process.env.CLAUDE_VERIFICATION_LEDGER_FILE
+  return process.env.HARNESS_VERIFICATION_LEDGER_FILE
     || path.join(STATE_DIR, 'verification-ledger.json');
 }
 

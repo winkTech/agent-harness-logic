@@ -30,6 +30,11 @@ const ALIASES = Object.freeze({
   HARNESS_SQLITE_BUSY_TIMEOUT_MS: ['CLAUDE_SQLITE_BUSY_TIMEOUT_MS'],
   HARNESS_RUNTIME_STATE_FILE: ['CLAUDE_RUNTIME_STATE_FILE'],
   HARNESS_ROOT: ['CLAUDE_HARNESS_ROOT'],
+  HARNESS_PLUGIN_ROOT: ['CLAUDE_PLUGIN_ROOT'],
+  HARNESS_PROJECT_DIR: ['CLAUDE_PROJECT_DIR'],
+  HARNESS_TOOL_NAME: ['CLAUDE_TOOL_NAME'],
+  HARNESS_TOOL_INPUT: ['CLAUDE_TOOL_INPUT'],
+  HARNESS_CONFIG_DIR: ['CLAUDE_CONFIG_DIR'],
 });
 
 /** 兼容视图：宿主名 → canonical（供适配器入口反向注册）。 */
@@ -41,6 +46,11 @@ const CANONICAL_FOR = Object.freeze((() => {
   }
   return map;
 })());
+
+/** 全部已知键（canonical + 宿主别名）——供调用方对"可能是宿主形态的 env"做
+ * 逐键归一化：Proxy/宿主形态 env 的 get 陷阱只有显式键访问才触发，
+ * Object.entries 走 ownKeys 会静默漏掉宿主键。 */
+const KNOWN_ENV_KEYS = Object.freeze(Object.keys(CANONICAL_FOR));
 
 /** canonical 名优先级读取：HARNESS_X → 宿主别名（首个非空胜出）。 */
 function envValue(env, canonicalName) {
@@ -101,6 +111,7 @@ function translateHostEnv(env = process.env) {
 module.exports = {
   ALIASES,
   CANONICAL_FOR,
+  KNOWN_ENV_KEYS,
   envValue,
   envOf,
   translateHostEnv,

@@ -298,7 +298,7 @@ const RTL_WRITE_TOOLS = new Set(['Write', 'Edit', 'MultiEdit']);
 
 function evaluate(payload, runtime = {}) {
   const source = 'rtl-semantic-oracle';
-  if (process.env.CLAUDE_RTL_SEMANTIC_ORACLE_DISABLED === '1') {
+  if (process.env.HARNESS_RTL_SEMANTIC_ORACLE_DISABLED === '1') {
     return { source, decision: 'allow', diagnostics: [], skipped: true };
   }
   if (!RTL_WRITE_TOOLS.has(toolNameFrom(payload))) {
@@ -371,7 +371,7 @@ function run(payload) {
 }
 
 function main() {
-  if (process.env.CLAUDE_RTL_SEMANTIC_ORACLE_DISABLED === '1') process.exit(0);
+  if (process.env.HARNESS_RTL_SEMANTIC_ORACLE_DISABLED === '1') process.exit(0);
   try {
     run(parsePayload(readStdin()));
     process.exit(0);

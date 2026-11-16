@@ -36,24 +36,24 @@ const DEFAULT_CACHE_TTL_MS = 10 * 60 * 1000;
 function memoryHintCacheFile(opts = {}) {
   const namespace = crypto.createHash('sha256').update(HARNESS).digest('hex').slice(0, 16);
   const cacheRoot = opts.tempRoot
-    || process.env.CLAUDE_MEMORY_HINT_CACHE_DIR
+    || process.env.HARNESS_MEMORY_HINT_CACHE_DIR
     || path.join(os.tmpdir(), 'claude-harness-cache', namespace, 'memory');
-  return process.env.CLAUDE_MEMORY_HINT_CACHE_FILE || path.join(cacheRoot, 'memory-retrieve-cache.json');
+  return process.env.HARNESS_MEMORY_HINT_CACHE_FILE || path.join(cacheRoot, 'memory-retrieve-cache.json');
 }
 
 function cacheDisabled() {
-  return process.env.CLAUDE_MEMORY_HINT_CACHE_DISABLED === '1'
-    || process.env.CLAUDE_HOOK_NO_WRITE === '1'
-    || process.env.CLAUDE_BENCH === '1'
+  return process.env.HARNESS_MEMORY_HINT_CACHE_DISABLED === '1'
+    || process.env.HARNESS_HOOK_NO_WRITE === '1'
+    || process.env.HARNESS_BENCH === '1'
     || envFlag('HARNESS_NO_PERSIST')
     || envFlag('HARNESS_VERIFY_READONLY')
     || envFlag('HARNESS_NO_DIAGNOSTIC_WRITES');
 }
 
 function attributionPersistenceDisabled() {
-  return process.env.CLAUDE_MEMORY_ATTRIBUTION_DISABLED === '1'
-    || process.env.CLAUDE_HOOK_NO_WRITE === '1'
-    || process.env.CLAUDE_BENCH === '1'
+  return process.env.HARNESS_MEMORY_ATTRIBUTION_DISABLED === '1'
+    || process.env.HARNESS_HOOK_NO_WRITE === '1'
+    || process.env.HARNESS_BENCH === '1'
     || envFlag('HARNESS_NO_PERSIST')
     || envFlag('HARNESS_VERIFY_READONLY')
     || envFlag('HARNESS_NO_DIAGNOSTIC_WRITES');
@@ -178,7 +178,7 @@ function extractFilePath(stdinRaw) {
 }
 
 function cacheTtlMs() {
-  const value = Number.parseInt(process.env.CLAUDE_MEMORY_HINT_TTL_MS || DEFAULT_CACHE_TTL_MS, 10);
+  const value = Number.parseInt(process.env.HARNESS_MEMORY_HINT_TTL_MS || DEFAULT_CACHE_TTL_MS, 10);
   return Number.isFinite(value) && value >= 0 ? value : DEFAULT_CACHE_TTL_MS;
 }
 
@@ -381,7 +381,7 @@ function retrieveContext(payload = {}, deps = {}) {
   const toolName = String(
     payload.tool_name || payload.toolName || payload.tool?.name
     || (typeof payload.tool === 'string' ? payload.tool : '')
-    || process.env.CLAUDE_TOOL_NAME || '',
+    || process.env.HARNESS_TOOL_NAME || '',
   ).toLowerCase();
   const eventName = payload.hook_event_name || '';
   // ── 层1: 用户消息触发 ──

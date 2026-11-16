@@ -23,7 +23,7 @@ function loadPolicies(opts = {}) {
     const filePath = path.join(rulesDir, name);
     const { validatePromotedRuleArtifact } = require('../harness-rule-candidates.cjs');
     const validation = validatePromotedRuleArtifact(filePath, {
-      ledgerPath: opts.ledgerPath || process.env.CLAUDE_HARNESS_RULE_LEDGER,
+      ledgerPath: opts.ledgerPath || process.env.HARNESS_RULE_LEDGER,
     });
     if (!validation.valid) continue;
     const parsed = parseFrontmatter(fs.readFileSync(filePath, 'utf8'));

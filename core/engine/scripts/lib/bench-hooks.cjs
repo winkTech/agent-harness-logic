@@ -12,7 +12,7 @@
  *   node core/engine/scripts/lib/bench-hooks.cjs --sla        # 按 hook-latency 档位判定 warm p95，超标 exit 1
  *
  * --sla 的档位与 async 判定全部来自 core/engine/scripts/lib/hook-latency.cjs（单一档位来源）；
- * env CLAUDE_HARNESS_LATENCY_SCALE 整体放大预算（CI 用 3）。
+ * env HARNESS_LATENCY_SCALE 整体放大预算（CI 用 3）。
  */
 
 'use strict';
@@ -39,7 +39,7 @@ function createBenchSandbox() {
   fs.mkdirSync(path.join(root, 'core', 'engine', 'scripts'), { recursive: true });
   fs.mkdirSync(path.join(root, 'var'), { recursive: true });
   // Phase 2.1 修（Phase 1 拆层遗留）：sandbox 树补 package.json 锚点(name=harness)，
-  // CLAUDE_HARNESS_ROOT 显式校验（isHarnessRoot）才能通过——旧布局标记
+  // HARNESS_ROOT 显式校验（isHarnessRoot）才能通过——旧布局标记
   // (engine/scripts + AGENTS.md) 在 core/engine 布局下不再命中。
   fs.writeFileSync(path.join(root, 'package.json'),
     JSON.stringify({ name: 'harness', private: true }), 'utf8');
@@ -55,9 +55,9 @@ function createBenchSandbox() {
     env: {
       HOME: base,
       USERPROFILE: base,
-      CLAUDE_HARNESS_ROOT: root,
-      CLAUDE_BENCH: '1',
-      CLAUDE_NO_DIAGNOSTIC_WRITES: '1',
+      HARNESS_ROOT: root,
+      HARNESS_BENCH: '1',
+      HARNESS_NO_DIAGNOSTIC_WRITES: '1',
     },
     cleanup() {
       if (cleaned) return;
@@ -126,7 +126,7 @@ function runSample(executable, args, opts = {}) {
     timeout: opts.timeoutMs || 10000,
     windowsHide: true,
     cwd: opts.cwd || process.cwd(),
-    env: { ...process.env, ...(opts.env || {}), CLAUDE_BENCH: '1' },
+    env: { ...process.env, ...(opts.env || {}), HARNESS_BENCH: '1' },
     input: JSON.stringify(payload),
   });
   return {

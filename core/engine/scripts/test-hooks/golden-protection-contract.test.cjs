@@ -113,9 +113,9 @@ test('批准 + 上游依据 → 放行', (t) => {
   const f = fixture(t);
   ageRtl(f.rtl, FOUR_HOURS_MS * 3);
   const out = judge(f.existingFile, f.root, {
-    CLAUDE_PROTECTED_WRITE_APPROVAL: f.existingFile.replace(/\\/g, '/'),
-    CLAUDE_PROTECTED_WRITE_REASON: '按算法规格修正量化标度',
-    CLAUDE_PROTECTED_WRITE_BASIS: 'spec|knowledge/.../algorithm_spec.md',
+    HARNESS_PROTECTED_WRITE_APPROVAL: f.existingFile.replace(/\\/g, '/'),
+    HARNESS_PROTECTED_WRITE_REASON: '按算法规格修正量化标度',
+    HARNESS_PROTECTED_WRITE_BASIS: 'spec|knowledge/.../algorithm_spec.md',
   });
   assert.notEqual(out.decision, 'block', `上游依据应放行: ${JSON.stringify(out.diagnostics)}`);
 });
@@ -124,9 +124,9 @@ test('批准 + 下游依据且无裁决 → 拦', (t) => {
   const f = fixture(t);
   ageRtl(f.rtl, FOUR_HOURS_MS * 3);
   const out = judge(f.existingFile, f.root, {
-    CLAUDE_PROTECTED_WRITE_APPROVAL: f.existingFile.replace(/\\/g, '/'),
-    CLAUDE_PROTECTED_WRITE_REASON: '依 RTL 实测行为调整',
-    CLAUDE_PROTECTED_WRITE_BASIS: 'rtl-observation|波形抓取',
+    HARNESS_PROTECTED_WRITE_APPROVAL: f.existingFile.replace(/\\/g, '/'),
+    HARNESS_PROTECTED_WRITE_REASON: '依 RTL 实测行为调整',
+    HARNESS_PROTECTED_WRITE_BASIS: 'rtl-observation|波形抓取',
   });
   assert.equal(out.decision, 'block', 'basis.kind=rtl-observation 无 ruling 必须拒绝');
 });
@@ -135,9 +135,9 @@ test('批准 + 理由含下游话术 → 拦 (即便 basis 自称上游)', (t) =
   const f = fixture(t);
   ageRtl(f.rtl, FOUR_HOURS_MS * 3);
   const out = judge(f.existingFile, f.root, {
-    CLAUDE_PROTECTED_WRITE_APPROVAL: f.existingFile.replace(/\\/g, '/'),
-    CLAUDE_PROTECTED_WRITE_REASON: '对齐 RTL 输出, 让 cosim 通过',
-    CLAUDE_PROTECTED_WRITE_BASIS: 'spec|某规格',
+    HARNESS_PROTECTED_WRITE_APPROVAL: f.existingFile.replace(/\\/g, '/'),
+    HARNESS_PROTECTED_WRITE_REASON: '对齐 RTL 输出, 让 cosim 通过',
+    HARNESS_PROTECTED_WRITE_BASIS: 'spec|某规格',
   });
   assert.equal(out.decision, 'block', '自述与话术冲突时应拒绝, 这是倒置的自述形状');
 });

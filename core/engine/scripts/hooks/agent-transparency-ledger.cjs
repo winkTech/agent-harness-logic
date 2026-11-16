@@ -25,7 +25,7 @@ const HOME = HARNESS_ROOT;
 const MAX_PREVIEW_CHARS = 220;
 const MAX_TRANSCRIPT_TAIL = 1024 * 1024;
 const configuredTranscriptMax = Number.parseInt(
-  process.env.CLAUDE_TRANSPARENCY_TRANSCRIPT_MAX_BYTES || String(4 * 1024 * 1024),
+  process.env.HARNESS_TRANSPARENCY_TRANSCRIPT_MAX_BYTES || String(4 * 1024 * 1024),
   10,
 );
 const TRANSCRIPT_MAX_BYTES = Number.isFinite(configuredTranscriptMax)
@@ -389,18 +389,18 @@ function buildContext(payload) {
   const signals = detectSignals(combined);
   const taskType = inferTaskType(signals);
   const runId = slug(
-    process.env.CLAUDE_TRANSPARENCY_RUN_ID
+    process.env.HARNESS_TRANSPARENCY_RUN_ID
     || payload?.session_id
     || payload?.sessionId
     || `local-${new Date().toISOString().slice(0, 10)}-${sha256(projectRoot).slice(0, 10)}`
   );
-  const explicitRunDir = process.env.CLAUDE_TRANSPARENCY_RUN_DIR;
+  const explicitRunDir = process.env.HARNESS_TRANSPARENCY_RUN_DIR;
   const runsRoot = resolvePath(
-    process.env.CLAUDE_TRANSPARENCY_RUNS_DIR || varPath('runs'),
+    process.env.HARNESS_TRANSPARENCY_RUNS_DIR || varPath('runs'),
     projectRoot,
   );
   const runDir = explicitRunDir
-    ? resolvePath(process.env.CLAUDE_TRANSPARENCY_RUN_DIR, projectRoot)
+    ? resolvePath(process.env.HARNESS_TRANSPARENCY_RUN_DIR, projectRoot)
     : path.join(runsRoot, runId);
   const loopScope = loopScopeFrom(payload, projectRoot, userInstruction);
 
@@ -427,13 +427,13 @@ function buildContext(payload) {
 }
 
 function shouldCapture(ctx) {
-  if (process.env.CLAUDE_TRANSPARENCY_CAPTURE_ALL === '1') return true;
+  if (process.env.HARNESS_TRANSPARENCY_CAPTURE_ALL === '1') return true;
   if ((ctx.eventName || '') === 'Stop') return true;
   return isControlledTool(ctx.toolName);
 }
 
 function actionContractMode() {
-  const value = String(process.env.CLAUDE_TOOL_ACTION_CONTRACT_MODE || 'high-risk').toLowerCase();
+  const value = String(process.env.HARNESS_TOOL_ACTION_CONTRACT_MODE || 'high-risk').toLowerCase();
   if (['off', 'disabled', 'none'].includes(value)) return 'off';
   return value === 'all' ? 'all' : 'high-risk';
 }
@@ -718,7 +718,7 @@ function rotateEventsIfNeeded(filePath) {
   try {
     const stat = fs.statSync(filePath);
     const configuredBytes = Number.parseInt(
-      process.env.CLAUDE_TRANSPARENCY_MAX_EVENTS_BYTES || MAX_EVENTS_BYTES,
+      process.env.HARNESS_TRANSPARENCY_MAX_EVENTS_BYTES || MAX_EVENTS_BYTES,
       10,
     );
     const maxBytes = Number.isFinite(configuredBytes) ? Math.max(1, configuredBytes) : MAX_EVENTS_BYTES;
@@ -728,7 +728,7 @@ function rotateEventsIfNeeded(filePath) {
     fs.renameSync(filePath, rotated);
 
     const configuredRotated = Number.parseInt(
-      process.env.CLAUDE_TRANSPARENCY_MAX_ROTATED_EVENTS || '5',
+      process.env.HARNESS_TRANSPARENCY_MAX_ROTATED_EVENTS || '5',
       10,
     );
     const maxRotated = Number.isFinite(configuredRotated) ? Math.max(1, configuredRotated) : 5;
@@ -805,7 +805,7 @@ function appendEvent(ctx, event) {
 
 function pruneRunDirs(ctx) {
   if (!ctx.managedRunsRoot || !fs.existsSync(ctx.runsRoot)) return;
-  const configuredMax = Number.parseInt(process.env.CLAUDE_TRANSPARENCY_MAX_RUNS || '50', 10);
+  const configuredMax = Number.parseInt(process.env.HARNESS_TRANSPARENCY_MAX_RUNS || '50', 10);
   const maxRuns = Number.isFinite(configuredMax) ? Math.max(5, configuredMax) : 50;
   const dirs = fs.readdirSync(ctx.runsRoot, { withFileTypes: true })
     .filter((entry) => entry.isDirectory())
@@ -879,12 +879,12 @@ function ensureToolActionContract(payload) {
 }
 
 function main() {
-  if (process.env.CLAUDE_TRANSPARENCY_LEDGER_DISABLED === '1') process.exit(0);
+  if (process.env.HARNESS_TRANSPARENCY_LEDGER_DISABLED === '1') process.exit(0);
   const payload = parsePayload(readStdin());
   try {
     run(payload);
   } catch (error) {
-    if (process.env.CLAUDE_TRANSPARENCY_DEBUG === '1') {
+    if (process.env.HARNESS_TRANSPARENCY_DEBUG === '1') {
       console.error(`[agent-transparency-ledger] ${error.stack || error.message}`);
     }
   }

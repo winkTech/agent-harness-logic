@@ -8,7 +8,7 @@ const crypto = require('node:crypto');
 const { spawnSync } = require('node:child_process');
 
 const DEFAULT_RUN_ROOT = path.join(os.tmpdir(), 'claude-harness-agent-evals', 'alignment-dialogue');
-const CODEX_NPX_EXEC_COMMAND = process.platform === 'win32'
+const HARNESS_NPX_EXEC_COMMAND = process.platform === 'win32'
   ? 'cmd.exe /d /s /c "npx -y @openai/codex@0.142.5 exec --ignore-user-config --json --sandbox read-only --ephemeral --skip-git-repo-check --color never"'
   : 'npx -y @openai/codex@0.142.5 exec --ignore-user-config --json --sandbox read-only --ephemeral --skip-git-repo-check --color never';
 
@@ -40,8 +40,8 @@ function sha256(text) {
 }
 
 function defaultCommandFor(agent) {
-  if (agent === 'codex') return process.env.CODEX_ALIGNMENT_EVAL_COMMAND || CODEX_NPX_EXEC_COMMAND;
-  return process.env.CLAUDE_ALIGNMENT_EVAL_COMMAND
+  if (agent === 'codex') return process.env.HARNESS_ALIGNMENT_EVAL_COMMAND || HARNESS_NPX_EXEC_COMMAND;
+  return process.env.HARNESS_ALIGNMENT_EVAL_COMMAND
     || 'claude -p --tools "" --output-format json --permission-mode bypassPermissions --no-session-persistence';
 }
 

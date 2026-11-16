@@ -29,9 +29,9 @@ const MIN_CASES_PER_ENTRY = 5;
 
 // 门禁评测必须与真实运行状态隔离: 状态文件转移到临时目录, 持久化关闭。
 const EVAL_TMP = fs.mkdtempSync(path.join(os.tmpdir(), 'harness-gate-eval-'));
-process.env.CLAUDE_VERIFY_GATE_STATE_FILE = path.join(EVAL_TMP, 'verify-gate.json');
-process.env.CLAUDE_VERIFICATION_LEDGER_FILE = path.join(EVAL_TMP, 'verification-ledger.json');
-process.env.CLAUDE_HARNESS_NO_PERSIST = '1';
+process.env.HARNESS_VERIFY_GATE_STATE_FILE = path.join(EVAL_TMP, 'verify-gate.json');
+process.env.HARNESS_VERIFICATION_LEDGER_FILE = path.join(EVAL_TMP, 'verification-ledger.json');
+process.env.HARNESS_NO_PERSIST = '1';
 
 process.env.HARNESS_NO_PERSIST = '1';
 

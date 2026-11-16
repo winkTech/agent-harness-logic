@@ -154,7 +154,7 @@ async function assertRiskAdaptivePostflight(router) {
   let result = await router.evaluatePostflightRisk(input, {
     riskState,
     fileExists: () => true,
-  }, { env: { CLAUDE_RISK_POLICY_MODE: 'shadow' } });
+  }, { env: { HARNESS_RISK_POLICY_MODE: 'shadow' } });
   assert.equal(result.assessment.effectiveRiskLevel, 'R1');
   assert.equal(result.decision, 'allow');
   assert.equal(writes.length, 1);
@@ -163,7 +163,7 @@ async function assertRiskAdaptivePostflight(router) {
     tool_input: { command: 'git status --short' },
   });
   result = await router.evaluatePostflightRisk(input, { riskState }, {
-    env: { CLAUDE_RISK_POLICY_MODE: 'shadow' },
+    env: { HARNESS_RISK_POLICY_MODE: 'shadow' },
   });
   assert.equal(result.assessment.effectiveRiskLevel, 'R0');
   assert.equal(writes.length, 1, 'R0 outcome must not write risk state');
@@ -186,7 +186,7 @@ async function assertRiskAdaptivePostflight(router) {
       gatesToRerun: [],
     }),
     projectIdentity: () => ({ projectId: 'project:test', relativePath: 'postflight-router.cjs' }),
-  }, { env: { CLAUDE_RISK_POLICY_MODE: 'enforce' } });
+  }, { env: { HARNESS_RISK_POLICY_MODE: 'enforce' } });
   assert.equal(result.assessment.effectiveRiskLevel, 'R2');
   assert.notEqual(result.decision, 'block', 'postflight must not retroactively block an executed action');
 
@@ -202,7 +202,7 @@ async function assertRiskAdaptivePostflight(router) {
     fileExists: () => true,
     getBlastRadius: () => ({ staleIndex: true, staleReason: 'index-stale' }),
     projectIdentity: () => ({ projectId: 'project:test', relativePath: 'postflight-router.cjs' }),
-  }, { env: { CLAUDE_RISK_POLICY_MODE: 'shadow' } });
+  }, { env: { HARNESS_RISK_POLICY_MODE: 'shadow' } });
   assert.equal(result.assessment.effectiveRiskLevel, 'R3',
     'stale blast-radius evidence must raise an R2 change by one level');
   assert(result.assessment.riskReasons.includes('stale-dependency-evidence'));
@@ -251,7 +251,7 @@ async function assertRiskClearsOnlyWithProportionalGreen(router) {
   let result = await router.evaluatePostflightRisk(input, {
     riskState,
     verificationResult: { verification: { ok: true, reason: 'explicit PASS evidence' } },
-  }, { env: { CLAUDE_RISK_POLICY_MODE: 'shadow' } });
+  }, { env: { HARNESS_RISK_POLICY_MODE: 'shadow' } });
   assert.equal(result.evidenceRiskLevel, 'R1');
   assert.equal(clearCalls.at(-1).evidenceRiskLevel, 'R1');
 
@@ -261,7 +261,7 @@ async function assertRiskClearsOnlyWithProportionalGreen(router) {
   result = await router.evaluatePostflightRisk(input, {
     riskState,
     verificationResult: { verification: { ok: true, reason: 'explicit PASS evidence' } },
-  }, { env: { CLAUDE_RISK_POLICY_MODE: 'shadow' } });
+  }, { env: { HARNESS_RISK_POLICY_MODE: 'shadow' } });
   assert.equal(result.evidenceRiskLevel, 'R3');
   assert.equal(clearCalls.at(-1).evidenceRiskLevel, 'R3');
   assert.equal(clearCalls.at(-1).fresh, true);
@@ -273,7 +273,7 @@ async function assertRiskClearsOnlyWithProportionalGreen(router) {
   result = await router.evaluatePostflightRisk(input, {
     riskState,
     verificationResult: { verification: { ok: false, reason: 'PostToolUseFailure event' } },
-  }, { env: { CLAUDE_RISK_POLICY_MODE: 'shadow' } });
+  }, { env: { HARNESS_RISK_POLICY_MODE: 'shadow' } });
   assert.equal(result.evidenceRiskLevel, 'R0');
   assert.equal(clearCalls.length, beforeFailure, 'failed verification must not clear risk');
   assert.equal(statusCalls.at(-1).status, 'failed',
@@ -286,7 +286,7 @@ async function assertRiskClearsOnlyWithProportionalGreen(router) {
   await router.evaluatePostflightRisk(input, {
     riskState,
     verificationResult: { verification: { ok: false, reason: 'exit=127' } },
-  }, { env: { CLAUDE_RISK_POLICY_MODE: 'shadow' } });
+  }, { env: { HARNESS_RISK_POLICY_MODE: 'shadow' } });
   assert.equal(statusCalls.at(-1).status, 'unavailable');
   assert.match(statusCalls.at(-1).reason, /command not found|exit=127/i);
 }
@@ -313,7 +313,7 @@ async function assertAcceptedEvidenceFeedsOnlyReusableCache(router) {
   let result = await router.evaluatePostflightRisk(input, {
     riskState,
     verificationResult: { verification: { ok: true, reason: 'explicit PASS evidence' } },
-  }, { env: { CLAUDE_RISK_POLICY_MODE: 'shadow' } });
+  }, { env: { HARNESS_RISK_POLICY_MODE: 'shadow' } });
   assert.equal(result.evidenceRiskLevel, 'R2');
   assert.equal(recorded.length, 1);
   assert.match(recorded[0].evidenceKey, /^[a-f0-9]{64}$/);
@@ -326,7 +326,7 @@ async function assertAcceptedEvidenceFeedsOnlyReusableCache(router) {
   result = await router.evaluatePostflightRisk(input, {
     riskState,
     verificationResult: { verification: { ok: true, reason: 'explicit PASS evidence' } },
-  }, { env: { CLAUDE_RISK_POLICY_MODE: 'shadow' } });
+  }, { env: { HARNESS_RISK_POLICY_MODE: 'shadow' } });
   assert.equal(result.evidenceRiskLevel, 'R3');
   assert.equal(recorded.length, 1, 'R3 evidence must not enter the reusable cache');
 }
@@ -544,9 +544,9 @@ function assertCliFailOpen() {
     windowsHide: true,
     env: {
       ...process.env,
-      CLAUDE_HARNESS_NO_PERSIST: '1',
-      CLAUDE_HARNESS_VERIFY_READONLY: '1',
-      CLAUDE_NO_DIAGNOSTIC_WRITES: '1',
+      HARNESS_NO_PERSIST: '1',
+      HARNESS_VERIFY_READONLY: '1',
+      HARNESS_NO_DIAGNOSTIC_WRITES: '1',
     },
   });
   assert.equal(result.status, 0, `invalid postflight payload must fail open: ${result.stderr}`);

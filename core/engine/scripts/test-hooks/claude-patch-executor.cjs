@@ -28,7 +28,7 @@ const {
   writeEvidenceLedger,
 } = require('../lib/evidence-ledger.cjs');
 
-const CODEX_NPX_EXEC_COMMAND = process.platform === 'win32'
+const HARNESS_NPX_EXEC_COMMAND = process.platform === 'win32'
   ? 'cmd.exe /d /s /c "npx -y @openai/codex@0.142.5 exec --ignore-user-config --json --sandbox read-only --skip-git-repo-check --ephemeral --color never"'
   : 'npx -y @openai/codex@0.142.5 exec --ignore-user-config --json --sandbox read-only --skip-git-repo-check --ephemeral --color never';
 
@@ -160,16 +160,16 @@ function runCommandLine(command, cwd, input = '', timeoutMs = 10 * 60 * 1000, en
 
 function defaultCommandFor(agent) {
   if (agent === 'claude') {
-    return process.env.CLAUDE_PATCH_EVAL_COMMAND
+    return process.env.HARNESS_PATCH_EVAL_COMMAND
       || 'claude -p --tools "" --output-format json --permission-mode bypassPermissions --no-session-persistence';
   }
-  if (agent === 'codex') return process.env.CODEX_PATCH_EVAL_COMMAND || CODEX_NPX_EXEC_COMMAND;
+  if (agent === 'codex') return process.env.HARNESS_PATCH_EVAL_COMMAND || HARNESS_NPX_EXEC_COMMAND;
   return '';
 }
 
 function versionCommandFor(agent) {
-  if (agent === 'claude') return process.env.CLAUDE_READINESS_COMMAND || 'claude --version';
-  if (agent === 'codex') return process.env.CODEX_READINESS_COMMAND || 'codex --version';
+  if (agent === 'claude') return process.env.HARNESS_READINESS_COMMAND || 'claude --version';
+  if (agent === 'codex') return process.env.HARNESS_READINESS_COMMAND || 'codex --version';
   return '';
 }
 

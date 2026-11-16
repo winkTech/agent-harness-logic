@@ -17,7 +17,7 @@
  *  10. 跨卷回退：注入 rename 失败后走递归复制 + 删源路径。
  * 以及 M2（插件模式）合同追加的 3 条：
  *  11. 旧位置没有 var/.wright 时不再回落 harnessRoot，而是落到默认状态目录；
- *  12. CLAUDE_PLUGIN_DATA 生效，但优先级低于 legacy in-place；
+ *  12. HARNESS_PLUGIN_DATA 生效，但优先级低于 legacy in-place；
  *  13. STATE_MODE 五种取值 env / migrated / legacy / plugin-data / default。
  *
  * 全部在 os.tmpdir() 下的临时目录进行，不触碰真实 HARNESS_ROOT 的状态。
@@ -362,32 +362,32 @@ test('11. an empty harness root no longer captures state (falls through to the d
   }
 });
 
-// ── 12. CLAUDE_PLUGIN_DATA 生效，但低于 legacy ─────────────────────────────
+// ── 12. HARNESS_PLUGIN_DATA 生效，但低于 legacy ─────────────────────────────
 
-test('12. CLAUDE_PLUGIN_DATA is honoured for fresh installs but never outranks legacy state', () => {
+test('12. HARNESS_PLUGIN_DATA is honoured for fresh installs but never outranks legacy state', () => {
   const base = makeCase('plugin-data');
   const homeDir = path.join(base, 'home');
   fs.mkdirSync(homeDir, { recursive: true });
   const pluginData = path.join(base, 'plugins', 'data', 'logical-paradox');
-  const env = { CLAUDE_PLUGIN_DATA: pluginData };
+  const env = { HARNESS_PLUGIN_DATA: pluginData };
 
   const freshRoot = path.join(base, 'fresh-repo');
   fs.mkdirSync(freshRoot, { recursive: true });
   assert.equal(
     resolveStateRoot({ env, harnessRoot: freshRoot, homeDir }),
     path.resolve(pluginData),
-    'a plugin install with no legacy state must use CLAUDE_PLUGIN_DATA',
+    'a plugin install with no legacy state must use HARNESS_PLUGIN_DATA',
   );
-  assert.equal(fs.existsSync(pluginData), false, 'resolution must not create CLAUDE_PLUGIN_DATA');
+  assert.equal(fs.existsSync(pluginData), false, 'resolution must not create HARNESS_PLUGIN_DATA');
 
   const legacyRoot = seedHarnessRoot(path.join(base, 'legacy-repo'));
   assert.equal(
     resolveStateRoot({ env, harnessRoot: legacyRoot, homeDir }),
     path.resolve(legacyRoot),
-    'existing in-place state must outrank CLAUDE_PLUGIN_DATA',
+    'existing in-place state must outrank HARNESS_PLUGIN_DATA',
   );
 
-  // env 覆盖与已迁移默认目录仍然压过 CLAUDE_PLUGIN_DATA
+  // env 覆盖与已迁移默认目录仍然压过 HARNESS_PLUGIN_DATA
   const envDir = path.join(base, 'explicit');
   assert.equal(
     resolveStateRoot({ env: { ...env, HARNESS_STATE_DIR: envDir }, harnessRoot: freshRoot, homeDir }),
@@ -403,7 +403,7 @@ test('12. CLAUDE_PLUGIN_DATA is honoured for fresh installs but never outranks l
   assert.equal(
     resolveStateRoot({ env, harnessRoot: freshRoot, homeDir }),
     path.resolve(defaultRoot),
-    'a migrated default dir must outrank CLAUDE_PLUGIN_DATA',
+    'a migrated default dir must outrank HARNESS_PLUGIN_DATA',
   );
 });
 
@@ -427,7 +427,7 @@ test('13. resolveState reports which precedence level was hit', () => {
     { stateRoot: path.resolve(legacyRoot), mode: 'legacy' },
   );
   assert.deepEqual(
-    resolveState({ env: { CLAUDE_PLUGIN_DATA: pluginData }, harnessRoot: freshRoot, homeDir }),
+    resolveState({ env: { HARNESS_PLUGIN_DATA: pluginData }, harnessRoot: freshRoot, homeDir }),
     { stateRoot: path.resolve(pluginData), mode: 'plugin-data' },
   );
   assert.deepEqual(

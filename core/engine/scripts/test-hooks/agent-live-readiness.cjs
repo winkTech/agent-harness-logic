@@ -6,7 +6,7 @@ const path = require('node:path');
 const { spawnSync } = require('node:child_process');
 
 const AGENTS = new Set(['claude', 'codex']);
-const CODEX_NPX_VERSION_COMMAND = process.platform === 'win32'
+const HARNESS_NPX_VERSION_COMMAND = process.platform === 'win32'
   ? 'cmd.exe /d /s /c "npx -y @openai/codex@0.142.5 --version"'
   : 'npx -y @openai/codex@0.142.5 --version';
 
@@ -167,15 +167,15 @@ function probeAgent(agent) {
   let probe = primaryProbe;
   let status = classify(agent, entries, primaryProbe);
   let fallbackProbe = null;
-  if (agent === 'codex' && status === 'blocked' && !process.env.CODEX_READINESS_COMMAND) {
-    fallbackProbe = runCommandLine(CODEX_NPX_VERSION_COMMAND, { timeout: 120000 });
+  if (agent === 'codex' && status === 'blocked' && !process.env.HARNESS_READINESS_COMMAND) {
+    fallbackProbe = runCommandLine(HARNESS_NPX_VERSION_COMMAND, { timeout: 120000 });
     if (fallbackProbe.status === 0) {
       probe = fallbackProbe;
       status = 'available';
       entries.push({
         CommandType: 'Application',
-        Source: CODEX_NPX_VERSION_COMMAND,
-        Definition: CODEX_NPX_VERSION_COMMAND,
+        Source: HARNESS_NPX_VERSION_COMMAND,
+        Definition: HARNESS_NPX_VERSION_COMMAND,
         Resolver: 'npm-fallback',
       });
     }

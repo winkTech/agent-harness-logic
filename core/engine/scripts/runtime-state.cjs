@@ -30,7 +30,7 @@ const p = require('node:path');
 const f = require('node:fs');
 
 const INDEX_DIR = varPath('index');
-const STATE_FILE = process.env.CLAUDE_RUNTIME_STATE_FILE || p.join(INDEX_DIR, 'runtime-state.json');
+const STATE_FILE = process.env.HARNESS_RUNTIME_STATE_FILE || p.join(INDEX_DIR, 'runtime-state.json');
 
 const MODES = ['根因分析', '第一性原理', '减法', '搜索优先', '倒推', '证据驱动', '闭环'];
 

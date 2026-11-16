@@ -161,12 +161,12 @@ function main() {
   const { payload } = ingest(readPayload(), { argv: process.argv });
   try {
     const result = evaluateSubagentStop(payload);
-    if (process.env.CLAUDE_SUBAGENT_VERDICT_DEBUG === '1') {
+    if (process.env.HARNESS_SUBAGENT_VERDICT_DEBUG === '1') {
       process.stderr.write(`[subagent-verdict] ${JSON.stringify(result)}\n`);
     }
   } catch (error) {
     // 观察者绝不阻断子 agent 的收尾
-    if (process.env.CLAUDE_SUBAGENT_VERDICT_DEBUG === '1') {
+    if (process.env.HARNESS_SUBAGENT_VERDICT_DEBUG === '1') {
       process.stderr.write(`[subagent-verdict] fail-open: ${error.message}\n`);
     }
   }

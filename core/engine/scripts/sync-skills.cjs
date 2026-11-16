@@ -144,9 +144,9 @@ function renderSkill(skill) {
 /** 三宿主目标目录（可用 env 覆盖，供沙箱测试）。 */
 function defaultTargets(home = os.homedir(), env = process.env) {
   return [
-    { host: 'claude-code', dir: env.CLAUDE_SKILLS_DIR || path.join(home, '.claude', 'skills') },
+    { host: 'claude-code', dir: env.HARNESS_SKILLS_DIR || path.join(home, '.claude', 'skills') },
     { host: 'grok', dir: env.AGENTS_SKILLS_DIR || path.join(home, '.agents', 'skills') },
-    { host: 'codex', dir: env.CODEX_SKILLS_DIR || path.join(home, '.codex', 'skills') },
+    { host: 'codex', dir: env.HARNESS_SKILLS_DIR || path.join(home, '.codex', 'skills') },
   ];
 }
 

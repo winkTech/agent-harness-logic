@@ -33,9 +33,9 @@ function runRouter(payload, env = {}) {
     windowsHide: true,
     env: {
       ...process.env,
-      CLAUDE_HARNESS_NO_PERSIST: '1',
-      CLAUDE_HARNESS_VERIFY_READONLY: '1',
-      CLAUDE_NO_DIAGNOSTIC_WRITES: '1',
+      HARNESS_NO_PERSIST: '1',
+      HARNESS_VERIFY_READONLY: '1',
+      HARNESS_NO_DIAGNOSTIC_WRITES: '1',
       ...env,
     },
   });
@@ -168,7 +168,7 @@ function assertRiskAdaptivePreflight() {
     file_path: path.join(HARNESS_ROOT, 'docs', 'rules', '05-harness.md'),
   }));
   let result = router.evaluateRiskPolicy(runtime, {
-    env: { CLAUDE_RISK_POLICY_MODE: 'shadow' },
+    env: { HARNESS_RISK_POLICY_MODE: 'shadow' },
     readVerificationState: forbiddenStateRead,
   });
   assert.equal(result.decision, 'allow');
@@ -181,7 +181,7 @@ function assertRiskAdaptivePreflight() {
     new_string: 'const ordinary = false;',
   }));
   result = router.evaluateRiskPolicy(runtime, {
-    env: { CLAUDE_RISK_POLICY_MODE: 'shadow' },
+    env: { HARNESS_RISK_POLICY_MODE: 'shadow' },
     fileExists: () => true,
     readVerificationState: () => ({ version: 4, pending: {}, risk: {} }),
     riskForPayload: () => [],
@@ -196,7 +196,7 @@ function assertRiskAdaptivePreflight() {
     new_string: 'module.exports = { main, evaluate };',
   }));
   result = router.evaluateRiskPolicy(runtime, {
-    env: { CLAUDE_RISK_POLICY_MODE: 'shadow' },
+    env: { HARNESS_RISK_POLICY_MODE: 'shadow' },
     fileExists: () => true,
     readVerificationState: () => ({ version: 4, pending: {}, risk: {} }),
     riskForPayload: () => [],
@@ -211,7 +211,7 @@ function assertRiskAdaptivePreflight() {
     riskReasons: ['interface-change'],
   };
   result = router.evaluateRiskPolicy(runtime, {
-    env: { CLAUDE_RISK_POLICY_MODE: 'shadow' },
+    env: { HARNESS_RISK_POLICY_MODE: 'shadow' },
     fileExists: () => true,
     readVerificationState: () => ({ version: 4, pending: {}, risk: { sticky } }),
     riskForPayload: () => [sticky],
@@ -222,7 +222,7 @@ function assertRiskAdaptivePreflight() {
     command: 'git reset --hard HEAD~1',
   }));
   result = router.evaluateRiskPolicy(runtime, {
-    env: { CLAUDE_RISK_POLICY_MODE: 'enforce' },
+    env: { HARNESS_RISK_POLICY_MODE: 'enforce' },
     readVerificationState: () => ({ version: 4, pending: {}, risk: {} }),
     riskForPayload: () => [],
     evaluateBypass: () => ({ requested: false, allowed: false, errors: [] }),
@@ -234,7 +234,7 @@ function assertRiskAdaptivePreflight() {
 
   let authorizationRequest = null;
   result = router.evaluateRiskPolicy(runtime, {
-    env: { CLAUDE_RISK_POLICY_MODE: 'enforce' },
+    env: { HARNESS_RISK_POLICY_MODE: 'enforce' },
     readVerificationState: () => ({ version: 4, pending: {}, risk: {} }),
     riskForPayload: () => [],
     evaluateBypass(request) {
@@ -249,7 +249,7 @@ function assertRiskAdaptivePreflight() {
 
   runtime = router.runtimeFrom(payload('Bash', { command: 'git reset --hard HEAD~1' }));
   result = router.evaluateRiskPolicy(runtime, {
-    env: { CLAUDE_RISK_POLICY_MODE: 'off' },
+    env: { HARNESS_RISK_POLICY_MODE: 'off' },
     readVerificationState: forbiddenStateRead,
     evaluateBypass: forbiddenStateRead,
   });
@@ -523,23 +523,23 @@ function assertReadOnlyMemoryHitDoesNotCache() {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'preflight-memory-cache-'));
   const cacheFile = path.join(root, 'memory-cache.json');
   const envNames = [
-    'CLAUDE_MEMORY_HINT_CACHE_FILE',
-    'CLAUDE_MEMORY_HINT_CACHE_DISABLED',
-    'CLAUDE_HOOK_NO_WRITE',
+    'HARNESS_MEMORY_HINT_CACHE_FILE',
+    'HARNESS_MEMORY_HINT_CACHE_DISABLED',
+    'HARNESS_HOOK_NO_WRITE',
   'HARNESS_HOOK_NO_WRITE',
-    'CLAUDE_BENCH',
-    'CLAUDE_HARNESS_NO_PERSIST',
+    'HARNESS_BENCH',
+    'HARNESS_NO_PERSIST',
   'HARNESS_NO_PERSIST',
-    'CLAUDE_HARNESS_VERIFY_READONLY',
+    'HARNESS_VERIFY_READONLY',
   'HARNESS_VERIFY_READONLY',
-    'CLAUDE_NO_DIAGNOSTIC_WRITES',
+    'HARNESS_NO_DIAGNOSTIC_WRITES',
   'HARNESS_NO_DIAGNOSTIC_WRITES',
   ];
   const previous = Object.fromEntries(envNames.map((name) => [name, process.env[name]]));
   try {
     for (const name of envNames) delete process.env[name];
-    process.env.CLAUDE_MEMORY_HINT_CACHE_FILE = cacheFile;
-    process.env.CLAUDE_HARNESS_NO_PERSIST = '1';
+    process.env.HARNESS_MEMORY_HINT_CACHE_FILE = cacheFile;
+    process.env.HARNESS_NO_PERSIST = '1';
 
     process.env.HARNESS_NO_PERSIST = '1';
     const memoryHook = require(path.join(
@@ -593,9 +593,9 @@ function assertPureEvaluatorImports() {
       input: JSON.stringify(payload('Bash', { command: 'rm -rf /' })),
       env: {
         ...process.env,
-        CLAUDE_HARNESS_NO_PERSIST: '1',
-        CLAUDE_HARNESS_VERIFY_READONLY: '1',
-        CLAUDE_NO_DIAGNOSTIC_WRITES: '1',
+        HARNESS_NO_PERSIST: '1',
+        HARNESS_VERIFY_READONLY: '1',
+        HARNESS_NO_DIAGNOSTIC_WRITES: '1',
       },
     });
     assert.equal(result.status, 0, `${relative} import failed: ${result.stderr}`);
@@ -643,7 +643,7 @@ function assertEditReconstructionAndDisableSwitches() {
     assert.equal(blocked.status, 2,
       `MultiEdit must be checked as reconstructed full RTL: ${blocked.stderr}`);
 
-    const disabled = runRouter(editPayload, { CLAUDE_RTL_SEMANTIC_ORACLE_DISABLED: '1' });
+    const disabled = runRouter(editPayload, { HARNESS_RTL_SEMANTIC_ORACLE_DISABLED: '1' });
     assert.equal(disabled.status, 0,
       `RTL oracle disable switch must apply through router evaluate: ${disabled.stderr}`);
 
@@ -696,7 +696,7 @@ function assertRepairMultiEditUsesFullContent() {
       },
       cwd: root,
       session_id: 'preflight-repair-multiedit',
-    }, { CLAUDE_REPAIR_SPEC: specPath });
+    }, { HARNESS_REPAIR_SPEC: specPath });
     assert.equal(result.status, 2,
       `repair forbiddenRegex must inspect reconstructed MultiEdit content: ${result.stderr}`);
   } finally {
@@ -711,11 +711,11 @@ function assertReadOnlyDoesNotPersist() {
     const result = runRouter(payload('Read', {
       file_path: path.join(HARNESS_ROOT, 'docs', 'rules', '00-core.md'),
     }), {
-      CLAUDE_HARNESS_NO_PERSIST: '0',
+      HARNESS_NO_PERSIST: '0',
     HARNESS_NO_PERSIST: '0',
-      CLAUDE_HARNESS_VERIFY_READONLY: '0',
+      HARNESS_VERIFY_READONLY: '0',
     HARNESS_VERIFY_READONLY: '0',
-      CLAUDE_TRANSPARENCY_LEDGER_DISABLED: '1',
+      HARNESS_TRANSPARENCY_LEDGER_DISABLED: '1',
       PROGRESS_WATCHDOG_STATE_FILE: stateFile,
       PROGRESS_WATCHDOG_ARCHIVE_DIR: path.join(root, 'archive'),
     });
@@ -783,15 +783,15 @@ function assertActionContractBindsFullToolInput() {
   const os = require('node:os');
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'preflight-input-contract-'));
   const envNames = [
-    'CLAUDE_TOOL_ACTION_CONTRACT_MODE',
-    'CLAUDE_TRANSPARENCY_RUN_DIR',
-    'CLAUDE_TRANSPARENCY_RUN_ID',
+    'HARNESS_TOOL_ACTION_CONTRACT_MODE',
+    'HARNESS_TRANSPARENCY_RUN_DIR',
+    'HARNESS_TRANSPARENCY_RUN_ID',
   ];
   const previous = Object.fromEntries(envNames.map((name) => [name, process.env[name]]));
   try {
-    process.env.CLAUDE_TOOL_ACTION_CONTRACT_MODE = 'all';
-    process.env.CLAUDE_TRANSPARENCY_RUN_DIR = root;
-    process.env.CLAUDE_TRANSPARENCY_RUN_ID = 'tool-input-binding';
+    process.env.HARNESS_TOOL_ACTION_CONTRACT_MODE = 'all';
+    process.env.HARNESS_TRANSPARENCY_RUN_DIR = root;
+    process.env.HARNESS_TRANSPARENCY_RUN_ID = 'tool-input-binding';
     const ledger = require(path.join(
       HARNESS_ROOT, 'core', 'engine', 'scripts', 'hooks', 'agent-transparency-ledger.cjs',
     ));

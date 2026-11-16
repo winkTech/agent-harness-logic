@@ -143,13 +143,13 @@ function assertFrustrationContextIsRequireSafeAndReadOnly() {
   fs.writeFileSync(stateFile, JSON.stringify({ failureCount: 0, failureHistory: [], toolCalls: [] }), 'utf8');
   const before = fs.readFileSync(stateFile, 'utf8');
   const previous = {
-    runtime: process.env.CLAUDE_RUNTIME_STATE_FILE,
-    noPersist: process.env.CLAUDE_HARNESS_NO_PERSIST,
+    runtime: process.env.HARNESS_RUNTIME_STATE_FILE,
+    noPersist: process.env.HARNESS_NO_PERSIST,
     noPersistNew: process.env.HARNESS_NO_PERSIST,
   };
   try {
-    process.env.CLAUDE_RUNTIME_STATE_FILE = stateFile;
-    process.env.CLAUDE_HARNESS_NO_PERSIST = '1';
+    process.env.HARNESS_RUNTIME_STATE_FILE = stateFile;
+    process.env.HARNESS_NO_PERSIST = '1';
     process.env.HARNESS_NO_PERSIST = '1';
     delete require.cache[require.resolve(frustrationPath)];
     const detector = require(frustrationPath);
@@ -181,10 +181,10 @@ function assertFrustrationContextIsRequireSafeAndReadOnly() {
     }, { persist: false, readState: () => ({ failureCount: 0, toolCalls: [] }) }), null,
     'neutral prompt unexpectedly emitted frustration context');
   } finally {
-    if (previous.runtime === undefined) delete process.env.CLAUDE_RUNTIME_STATE_FILE;
-    else process.env.CLAUDE_RUNTIME_STATE_FILE = previous.runtime;
-    if (previous.noPersist === undefined) delete process.env.CLAUDE_HARNESS_NO_PERSIST;
-    else process.env.CLAUDE_HARNESS_NO_PERSIST = previous.noPersist;
+    if (previous.runtime === undefined) delete process.env.HARNESS_RUNTIME_STATE_FILE;
+    else process.env.HARNESS_RUNTIME_STATE_FILE = previous.runtime;
+    if (previous.noPersist === undefined) delete process.env.HARNESS_NO_PERSIST;
+    else process.env.HARNESS_NO_PERSIST = previous.noPersist;
     if (previous.noPersistNew === undefined) delete process.env.HARNESS_NO_PERSIST;
     else process.env.HARNESS_NO_PERSIST = previous.noPersistNew;
     delete require.cache[require.resolve(frustrationPath)];
@@ -194,19 +194,19 @@ function assertFrustrationContextIsRequireSafeAndReadOnly() {
 
 function assertStaleFailureEvidenceFailsClosed() {
   const previous = {
-    noPersist: process.env.CLAUDE_HARNESS_NO_PERSIST,
-    noWrite: process.env.CLAUDE_HOOK_NO_WRITE,
-    readonly: process.env.CLAUDE_HARNESS_VERIFY_READONLY,
-    noDiag: process.env.CLAUDE_NO_DIAGNOSTIC_WRITES,
+    noPersist: process.env.HARNESS_NO_PERSIST,
+    noWrite: process.env.HARNESS_HOOK_NO_WRITE,
+    readonly: process.env.HARNESS_VERIFY_READONLY,
+    noDiag: process.env.HARNESS_NO_DIAGNOSTIC_WRITES,
     noPersistNew: process.env.HARNESS_NO_PERSIST,
     readonlyNew: process.env.HARNESS_VERIFY_READONLY,
     noDiagNew: process.env.HARNESS_NO_DIAGNOSTIC_WRITES,
   };
   try {
-    delete process.env.CLAUDE_HARNESS_NO_PERSIST;
-    delete process.env.CLAUDE_HOOK_NO_WRITE;
-    delete process.env.CLAUDE_HARNESS_VERIFY_READONLY;
-    delete process.env.CLAUDE_NO_DIAGNOSTIC_WRITES;
+    delete process.env.HARNESS_NO_PERSIST;
+    delete process.env.HARNESS_HOOK_NO_WRITE;
+    delete process.env.HARNESS_VERIFY_READONLY;
+    delete process.env.HARNESS_NO_DIAGNOSTIC_WRITES;
     delete process.env.HARNESS_NO_PERSIST;
     delete process.env.HARNESS_VERIFY_READONLY;
     delete process.env.HARNESS_NO_DIAGNOSTIC_WRITES;
@@ -267,16 +267,16 @@ function assertStaleFailureEvidenceFailsClosed() {
     assert.match(fresh?.hookSpecificOutput?.additionalContext || '', /强制模式切换/,
       '5 分钟前的失败证据必须仍触发强制模式切换');
   } finally {
-    if (previous.noPersist === undefined) delete process.env.CLAUDE_HARNESS_NO_PERSIST;
-    else process.env.CLAUDE_HARNESS_NO_PERSIST = previous.noPersist;
+    if (previous.noPersist === undefined) delete process.env.HARNESS_NO_PERSIST;
+    else process.env.HARNESS_NO_PERSIST = previous.noPersist;
     if (previous.noPersistNew === undefined) delete process.env.HARNESS_NO_PERSIST;
     else process.env.HARNESS_NO_PERSIST = previous.noPersistNew;
-    if (previous.noWrite === undefined) delete process.env.CLAUDE_HOOK_NO_WRITE;
-    else process.env.CLAUDE_HOOK_NO_WRITE = previous.noWrite;
-    if (previous.readonly === undefined) delete process.env.CLAUDE_HARNESS_VERIFY_READONLY;
-    else process.env.CLAUDE_HARNESS_VERIFY_READONLY = previous.readonly;
-    if (previous.noDiag === undefined) delete process.env.CLAUDE_NO_DIAGNOSTIC_WRITES;
-    else process.env.CLAUDE_NO_DIAGNOSTIC_WRITES = previous.noDiag;
+    if (previous.noWrite === undefined) delete process.env.HARNESS_HOOK_NO_WRITE;
+    else process.env.HARNESS_HOOK_NO_WRITE = previous.noWrite;
+    if (previous.readonly === undefined) delete process.env.HARNESS_VERIFY_READONLY;
+    else process.env.HARNESS_VERIFY_READONLY = previous.readonly;
+    if (previous.noDiag === undefined) delete process.env.HARNESS_NO_DIAGNOSTIC_WRITES;
+    else process.env.HARNESS_NO_DIAGNOSTIC_WRITES = previous.noDiag;
     if (previous.noPersistNew === undefined) delete process.env.HARNESS_NO_PERSIST;
     else process.env.HARNESS_NO_PERSIST = previous.noPersistNew;
     if (previous.readonlyNew === undefined) delete process.env.HARNESS_VERIFY_READONLY;
@@ -289,10 +289,10 @@ function assertStaleFailureEvidenceFailsClosed() {
 
 function assertDiagnosticQuestionTriggersMemoryRetrieval() {
   const memoryHook = require(memoryHookPath);
-  const previous = process.env.CLAUDE_HARNESS_NO_PERSIST;
+  const previous = process.env.HARNESS_NO_PERSIST;
   const queries = [];
   try {
-    process.env.CLAUDE_HARNESS_NO_PERSIST = '1';
+    process.env.HARNESS_NO_PERSIST = '1';
     const output = memoryHook.retrieveContext({
       hook_event_name: 'UserPromptSubmit',
       prompt: '认知层是不是没有生效？',
@@ -321,8 +321,8 @@ function assertDiagnosticQuestionTriggersMemoryRetrieval() {
     assert.match(output?.hookSpecificOutput?.additionalContext || '', /cognitive-layer-routing/,
       'diagnostic memory result was not injected into Hook context');
   } finally {
-    if (previous === undefined) delete process.env.CLAUDE_HARNESS_NO_PERSIST;
-    else process.env.CLAUDE_HARNESS_NO_PERSIST = previous;
+    if (previous === undefined) delete process.env.HARNESS_NO_PERSIST;
+    else process.env.HARNESS_NO_PERSIST = previous;
   }
 }
 
@@ -333,27 +333,27 @@ function assertRuleContextIsRequireSafeAndReadOnly() {
 
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'prompt-rule-readonly-'));
   const previous = {
-    memo: process.env.CLAUDE_RULE_LOADER_MEMO_DIR,
-    noPersist: process.env.CLAUDE_HARNESS_NO_PERSIST,
-    signal: process.env.CLAUDE_RULE_SIGNAL_DISABLED,
+    memo: process.env.HARNESS_RULE_LOADER_MEMO_DIR,
+    noPersist: process.env.HARNESS_NO_PERSIST,
+    signal: process.env.HARNESS_RULE_SIGNAL_DISABLED,
   };
   try {
-    process.env.CLAUDE_RULE_LOADER_MEMO_DIR = root;
-    process.env.CLAUDE_HARNESS_NO_PERSIST = '1';
-    process.env.CLAUDE_RULE_SIGNAL_DISABLED = '1';
+    process.env.HARNESS_RULE_LOADER_MEMO_DIR = root;
+    process.env.HARNESS_NO_PERSIST = '1';
+    process.env.HARNESS_RULE_SIGNAL_DISABLED = '1';
     const output = ruleLoader.retrieveContext(promptPayload());
     assert.match(output?.hookSpecificOutput?.additionalContext || '', /Harness rule capsule/,
       'rule Hook interface must preserve capsule output');
     assert.deepEqual(fs.readdirSync(root), [], 'read-only mode must not write rule injection state');
   } finally {
-    if (previous.memo === undefined) delete process.env.CLAUDE_RULE_LOADER_MEMO_DIR;
-    else process.env.CLAUDE_RULE_LOADER_MEMO_DIR = previous.memo;
-    if (previous.noPersist === undefined) delete process.env.CLAUDE_HARNESS_NO_PERSIST;
-    else process.env.CLAUDE_HARNESS_NO_PERSIST = previous.noPersist;
+    if (previous.memo === undefined) delete process.env.HARNESS_RULE_LOADER_MEMO_DIR;
+    else process.env.HARNESS_RULE_LOADER_MEMO_DIR = previous.memo;
+    if (previous.noPersist === undefined) delete process.env.HARNESS_NO_PERSIST;
+    else process.env.HARNESS_NO_PERSIST = previous.noPersist;
     if (previous.noPersistNew === undefined) delete process.env.HARNESS_NO_PERSIST;
     else process.env.HARNESS_NO_PERSIST = previous.noPersistNew;
-    if (previous.signal === undefined) delete process.env.CLAUDE_RULE_SIGNAL_DISABLED;
-    else process.env.CLAUDE_RULE_SIGNAL_DISABLED = previous.signal;
+    if (previous.signal === undefined) delete process.env.HARNESS_RULE_SIGNAL_DISABLED;
+    else process.env.HARNESS_RULE_SIGNAL_DISABLED = previous.signal;
     fs.rmSync(root, { recursive: true, force: true });
   }
 }

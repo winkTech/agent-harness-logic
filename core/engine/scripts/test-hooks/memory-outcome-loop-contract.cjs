@@ -19,21 +19,21 @@ const os = require('node:os');
 const path = require('node:path');
 
 // 全链持久化由注入的临时 DB 承载, 环境守卫必须清掉, 否则 delivery 分支静默跳过。
-delete process.env.CLAUDE_HARNESS_NO_PERSIST;
+delete process.env.HARNESS_NO_PERSIST;
 
 delete process.env.HARNESS_NO_PERSIST;
-delete process.env.CLAUDE_HARNESS_VERIFY_READONLY;
+delete process.env.HARNESS_VERIFY_READONLY;
 
 delete process.env.HARNESS_VERIFY_READONLY;
-delete process.env.CLAUDE_NO_DIAGNOSTIC_WRITES;
+delete process.env.HARNESS_NO_DIAGNOSTIC_WRITES;
 
 delete process.env.HARNESS_NO_DIAGNOSTIC_WRITES;
-delete process.env.CLAUDE_HOOK_NO_WRITE;
+delete process.env.HARNESS_HOOK_NO_WRITE;
 
 const ROOT = path.resolve(__dirname, '..', '..', '..', '..');
 const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'outcome-loop-'));
 // verification-gate 的证据账本在模块加载时解析 env, 必须先设再 require。
-process.env.CLAUDE_VERIFICATION_LEDGER_FILE = path.join(tmp, 'verification-ledger.json');
+process.env.HARNESS_VERIFICATION_LEDGER_FILE = path.join(tmp, 'verification-ledger.json');
 
 const { openDb } = require(path.join(ROOT, 'core/engine/sqlite/index.cjs'));
 const storeMemory = require(path.join(ROOT, 'core/engine/sqlite/store-memory.cjs'));
