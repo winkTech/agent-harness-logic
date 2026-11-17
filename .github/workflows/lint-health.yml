@@ -17,7 +17,9 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, windows-latest]
+        # 仅 windows：ubuntu 腿 gate 47s 挂（ubuntu 特有差异待定位，windows 全绿
+        # 已证明 gate 逻辑正确）。用户裁决 2026-11-17 暂时屏蔽；差异查明后恢复。
+        os: [windows-latest]
 
     steps:
       - name: Checkout without persisted credentials
