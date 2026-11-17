@@ -33,10 +33,12 @@ jobs:
       # 3.12.10 是 3.12 系列最后一个有 Windows 构建的版本：CPython 3.12 在此之后
       # 进入 security-only，只发源码，actions/python-versions 因而做不出 win32 包
       # （3.12.11/12/13 在 manifest 里只有 linux）。升级前先确认新版能跑通 .py 校验与 pytest。
-      - name: Use Python 3.12.10
+      # ubuntu 侧钉 3.12.10 自 2026-11 起在 ubuntu manifest 持续失败（#86-#91 连续六
+      # 次卡 setup）——浮动到 3.12 系列最新可用 linux 构建；windows 保持 3.12.10。
+      - name: Use Python 3.12
         uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
         with:
-          python-version: '3.12.10'
+          python-version: ${{ matrix.os == 'windows-latest' && '3.12.10' || '3.12' }}
 
       - name: Verify Git, CI, MCP, and plugin contracts
         shell: bash
@@ -65,7 +67,7 @@ jobs:
       - name: Materialize hook registrations and the workflow mirror
         shell: bash
         env:
-          CLAUDE_HARNESS_ROOT: ${{ github.workspace }}
+          HARNESS_ROOT: ${{ github.workspace }}
         run: |
           set -o pipefail
           node core/engine/scripts/render-hook-settings.cjs
@@ -78,7 +80,7 @@ jobs:
       - name: Materialize the skill mirrors for all hosts
         shell: bash
         env:
-          CLAUDE_HARNESS_ROOT: ${{ github.workspace }}
+          HARNESS_ROOT: ${{ github.workspace }}
         run: |
           set -o pipefail
           node core/engine/scripts/sync-skills.cjs
@@ -87,10 +89,10 @@ jobs:
       - name: Run the fail-closed Harness gate
         shell: bash
         env:
-          CLAUDE_HARNESS_ROOT: ${{ github.workspace }}
-          CLAUDE_HARNESS_NO_PERSIST: '1'
-          CLAUDE_HARNESS_VERIFY_READONLY: '1'
-          CLAUDE_NO_DIAGNOSTIC_WRITES: '1'
+          HARNESS_ROOT: ${{ github.workspace }}
+          HARNESS_NO_PERSIST: '1'
+          HARNESS_VERIFY_READONLY: '1'
+          HARNESS_NO_DIAGNOSTIC_WRITES: '1'
         run: |
           set -o pipefail
           node core/engine/scripts/harness-ci.cjs 2>&1 \
