@@ -128,8 +128,15 @@ jobs:
           HARNESS_NO_DIAGNOSTIC_WRITES: '1'
         run: |
           set -o pipefail
-          node core/engine/scripts/harness-ci.cjs 2>&1 \
-            | tee "var/ci/harness-ci-${RUNNER_OS}.log"
+          if ! node core/engine/scripts/harness-ci.cjs 2>&1 | tee "var/ci/harness-ci-${RUNNER_OS}.log"; then
+            {
+              echo "### Harness gate 失败摘要（${RUNNER_OS}）"
+              echo '```'
+              grep -E "FAIL|✖|Error|error=" "var/ci/harness-ci-${RUNNER_OS}.log" | head -40 || true
+              echo '```'
+            } >> "$GITHUB_STEP_SUMMARY"
+            exit 1
+          fi
 
       - name: Write immutable-run provenance
         if: always()
