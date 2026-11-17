@@ -289,14 +289,20 @@ test('MCP package and enabled plugins are reproducibly locked', () => {
   const lockText = fs.readFileSync(PLUGIN_LOCK, 'utf8');
   const lock = JSON.parse(lockText);
   const schema = JSON.parse(fs.readFileSync(PLUGIN_LOCK_SCHEMA, 'utf8'));
-  const settings = JSON.parse(fs.readFileSync(path.join(ROOT, 'settings.local.json'), 'utf8'));
 
   assert.equal(lock.$schema, './core/engine/schemas/plugin-lock.schema.json');
   assert.equal(lock.version, 1);
-  assert.deepEqual(
-    Object.keys(lock.plugins).sort(),
-    Object.entries(settings.enabledPlugins).filter(([, enabled]) => enabled).map(([name]) => name).sort(),
-  );
+  // settings.local.json 已退出跟踪（审计 P2-5，个人配置不入库）——fresh
+  // checkout / runner 上不存在。存在时（本机开发态）校验与锁一致；不存在
+  // 时跳过一致性子断言（锁文件自身形态仍全量校验）。
+  const settingsPath = path.join(ROOT, 'settings.local.json');
+  if (fs.existsSync(settingsPath)) {
+    const settings = JSON.parse(fs.readFileSync(settingsPath, 'utf8'));
+    assert.deepEqual(
+      Object.keys(lock.plugins).sort(),
+      Object.entries(settings.enabledPlugins).filter(([, enabled]) => enabled).map(([name]) => name).sort(),
+    );
+  }
   for (const [name, entry] of Object.entries(lock.plugins)) {
     assert.equal(typeof entry.version, 'string', `${name} has no version`);
     assert.match(entry.gitCommitSha, /^[0-9a-f]{40}$/, `${name} has no immutable git SHA`);
