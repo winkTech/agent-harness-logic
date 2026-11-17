@@ -110,23 +110,54 @@ function buildDist() {
     if (fs.existsSync(src)) copyTree(src, path.join(DIST, 'core', 'engine', extra));
   }
 
+  // 规则层 + 入口渲染产物（审计 P0-2）：harness-root 锚点判定 + rule-loader 都
+  // 以 <root>/core/rules 与 <root>/CLAUDE.md|AGENTS.md 为引用面，缺了则
+  // "有技能、无规则"——00-core/03-gates/05-harness 全部失效。
+  copyTree(path.join(HARNESS_ROOT, 'core', 'rules'), path.join(DIST, 'core', 'rules'));
+  for (const entry of ['CLAUDE.md', 'AGENTS.md']) {
+    const src = path.join(HARNESS_ROOT, entry);
+    if (fs.existsSync(src)) copyFile(src, path.join(DIST, entry));
+  }
+
+  // 引擎根锚点（审计 P0-1）：harness-root.cjs 靠"模块位置上溯找 package.json
+  // （name=harness）"判定根——插件安装目录缺锚点时全部 hook 抛 Unable to
+  // resolve Harness root。锚点与真源同版本号（单一事实源 = 根 .claude-plugin）。
+  const sourceManifest = JSON.parse(fs.readFileSync(
+    path.join(HARNESS_ROOT, '.claude-plugin', 'plugin.json'), 'utf8',
+  ));
+  copyFromObject(
+    { name: 'harness', private: true, version: sourceManifest.version },
+    path.join(DIST, 'package.json'),
+  );
+
   // .mcp.json（脱敏投影：只保留可分发服务器——npx 形与 plugin 相对形）
   const rootMcp = JSON.parse(fs.readFileSync(path.join(HARNESS_ROOT, '.mcp.json'), 'utf8'));
   const mcpOut = { mcpServers: {} };
   for (const [name, cfg] of Object.entries(rootMcp.mcpServers || {})) {
     const cmd = String(cfg.command || '');
     if (cmd === 'npx' || cmd === 'node') {
-      mcpOut.mcpServers[name] = cfg;
+      // 审计 P0-3：node 相对路径依赖 cwd，插件模式下 MCP 启动 cwd 不可控——
+      // 引擎内相对路径一律改 ${CLAUDE_PLUGIN_ROOT} 前缀（插件根解析契约）。
+      const fixedArgs = (cfg.args || []).map((a) => (
+        typeof a === 'string' && /^[a-zA-Z0-9_-]+[\\/]/.test(a) && !a.includes('${CLAUDE_PLUGIN_ROOT}')
+          ? `\${CLAUDE_PLUGIN_ROOT}/${a.replace(/\\/g, '/')}`
+          : a
+      ));
+      mcpOut.mcpServers[name] = { ...cfg, args: fixedArgs };
     }
     // 本机绝对路径 command（如 D:/tools/...）不分发
   }
   copyFromObject(mcpOut, path.join(DIST, '.mcp.json'));
 
-  // 三宿主 plugin.json（同名 kebab-case）
+  // 三宿主 plugin.json（同名 kebab-case）——版本单一事实源 = 根 .claude-plugin
+  // （release-checklist「版本一致」条款；此前硬编码 0.2.0 与根 0.1.0 漂移，审计 P2-6）
+  const sourceManifestVersion = JSON.parse(fs.readFileSync(
+    path.join(HARNESS_ROOT, '.claude-plugin', 'plugin.json'), 'utf8',
+  )).version;
   const baseManifest = {
     name: PLUGIN_NAME,
     displayName: PLUGIN_NAME,
-    version: '0.2.0',
+    version: sourceManifestVersion,
     description: 'Runtime-neutral agent harness: safety gates, verification loop, memory + Dream, session handoff.',
     author: { name: '__OWNER__' },
     repository: '__REPO_URL__',

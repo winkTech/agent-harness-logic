@@ -4422,7 +4422,7 @@ define('AgentTransparencyLedger', 'writes task contract skill plan rule trace an
   const trace = fs.readFileSync(path.join(outDir, 'rule-trace.md'), 'utf8');
   const events = fs.readFileSync(path.join(outDir, 'events.ndjson'), 'utf8');
   const pass = plan.requiredSkills.includes('hdl-coding')
-    && plan.loadedRules.includes('docs/rules/01-hdl.md')
+    && plan.loadedRules.some((r) => /01-hdl\.md$/.test(r)) // 前缀无关：规则层真源 core/rules/（审计 P1-4 后按实际根记录）
     && contract.taskType === 'rtl_project'
     && toolContract.tool === 'Write'
     && toolContract.match?.status === 'user-instruction-captured'

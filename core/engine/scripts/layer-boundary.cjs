@@ -60,6 +60,8 @@ const SANCTIONED_DISTRIBUTION = new Set([
   'scripts/sync-skills.cjs',
   'scripts/sync-pack-skills.cjs',
   'scripts/render-hook-settings.cjs',
+  // dist 组装器：.mcp.json 投影写 ${CLAUDE_PLUGIN_ROOT} 分发契约占位（审计 P0-3）
+  'scripts/sync-plugin-dist.cjs',
   // §4.2：P 系列 bench 采集器（跑 pack 工具是其职责）
   'scripts/bench-refactor.cjs',
   // 注册表数据面：registrations/manifest 真源在 hosts/claude-code/
@@ -166,6 +168,8 @@ const ENV_SANCTIONED = new Set([
   // ${CLAUDE_PLUGIN_ROOT} 占位符契约（渲染/注册面消费，非 env 读取）
   'scripts/lib/hook-registry.cjs',
   'scripts/render-hook-settings.cjs',
+  // dist 组装器：.mcp.json 投影写 ${CLAUDE_PLUGIN_ROOT} 分发契约占位（审计 P0-3）
+  'scripts/sync-plugin-dist.cjs',
   // 翻译层行为测试（宿主名兜底契约——模拟宿主注入）
   'scripts/test-hooks/env-translation-contract.test.cjs',
   // 其余 test-hooks 的宿主名 = 模拟宿主注入语义（C-6 迁移归零批次 2026-11-16）
