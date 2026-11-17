@@ -265,8 +265,13 @@ test('CI is least-privilege, immutable, cross-platform, and uploads provenance',
   assert.match(workflow, /actions\/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020\s+# v4\.4\.0/);
   assert.match(workflow, /node-version:\s*['"]22\.17\.1['"]/);
   assert.match(workflow, /actions\/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065\s+# v5\.6\.0/);
-  // 必须钉在有 win32 构建的版本上，否则 windows-latest 那条腿装不上 Python。
-  assert.match(workflow, /python-version:\s*['"]3\.12\.10['"]/);
+  // windows 腿必须钉在有 win32 构建的版本上（3.12.11+ 无 win32 包，装不上
+  // Python）；ubuntu 自 2026-11 起 3.12.10 在 ubuntu manifest 持续失败
+  // （run #86-#91 连续六次卡 setup），按 OS 分流浮动到 3.12 系列最新 linux 构建。
+  assert.match(
+    workflow,
+    /python-version:\s*\$\{\{\s*matrix\.os == 'windows-latest' && '3\.12\.10' \|\| '3\.12' \}\}/,
+  );
   assert.match(workflow, /node --test core\/engine\/scripts\/test-hooks\/git-ci-repro-contract\.test\.cjs/);
   assert.match(workflow, /actions\/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02\s+# v4\.6\.2/);
   assert.match(workflow, /var\/coverage\/coverage-summary\.json/);
