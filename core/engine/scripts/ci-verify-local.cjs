@@ -83,7 +83,8 @@ function main() {
   console.log('[5/8] step9 codex + grok projections（runner home）');
   const s9 = run('render-codex-hooks', process.execPath, ['core/engine/scripts/render-codex-hooks.cjs'], { env: { ...workflowEnv, HOME: RUNNER_HOME, USERPROFILE: RUNNER_HOME } })
     && run('render-codex-hooks --check', process.execPath, ['core/engine/scripts/render-codex-hooks.cjs', '--check'], { env: { ...workflowEnv, HOME: RUNNER_HOME, USERPROFILE: RUNNER_HOME } });
-  // grok：真源 = home/.claude/settings.json——workflow 里先复制再渲染
+  // grok：渲染真源是用户主目录下的 settings 文件（兼容面约定）——workflow
+  // 同款：先复制 workspace 的 settings.json 到 runner home，再渲染。
   fs.mkdirSync(path.join(RUNNER_HOME, '.claude'), { recursive: true });
   fs.copyFileSync(path.join(CLONE, 'settings.json'), path.join(RUNNER_HOME, '.claude', 'settings.json'));
   const s9b = run('render-grok-hooks', process.execPath, ['core/engine/scripts/render-grok-hooks.cjs'], { env: { ...workflowEnv, HOME: RUNNER_HOME, USERPROFILE: RUNNER_HOME } })
