@@ -86,6 +86,24 @@ jobs:
           node core/engine/scripts/sync-skills.cjs
           node core/engine/scripts/sync-skills.cjs --check
 
+      # codex/grok 渲染产物写 runner home（~/.codex/hooks.json、~/.grok/hooks.json、
+      # ~/.codex/AGENTS.md）——gate 的 render family 会校验两者 --check，runner 上
+      # 从未渲染则必红（#97 gate 8-17s 挂的真凶，本地 home==仓库根掩盖）。
+      # grok 渲染的真源是 ~/.claude/settings.json（兼容面）——runner 上 settings.json
+      # 在 workspace（step 7 已按 runner 路径重渲染），先复制到 home 再渲染。
+      - name: Materialize codex and grok projections
+        shell: bash
+        env:
+          HARNESS_ROOT: ${{ github.workspace }}
+        run: |
+          set -o pipefail
+          node core/engine/scripts/render-codex-hooks.cjs
+          node core/engine/scripts/render-codex-hooks.cjs --check
+          mkdir -p "$HOME/.claude"
+          cp settings.json "$HOME/.claude/settings.json"
+          node core/engine/scripts/render-grok-hooks.cjs
+          node core/engine/scripts/render-grok-hooks.cjs --check
+
       # dist/plugin 与双 marketplace 是 gitignore 的可再生产物（sha 随组装变化）——
       # 全新 checkout 上没有，gate 的 render family 会校验 sync-plugin-dist --check。
       # 组装分两步：①仓库内 skills/ 运行时镜像是 dist 的 core 技能源——fresh checkout
