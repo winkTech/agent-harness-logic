@@ -352,12 +352,22 @@ function requiredSkills(taskType, signals) {
 }
 
 function requiredRules(signals) {
-  // 规则文件住在 docs/rules/ 而不是 .claude/rules/: 后者会被平台当作常驻全局
-  // 指令全文注入每个会话, 与 rule-loader 的按需 capsule 双重加权。
-  const rules = ['docs/rules/00-core.md', 'docs/rules/03-gates.md'];
-  if (signals.includes('rtl')) rules.push('docs/rules/01-hdl.md');
-  if (signals.includes('python')) rules.push('docs/rules/02-python.md');
-  if (signals.includes('git')) rules.push('docs/rules/04-git.md');
+  // 规则文件真源 = core/rules/（Phase 1 拆层）；旧布局 docs/rules/ 保留兼容回退
+  // （后者会被平台当作常驻全局指令全文注入每个会话，与 rule-loader 的按需
+  // capsule 双重加权，故规则层迁移到 core/rules 按需加载）。审计 P1-4：此前
+  // 硬编码 docs/rules/ 在新布局下指向不存在文件，曝光记录静默空转——按实际
+  // 存在的前缀记录。
+  const exists = (rel) => fs.existsSync(path.join(HARNESS_ROOT, rel));
+  const pick = (name) => {
+    for (const rel of [`core/rules/${name}`, `docs/rules/${name}`]) {
+      if (exists(rel)) return rel;
+    }
+    return `core/rules/${name}`;
+  };
+  const rules = [pick('00-core.md'), pick('03-gates.md')];
+  if (signals.includes('rtl')) rules.push(pick('01-hdl.md'));
+  if (signals.includes('python')) rules.push(pick('02-python.md'));
+  if (signals.includes('git')) rules.push(pick('04-git.md'));
   return unique(rules);
 }
 
