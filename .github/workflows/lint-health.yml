@@ -88,13 +88,16 @@ jobs:
 
       # dist/plugin 与双 marketplace 是 gitignore 的可再生产物（sha 随组装变化）——
       # 全新 checkout 上没有，gate 的 render family 会校验 sync-plugin-dist --check。
-      # 按 marketplace 契约重建后再校验，确保门禁校验到真实分发契约。
+      # 组装分两步：①仓库内 skills/ 运行时镜像是 dist 的 core 技能源——fresh checkout
+      # 上不存在（本机 home==仓库根的巧合在 CI 上不成立），用 HARNESS_SKILLS_DIR
+      # 覆盖投到仓库根；②按 marketplace 契约组装后再校验。
       - name: Materialize the plugin distribution
         shell: bash
         env:
           HARNESS_ROOT: ${{ github.workspace }}
         run: |
           set -o pipefail
+          HARNESS_SKILLS_DIR="$GITHUB_WORKSPACE/skills" node core/engine/scripts/sync-skills.cjs
           node core/engine/scripts/sync-plugin-dist.cjs
           node core/engine/scripts/sync-plugin-dist.cjs --check
 
