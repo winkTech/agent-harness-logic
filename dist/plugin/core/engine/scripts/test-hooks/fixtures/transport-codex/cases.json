@@ -1,0 +1,80 @@
+[
+  {
+    "id": "codex-session-start",
+    "transport": "codex",
+    "input": {
+      "eventType": "session.start",
+      "sessionId": "codex-sess-001",
+      "cwd": "C:/work/project"
+    },
+    "expected": {
+      "eventType": "session.start",
+      "transport": "codex",
+      "status": "unknown",
+      "sessionId": "codex-sess-001",
+      "cwd": "C:/work/project",
+      "source": { "nativeEventName": "session.start", "adapter": "codex-precommit-v1", "statusInferred": true, "timestampInferred": true }
+    },
+    "notes": "Codex 无 hook，缺 status 一律 unknown，不因'走到了提交前'臆测成功。"
+  },
+  {
+    "id": "codex-tool-post-succeeded",
+    "transport": "codex",
+    "input": {
+      "eventType": "tool.post",
+      "status": "succeeded",
+      "toolName": "Bash",
+      "toolUseId": "codex_tool_001",
+      "sessionId": "codex-sess-001",
+      "cwd": "C:/work/project",
+      "occurredAt": "2026-08-25T10:00:00.000Z"
+    },
+    "expected": {
+      "eventType": "tool.post",
+      "transport": "codex",
+      "status": "succeeded",
+      "toolName": "Bash",
+      "toolUseId": "codex_tool_001",
+      "occurredAt": "2026-08-25T10:00:00.000Z",
+      "source": { "nativeEventName": "tool.post", "adapter": "codex-precommit-v1", "statusInferred": false, "timestampInferred": false }
+    },
+    "notes": "调用方显式给出 succeeded，透传。"
+  },
+  {
+    "id": "codex-tool-post-missing-status",
+    "transport": "codex",
+    "input": {
+      "eventType": "tool.post",
+      "toolName": "Bash",
+      "sessionId": "codex-sess-002",
+      "cwd": "C:/work/project"
+    },
+    "expected": {
+      "eventType": "tool.post",
+      "transport": "codex",
+      "status": "unknown",
+      "toolName": "Bash",
+      "source": { "nativeEventName": "tool.post", "adapter": "codex-precommit-v1", "statusInferred": true }
+    },
+    "notes": "D1: options 缺 status 缺省 unknown，不臆测。"
+  },
+  {
+    "id": "codex-tool-pre",
+    "transport": "codex",
+    "input": {
+      "eventType": "tool.pre",
+      "toolName": "Edit",
+      "toolInput": { "file_path": "C:/work/project/rtl/rx_fifo.sv" },
+      "sessionId": "codex-sess-003",
+      "cwd": "C:/work/project"
+    },
+    "expected": {
+      "eventType": "tool.pre",
+      "transport": "codex",
+      "status": "unknown",
+      "toolName": "Edit",
+      "source": { "nativeEventName": "tool.pre", "adapter": "codex-precommit-v1", "statusInferred": true }
+    },
+    "notes": "tool.pre 无结果语义，unknown。"
+  }
+]

@@ -96,7 +96,8 @@ function listSpoolFiles(opts = {}) {
       .filter((n) => /^spool-\d{4}-\d{2}-\d{2}(-\d+)?\.jsonl$/.test(n))
       .sort()
       .map((n) => path.join(dir, n));
-  } catch {
+  } catch (error) {
+    if (opts.strict && error.code !== 'ENOENT') throw error;
     return [];
   }
 }

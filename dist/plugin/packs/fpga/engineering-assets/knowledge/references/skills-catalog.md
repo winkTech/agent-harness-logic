@@ -1,0 +1,113 @@
+---
+name: skills-catalog
+description: 辅助 Skill 目录
+metadata:
+  type: reference
+---
+
+# 辅助 Skill 目录
+
+> 详细功能列表，按需加载。标注 🔀 的为重定向桩（原 skill 已合并）。
+
+---
+
+## 文档与演示
+
+| Skill | 功能 | 场景 |
+|-------|------|------|
+| `doc-gen` | 文档/README 生成 | 设计文档、API 文档、项目说明 |
+| `presentation` | 图表/PPT/Excel/HTML 幻灯片 | 架构图、汇报、数据分析 |
+| ~~doc-generator~~ | 🔀 已合并到 doc-gen | — |
+| ~~readme~~ | 🔀 已合并到 doc-gen | — |
+| ~~diagram-generator~~ | 🔀 已合并到 presentation | — |
+| ~~pptx~~ | 🔀 已合并到 presentation | — |
+| ~~xlsx~~ | 🔀 已合并到 presentation | — |
+| ~~html-ppt-skill~~ | 🔀 已合并到 presentation | — |
+
+## 代码搜索与探索
+
+| Skill | 功能 | 场景 |
+|-------|------|------|
+| `code-search` | 统一搜索 — rg/pnpm + 7阶段探索 + 语义搜索 | 日常搜代码、陌生代码库分析、按意图搜索 |
+| ~~ripgrep~~ | 🔀 已合并到 code-search | — |
+| ~~code-semantic-search~~ | 🔀 已合并到 code-search | — |
+| ~~codebase-exploration~~ | 🔀 已合并到 code-search | — |
+
+## 开发测试
+
+| Skill | 功能 | 场景 |
+|-------|------|------|
+| `tdd` | 测试驱动开发 | RTL/Python/MATLAB |
+| `test-generator` | 测试生成 | Testbench 框架 |
+| `debugging` | 系统化调试（含高级模式） | 仿真异常、间歇性 Bug、生产环境 |
+
+## 代码审查与审计
+
+| Skill/Workflow | 功能 | 场景 |
+|-------|------|------|
+| `code-review` | 统一审查 — 架构/复杂度/代码质量/框架审计 | 设计评审、规划评估、Clean Code、提交前检查 |
+| ~~architecture-review~~ | 🔀 已合并到 code-review | — |
+| ~~complexity-assessment~~ | 🔀 已合并到 code-review | — |
+| ~~code-quality-expert~~ | 🔀 已合并到 code-review | — |
+| ~~proactive-audit~~ | 🔀 已合并到 code-review | — |
+| `security-review-workflow` (工作流) | 安全审查 | 认证、API、敏感数据 |
+
+## 研究分析
+
+| Skill | 功能 | 场景 |
+|-------|------|------|
+| `deep-research` | 深度研究 | 技术调研、方案对比 |
+| `modern-python` | 现代 Python | Python 3.12+ 特性 |
+| `brainstorming` | 头脑风暴 | 多方案对比 |
+
+## Agent 管理
+
+| Skill | 功能 | 场景 |
+|-------|------|------|
+| `agent-management` | Skill 管理/发现/会话交接/子 Agent 编排 | 创建优化 Skill、安装社区技能、跨会话续接 |
+| ~~skill-creator~~ | 🔀 已合并到 agent-management | — |
+| ~~find-skills~~ | 🔀 已合并到 agent-management | — |
+| ~~session-handoff~~ | 🔀 已合并到 agent-management | — |
+| ~~subagent-driven-development~~ | 🔀 已合并到 agent-management | — |
+
+## 浏览器
+
+| Skill | 功能 | 场景 |
+|-------|------|------|
+| `browser` | 浏览器自动化 + 用户实时浏览器 | 网页交互/抓取/测试 & 登录态/DevTools 检查 |
+| ~~agent-browser~~ | 🔀 已合并到 browser | — |
+
+## 项目初始化
+
+| Skill | 功能 | 场景 |
+|-------|------|------|
+| `project-init` | FPGA 项目/模块脚手架 | 新建工程目录、添加模块 RTL+TB |
+
+## 其他
+
+| Skill | 功能 | 场景 |
+|-------|------|------|
+| `markitdown-converter` | 多格式转 Markdown | PDF/PPT/Word/Excel |
+| `git-expert` | Git 操作 | 复杂 Git 操作、冲突解决 |
+| `rag-skill` | 知识库检索 | 本地知识库问答 |
+| `hdl-coding` | HDL 编码规范 | Verilog/SV FPGA 设计 |
+| `python-hardware-debug` | 硬件调试 | 星座图/EVM/频偏 |
+| `rtl-gen` | RTL 代码生成 | 快速 RTL 模板生成 |
+
+## 会话管理（自定义技能）
+
+| Skill | 功能 | 场景 |
+|-------|------|------|
+| `start` | Session 初始化仪式 | 新 session 开局：读任务协议 + git 状态 → 输出 Briefing |
+| `handoff` | Session 收尾仪式 | 保存进度、写日志、更新协议、flush 记忆 |
+
+## 工作流
+
+| Workflow | 功能 | 场景 |
+|----------|------|------|
+| `hdl-coding-dag-workflow` | RTL 全流程 (10 Phase) | 算法 → 架构 → 定点 → TB → RTL → 门禁 → 集成 → 回归 → 审查 → 报告 |
+| `hdl-coding-workflow` | 别名，同上 | 向后兼容 |
+| `code-review-workflow` | 两轮代码审查 | Pass 1 正确性 + Pass 2 代码质量 |
+| `architecture-review-workflow` | 多 Agent 架构审查 | 上下文 → 分析 → 安全 → 建议 |
+| `rag-skill-workflow` | 知识库检索 | 知识库问答 |
+| `security-review-workflow` | 安全审查 | 安全敏感关键词触发 |

@@ -108,7 +108,8 @@
           {
             "type": "command",
             "command": "node {{HARNESS_ROOT}}/core/engine/scripts/consumer-scheduler.cjs --auto",
-            "timeout": 45
+            "timeout": 75,
+            "async": true
           }
         ]
       },

@@ -60,3 +60,20 @@ function resolve() {
 }
 
 module.exports = resolve;
+
+if (require.main === module && process.argv[2] === '--session-start') {
+  const dir = resolve();
+  if (check(dir)) {
+    const child = require('node:child_process').spawnSync(process.execPath,
+      [p.join(dir, 'scripts/hooks/session-start.js')], { stdio: ['inherit', 'pipe', 'inherit'], encoding: 'utf8' });
+    if (child.error) throw child.error;
+    process.exitCode = child.status ?? 1;
+    const text = child.stdout?.trim();
+    if (!process.exitCode && text) {
+      let output;
+      try { output = JSON.parse(text); } catch { /* ECC versions can emit a plain context string. */ }
+      if (output?.hookSpecificOutput?.hookEventName === 'SessionStart') console.log(text);
+      else console.log(JSON.stringify({ hookSpecificOutput: { hookEventName: 'SessionStart', additionalContext: text } }));
+    }
+  }
+}

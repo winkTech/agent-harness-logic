@@ -1,0 +1,86 @@
+{
+  "skill": "tdd",
+  "version": "1.4.0",
+  "description": "Test-Driven Development skill evals",
+  "evals": [
+    {
+      "name": "python-tdd-basic",
+      "description": "为一个简单的 Python 函数编写 TDD 测试",
+      "prompt": "用 TDD 方式编写一个函数，计算两个数的最大公约数（GCD）",
+      "expected_outputs": {
+        "has_test_first": true,
+        "has_red_phase": true,
+        "has_green_phase": true,
+        "has_refactor_phase": true,
+        "test_passes": true
+      },
+      "assertions": [
+        {
+          "type": "file_exists",
+          "pattern": "test_*.py",
+          "description": "测试文件存在"
+        },
+        {
+          "type": "content_match",
+          "pattern": "def test_.*gcd",
+          "description": "包含 GCD 测试函数"
+        },
+        {
+          "type": "content_match",
+          "pattern": "def gcd",
+          "description": "包含 GCD 实现函数"
+        }
+      ]
+    },
+    {
+      "name": "verilog-tdd-basic",
+      "description": "为一个简单的 Verilog 模块编写 TDD 测试",
+      "prompt": "用 TDD 方式编写一个 8 位加法器模块",
+      "expected_outputs": {
+        "has_testbench_first": true,
+        "has_module": true,
+        "simulation_passes": true
+      },
+      "assertions": [
+        {
+          "type": "file_exists",
+          "pattern": "tb_*.v",
+          "description": "Testbench 文件存在"
+        },
+        {
+          "type": "file_exists",
+          "pattern": "*.v",
+          "description": "模块文件存在"
+        },
+        {
+          "type": "content_match",
+          "pattern": "module.*adder",
+          "description": "包含加法器模块"
+        }
+      ]
+    },
+    {
+      "name": "bug-fix-tdd",
+      "description": "用 TDD 方式修复 Bug",
+      "prompt": "修复这个函数的 bug：它应该返回列表中的最大值，但有时返回 None",
+      "code": "def find_max(lst):\n    if not lst:\n        return None\n    max_val = None\n    for item in lst:\n        if max_val is None or item > max_val:\n            max_val = item\n    return max_val",
+      "expected_outputs": {
+        "has_reproduction_test": true,
+        "test_fails_before_fix": true,
+        "test_passes_after_fix": true
+      },
+      "assertions": [
+        {
+          "type": "content_match",
+          "pattern": "def test_.*max",
+          "description": "包含最大值测试"
+        },
+        {
+          "type": "content_match",
+          "pattern": "def test_.*none|def test_.*empty",
+          "description": "包含边界条件测试"
+        }
+      ]
+    }
+  ]
+}

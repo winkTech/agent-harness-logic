@@ -125,7 +125,8 @@ function childEnvironment() {
     'HARNESS_SESSION_ID', 'HARNESS_USER_MESSAGE', 'HARNESS_TRANSCRIPT_PATH',
     'HARNESS_SESSION_DIR', 'HARNESS_PROJECT_DIR', 'HARNESS_TOOL_NAME', 'HARNESS_TOOL_INPUT',
     'HARNESS_CONFIG_DIR',
-    'HARNESS_ROOT', 'HARNESS_NO_DIAGNOSTIC_WRITES',
+    'HARNESS_ROOT', 'HARNESS_STATE_DIR', 'HARNESS_VERIFY_GATE_STATE_FILE', 'HARNESS_VERIFY_READONLY',
+    'HARNESS_NO_DIAGNOSTIC_WRITES',
     'HARNESS_NO_PERSIST', 'HARNESS_BENCH', 'HARNESS_HOOK_DEADLINE_MS',
     'HARNESS_RUNTIME_STATE_FILE', 'HARNESS_REPAIR_SPEC', 'HARNESS_VERIFICATION_LEDGER_FILE',
     'HARNESS_VERIFY_GATE_TTL_MS', 'HARNESS_RTL_SEMANTIC_ORACLE_DISABLED',
@@ -152,6 +153,7 @@ function childEnvironment() {
       continue;
     }
     if (exact.has(upper) || prefixes.some(prefix => upper.startsWith(prefix))) {
+      if (key === CANONICAL_FOR[key] && !value && env[key]) continue;
       env[key] = value;
     }
   }

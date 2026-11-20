@@ -2176,12 +2176,13 @@ define('CoverageRunner', 'merges duplicate script coverage across child processe
   const { pathToFileURL } = require('node:url');
   const { parseV8Coverage } = require('../coverage-runner.cjs');
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'coverage-merge-'));
-  const engineDir = path.join(root, 'engine');
+  const engineDir = path.join(root, 'core', 'engine');
   const coverageDir = path.join(root, 'coverage');
   const script = path.join(engineDir, 'sample.cjs');
   fs.mkdirSync(engineDir, { recursive: true });
   fs.mkdirSync(coverageDir, { recursive: true });
   fs.writeFileSync(script, 'line1\nline2\nline3\n', 'utf8');
+  fs.writeFileSync(path.join(engineDir, 'unloaded.cjs'), 'line1\nline2\n', 'utf8');
   const makeEntry = (startOffset, endOffset) => ({
     result: [{
       url: pathToFileURL(script).href,
@@ -2193,7 +2194,7 @@ define('CoverageRunner', 'merges duplicate script coverage across child processe
   try {
     const result = parseV8Coverage(coverageDir, { root });
     return {
-      pass: result.files === 1 && result.coveredLines === 2,
+      pass: result.files === 2 && result.unloadedFiles === 1 && result.coveredLines === 2 && result.totalLines === 7,
       detail: JSON.stringify(result),
     };
   } finally {
@@ -2203,7 +2204,7 @@ define('CoverageRunner', 'merges duplicate script coverage across child processe
 
 define('CoverageRunner', 'nested zero-count ranges remain uncovered', () => {
   const { coveredLinesForRanges } = require('../coverage-runner.cjs');
-  const lines = ['line1', 'line2', 'line3', ''];
+  const lines = ['中文😀a', '中文😀b', '中文😀c', ''];
   const covered = coveredLinesForRanges(lines, [
     { startOffset: 0, endOffset: 18, count: 1 },
     { startOffset: 6, endOffset: 12, count: 0 },
@@ -2516,6 +2517,8 @@ const AUDIT_REMEDIATION_CONTRACTS = [
   ['claude host closure contract', 'claude-host-closure-contract.test.cjs', 120000],
   ['cross-host consistency contract', 'cross-host-consistency-contract.test.cjs', 300000],
   ['workbuddy render target', 'render-workbuddy-contract.test.cjs', 30000],
+  ['plugin distribution and release pins', 'plugin-dist-contract.test.cjs', 120000],
+  ['consumer startup scheduler', 'consumer-scheduler-contract.test.cjs', 30000],
   ['claude code plugin manifest', 'plugin-manifest-contract.test.cjs', 300000],
   ['harness state root and migration', 'harness-state-contract.test.cjs', 60000],
   ['plugin mode session context', 'plugin-mode-contract.test.cjs', 30000],
@@ -2538,12 +2541,8 @@ for (const [name, relative, timeout, extraArgs = []] of AUDIT_REMEDIATION_CONTRA
       env: {
         ...process.env,
         HARNESS_NO_PERSIST: '1',
-        HARNESS_NO_PERSIST: '1',
-        HARNESS_VERIFY_READONLY: '1',
         HARNESS_VERIFY_READONLY: '1',
         HARNESS_NO_DIAGNOSTIC_WRITES: '1',
-        HARNESS_NO_DIAGNOSTIC_WRITES: '1',
-  HARNESS_NO_DIAGNOSTIC_WRITES: '1',
       },
     });
     const passed = r.status === 0 && !r.error && !r.signal;
@@ -2551,7 +2550,7 @@ for (const [name, relative, timeout, extraArgs = []] of AUDIT_REMEDIATION_CONTRA
       pass: passed,
       detail: passed
         ? `exit=0 (${relative})`
-        : `exit=${r.status} signal=${r.signal || 'none'} ${headTail(r.stderr || r.stdout || r.error?.message || '')}`,
+        : `exit=${r.status} signal=${r.signal || 'none'} ${headTail([r.stderr, r.stdout, r.error?.message].filter(Boolean).join('\n'))}`,
     };
   });
 }
@@ -3780,6 +3779,8 @@ define('MemoryLifecycle', 'Dream and Skill-Evolve use independent consumer water
 define('MemoryLifecycle', 'event retention deletes only expired events consumed by every consumer', () => {
   const { openDb } = require(path.join(HOME, 'core/engine/sqlite/index.cjs'));
   const events = require(path.join(HOME, 'core/engine/sqlite/store-events.cjs'));
+  const { consumerRegistry } = require(path.join(HOME, 'core/engine/hooks/manifest.json'));
+  const consumers = consumerRegistry.filter((entry) => entry.active && entry.requiresWatermark);
   if (typeof events.purgeConsumedEvents !== 'function') {
     return { pass: false, detail: 'purgeConsumedEvents export missing' };
   }
@@ -3794,6 +3795,14 @@ define('MemoryLifecycle', 'event retention deletes only expired events consumed 
     const fresh = events.record({ sessionId: 'retention', type: 'tool_fail' }, recent, { db: wDb.db });
     events.setWatermark(dreamOnly, { db: wDb.db, consumer: 'dream' });
     events.setWatermark(second, { db: wDb.db, consumer: 'skill-evolve' });
+    const blocked = events.purgeConsumedEvents(30, { db: wDb.db });
+    if (blocked.deleted !== 0 || blocked.safeWatermark !== 0
+      || blocked.consumers !== consumers.length || events.countSinceWatermark(0, { db: wDb.db }) !== 4) {
+      return { pass: false, detail: `missing consumer watermarks must block retention: ${JSON.stringify(blocked)}` };
+    }
+    for (const { id } of consumers.filter((entry) => !['dream', 'skill-evolve'].includes(entry.id))) {
+      events.setWatermark(second, { db: wDb.db, consumer: id });
+    }
     const result = events.purgeConsumedEvents(30, { db: wDb.db });
     const remaining = events.sinceWatermark(0, 10, { db: wDb.db });
     const pass = result.deleted === 2

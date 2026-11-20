@@ -3,10 +3,12 @@
 
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
+const { createRequire } = require('node:module');
 const os = require('node:os');
 const path = require('node:path');
 const { spawnSync } = require('node:child_process');
 const test = require('node:test');
+const vm = require('node:vm');
 
 const ROOT = path.resolve(__dirname, '..', '..', '..', '..'); // Phase 1.1 后 test-hooks 上溯 4 级
 const PRE_COMMIT = path.join(ROOT, '.githooks', 'pre-commit');
@@ -14,6 +16,107 @@ const WORKFLOW = path.join(ROOT, '.github', 'workflows', 'lint-health.yml');
 const MCP_CONFIG = path.join(ROOT, '.mcp.json');
 const PLUGIN_LOCK = path.join(ROOT, 'hosts', 'claude-code', 'plugins.lock.json');
 const PLUGIN_LOCK_SCHEMA = path.join(ROOT, 'core', 'engine', 'schemas', 'plugin-lock.schema.json');
+
+function runScriptWithStubs(name, stubs, overrides = {}) {
+  const file = path.join(ROOT, 'core', 'engine', 'scripts', name);
+  const requireScript = createRequire(file);
+  const context = {
+    require: (id) => Object.hasOwn(stubs, id) ? stubs[id] : requireScript(id),
+    __dirname: path.dirname(file),
+    console: { log() {}, error() {} },
+    process: {
+      argv: [],
+      env: {},
+      execPath: process.execPath,
+      version: process.version,
+      stdout: { write() {} },
+      stderr: { write() {} },
+      exit(code) { this.exitCode = code; },
+    },
+  };
+  Object.assign(context.process, overrides);
+  vm.runInNewContext(fs.readFileSync(file, 'utf8'), context, { filename: file });
+  return context.process.exitCode ?? 0;
+}
+
+test('local CI uses an isolated user and state for every simulated step', () => {
+  const temp = path.join(os.tmpdir(), 'ci-contract-sandbox');
+  const originalHome = path.join(os.tmpdir(), 'ci-contract-original-user');
+  const children = [];
+  const code = runScriptWithStubs('ci-verify-local.cjs', {
+    'node:os': { tmpdir: () => os.tmpdir() },
+    'node:fs': {
+      mkdtempSync: () => temp,
+      mkdirSync() {},
+      existsSync: (file) => file === path.join(temp, 'repo', 'var', 'coverage', 'coverage-summary.json'),
+      statSync: () => ({ size: 100 }),
+      copyFileSync() {},
+      rmSync() {},
+    },
+    'node:child_process': {
+      spawnSync(command, args, options) {
+        children.push({ command, args, env: options.env });
+        return { status: 0, stdout: '', stderr: '' };
+      },
+    },
+  }, {
+    env: {
+      HOME: originalHome,
+      USERPROFILE: originalHome,
+      CODEX_HOME: path.join(originalHome, 'custom-codex'),
+      HARNESS_SKILLS_DIR: path.join(originalHome, 'custom-skills'),
+      AGENTS_SKILLS_DIR: path.join(originalHome, 'custom-agents'),
+      HARNESS_STATE_ROOT: path.join(originalHome, 'state'),
+    },
+  });
+  assert.equal(code, 0);
+  const gate = children.find(({ args }) => args[0]?.endsWith('/harness-ci.cjs'));
+  assert.equal(gate.env.HARNESS_COVERAGE_SUMMARY_FILE, path.join(temp, 'repo', 'var', 'coverage', 'coverage-summary.json'));
+  const clone = children.find(({ command, args }) => command === 'git' && args.includes('clone'));
+  assert.ok(clone.args.includes('core.longpaths=true'), 'Windows checkout must support deeply nested vendor paths');
+  assert.ok(children.some(({ args }) => args[0]?.endsWith('/sync-skills.cjs')));
+  for (const { args, env } of children) {
+    for (const variable of ['HOME', 'USERPROFILE', 'CODEX_HOME', 'HARNESS_SKILLS_DIR', 'AGENTS_SKILLS_DIR', 'HARNESS_STATE_ROOT']) {
+      assert.ok(!env?.[variable] || env[variable].startsWith(temp + path.sep), `${args.join(' ')} inherited ${variable}`);
+    }
+    assert.equal(env?.USERPROFILE, path.join(temp, 'runner-home'), args.join(' '));
+  }
+});
+
+test('CI rejects forbidden hook patterns and unsuccessful coverage runs', () => {
+  const rows = [
+    { label: 'one regression', status: 2, failures: 1, files: 250, expected: 1 },
+    { label: 'low coverage', status: 2, failures: 0, files: 250, expected: 1 },
+    { label: 'no coverage data', status: 2, failures: 5, files: 0, expected: 1 },
+    { label: 'engine hook guard', hook: 'core/engine/hooks/fixture.cjs', status: 0, expected: 1 },
+    { label: 'script hook guard', hook: 'core/engine/scripts/hooks/fixture.cjs', status: 0, expected: 1 },
+    { label: 'successful coverage run', status: 0, failures: 0, files: 250, expected: 0 },
+  ];
+  for (const { label, hook, status, failures, files, expected } of rows) {
+    const code = runScriptWithStubs('harness-ci.cjs', {
+      'node:fs': { existsSync: () => Boolean(hook), readFileSync: () => 'const options = { shell: true };' },
+      './lib/harness-root.cjs': { HARNESS_ROOT: ROOT, settingsFiles: () => [] },
+      './lib/hook-registry.cjs': {
+        validateHookScripts: () => ({ missing: [], found: [] }),
+        validateHookManifest: () => ({ errors: [], checked: 0 }),
+      },
+      './lib/schema-catalog.cjs': { validateSchemaCatalog: () => ({ errors: [], files: [] }) },
+      'node:child_process': {
+        spawnSync(command, args) {
+          if (command === 'git' && hook) return { status: 0, stdout: hook + '\0' };
+          if (args[0]?.endsWith('coverage-runner.cjs')) {
+            return { status, stdout: `总计: 600 失败: ${failures}\n检测文件数: ${files}`, stderr: '' };
+          }
+          if (args[0]?.endsWith('bench-hooks.cjs')) {
+            return { status: 0, stdout: '{"error":"no hooks in test fixture"}', stderr: '' };
+          }
+          return { status: 0, stdout: '', stderr: '' };
+        },
+      },
+    });
+    assert.equal(code, expected, label);
+  }
+});
 
 function run(command, args, options = {}) {
   return spawnSync(command, args, {
@@ -276,7 +379,8 @@ test('CI is least-privilege, immutable, cross-platform, and uploads provenance',
   );
   assert.match(workflow, /node --test core\/engine\/scripts\/test-hooks\/git-ci-repro-contract\.test\.cjs/);
   assert.match(workflow, /actions\/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02\s+# v4\.6\.2/);
-  assert.match(workflow, /var\/coverage\/coverage-summary\.json/);
+  assert.match(workflow, /HARNESS_COVERAGE_SUMMARY_FILE: \$\{\{ github\.workspace \}\}\/var\/coverage\/coverage-summary\.json/);
+  assert.match(workflow, /test -s var\/coverage\/coverage-summary\.json/);
   assert.match(workflow, /provenance/);
 });
 

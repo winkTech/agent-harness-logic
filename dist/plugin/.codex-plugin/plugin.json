@@ -1,0 +1,19 @@
+{
+  "name": "logical-paradox",
+  "displayName": "logical-paradox",
+  "version": "0.1.2",
+  "description": "Runtime-neutral agent harness with safety gates, verification loop, memory and session handoff.",
+  "author": {
+    "name": "Agent Harness Logic"
+  },
+  "license": "MIT",
+  "keywords": [
+    "harness",
+    "hooks",
+    "memory",
+    "verification",
+    "fpga"
+  ],
+  "hooks": "./hooks/codex.json",
+  "mcpServers": "./.codex-mcp.json"
+}

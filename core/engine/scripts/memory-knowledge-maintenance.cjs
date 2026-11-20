@@ -66,6 +66,7 @@ function parseArgs(argv = process.argv.slice(2)) {
     else if (arg === '--auto') opts.auto = true;
     else if (arg === '--force') opts.force = true;
     else if (arg === '--json') opts.json = true;
+    else if (arg === '--quiet') opts.quiet = true;
     else if (arg === '--no-reindex') opts.reindex = false;
     else if (arg === '--reindex') opts.reindex = true;
     else if (arg === '--reconcile') opts.reconcile = true;
@@ -287,9 +288,8 @@ function inspectEventConsumers(db, cutoff) {
       consumedEventsPastRetention: 0,
     };
   }
-  const consumers = db.prepare(
-    'SELECT consumer, watermark, updated_at FROM runtime_consumer_watermarks ORDER BY consumer',
-  ).all().map((row) => {
+  const { listConsumerWatermarks } = require('../sqlite/store-events.cjs');
+  const consumers = listConsumerWatermarks({ db }).map((row) => {
     const watermark = Number(row.watermark || 0);
     return {
       consumer: row.consumer,
@@ -341,7 +341,7 @@ function defaultRetainEvents(plan, context) {
     wDb.close();
     return { deleted: 0, reason: 'event tables missing' };
   }
-  const result = purgeConsumedEvents(plan.eventRetentionDays, { db });
+  const result = purgeConsumedEvents(plan.eventRetentionDays, { db, now: context.now });
   wDb.close();
   return result;
 }
@@ -549,7 +549,7 @@ function defaultRebuildIndex(_plan, context) {
     windowsHide: true,
     timeout: 60_000,
   });
-  return { status: result.status, stdout: result.stdout, stderr: result.stderr };
+  return { status: result.status, stdout: result.stdout, stderr: result.stderr, error: result.error?.message };
 }
 
 function defaultSaveState(state, context) {
@@ -617,6 +617,9 @@ function runMaintenance(opts = parseArgs(), now = new Date(), runtime = {}) {
     reindex: opts.reindex ? (runtime.rebuildIndex || defaultRebuildIndex)(plan, context) : { skipped: true },
     weeklyReport: (runtime.writeWeeklyReport || defaultWriteWeeklyReport)(plan, context),
   };
+  if (opts.reindex && results.reindex.status !== 0) {
+    return { ...base, results, state: null };
+  }
   const state = {
     lastExecutedAt: now.toISOString(),
     nextDueAt: new Date(now.getTime() + opts.intervalDays * DAY_MS).toISOString(),
@@ -643,8 +646,11 @@ function main() {
   const opts = parseArgs();
   const result = runMaintenance(opts);
   if (opts.json) console.log(JSON.stringify(result, null, 2));
-  else printHuman(result);
-  if (result.results?.reindex?.status !== undefined && result.results.reindex.status !== 0) process.exitCode = 1;
+  else if (!opts.quiet) printHuman(result);
+  if (result.results && opts.reindex && result.results.reindex.status !== 0) {
+    if (opts.quiet) console.error('[memory-knowledge-maintenance] reindex failed');
+    process.exitCode = 1;
+  }
 }
 
 if (require.main === module) {

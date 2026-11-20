@@ -6,6 +6,7 @@
     "node": ">=22"
   },
   "scripts": {
-    "check": "node core/engine/scripts/harness-ci.cjs"
+    "check": "node core/engine/scripts/harness-ci.cjs",
+    "codex:connect": "node hosts/codex/connect.cjs"
   }
 }

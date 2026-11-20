@@ -1,0 +1,106 @@
+#!/bin/bash
+# 记忆检索 (v2.0)
+# 四工具并行，覆盖域 0 重叠：
+#   1. grep — 精确字面量（主力）
+#   2. semantic-search — 跨词同义 + 概念查询（TF-IDF char n-gram）
+#   3. code-graph — 代码调用链和符号定义
+#   4. git log — 时间轴查询（CI 外由 Claude 直接执行）
+#
+# 用法: ./memory-retrieve.sh <搜索关键词>
+# 输出: JSON lines，每行类型 + 路径 + 摘要
+
+set -euo pipefail
+
+QUERY="${1:-}"
+if [ -z "$QUERY" ]; then
+    echo '{"tool":"help","msg":"用法: ./memory-retrieve.sh <搜索关键词>"}'
+    exit 1
+fi
+
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+# shellcheck source=../config.path.sh
+source "$SCRIPT_DIR/../config.path.sh"
+HOME_DIR="$SCRIPT_DIR/../.."
+ENGINE_SCRIPTS="$HOME_DIR/engine/scripts"
+INDEX_DIR="$VAR_DIR/index"
+
+# ── 0. SQLite FTS5 全文搜索 (Phase 1 新增, 优先) ─────────────────────
+if command -v node &>/dev/null; then
+    sqlite_out=$(node -e "
+        var p = require('path');
+        var mem = require(p.join(process.argv[1], 'core', 'engine', 'sqlite', 'store-memory.cjs'));
+        var sqlite = require(p.join(process.argv[1], 'engine', 'sqlite', 'index.cjs'));
+        var wDb;
+        try {
+            wDb = sqlite.openDb({ readonly: true });
+            var results = mem.retrieveMemory(process.argv[2], {
+                db: wDb.db, limit: 5, trackHit: false
+            });
+            for (var r of results) {
+                var snippet = r.content.replace(/\"/g,'\\\\\"').replace(/\n/g,' ').slice(0,200);
+                console.log(JSON.stringify({tool:'sqlite-fts',id:r.id,ns:r.namespace,name:r.name||'',score:r.score.toFixed(3),snippet:snippet}));
+            }
+        } catch(e) {
+            console.log(JSON.stringify({tool:'sqlite-fts-error',msg:'retrieve: '+e.message}));
+        } finally {
+            try { if (wDb) wDb.close(); } catch(e) {}
+        }
+    " "$(cd "$HOME_DIR" && pwd)" "$QUERY" 2>/dev/null || true)
+
+    if [ -n "$sqlite_out" ]; then
+        echo "$sqlite_out"
+    fi
+fi
+
+# ── 1. grep 精确匹配 ──────────────────────────────────────────────────
+grep_hits=$(find "$HOME_DIR/personal" "$HOME_DIR/packs/fpga/engineering-assets/knowledge" -name "*.md" -not -name "MEMORY.md" -not -name "MEMORY_RULES.md" 2>/dev/null \
+  | xargs grep -r -l -i "$QUERY" 2>/dev/null | head -10)
+
+if [ -n "$grep_hits" ]; then
+    echo "$grep_hits" | while IFS= read -r f; do
+        rel="${f#$HOME_DIR/}"
+        snippet=$(grep -i "$QUERY" "$f" 2>/dev/null | head -1 | sed 's/^[[:space:]]*//; s/[[:space:]]*$//; s/"/\\"/g')
+        echo "{\"tool\":\"grep\",\"path\":\"$rel\",\"snippet\":\"${snippet:0:200}\"}"
+    done
+fi
+
+# ── 2. Semantic search ─────────────────────────────────────────────────
+if command -v node &>/dev/null && [ -f "$ENGINE_SCRIPTS/semantic-search.cjs" ]; then
+    if [ -f "$INDEX_DIR/semantic-index.json" ]; then
+        semantic_out=$(node "$ENGINE_SCRIPTS/semantic-search.cjs" query "$QUERY" --top 3 2>/dev/null || true)
+        if [ -n "$semantic_out" ]; then
+            # Prefix each JSON line from semantic search with tool type
+            echo "$semantic_out" | node -e "
+                const d=require('fs').readFileSync(0,'utf8');
+                try {
+                    const arr=JSON.parse(d);
+                    for (const r of arr) {
+                        const snippet=r.snippet?r.snippet.replace(/\"/g,'\\\"').slice(0,200):'';
+                        console.log(JSON.stringify({tool:'semantic',path:r.path,score:r.score.toFixed(3),snippet}));
+                    }
+                } catch(e) { /* skip parse errors */ }
+            " 2>/dev/null || true
+        fi
+    fi
+fi
+
+# ── 3. Code graph query (SQLite 代码图后端) ────────────────────────────
+if command -v node &>/dev/null && [ -f "$ENGINE_SCRIPTS/cg-queries.cjs" ]; then
+    code_out=$(node -e "
+        try {
+            const {searchNodes,resolveProject} = require('$ENGINE_SCRIPTS/cg-queries.cjs');
+            let pid;
+            try { pid = resolveProject(process.cwd()).projectId; } catch(e) { pid = null; }
+            if (pid) {
+                const r = searchNodes(process.argv[1], {projectId:pid, limit:5, maxChars:150});
+                for (const n of r) {
+                    console.log(JSON.stringify({tool:'code-graph',kind:n.kind,name:n.name,file:n.file,line:n.line,sig:(n.signature||'').slice(0,80)}));
+                }
+            }
+        } catch(e) { console.error('cg error:', e.message); }
+    " "$QUERY" 2>/dev/null || true)
+
+    if [ -n "$code_out" ]; then
+        echo "$code_out"
+    fi
+fi

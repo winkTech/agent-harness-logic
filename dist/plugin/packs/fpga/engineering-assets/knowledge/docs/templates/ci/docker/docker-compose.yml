@@ -1,0 +1,25 @@
+# Docker Compose 配置
+# 用于启动 FPGA 开发环境
+
+version: '3.8'
+
+services:
+  fpga-dev:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: fpga-dev
+    volumes:
+      - ../prj:/workspace/prj
+      - ../scripts:/workspace/scripts
+      - ../tests:/workspace/tests
+    working_dir: /workspace
+    stdin_open: true
+    tty: true
+    network_mode: "host"
+
+  # 可选: MATLAB 环境 (需要本地安装 MATLAB)
+  # matlab:
+  #   image: mathworks/matlab:r2023b
+  #   volumes:
+  #     - ../prj/07_mat:/workspace/matlab

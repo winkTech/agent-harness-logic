@@ -26,6 +26,7 @@ jobs:
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with:
           persist-credentials: false
+          fetch-depth: 0
 
       - name: Use Node.js 22.17.1
         uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
@@ -91,8 +92,6 @@ jobs:
       # codex/grok 渲染产物写 runner home（~/.codex/hooks.json、~/.grok/hooks.json、
       # ~/.codex/AGENTS.md）——gate 的 render family 会校验两者 --check，runner 上
       # 从未渲染则必红（#97 gate 8-17s 挂的真凶，本地 home==仓库根掩盖）。
-      # grok 渲染的真源是 ~/.claude/settings.json（兼容面）——runner 上 settings.json
-      # 在 workspace（step 7 已按 runner 路径重渲染），先复制到 home 再渲染。
       - name: Materialize codex and grok projections
         shell: bash
         env:
@@ -101,8 +100,6 @@ jobs:
           set -o pipefail
           node core/engine/scripts/render-codex-hooks.cjs
           node core/engine/scripts/render-codex-hooks.cjs --check
-          mkdir -p "$HOME/.claude"
-          cp settings.json "$HOME/.claude/settings.json"
           node core/engine/scripts/render-grok-hooks.cjs
           node core/engine/scripts/render-grok-hooks.cjs --check
 
@@ -125,6 +122,7 @@ jobs:
         shell: bash
         env:
           HARNESS_ROOT: ${{ github.workspace }}
+          HARNESS_COVERAGE_SUMMARY_FILE: ${{ github.workspace }}/var/coverage/coverage-summary.json
           HARNESS_NO_PERSIST: '1'
           HARNESS_VERIFY_READONLY: '1'
           HARNESS_NO_DIAGNOSTIC_WRITES: '1'
@@ -139,6 +137,7 @@ jobs:
             } >> "$GITHUB_STEP_SUMMARY"
             exit 1
           fi
+          test -s var/coverage/coverage-summary.json
 
       - name: Write immutable-run provenance
         if: always()

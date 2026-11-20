@@ -29,9 +29,11 @@ const crypto = require('node:crypto');
 const { HARNESS_ROOT } = require('./lib/harness-root.cjs');
 
 const REGISTRATIONS = path.join(HARNESS_ROOT, 'hosts', 'codex', 'registrations.json');
-const TARGET = path.join(os.homedir(), '.codex', 'hooks.json');
-const CONFIG_TOML = path.join(os.homedir(), '.codex', 'config.toml');
-const AGENTS_TARGET = path.join(os.homedir(), '.codex', 'AGENTS.md');
+const { envOf } = require('./io/env.cjs');
+const codexDir = path.resolve(envOf().codexHome || path.join(os.homedir(), '.codex'));
+const TARGET = path.join(codexDir, 'hooks.json');
+const CONFIG_TOML = path.join(codexDir, 'config.toml');
+const AGENTS_TARGET = path.join(codexDir, 'AGENTS.md');
 const AGENTS_SOURCE = path.join(HARNESS_ROOT, 'hosts', 'claude-code', 'AGENTS.md');
 
 // ── 渲染 ────────────────────────────────────────────────────────────────────
@@ -56,6 +58,7 @@ function renderProduct(registrations, root = HARNESS_ROOT) {
       hooks: (g.hooks || []).map((hk) => {
         const entry = { type: hk.type || 'command', command: expandCommand(hk.command, root) };
         if (hk.timeout !== undefined) entry.timeout = hk.timeout;
+        if (hk.async !== undefined) entry.async = hk.async;
         return entry;
       }),
     }));
@@ -114,75 +117,65 @@ function checkManifestConsistency(registrations, manifestMap) {
 
 // ── trusted_hash 提示 ───────────────────────────────────────────────────────
 
-/** hooks.json 各条目的 config.toml 键形（'C:\...\hooks.json:pre_tool_use:g:h'）。 */
-function hookStateKeys(product) {
-  const evMap = {
-    PreToolUse: 'pre_tool_use', PostToolUse: 'post_tool_use',
-    PreCompact: 'pre_compact', SessionStart: 'session_start', Stop: 'stop',
-  };
-  const keys = [];
-  for (const [event, groups] of Object.entries(product.hooks || {})) {
-    const evKey = evMap[event];
-    if (!evKey) continue;
-    groups.forEach((g, gi) => {
-      (g.hooks || []).forEach((hk, hi) => {
-        keys.push(`${TARGET}:${evKey}:${gi}:${hi}`);
-      });
-    });
-  }
-  return keys;
-}
-
-/** 从 config.toml 抽 [hooks.state.'key'] trusted_hash 行（容错解析——只找前缀匹配）。 */
+/** 只读取 Codex 持久化的 hook 信任表。 */
 function readTrustedHashes() {
   let toml;
   try { toml = fs.readFileSync(CONFIG_TOML, 'utf8'); } catch { return new Map(); }
   const map = new Map();
-  for (const line of toml.split('\n')) {
-    const m = line.match(/^\[hooks\.state\.'(.+)'\]$/);
-    if (m) {
-      // 段头后 2 行内找 trusted_hash
-      const idx = toml.indexOf(line);
-      const seg = toml.slice(idx + line.length, idx + line.length + 200);
-      const hm = seg.match(/trusted_hash\s*=\s*"([0-9a-f]{40,64})"/);
-      if (hm) map.set(m[1].replace(/\\\\/g, '\\'), hm[1]);
+  let key;
+  for (const line of toml.split(/\r?\n/)) {
+    const trimmed = line.trim();
+    if (trimmed.startsWith('[')) {
+      const section = trimmed.match(/^\[hooks\.state\.(?:'([^']+)'|("(?:\\.|[^"\\])+"))\](?:\s*#.*)?$/);
+      key = section?.[1];
+      if (section?.[2]) {
+        try { key = JSON.parse(section[2]); } catch { key = undefined; }
+      }
+    } else if (key) {
+      const hash = trimmed.match(/^trusted_hash\s*=\s*(["'])(sha256:[a-f0-9]{64})\1(?:\s*#.*)?$/);
+      if (hash) map.set(key, hash[2]);
     }
   }
   return map;
 }
 
-/** 单条目 hash（与 git-integrity-guard 同构：canonical JSON sha256）。 */
+/** 与 Codex hook_hash 的命令条目规范化一致。 */
 function entryHash(hookEntry, eventName, matcher) {
   const obj = {
-    event_name: eventName.toLowerCase(),
+    event_name: eventName,
     matcher,
-    hooks: [{ type: hookEntry.type, command: hookEntry.command, ...(hookEntry.timeout !== undefined ? { timeout: hookEntry.timeout } : {}) }],
+    hooks: [{ ...hookEntry, async: hookEntry.async ?? false, timeout: hookEntry.timeout ?? 600 }],
   };
   const canonical = JSON.stringify(obj, (k, v) => (v && typeof v === 'object' && !Array.isArray(v)
     ? Object.keys(v).sort().reduce((acc, key) => { acc[key] = v[key]; return acc; }, {})
     : v));
-  return crypto.createHash('sha256').update(canonical).digest('hex');
+  return `sha256:${crypto.createHash('sha256').update(canonical).digest('hex')}`;
 }
 
-function staleTrustKeys(product) {
+function reportTrust(product) {
   const trusted = readTrustedHashes();
-  const stale = [];
+  let missing = 0;
+  let stale = 0;
   const evMap = {
     PreToolUse: 'pre_tool_use', PostToolUse: 'post_tool_use',
     PreCompact: 'pre_compact', SessionStart: 'session_start', Stop: 'stop',
+    UserPromptSubmit: 'user_prompt_submit',
   };
   for (const [event, groups] of Object.entries(product.hooks || {})) {
     groups.forEach((g, gi) => {
       (g.hooks || []).forEach((hk, hi) => {
         const key = `${TARGET}:${evMap[event]}:${gi}:${hi}`;
-        const recorded = trusted.get(key);
-        if (recorded !== undefined && recorded !== entryHash(hk, event, g.matcher || '*')) {
-          stale.push(key);
-        }
+        const recorded = trusted.get(key) ?? trusted.get(`file:${key}`);
+        if (recorded === undefined) missing++;
+        else if (recorded !== entryHash(hk, evMap[event], g.matcher)) stale++;
       });
     });
   }
-  return stale;
+  if (missing || stale) {
+    process.stderr.write(`[render-codex-hooks] ⚠ Hook 信任记录缺失 ${missing} 条，失配 ${stale} 条。请在 Codex 内复核并信任。\n`);
+  } else {
+    process.stdout.write('[render-codex-hooks] trusted_hash 全部匹配\n');
+  }
 }
 
 // ── AGENTS.md 投影 ──────────────────────────────────────────────────────────
@@ -217,18 +210,25 @@ function main() {
     }
   }
 
+  // Integrated installations keep their previous standalone switches. Validate the active host through Codex.
+  if (checkOnly && process.argv.includes('--active') && fs.existsSync(CONFIG_TOML)) {
+    const config = fs.readFileSync(CONFIG_TOML, 'utf8');
+    const section = /^\[plugins\.(?:"logical-paradox@agent-harness-logic"|'logical-paradox@agent-harness-logic')\][^\n]*\n([^[]*)/m.exec(config);
+    if (section && /^\s*enabled\s*=\s*true\b/m.test(section[1])) {
+      const result = require('node:child_process').spawnSync(process.execPath,
+        [path.join(HARNESS_ROOT, 'hosts/codex/connect.cjs'), '--check'], { stdio: 'inherit', windowsHide: true });
+      process.exitCode = result.status ?? 1;
+      return;
+    }
+  }
+
   if (agentsOnly || !checkOnly) {
     // 渲染路径：hooks.json + AGENTS.md 一起出
     if (!agentsOnly) {
       fs.mkdirSync(path.dirname(TARGET), { recursive: true });
       fs.writeFileSync(TARGET, `${JSON.stringify(product, null, 2)}\n`, 'utf8');
       process.stdout.write(`[render-codex-hooks] 已渲染 ${TARGET}（${Object.keys(product.hooks).length} 事件族）\n`);
-      const stale = staleTrustKeys(product);
-      if (stale.length > 0) {
-        process.stderr.write(`[render-codex-hooks] ⚠ trusted_hash 失配 ${stale.length} 条——hooks 变更后须在 Codex 内重新信任，否则钩子静默不执行\n`);
-      } else {
-        process.stdout.write('[render-codex-hooks] trusted_hash 全部匹配\n');
-      }
+      reportTrust(product);
     }
     fs.mkdirSync(path.dirname(AGENTS_TARGET), { recursive: true });
     fs.writeFileSync(AGENTS_TARGET, renderAgentsProduct(), 'utf8');
@@ -252,10 +252,7 @@ function main() {
     drift = true;
   }
   if (drift) process.exit(1);
-  const stale = staleTrustKeys(product);
-  if (stale.length > 0) {
-    process.stderr.write(`[render-codex-hooks] ⚠ trusted_hash 失配 ${stale.length} 条——需在 Codex 内重信任 hooks\n`);
-  }
+  reportTrust(product);
   process.stdout.write('[render-codex-hooks] ✓ 零漂移（hooks.json + AGENTS.md）\n');
 }
 

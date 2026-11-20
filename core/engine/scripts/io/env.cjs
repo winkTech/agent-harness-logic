@@ -73,6 +73,7 @@ function envOf(env = process.env) {
     return v === undefined ? false : ['1', 'true', 'yes'].includes(String(v).toLowerCase());
   };
   return {
+    codexHome: env?.CODEX_HOME || '',
     sessionId: read('HARNESS_SESSION_ID') || '',
     noPersist: flag('HARNESS_NO_PERSIST'),
     noDiagnosticWrites: flag('HARNESS_NO_DIAGNOSTIC_WRITES'),

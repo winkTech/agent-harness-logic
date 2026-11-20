@@ -639,7 +639,10 @@ function cmdSyncFile(filePath, opts = {}) {
   const log = opts.quiet ? () => {} : (msg) => console.error(msg);
   let abs = p.resolve(filePath);
   let stat;
-  try { stat = f.statSync(abs); } catch { return { indexed: false, reason: 'missing_file' }; }
+  try { stat = f.statSync(abs); }
+  catch (error) {
+    if (!opts.removeMissing || error.code !== 'ENOENT') return { indexed: false, reason: 'missing_file' };
+  }
   // 与项目根同一套规范化。rootPath 出自 resolveProject → canonicalRootPath →
   // realpathSync.native, Windows 8.3 短名与符号链接都会被展开; 而 p.resolve 是纯
   // 字符串运算, 短名原样保留。两边口径不一时, 下面的前缀包含判定与 p.relative
@@ -647,21 +650,30 @@ function cmdSyncFile(filePath, opts = {}) {
   // 真实事故: GitHub windows-latest 的 runner 用户是 runneradmin (>8 字符),
   // TEMP=C:\Users\RUNNER~1\... 恒为短名, codegraph-sync-contract 在 CI 上因此
   // **确定性**失败; 而开发机用户名短、无 8.3 分量, 本地永远复现不出来。
-  try { abs = f.realpathSync.native(abs); } catch { /* stat 已证实存在, 保底用 resolve 结果 */ }
-  if (!shouldDeepIndex(p.extname(abs), stat)) return { indexed: false, reason: 'not_deep_indexable' };
-  if (!shouldIndex(abs, stat)) return { indexed: false, reason: 'excluded' };
+  try {
+    abs = stat ? f.realpathSync.native(abs) : p.join(f.realpathSync.native(p.dirname(abs)), p.basename(abs));
+  } catch { /* 文件所在目录也被删除时，保留解析后的绝对路径。 */ }
+  if (stat && !shouldDeepIndex(p.extname(abs), stat)) return { indexed: false, reason: 'not_deep_indexable' };
+  if (stat && !shouldIndex(abs, stat)) return { indexed: false, reason: 'excluded' };
 
   const { findProjectRoot } = require('./lib/project-scope.cjs');
   const projectPath = opts.projectPath || findProjectRoot(p.dirname(abs));
   if (!projectPath) return { indexed: false, reason: 'no_project_root' };
 
   const { projectId, rootPath } = resolveProject(projectPath);
-  if (!abs.toLowerCase().startsWith(rootPath.toLowerCase())) {
+  const relativePath = p.relative(rootPath, abs);
+  if (!relativePath || p.isAbsolute(relativePath) || relativePath === '..' || relativePath.startsWith('..' + p.sep)) {
     return { indexed: false, reason: 'outside_project' };
   }
-  const relPath = p.relative(rootPath, abs).replace(/\\/g, '/');
+  const relPath = relativePath.replace(/\\/g, '/');
 
   const db = openDb().db;
+  if (!stat) {
+    if (f.existsSync(abs)) return { indexed: false, reason: 'recreated' };
+    const deleted = db.prepare('DELETE FROM cg_files WHERE project_id = ? AND relative_path = ?').run(projectId, relPath);
+    if (deleted.changes) updateProjectStats(db, projectId);
+    return { indexed: false, removed: deleted.changes > 0, projectId, relPath };
+  }
   const result = indexFile(db, abs, projectId, relPath);
   if (!result.changed) return { indexed: false, reason: 'unchanged', projectId, relPath };
 

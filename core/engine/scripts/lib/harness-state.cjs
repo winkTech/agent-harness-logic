@@ -22,6 +22,7 @@ const STATE_LAYOUT_VERSION = 1;
 const STATE_MARKER = 'state.json';
 /** 默认状态目录名，位于 <homedir> 下 */
 const DEFAULT_STATE_DIRNAME = '.logical-paradox';
+const STATE_LINK_FILE = 'state-link.json';
 
 /**
  * 读取 state.json；不存在返回 null；损坏（非法 JSON / 非对象）抛错。
@@ -67,10 +68,11 @@ function assertLayoutSupported(stateRoot) {
  *  1. env.HARNESS_STATE_DIR 非空 → path.resolve 后返回（不校验存在性）           mode='env'
  *  2. 默认目录 <homedir>/.logical-paradox 下存在 state.json → 默认目录（已迁移） mode='migrated'
  *  3. harnessRoot 下存在 .wright 或 var → harnessRoot（legacy in-place）        mode='legacy'
- *  4. env.HARNESS_PLUGIN_DATA 非空 → 该目录（插件安装模式，跨插件更新存活）        mode='plugin-data'
- *  5. 否则 → <homedir>/.logical-paradox（首次运行，消费者自行 mkdir）           mode='default'
+ *  4. 本机 state-link.json 指向已安装的状态根                                  mode='linked'
+ *  5. env.HARNESS_PLUGIN_DATA 非空 → 该目录（插件安装模式，跨插件更新存活）        mode='plugin-data'
+ *  6. 否则 → <homedir>/.logical-paradox（首次运行，消费者自行 mkdir）           mode='default'
  * @param {{env?: object, harnessRoot?: string, homeDir?: string}} [opts]
- * @returns {{stateRoot: string, mode: 'env'|'migrated'|'legacy'|'plugin-data'|'default'}}
+ * @returns {{stateRoot: string, mode: 'env'|'migrated'|'legacy'|'linked'|'plugin-data'|'default'}}
  */
 function resolveState(opts = {}) {
   const env = opts.env || process.env;
@@ -97,6 +99,17 @@ function resolveState(opts = {}) {
     return { stateRoot: harnessRoot, mode: 'legacy' };
   }
 
+  const linkPath = path.join(defaultRoot, STATE_LINK_FILE);
+  if (fs.existsSync(linkPath)) {
+    const { stateRoot } = JSON.parse(fs.readFileSync(linkPath, 'utf8'));
+    if (typeof stateRoot !== 'string' || !path.isAbsolute(stateRoot) || !fs.statSync(stateRoot).isDirectory()) {
+      throw new Error('Invalid Harness state link: ' + linkPath);
+    }
+    const linked = path.resolve(stateRoot);
+    assertLayoutSupported(linked);
+    return { stateRoot: linked, mode: 'linked' };
+  }
+
   const pluginData = env.HARNESS_PLUGIN_DATA ? String(env.HARNESS_PLUGIN_DATA).trim() : '';
   if (pluginData) {
     const resolved = path.resolve(pluginData);
@@ -119,7 +132,7 @@ function resolveStateRoot(opts = {}) {
 
 const RESOLVED_STATE = resolveState();
 const STATE_ROOT = RESOLVED_STATE.stateRoot;
-/** 命中的解析级别：'env' | 'migrated' | 'legacy' | 'plugin-data' | 'default' */
+/** 命中的解析级别：'env' | 'migrated' | 'legacy' | 'linked' | 'plugin-data' | 'default' */
 const STATE_MODE = RESOLVED_STATE.mode;
 /** legacy in-place：状态仍留在仓库目录里（未迁移的机器与所有旧克隆） */
 const IS_LEGACY_IN_PLACE = STATE_ROOT === path.resolve(HARNESS_ROOT);
@@ -141,6 +154,7 @@ module.exports = {
   STATE_LAYOUT_VERSION,
   STATE_MARKER,
   DEFAULT_STATE_DIRNAME,
+  STATE_LINK_FILE,
   STATE_ROOT,
   STATE_MODE,
   IS_LEGACY_IN_PLACE,

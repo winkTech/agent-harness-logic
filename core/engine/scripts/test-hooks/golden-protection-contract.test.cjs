@@ -225,10 +225,19 @@ function tokenFixture(t, remainingWrites = 2) {
     basis: { kind: 'user-ruling', ref: 'test ruling', ruling: 'test-ruling-001' },
   }], null, 1), 'utf8');
 
+  const previous = process.env.HARNESS_STATE_DIR;
+  let guard;
+  try {
+    process.env.HARNESS_STATE_DIR = root;
+    guard = require(path.join(hooks, 'file-protection-guard.cjs'));
+  } finally {
+    if (previous === undefined) delete process.env.HARNESS_STATE_DIR;
+    else process.env.HARNESS_STATE_DIR = previous;
+  }
   return {
     root,
     golden,
-    guard: require(path.join(hooks, 'file-protection-guard.cjs')),
+    guard,
     remaining: () => JSON.parse(fs.readFileSync(approvals, 'utf8'))[0]?.remainingWrites ?? 0,
     pendingExists: () => fs.existsSync(path.join(root, 'var', 'audit', 'protected-write-pending.json')),
   };

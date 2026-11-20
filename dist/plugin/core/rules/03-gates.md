@@ -1,0 +1,97 @@
+---
+name: gate-rules
+description: "Requirements and verification-quality gates for new or materially changed behavior."
+priority: L0
+trigger: "新代码文件;新模块;新功能;接口变更;行为契约;正确行为不明;Testbench;testbench;验证方案;tb_;test_;new code file;new module;new feature;interface change;behavior contract;ambiguous behavior;verification plan"
+skip: "只读;审查;review;诊断;diagnose;文档"
+---
+
+# 需求与验证质量门禁
+
+门禁用于新资产或会改变契约的工作，不用于只读任务，也不要求对明确的已有文件小修复二次确认。
+
+代价要说清楚：这两道门禁偏向谨慎而非速度，每次触发都要付出一轮信息提取与记录。因此触发条件写得很窄——落在条件之外时直接做，不要"为稳妥起见"自愿走一遍。过度套用和整体忽略同样是失效。
+
+## 门禁一：需求澄清
+
+触发条件：
+
+- 创建新代码文件或新模块/功能；
+- 修改接口、数据契约、复位、延迟、位宽或外部行为；
+- 修复问题但正确行为无法从现有证据确定。
+
+先从规格、代码、测试、Golden Model 和知识库提取以下信息。每项可标记为 `confirmed`、`assumed` 或 `na`：
+
+```
+D1 范围边界    D2 数据契约    D3 成功标准
+D4 算法路径    D5 微架构      D6 风险未知
+```
+
+只有仍会实质改变实现或验收结果的未知项才询问用户；证据充分时直接记录假设并继续。
+
+退出条件：将结果按下文“状态合同 v2”写入 `var/gates/requirements-gate.json`，且 `dimensions` 记录本任务的六项结论。新代码文件由 `requirements-gate-guard.cjs` **提示**（advisory，不阻断——见本文末「门禁的执行力」）。
+
+## 门禁二：验证质量
+
+触发条件：创建新 TB、Testbench、测试文件或验证方案。
+
+先画像适用的环境信息：时钟、复位、接口、数据格式、帧结构、背压、吞吐和邻居行为。再选择适用场景：
+
+```
+S1 基础功能    S2 背压流控    S3 帧/包边界
+S4 复位异常    S5 吞吐极限
+```
+
+不适用于目标的画像项或场景可标记为 `na`，但必须记录理由；适用项至少有一个可执行场景。验证从单模块开始，按风险扩展到子系统和全链路。
+
+测试和 Golden Model 是验收证据，不是需要迎合的固定答案。不得仅为制造通过而削弱、删除或跳过测试，硬编码固定样例，或绕过检查。测试本身疑似错误时，先记录失败证据、预期契约和影响范围；只有当前任务明确包含测试修正时才修改。
+
+Golden Model 的约束是**方向**，不是禁止修改。Golden 与需求有出入时就该改——它的职责是贴合需求，不是保持不变。禁止的是因果倒置：RTL 调不通，于是把 Golden 改成 RTL 的样子。判据在依据指向哪一侧：
+
+- **上游依据**（规格条款、标准章节、ADR 裁决、数学推导、用户裁定）——Golden 的正当来源，照常修改。
+- **下游依据**（"对齐 RTL"、"RTL 已改所以同步"、"让 cosim 通过"）——默认不成立。位真镜像一类 Golden 有意跟随 RTL 的合法特例，必须挂一次显式裁决（ADR 号或用户判定）说明为何 RTL 才是正确的一方，不能混在普通修复里。
+
+流程方向也是硬约束：Golden 指导 RTL，不是反过来。同模块 RTL 刚改完就改 Golden，是倒置的时序指纹，此时依据必须升级到裁决级。`file-protection-guard.cjs` 按 `basis{kind,ref[,ruling]}` 判定方向并记入 `var/audit/protected-writes.jsonl`，倒置签名由模型 manifest 的 `implements_for` 与 RTL 文件 mtime 观测，不依赖自述。
+
+退出条件：将结果按下文“状态合同 v2”写入 `var/gates/verification-quality.json`，且 `env_profile` 与 `scenarios` 只记录本任务适用项。新测试文件由 `verification-quality-guard.cjs` **提示**（advisory，不阻断）。
+
+## 状态合同 v2
+
+状态是**当前任务的短期收据**，不是项目级永久通行证。两个门禁共用以下作用域字段：
+
+```json
+{
+  "version": 2,
+  "status": "completed",
+  "taskId": "issue-or-session-scoped-id",
+  "projectRoot": "C:/absolute/project/root",
+  "targets": ["src/exact_file.py", "rtl/feature/**"],
+  "contractHash": "64-lowercase-hex-characters",
+  "validUntil": "2026-08-20T12:00:00.000Z"
+}
+```
+
+- `targets` 必须非空，只接受项目内的精确相对路径或末尾 `/**` 的目录范围；不得写 `.`、项目根或越界路径。
+- `contractHash` 是本次已确认门禁内容的 SHA-256，用于识别合同是否被换成另一项任务；它不是正确性的证明。
+- `validUntil` 必须是未来的 ISO 时间。任务或合同变化时立即替换，不靠延长旧状态继续工作。
+- 仅有 `status: "completed"` 或 `projectRoot` 的 v1/旧状态无效；它不能覆盖未来新文件。
+- 热状态文件只保留当前任务。普通任务直接原子替换；只有确有事故审计需要时，才把旧状态复制到 `var/gates/history/`。
+
+## 门禁的执行力
+
+这两道门禁是 **advisory**：未完成时输出提示，但不会 `exit 2` 阻断写入。
+
+这是刻意的。v2 guard 会校验任务标识、目标范围、哈希形状与有效期，解决旧状态误覆盖
+未来文件的问题；但这些字段仍由执行者记录，不能独立证明内容真实。把这种自述状态做成
+硬阻断只会训练模型伪造记录，对临时脚本还会大量误报。
+
+所以**不要把"门禁没拦住"当成放行的理由**——它的约束力来自这份规则本身，不来自退出码。
+真正有牙齿的硬门禁建立在可独立复核的产物上，例见
+`workflows/hdl-coding-dag-workflow.js` 的 Phase 4.5（校验 `check_results/<mod>.json`
+真实存在且 `status === PASS`）。
+
+运行时阻断由 `core/rules/05-harness.md` 的风险自适应策略统一决定：普通 R0/R1 写入不因画像表单硬阻断；R2 按影响范围要求比例验证；R3 在动作前要求精确授权，并在交付边界要求新鲜签核证据。需求门禁和验证质量门禁是风险分类输入，不是额外的同步审批层。
+
+## 门禁异常
+
+不要把过期、损坏或旧版状态继续当作证据。说明原因后，用当前任务的 v2 状态原子替换；确有事故审计价值时才归档旧状态。用户明确要求跳过时，记录 `status: "bypassed"`、原因和目标范围；是否放行由 Hook 的当前策略决定。

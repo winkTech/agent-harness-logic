@@ -240,6 +240,21 @@ function getWatermark(opts = {}) {
   return row ? row.watermark : 0;
 }
 
+/** Include registered event-stream consumers that have not yet persisted a checkpoint. */
+function listConsumerWatermarks(opts = {}) {
+  const db = resolveDb(opts);
+  const { consumerRegistry } = require('../hooks/manifest.json');
+  const watermarks = new Map(db.prepare(
+    'SELECT consumer, watermark, updated_at FROM runtime_consumer_watermarks',
+  ).all().map((row) => [row.consumer, row]));
+  for (const entry of consumerRegistry) {
+    if (entry.active && entry.kind === 'event-stream' && entry.requiresWatermark && !watermarks.has(entry.id)) {
+      watermarks.set(entry.id, { consumer: entry.id, watermark: 0, updated_at: null });
+    }
+  }
+  return [...watermarks.values()].sort((left, right) => left.consumer.localeCompare(right.consumer));
+}
+
 /**
  * 设置水印。
  * @param {number} eventId
@@ -296,13 +311,10 @@ function purgeConsumedEvents(retentionDays = 30, opts = {}) {
   if (!Number.isFinite(days) || days < 0) {
     throw new TypeError('event retention days must be a non-negative number');
   }
-  const state = db.prepare(`
-    SELECT COUNT(1) AS consumers, MIN(watermark) AS safe_watermark
-    FROM runtime_consumer_watermarks
-  `).get();
-  const consumers = Number(state?.consumers || 0);
-  const safeWatermark = consumers > 0 ? Number(state.safe_watermark || 0) : 0;
-  const cutoff = new Date(Date.now() - days * 86_400_000).toISOString();
+  const watermarks = listConsumerWatermarks({ db });
+  const consumers = watermarks.length;
+  const safeWatermark = consumers > 0 ? Math.min(...watermarks.map((row) => row.watermark)) : 0;
+  const cutoff = new Date(Number(opts.now ?? Date.now()) - days * 86_400_000).toISOString();
   if (consumers === 0 || safeWatermark <= 0) {
     return { deleted: 0, safeWatermark, consumers, cutoff };
   }
@@ -318,6 +330,7 @@ module.exports = {
   sinceWatermark,
   countSinceWatermark,
   getWatermark,
+  listConsumerWatermarks,
   setWatermark,
   countByType,
   recentSummary,

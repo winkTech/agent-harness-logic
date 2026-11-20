@@ -32,7 +32,9 @@ test('permissions.template.json 形态', () => {
   assert.ok(!('env' in t), '本机 env 调参不得入模板（个性化面退出分发）');
 });
 
-test('模板权限面 = 现网 settings.local.json 权限面（拆分无损）', () => {
+test('模板权限面 = 已安装的 settings.local.json 权限面', {
+  skip: !fs.existsSync(path.join(HOME, '.claude', 'settings.local.json')) && '当前用户未安装本机权限配置',
+}, () => {
   const t = JSON.parse(fs.readFileSync(path.join(ROOT, 'hosts', 'claude-code', 'permissions.template.json'), 'utf8'));
   const local = JSON.parse(fs.readFileSync(path.join(HOME, '.claude', 'settings.local.json'), 'utf8'));
   assert.deepEqual(t.permissions.allow, local.permissions.allow);
@@ -64,7 +66,7 @@ test('H-1(claude): render-hook-settings 三产物零漂移', () => {
 });
 
 test('H-2(claude): settings.json hooks ⊆ manifest claude-code 声明面', () => {
-  const settings = JSON.parse(fs.readFileSync(path.join(HOME, '.claude', 'settings.json'), 'utf8'));
+  const settings = JSON.parse(fs.readFileSync(path.join(ROOT, 'settings.json'), 'utf8'));
   const m = JSON.parse(fs.readFileSync(path.join(ROOT, 'core', 'engine', 'hooks', 'manifest.json'), 'utf8'));
   const claudeEntries = m.entries.filter((e) => (e.transports || []).includes('claude-code'));
   const declared = new Set(claudeEntries.map((e) => path.basename(e.script)));
@@ -78,11 +80,7 @@ test('H-2(claude): settings.json hooks ⊆ manifest claude-code 声明面', () =
     }
   }
   const undeclared = [...refs].filter((r) => !declared.has(r));
-  // manifest 之外的引用面 = batch 辅助/独立 gate（hooks/manifest 管 router 面）——
-  // H-2 断言"已声明者 transports 正确"：
-  for (const r of refs) {
-    if (!declared.has(r)) continue;
-    assert.ok(true);
-  }
+  assert.ok(refs.size > 0, 'settings.json 缺少已注册的 hook 脚本');
+  assert.deepEqual(undeclared, [], 'settings.json 引用了未在 claude-code transports 中声明的脚本');
   assert.ok(declared.size >= 12, `claude-code 声明面过小: ${declared.size}`);
 });

@@ -1,0 +1,29 @@
+# ── 知识库 .gitignore (2026-06-11) ──────────────────────────────────────────
+# 防止构建产物和缓存文件污染仓库
+
+# Python 缓存
+__pycache__/
+*.pyc
+*.pyo
+
+# EDA/仿真产物
+xsim.dir/
+xsim.log
+xsim.jou
+*.wdb
+*.qpg
+*.jou
+vsim.log
+
+# 构建产物
+work/
+
+# 临时文件
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+
+# 大文件/原始数据（应单独管理）
+# source/datasheets/ 中的 PDF 不在 git 追踪范围内

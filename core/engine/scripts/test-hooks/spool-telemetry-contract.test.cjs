@@ -173,6 +173,50 @@ test('drain: 坏行 drop 不重试不阻塞', (t) => {
   assert.equal(r.ok, true);
 });
 
+test('drain: 入库失败保留有效记录并从失败行重试', (t) => {
+  const { dir, dbPath } = makeDbFixture(t);
+  const openFixture = () => openDb({ path: dbPath });
+  for (const sessionId of ['先写入', 'retry', 'tail']) {
+    spool.appendToSpool({ type: 'probe', sessionId }, { dir });
+  }
+  const [file] = spool.listSpoolFiles({ dir });
+  const original = fs.readFileSync(file, 'utf8');
+  const failure = drainSpool({
+    spoolDir: dir,
+    deps: {
+      openDb: openFixture,
+      events: {
+        ...events,
+        record(event, ...args) {
+          if (event.sessionId === 'retry') throw new Error('fixture: database is busy');
+          return events.record(event, ...args);
+        },
+      },
+    },
+  });
+
+  assert.equal(failure.ok, false);
+  assert.equal(failure.heartbeat, 'failed');
+  assert.equal(failure.moved, 1);
+  assert.equal(failure.dropped, 0);
+  assert.match(failure.errors[0], /database is busy/);
+  assert.equal(fs.readFileSync(file, 'utf8'), original);
+
+  const failedDb = openFixture();
+  assert.equal(events.getConsumerRun('telemetry-spool-drain', { db: failedDb }).status, 'failed');
+  assert.equal(events.getWatermark({ db: failedDb, consumer: 'telemetry-spool-drain' }), 0);
+  failedDb.close();
+
+  const retried = drainSpool({ spoolDir: dir, deps: { openDb: openFixture, events } });
+  assert.equal(retried.moved, 2);
+  assert.equal(retried.heartbeat, 'completed');
+  assert.equal(fs.readFileSync(file, 'utf8'), '');
+  const finishedDb = openFixture();
+  assert.deepEqual(events.sinceWatermark(0, 10, { db: finishedDb }).map((row) => row.sessionId), ['先写入', 'retry', 'tail']);
+  assert.equal(events.getConsumerRun('telemetry-spool-drain', { db: finishedDb }).status, 'success');
+  finishedDb.close();
+});
+
 test('drain: 有界批量——batchLimit 截断后保留余量续搬', (t) => {
   const { dir, dbPath } = makeDbFixture(t);
   for (let i = 0; i < 10; i += 1) {
@@ -181,14 +225,38 @@ test('drain: 有界批量——batchLimit 截断后保留余量续搬', (t) => {
   const deps = { events, openDb: () => openDb({ path: dbPath }) };
   const r1 = drainSpool({ spoolDir: dir, deps, batchLimit: 4 });
   assert.equal(r1.moved, 4);
+  assert.equal(r1.watermark, 0, '有待搬运记录时不确认数据库高水位');
   assert.notEqual(fs.readFileSync(spool.listSpoolFiles({ dir })[0], 'utf8'), '', '半途不截断');
   const r2 = drainSpool({ spoolDir: dir, deps });
   assert.equal(r2.moved, 6, '余量续搬');
+  assert.equal(r2.watermark, 10);
 });
 
-test('drain: 空目录与缺目录 fail-soft', () => {
-  const r = drainSpool({ spoolDir: path.join(os.tmpdir(), `nope-${Date.now()}`) });
-  assert.equal(r.ok, true);
-  assert.equal(r.files, 0);
-  assert.equal(r.moved, 0);
+test('drain: 空目录确认数据库高水位，读取失败保留原水位', (t) => {
+  const { dir, dbPath, handle } = makeDbFixture(t);
+  const id = events.record({ sessionId: 'review', type: 'probe' }, '2025-01-01T00:00:00.000Z', { db: handle });
+  const deps = { events, openDb: () => openDb({ path: dbPath }) };
+  for (const spoolDir of [dir, path.join(dir, 'missing')]) {
+    const empty = drainSpool({ spoolDir, deps });
+    assert.equal(empty.ok, true);
+    assert.equal(empty.files, 0);
+    assert.equal(empty.moved, 0);
+    assert.equal(empty.watermark, id);
+  }
+
+  const db = openDb({ path: dbPath });
+  events.record({ sessionId: 'review', type: 'probe' }, null, { db });
+  const { consumerRegistry } = require('../../hooks/manifest.json');
+  for (const { id: consumer } of consumerRegistry.filter((entry) => entry.active && entry.requiresWatermark)) {
+    if (!['fp-rate', 'telemetry-spool-drain'].includes(consumer)) events.setWatermark(id, { db, consumer });
+  }
+  assert.equal(events.purgeConsumedEvents(30, { db }).deleted, 0, '其他消费者未处理的事件仍应保留');
+  db.close();
+
+  const unreadable = drainSpool({ spoolDir: dbPath, deps });
+  assert.equal(unreadable.ok, false);
+  assert.equal(unreadable.heartbeat, 'failed');
+  const failedDb = openDb({ path: dbPath });
+  assert.equal(events.getWatermark({ db: failedDb, consumer: 'telemetry-spool-drain' }), id);
+  failedDb.close();
 });

@@ -33,10 +33,10 @@ const CONTENT_PATTERNS = [
 ];
 
 function main() {
-  const files = execSync('git ls-files', { encoding: 'utf8' }).trim().split('\n').filter(Boolean);
+  const files = execSync('git ls-files -z', { encoding: 'utf8', maxBuffer: 16 * 1024 * 1024 }).split('\0').filter(Boolean);
   const hits = [];
   for (const file of files) {
-    if (EXEMPT.has(file)) continue;
+    if (EXEMPT.has(file.replace(/^dist\/plugin\//, ''))) continue;
     if (/lihan/i.test(file)) { hits.push(`${file} (文件名)`); continue; }
     let text = '';
     try { text = fs.readFileSync(file, 'utf8'); } catch { continue; }

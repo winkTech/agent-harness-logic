@@ -111,6 +111,7 @@ function indexableRoot(rootPath) {
 // ── 模式 1: 会话级增量同步 ──────────────────────────────────────────────────
 
 function runSessionSync(payload, opts = {}) {
+  if (readOnlyMode()) return { synced: false, reason: 'read_only' };
   const cwd = payloadCwd(payload, process.cwd());
   const rootPath = findProjectRoot(cwd) || cwd;
   if (!indexableRoot(rootPath)) return { synced: false, reason: 'unindexable_root' };
@@ -127,7 +128,6 @@ function runSessionSync(payload, opts = {}) {
   if (freshness.fresh && sinceLast < SYNC_INTERVAL_MS) {
     return { synced: false, reason: 'throttled', sinceLast, projectId };
   }
-  if (readOnlyMode()) return { synced: false, reason: 'read_only', projectId };
 
   const indexer = require('../code-graph-index.cjs');
   const started = Date.now();
@@ -167,14 +167,14 @@ function collectRequirementEdges(projectRoot, projectId) {
 
 // ── 模式 2: 单文件增量索引 ──────────────────────────────────────────────────
 
-function runFileSync(payload) {
+function runFileSync(payload, opts = {}) {
   if (readOnlyMode()) return { indexed: false, reason: 'read_only' };
   const cwd = payloadCwd(payload, process.cwd());
   const filePath = payloadFilePath(payload, cwd);
   if (!filePath) return { indexed: false, reason: 'no_file_path' };
 
   const indexer = require('../code-graph-index.cjs');
-  return indexer.cmdSyncFile(filePath, { quiet: true });
+  return indexer.cmdSyncFile(filePath, { quiet: true, removeMissing: opts.removeMissing === true });
 }
 
 // ── 入口 ────────────────────────────────────────────────────────────────────

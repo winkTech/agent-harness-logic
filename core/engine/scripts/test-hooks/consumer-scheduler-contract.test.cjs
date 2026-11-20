@@ -49,10 +49,33 @@ test('各消费者 runner 存在且超时有界', () => {
   }
 });
 
-test('--auto 未到期态快速退出且 exit 0（不阻塞会话启动）', () => {
+test('startup scheduler has time for every due consumer', () => {
+  const budget = CONSUMERS.reduce((sum, c) => sum + c.timeoutMs, 0);
+  for (const host of ['claude-code', 'codex']) {
+    const registrations = JSON.parse(fs.readFileSync(path.join(HARNESS_ROOT, 'hosts', host, 'registrations.json')));
+    const hook = registrations.hooks.SessionStart.flatMap(g => g.hooks).find(h => h.command.includes('consumer-scheduler.cjs'));
+    assert.ok(hook.timeout * 1000 > budget, host + ' startup timeout');
+    if (host === 'claude-code') assert.equal(hook.async, true);
+  }
+});
+
+test('--auto skips consumers with future due dates', t => {
+  const dir = fs.mkdtempSync(path.join(require('node:os').tmpdir(), 'scheduler-due-'));
+  t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
+  const file = path.join(dir, 'fixture.db');
+  const handle = require('../../sqlite/index.cjs').openDb({ path: file });
+  const store = require('../../sqlite/store-events.cjs');
+  for (const c of CONSUMERS) {
+    const opts = { db: handle, runId: 'fixture' };
+    store.beginConsumerRun(c.id, opts);
+    store.completeConsumerRun(c.id, { ...opts, nextDueAt: new Date(Date.now() + 3600000).toISOString() });
+  }
+  handle.close();
+  const start = Date.now();
   const r = spawnSync(process.execPath, [path.join(HARNESS_ROOT, 'core/engine/scripts/consumer-scheduler.cjs'), '--auto'], {
-    encoding: 'utf8', timeout: 120_000, windowsHide: true,
+    env: { ...process.env, HARNESS_SQLITE_PATH: file, HARNESS_STATE_DIR: dir }, encoding: 'utf8', timeout: 2000, windowsHide: true,
   });
-  assert.equal(r.status, 0, `--auto 必须 exit 0: ${r.status}`);
-  assert.ok(r.durationMs === undefined || true, 'spawnSync duration 由外部测');
+  assert.equal(r.status, 0, r.error?.message || r.stderr);
+  assert.ok(Date.now() - start < 2000);
+  assert.doesNotMatch(r.stderr, /:ran|:timeout/);
 });

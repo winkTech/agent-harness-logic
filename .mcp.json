@@ -1,5 +1,9 @@
 {
   "mcpServers": {
+    "matlab": {
+      "command": "node",
+      "args": ["core/engine/mcp/matlab-server.cjs"]
+    },
     "mcp-pdf": {
       "command": "npx",
       "args": ["-y", "mcp-pdf@1.1.0"]

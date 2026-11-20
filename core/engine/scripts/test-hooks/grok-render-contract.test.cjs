@@ -57,6 +57,24 @@ test('--check 零漂移 + 幂等', () => {
   assert.equal(a.stdout, b.stdout);
 });
 
+test('standalone Grok setup uses the selected checkout registration template on a fresh home', (t) => {
+  const temp = path.resolve(os.tmpdir());
+  const home = fs.mkdtempSync(path.join(temp, 'harness-grok-contract-'));
+  t.after(() => {
+    assert.equal(path.dirname(home), temp);
+    fs.rmSync(home, { recursive: true, force: true });
+  });
+  const env = { ...process.env, HARNESS_ROOT: ROOT, HOME: home, USERPROFILE: home };
+  const options = { cwd: ROOT, env, encoding: 'utf8', timeout: 30000 };
+  const run = spawnSync(process.execPath, [RENDERER], options);
+  assert.equal(run.status, 0, run.error?.message || run.stderr);
+  assert.equal(fs.existsSync(path.join(home, '.claude', 'settings.json')), false);
+  const hooks = JSON.parse(fs.readFileSync(path.join(home, '.grok', 'hooks.json'), 'utf8')).hooks;
+  assert.match(JSON.stringify(hooks.PreToolUse), /preflight-router\.cjs/);
+  const check = spawnSync(process.execPath, [RENDERER, '--check'], options);
+  assert.equal(check.status, 0, check.error?.message || check.stderr);
+});
+
 test('产物剖面不变量（B1 长钩子陷阱防护）', () => {
   const product = JSON.parse(fs.readFileSync(path.join(os.homedir(), '.grok', 'hooks.json'), 'utf8'));
   const families = Object.keys(product.hooks);

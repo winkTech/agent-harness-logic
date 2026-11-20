@@ -1,0 +1,53 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://claude-code/schemas/plan-snapshot",
+  "title": "Plan Snapshot",
+  "description": "过门禁任务的结构化计划快照 (D2)。由 requirements-gate 记录派生, 供任务收尾时与实际结果对账出 plan-accuracy。",
+  "type": "object",
+  "required": ["schemaVersion", "planId", "task", "goal", "acceptance", "expectedScope", "risks", "sourceGate", "createdAt"],
+  "additionalProperties": false,
+  "properties": {
+    "schemaVersion": { "type": "integer", "const": 1 },
+    "planId": {
+      "type": "string",
+      "minLength": 8,
+      "description": "任务+计划引用的稳定哈希, 同一门禁记录重复快照必须幂等"
+    },
+    "task": { "type": "string", "minLength": 1 },
+    "planRef": {
+      "type": "string",
+      "description": "计划文档引用 (如 plans/xxx.md#section)"
+    },
+    "goal": {
+      "type": "string",
+      "minLength": 1,
+      "description": "目标, 取自门禁 D1 范围与边界"
+    },
+    "acceptance": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "type": "string" },
+      "description": "验收标准, 取自门禁 D3 成功标准"
+    },
+    "expectedScope": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "计划触及的文件/模块数, 取自门禁 scope 数组长度"
+    },
+    "expectedScopeFiles": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "risks": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "已识别风险, 取自门禁 D6"
+    },
+    "sourceGate": {
+      "type": "string",
+      "description": "派生自哪个门禁记录文件"
+    },
+    "approvedBy": { "type": "string" },
+    "createdAt": { "type": "string" }
+  }
+}

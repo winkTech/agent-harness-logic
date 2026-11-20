@@ -37,8 +37,6 @@ const PHASES = {
       id: 'C-2', desc: 'run-all-tests --no-persist (全量回归套件)',
       cmd: [process.execPath, R('core/engine/scripts/test-hooks/run-all-tests.cjs'), '--no-persist'],
       json: null, timeoutMs: 420000,
-      // Phase 0 基线同款豁免（final 连跑口径与 phase 1 一致）。
-      baselineFailures: 4,
     },
     {
       id: 'C-3', desc: 'bench-hooks --json --sla (diagnostics --bench 的数据源)',
@@ -80,7 +78,6 @@ const PHASES = {
       id: 'C-2', desc: 'run-all-tests --no-persist (全量回归, 对齐 Phase 0 基线 4 fail)',
       cmd: [process.execPath, R('core/engine/scripts/test-hooks/run-all-tests.cjs'), '--no-persist'],
       json: null, timeoutMs: 420000,
-      baselineFailures: 4,
     },
     {
       // H-1 判据 = 渲染零漂移族全 exit 0（方案 §4.2：'各宿主 render --check'）。
@@ -130,13 +127,13 @@ const PHASES = {
       cmd: [process.execPath, R('core/engine/scripts/bench-h5-telemetry.js')],
       json: null, timeoutMs: 120000,
       // H-5 全程临时目录/临时 DB 隔离——必须解除 runner 的防写注入，否则 writer 直接 skip。
-      envOverride: { HARNESS_NO_PERSIST: '0', HARNESS_NO_PERSIST: '0' },
+      envOverride: { HARNESS_NO_PERSIST: '0' },
     },
     {
       id: 'P-4', desc: '可卸性烟测 (HARNESS_PACKS_DISABLED=1 下 core 套件全绿)',
       cmd: [process.execPath, R('core/engine/scripts/bench-p4-removable.js')],
       json: null, timeoutMs: 480000,
-      envOverride: { HARNESS_NO_PERSIST: '0', HARNESS_NO_PERSIST: '0' },
+      envOverride: { HARNESS_NO_PERSIST: '0' },
     },
     {
       id: 'H-4', desc: '跨宿主引擎层等价性 (样例×四方言路径同判 100%)',
@@ -187,15 +184,6 @@ function runEntry(entry) {
   let verdict = exitOk ? 'pass' : 'fail';
   let parsed = null;
   let note = null;
-  // 基线豁免（C-2 行为级 backlog）：退出码非 0 但失败数与 Phase 0 基线一致时，
-  // 记 pass-baseline 并在 note 落账差异——门语义是"不劣化于基线"。
-  if (!exitOk && typeof entry.baselineFailures === 'number' && result.stdout) {
-    const m = result.stdout.match(/失败:\s*(\d+)/);
-    if (m && Number(m[1]) === entry.baselineFailures) {
-      verdict = 'pass';
-      note = `baseline-exempt: ${m[1]} failures == Phase 0 baseline`;
-    }
-  }
   if (exitOk && entry.json === 'stdout') {
     try {
       parsed = JSON.parse(result.stdout || '');

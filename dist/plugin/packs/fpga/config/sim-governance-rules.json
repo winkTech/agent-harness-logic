@@ -1,0 +1,10 @@
+{
+  "$schema": "fpga-pack/sim-governance-rules-v1",
+  "description": "sim-governance 的仿真治理规则（Phase 2.6 外置——清理骨架留 core，触发命令/产物清单归 pack）",
+  "triggerCommand": "\\bvsim\\b|\\bxsim\\b|\\bvlog\\s+-sv\\b",
+  "triggerCommandFlags": "",
+  "toolName": "Bash",
+  "artifactFiles": ["wlft^", "transcript", "\\.wlf$", "vish_stacktrace.vstf", "vsim_stacktrace.vstf"],
+  "evidenceDir": "check_results",
+  "evidenceFile": "governance-evidence.json"
+}

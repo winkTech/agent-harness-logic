@@ -20,8 +20,25 @@ const { execFileSync } = require('child_process');
 const fs = require('fs');
 const path = require('path');
 
-const HOME = path.resolve(__dirname, '..', '..', '..', '..'); // core/engine/hooks/git/ → repo root（Phase 1.1 拆层后上溯 4 级）
-const GIT_DIR = path.join(HOME, '.git');
+const sourceRoot = path.resolve(__dirname, '..', '..', '..', '..');
+const workspace = process.argv.includes('--workspace');
+let HOME = sourceRoot;
+if (workspace) {
+  const event = JSON.parse(fs.readFileSync(0, 'utf8').replace(/^\uFEFF/, '') || '{}');
+  HOME = path.resolve(event.cwd || process.cwd());
+  while (!fs.existsSync(path.join(HOME, '.git'))) {
+    const parent = path.dirname(HOME);
+    if (parent === HOME) process.exit(0);
+    HOME = parent;
+  }
+}
+const gitMarker = path.join(HOME, '.git');
+const GIT_DIR = workspace && fs.statSync(gitMarker).isFile()
+  ? git(['rev-parse', '--absolute-git-dir'])?.trim() : gitMarker;
+if (!GIT_DIR) { console.error('[git-integrity-guard] Invalid Git worktree metadata'); process.exit(2); }
+const commonDir = workspace ? git(['rev-parse', '--path-format=absolute', '--git-common-dir'])?.trim() || GIT_DIR : GIT_DIR;
+// The historical repair path owns the Harness checkout. Inspect other projects without rewriting their refs.
+const canRepair = !workspace || HOME === sourceRoot;
 
 function git(args, opts) {
   try {
@@ -31,7 +48,10 @@ function git(args, opts) {
   }
 }
 
-function out(msg) { process.stdout.write(`[git-integrity-guard] ${msg}\n`); }
+function out(msg) {
+  if (workspace && msg.startsWith('OK:')) return;
+  (workspace ? process.stderr : process.stdout).write(`[git-integrity-guard] ${msg}\n`);
+}
 
 // ── 1. .git 目录本体 ──
 if (!fs.existsSync(GIT_DIR)) {
@@ -40,8 +60,9 @@ if (!fs.existsSync(GIT_DIR)) {
 }
 
 // ── 2. refs 目录存在性 ──
-const refsDir = path.join(GIT_DIR, 'refs');
+const refsDir = path.join(commonDir, 'refs');
 if (!fs.existsSync(refsDir)) {
+  if (!canRepair) { out('CRITICAL: Git refs/ missing'); process.exit(2); }
   out('refs/ 目录消失 — 正在重建 (heads/ tags/)');
   try {
     fs.mkdirSync(path.join(refsDir, 'heads'), { recursive: true });
@@ -51,7 +72,7 @@ if (!fs.existsSync(refsDir)) {
     out(`CRITICAL: refs/ 重建失败: ${e.message}`);
     process.exit(2);
   }
-} else {
+} else if (canRepair) {
   if (!fs.existsSync(path.join(refsDir, 'heads'))) fs.mkdirSync(path.join(refsDir, 'heads'), { recursive: true });
   if (!fs.existsSync(path.join(refsDir, 'tags'))) fs.mkdirSync(path.join(refsDir, 'tags'), { recursive: true });
 }
@@ -72,6 +93,13 @@ if (!headSha) {
   //  目录还在, 只查目录存在性查不出来 —— rev-parse 失败是唯一信号)
   const m = headContent.match(/^ref:\s*(\S+)/);
   const refName = m ? m[1] : null;
+  if (workspace && refName && git(['check-ref-format', refName]) === null) {
+    out('CRITICAL: invalid HEAD ref'); process.exit(2);
+  }
+  if (workspace && refName?.startsWith('refs/heads/') && !fs.existsSync(path.join(commonDir, refName)) &&
+      !fs.existsSync(path.join(GIT_DIR, 'logs', 'HEAD')) && !fs.existsSync(path.join(commonDir, 'logs', refName)) &&
+      git(['rev-list', '--all', '--max-count=1'])?.trim() === '') process.exit(0);
+  if (!canRepair) { out('CRITICAL: Git HEAD cannot be resolved'); process.exit(2); }
   if (refName) {
     let recovered = null;
     const packedRefsPath = path.join(GIT_DIR, 'packed-refs');
@@ -120,7 +148,7 @@ if (headType === null) {
 }
 
 // ── 5. pack 文件存在性 (object 库被清空的早期信号) ──
-const packDir = path.join(GIT_DIR, 'objects', 'pack');
+const packDir = path.join(commonDir, 'objects', 'pack');
 if (fs.existsSync(packDir)) {
   const packs = fs.readdirSync(packDir).filter(f => f.endsWith('.pack'));
   const idx = fs.readdirSync(packDir).filter(f => f.endsWith('.idx'));
@@ -150,6 +178,7 @@ if (fs.existsSync(packDir)) {
     // merge-base --is-ancestor 静默: 返回非 null 即退出码 0 = HEAD 是 reflog 顶端的祖先。
     const mergeBase = topExists ? git(['merge-base', '--is-ancestor', headSha.trim(), reflogTop]) : null;
     if (topExists && mergeBase !== null) {
+      if (!canRepair) { out('CRITICAL: HEAD is behind the latest reflog entry'); process.exit(2); }
       const m = headContent.match(/^ref:\s*(\S+)/);
       const refName = m ? m[1] : null;
       if (refName) {

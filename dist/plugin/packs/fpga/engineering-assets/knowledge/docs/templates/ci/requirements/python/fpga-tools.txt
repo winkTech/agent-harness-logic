@@ -1,0 +1,20 @@
+# FPGA 开发工具 Python 依赖
+# 用法: pip install -r fpga-tools.txt
+
+# 基础依赖
+-r base.txt
+
+# FPGA 工具
+cocotb>=1.9          # HDL 仿真框架
+cocotbext-axi>=0.1   # AXI 总线扩展
+cocotbext-uart>=0.1  # UART 扩展
+
+# 数据处理
+numpy>=1.24          # 数值计算
+scipy>=1.12          # 科学计算
+matplotlib>=3.8      # 绑图
+
+# 文件处理
+pyyaml>=6.0          # YAML 解析
+json5>=0.9           # JSON5 解析
+toml>=0.10           # TOML 解析

@@ -29,7 +29,7 @@ const os = require('node:os');
 const { HARNESS_ROOT } = require('./lib/harness-root.cjs');
 
 const MANIFEST = path.join(HARNESS_ROOT, 'core', 'engine', 'hooks', 'manifest.json');
-const SOURCE_SETTINGS = path.join(os.homedir(), '.claude', 'settings.json');
+const { renderHooks } = require('./render-hook-settings.cjs');
 const TARGET = path.join(os.homedir(), '.grok', 'hooks.json');
 
 function loadPreset() {
@@ -108,7 +108,7 @@ function applyPreset(clauseSettings, preset) {
 function main() {
   const checkOnly = process.argv.includes('--check');
   const preset = loadPreset();
-  const clauseSettings = JSON.parse(fs.readFileSync(SOURCE_SETTINGS, 'utf8'));
+  const clauseSettings = { hooks: renderHooks({ root: HARNESS_ROOT }) };
   const { product, applied } = applyPreset(clauseSettings, preset);
   const expected = `${JSON.stringify(product, null, 2)}\n`;
 

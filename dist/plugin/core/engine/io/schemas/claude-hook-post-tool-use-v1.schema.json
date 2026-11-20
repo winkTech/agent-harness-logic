@@ -1,0 +1,22 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "claude-hook/post-tool-use-v1",
+  "title": "Claude Code hook payload: PostToolUse / PostToolUseFailure",
+  "description": "Phase 2.3 payload 契约第二份——工具后事件。status 语义见 transport/index.cjs（D1 真实事件语义守门层：缺 status 一律 unknown，绝不臆测成功）。",
+  "type": "object",
+  "required": ["hook_event_name"],
+  "properties": {
+    "hook_event_name": { "enum": ["PostToolUse", "PostToolUseFailure"] },
+    "session_id": { "type": "string" },
+    "transcript_path": { "type": "string" },
+    "cwd": { "type": "string" },
+    "tool_name": { "type": "string" },
+    "tool_input": { "type": "object" },
+    "tool_response": {
+      "type": ["object", "array", "string", "null"],
+      "description": "工具结果；多形态（tool_response/toolResponse/result/output）由 transport 层 collectExtras 归一。"
+    },
+    "failure_count": { "type": "integer", "minimum": 0 }
+  },
+  "additionalProperties": true
+}

@@ -1,0 +1,91 @@
+# 质量门禁配置
+# 定义 TDD 工作流的质量标准
+
+version: "1.0"
+
+# 测试质量门禁
+test:
+  # 覆盖率要求
+  coverage:
+    unit_test: 90        # 单元测试覆盖率 ≥ 90%
+    integration_test: 70 # 集成测试覆盖率 ≥ 70%
+    overall: 80          # 总体覆盖率 ≥ 80%
+
+  # 测试通过率
+  pass_rate:
+    unit_test: 100       # 单元测试必须 100% 通过
+    integration_test: 100 # 集成测试必须 100% 通过
+
+  # 测试执行时间
+  timeout:
+    unit_test: 5         # 单个单元测试 ≤ 5秒
+    integration_test: 30 # 单个集成测试 ≤ 30秒
+    total: 300           # 总测试时间 ≤ 300秒
+
+# 代码质量门禁
+code_quality:
+  # Lint 检查
+  lint:
+    python:
+      tool: ruff
+      max_line_length: 100
+      max_complexity: 10
+
+  # 类型检查
+  type_check:
+    enabled: true
+    tool: mypy
+    strict: false
+
+  # 安全检查
+  security:
+    enabled: true
+    tool: bandit
+    severity_threshold: medium
+
+# TDD 流程门禁
+tdd:
+  # 循环验证
+  cycle:
+    require_red_first: true      # 必须先 RED
+    require_test_failure: true   # RED 阶段测试必须失败
+    require_test_pass: true      # GREEN 阶段测试必须通过
+    require_refactor_verify: true # REFACTOR 后必须验证
+
+  # 提交验证
+  commit:
+    require_test_update: true    # 必须更新测试
+    require_coverage_check: true # 必须检查覆盖率
+    require_lint_pass: true      # 必须通过 lint
+
+# Git 提交门禁
+git:
+  # 提交信息格式
+  commit_format:
+    pattern: "^(feat|fix|refactor|test|docs|chore)\\(.+\\): .+"
+    max_length: 72
+
+  # 分支策略
+  branch:
+    require_feature_branch: true  # 必须在功能分支上
+    block_main_commit: true       # 禁止直接提交到 main
+
+# CI/CD 门禁
+ci:
+  # 必须通过的检查
+  required_checks:
+    - test-unit
+    - test-integration
+    - lint
+    - coverage
+
+  # 可选检查
+  optional_checks:
+    - type-check
+    - security-scan
+
+  # 覆盖率报告
+  coverage_report:
+    format: xml
+    output: coverage.xml
+    fail_under: 80

@@ -220,7 +220,13 @@ function main() {
     return null;
   }
   const result = runStartup();
-  if (result) console.log(JSON.stringify(result));
+  if (result) {
+    if (process.argv.includes('--session-start')) {
+      const context = [result.brief, ...(result.recentDreamLearnings || []).map(item => item.name + ': ' + item.desc)]
+        .filter(Boolean).join('\n');
+      if (context) console.log(JSON.stringify({ hookSpecificOutput: { hookEventName: 'SessionStart', additionalContext: context } }));
+    } else console.log(JSON.stringify(result));
+  }
   return result;
 }
 

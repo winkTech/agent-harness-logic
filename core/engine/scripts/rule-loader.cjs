@@ -589,6 +589,7 @@ function retrieveContext(payload = {}, deps = {}) {
     || '';
   const openFiles = [toolInput.file_path, toolInput.notebook_path]
     .filter(Boolean)
+    .concat(deps.openFiles || [])
     .concat((process.env.HARNESS_OPEN_FILES || '').split(',').filter(Boolean));
   const toolNames = [payload.tool_name || payload.tool?.name].filter(Boolean);
 

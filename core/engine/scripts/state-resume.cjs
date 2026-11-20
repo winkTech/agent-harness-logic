@@ -22,11 +22,12 @@ const fs = require('node:fs');
 const path = require('node:path');
 const scope = require('./lib/project-scope.cjs');
 const { HARNESS_ROOT } = require('./lib/harness-root.cjs');
-const { varPath } = require('./lib/harness-state.cjs');
+const { statePath, varPath } = require('./lib/harness-state.cjs');
 
 const STATE_FILE = varPath('index', 'runtime-state.json');
 const TASK_FILE = varPath('active-task.yaml');
-const WORK_DIR = path.join(HARNESS_ROOT, 'personal', 'work');
+const sharedWork = statePath('personal', 'work');
+const WORK_DIR = fs.existsSync(sharedWork) ? sharedWork : path.join(HARNESS_ROOT, 'personal', 'work');
 const HOME_ROOT = HARNESS_ROOT;
 
 function readJSON(filePath) {
@@ -91,9 +92,10 @@ function main(opts = {}) {
     return;
   }
 
-  const lastActivity = state.lastActivityAt ? new Date(state.lastActivityAt + 'Z') : null;
+  const timestamp = String(state.lastActivityAt || '');
+  const lastActivity = timestamp ? Date.parse(/(?:Z|[+-]\d\d:\d\d)$/i.test(timestamp) ? timestamp : timestamp + 'Z') : NaN;
   const now = new Date();
-  const hoursSinceLast = lastActivity ? Math.round((now - lastActivity) / (1000 * 60 * 60)) : 0;
+  const hoursSinceLast = Number.isFinite(lastActivity) ? Math.round((now - lastActivity) / (1000 * 60 * 60)) : 0;
 
   const summary = {
     source: 'state-resume',
@@ -178,7 +180,12 @@ function main(opts = {}) {
 }
 
 if (require.main === module) {
-  main();
+  if (process.argv.includes('--session-start')) {
+    const state = main({ emit: false });
+    if (state) console.log(JSON.stringify({ hookSpecificOutput: {
+      hookEventName: 'SessionStart', additionalContext: [state.handoffBrief, state.taskSummary].filter(Boolean).join('\n'),
+    } }));
+  } else main();
 }
 
 module.exports = { main };

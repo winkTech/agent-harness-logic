@@ -181,6 +181,14 @@ function main() {
     }
   }
 
+  if (args.includes('--session-start')) {
+    const { injectPrompt } = resume();
+    if (injectPrompt) console.log(JSON.stringify({ hookSpecificOutput: {
+      hookEventName: 'SessionStart', additionalContext: injectPrompt,
+    } }));
+    return;
+  }
+
   if (args.includes('--inject')) {
     const result = resume();
     if (result.injectPrompt) {

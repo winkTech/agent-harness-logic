@@ -1,0 +1,16 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "claude-hook/user-prompt-submit-v1",
+  "title": "Claude Code hook payload: UserPromptSubmit",
+  "description": "Phase 2.3 payload 契约第三份——提示提交事件（prompt-context 注入通道的输入）。",
+  "type": "object",
+  "required": ["hook_event_name", "prompt"],
+  "properties": {
+    "hook_event_name": { "const": "UserPromptSubmit" },
+    "session_id": { "type": "string" },
+    "transcript_path": { "type": "string" },
+    "cwd": { "type": "string" },
+    "prompt": { "type": "string", "minLength": 1 }
+  },
+  "additionalProperties": true
+}
