@@ -301,7 +301,7 @@ function main() {
     const source = release ? releaseSource(release, files) : './' + DIST_REL;
     const base = { name: 'agent-harness-logic', owner: { name: release?.owner || PROJECT_NAME } };
     const catalogs = {
-      '.agents/plugins/marketplace.json': { name: base.name, interface: { displayName: PROJECT_NAME },
+      [require(path.join(HARNESS_ROOT, 'hosts/codex/connect.cjs')).catalogPath]: { name: base.name, interface: { displayName: PROJECT_NAME },
         plugins: [{ name: PLUGIN_NAME, source: { source: 'local', path: './' + DIST_REL },
           policy: { installation: 'AVAILABLE', authentication: 'ON_INSTALL' }, category: 'Developer Tools' }] },
       '.claude-plugin/marketplace.json': { ...base, plugins: [{ name: PLUGIN_NAME, source, description: DESCRIPTION }] },
@@ -315,11 +315,13 @@ function main() {
       }
       if (drift.length) throw new Error('Distribution drift: ' + drift.slice(0, 10).join(', '));
     } else {
-      if (fs.existsSync(DIST)) fs.renameSync(DIST, backup);
-      try { fs.renameSync(staged, DIST); }
-      catch (error) {
-        if (fs.existsSync(backup)) fs.renameSync(backup, DIST);
-        throw error;
+      if (!fs.existsSync(DIST) || differences(files, filesIn(DIST)).length) {
+        if (fs.existsSync(DIST)) fs.renameSync(DIST, backup);
+        try { fs.renameSync(staged, DIST); }
+        catch (error) {
+          if (fs.existsSync(backup)) fs.renameSync(backup, DIST);
+          throw error;
+        }
       }
       for (const [name, catalog] of Object.entries(catalogs)) copyFromObject(catalog, path.join(HARNESS_ROOT, name));
     }

@@ -40,7 +40,9 @@ function findServer() {
     const saved = JSON.parse(fs.readFileSync(profile, 'utf8')).executable;
     if (executable(saved)) return saved;
   }
-  return findIn([path.resolve(__dirname, '../../../packs/fpga/tools'), ...(process.env.PATH || '').split(path.delimiter)]);
+  const locations = (process.env.PATH || '').split(path.delimiter);
+  if (process.argv[2]) locations.unshift(path.resolve(__dirname, '../../..', process.argv[2]));
+  return findIn(locations);
 }
 
 // MATLAB is optional. A host without the external runtime can still load the plugin.

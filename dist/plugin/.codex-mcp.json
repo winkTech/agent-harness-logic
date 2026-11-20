@@ -3,7 +3,8 @@
     "matlab": {
       "command": "node",
       "args": [
-        "./core/engine/mcp/matlab-server.cjs"
+        "./core/engine/mcp/matlab-server.cjs",
+        "./packs/fpga/tools"
       ],
       "cwd": "."
     },

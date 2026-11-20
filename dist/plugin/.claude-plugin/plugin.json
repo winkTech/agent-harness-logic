@@ -19,7 +19,8 @@
     "matlab": {
       "command": "node",
       "args": [
-        "${CLAUDE_PLUGIN_ROOT}/core/engine/mcp/matlab-server.cjs"
+        "${CLAUDE_PLUGIN_ROOT}/core/engine/mcp/matlab-server.cjs",
+        "${CLAUDE_PLUGIN_ROOT}/packs/fpga/tools"
       ]
     },
     "mcp-pdf": {

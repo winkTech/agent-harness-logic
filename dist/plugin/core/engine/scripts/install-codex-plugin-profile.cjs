@@ -34,7 +34,9 @@ function install({ check, home = os.homedir(), codexHome = envOf().codexHome || 
   const defaultState = path.join(home, DEFAULT_STATE_DIRNAME);
   // The installed plugin cache excludes third-party binaries. Remember a runtime supplied in the checkout.
   const { findIn, profileName } = require('../mcp/matlab-server.cjs');
-  const matlab = findIn([path.join(HARNESS_ROOT, 'packs/fpga/tools')]);
+  const servers = JSON.parse(fs.readFileSync(path.join(HARNESS_ROOT, '.mcp.json'), 'utf8')).mcpServers;
+  const runtimeDir = servers.matlab?.args?.[1];
+  const matlab = runtimeDir && findIn([path.resolve(HARNESS_ROOT, runtimeDir)]);
   if (matlab) {
     const file = path.join(defaultState, profileName);
     const wanted = JSON.stringify({ executable: matlab }, null, 2) + '\n';

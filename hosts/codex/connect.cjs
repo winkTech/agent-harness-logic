@@ -10,6 +10,7 @@ const root = path.resolve(__dirname, '../..');
 const market = 'agent-harness-logic';
 const pluginId = 'logical-paradox@' + market;
 const scripts = path.join(root, 'core/engine/scripts');
+const catalogPath = '.agents/plugins/marketplace.json';
 
 function run(file, args, capture = false) {
   const result = spawnSync(file, args, { cwd: root, encoding: 'utf8',
@@ -138,7 +139,7 @@ async function main() {
   const codex = (args, capture = false) => run(cli[0], [...cli.slice(1), ...args], capture);
   const hooksFile = path.join(root, 'dist/plugin/hooks/codex.json');
   if (!values.check && (!fs.existsSync(hooksFile) || values.refresh)) run(process.execPath, [path.join(scripts, 'sync-plugin-dist.cjs')]);
-  const catalog = JSON.parse(fs.readFileSync(path.join(root, '.agents/plugins/marketplace.json'), 'utf8'));
+  const catalog = JSON.parse(fs.readFileSync(path.join(root, catalogPath), 'utf8'));
   const source = catalog.plugins.find(p => p.name === 'logical-paradox')?.source;
   if (source?.source !== 'local' || source.path !== './dist/plugin') throw new Error('Unexpected Codex marketplace source');
   const groups = JSON.parse(fs.readFileSync(hooksFile, 'utf8')).hooks;
@@ -187,7 +188,16 @@ async function main() {
     if (status.pending && !status.otherPending) console.log('Only this plugin needs review. Codex offers "Trust all and continue".');
     if (status.otherPending) console.log('Other sources also need review. Choose "Review hooks" and select only ' + pluginId + '.');
     console.log('Use /hooks for individual entries. Exit Codex with /quit to verify the result.');
-    codex(['--no-daemon', '-C', root]);
+    // Hook approval is a local Codex operation. An unavailable account route must not prevent review.
+    const review = ['--no-daemon', '-C', root,
+      '-c', 'model_provider="harness_review"',
+      '-c', 'model_providers.harness_review.name="Local hook review"',
+      '-c', 'model_providers.harness_review.base_url="http://127.0.0.1:9/v1"',
+      '-c', 'model_providers.harness_review.wire_api="responses"'];
+    const catalogFile = path.join(process.env.CODEX_HOME || path.join(require('node:os').homedir(), '.codex'), 'models_cache.json');
+    if (fs.existsSync(catalogFile)) review.push('-c', 'model_catalog_json=' + JSON.stringify(catalogFile.replaceAll('\\', '/')));
+    console.log('This local review session is for /hooks and /quit. Model calls are disabled.');
+    codex(review);
     hooks = await readHooks(cli);
     status = summarize(hooks, expected);
   }
@@ -221,4 +231,4 @@ async function main() {
 if (require.main === module) {
   main().catch(error => { console.error('[codex:connect] ' + error.message); process.exitCode = 1; });
 }
-module.exports = { duplicates };
+module.exports = { duplicates, catalogPath };

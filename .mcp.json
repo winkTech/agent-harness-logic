@@ -2,7 +2,7 @@
   "mcpServers": {
     "matlab": {
       "command": "node",
-      "args": ["core/engine/mcp/matlab-server.cjs"]
+      "args": ["core/engine/mcp/matlab-server.cjs", "packs/fpga/tools"]
     },
     "mcp-pdf": {
       "command": "npx",
