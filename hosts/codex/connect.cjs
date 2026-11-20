@@ -35,6 +35,33 @@ function findCli() {
   throw new Error('Install Codex CLI with npm.cmd install -g @openai/codex, then retry.');
 }
 
+function reinstallVersion({ cache, codexHome, version, pkg, install }) {
+  const pluginHome = fs.realpathSync(path.join(codexHome, 'plugins'));
+  const expected = path.join(pluginHome, 'cache', market, 'logical-paradox', version);
+  if (!/^[a-z\d][\w.-]*$/i.test(version) || path.relative(expected, fs.realpathSync(cache)) !== '') {
+    throw new Error('Unexpected installed plugin cache: ' + cache);
+  }
+  const manifest = JSON.parse(fs.readFileSync(path.join(cache, '.codex-plugin/plugin.json'), 'utf8'));
+  if (manifest.name !== 'logical-paradox' || manifest.version !== version) throw new Error('Unexpected cache manifest');
+  const { filesIn, differences } = require(path.join(scripts, 'sync-plugin-dist.cjs'));
+  const stage = path.join(pluginHome, '.logical-paradox-refresh-' + version);
+  fs.mkdirSync(stage); // Exclusive across concurrent recovery attempts. A retained directory contains recovery data.
+  const previous = path.join(stage, 'previous');
+  try {
+    fs.renameSync(cache, previous);
+    install();
+    if (differences(filesIn(pkg), filesIn(cache)).length) throw new Error('Native reinstall produced a different package');
+  } catch (error) {
+    if (fs.existsSync(previous)) {
+      if (fs.existsSync(cache)) throw new Error(error.message + '. Previous version retained at ' + previous);
+      fs.renameSync(previous, cache);
+    }
+    fs.rmdirSync(stage);
+    throw error;
+  }
+  fs.rmSync(stage, { recursive: true, force: true });
+}
+
 async function request([file, ...prefix], method, params) {
   const child = spawn(file, [...prefix, 'app-server', '--stdio'], { cwd: root, windowsHide: true });
   const lines = readline.createInterface({ input: child.stdout });
@@ -159,22 +186,26 @@ async function main() {
       fs.realpathSync(p.source.path) === fs.realpathSync(path.join(root, 'dist/plugin')));
   let ready = installed();
   let refreshNeeded = false;
+  let cached;
   if (ready && values.refresh) {
     // Reinstalling even an identical package can clear Codex's recorded hook trust.
     const { filesIn, differences } = require(path.join(scripts, 'sync-plugin-dist.cjs'));
     const hook = (await readHooks(cli)).find(h => h.pluginId === pluginId);
-    const cached = hook && path.resolve(path.dirname(hook.sourcePath), '..');
+    cached = hook && path.resolve(path.dirname(hook.sourcePath), '..');
     refreshNeeded = !cached || differences(filesIn(path.join(root, 'dist/plugin')), filesIn(cached)).length > 0;
   }
   if (!values.check && (refreshNeeded || !ready)) {
-    try {
+    const install = () => {
       const output = codex(['plugin', 'add', pluginId], true);
       if (output.trim()) console.log(output.trim());
+    };
+    try {
+      install();
     } catch (error) {
-      if (process.platform === 'win32' && /failed to back up plugin cache entry/i.test(error.message)) {
-        throw new Error(error.message + '\nClose Codex sessions using this plugin and retry --refresh.');
-      }
-      throw error;
+      if (process.platform !== 'win32' || !cached || !refreshNeeded ||
+          !/failed to back up plugin cache entry/i.test(error.message)) throw error;
+      reinstallVersion({ cache: cached, codexHome: process.env.CODEX_HOME || path.join(require('node:os').homedir(), '.codex'),
+        version, pkg: path.join(root, 'dist/plugin'), install });
     }
     ready = installed();
   }
@@ -231,4 +262,4 @@ async function main() {
 if (require.main === module) {
   main().catch(error => { console.error('[codex:connect] ' + error.message); process.exitCode = 1; });
 }
-module.exports = { duplicates, catalogPath };
+module.exports = { duplicates, catalogPath, reinstallVersion };

@@ -13,6 +13,29 @@ const VALIDATOR = path.join(ROOT, 'core/engine/scripts/bench-d2-plugin-validate.
 const CLAUDE = '.claude-plugin/marketplace.json';
 const GROK = '.grok-plugin/marketplace.json';
 
+test('Windows refresh preserves other versions and restores the old package on a failed install', t => {
+  const { reinstallVersion } = require('../../../../hosts/codex/connect.cjs');
+  const home = fs.mkdtempSync(path.join(os.tmpdir(), 'codex-refresh-'));
+  t.after(() => fs.rmSync(home, { recursive: true, force: true }));
+  const cache = path.join(home, 'plugins/cache/agent-harness-logic/logical-paradox/0.1.2');
+  const older = path.resolve(cache, '../0.1.1');
+  const pkg = path.join(home, 'release');
+  for (const dir of [cache, pkg]) {
+    fs.mkdirSync(path.join(dir, '.codex-plugin'), { recursive: true });
+    fs.writeFileSync(path.join(dir, '.codex-plugin/plugin.json'), JSON.stringify({ name: 'logical-paradox', version: '0.1.2' }));
+  }
+  fs.mkdirSync(older);
+  fs.writeFileSync(path.join(cache, 'payload'), 'previous');
+  fs.writeFileSync(path.join(pkg, 'payload'), 'release');
+  const options = { cache, codexHome: home, version: '0.1.2', pkg };
+  assert.throws(() => reinstallVersion({ ...options, install() { throw new Error('unavailable'); } }), /unavailable/);
+  assert.equal(fs.readFileSync(path.join(cache, 'payload'), 'utf8'), 'previous');
+  reinstallVersion({ ...options, install() { fs.cpSync(pkg, cache, { recursive: true }); } });
+  assert.equal(fs.readFileSync(path.join(cache, 'payload'), 'utf8'), 'release');
+  assert.ok(fs.existsSync(older));
+  assert.throws(() => reinstallVersion({ ...options, cache: older }), /Unexpected installed plugin cache/);
+});
+
 test('skill projections preserve body spacing across LF and CRLF checkouts', () => {
   const { normalizeSkillMarkdown } = require('../sync-skills.cjs');
   for (const body of ['', '# Heading\n', '\n# Heading\n']) {
