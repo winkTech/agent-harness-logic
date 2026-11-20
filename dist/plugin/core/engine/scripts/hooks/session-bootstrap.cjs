@@ -1,0 +1,185 @@
+#!/usr/bin/env node
+'use strict';
+
+const fs = require('node:fs');
+const stateResume = require('../state-resume.cjs');
+const contextResume = require('../context-resume.cjs');
+const dreamStartup = require('../dream-startup-inject.cjs');
+const isolation = require('./isolation-check.cjs');
+const pluginSessionContext = require('./plugin-session-context.cjs');
+const { ingest } = require('../transport/index.cjs');
+const { renderDecision } = require('../transport/render.cjs');
+
+const SUPPORTED_SOURCES = Object.freeze(['startup', 'resume', 'clear', 'compact', 'fork']);
+
+function defaultIo(opts = {}) {
+  return {
+    stdout: typeof opts.stdout === 'function'
+      ? opts.stdout
+      : line => process.stdout.write(`${String(line)}\n`),
+    stderr: typeof opts.stderr === 'function'
+      ? opts.stderr
+      : line => process.stderr.write(`${String(line)}\n`),
+  };
+}
+
+function contextInjectOutput() {
+  const result = contextResume.resume();
+  if (result.injectPrompt) {
+    return {
+      source: 'context-resume',
+      type: 'context-restore',
+      injectPrompt: result.injectPrompt,
+      summary: result.summary,
+    };
+  }
+  return { source: 'context-resume', type: 'context-restore', injectPrompt: '', summary: '无状态' };
+}
+
+function defaultComponents() {
+  return {
+    coreCapsule(payload, io) {
+      return pluginSessionContext.coreCapsule(payload, io);
+    },
+    registrationOverlap(payload, io) {
+      return pluginSessionContext.registrationOverlap(payload, io);
+    },
+    stateResume() {
+      const output = stateResume.main({ emit: false });
+      const context = output?.handoffBrief
+        ? `[state-resume] ${output.handoffBrief}${output.taskSummary ? ` ${output.taskSummary}` : ''}`
+        : '';
+      return { exitCode: 0, output, context };
+    },
+    contextResumeInject() {
+      const output = contextInjectOutput();
+      return { exitCode: 0, output, context: output.injectPrompt || '' };
+    },
+    dreamStartup(payload) {
+      const output = dreamStartup.runStartup({ payload });
+      return { exitCode: 0, output, context: output?.brief || '' };
+    },
+    // Phase 2.5：spool 搬运消费者挂 SessionStart 维护路径（§3.6）。
+    // 有界批量 + ms 预算内完成；fail-soft（spool 是兜底通道，失败不阻塞启动注入）。
+    spoolDrain(payload, io) {
+      const { drainSpool } = require('../io/spool-drain-lib.cjs');
+      const result = drainSpool({ consumerId: 'telemetry-spool-drain' });
+      // 只在有实际搬运时汇报——空转静默（lifecycle 契约对 startup stderr 有
+      // 精确断言，空转噪音会破坏顺序契约）。
+      if ((result.moved > 0 || result.dropped > 0) && io && typeof io.stderr === 'function') {
+        io.stderr(JSON.stringify({ source: 'telemetry-spool-drain', type: 'drain', moved: result.moved, dropped: result.dropped }));
+      }
+      return { exitCode: 0, output: null, context: '' };
+    },
+    isolationCheck() {
+      return isolation.main();
+    },
+  };
+}
+
+function normalizeExitCode(result) {
+  const value = Number(result?.exitCode || 0);
+  return Number.isInteger(value) && value >= 0 ? value : 1;
+}
+
+function sessionSource(payload) {
+  return String(payload?.source || payload?.session_source || payload?.sessionSource || '').trim().toLowerCase();
+}
+
+function runSessionBootstrap(raw, opts = {}) {
+  const io = defaultIo(opts);
+  const parse = typeof opts.parse === 'function' ? opts.parse : JSON.parse;
+  let payload = {};
+  try {
+    if (String(raw || '').trim()) payload = parse(String(raw));
+  } catch (error) {
+    io.stderr(JSON.stringify({
+      source: 'session-bootstrap',
+      type: 'warning',
+      message: `invalid hook json: ${error.message}`,
+    }));
+    return { exitCode: 0, payload: {}, source: '', componentsRun: [] };
+  }
+
+  const ingested = ingest(payload, { transport: opts.transport, argv: opts.argv || process.argv });
+  payload = ingested.payload;
+  const transport = ingested.transport;
+
+  if (typeof opts.onParsed === 'function') opts.onParsed(payload);
+  const source = sessionSource(payload);
+  if (!SUPPORTED_SOURCES.includes(source)) {
+    return { exitCode: 0, payload, source, componentsRun: [] };
+  }
+
+  // 注入的 components 覆盖默认实现；未覆盖的名字仍走默认，插件组件因此永远在路由上。
+  const components = { ...defaultComponents(), ...(opts.components || {}) };
+  const route = ['coreCapsule', 'registrationOverlap', 'stateResume', 'contextResumeInject', 'dreamStartup'];
+  if (source === 'startup') route.push('isolationCheck');
+  // Phase 2.5：spool 搬运放最后——不与既有组件的 stderr 输出顺序契约竞争
+  //（lifecycle 契约断言 startup 首行 = isolation:startup）。
+  route.push('spoolDrain');
+
+  let exitCode = 0;
+  const contextBlocks = [];
+  for (const name of route) {
+    const component = components[name];
+    if (typeof component !== 'function') {
+      io.stderr(JSON.stringify({
+        source: 'session-bootstrap',
+        type: 'error',
+        component: name,
+        message: 'component is not callable',
+      }));
+      exitCode = Math.max(exitCode, 1);
+      continue;
+    }
+    try {
+      const result = component(payload, io);
+      exitCode = Math.max(exitCode, normalizeExitCode(result));
+      if (typeof result?.context === 'string' && result.context.trim()) {
+        contextBlocks.push(result.context.trim());
+      }
+    } catch (error) {
+      io.stderr(JSON.stringify({
+        source: 'session-bootstrap',
+        type: 'warning',
+        component: name,
+        message: error.message,
+      }));
+    }
+  }
+
+  if (contextBlocks.length > 0) {
+    const rendered = renderDecision(transport, {
+      decision: 'allow',
+      eventName: 'SessionStart',
+      additionalContext: contextBlocks.join('\n\n'),
+    });
+    if (rendered.stdout) io.stdout(rendered.stdout);
+  }
+
+  return { exitCode, payload, source, componentsRun: route, contextBlocks };
+}
+
+function readStdin() {
+  try {
+    if (!process.stdin.isTTY) return fs.readFileSync(0, 'utf8');
+  } catch {
+    return '';
+  }
+  return '';
+}
+
+function main() {
+  const result = runSessionBootstrap(readStdin());
+  if (result.exitCode) process.exitCode = result.exitCode;
+  return result;
+}
+
+if (require.main === module) main();
+
+module.exports = {
+  SUPPORTED_SOURCES,
+  runSessionBootstrap,
+  sessionSource,
+};

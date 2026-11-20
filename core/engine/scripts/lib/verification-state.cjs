@@ -499,11 +499,41 @@ function findReusableRiskEvidence(state, opts = {}) {
   return canReuseEvidence(entry, request) ? entry : null;
 }
 
+function verificationRunKey(payload, command) {
+  return JSON.stringify([payloadCwd(payload), sessionIdFromPayload(payload), payload.tool_use_id || '', command]);
+}
+
+function startVerification(payload, command) {
+  const key = verificationRunKey(payload, command);
+  const now = Date.now();
+  updateJsonFileSync(STATE_FILE, emptyState, raw => {
+    const next = migrate(raw);
+    const starts = Object.entries(next.testStarts || {}).filter(([, value]) => now - value.time < pendingTtlMs({}));
+    next.testStarts = Object.fromEntries(starts.slice(-255));
+    const previous = next.testStarts[key];
+    const pending = pendingForPayload(next, payload);
+    const edits = Object.fromEntries(pending.map(entry => [entry.pendingKey, [entry.lastEditTime, entry.editCount]]));
+    next.testStarts[key] = previous
+      ? { ...previous, count: previous.count + 1 }
+      : { time: now, count: 1, edits };
+    return next;
+  });
+}
+
 function markVerifiedForCwd(cwd = process.cwd(), opts = {}) {
   let cleared = [];
   const state = updateJsonFileSync(STATE_FILE, emptyState, (raw) => {
     const next = migrate(raw, opts);
-    cleared = pendingForCwd(next, cwd, opts);
+    const started = next.testStarts?.[opts.runKey];
+    if (started && --started.count === 0) delete next.testStarts[opts.runKey];
+    cleared = opts.passed === false ? [] : pendingForCwd(next, cwd, opts).filter(entry => {
+      if (started) {
+        const edit = started.edits?.[entry.pendingKey];
+        if (!edit || edit[0] !== entry.lastEditTime || edit[1] !== entry.editCount) return false;
+      }
+      if (Number.isFinite(opts.startedAtMs)) return Date.parse(entry.lastEditTime) < opts.startedAtMs;
+      return Boolean(started) || !opts.correlated;
+    });
     for (const entry of cleared) delete next.pending[entry.pendingKey];
     if (cleared.length > 0) {
       next.lastVerifyTime = opts.now || new Date().toISOString();
@@ -536,6 +566,8 @@ module.exports = {
   resetVerificationState,
   markEdited,
   markEditedFromPayload,
+  startVerification,
+  verificationRunKey,
   markVerifiedForCwd,
   pendingForCwd,
   pendingForPayload,

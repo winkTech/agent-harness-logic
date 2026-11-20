@@ -1,11 +1,15 @@
 {
   "name": "agent-harness-logic",
+  "owner": {
+    "name": "winkTech"
+  },
   "plugins": [
     {
       "name": "logical-paradox",
-      "source": "__REPO_URL__",
-      "plugin_subdir": "dist/plugin",
-      "sha": "acc18bcf5367fc552437d24befcb989e38f99359"
+      "source": {
+        "type": "local",
+        "path": "./dist/plugin"
+      }
     }
   ]
 }

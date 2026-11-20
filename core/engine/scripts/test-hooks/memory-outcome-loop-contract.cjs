@@ -20,18 +20,14 @@ const path = require('node:path');
 
 // 全链持久化由注入的临时 DB 承载, 环境守卫必须清掉, 否则 delivery 分支静默跳过。
 delete process.env.HARNESS_NO_PERSIST;
-
-delete process.env.HARNESS_NO_PERSIST;
 delete process.env.HARNESS_VERIFY_READONLY;
-
-delete process.env.HARNESS_VERIFY_READONLY;
-delete process.env.HARNESS_NO_DIAGNOSTIC_WRITES;
-
 delete process.env.HARNESS_NO_DIAGNOSTIC_WRITES;
 delete process.env.HARNESS_HOOK_NO_WRITE;
 
 const ROOT = path.resolve(__dirname, '..', '..', '..', '..');
 const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'outcome-loop-'));
+process.env.HARNESS_STATE_DIR = tmp;
+process.env.HARNESS_VERIFY_GATE_STATE_FILE = path.join(tmp, 'verify-gate.json');
 // verification-gate 的证据账本在模块加载时解析 env, 必须先设再 require。
 process.env.HARNESS_VERIFICATION_LEDGER_FILE = path.join(tmp, 'verification-ledger.json');
 

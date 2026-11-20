@@ -1,0 +1,341 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://claude-code.anthropic.com/schemas/agent-capability-card",
+  "title": "Agent Capability Card",
+  "description": "Schema for agent capability publication - enables dynamic discovery and health-aware routing",
+  "type": "object",
+  "required": ["id", "capabilities", "health"],
+  "properties": {
+    "id": {
+      "type": "string",
+      "description": "Agent ID (must match agent filename without .md extension)",
+      "pattern": "^[a-z][a-z0-9-]*$",
+      "maxLength": 100,
+      "examples": ["developer", "code-reviewer", "frontend-pro"]
+    },
+    "displayName": {
+      "type": "string",
+      "description": "Human-readable agent name",
+      "maxLength": 200,
+      "examples": ["Developer Agent", "Code Reviewer", "Frontend Pro"]
+    },
+    "category": {
+      "type": "string",
+      "enum": ["core", "specialized", "domain", "orchestrator", "orchestrators", "isolated"],
+      "description": "Organizational category"
+    },
+    "filePath": {
+      "type": "string",
+      "description": "Relative path to agent file from project root",
+      "pattern": "^\\.claude/agents/(core|specialized|domain|orchestrators|isolated)/[a-z0-9-]+\\.md$",
+      "maxLength": 500
+    },
+    "capabilities": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 50,
+      "description": "List of capabilities this agent provides",
+      "items": {
+        "$ref": "#/$defs/Capability"
+      }
+    },
+    "constraints": {
+      "$ref": "#/$defs/Constraints"
+    },
+    "health": {
+      "$ref": "#/$defs/Health"
+    },
+    "metadata": {
+      "$ref": "#/$defs/Metadata"
+    },
+    "alwaysSkills": {
+      "type": "array",
+      "description": "Skills always active for this agent (from matrix always list), uncapped",
+      "items": { "type": "string", "maxLength": 200 },
+      "maxItems": 200
+    },
+    "fingerprint": {
+      "type": "string",
+      "description": "Agent fingerprint UUID for integrity verification",
+      "pattern": "^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$",
+      "maxLength": 36
+    }
+  },
+  "$defs": {
+    "Capability": {
+      "type": "object",
+      "required": ["name", "domain", "description"],
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "Capability name (e.g., 'code-review', 'implementation', 'testing')",
+          "pattern": "^[a-z][a-z0-9-]*$",
+          "maxLength": 100
+        },
+        "domain": {
+          "type": "string",
+          "description": "Domain category for capability grouping",
+          "enum": [
+            "code",
+            "testing",
+            "security",
+            "devops",
+            "research",
+            "documentation",
+            "architecture",
+            "database",
+            "frontend",
+            "backend",
+            "mobile",
+            "ai-ml",
+            "blockchain",
+            "orchestration",
+            "planning"
+          ]
+        },
+        "description": {
+          "type": "string",
+          "description": "What this capability does",
+          "maxLength": 200
+        },
+        "triggerPhrases": {
+          "type": "array",
+          "maxItems": 50,
+          "items": {
+            "type": "string",
+            "maxLength": 200
+          },
+          "description": "Router keywords that trigger this capability",
+          "examples": [["code review", "review PR", "analyze code"]]
+        },
+        "requiredTools": {
+          "type": "array",
+          "maxItems": 100,
+          "items": {
+            "type": "string",
+            "maxLength": 100
+          },
+          "description": "Tools needed for this capability",
+          "examples": [["Read", "Write", "Edit", "Bash"]]
+        },
+        "skills": {
+          "type": "array",
+          "maxItems": 250,
+          "items": {
+            "type": "string",
+            "maxLength": 100
+          },
+          "description": "Skills used for this capability",
+          "examples": [["tdd", "code-reviewer", "debugging"]]
+        },
+        "examples": {
+          "type": "array",
+          "maxItems": 50,
+          "items": {
+            "type": "string",
+            "maxLength": 500
+          },
+          "description": "Example user prompts or scenarios (A2A AgentSkill.examples); used for semantic prototype generation and discovery"
+        },
+        "tags": {
+          "type": "array",
+          "maxItems": 50,
+          "items": {
+            "type": "string",
+            "maxLength": 100
+          },
+          "description": "Keywords describing this capability (A2A AgentSkill.tags); used for keyword scoring in routing"
+        }
+      },
+      "additionalProperties": false
+    },
+    "Constraints": {
+      "type": "object",
+      "description": "Resource and execution constraints",
+      "properties": {
+        "maxConcurrentTasks": {
+          "type": "integer",
+          "minimum": 1,
+          "default": 5,
+          "description": "Maximum simultaneous tasks this agent can handle"
+        },
+        "rateLimit": {
+          "type": "string",
+          "pattern": "^[0-9]+/(second|minute|hour)$",
+          "description": "Rate limit for spawn requests (e.g., '10/minute')",
+          "maxLength": 50
+        },
+        "maxTaskSize": {
+          "type": "string",
+          "pattern": "^[0-9]+(KB|MB)$",
+          "description": "Maximum input size for tasks (e.g., '50KB')",
+          "maxLength": 50
+        },
+        "preferredModel": {
+          "type": "string",
+          "enum": ["haiku", "sonnet", "opus"],
+          "default": "sonnet",
+          "description": "Preferred model for this agent"
+        }
+      },
+      "additionalProperties": false
+    },
+    "Health": {
+      "type": "object",
+      "required": ["status"],
+      "description": "Real-time health status for routing decisions",
+      "properties": {
+        "status": {
+          "type": "string",
+          "enum": ["healthy", "degraded", "unavailable"],
+          "description": "Current health status"
+        },
+        "consecutiveFailures": {
+          "type": "integer",
+          "minimum": 0,
+          "default": 0,
+          "description": "Count of consecutive spawn/task failures"
+        },
+        "successCount": {
+          "type": "integer",
+          "minimum": 0,
+          "default": 0,
+          "description": "Total successful completions"
+        },
+        "failureCount": {
+          "type": "integer",
+          "minimum": 0,
+          "default": 0,
+          "description": "Total failures"
+        },
+        "successRate": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1,
+          "default": 1,
+          "description": "Success rate (successCount / total)"
+        },
+        "averageExecutionMs": {
+          "type": "number",
+          "minimum": 0,
+          "description": "Average task execution time in milliseconds"
+        },
+        "lastUpdate": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Timestamp of last health update"
+        },
+        "isolatedAt": {
+          "type": ["string", "null"],
+          "format": "date-time",
+          "description": "When agent was isolated (null if not isolated)"
+        },
+        "isolationReason": {
+          "type": ["string", "null"],
+          "description": "Why isolated (e.g., '3 consecutive failures: timeout')",
+          "maxLength": 500
+        },
+        "lastSuccessAt": {
+          "type": ["string", "null"],
+          "format": "date-time",
+          "description": "Timestamp of last successful completion"
+        },
+        "lastFailureAt": {
+          "type": ["string", "null"],
+          "format": "date-time",
+          "description": "Timestamp of last failure"
+        }
+      },
+      "additionalProperties": false
+    },
+    "Metadata": {
+      "type": "object",
+      "description": "Additional metadata for tracking and auditing",
+      "properties": {
+        "version": {
+          "type": "string",
+          "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$",
+          "description": "Agent definition version",
+          "maxLength": 50
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "author": {
+          "type": "string",
+          "maxLength": 100
+        },
+        "references": {
+          "type": "array",
+          "maxItems": 50,
+          "items": {
+            "type": "string",
+            "maxLength": 500
+          },
+          "description": "Related documentation or ADRs"
+        },
+        "dependencies": {
+          "type": "array",
+          "maxItems": 50,
+          "items": {
+            "type": "string",
+            "maxLength": 100
+          },
+          "description": "Other agents this agent depends on"
+        }
+      },
+      "additionalProperties": false
+    }
+  },
+  "examples": [
+    {
+      "id": "developer",
+      "displayName": "Developer Agent",
+      "category": "core",
+      "filePath": ".claude/agents/core/developer.md",
+      "capabilities": [
+        {
+          "name": "implementation",
+          "domain": "code",
+          "description": "TDD-focused code implementation with Red-Green-Refactor",
+          "triggerPhrases": ["implement", "code", "develop", "build", "create feature"],
+          "requiredTools": ["Read", "Write", "Edit", "Bash", "Grep", "Glob"],
+          "skills": ["tdd", "debugging", "git-expert"]
+        },
+        {
+          "name": "bug-fix",
+          "domain": "code",
+          "description": "Fix bugs using systematic debugging and TDD",
+          "triggerPhrases": ["fix bug", "debug", "resolve issue", "error"],
+          "requiredTools": ["Read", "Write", "Edit", "Bash", "Grep"],
+          "skills": ["debugging", "tdd"]
+        }
+      ],
+      "constraints": {
+        "maxConcurrentTasks": 5,
+        "preferredModel": "sonnet"
+      },
+      "health": {
+        "status": "healthy",
+        "consecutiveFailures": 0,
+        "successCount": 0,
+        "failureCount": 0,
+        "successRate": 1,
+        "lastUpdate": "2026-01-31T12:00:00.000Z",
+        "isolatedAt": null,
+        "isolationReason": null
+      },
+      "metadata": {
+        "version": "1.1.0",
+        "createdAt": "2026-01-23T00:00:00.000Z",
+        "updatedAt": "2026-01-31T12:00:00.000Z"
+      }
+    }
+  ],
+  "additionalProperties": false
+}

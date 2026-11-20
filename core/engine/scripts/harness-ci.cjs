@@ -99,7 +99,7 @@ function checkSettingsFiles() {
 
 function checkHookSecurity(files) {
   const errors = [];
-  const hookFiles = files.filter((file) => /^(?:engine\/hooks|engine\/scripts\/hooks)\//.test(file)
+  const hookFiles = files.filter((file) => /^core\/engine\/(?:scripts\/)?hooks\//.test(file)
     && /\.(?:cjs|mjs|js)$/.test(file));
   const forbidden = [
     ['SE-01 shell:true', /shell\s*:\s*true/],
@@ -165,7 +165,9 @@ function runRenderFamilyChecks() {
   const errors = [];
   const checks = [];
   for (const relative of scripts) {
-    const result = spawnSync(process.execPath, [path.join(HARNESS_ROOT, relative), '--check'], {
+    const args = [path.join(HARNESS_ROOT, relative), '--check'];
+    if (relative.endsWith('/render-codex-hooks.cjs')) args.push('--active');
+    const result = spawnSync(process.execPath, args, {
       cwd: HARNESS_ROOT,
       encoding: 'utf8',
       timeout: 120000,
@@ -305,21 +307,7 @@ function main() {
   if (coverage.stdout) process.stdout.write(coverage.stdout);
   if (coverage.stderr) process.stderr.write(coverage.stderr);
   if (coverage.status !== 0 || coverage.error || coverage.signal) {
-    // 基线豁免（与 bench-refactor C-2 同口径）：全量回归失败数 == Phase 0 行为级
-    // 基线（4：E2E/painpoints/managed-action/fresh-live）时记 pass——门语义是
-    // "不劣化于基线"。覆盖率"0% 未达标"同豁免：NO_PERSIST（CI 与 --ci 门禁态）
-    // 下 instrumentation 不注入，检测文件数恒 0，覆盖率检查在此模式无意义。
-    const out = String(coverage.stdout || '');
-    const totalLine = out.match(/总计:[^\n]*失败:\s*(\d+)/);
-    const covZero = /检测文件数:\s*0/.test(out);
-    const fails = totalLine ? Number(totalLine[1]) : null;
-    const BASELINE_FAILURES = 4;
-    const withinBaseline = fails !== null && fails <= BASELINE_FAILURES;
-    if (withinBaseline || (covZero && fails !== null)) {
-      console.log(`[harness-ci] coverage/regression pass-baseline: ${fails} failures (baseline <=${BASELINE_FAILURES})${covZero ? ' + coverage instrumentation off (NO_PERSIST)' : ''}`);
-    } else {
-      fail([`coverage/regression exit=${coverage.status} error=${coverage.error?.message || 'none'} signal=${coverage.signal || 'none'}`]);
-    }
+    fail([`coverage/regression exit=${coverage.status} error=${coverage.error?.message || 'none'} signal=${coverage.signal || 'none'}`]);
   }
 
   console.log('[harness-ci] all gates passed');

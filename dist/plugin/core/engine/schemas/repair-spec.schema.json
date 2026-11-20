@@ -1,0 +1,192 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://claude-code/schemas/repair-spec",
+  "title": "Harness Repair Specification",
+  "description": "Machine-checkable contract for narrow agent repairs.",
+  "type": "object",
+  "required": [
+    "schemaVersion",
+    "id",
+    "objective",
+    "allowedFiles",
+    "patches"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "schemaVersion": {
+      "type": "integer",
+      "const": 1
+    },
+    "id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "objective": {
+      "type": "string",
+      "minLength": 1
+    },
+    "allowedFiles": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "minLength": 1
+      }
+    },
+    "readonlyFiles": {
+      "type": "array",
+      "uniqueItems": true,
+      "default": [],
+      "items": {
+        "type": "string",
+        "minLength": 1
+      }
+    },
+    "outputSentinel": {
+      "description": "When set, the agent's user-facing final text must exactly equal this string after trimming.",
+      "type": "string"
+    },
+    "forbiddenClaims": {
+      "type": "array",
+      "default": [],
+      "items": {
+        "type": "string",
+        "minLength": 1
+      }
+    },
+    "patches": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "required": [
+          "file",
+          "oldBlock",
+          "newBlock"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "file": {
+            "type": "string",
+            "minLength": 1
+          },
+          "oldBlock": {
+            "type": "string",
+            "minLength": 1
+          },
+          "newBlock": {
+            "type": "string",
+            "minLength": 1
+          },
+          "description": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "requiredRegex": {
+      "type": "array",
+      "default": [],
+      "items": {
+        "type": "object",
+        "required": [
+          "file",
+          "pattern"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "file": {
+            "type": "string",
+            "minLength": 1
+          },
+          "pattern": {
+            "type": "string",
+            "minLength": 1
+          },
+          "flags": {
+            "type": "string",
+            "pattern": "^[dgimsuvy]*$"
+          },
+          "description": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "forbiddenRegex": {
+      "type": "array",
+      "default": [],
+      "items": {
+        "type": "object",
+        "required": [
+          "file",
+          "pattern"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "file": {
+            "type": "string",
+            "minLength": 1
+          },
+          "pattern": {
+            "type": "string",
+            "minLength": 1
+          },
+          "flags": {
+            "type": "string",
+            "pattern": "^[dgimsuvy]*$"
+          },
+          "description": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "expectedCommands": {
+      "type": "array",
+      "default": [],
+      "items": {
+        "type": "string",
+        "minLength": 1
+      }
+    },
+    "expectedLogEvidence": {
+      "type": "array",
+      "default": [],
+      "items": {
+        "type": "object",
+        "required": [
+          "command"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "command": {
+            "type": "string",
+            "minLength": 1
+          },
+          "mustContain": {
+            "type": "array",
+            "default": [],
+            "items": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          "mustNotContain": {
+            "type": "array",
+            "default": [],
+            "items": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          "classifyToolchainFailure": {
+            "type": "boolean",
+            "default": true
+          }
+        }
+      }
+    }
+  }
+}

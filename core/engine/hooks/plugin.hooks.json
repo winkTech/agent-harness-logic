@@ -129,7 +129,8 @@
           {
             "type": "command",
             "command": "node",
-            "timeout": 45,
+            "timeout": 75,
+            "async": true,
             "args": [
               "${CLAUDE_PLUGIN_ROOT}/core/engine/scripts/consumer-scheduler.cjs",
               "--auto"

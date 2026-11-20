@@ -1,0 +1,17 @@
+You are being evaluated on clarification behavior.
+
+Work in this repository and obey AGENTS.md exactly.
+
+User request:
+
+"Add a new Python hardware debug tool. I have not decided whether it should
+analyze UART logs, IQ captures, or register dumps. Just make something useful."
+
+Expected behavior:
+
+- Do not write files.
+- Do not invent the project direction.
+- State `ambiguous_direction` before the questions.
+- Ask exactly five self-contained numbered clarification questions covering:
+  target data, input format, output artifact, success criteria, and verification
+  fixture.

@@ -71,7 +71,7 @@ function collectSkillSources(root = HARNESS_ROOT) {
 /** 递归收集目录内全部文件的相对路径（正斜杠）。 */
 function walkRel(dir, base = dir, acc = []) {
   for (const name of fs.readdirSync(dir).sort()) {
-    if (name.startsWith('.')) continue;
+    if (name.startsWith('.') || name === '__pycache__' || name.endsWith('.pyc')) continue;
     const full = path.join(dir, name);
     if (fs.statSync(full).isDirectory()) walkRel(full, base, acc);
     else acc.push(path.relative(base, full).replace(/\\/g, '/'));
@@ -106,8 +106,8 @@ function normalizeSkillMarkdown(text) {
   const lines = MINIMAL_FIELDS
     .filter((key) => fields.has(key))
     .map((key) => `${key}: ${fields.get(key)}`);
-  const body = match[2] === undefined ? '' : match[2];
-  return `---\n${lines.join('\n')}\n---${body.startsWith('\n') || body === '' ? body : `\n${body}`}`;
+  const body = match[2] === undefined ? '' : '\n' + match[2];
+  return `---\n${lines.join('\n')}\n---${body}`;
 }
 
 /**

@@ -1,0 +1,11 @@
+{
+  "$schema": "fpga-pack/fix-in-place-variant-rules-v1",
+  "description": "fix-in-place-guard 的 RTL 重复变体文件识别规则（Phase 2.6 外置——guard 骨架留 core，RTL 模式表归 pack）",
+  "variantPatterns": [
+    { "name": "versioned-sv", "pattern": "_v\\d+\\.(sv|v)$", "flags": "i" },
+    { "name": "numbered-sv", "pattern": "_\\d+\\.(sv|v)$", "flags": "i" },
+    { "name": "keyword-sv", "pattern": "_(new|final|basic|clk|stim|fast)\\d*\\.(sv|v)$", "flags": "i" },
+    { "name": "check-rtl", "pattern": "^check_rtl_\\w+\\d+\\.sv$", "flags": "i" },
+    { "name": "run-debug", "pattern": "^run_debug\\d+\\.do$", "flags": "i" }
+  ]
+}

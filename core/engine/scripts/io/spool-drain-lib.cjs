@@ -13,33 +13,37 @@
  */
 
 const {
-  listSpoolFiles, readSpoolLines, markConsumed,
+  listSpoolFiles, markConsumed,
 } = require('./telemetry-spool.cjs');
 const fs = require('node:fs');
 
-/** 行级续搬：spool 文件的已消费字节偏移记在伴生 .pos 文件（同目录 + '.pos'）。 */
+/** .pos 保留以 UTF-16 代码单元计数的偏移，与已写入的断点兼容。 */
 function readOffset(posFile) {
-  try { return Number(fs.readFileSync(posFile, 'utf8').trim()) || 0; } catch { return 0; }
+  try {
+    const offset = Number(fs.readFileSync(posFile, 'utf8').trim());
+    return Number.isSafeInteger(offset) && offset >= 0 ? offset : 0;
+  } catch (error) {
+    if (error.code !== 'ENOENT') throw error;
+    return 0;
+  }
 }
 
 function writeOffset(posFile, offset) {
-  try { fs.writeFileSync(posFile, String(offset), 'utf8'); } catch { /* 尽力而为 */ }
+  fs.writeFileSync(posFile, String(offset), 'utf8');
 }
 
-/** 逐行产出 { event, lineStart, lineEnd }——line* 供部分消费后续搬。 */
-function* readSpoolLinesWithOffset(file, fromOffset = 0) {
-  let text = '';
-  try { text = fs.readFileSync(file, 'utf8'); } catch { return; }
+/** 逐行产出 { event, lineEnd }，用于从部分消费的文件续搬。 */
+function* readSpoolLinesWithOffset(text, fromOffset) {
   let pos = fromOffset;
   while (pos < text.length) {
     const nl = text.indexOf('\n', pos);
     const end = nl === -1 ? text.length : nl;
     const line = text.slice(pos, end);
-    const lineEnd = end + 1; // 含换行
+    const lineEnd = nl === -1 ? end : end + 1;
     if (line.trim()) {
       let event;
       try { event = JSON.parse(line); } catch { event = { __bad: true, line: line.slice(0, 200) }; }
-      yield { event, lineStart: pos, lineEnd };
+      yield { event, lineEnd };
     }
     pos = lineEnd;
   }
@@ -73,10 +77,8 @@ function drainSpool(opts = {}) {
     ok: true, moved: 0, dropped: 0, watermark: null,
     heartbeat: dryRun ? 'dry-run' : 'none', files: 0, errors: [],
   };
-  const files = listSpoolFiles(opts.spoolDir ? { dir: opts.spoolDir } : {});
-  if (dryRun && files.length === 0) return result;
-
   let handle = null;
+  let pending = 0;
   const runId = `spool-drain-${startedAt}-${process.pid}`;
   try {
     if (!dryRun) handle = deps.openDb({});
@@ -85,38 +87,27 @@ function drainSpool(opts = {}) {
     if (!dryRun) {
       deps.events.beginConsumerRun(consumerId, dbopt);
     }
-    if (files.length === 0) {
-      // 空转也要闭合心跳+水位——消费者健康语义是"跑过"，不是"有活干"。
-      if (!dryRun) {
-        const current = deps.events.getWatermark(handle ? { db: handle, consumer: consumerId } : { consumer: consumerId });
-        deps.events.setWatermark(current, handle ? { db: handle, consumer: consumerId } : { consumer: consumerId });
-        result.watermark = current;
-        deps.events.completeConsumerRun(consumerId, {
-          status: 'success', runId, processedThrough: current,
-          processed: 0, pending: 0,
-          ...(handle ? { db: handle } : {}),
-        });
-        result.heartbeat = 'completed';
-      }
-      return result;
-    }
-
-    let consumedAll = true;
+    const files = listSpoolFiles({ dir: opts.spoolDir, strict: true });
     outer: for (const file of files) {
       result.files += 1;
       const posFile = `${file}.pos`;
-      const startOffset = readOffset(posFile);
+      const text = fs.readFileSync(file, 'utf8');
+      const savedOffset = readOffset(posFile);
+      const startOffset = savedOffset <= text.length ? savedOffset : 0;
       let offset = startOffset;
-      for (const { event: line, lineEnd } of readSpoolLinesWithOffset(file, startOffset)) {
+      for (const { event: line, lineEnd } of readSpoolLinesWithOffset(text, startOffset)) {
         if (result.moved >= batchLimit || Date.now() - startedAt > msBudget) {
-          consumedAll = false;
+          pending = 1;
           // 预算/批量耗尽——先固化本文件进度再退出（break 跳过后面的统一写）。
           if (!dryRun) writeOffset(posFile, offset);
           break outer;
         }
-        offset = lineEnd;
-        if (line.__bad) { result.dropped += 1; continue; }
-        if (dryRun) { result.moved += 1; continue; }
+        if (line.__bad || dryRun) {
+          offset = lineEnd;
+          if (line.__bad) result.dropped += 1;
+          else result.moved += 1;
+          continue;
+        }
         try {
           deps.events.record(
             {
@@ -127,36 +118,46 @@ function drainSpool(opts = {}) {
             line.timestamp || line.ts,
             dbopt,
           );
-          result.moved += 1;
         } catch (e) {
-          result.dropped += 1;
-          result.errors.push(`record failed: ${e.message}`);
+          pending = 1;
+          if (offset !== startOffset) writeOffset(posFile, offset);
+          throw new Error(`record failed: ${e.message}`, { cause: e });
         }
+        offset = lineEnd;
+        result.moved += 1;
       }
       // 行级续搬：已消费到 offset——全消费清空文件与偏移，部分消费保留偏移。
       if (!dryRun) {
-        if (offset >= (fs.existsSync(file) ? fs.statSync(file).size : 0)) {
-          markConsumed(file);
-          try { fs.rmSync(posFile, { force: true }); } catch { /* */ }
+        if (fs.statSync(file).size === Buffer.byteLength(text, 'utf8')) {
+          if (text.length > 0 && !markConsumed(file)) {
+            writeOffset(posFile, text.length);
+            throw new Error(`cannot clear drained spool file: ${file}`);
+          }
+          fs.rmSync(posFile, { force: true });
         } else {
-          writeOffset(posFile, offset);
+          pending = 1;
+          writeOffset(posFile, text.length);
         }
       }
     }
 
     if (!dryRun) {
-      // 水位推进：本 consumer 名下 watermark = 搬运入库后的最大 event_id。
-      const maxRow = handle.db
-        ? handle.db.prepare('SELECT COALESCE(MAX(event_id), 0) m FROM runtime_events').get()
-        : handle.prepare('SELECT COALESCE(MAX(event_id), 0) m FROM runtime_events').get();
-      result.watermark = Number(maxRow.m || 0);
-      deps.events.setWatermark(result.watermark, handle ? { db: handle, consumer: consumerId } : { consumer: consumerId });
+      const checkpoint = { db: handle, consumer: consumerId };
+      const current = deps.events.getWatermark(checkpoint);
+      result.watermark = current;
+      if (pending === 0) {
+        // Spool 只向 SQLite 写入，来源是文件。确认 spool 已清空后才记录 SQLite 高水位快照。
+        const db = handle.db || handle;
+        const maxRow = db.prepare('SELECT COALESCE(MAX(event_id), 0) m FROM runtime_events').get();
+        result.watermark = Math.max(current, Number(maxRow.m || 0));
+      }
+      deps.events.setWatermark(result.watermark, checkpoint);
       deps.events.completeConsumerRun(consumerId, {
         status: 'success',
         runId,
         processedThrough: result.watermark,
         processed: result.moved,
-        pending: result.dropped,
+        pending,
         ...(handle ? { db: handle } : {}),
       });
       result.heartbeat = 'completed';
@@ -166,7 +167,7 @@ function drainSpool(opts = {}) {
     result.errors.push(e.message);
     if (!dryRun && handle) {
       try {
-        deps.events.failConsumerRun(consumerId, { error: e.message, runId, db: handle });
+        deps.events.failConsumerRun(consumerId, { error: e.message, runId, db: handle, pending });
         result.heartbeat = 'failed';
       } catch { /* 心跳失败不掩盖主错误 */ }
     }

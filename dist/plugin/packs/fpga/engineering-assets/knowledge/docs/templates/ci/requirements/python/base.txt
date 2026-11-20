@@ -1,0 +1,15 @@
+# Python 基础依赖
+# 用法: pip install -r base.txt
+
+# 开发工具
+ruff>=0.4.0          # 代码检查 (推荐，比 flake8 快)
+black>=24.0          # 代码格式化
+mypy>=1.8            # 类型检查
+
+# 测试
+pytest>=8.0          # 测试框架
+pytest-cov>=4.1      # 覆盖率报告
+
+# 文档
+sphinx>=7.0          # 文档生成器
+sphinx-rtd-theme>=2.0 # Read the Docs 主题

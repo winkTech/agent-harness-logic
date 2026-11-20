@@ -1,0 +1,25 @@
+{
+  "mcpServers": {
+    "matlab": {
+      "command": "node",
+      "args": [
+        "${CLAUDE_PLUGIN_ROOT}/core/engine/mcp/matlab-server.cjs",
+        "${CLAUDE_PLUGIN_ROOT}/packs/fpga/tools"
+      ]
+    },
+    "mcp-pdf": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "mcp-pdf@1.1.0"
+      ]
+    },
+    "codegraph": {
+      "command": "node",
+      "args": [
+        "${CLAUDE_PLUGIN_ROOT}/core/engine/mcp/codegraph-server.cjs"
+      ],
+      "env": {}
+    }
+  }
+}

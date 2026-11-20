@@ -1,0 +1,193 @@
+{
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"${PLUGIN_ROOT}/core/engine/scripts/hooks/frustration-detector.cjs\"",
+            "commandWindows": "node \"$env:PLUGIN_ROOT/core/engine/scripts/hooks/frustration-detector.cjs\"; exit $LASTEXITCODE"
+          },
+          {
+            "type": "command",
+            "timeout": 8,
+            "command": "node \"${PLUGIN_ROOT}/hosts/codex/patch-hook.cjs\" context",
+            "commandWindows": "node \"$env:PLUGIN_ROOT/hosts/codex/patch-hook.cjs\" context; exit $LASTEXITCODE"
+          }
+        ]
+      },
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"${PLUGIN_ROOT}/core/engine/scripts/hooks/local-runner.cjs\" --batch \"verification-gate.cjs,pre-commit-lint.cjs,diff-size-gate.cjs,resource-budget-gate.cjs,bash-safety-guard.cjs\"",
+            "commandWindows": "node \"$env:PLUGIN_ROOT/core/engine/scripts/hooks/local-runner.cjs\" --batch \"verification-gate.cjs,pre-commit-lint.cjs,diff-size-gate.cjs,resource-budget-gate.cjs,bash-safety-guard.cjs\"; exit $LASTEXITCODE"
+          }
+        ]
+      },
+      {
+        "matcher": "Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"${PLUGIN_ROOT}/core/engine/scripts/context-monitor-gate.cjs\"",
+            "commandWindows": "node \"$env:PLUGIN_ROOT/core/engine/scripts/context-monitor-gate.cjs\"; exit $LASTEXITCODE"
+          },
+          {
+            "type": "command",
+            "command": "node \"${PLUGIN_ROOT}/hosts/codex/patch-hook.cjs\" protect",
+            "commandWindows": "node \"$env:PLUGIN_ROOT/hosts/codex/patch-hook.cjs\" protect; exit $LASTEXITCODE"
+          }
+        ]
+      },
+      {
+        "matcher": "Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"${PLUGIN_ROOT}/hosts/codex/patch-hook.cjs\" write",
+            "commandWindows": "node \"$env:PLUGIN_ROOT/hosts/codex/patch-hook.cjs\" write; exit $LASTEXITCODE"
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write|MultiEdit|Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"${PLUGIN_ROOT}/hosts/codex/patch-hook.cjs\" verify",
+            "commandWindows": "node \"$env:PLUGIN_ROOT/hosts/codex/patch-hook.cjs\" verify; exit $LASTEXITCODE"
+          }
+        ]
+      },
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "command",
+            "timeout": 60,
+            "async": true,
+            "command": "node \"${PLUGIN_ROOT}/hosts/codex/patch-hook.cjs\" observe",
+            "commandWindows": "node \"$env:PLUGIN_ROOT/hosts/codex/patch-hook.cjs\" observe; exit $LASTEXITCODE"
+          }
+        ]
+      }
+    ],
+    "PreCompact": [
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"${PLUGIN_ROOT}/core/engine/scripts/pre-compact.cjs\" --quiet",
+            "commandWindows": "node \"$env:PLUGIN_ROOT/core/engine/scripts/pre-compact.cjs\" --quiet; exit $LASTEXITCODE"
+          }
+        ]
+      }
+    ],
+    "SessionStart": [
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"${PLUGIN_ROOT}/core/engine/scripts/state-resume.cjs\" --session-start",
+            "commandWindows": "node \"$env:PLUGIN_ROOT/core/engine/scripts/state-resume.cjs\" --session-start; exit $LASTEXITCODE"
+          },
+          {
+            "type": "command",
+            "timeout": 5000,
+            "command": "node \"${PLUGIN_ROOT}/core/engine/scripts/context-resume.cjs\" --session-start",
+            "commandWindows": "node \"$env:PLUGIN_ROOT/core/engine/scripts/context-resume.cjs\" --session-start; exit $LASTEXITCODE"
+          },
+          {
+            "type": "command",
+            "command": "node \"${PLUGIN_ROOT}/core/engine/scripts/dream-startup-inject.cjs\" --session-start",
+            "commandWindows": "node \"$env:PLUGIN_ROOT/core/engine/scripts/dream-startup-inject.cjs\" --session-start; exit $LASTEXITCODE"
+          },
+          {
+            "type": "command",
+            "command": "node \"${PLUGIN_ROOT}/core/engine/scripts/hooks/isolation-check.cjs\"",
+            "commandWindows": "node \"$env:PLUGIN_ROOT/core/engine/scripts/hooks/isolation-check.cjs\"; exit $LASTEXITCODE"
+          },
+          {
+            "type": "command",
+            "timeout": 120,
+            "command": "node \"${PLUGIN_ROOT}/core/engine/scripts/memory-knowledge-maintenance.cjs\" --auto --execute --quiet",
+            "commandWindows": "node \"$env:PLUGIN_ROOT/core/engine/scripts/memory-knowledge-maintenance.cjs\" --auto --execute --quiet; exit $LASTEXITCODE"
+          },
+          {
+            "type": "command",
+            "timeout": 75,
+            "command": "node \"${PLUGIN_ROOT}/core/engine/scripts/consumer-scheduler.cjs\" --auto",
+            "commandWindows": "node \"$env:PLUGIN_ROOT/core/engine/scripts/consumer-scheduler.cjs\" --auto; exit $LASTEXITCODE"
+          }
+        ]
+      },
+      {
+        "matcher": "^startup$",
+        "hooks": [
+          {
+            "type": "command",
+            "timeout": 60,
+            "async": true,
+            "command": "node \"${PLUGIN_ROOT}/core/engine/scripts/hooks/codegraph-sync.cjs\" --session",
+            "commandWindows": "node \"$env:PLUGIN_ROOT/core/engine/scripts/hooks/codegraph-sync.cjs\" --session; exit $LASTEXITCODE"
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"${PLUGIN_ROOT}/core/engine/scripts/hooks/lint-auto-gate.cjs\"",
+            "commandWindows": "node \"$env:PLUGIN_ROOT/core/engine/scripts/hooks/lint-auto-gate.cjs\"; exit $LASTEXITCODE"
+          },
+          {
+            "type": "command",
+            "command": "node \"${PLUGIN_ROOT}/core/engine/scripts/hooks/context-pressure-warn.cjs\"",
+            "commandWindows": "node \"$env:PLUGIN_ROOT/core/engine/scripts/hooks/context-pressure-warn.cjs\"; exit $LASTEXITCODE"
+          },
+          {
+            "type": "command",
+            "timeout": 15000,
+            "command": "node \"${PLUGIN_ROOT}/core/engine/hooks/git/git-integrity-guard.cjs\" --workspace",
+            "commandWindows": "node \"$env:PLUGIN_ROOT/core/engine/hooks/git/git-integrity-guard.cjs\" --workspace; exit $LASTEXITCODE"
+          }
+        ]
+      },
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "command",
+            "timeout": 15,
+            "async": true,
+            "command": "node \"${PLUGIN_ROOT}/hosts/codex/patch-hook.cjs\" observe",
+            "commandWindows": "node \"$env:PLUGIN_ROOT/hosts/codex/patch-hook.cjs\" observe; exit $LASTEXITCODE"
+          }
+        ]
+      }
+    ],
+    "UserPromptSubmit": [
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "command",
+            "timeout": 8,
+            "command": "node \"${PLUGIN_ROOT}/hosts/codex/patch-hook.cjs\" context",
+            "commandWindows": "node \"$env:PLUGIN_ROOT/hosts/codex/patch-hook.cjs\" context; exit $LASTEXITCODE"
+          }
+        ]
+      }
+    ]
+  }
+}

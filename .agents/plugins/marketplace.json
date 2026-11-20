@@ -1,0 +1,20 @@
+{
+  "name": "agent-harness-logic",
+  "interface": {
+    "displayName": "Agent Harness Logic"
+  },
+  "plugins": [
+    {
+      "name": "logical-paradox",
+      "source": {
+        "source": "local",
+        "path": "./dist/plugin"
+      },
+      "policy": {
+        "installation": "AVAILABLE",
+        "authentication": "ON_INSTALL"
+      },
+      "category": "Developer Tools"
+    }
+  ]
+}

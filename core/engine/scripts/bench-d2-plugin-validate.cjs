@@ -17,6 +17,7 @@
  */
 
 const fs = require('node:fs');
+const { spawnSync } = require('node:child_process');
 const path = require('node:path');
 
 const { HARNESS_ROOT } = require('./lib/harness-root.cjs');
@@ -76,10 +77,23 @@ function main() {
   // 5 marketplace 双形态
   const cm = JSON.parse(fs.readFileSync(path.join(HARNESS_ROOT, '.claude-plugin', 'marketplace.json'), 'utf8'));
   const gm = JSON.parse(fs.readFileSync(path.join(HARNESS_ROOT, '.grok-plugin', 'marketplace.json'), 'utf8'));
-  ok(typeof cm.plugins[0].subdir === 'string', 'claude marketplace 缺 subdir（git-subdir 形）');
-  ok(typeof gm.plugins[0].plugin_subdir === 'string', 'grok marketplace 缺 plugin_subdir');
-  ok(/^[0-9a-f]{40}$/.test(cm.plugins[0].sha || ''), 'claude marketplace sha 非 40 位');
-  ok(/^[0-9a-f]{40}$/.test(gm.plugins[0].sha || ''), 'grok marketplace sha 非 40 位');
+  const source = cm.plugins[0].source;
+  ok(source === './dist/plugin' || (source?.source === 'git-subdir' && source.path === 'dist/plugin'
+    && /^https:\/\//.test(source.url) && /^[a-f0-9]{40}$/.test(source.sha)), 'Invalid Claude marketplace source');
+  ok(gm.plugins[0].source?.type === 'local' && gm.plugins[0].source.path === './dist/plugin', 'Invalid Grok marketplace source');
+
+  const entries = ['core/engine/hooks/learning/postflight-observer.cjs',
+    'core/engine/scripts/memory-knowledge-maintenance.cjs', 'core/engine/scripts/code-graph-index.cjs'];
+  for (const cfg of Object.values(mcp.mcpServers || {})) {
+    if (cfg.command === 'node') {
+      const script = cfg.args?.[0];
+      ok(typeof script === 'string' && script.startsWith('${CLAUDE_PLUGIN_ROOT}/')
+        && fs.existsSync(path.join(DIST, script.slice('${CLAUDE_PLUGIN_ROOT}/'.length))), 'Missing MCP entry: ' + script);
+    }
+  }
+  const load = spawnSync(process.execPath, ['-e', 'for(const name of process.argv.slice(1)) require(name)', ...entries.map(p => path.join(DIST,p))],
+    { cwd: DIST, env: { ...process.env, HARNESS_ROOT: DIST, HARNESS_NO_PERSIST: '1' }, encoding: 'utf8' });
+  ok(load.status === 0, 'Plugin runtime dependency: ' + (load.error?.message || load.stderr));
 
   // 6 D-1 联动抽查（分发物全树；bench-d1 自身是守卫面——其模式串即被检词，豁免）
   const leaks = [];

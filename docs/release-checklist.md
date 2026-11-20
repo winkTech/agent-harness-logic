@@ -4,7 +4,7 @@
 
 ## 合入/切分支后复位（先于一切检查）
 
-merge 或 checkout 后，旧分支同名 tracked 产物会覆盖渲染版、gitignore 的运行时镜像（skills/）会残缺、dist sha 与 marketplace 断链——依次重建并全验：
+merge 或 checkout 后，旧分支同名 tracked 产物会覆盖渲染版、gitignore 的运行时镜像（skills/）会残缺、插件产物可能与源码不一致——依次重建并全验：
 
 ```bash
 node core/engine/scripts/sync-skills.cjs
@@ -12,16 +12,26 @@ node core/engine/scripts/sync-workflow-mirror.cjs
 node core/engine/scripts/render-hook-settings.cjs
 node core/engine/scripts/render-codex-hooks.cjs
 node core/engine/scripts/render-grok-hooks.cjs
-node core/engine/scripts/sync-plugin-dist.cjs   # marketplace 与 dist 产物须同 commit 提交
+node core/engine/scripts/sync-plugin-dist.cjs   # 从受版本管理的技能与引擎组装插件
 node core/engine/scripts/harness-ci.cjs          # render family 六渲染器须全绿
 ```
 
 ## 分发面
 
 - [ ] `node core/engine/scripts/sync-plugin-dist.cjs`（重建 dist）
-- [ ] `--check` 零漂移（dist 与 marketplace sha 同步）
-- [ ] `__REPO_URL__` / `__OWNER__` 已替换为真实值（发布期动作；开发期保持占位）
-- [ ] marketplace 条目 sha = 40 位且与 dist 树一致（`bench-d2-plugin-validate.cjs` PASS）
+- [ ] `node core/engine/scripts/sync-plugin-dist.cjs --check` 校验本地包以及两个 marketplace 清单。
+- [ ] 发布用提交必须包含完整的 `dist/plugin`（此目录默认忽略，可用 `git add -f -- dist/plugin` 精确暂存）。保留这个提交的完整 SHA。
+- [ ] 对该提交运行 `node core/engine/scripts/sync-plugin-dist.cjs --release --repo-url=<仓库HTTPS地址> --owner=<所有者> --commit=<完整SHA>`。只有 Git 中的插件文件与本次组装一致才生成发布清单。使用相同参数附加 `--check` 可只读复核。
+- [ ] 发布包含两个清单和同一份 `dist/plugin` 的版本，并确保插件提交对安装者可访问。Claude 使用固定提交，Grok 从同一发行版本读取相对路径。
+
+本机 Codex 安装或更新插件时，从 Harness 源码根运行：
+
+```powershell
+npm.cmd run codex:connect
+npm.cmd run codex:connect -- --check
+```
+
+从本地源码更新同版本插件时，运行 `npm.cmd run codex:connect -- --refresh`。入口比较生成产物和安装缓存，有内容变化才重新安装。首次使用、Hook 定义变化或宿主在重装后要求重新审核时，Codex 会提示确认。若待审列表还包含其他来源，选择 **Review hooks**，只确认目标插件。使用过独立版 Harness 的机器，可在接入命令后加上 `-- --dedupe`。入口等插件 Hook 全部获准后，使用 Codex 的配置接口停用已核实的重叠 User 条目。跳过审核后可再次执行接入命令。
 
 ## 结构合规
 
@@ -39,7 +49,7 @@ node core/engine/scripts/harness-ci.cjs          # render family 六渲染器须
 ## 质量门
 
 - [ ] `harness-ci.cjs` 六段绿
-- [ ] `run-all-tests.cjs --no-persist`：失败数 = 基线 4（行为级已知项）
+- [ ] `run-all-tests.cjs --no-persist`：失败数为 0，核对环境相关的跳过项。
 - [ ] `bench-refactor --phase 2` overall=pass（H-5/P-4/H-4）
 - [ ] `bench-refactor --phase 4` overall=pass（D-1/D-2）
 - [ ] `layer-boundary.cjs --check` violations=0

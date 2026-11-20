@@ -1774,8 +1774,10 @@ test('benchmark entry runner replays lifecycle-specific real payload shapes', ()
     `Stop payload mismatch: ${JSON.stringify(stopPayload)}`);
 });
 
-test('local permissions allow edits without bypassing all shell approvals', () => {
-  const local = readJson(path.join(HOME, 'settings.local.json'), {});
+test('configured or template permissions allow edits without bypassing all shell approvals', () => {
+  const localPath = path.join(HOME, 'settings.local.json');
+  const local = JSON.parse(fs.readFileSync(fs.existsSync(localPath) ? localPath
+    : path.join(HOME, 'hosts', 'claude-code', 'permissions.template.json'), 'utf8'));
   const permissions = local.permissions || {};
   const allow = new Set(permissions.allow || []);
   const ask = new Set(permissions.ask || []);
@@ -1794,38 +1796,6 @@ test('local settings do not force context compaction below fifty percent', () =>
   const raw = local.env?.HARNESS_AUTOCOMPACT_PCT_OVERRIDE;
   assert(raw === undefined || Number(raw) >= 50,
     `low autocompact override still amplifies SessionStart(compact): ${raw}`);
-  // settings.json 不入版本库（hook 命令含本机绝对路径，见 hosts/claude-code/registrations.json）。
-  // 全新 checkout / CI 上它要么不存在，要么只有渲染器生成的 hooks 块 —— model/effortLevel
-  // 是操作员的本机选择，不是仓库契约，那里没有"正确值"可断言。
-  const settingsPath = path.join(HOME, 'settings.json');
-  if (!fs.existsSync(settingsPath)) {
-    skip('settings.json 不存在（全新 checkout / CI）——本机 model/effort 断言不适用');
-  }
-  const base = readJson(settingsPath, {});
-  const keys = Object.keys(base);
-  if (keys.length === 1 && keys[0] === 'hooks') {
-    skip('settings.json 由 render-hook-settings.cjs 生成，未含本机 model/effort 配置');
-  }
-  // 已批准的本机模型选择:opus[1m](原基线)、claude-fable-5[1m](2026-07-29 操作员显式
-  // /model 切换,允许两者间 A/B)。2026-09-02 记录:WorkBuddy/Codex 宿主会话把 settings.json
-  // 的 model 写回为 'fable[1m]'(fable 家族 1M,与 claude-fable-5[1m] 同族)——操作员确认
-  // 该 host 写回值作为本机选择,允许三者间 A/B。出现第四个值仍视为无决策记录的漂移。
-  const sanctionedModels = ['opus[1m]', 'claude-fable-5[1m]', 'fable[1m]'];
-  // effortLevel 同理:此前钉死成单值 'max',但上面那段注释自己已经写明"model/effortLevel
-  // 是操作员的本机选择,那里没有正确值可断言"—— 注释与断言互相矛盾,而矛盾的那一侧是
-  // 断言。2026-08-02 实测:操作员切到 xhigh 后本条与 E2E 同时变红,而这是一次合理的
-  // 本机选择。把本机偏好钉进契约,只会训练人忽略红灯。改为与 model 同构的白名单:
-  // 锁的是"没有决策记录的漂移",不是"不许换"。2026-09-02 追加:宿主会话只写 model、
-  // 不写 effortLevel(undefined)——该形态同样不是漂移,允许缺省;写了就必须在白名单里。
-  const sanctionedEfforts = ['max', 'xhigh'];
-  assert(sanctionedModels.includes(base.model),
-    `model ${base.model} is not a sanctioned choice `
-    + `(${sanctionedModels.join(' / ')}) — record A/B evidence before pinning a new one`);
-  if (base.effortLevel !== undefined) {
-    assert(sanctionedEfforts.includes(base.effortLevel),
-      `effortLevel ${base.effortLevel} is not a sanctioned choice `
-      + `(${sanctionedEfforts.join(' / ')}) — record A/B evidence before pinning a new one`);
-  }
 });
 
 test('local plugins do not inject a second full skill router at SessionStart', () => {
@@ -1921,7 +1891,7 @@ test('local runner child environment preserves runtime context without inheritin
     '  claudeOauth: process.env.HARNESS_CODE_OAUTH_TOKEN || null,',
     '  anthropic: process.env.ANTHROPIC_API_KEY || null,',
     '  path: process.env.PATH || process.env.Path || null,',
-    '  session: process.env.CLAUDE_SESSION_ID || null,',
+    '  session: process.env.HARNESS_SESSION_ID || null,',
     '}));',
     '',
   ].join('\n'), 'utf8');
@@ -1935,6 +1905,7 @@ test('local runner child environment preserves runtime context without inheritin
       GITHUB_TOKEN: 'sentinel-must-not-reach-hook',
       HARNESS_CODE_OAUTH_TOKEN: 'sentinel-oauth-must-not-reach-hook',
       ANTHROPIC_API_KEY: 'sentinel-api-key-must-not-reach-hook',
+      HARNESS_SESSION_ID: '',
       CLAUDE_SESSION_ID: 'claude-session-preserved',
     },
   });

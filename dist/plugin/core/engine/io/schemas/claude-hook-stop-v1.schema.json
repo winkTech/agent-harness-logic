@@ -1,0 +1,18 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "claude-hook/stop-v1",
+  "title": "Claude Code hook payload: Stop / SubagentStop / PreCompact",
+  "description": "Phase 2.3 payload 契约第五份——回合/子代理/压缩事件。Stop 的阻断语义是 claude-code 宿主独占（hostOnly，见 manifest v3 hostPresets）。",
+  "type": "object",
+  "required": ["hook_event_name"],
+  "properties": {
+    "hook_event_name": { "enum": ["Stop", "SubagentStop", "PreCompact"] },
+    "session_id": { "type": "string" },
+    "transcript_path": { "type": "string" },
+    "cwd": { "type": "string" },
+    "stop_hook_active": { "type": "boolean" },
+    "trigger": { "type": "string" },
+    "last_assistant_message": { "type": "string" }
+  },
+  "additionalProperties": true
+}

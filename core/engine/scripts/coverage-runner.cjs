@@ -18,6 +18,7 @@
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
+const { fileURLToPath } = require('node:url');
 const { spawnSync } = require('node:child_process');
 const { HARNESS_ROOT, resolveHarnessRoot } = require('./lib/harness-root.cjs');
 const { varPath } = require('./lib/harness-state.cjs');
@@ -64,15 +65,15 @@ function ensureDir(d) {
 // ── V8 Coverage 解析 ─────────────────────────────────────────────────────────
 
 /**
- * 将 V8 字节偏移转换为行号。
+ * 将 V8 的 UTF-16 源码偏移转换为行号。
  * @param {string[]} lines 源文件行数组
  * @param {number} offset 字节偏移
  * @returns {number} 行号 (0-based)
  */
-function byteOffsetToLine(lines, offset) {
+function sourceOffsetToLine(lines, offset) {
   let accumulated = 0;
   for (let i = 0; i < lines.length; i++) {
-    accumulated += Buffer.byteLength(lines[i], 'utf8') + 1; // +1 for \n
+    accumulated += lines[i].length + 1; // +1 for \n
     if (accumulated > offset) return i;
   }
   return lines.length - 1;
@@ -83,7 +84,7 @@ function coveredLinesForRanges(sourceLines, ranges) {
   let offset = 0;
   for (const line of sourceLines) {
     lineStarts.push(offset);
-    offset += Buffer.byteLength(line, 'utf8') + 1;
+    offset += line.length + 1;
   }
 
   const positive = ranges.filter((range) => range.count > 0 && range.endOffset > range.startOffset);
@@ -96,8 +97,8 @@ function coveredLinesForRanges(sourceLines, ranges) {
         && candidate.endOffset <= range.endOffset)
       .sort((a, b) => a.startOffset - b.startOffset || a.endOffset - b.endOffset);
     const endOffset = Math.max(range.startOffset, range.endOffset - 1);
-    const firstLine = byteOffsetToLine(sourceLines, range.startOffset);
-    const lastLine = byteOffsetToLine(sourceLines, endOffset);
+    const firstLine = sourceOffsetToLine(sourceLines, range.startOffset);
+    const lastLine = sourceOffsetToLine(sourceLines, endOffset);
 
     for (let line = firstLine; line <= lastLine; line++) {
       const lineStart = lineStarts[line];
@@ -128,8 +129,7 @@ function coveredLinesForRanges(sourceLines, ranges) {
  * 从未被执行入口 require 到的脚本完全不在分母里, 覆盖率系统性偏高 (失明)。
  * 新分母 = engine 递归全量 .cjs 文件, 未加载文件计 0 覆盖。
  */
-function collectEngineCjs(root) {
-  const engineDir = path.join(root, 'engine');
+function collectEngineCjs(engineDir) {
   const files = [];
   const walk = (dir) => {
     let entries;
@@ -156,18 +156,11 @@ function collectEngineCjs(root) {
  */
 function parseV8Coverage(coverageDir, options = {}) {
   const root = path.resolve(options.root || ROOT);
-  if (!fs.existsSync(coverageDir)) {
-    // 无覆盖率数据 ≠ 空分母: 全量 engine/**/*.cjs 依然计入, 全部 0 覆盖
-    let totalLines = 0;
-    for (const file of collectEngineCjs(root)) {
-      try {
-        totalLines += fs.readFileSync(file, 'utf8').split('\n').length;
-      } catch {}
-    }
-    return { totalLines, coveredLines: 0, percent: 0, files: 0, unloadedFiles: 0 };
-  }
-
-  const coverageFiles = fs.readdirSync(coverageDir).filter(f => f.endsWith('.json'));
+  const currentEngine = path.join(root, 'core', 'engine');
+  const engineDir = fs.existsSync(currentEngine) ? currentEngine : path.join(root, 'engine');
+  const coverageFiles = fs.existsSync(coverageDir)
+    ? fs.readdirSync(coverageDir).filter(file => file.endsWith('.json'))
+    : [];
   const byScript = new Map();
 
   for (const file of coverageFiles) {
@@ -185,30 +178,20 @@ function parseV8Coverage(coverageDir, options = {}) {
       const rawUrl = entry.url || '';
       if (!rawUrl.startsWith('file://')) continue;
 
-      // 从 file:// URL 提取本地路径
-      // file:///C:/Users/... → C:/Users/...  (Windows)
-      // file:///home/... → /home/...          (Unix)
-      let scriptPath = rawUrl.replace(/^file:\/\//, '');
-      // Windows: /C:/... → C:/...
-      if (/^\/[A-Za-z]:\\?/.test(scriptPath)) {
-        scriptPath = scriptPath.slice(1);
-      }
-      // URL decode
-      try { scriptPath = decodeURIComponent(scriptPath); } catch {}
-
-      scriptPath = path.resolve(scriptPath);
-      const relative = path.relative(root, scriptPath);
-      if (!relative || relative.startsWith('..') || path.isAbsolute(relative)) continue;
-      if (relative !== 'engine' && !relative.startsWith(`engine${path.sep}`)) continue;
+      let scriptPath;
+      try { scriptPath = path.resolve(fileURLToPath(rawUrl)); } catch { continue; }
+      const relative = path.relative(engineDir, scriptPath);
+      if (!relative.endsWith('.cjs') || relative === '..'
+          || relative.startsWith(`..${path.sep}`) || path.isAbsolute(relative)) continue;
       if (!fs.existsSync(scriptPath)) continue;
-      let scriptCoverage = byScript.get(scriptPath);
+      let scriptCoverage = byScript.get(relative);
       if (!scriptCoverage) {
         try {
           scriptCoverage = {
             sourceLines: fs.readFileSync(scriptPath, 'utf8').split('\n'),
             coveredLines: new Set(),
           };
-          byScript.set(scriptPath, scriptCoverage);
+          byScript.set(relative, scriptCoverage);
         } catch {
           continue;
         }
@@ -223,10 +206,11 @@ function parseV8Coverage(coverageDir, options = {}) {
 
   // 全量分母: 补齐未被任何子进程加载的 engine/**/*.cjs, 计 0 覆盖
   let unloadedFiles = 0;
-  for (const file of collectEngineCjs(root)) {
-    if (byScript.has(file)) continue;
+  for (const file of collectEngineCjs(engineDir)) {
+    const relative = path.relative(engineDir, file);
+    if (byScript.has(relative)) continue;
     try {
-      byScript.set(file, {
+      byScript.set(relative, {
         sourceLines: fs.readFileSync(file, 'utf8').split('\n'),
         coveredLines: new Set(),
       });
@@ -319,7 +303,7 @@ function main() {
   const summary = {
     timestamp: new Date().toISOString(),
     root: ROOT,
-    denominator: 'engine/**/*.cjs (全量, 未加载文件计 0 覆盖)',
+    denominator: 'core/engine/**/*.cjs (全量, 未加载文件计 0 覆盖)',
     totalLines,
     coveredLines,
     percent,
@@ -337,7 +321,7 @@ function main() {
   // 输出
   console.log('');
   console.log('━━━ V8 覆盖率报告 ━━━');
-  console.log('  分母:       engine/**/*.cjs 全量');
+  console.log('  分母:       core/engine/**/*.cjs 全量');
   console.log(`  检测文件数: ${files} (其中未被加载计 0 覆盖: ${unloadedFiles})`);
   console.log(`  总行数:     ${totalLines}`);
   console.log(`  覆盖行数:   ${coveredLines}`);
@@ -403,4 +387,4 @@ function main() {
 
 if (require.main === module) main();
 
-module.exports = { byteOffsetToLine, coveredLinesForRanges, parseV8Coverage };
+module.exports = { coveredLinesForRanges, parseV8Coverage };

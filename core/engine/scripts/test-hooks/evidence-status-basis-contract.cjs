@@ -30,6 +30,7 @@ process.on('exit', () => { try { fs.rmSync(TMP, { recursive: true, force: true }
 const { commandEvidence, statusFromEvidence } = require(path.join(ROOT, 'core/engine/scripts/lib/evidence-ledger.cjs'));
 const markers = require(path.join(ROOT, 'core/engine/scripts/lib/verification-markers.cjs'));
 const verificationGate = require(path.join(ROOT, 'core/engine/scripts/hooks/verification-gate.cjs'));
+const verificationState = require(path.join(ROOT, 'core/engine/scripts/lib/verification-state.cjs'));
 
 const CMD = 'node core/engine/scripts/test-hooks/run-all-tests.cjs';
 
@@ -93,6 +94,34 @@ function main() {
     if (expectOk) assert.equal(entry.status, 'passed', 'ledger must agree with an accepted gate verdict');
     else assert.notEqual(entry.status, 'passed', 'ledger must not record a rejected verdict as passed');
   }
+
+  // A passing run can only settle edits that were already pending when it started.
+  const clock = Date.now();
+  const sessionId = 'concurrent-edit';
+  const pending = () => verificationState.pendingForCwd(
+    verificationState.readVerificationState(), ROOT, { sessionId },
+  );
+  const edit = () => verificationState.markEdited({
+    cwd: ROOT, sessionId, filePath: path.join(ROOT, 'src', 'sample.py'),
+    now: new Date(clock - 1000).toISOString(),
+  });
+  const finish = (timing) => verificationGate.evaluate({
+    hook_event_name: 'PostToolUse', tool_name: 'Bash', session_id: sessionId, cwd: ROOT,
+    tool_input: { command: 'pytest -q' },
+    tool_response: { stdout: '2 passed', exit_code: 0, ...timing },
+  });
+  edit();
+  const previousResult = finish({ startedAt: new Date(clock - 2000).toISOString() });
+  assert.equal(previousResult.verification.ok, true);
+  assert.equal(previousResult.stateUpdated, false);
+  assert.equal(pending().length, 1, 'a passing test started before the edit must leave it pending');
+  finish({ completedAt: new Date(clock).toISOString(), durationMs: 2000 });
+  assert.equal(pending().length, 1, 'completion and duration also establish when a test started');
+  finish({ startedAt: new Date(clock - 500).toISOString() });
+  assert.equal(pending().length, 0, 'a subsequent passing test must clear the edit');
+  edit();
+  finish({});
+  assert.equal(pending().length, 0, 'legacy payloads without timing retain existing behavior');
 
   console.log('evidence-status-basis-contract: all assertions passed');
 }

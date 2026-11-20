@@ -755,6 +755,7 @@ test('memory maintenance keeps dry-run read-only and executes only bounded maint
     reconcileFacts: (plan) => { calls.push(['reconcile', plan]); return { inserted: 1, removed: 1 }; },
     stageCandidates: (candidates) => { calls.push(['candidates', candidates]); return { staged: candidates.length }; },
     rebuildIndex: () => { calls.push(['reindex']); return { status: 0 }; },
+    writeWeeklyReport: () => ({}),
     saveState: (state) => { calls.push(['state', state]); },
   };
   const now = new Date('2026-07-28T00:00:00.000Z');
@@ -778,6 +779,16 @@ test('memory maintenance keeps dry-run read-only and executes only bounded maint
   assert(executed.results.reindex.status === 0, 'semantic reindex interface not executed');
   assert(JSON.stringify(calls.map((item) => item[0])) === JSON.stringify(['retain', 'reconcile', 'candidates', 'reindex', 'state']),
     `unexpected maintenance side effects: ${JSON.stringify(calls)}`);
+
+  for (const status of [1, null]) {
+    calls.length = 0;
+    const failed = maintenance.runMaintenance({ ...common, execute: true, dryRun: false }, now, {
+      ...runtime,
+      rebuildIndex: () => ({ status }),
+    });
+    assert(failed.results.reindex.status === status, 'failed reindex result is missing');
+    assert(!calls.some(([action]) => action === 'state'), 'failed reindex postponed the next maintenance attempt');
+  }
 });
 
 test('memory retention waits for every registered consumer and uses the consumer purge API', () => {
@@ -788,6 +799,8 @@ test('memory retention waits for every registered consumer and uses the consumer
   const dbPath = path.join(fixture, 'memory.db');
   const { openDb } = require(path.join(HOME, 'core/engine/sqlite/index.cjs'));
   const events = require(path.join(HOME, 'core/engine/sqlite/store-events.cjs'));
+  const { consumerRegistry } = require(path.join(HOME, 'core/engine/hooks/manifest.json'));
+  const consumers = consumerRegistry.filter((entry) => entry.active && entry.requiresWatermark);
   let wDb = openDb({ path: dbPath });
   const ids = [];
   for (let index = 0; index < 3; index += 1) {
@@ -804,18 +817,20 @@ test('memory retention waits for every registered consumer and uses the consumer
     '--force', '--execute', '--event-retention-days', '14', '--no-reconcile', '--no-reindex',
     '--home', fixture, '--db-path', dbPath,
   ]);
-  const runtime = { home: fixture, saveState: () => {} };
+  const runtime = { home: fixture, writeWeeklyReport: () => ({}), saveState: () => {} };
   const blocked = maintenance.runMaintenance(opts, new Date('2026-07-28T00:00:00.000Z'), runtime);
   assert(blocked.results.events.deleted === 0 && blocked.results.events.safeWatermark === 0
-    && blocked.results.events.consumers === 2,
+    && blocked.inspection.safeWatermark === 0
+    && blocked.results.events.consumers === consumers.length,
   `retention bypassed a lagging consumer: ${JSON.stringify(blocked.results.events)}`);
 
   wDb = openDb({ path: dbPath });
-  events.setWatermark(ids[2], { db: wDb.db, consumer: 'skill-evolve' });
+  for (const { id } of consumers) events.setWatermark(ids[2], { db: wDb.db, consumer: id });
   wDb.close();
   const purged = maintenance.runMaintenance(opts, new Date('2026-07-28T00:00:00.000Z'), runtime);
   assert(purged.results.events.deleted === 3 && purged.results.events.safeWatermark === ids[2]
-    && purged.results.events.consumers === 2,
+    && purged.inspection.safeWatermark === ids[2]
+    && purged.results.events.consumers === consumers.length,
   `consumer purge API was not used: ${JSON.stringify(purged.results.events)}`);
 
   wDb = openDb({ path: dbPath, readonly: true });

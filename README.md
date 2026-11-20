@@ -38,9 +38,13 @@ packs/ ──────── 域内容 (fpga: 规则/技能/工程资产/治�
 | codex | `render-codex-hooks.cjs` 渲染 `~/.codex/hooks.json` + AGENTS.md | `--check` + trusted_hash |
 | grok | `render-grok-hooks.cjs` 剖面投影 `~/.grok/hooks.json` | `--check` + smoke 8 检查 |
 | workbuddy | `render-hook-settings.cjs` 同渲 `workbuddy.hooks.json` | `--check` |
-| marketplace | `dist/plugin`（claude git-subdir / grok plugin_subdir） | `bench-d2-plugin-validate.cjs` |
+| marketplace | `dist/plugin`（Claude 发布时固定 Git 提交 / Grok 同仓路径） | `bench-d2-plugin-validate.cjs` |
 
 **新机器接入**：对任意 coding agent 说"读 SETUP.md 和我一起装"——人只回答问题，agent 干活（<30 分钟，D-3 实测口径）。
+
+Windows 上从本仓库连接 Codex 插件，在仓库根目录运行 `npm.cmd run codex:connect`。入口会查找独立 CLI 或桌面版自带的 CLI，安装插件和角色，并在需要时打开 Codex 原生 Hook 审核页。待审项全部属于本插件时，可选 **Trust all and continue** 一次确认。退出审核会话后，入口会回读信任结果。用 `npm.cmd run codex:connect -- --check` 单独检查。
+
+插件提供 CodeGraph、PDF 和 MATLAB 三个 MCP 入口。MATLAB 工具使用本机安装的 MATLAB 和 MathWorks MATLAB MCP Server。把服务程序放在 PATH 或仓库的 `packs/fpga/tools/` 后运行接入命令，也可以用 `MATLAB_MCP_SERVER` 指定绝对路径。没有安装服务程序时，MATLAB 工具列表为空。运行 `node packs/fpga/tools/check-matlab-mcp.cjs --manifest=dist/plugin/.codex-mcp.json` 可验证插件清单、工具发现和一次真实 MATLAB 计算。
 
 ## 质量门（CI 可复现）
 

@@ -1,15 +1,18 @@
 {
   "name": "agent-harness-logic",
   "owner": {
-    "name": "__OWNER__"
+    "name": "winkTech"
   },
   "plugins": [
     {
       "name": "logical-paradox",
-      "source": "__REPO_URL__",
-      "subdir": "dist/plugin",
-      "description": "UnVudGltZS1uZXV0cmFsIGFnZW50IGhhcm5lc3Mgd2l0aCBzYWZldHkgZ2F0ZXMsIHZlcmlmaWNhdGlvbiBsb29wLCBtZW1vcnkgKyBEcmVhbS4gTXVsdGktaG9zdDogY2xhdWRlLWNvZGUgLyBncm9rIC8gY29kZXggLyB3b3JrYnVkZHku",
-      "sha": "acc18bcf5367fc552437d24befcb989e38f99359"
+      "source": {
+        "source": "git-subdir",
+        "url": "https://github.com/winkTech/agent-harness-logic.git",
+        "path": "dist/plugin",
+        "sha": "92c77e32f284d43698b0cfb7e11b28a6735713f2"
+      },
+      "description": "Runtime-neutral agent harness with safety gates, verification loop, memory and session handoff."
     }
   ]
 }

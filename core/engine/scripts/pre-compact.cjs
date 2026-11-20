@@ -175,7 +175,7 @@ function main() {
 
   // 默认: hook 模式，保存检查点
   const event = saveCheckpoint();
-  console.log(`[pre-compact] 检查点已保存: ${event.timestamp} (#${event.compactNumber})`);
+  if (!process.argv.includes('--quiet')) console.log(`[pre-compact] 检查点已保存: ${event.timestamp} (#${event.compactNumber})`);
 }
 
 if (require.main === module) {

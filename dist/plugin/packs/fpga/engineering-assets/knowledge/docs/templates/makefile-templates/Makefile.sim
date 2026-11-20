@@ -1,0 +1,76 @@
+# ── HDL 仿真 Makefile 模板 ─────────────────────────────────────────
+# 适用: logic-engineer
+# 用法:
+#   make lint           — 语法检查
+#   make compile        — 编译所有源文件
+#   make sim MODULE=X   — 运行指定模块仿真
+#   make regress        — 全量回归
+#   make clean          — 清理编译结果
+# ────────────────────────────────────────────────────────────────────
+
+# ── 配置 ────────────────────────────────────────────────────────────
+TOP        ?= tb_top
+MODULE     ?= tb_scrambler
+VSIM       ?= vsim
+VLOG       ?= vlog
+VCOM       ?= vcom
+
+SRC_DIR    := 01_src
+TB_DIR     := 02_sim/tb
+LOG_DIR    := 02_sim/logs
+RESULT_DIR := 02_sim/check_results
+WORK_DIR   := work
+
+# 源文件列表（按依赖顺序）
+VLOG_SRC   := $(shell find $(SRC_DIR) -name '*.sv' -o -name '*.v' | sort)
+TB_SRC     := $(shell find $(TB_DIR) -name '*.sv' | sort)
+
+VLOG_FLAGS := -lint -sv -work $(WORK_DIR)
+VSIM_FLAGS := -c -voptargs=+acc -do "run -all; quit"
+
+# ── 目标 ────────────────────────────────────────────────────────────
+
+.PHONY: lint compile sim regress check clean
+
+# lint: 语法检查
+lint:
+	@mkdir -p $(LOG_DIR)
+	$(VLOG) $(VLOG_FLAGS) $(VLOG_SRC) 2>&1 | tee $(LOG_DIR)/lint.log
+	@echo "✅ lint 完成 (see $(LOG_DIR)/lint.log)"
+
+# compile: 编译所有源文件
+compile: | $(WORK_DIR)
+	@mkdir -p $(LOG_DIR)
+	$(VLOG) $(VLOG_FLAGS) $(VLOG_SRC) $(TB_SRC) 2>&1 | tee $(LOG_DIR)/compile.log
+	@echo "✅ compile 完成 (see $(LOG_DIR)/compile.log)"
+
+# sim: 运行指定模块仿真
+sim: compile
+	@mkdir -p $(LOG_DIR) $(RESULT_DIR)
+	$(VSIM) $(VSIM_FLAGS) -l $(LOG_DIR)/$(MODULE).log $(MODULE)
+	@echo "✅ sim $(MODULE) 完成 (see $(LOG_DIR)/$(MODULE).log)"
+	@python3 $(TB_DIR)/../check_$(MODULE).py 2>&1 | tee $(LOG_DIR)/$(MODULE)_check.log
+
+# regress: 全量回归
+regress: compile
+	@mkdir -p $(LOG_DIR) $(RESULT_DIR)
+	@for tb in $(TB_SRC); do \
+		mod=$$(basename $$tb .sv); \
+		echo "▶ 运行 $$mod ..."; \
+		$(VSIM) $(VSIM_FLAGS) -l $(LOG_DIR)/$$mod.log $$mod && \
+		python3 $(TB_DIR)/../check_$$mod.py; \
+	done
+	@echo "✅ regress 完成"
+
+# check: 运行 check 脚本（编译+仿真后）
+check:
+	@python3 $(TB_DIR)/../check_$(MODULE).py
+
+# clean: 清理
+clean:
+	rm -rf $(WORK_DIR) $(LOG_DIR)/*.log $(RESULT_DIR)/*.json transcript
+	@echo "✅ 清理完成"
+
+# work 目录
+$(WORK_DIR):
+	vlib $(WORK_DIR)

@@ -7,37 +7,42 @@
  * 从真源组装 dist/plugin/（标准插件布局，Claude/Grok/Codex 三形态同名）：
  *
  *   dist/plugin/
- *     skills/              ← core 技能（skills/ 运行时镜像中 core 部分）+
- *                            packs/fpga/skills + packs/office/skills 合集
+ *     skills/              ← 从 core/skills 和 域包的 skills 目录 渲染的合集
  *     agents/              ← packs/fpga/agents/{compound,domain}
- *     hooks/hooks.json     ← core/engine/hooks/plugin.hooks.json 复制
- *                            （命令已用 ${CLAUDE_PLUGIN_ROOT} 相对引用）
+ *     hooks/hooks.json     ← Claude / Grok 插件 Hook
+ *     hooks/codex.json     ← hosts/codex/registrations.json 渲染
  *     core/                ← bundled 精简引擎（hooks/scripts/sqlite/schemas——
  *                            plugin.hooks.json 引用面的最小闭包）
  *     .mcp.json            ← 从根 .mcp.json 脱敏投影（绝对路径→占位）
+ *     .codex-mcp.json      ← Codex MCP（插件根工作目录）
  *     .claude-plugin/plugin.json  ← 三宿主同名 kebab-case 清单
  *     .grok-plugin/plugin.json
  *     .codex-plugin/plugin.json
  *
- * 双 marketplace（仓库根，source 指本仓 dist/plugin 子目录）：
- *   .claude-plugin/marketplace.json（git-subdir 形，条目带 40 位 sha）
- *   .grok-plugin/marketplace.json（plugin_subdir 形）
+ * 双 marketplace 默认引用同仓 dist/plugin。发布时 Claude 使用 git-subdir
+ * 定位带有完整插件产物的 Git 提交，Grok 使用同仓的 vendored 路径。
  *
  * 用法：sync-plugin-dist.cjs [--check]
- *   渲染 = 重建 dist/plugin + 两 marketplace；--check = 逐字节漂移比对 exit 1。
- *
- * 脱敏（Phase 4.2 前置）：plugin.json author 占位 __OWNER__；.mcp.json 不含
- * 本机路径；marketplace source 用仓库公开 URL（占位 __REPO_URL__，发布时替换）。
+ *       sync-plugin-dist.cjs [--check] --release --repo-url=<https-url> --owner=<name> --commit=<sha>
+ * --check 在独立临时目录组装，发现漂移退出 1。
  */
 
 const fs = require('node:fs');
+const os = require('node:os');
 const path = require('node:path');
 const crypto = require('node:crypto');
+const { execFileSync } = require('node:child_process');
+const { parseArgs } = require('node:util');
 
 const { HARNESS_ROOT } = require('./lib/harness-root.cjs');
+const { collectSkillSources, deployTarget } = require('./sync-skills.cjs');
+const { parseFrontmatter } = require('./rule-loader.cjs');
 
-const DIST = path.join(HARNESS_ROOT, 'dist', 'plugin');
+const DIST_REL = 'dist/plugin';
+const DIST = path.join(HARNESS_ROOT, DIST_REL);
 const PLUGIN_NAME = 'logical-paradox';
+const PROJECT_NAME = 'Agent Harness Logic';
+const DESCRIPTION = 'Runtime-neutral agent harness with safety gates, verification loop, memory and session handoff.';
 
 // ── 拷贝工具（幂等重建：先清空目标子树）────────────────────────────────────
 
@@ -47,7 +52,8 @@ function rmrf(dir) {
 
 function copyTree(src, dest) {
   fs.mkdirSync(path.dirname(dest), { recursive: true });
-  fs.cpSync(src, dest, { recursive: true });
+  fs.cpSync(src, dest, { recursive: true, filter: file =>
+    path.relative(src, file) !== 'workbuddy.hooks.json' && path.basename(file) !== '__pycache__' });
 }
 
 function copyFile(src, dest) {
@@ -55,68 +61,58 @@ function copyFile(src, dest) {
   fs.copyFileSync(src, dest);
 }
 
-/** core 技能集 = skills/ 镜像中排除 pack 技能（pack 技能从 packs 源取）。 */
-const PACK_SKILL_NAMES = new Set([
-  'hdl-coding', 'project-init', 'python-hardware-debug', 'rtl-gen',
-  'vivado-flow', 'workflows', 'xdc-constraint-gen',
-  'doc-gen', 'markitdown-converter', 'pdf', 'presentation',
-]);
-
-function coreSkillNames() {
-  return fs.readdirSync(path.join(HARNESS_ROOT, 'skills'))
-    .filter((n) => !PACK_SKILL_NAMES.has(n) && fs.existsSync(
-      path.join(HARNESS_ROOT, 'skills', n, 'SKILL.md'),
-    ));
-}
-
 // ── 组装 ────────────────────────────────────────────────────────────────────
 
-function buildDist() {
-  rmrf(DIST);
-  fs.mkdirSync(DIST, { recursive: true });
-
-  // skills/：core + fpga + office 合集
-  for (const name of coreSkillNames()) {
-    copyTree(path.join(HARNESS_ROOT, 'skills', name), path.join(DIST, 'skills', name));
-  }
-  for (const pack of ['fpga', 'office']) {
-    const dir = path.join(HARNESS_ROOT, 'packs', pack, 'skills');
-    if (!fs.existsSync(dir)) continue;
-    for (const name of fs.readdirSync(dir)) {
-      if (!fs.existsSync(path.join(dir, name, 'SKILL.md'))) continue;
-      copyTree(path.join(dir, name), path.join(DIST, 'skills', name));
-    }
-  }
+function buildDist(output) {
+  const skills = collectSkillSources().filter(skill =>
+    skill.sources.some(dir => fs.existsSync(path.join(dir, 'SKILL.md')))
+  );
+  if (!skills.length) throw new Error('找不到可分发的技能真源');
+  deployTarget(path.join(output, 'skills'), skills, { quiet: true });
 
   // agents/：packs/fpga/agents 平铺
   const agentsSrc = path.join(HARNESS_ROOT, 'packs', 'fpga', 'agents');
   if (fs.existsSync(agentsSrc)) {
-    copyTree(agentsSrc, path.join(DIST, 'agents', 'fpga'));
+    copyTree(agentsSrc, path.join(output, 'agents', 'fpga'));
+    renderCodexAgents(agentsSrc, path.join(output, 'agents', 'codex'));
   }
 
   // hooks/hooks.json（plugin.hooks.json 已 ${CLAUDE_PLUGIN_ROOT} 形）
   copyFile(
     path.join(HARNESS_ROOT, 'core', 'engine', 'hooks', 'plugin.hooks.json'),
-    path.join(DIST, 'hooks', 'hooks.json'),
+    path.join(output, 'hooks', 'hooks.json'),
   );
+  copyFile(path.join(HARNESS_ROOT, 'hosts', 'codex', 'patch-hook.cjs'),
+    path.join(output, 'hosts', 'codex', 'patch-hook.cjs'));
 
   // core/：精简引擎闭包（hooks 命令引用面）
-  copyTree(path.join(HARNESS_ROOT, 'core', 'engine', 'hooks'), path.join(DIST, 'core', 'engine', 'hooks'));
-  copyTree(path.join(HARNESS_ROOT, 'core', 'engine', 'scripts'), path.join(DIST, 'core', 'engine', 'scripts'));
-  copyTree(path.join(HARNESS_ROOT, 'core', 'engine', 'sqlite'), path.join(DIST, 'core', 'engine', 'sqlite'));
-  copyTree(path.join(HARNESS_ROOT, 'core', 'engine', 'schemas'), path.join(DIST, 'core', 'engine', 'schemas'));
-  for (const extra of ['rules', 'io']) {
-    const src = path.join(HARNESS_ROOT, 'core', 'engine', extra);
-    if (fs.existsSync(src)) copyTree(src, path.join(DIST, 'core', 'engine', extra));
+  const sourceEngine = path.join(HARNESS_ROOT, 'core', 'engine');
+  const outputEngine = path.join(output, 'core', 'engine');
+  for (const dir of ['hooks', 'scripts', 'sqlite', 'schemas', 'io', 'mcp', 'parsers']) {
+    copyTree(path.join(sourceEngine, dir), path.join(outputEngine, dir));
   }
+  copyFile(path.join(sourceEngine, 'config.cjs'), path.join(outputEngine, 'config.cjs'));
+  copyFromObject(codexPluginHooks(output), path.join(output, 'hooks', 'codex.json'));
 
   // 规则层 + 入口渲染产物（审计 P0-2）：harness-root 锚点判定 + rule-loader 都
   // 以 <root>/core/rules 与 <root>/CLAUDE.md|AGENTS.md 为引用面，缺了则
   // "有技能、无规则"——00-core/03-gates/05-harness 全部失效。
-  copyTree(path.join(HARNESS_ROOT, 'core', 'rules'), path.join(DIST, 'core', 'rules'));
+  copyTree(path.join(HARNESS_ROOT, 'core', 'rules'), path.join(output, 'core', 'rules'));
+  for (const relative of ['packs/fpga/rules', 'packs/fpga/config']) {
+    const source = path.join(HARNESS_ROOT, relative);
+    if (fs.existsSync(source)) copyTree(source, path.join(output, relative));
+  }
+  const knowledge = 'packs/fpga/engineering-assets/knowledge';
+  if (fs.existsSync(path.join(HARNESS_ROOT, knowledge))) {
+    for (const file of git('ls-files', '-z', '--', knowledge).split('\0').filter(Boolean)) {
+      // 局部 EDA 验证报告含开发机绝对路径，不属于检索正文。
+      if (path.basename(file) === 'verification_report.json') continue;
+      copyFile(path.join(HARNESS_ROOT, file), path.join(output, file));
+    }
+  }
   for (const entry of ['CLAUDE.md', 'AGENTS.md']) {
     const src = path.join(HARNESS_ROOT, entry);
-    if (fs.existsSync(src)) copyFile(src, path.join(DIST, entry));
+    if (fs.existsSync(src)) copyFile(src, path.join(output, entry));
   }
 
   // 引擎根锚点（审计 P0-1）：harness-root.cjs 靠"模块位置上溯找 package.json
@@ -127,7 +123,7 @@ function buildDist() {
   ));
   copyFromObject(
     { name: 'harness', private: true, version: sourceManifest.version },
-    path.join(DIST, 'package.json'),
+    path.join(output, 'package.json'),
   );
 
   // .mcp.json（脱敏投影：只保留可分发服务器——npx 形与 plugin 相对形）
@@ -147,35 +143,97 @@ function buildDist() {
     }
     // 本机绝对路径 command（如 D:/tools/...）不分发
   }
-  copyFromObject(mcpOut, path.join(DIST, '.mcp.json'));
+  copyFromObject(mcpOut, path.join(output, '.mcp.json'));
+  // Codex 的兼容清单支持 Hook，MCP 的相对 cwd 会从插件根解析。
+  const pluginRootPrefix = '${CLAUDE_PLUGIN_ROOT}/';
+  const codexServers = Object.fromEntries(Object.entries(mcpOut.mcpServers).map(([name, server]) => {
+    const args = server.args.map((arg) => typeof arg === 'string' && arg.startsWith(pluginRootPrefix)
+      ? './' + arg.slice(pluginRootPrefix.length) : arg);
+    return [name, args.some((arg, i) => arg !== server.args[i]) ? { ...server, cwd: '.', args } : server];
+  }));
+  const codexMcp = './.codex-mcp.json';
+  copyFromObject({ mcpServers: codexServers }, path.join(output, codexMcp));
 
   // 三宿主 plugin.json（同名 kebab-case）——版本单一事实源 = 根 .claude-plugin
   // （release-checklist「版本一致」条款；此前硬编码 0.2.0 与根 0.1.0 漂移，审计 P2-6）
-  const sourceManifestVersion = JSON.parse(fs.readFileSync(
-    path.join(HARNESS_ROOT, '.claude-plugin', 'plugin.json'), 'utf8',
-  )).version;
   const baseManifest = {
     name: PLUGIN_NAME,
     displayName: PLUGIN_NAME,
-    version: sourceManifestVersion,
-    description: 'Runtime-neutral agent harness: safety gates, verification loop, memory + Dream, session handoff.',
-    author: { name: '__OWNER__' },
-    repository: '__REPO_URL__',
+    version: sourceManifest.version,
+    description: DESCRIPTION,
+    author: { name: PROJECT_NAME },
     license: 'MIT',
     keywords: ['harness', 'hooks', 'memory', 'verification', 'fpga'],
   };
   copyFromObject(
     { ...baseManifest, hooks: './hooks/hooks.json', mcpServers: mcpOut.mcpServers },
-    path.join(DIST, '.claude-plugin', 'plugin.json'),
+    path.join(output, '.claude-plugin', 'plugin.json'),
   );
   copyFromObject(
     { ...baseManifest, hooks: './hooks/hooks.json' },
-    path.join(DIST, '.grok-plugin', 'plugin.json'),
+    path.join(output, '.grok-plugin', 'plugin.json'),
   );
   copyFromObject(
-    { ...baseManifest, hooks: './hooks/hooks.json' },
-    path.join(DIST, '.codex-plugin', 'plugin.json'),
+    { ...baseManifest, hooks: './hooks/codex.json', mcpServers: codexMcp },
+    path.join(output, '.codex-plugin', 'plugin.json'),
   );
+  // Git checkout line endings vary by platform. Store portable text as LF and preserve binary blobs.
+  for (const name of fs.readdirSync(output, { recursive: true })) {
+    const file = path.join(output, name);
+    if (!fs.statSync(file).isFile()) continue;
+    const bytes = fs.readFileSync(file);
+    if (!bytes.includes(0) && bytes.includes('\r\n') && require('node:buffer').isUtf8(bytes)) {
+      fs.writeFileSync(file, bytes.toString('utf8').replace(/\r\n/g, '\n'));
+    }
+  }
+  return skills.length;
+}
+
+function renderCodexAgents(source, output) {
+  for (const group of ['compound', 'domain']) {
+    for (const file of fs.readdirSync(path.join(source, group)).filter((name) => name.endsWith('.md'))) {
+      const raw = fs.readFileSync(path.join(source, group, file), 'utf8');
+      const { frontmatter: { name, description }, body } = parseFrontmatter(raw);
+      if (!/^[a-z][a-z0-9-]*$/.test(name || '') || !description || !body) {
+        throw new Error('Invalid Codex agent source: ' + file);
+      }
+      const skills = raw.split(/\r?\n---/)[0].match(/^skills:\s*\r?\n((?:[ \t]+- [^\r\n]+\r?\n)+)/m)?.[1]
+        .trim().split(/\r?\n/).map((line) => line.replace(/^\s*-\s+/, '').split(/\s+#/)[0].trim());
+      const preface = skills?.length ? '按任务使用已安装的技能：' + skills.join('、') + '。\n\n' : '';
+      const instructions = ('继承父会话的工具与权限。查 Harness 引用时，以已安装插件的目录作为资源根。\n\n' + preface + body)
+        .replace(/\r\n/g, '\n');
+      const filePath = path.join(output, name + '.toml');
+      fs.mkdirSync(output, { recursive: true });
+      fs.writeFileSync(filePath, [
+        '# Generated by logical-paradox from ' + group + '/' + file,
+        'name = ' + JSON.stringify(name),
+        'description = ' + JSON.stringify(description),
+        'developer_instructions = ' + JSON.stringify(instructions),
+        '',
+      ].join('\n'));
+    }
+  }
+}
+
+function codexPluginHooks(output) {
+  const registrations = JSON.parse(fs.readFileSync(path.join(HARNESS_ROOT, 'hosts/codex/registrations.json'), 'utf8'));
+  const hooks = Object.fromEntries(Object.entries(registrations.hooks).map(([event, groups]) => [event,
+    groups.map(({ matcher, hooks: entries }) => ({
+      matcher,
+      hooks: entries.filter((entry) => !entry.standaloneOnly).map(({ command, ...fields }) => {
+        const match = /^node "?\$\{HARNESS_ROOT\}\/((?:[\w-]+\/)*[\w.-]+\.cjs)"?(\s.*)?$/.exec(command);
+        if (!match || !fs.existsSync(path.join(output, match[1]))) {
+          throw new Error(`Invalid Codex plugin hook: ${command}`);
+        }
+        const [, script, args = ''] = match;
+        return { ...fields,
+          command: 'node "${PLUGIN_ROOT}/' + script + '"' + args,
+          commandWindows: 'node "$env:PLUGIN_ROOT/' + script + '"' + args + '; exit $LASTEXITCODE',
+        };
+      }),
+    })).filter((group) => group.hooks.length > 0),
+  ]));
+  return { hooks };
 }
 
 function copyFromObject(obj, dest) {
@@ -183,108 +241,98 @@ function copyFromObject(obj, dest) {
   fs.writeFileSync(dest, `${JSON.stringify(obj, null, 2)}\n`, 'utf8');
 }
 
-/** dist 树内容 sha（40 位——marketplace 条目引用）。 */
-function distSha() {
-  const hash = crypto.createHash('sha1');
-  const walk = (dir) => {
-    for (const name of fs.readdirSync(dir).sort()) {
-      const p = path.join(dir, name);
-      const stat = fs.statSync(p);
-      if (stat.isDirectory()) walk(p);
-      else {
-        hash.update(name);
-        hash.update(fs.readFileSync(p));
-      }
-    }
-  };
-  walk(DIST);
-  return hash.digest('hex');
-}
-
-// ── 双 marketplace ─────────────────────────────────────────────────────────
-
-function buildMarketplaces() {
-  const sha = distSha();
-  const claude = {
-    name: 'agent-harness-logic',
-    owner: { name: '__OWNER__' },
-    plugins: [
-      {
-        name: PLUGIN_NAME,
-        source: '__REPO_URL__',
-        subdir: 'dist/plugin',
-        description: base64desc(),
-        sha,
-      },
-    ],
-  };
-  copyFromObject(claude, path.join(HARNESS_ROOT, '.claude-plugin', 'marketplace.json'));
-  const grok = {
-    name: 'agent-harness-logic',
-    plugins: [
-      {
-        name: PLUGIN_NAME,
-        source: '__REPO_URL__',
-        plugin_subdir: 'dist/plugin',
-        sha,
-      },
-    ],
-  };
-  copyFromObject(grok, path.join(HARNESS_ROOT, '.grok-plugin', 'marketplace.json'));
-  return sha;
-}
-
-function base64desc() {
-  return Buffer.from('Runtime-neutral agent harness with safety gates, verification loop, memory + Dream. Multi-host: claude-code / grok / codex / workbuddy.').toString('base64');
-}
-
-// ── check ──────────────────────────────────────────────────────────────────
-
-/** 逐字节比对：把当前 dist 快照到临时目录，重建，比对两树。 */
-function check() {
-  const tmp = path.join(HARNESS_ROOT, 'var', 'tmp', 'dist-check');
-  rmrf(tmp);
-  if (fs.existsSync(DIST)) copyTree(DIST, tmp);
-  buildDist();
-  const shaNew = distSha();
-  const diffs = [];
-  const walk = (a, b, rel) => {
-    const aEntries = fs.existsSync(a) ? fs.readdirSync(a).sort() : [];
-    const bEntries = fs.existsSync(b) ? fs.readdirSync(b).sort() : [];
-    for (const n of new Set([...aEntries, ...bEntries])) {
-      const relPath = rel ? `${rel}/${n}` : n;
-      const inA = aEntries.includes(n);
-      const inB = bEntries.includes(n);
-      if (!inA || !inB) { diffs.push(relPath); continue; }
-      const pa = path.join(a, n); const pb = path.join(b, n);
-      const sa = fs.statSync(pa); const sb = fs.statSync(pb);
-      if (sa.isDirectory() !== sb.isDirectory()) { diffs.push(relPath); continue; }
-      if (sa.isDirectory()) walk(pa, pb, relPath);
-      else if (fs.readFileSync(pa).equals(fs.readFileSync(pb)) === false) diffs.push(relPath);
-    }
-  };
-  walk(tmp, DIST, '');
-  rmrf(tmp);
-  if (diffs.length > 0) {
-    process.stderr.write(`[sync-plugin-dist] ✖ dist/plugin 漂移 ${diffs.length} 处: ${diffs.slice(0, 5).join(', ')}${diffs.length > 5 ? ' ...' : ''}\n`);
-    process.exit(1);
+function filesIn(dir, rel = '', files = new Map()) {
+  for (const entry of fs.readdirSync(path.join(dir, rel), { withFileTypes: true })) {
+    const name = path.posix.join(rel, entry.name);
+    if (entry.isDirectory()) filesIn(dir, name, files);
+    else if (entry.isFile()) {
+      const bytes = fs.readFileSync(path.join(dir, name));
+      const oid = crypto.createHash('sha1').update('blob ' + bytes.length + '\0').update(bytes).digest('hex');
+      files.set(name, oid);
+    } else throw new Error('Unsupported plugin entry: ' + name);
   }
-  // marketplace sha 复核
-  const claudeM = JSON.parse(fs.readFileSync(path.join(HARNESS_ROOT, '.claude-plugin', 'marketplace.json'), 'utf8'));
-  if (claudeM.plugins[0].sha !== shaNew) {
-    process.stderr.write('[sync-plugin-dist] ✖ marketplace sha 过期（重跑渲染）\n');
-    process.exit(1);
+  return files;
+}
+
+function differences(expected, actual) {
+  return [...new Set([...expected.keys(), ...actual.keys()])].filter(k => expected.get(k) !== actual.get(k));
+}
+
+function git(...args) {
+  return execFileSync('git', ['-c', 'safe.directory=' + HARNESS_ROOT.replace(/\\/g, '/'), ...args],
+    { cwd: HARNESS_ROOT, encoding: 'utf8', maxBuffer: 16 * 1024 * 1024 });
+}
+
+function releaseSource(options, files) {
+  const { commit, 'repo-url': url, owner } = options;
+  if (!owner?.trim() || !/^https:\/\//.test(url || '') || !/^[a-f0-9]{40}$/.test(commit || '')) {
+    throw new Error('--release requires --owner, --repo-url=https://... and --commit=<full Git SHA>');
   }
-  process.stdout.write('[sync-plugin-dist] ✓ 零漂移\n');
+  if (git('cat-file', '-t', commit).trim() !== 'commit') throw new Error('Expected a Git commit');
+  const tree = git('ls-tree', '-rz', commit + ':' + DIST_REL);
+  const committed = new Map(tree.split('\0').filter(Boolean).map(entry => {
+    const tab = entry.indexOf('\t');
+    const [mode, type, oid] = entry.slice(0, tab).split(' ');
+    if (!['100644','100755'].includes(mode) || type !== 'blob') throw new Error('Invalid plugin entry ' + entry);
+    return [entry.slice(tab + 1), oid];
+  }));
+  const drift = differences(files, committed);
+  if (drift.length) throw new Error('Commit differs from generated plugin: ' + drift.slice(0, 8).join(', '));
+  return { source: 'git-subdir', url, path: DIST_REL, sha: commit };
 }
 
 function main() {
-  if (process.argv.includes('--check')) { check(); return; }
-  buildDist();
-  const sha = buildMarketplaces();
-  const skillCount = fs.readdirSync(path.join(DIST, 'skills')).length;
-  process.stdout.write(`[sync-plugin-dist] 已组装 dist/plugin（skills ${skillCount} · agents fpga · core 引擎 · 三宿主清单）sha=${sha.slice(0, 12)}\n`);
-  process.stdout.write('[sync-plugin-dist] 双 marketplace 已渲染（__REPO_URL__ 占位——发布时替换）\n');
+  const { values } = parseArgs({ options: { check: { type: 'boolean' }, release: { type: 'boolean' }, local: { type: 'boolean' },
+    'repo-url': { type: 'string' }, owner: { type: 'string' }, commit: { type: 'string' } } });
+  const tempParent = values.check ? os.tmpdir() : path.dirname(DIST);
+  fs.mkdirSync(tempParent, { recursive: true });
+  const work = fs.mkdtempSync(path.join(tempParent, 'plugin-build-'));
+  const staged = path.join(work, 'plugin');
+  const backup = path.join(work, 'previous');
+  try {
+    buildDist(staged);
+    const files = filesIn(staged);
+    if (values.release && values.local) throw new Error('Choose either --release or --local');
+    const existingPath = path.join(HARNESS_ROOT, '.claude-plugin/marketplace.json');
+    const existing = fs.existsSync(existingPath) ? JSON.parse(fs.readFileSync(existingPath, 'utf8')) : null;
+    const pin = existing?.plugins?.find(p => p.name === PLUGIN_NAME)?.source;
+    const release = values.release ? values : !values.local && pin?.source === 'git-subdir'
+      ? { commit: pin.sha, 'repo-url': pin.url, owner: existing.owner?.name } : null;
+    const source = release ? releaseSource(release, files) : './' + DIST_REL;
+    const base = { name: 'agent-harness-logic', owner: { name: release?.owner || PROJECT_NAME } };
+    const catalogs = {
+      [require(path.join(HARNESS_ROOT, 'hosts/codex/connect.cjs')).catalogPath]: { name: base.name, interface: { displayName: PROJECT_NAME },
+        plugins: [{ name: PLUGIN_NAME, source: { source: 'local', path: './' + DIST_REL },
+          policy: { installation: 'AVAILABLE', authentication: 'ON_INSTALL' }, category: 'Developer Tools' }] },
+      '.claude-plugin/marketplace.json': { ...base, plugins: [{ name: PLUGIN_NAME, source, description: DESCRIPTION }] },
+      '.grok-plugin/marketplace.json': { ...base, plugins: [{ name: PLUGIN_NAME, source: { type: 'local', path: './' + DIST_REL } }] },
+    };
+    if (values.check) {
+      const drift = differences(files, fs.existsSync(DIST) ? filesIn(DIST) : new Map());
+      for (const [name, catalog] of Object.entries(catalogs)) {
+        const target = path.join(HARNESS_ROOT, name);
+        if (!fs.existsSync(target) || fs.readFileSync(target, 'utf8').replace(/\r\n/g, '\n') !== JSON.stringify(catalog, null, 2) + '\n') drift.push(name);
+      }
+      if (drift.length) throw new Error('Distribution drift: ' + drift.slice(0, 10).join(', '));
+    } else {
+      if (!fs.existsSync(DIST) || differences(files, filesIn(DIST)).length) {
+        if (fs.existsSync(DIST)) fs.renameSync(DIST, backup);
+        try { fs.renameSync(staged, DIST); }
+        catch (error) {
+          if (fs.existsSync(backup)) fs.renameSync(backup, DIST);
+          throw error;
+        }
+      }
+      for (const [name, catalog] of Object.entries(catalogs)) copyFromObject(catalog, path.join(HARNESS_ROOT, name));
+    }
+    console.log('[sync-plugin-dist] ' + (values.check ? '零漂移' : '插件与目录已生成'));
+  } finally {
+    if (fs.existsSync(DIST) || !fs.existsSync(backup)) rmrf(work);
+  }
 }
 
-main();
+if (require.main === module) {
+  try { main(); }
+  catch (error) { console.error('[sync-plugin-dist] ' + error.message); process.exitCode = 1; }
+}
+module.exports = { filesIn, differences };

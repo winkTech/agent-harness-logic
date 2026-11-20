@@ -1,0 +1,6 @@
+{
+  "$schema": "fpga-pack/progress-watchdog-rules-v1",
+  "description": "progress-watchdog 的 FPGA 验证命令识别规则（Phase 2.6 从 core 外置——watchdog 骨架留 core，域命令表归 pack）",
+  "fpgaVerificationCommand": "\\b(?:vivado(?:\\.bat|\\.exe)?\\s+.*(?:-mode\\s+batch|-source\\b)|node(?:\\.exe)?\\s+.*(?:pg-synth|fpga-timing-parser|auto-parse-fpga-reports)\\.cjs\\b)",
+  "fpgaVerificationCommandFlags": "i"
+}

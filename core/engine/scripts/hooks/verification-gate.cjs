@@ -44,6 +44,8 @@ const { evaluateGuardBypass } = require('../lib/gate-bypass.cjs');
 const GATE_ID = 'verification-gate.cjs';
 const {
   markEditedFromPayload,
+  startVerification,
+  verificationRunKey,
   markVerifiedForCwd,
   pendingForPayload,
   readVerificationState,
@@ -265,10 +267,20 @@ function markEdited(payload, toolName) {
   markEditedFromPayload(payload, { toolName });
 }
 
-function markVerified(payload, command) {
-  markVerifiedForCwd(payloadCwd(payload), {
+function finishVerification(payload, command, result, passed) {
+  let startedAtMs = Date.parse(result.startedAt);
+  const finishedAt = Date.parse(result.completedAt);
+  if (!Number.isFinite(startedAtMs) && Number.isFinite(finishedAt)
+      && Number.isFinite(result.durationMs) && result.durationMs >= 0) {
+    startedAtMs = finishedAt - result.durationMs;
+  }
+  return markVerifiedForCwd(payloadCwd(payload), {
     command,
     sessionId: sessionIdFromPayload(payload),
+    startedAtMs,
+    passed,
+    runKey: verificationRunKey(payload, command),
+    correlated: Boolean(payload.tool_use_id),
   });
 }
 
@@ -865,9 +877,9 @@ function evaluate(payload, _runtime = {}) {
       ? { ok: false, reason: 'PostToolUseFailure event' }
       : verificationVerdict(command, result);
     recordVerificationEvidence(payload, command, result, verdict);
+    const stateUpdated = finishVerification(payload, command, result, verdict.ok).cleared.length > 0;
     if (verdict.ok) {
-      if (pending.length > 0) markVerified(payload, command);
-      return allow([], { pending, verification: verdict, stateUpdated: pending.length > 0 });
+      return allow([], { pending, verification: verdict, stateUpdated });
     }
     const diagnostics = [`[VerificationGate] verification result rejected: ${verdict.reason}`];
     if (verdict.reason === 'no explicit PASS evidence in output') {
@@ -884,6 +896,7 @@ function evaluate(payload, _runtime = {}) {
 
   if ((eventName === 'PreToolUse' || !eventName) && isShellTool && command) {
     const pending = pendingForPayload(readState(), payload);
+    if (matchesAny(command, TEST_PATTERNS) && matchesAll(command, [...TEST_PATTERNS, ...LINT_PATTERNS, ...SAFE_PATTERNS])) startVerification(payload, command);
     if (pending.length === 0 || isRescue(command)) return allow([], { pending });
 
     if (matchesAny(command, TEST_PATTERNS)) {
@@ -961,7 +974,7 @@ async function main() {
   if ((eventName === 'PostToolUse' || eventName === 'PostToolUseFailure') && isShellTool && command) {
     const state = readState();
     const pending = pendingForPayload(state, payload);
-    if (pending.length === 0 || !matchesAny(command, TEST_PATTERNS)) process.exit(0);
+    if (!matchesAny(command, TEST_PATTERNS)) process.exit(0);
 
     const result = bashResultFromPayload(payload);
     // PostToolUseFailure = 工具层已判定执行失败, 无条件按验证失败记录
@@ -969,9 +982,8 @@ async function main() {
       ? { ok: false, reason: 'PostToolUseFailure event' }
       : verificationVerdict(command, result);
     recordVerificationEvidence(payload, command, result, verdict);
-    if (verdict.ok) {
-      markVerified(payload, command);
-    } else {
+    finishVerification(payload, command, result, verdict.ok);
+    if (!verdict.ok) {
       console.error(`[VerificationGate] verification result rejected: ${verdict.reason}`);
       if (verdict.reason === 'no explicit PASS evidence in output') {
         console.error('  退出码 0 且无失败标记, 但输出里没有任何通过证据 —— 这不算验证通过。');
@@ -994,6 +1006,7 @@ async function main() {
     const pending = pendingForPayload(state, payload);
 
     // 没有待验证的修改 → 放行
+    if (matchesAny(command, TEST_PATTERNS) && matchesAll(command, [...TEST_PATTERNS, ...LINT_PATTERNS, ...SAFE_PATTERNS])) startVerification(payload, command);
     if (pending.length === 0) process.exit(0);
 
     // 本门禁自身的解除/查询命令 → 始终放行 (逃生通道, 不受链式命令影响)

@@ -61,7 +61,9 @@ function main() {
     'core/engine/scripts/render-grok-hooks.cjs',
   ];
   for (const c of checks) {
-    const r = spawnSync(process.execPath, [path.join(HARNESS_ROOT, c), '--check'],
+    const args = [path.join(HARNESS_ROOT, c), '--check'];
+    if (c.endsWith('/render-codex-hooks.cjs')) args.push('--active');
+    const r = spawnSync(process.execPath, args,
       { encoding: 'utf8', timeout: 120000, windowsHide: true });
     ok(r.status === 0, `${c} --check exit=${r.status}: ${(r.stderr || '').split('\n')[0]}`);
   }
