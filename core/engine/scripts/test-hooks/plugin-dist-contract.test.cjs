@@ -13,6 +13,15 @@ const VALIDATOR = path.join(ROOT, 'core/engine/scripts/bench-d2-plugin-validate.
 const CLAUDE = '.claude-plugin/marketplace.json';
 const GROK = '.grok-plugin/marketplace.json';
 
+test('skill projections preserve body spacing across LF and CRLF checkouts', () => {
+  const { normalizeSkillMarkdown } = require('../sync-skills.cjs');
+  for (const body of ['', '# Heading\n', '\n# Heading\n']) {
+    const text = '---\nname: sample\ndescription: Example\n---\n' + body;
+    assert.equal(normalizeSkillMarkdown(text), text);
+    assert.equal(normalizeSkillMarkdown(text.replaceAll('\n', '\r\n')).replaceAll('\r\n', '\n'), text);
+  }
+});
+
 test('Codex migration disables only user commands covered by a trusted, enabled plugin hook', () => {
   const { duplicates } = require('../../../../hosts/codex/connect.cjs');
   const script = 'hosts/codex/patch-hook.cjs';

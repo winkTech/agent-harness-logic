@@ -106,8 +106,8 @@ function normalizeSkillMarkdown(text) {
   const lines = MINIMAL_FIELDS
     .filter((key) => fields.has(key))
     .map((key) => `${key}: ${fields.get(key)}`);
-  const body = match[2] === undefined ? '' : match[2];
-  return `---\n${lines.join('\n')}\n---${body.startsWith('\n') || body === '' ? body : `\n${body}`}`;
+  const body = match[2] === undefined ? '' : '\n' + match[2];
+  return `---\n${lines.join('\n')}\n---${body}`;
 }
 
 /**
