@@ -1,13 +1,15 @@
 ---
 name: wifi-golden-model-setup
-title: Golden Model 设置指南
+title: WiFi 黄金模型环境搭建指南
 domain: comm
 type: guide
 tags: [wifi, golden-model, python, setup]
 updated: 2026-07-03
 ---
 
-# Golden Model 设置指南
+# WiFi 黄金模型环境搭建指南
+
+搭建 WiFi PHY 的 Golden Model 时，先选择 Python 或 MATLAB，再约定模型目录、定点参数、内置测试向量和命令行测试入口，以便 RTL 对拍复用同一组输入输出。
 
 ## 语言选择：Python 优先
 

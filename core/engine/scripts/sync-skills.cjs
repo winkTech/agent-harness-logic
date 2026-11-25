@@ -41,18 +41,21 @@ const path = require('node:path');
 const os = require('node:os');
 
 const { HARNESS_ROOT } = require('./lib/harness-root.cjs');
+const { resolveEnabledPacks } = require('./lib/pack-config.cjs');
 
 // ── 真源收集 ───────────────────────────────────────────────────────────────
 
 /**
- * 收集全部技能真源。
+ * 收集全部技能真源（支持按 packs 过滤：core / core,office / fpga / all）。
  * @param {string} root
+ * @param {{ packs?: string|string[]|null, env?: object }} [opts]
  * @returns {Array<{ name: string, sources: string[] }>} 按名称分组（同名多真源=合并投放）
  */
-function collectSkillSources(root = HARNESS_ROOT) {
+function collectSkillSources(root = HARNESS_ROOT, opts = {}) {
+  const enabledPacks = resolveEnabledPacks({ root, packs: opts.packs, env: opts.env });
   const roots = [
     path.join(root, 'core', 'skills'),
-    ...fs.readdirSync(path.join(root, 'packs')).map((pack) => path.join(root, 'packs', pack, 'skills')),
+    ...enabledPacks.map((pack) => path.join(root, 'packs', pack, 'skills')),
   ];
   const byName = new Map();
   for (const dir of roots) {
@@ -248,11 +251,20 @@ function checkEntryFiles(root = HARNESS_ROOT) {
 
 // ── CLI ────────────────────────────────────────────────────────────────────
 
+function parsePacksArg(args) {
+  for (let i = 0; i < args.length; i += 1) {
+    if (args[i] === '--packs' && i + 1 < args.length) return args[i + 1];
+    if (args[i].startsWith('--packs=')) return args[i].slice('--packs='.length);
+  }
+  return undefined;
+}
+
 function main() {
   const args = process.argv.slice(2);
   const checkOnly = args.includes('--check');
+  const packs = parsePacksArg(args);
   try {
-    const skills = collectSkillSources();
+    const skills = collectSkillSources(HARNESS_ROOT, { packs });
     if (!skills.length) {
       throw Object.assign(new Error('真源为空：core/skills/ 与 packs/*/skills/ 均无技能'), { exitCode: 2 });
     }

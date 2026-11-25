@@ -1,7 +1,7 @@
 {
   "name": "logical-paradox",
   "displayName": "logical-paradox",
-  "version": "0.1.2",
+  "version": "0.1.6",
   "description": "Runtime-neutral agent harness: safety gates, verification loop, memory + Dream, session handoff. Core skills: tdd, debugging, code-review, brainstorming, git-expert.",
   "author": { "name": "Lihan" },
   "repository": "https://github.com/winkTech/agent-harness-logic",

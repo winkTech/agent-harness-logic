@@ -45,23 +45,20 @@ const SANCTIONED_DISTRIBUTION = new Set([
   'config.cjs',
   // Phase 2.6：pack 规则表加载器本体（config 目录解析是它的全部职责）
   'scripts/lib/pack-config.cjs',
-  // Phase 4.1: dist 组装器
+  // Phase 4.1: dist 组装器（读 skills/packs/core 组装分发面与 ${CLAUDE_PLUGIN_ROOT} 占位）
   'scripts/sync-plugin-dist.cjs',
   // Phase 4.3: 文档干跑校验器（文档路径引用面）
   'scripts/bench-d3-docs-dryrun.cjs',
-  // Phase 3.1：Codex 宿主适配器渲染器（真源在 hosts/codex，产物到 ~/.codex）
+  // Phase 3.1/3.2：宿主适配器渲染器与 CI 门禁调度
   'scripts/render-codex-hooks.cjs',
   'scripts/render-grok-hooks.cjs',
-  // Phase 4.1: dist 组装器（读 skills/packs/core 组装分发面）
-  'scripts/sync-plugin-dist.cjs',
+  'scripts/harness-ci.cjs',
   // §6.1.4：rule-loader 双根扫描（core/rules + packs/fpga/rules）
   'scripts/rule-loader.cjs',
   // §3.5：技能/规则单一真源同步器与渲染器
   'scripts/sync-skills.cjs',
   'scripts/sync-pack-skills.cjs',
   'scripts/render-hook-settings.cjs',
-  // dist 组装器：.mcp.json 投影写 ${CLAUDE_PLUGIN_ROOT} 分发契约占位（审计 P0-3）
-  'scripts/sync-plugin-dist.cjs',
   // §4.2：P 系列 bench 采集器（跑 pack 工具是其职责）
   'scripts/bench-refactor.cjs',
   // 注册表数据面：registrations/manifest 真源在 hosts/claude-code/
@@ -98,8 +95,8 @@ const PACK_PATH_PATTERNS = [
   /packs\/(fpga|office)/,
   /packs\\(fpga|office)/,
   /['"]packs['"]\s*,/,
-  /hosts\/(claude-code|codex|grok)/,
-  /hosts\\(claude-code|codex|grok)/,
+  /hosts\/(claude-code|codex|grok|antigravity)/,
+  /hosts\\(claude-code|codex|grok|antigravity)/,
   /['"]hosts['"]\s*,/,
 ];
 const HOST_TOPOLOGY_PATTERNS = [
@@ -110,8 +107,8 @@ const HOST_TOPOLOGY_PATTERNS = [
   /statusLine/i,
 ];
 const REQUIRE_PACK_PATTERNS = [
-  /require(s*['"][^'"]*packs[\/](fpga|office)[\/][^'"]*['"]s*)/,
-  /require(s*['"][^'"]*hosts[\/](claude-code|codex|grok)[\/][^'"]*['"]s*)/,
+  /\brequire\s*\(\s*(['"])(?:[^'"\r\n]*[\\/])?packs[\\/](?:fpga|office)[\\/][^'"\r\n]+\1\s*\)/,
+  /\brequire\s*\(\s*(['"])(?:[^'"\r\n]*[\\/])?hosts[\\/](?:claude-code|codex|grok|antigravity)[\\/][^'"\r\n]+\1\s*\)/,
 ];
 
 function walkCjs(dir, acc = []) {

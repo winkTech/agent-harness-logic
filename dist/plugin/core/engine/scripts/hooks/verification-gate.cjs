@@ -53,13 +53,8 @@ const {
   sessionIdFromPayload,
   writeVerificationState,
 } = require('../lib/verification-state.cjs');
-const { payloadCwd, payloadFilePath } = require('../lib/project-scope.cjs');
+const { payloadCwd, payloadFilePath, resolvePath } = require('../lib/project-scope.cjs');
 const { VAR_DIR } = require('../lib/harness-state.cjs');
-const {
-  commandEvidence,
-  ensureEvidenceDir,
-  writeEvidenceLedger,
-} = require('../lib/evidence-ledger.cjs');
 
 const STATE_DIR = VAR_DIR;
 const STATE_FILE = path.join(STATE_DIR, 'verify-gate.json');
@@ -123,6 +118,7 @@ const TEST_PATTERNS = [
   // Node/JS 测试
   /^npm\s+test\b/,
   /^npm\s+run\s+test\b/,
+  /^node\s+--test(?:\s|$)/,
   /^node\s+.*engine[\/\\]scripts[\/\\]test-hooks[\/\\].+\.(?:cjs|js)\b/,
   // engineering-assets 的准入门 runner —— 它自己就会跑 vlog 并判读仿真/综合
   // 证据, 是本仓库 CBB 的验收判定, 属功能验证而非语法检查。
@@ -218,7 +214,7 @@ const SAFE_PATTERNS = [
   /^Test-Path\b/i,
   /^(?:Resolve|Split|Join)-Path\b/i,
   /^Write-(?:Output|Host|Verbose|Debug)\b/i,
-  /^Set-Location\b/i,
+  /^(?:Set-Location|sl)\b/i,
   /^Get-ChildItem\b/i,
   // 变量赋值 / 管道续行 / 表达式求值等 PowerShell 语法片段
   /^\$[A-Za-z_]\w*\s*=/,
@@ -276,12 +272,47 @@ function finishVerification(payload, command, result, passed) {
   }
   return markVerifiedForCwd(payloadCwd(payload), {
     command,
+    workspacePaths:payload.workspacePaths,
     sessionId: sessionIdFromPayload(payload),
     startedAtMs,
     passed,
     runKey: verificationRunKey(payload, command),
     correlated: Boolean(payload.tool_use_id),
   });
+}
+
+// The hook workspace and the shell's actual working directory may differ.
+// A shell can continue in its old directory after an unconditional cd.
+// Check all possible working directories; only one proven directory can settle an edit.
+function shellProjectContext(payload, command) {
+  const input = payload.tool_input || payload.tool?.input || payload.input || {};
+  let directories = [resolvePath(input.Cwd || input.cwd || payloadCwd(payload), payloadCwd(payload))];
+  let baseKnown = !payload.workspaceCwdUnknown || path.isAbsolute(input.Cwd || input.cwd || '');
+  let rest = command.trimStart();
+  const prefix = /^(?:cd|chdir|set-location|sl)\s+(?:(?:\/d|-literalpath|-path)\s+)?("[^"]+"|'[^']+'|[^\s;&|]+)[ \t]*(&&|;|\r?\n)\s*/i;
+  let match;
+  while ((match = prefix.exec(rest))) {
+    const target = match[1].replace(/^(["'])(.*)\1$/, '$2');
+    if (/[$%*?~\x60]/.test(target) || target === '-') break;
+    if (!baseKnown && !path.isAbsolute(target)) break;
+    if (match[2] === '&&') baseKnown = true;
+    const targets = directories.map(cwd => resolvePath(target, cwd));
+    directories = [...new Set(match[2] === '&&' ? targets : [...directories, ...targets])];
+    if (directories.length > 8) break;
+    rest = rest.slice(match[0].length);
+  }
+  const unresolved = /\b(?:cd|chdir|set-location|sl|pushd|popd|push-location|pop-location)\b/i.test(rest)
+    && commandSegments(rest).some(part => /^(?:cd|chdir|set-location|sl|pushd|popd|push-location|pop-location)\b/i.test(part));
+  return {payload:{...payload,cwd:directories[0]}, directories, unresolved, ambiguous:!baseKnown || unresolved || directories.length !== 1};
+}
+
+function shellPending(state, payload, scope) {
+  if (!scope || scope.directories.length === 1) return pendingForPayload(state, payload);
+  const entries = new Map();
+  for (const cwd of scope.directories) {
+    for (const item of pendingForPayload(state, {...payload,cwd})) entries.set(item.pendingKey,item);
+  }
+  return [...entries.values()];
 }
 
 function normalizeStatus(status) {
@@ -339,7 +370,7 @@ function bashResultFromPayload(payload) {
  * "载荷不带退出码"的观察型条目时需要同一套判据, 两处各抄一份就会重演
  * "两份名单漂移" (vvp 曾只在其中一份里, 于是空输出仿真算通过)。
  */
-const { PASS_MARKERS, failureMarker } = require('../lib/verification-markers.cjs');
+const { PASS_MARKERS, failureMarker, hasPassMarker } = require('../lib/verification-markers.cjs');
 
 /**
  * partial 归因: 未满足的证据要求项 = 要求全集 - 已满足项。
@@ -351,7 +382,7 @@ function uncoveredEvidence(result, combined) {
   const uncovered = [];
   if (normalizeStatus(result?.status) === null) uncovered.push('exit-code');
   if (!combined.trim()) uncovered.push('log-evidence');
-  else if (!PASS_MARKERS.some((re) => re.test(combined))) uncovered.push('pass-marker');
+  else if (!hasPassMarker(combined)) uncovered.push('pass-marker');
   return uncovered;
 }
 
@@ -394,7 +425,7 @@ function verificationVerdictBase(command, result) {
     return { ok: false, reason: 'verification command produced no log evidence' };
   }
 
-  if (!PASS_MARKERS.some((re) => re.test(combined))) {
+  if (!hasPassMarker(combined)) {
     return { ok: false, reason: 'no explicit PASS evidence in output' };
   }
 
@@ -402,6 +433,7 @@ function verificationVerdictBase(command, result) {
 }
 
 function recordVerificationEvidence(payload, command, result, verdict) {
+  const { commandEvidence, ensureEvidenceDir, writeEvidenceLedger } = require('../lib/evidence-ledger.cjs');
   const entry = commandEvidence(command, result);
   entry.verification = {
     accepted: verdict.ok,
@@ -837,6 +869,15 @@ function block(diagnostics, extra = {}) {
   return { source: 'verification-gate', decision: 'block', diagnostics, ...extra };
 }
 
+// Observing a test result does not establish which project it verifies.
+// Only attributed results are handed to the evidence ledger and risk settlement.
+function observedTestOutcome(verdict, pending) {
+  const result = { observedVerification:verdict, pending, stateUpdated:false };
+  if (!verdict.ok) return warn(['[VerificationGate] verification result rejected: ' + verdict.reason], result);
+  if (pending.length) return warn(['[VerificationGate] Tests passed; specify the working directory to settle pending edits.'], result);
+  return allow([], result);
+}
+
 function evaluate(payload, _runtime = {}) {
   if (evaluateGuardBypass({ gateId: GATE_ID, payload }).allowed) {
     return allow([], { bypassed: true });
@@ -853,6 +894,10 @@ function evaluate(payload, _runtime = {}) {
     || ''
   ).trim();
 
+  const scope = isShellTool && command ? shellProjectContext(payload, command) : null;
+  if (scope) payload = scope.payload;
+  const ambiguousScope = scope?.ambiguous;
+
   if ((eventName === 'PostToolUse' || !eventName) && ['edit', 'write', 'multiedit'].includes(toolName)) {
     const filePath = payloadFilePath(payload);
     const normalizedPath = filePath.toLowerCase();
@@ -864,7 +909,7 @@ function evaluate(payload, _runtime = {}) {
   }
 
   if ((eventName === 'PostToolUse' || eventName === 'PostToolUseFailure') && isShellTool && command) {
-    const pending = pendingForPayload(readState(), payload);
+    const pending = shellPending(readState(), payload, scope);
     // verdict 产出与 pending 解耦 (2026-07-30, D5.3 outcome 断链根因):
     // 旧逻辑 pending 为空时直接 allow, 于是 verdict 只在"有待验证的 .sv/.py 编辑"
     // 时产生 —— harness 会话编辑 .cjs 不进 pending, outcome/delivery 两条自动
@@ -876,6 +921,7 @@ function evaluate(payload, _runtime = {}) {
     const verdict = eventName === 'PostToolUseFailure'
       ? { ok: false, reason: 'PostToolUseFailure event' }
       : verificationVerdict(command, result);
+    if (ambiguousScope) return observedTestOutcome(verdict, pending);
     recordVerificationEvidence(payload, command, result, verdict);
     const stateUpdated = finishVerification(payload, command, result, verdict.ok).cleared.length > 0;
     if (verdict.ok) {
@@ -895,8 +941,12 @@ function evaluate(payload, _runtime = {}) {
   }
 
   if ((eventName === 'PreToolUse' || !eventName) && isShellTool && command) {
-    const pending = pendingForPayload(readState(), payload);
-    if (matchesAny(command, TEST_PATTERNS) && matchesAll(command, [...TEST_PATTERNS, ...LINT_PATTERNS, ...SAFE_PATTERNS])) startVerification(payload, command);
+    const state = readState();
+    if (scope.unresolved && Object.keys(state.pending).length && !matchesAll(command, SAFE_PATTERNS)) {
+      return block(['[VerificationGate] Specify the working directory separately so the project can be checked.']);
+    }
+    const pending = shellPending(state, payload, scope);
+    if (!ambiguousScope && matchesAny(command, TEST_PATTERNS) && matchesAll(command, [...TEST_PATTERNS, ...LINT_PATTERNS, ...SAFE_PATTERNS])) startVerification(payload, command);
     if (pending.length === 0 || isRescue(command)) return allow([], { pending });
 
     if (matchesAny(command, TEST_PATTERNS)) {
@@ -957,6 +1007,9 @@ async function main() {
   const isShellTool = toolName === 'bash' || toolName === 'powershell'
     || payload?.tool_name === 'Bash' || payload?.tool_name === 'PowerShell';
   const command = (payload?.tool_input?.command || payload?.tool?.input?.command || payload?.input?.command || payload?.command || '').trim();
+  const scope = isShellTool && command ? shellProjectContext(payload, command) : null;
+  if (scope) payload = scope.payload;
+  const ambiguousScope = scope?.ambiguous;
 
   // ── PostToolUse: 编辑代码文件 → 标记待验证 ───────────────────────────────
   if ((eventName === 'PostToolUse' || !eventName) && ['edit', 'write', 'multiedit'].includes(toolName)) {
@@ -973,7 +1026,7 @@ async function main() {
 
   if ((eventName === 'PostToolUse' || eventName === 'PostToolUseFailure') && isShellTool && command) {
     const state = readState();
-    const pending = pendingForPayload(state, payload);
+    const pending = shellPending(state, payload, scope);
     if (!matchesAny(command, TEST_PATTERNS)) process.exit(0);
 
     const result = bashResultFromPayload(payload);
@@ -981,6 +1034,10 @@ async function main() {
     const verdict = eventName === 'PostToolUseFailure'
       ? { ok: false, reason: 'PostToolUseFailure event' }
       : verificationVerdict(command, result);
+    if (ambiguousScope) {
+      for (const line of observedTestOutcome(verdict, pending).diagnostics) console.error(line);
+      process.exit(0);
+    }
     recordVerificationEvidence(payload, command, result, verdict);
     finishVerification(payload, command, result, verdict.ok);
     if (!verdict.ok) {
@@ -1003,10 +1060,14 @@ async function main() {
   // ── PreToolUse: Bash 命令 → 检查验证状态 ─────────────────────────────────
   if ((eventName === 'PreToolUse' || !eventName) && isShellTool && command) {
     const state = readState();
-    const pending = pendingForPayload(state, payload);
+    if (scope.unresolved && Object.keys(state.pending).length && !matchesAll(command, SAFE_PATTERNS)) {
+      console.error('[VerificationGate] Specify the working directory separately so the project can be checked.');
+      process.exit(2);
+    }
+    const pending = shellPending(state, payload, scope);
 
     // 没有待验证的修改 → 放行
-    if (matchesAny(command, TEST_PATTERNS) && matchesAll(command, [...TEST_PATTERNS, ...LINT_PATTERNS, ...SAFE_PATTERNS])) startVerification(payload, command);
+    if (!ambiguousScope && matchesAny(command, TEST_PATTERNS) && matchesAll(command, [...TEST_PATTERNS, ...LINT_PATTERNS, ...SAFE_PATTERNS])) startVerification(payload, command);
     if (pending.length === 0) process.exit(0);
 
     // 本门禁自身的解除/查询命令 → 始终放行 (逃生通道, 不受链式命令影响)

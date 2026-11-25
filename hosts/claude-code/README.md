@@ -1,10 +1,15 @@
-# hosts/claude-code — 基座宿主接入
+# hosts/claude-code — Claude Code / WorkBuddy 宿主接入
 
-一分钟接入：
+一分钟接入（推荐先用插件模式，零侵入 `~/.claude/settings.json`）：
 
 ```bash
-node core/engine/scripts/render-hook-settings.cjs        # 渲染 settings.json + workbuddy.hooks.json + plugin.hooks.json
-node core/engine/scripts/render-hook-settings.cjs --check  # 期望: 三产物一致
+# 方式 1（推荐·插件模式，支持按需裁剪 --packs core | core,office | all）：
+npm run connect -- claude-code --packs core
+claude --plugin-dir ./dist/plugin
+
+# 方式 2（用户级 settings.json 接入，保留已有 env 与密钥）：
+npm run connect -- claude-code --mode user
+node core/engine/scripts/render-hook-settings.cjs --check  # 期望: 三产物零漂移
 ```
 
 ## 本目录内容

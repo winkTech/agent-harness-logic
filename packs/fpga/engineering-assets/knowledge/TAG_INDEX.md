@@ -27,6 +27,15 @@ tags: [index, navigation, tags]
 
 ## 算法 (algo)
 
+- [异步 FIFO CDC 格雷码 Gray 指针](primary/architecture-patterns/memory-cdc-patterns.md#格雷码-vs-二进制地址)
+
+复用、验收与签核按资产清单查询，例如[LDPC 编译码器](../cbb/ldpc_codec/manifest.json)。MATLAB 联仿的入口如下。
+
+- [信道估计 channel_est](primary/domains/comm/channel_est/run_rtl_cosim.m)
+- [OFDM](primary/domains/comm/ofdm/run_rtl_cosim.m)
+- [成形滤波 RRC](primary/domains/comm/rrc/run_rtl_cosim.m)
+- [同步 synch](primary/domains/comm/synch/run_rtl_cosim.m)
+
 | Tag | 文档路径 | 说明 |
 |:----|:---------|:-----|
 | `ofdm` | comm/ofdm/algorithm_spec, rtl_architecture, fixed_point_report, resource_estimate, report_ofdm_fpga_implementation, testbench_plan | OFDM 全链路 |

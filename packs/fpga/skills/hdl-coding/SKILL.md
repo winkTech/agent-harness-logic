@@ -6,6 +6,8 @@ version: 3.9.0
 
 # HDL 编码规范
 
+用户说「用 hdl-coding 工作流」或「hdl-coding workflow」时，先通过 `harness_workflows_list` 匹配 `hdl-coding-dag-workflow`，按工作流入口处理执行器和检查点。本规范在相应阶段加载；读取规范本身不会启动流程或授权派发 RTL。
+
 ## 适用边界
 **必须使用**: RTL 编写、Testbench、模块例化、时序约束。
 **可跳过**: 纯文档/注释、已完成的代码审查（但 lint 仍需）。

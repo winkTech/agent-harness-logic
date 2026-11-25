@@ -30,7 +30,9 @@ const ALIASES = Object.freeze({
   HARNESS_SQLITE_BUSY_TIMEOUT_MS: ['CLAUDE_SQLITE_BUSY_TIMEOUT_MS'],
   HARNESS_RUNTIME_STATE_FILE: ['CLAUDE_RUNTIME_STATE_FILE'],
   HARNESS_ROOT: ['CLAUDE_HARNESS_ROOT'],
+  HARNESS_HOST: [],
   HARNESS_PLUGIN_ROOT: ['CLAUDE_PLUGIN_ROOT'],
+  HARNESS_PLUGIN_DATA: ['PLUGIN_DATA'],
   HARNESS_PROJECT_DIR: ['CLAUDE_PROJECT_DIR'],
   HARNESS_TOOL_NAME: ['CLAUDE_TOOL_NAME'],
   HARNESS_TOOL_INPUT: ['CLAUDE_TOOL_INPUT'],
@@ -74,6 +76,8 @@ function envOf(env = process.env) {
   };
   return {
     codexHome: env?.CODEX_HOME || '',
+    host: (read('HARNESS_HOST') || '').trim().toLowerCase(),
+    pluginData: read('HARNESS_PLUGIN_DATA') || '',
     sessionId: read('HARNESS_SESSION_ID') || '',
     noPersist: flag('HARNESS_NO_PERSIST'),
     noDiagnosticWrites: flag('HARNESS_NO_DIAGNOSTIC_WRITES'),

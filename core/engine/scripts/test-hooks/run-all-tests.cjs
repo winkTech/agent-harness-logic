@@ -2365,7 +2365,7 @@ function failingLines(text, maxLines = 40, maxChars = 1500) {
   const lines = String(text || '').replace(/\x1b\[[0-9;]*m/g, '').split(/\r?\n/);
   const picked = [];
   for (let i = 0; i < lines.length && picked.length < maxLines; i += 1) {
-    if (!/FAIL|❌|✖/.test(lines[i])) continue;
+    if (!/FAIL|❌|✖|^\s*not ok\b|AssertionError/.test(lines[i])) continue;
     picked.push(lines[i].trim());
     // 详情是缩进续行; 遇到下一条结果行或非缩进行即停。
     for (let j = i + 1; j < lines.length && j <= i + 8 && picked.length < maxLines; j += 1) {
@@ -2466,6 +2466,7 @@ define('PainpointRegression', 'harness-painpoints.cjs 全部通过', () => {
 });
 
 const AUDIT_REMEDIATION_CONTRACTS = [
+  ['knowledge source and signoff retrieval', 'knowledge-answer.test.cjs', 60000],
   ['DAG cancellation', 'dag-cancellation.cjs', 30000],
   ['controlled gate bypass', 'gate-bypass-contract.test.cjs', 30000],
   ['risk-adaptive policy', 'risk-policy-contract.cjs', 30000],
@@ -2522,6 +2523,10 @@ const AUDIT_REMEDIATION_CONTRACTS = [
   ['claude code plugin manifest', 'plugin-manifest-contract.test.cjs', 300000],
   ['harness state root and migration', 'harness-state-contract.test.cjs', 60000],
   ['plugin mode session context', 'plugin-mode-contract.test.cjs', 30000],
+  ['plugin OS read-only ACL sealing', 'plugin-acl.test.cjs', 60000],
+  ['MCP App maintenance console', 'mcp-app-console.test.cjs', 60000],
+  ['M5 telemetry prune and Vivado evidence gate', 'm5-governance-vivado.test.cjs', 60000],
+  ['unified connect CLI and pack profiles', 'connect-and-packs.test.cjs', 60000],
   ['git integrity guard', 'git-integrity-guard-contract.cjs', 120000],
   ['hook latency SLA tiers', 'hook-latency-sla-contract.test.cjs', 30000],
 ];
@@ -2550,7 +2555,7 @@ for (const [name, relative, timeout, extraArgs = []] of AUDIT_REMEDIATION_CONTRA
       pass: passed,
       detail: passed
         ? `exit=0 (${relative})`
-        : `exit=${r.status} signal=${r.signal || 'none'} ${headTail([r.stderr, r.stdout, r.error?.message].filter(Boolean).join('\n'))}`,
+        : `exit=${r.status} signal=${r.signal || 'none'} ${failingLines([r.stderr, r.stdout, r.error?.message].filter(Boolean).join('\n'))}`,
     };
   });
 }
@@ -4858,7 +4863,8 @@ function runSuite() {
           passed++;
         } else {
           console.log(fail('失败'));
-          console.log(`    ${C.dim}${headTail(result.detail)}${C.reset}`);
+          const body = headTail(result.detail).split('\n').join('\n    ');
+          console.log(`    ${C.dim}${body}${C.reset}`);
           failed++;
         }
       } catch (e) {

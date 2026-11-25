@@ -32,18 +32,25 @@
 ```makefile
 # 工具链选择 (questa / vcs / xcelium / verilator)
 TOOLCHAIN ?= questa
--include toolchains/$(TOOLCHAIN).mk
+.DEFAULT_GOAL := lint
+include toolchains/$(TOOLCHAIN).mk
 
 # 文件清单
 RTL_SRC = $(shell cat filelist.f)
 TB_SRC  = $(shell cat tb_filelist.f)
 
-.PHONY: lint compile sim sim_wave regress coverage
+.PHONY: check-inputs lint compile sim sim_wave regress coverage
 
-lint: $(RTL_SRC) $(TB_SRC)
+check-inputs:
+	@test -d 01_src/00_hdl || { echo "missing RTL directory: 01_src/00_hdl"; exit 1; }
+	@test -n "$(strip $(RTL_SRC))" || { echo "no design sources in filelist.f"; exit 1; }
+
+lint: $(RTL_SRC) $(TB_SRC) | check-inputs
+	@test -n "$(strip $(LINT_CMD))" || { echo "missing LINT_CMD"; exit 1; }
 	$(LINT_CMD) $^
 
-compile: $(RTL_SRC) $(TB_SRC)
+compile: $(RTL_SRC) $(TB_SRC) | check-inputs
+	@test -n "$(strip $(COMPILE_CMD))" || { echo "missing COMPILE_CMD"; exit 1; }
 	$(COMPILE_CMD) $^
 
 sim: compile
@@ -85,7 +92,8 @@ TEST_LIST      = $(wildcard tests/*.tcl)
 ## 检查点
 
 - 选定工具链，Makefile + filelists 创建完成
-- `make lint` 和 `make compile` 通过
+- 从干净 Git 检出运行项目提供的目录恢复入口，对照受版本管理的契约核对目录。逐文件复核已冻结 Golden 的哈希，覆盖项目支持的 Git 换行配置。
+- 缺 RTL 根目录、空设计源列表和故障探针均须可辨。用隔离的正常 HDL 探针实跑 lint/compile，再用含语法错误的探针验证退出码。新工程报告单列工具结果和实际 DUT 源文件数量。
 
 **可执行检查点**:
 ```bash

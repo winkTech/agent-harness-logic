@@ -73,7 +73,7 @@ function fixture(t) {
     fs.rmSync(root, { recursive: true, force: true });
   });
   for (const item of ['package.json', '.mcp.json', '.gitattributes', 'CLAUDE.md', 'AGENTS.md',
-    '.claude-plugin/plugin.json', 'core/engine', 'core/rules', 'hosts/codex',
+    '.claude-plugin/plugin.json', 'core/engine', 'core/rules', 'hosts/codex', 'hosts/claude-code/registrations.json',
     'packs/fpga/rules', 'packs/fpga/config', 'packs/fpga/agents']) {
     const source = path.join(ROOT, item);
     const target = path.join(root, item);
@@ -170,6 +170,10 @@ test('distributed plugin loads the observer, maintenance, codegraph index and MC
 
 test('Codex plugin registers runnable hooks from the installed package', (t) => {
   const root = fixture(t);
+  for (const dir of ['core/workflows', 'packs/fpga/workflows', 'core/skills/workflows', 'packs/fpga/skills/workflows',
+    'packs/fpga/skills/vivado-flow', 'packs/fpga/engine']) {
+    fs.cpSync(path.join(ROOT, dir), path.join(root, dir), { recursive: true });
+  }
   success(node(root, [ASSEMBLER]));
   const plugin = path.join(root, 'dist/plugin');
   const read = (relative) => JSON.parse(fs.readFileSync(path.join(plugin, relative), 'utf8'));
@@ -193,6 +197,25 @@ test('Codex plugin registers runnable hooks from the installed package', (t) => 
   const toolList = JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'tools/list', params: {} }) + '\n';
   const mcp = success(node(root, server.args, { cwd: path.resolve(plugin, server.cwd), input: toolList }));
   assert.ok(JSON.parse(mcp).result.tools.some((tool) => tool.name === 'harness_cg_search'));
+  const call = JSON.stringify({ jsonrpc: '2.0', id: 2, method: 'tools/call',
+    params: { name: 'harness_workflows_list', arguments: {} } }) + '\n';
+  const catalog = () => JSON.parse(JSON.parse(success(node(root, server.args, { cwd: plugin, input: call }))).result.content[0].text).workflows;
+  const workflows = catalog();
+  const hdl = workflows.find(w => w.name === 'hdl-coding-dag-workflow');
+  assert.ok(hdl?.checkpoints.includes('design-review') && hdl.inputs.includes('modules'));
+  assert.ok(hdl.inputs.some(input => input.includes('goldenBaseline')));
+  for (const relative of ['core/engine/scripts/hdl-evidence-gate.cjs', 'skills/vivado-flow/scripts/vivado_flow.tcl',
+    'packs/fpga/engine/fpga-util-parser.cjs', 'packs/fpga/engine/fpga-timing-parser.cjs']) {
+    assert.ok(fs.existsSync(path.join(plugin, relative)), 'missing HDL workflow dependency: ' + relative);
+  }
+  assert.ok(workflows.some(w => w.name === 'code-review-workflow'));
+  assert.ok(fs.existsSync(path.join(plugin, 'skills/workflows/SKILL.md')));
+  for (const w of workflows) {
+    assert.ok(w.scriptPath.startsWith(plugin + path.sep) && fs.existsSync(w.scriptPath));
+    assert.equal(w.sha256, require('node:crypto').createHash('sha256').update(fs.readFileSync(w.scriptPath)).digest('hex'));
+  }
+  fs.unlinkSync(hdl.scriptPath);
+  assert.ok(!catalog().some(w => w.name === hdl.name), 'installed definitions must take precedence over checkout files');
   const rules = success(node(plugin, ['core/engine/scripts/rule-loader.cjs', 'index']));
   for (const rule of ['00-core.md', '01-hdl.md', '02-python.md']) assert.ok(rules.includes(rule), rule);
   const verify = hooks.PostToolUse.flatMap((group) => group.hooks)
@@ -221,6 +244,15 @@ test('Codex package shares state and closes the prompt, edit, graph and knowledg
   fs.writeFileSync(path.join(root, note), '# Clock crossing reference\n');
   git(root, ['init', '--quiet']);
   git(root, ['add', '--', knowledge]);
+  const assets = path.dirname(knowledge);
+  const manifest = path.join(assets, 'cbb/ldpc_codec/manifest.json');
+  const current = JSON.parse(fs.readFileSync(path.join(ROOT, manifest), 'utf8'));
+  const seal = path.join(assets, 'evidence/ldpc_codec', current.version, 'SNAPSHOT.json');
+  for (const file of [manifest, seal]) {
+    fs.mkdirSync(path.dirname(path.join(root, file)), { recursive: true });
+    fs.copyFileSync(path.join(ROOT, file), path.join(root, file));
+  }
+  git(root, ['add', '--', manifest, seal]);
   fs.writeFileSync(path.join(root, knowledge, 'local-only.md'), 'untracked reference');
   success(node(root, [ASSEMBLER]));
 
@@ -249,6 +281,19 @@ test('Codex package shares state and closes the prompt, edit, graph and knowledg
   const [, link] = /\]\(([^\n)]+)\)/.exec(index);
   assert.match(fs.readFileSync(path.join(packageKnowledge, link), 'utf8'), /Clock crossing reference/);
   assert.equal(fs.existsSync(path.join(packageKnowledge, 'local-only.md')), false);
+  const call = { jsonrpc: '2.0', id: 7, method: 'tools/call',
+    params: { name: 'harness_knowledge_query', arguments: { query: 'LDPC 编码器可以直接复用吗？' } } };
+  const server = JSON.parse(fs.readFileSync(path.join(pkg, '.codex-mcp.json'))).mcpServers.codegraph;
+  const knowledgeOutput = success(node(root, [path.resolve(pkg, server.args[0])],
+    { cwd: project, env, input: JSON.stringify(call) + '\n' }));
+  const response = JSON.parse(JSON.parse(knowledgeOutput.trim()).result.content[0].text);
+  assert.equal(response.status, 'supported');
+  assert.equal(response.version, current.version);
+  assert.match(response.answer, /编码器无独立综合包络证据/);
+  assert.ok(response.citations.some(c => c.file.endsWith('/SNAPSHOT.json')));
+  for (const c of response.citations) {
+    assert.equal(fs.readFileSync(path.join(pkg, c.file), 'utf8').split(/\r?\n/)[c.line - 1].trim(), c.quote);
+  }
 
   const hooks = JSON.parse(fs.readFileSync(path.join(pkg, 'hooks/codex.json'), 'utf8')).hooks;
   function invoke(event, fragment, input) {
@@ -296,13 +341,12 @@ test('Codex package shares state and closes the prompt, edit, graph and knowledg
     tool_response: { metadata: { exit_code: 1 } },
   }));
 
-  const mcp = JSON.parse(fs.readFileSync(path.join(pkg, '.codex-mcp.json'), 'utf8')).mcpServers.codegraph;
   const query = (id, name) => JSON.stringify({
     jsonrpc: '2.0', id, method: 'tools/call',
     params: { name: 'harness_cg_search', arguments: { query: name, projectPath: project } },
   });
-  const output = success(node(root, mcp.args, {
-    env, cwd: path.resolve(pkg, mcp.cwd),
+  const output = success(node(root, server.args, {
+    env, cwd: path.resolve(pkg, server.cwd),
     input: [query(1, 'package_loop_next'), query(2, 'package_loop_old'), ''].join('\n'),
   })).trim().split(/\r?\n/).map((line) => JSON.parse(line));
   assert.match(output[0].result.content[0].text, /package_loop_next/);

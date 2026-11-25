@@ -38,22 +38,26 @@ if (!query || (Array.isArray(query) && query.length === 0)) {
 
 const result = await agent(
   '你是一个 rag-skill 专家。请针对以下查询检索知识库并给出答案。\n' +
-  '硬约束: 每个关键结论必须带 file:line 引用；输出 citations 数组；知识库没有证据时必须说明缺口并提出澄清问题，不得编造。\n' +
+  '调用 harness_knowledge_query 或插件根的 knowledge-answer.cjs，原样返回工具 JSON（status、answer、citations 中的 file、line、quote）。\n' +
   '查询: ' + query,
   { label: 'rag-search', agentType: 'claude' }
 );
 
 const rawCitations = Array.isArray(result?.citations) ? result.citations : [];
 const citationPattern = /^(?![A-Za-z]:[\\/])(?![\\/])(?!.*(?:^|[\\/])\.\.(?:[\\/]|$))[^:\r\n]+:\d+(?:-\d+)?$/;
-const citations = rawCitations
-  .filter((item) => typeof item === 'string')
-  .map((item) => item.trim())
-  .filter((item) => citationPattern.test(item));
-const invalidCitations = rawCitations.filter((item) => (
-  typeof item !== 'string' || !citationPattern.test(item.trim())
-));
+const valid = item => typeof item?.file === 'string' && Number.isSafeInteger(item.line) && item.line > 0
+  && typeof item.quote === 'string' && item.quote.trim() && citationPattern.test(item.file + ':' + item.line);
+const citations = rawCitations.filter(valid).map(item => item.file + ':' + item.line);
+const invalidCitations = rawCitations.filter(item => !valid(item));
 const hasAnswer = typeof result?.answer === 'string' && result.answer.trim().length > 0;
-const pass = hasAnswer && citations.length > 0 && invalidCitations.length === 0;
+let pass = false;
+if (hasAnswer && ['supported', 'references'].includes(result.status) && citations.length && !invalidCitations.length) {
+  const check = await agent('独立运行 harness_knowledge_query 或插件根的 knowledge-answer.cjs，原样返回该次输出 JSON。问题：' + query,
+    { label: 'rag-verify', agentType: 'claude' });
+  pass = check?.status === result.status && check.answer === result.answer && Array.isArray(check.citations)
+    && check.citations.length === rawCitations.length && rawCitations.every((c, i) =>
+      c.file === check.citations[i]?.file && c.line === check.citations[i]?.line && c.quote === check.citations[i]?.quote);
+}
 return {
   pass,
   reason: pass

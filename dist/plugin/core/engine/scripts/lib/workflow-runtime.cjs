@@ -3,6 +3,7 @@
 const { HARNESS_ROOT } = require('./harness-root.cjs');
 
 const fs = require('node:fs');
+const crypto = require('node:crypto');
 const os = require('node:os');
 const path = require('node:path');
 const vm = require('node:vm');
@@ -28,6 +29,30 @@ function listWorkflowFiles(workflowDir = DEFAULT_WORKFLOW_DIR) {
 
 function readWorkflow(filePath) {
   return fs.readFileSync(filePath, 'utf8');
+}
+
+// Only inspect definitions shipped beside this module, regardless of the caller's project or state root.
+function workflowSourceFiles(root = path.resolve(__dirname, '../../../..')) {
+  const packs = path.join(root, 'packs');
+  const dirs = [path.join(root, 'core', 'workflows')];
+  if (fs.existsSync(packs)) {
+    for (const pack of fs.readdirSync(packs, { withFileTypes: true })) {
+      if (pack.isDirectory()) dirs.push(path.join(packs, pack.name, 'workflows'));
+    }
+  }
+  return dirs.flatMap(dir => listWorkflowFiles(dir).filter(file => file.endsWith('-workflow.js')));
+}
+
+function workflowCatalog() {
+  return workflowSourceFiles().map(scriptPath => {
+    const bytes = fs.readFileSync(scriptPath);
+    const meta = extractWorkflowMeta(bytes.toString('utf8'));
+    if (meta?.name !== workflowNameFromFile(scriptPath) || !meta.contract) {
+      throw new Error('Invalid workflow definition: ' + scriptPath);
+    }
+    return { name: meta.name, description: meta.description, scriptPath, sha256: crypto.createHash('sha256').update(bytes).digest('hex'),
+      inputs: meta.contract.inputs, checkpoints: meta.contract.checkpoints };
+  });
 }
 
 function workflowNameFromFile(filePath) {
@@ -264,6 +289,8 @@ if (require.main === module) {
 }
 
 module.exports = {
+  workflowCatalog,
+  workflowSourceFiles,
   DEFAULT_WORKFLOW_DIR,
   listWorkflowFiles,
   readWorkflow,

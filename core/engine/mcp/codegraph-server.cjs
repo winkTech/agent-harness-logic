@@ -31,10 +31,24 @@ const path = require('node:path');
 const {
   resolveProject, searchNodes, getNode, getCallers, getCallees, getSubgraphByNames, getBlastRadius,
 } = require('../scripts/cg-queries.cjs');
+const consoleBackend = require('./harness-console-backend.cjs');
 
 // ── 工具定义 ────────────────────────────────────────────────────────────────
 
 const TOOLS = [
+  {
+    name: 'harness_workflows_list',
+    description: '查当前插件实际包含的工作流。返回用途、脚本路径、输入和检查点，供宿主选择并调用。查询本身只读。',
+    inputSchema: { type: 'object', properties: {}, additionalProperties: false },
+  },
+  {
+    name: 'harness_knowledge_query',
+    description: '检索插件内的工程知识，定位脚本和原文，核对资产的当前版本、签核范围与已知限制。',
+    inputSchema: { type: 'object', required: ['query'], properties: {
+      query: { type: 'string', description: '用户的完整问题' },
+      asset: { type: 'string', description: '上下文已经明确的资产 ID，可省略' },
+    } },
+  },
   {
     name: 'harness_cg_explore',
     description: `按符号名或查询浏览代码。返回源码位置、层次关系、调用/实例化路径。
@@ -222,6 +236,71 @@ HDL 场景：找出某模块内部实例化了哪些子模块。`,
       required: ['target'],
     },
   },
+  {
+    name: 'harness_console',
+    title: 'Harness Console',
+    description: '打开 Logical Paradox Harness 交互式维护与门禁控制台（展示记忆健康度、消费者水位、待验证门禁与插件 ACL 状态）。',
+    inputSchema: { type: 'object', properties: {}, additionalProperties: false },
+    _meta: {
+      ui: { resourceUri: consoleBackend.APP_URI },
+      'com.google.antigravity/ui': {
+        entrypoints: [
+          { type: 'aux_pane', title: 'Harness Console' },
+          { type: 'global', title: 'Harness' },
+        ],
+      },
+    },
+  },
+  {
+    name: 'harness_ui_refresh',
+    title: 'Refresh Console',
+    description: 'App-only refresh for Harness Console.',
+    inputSchema: { type: 'object', properties: {}, additionalProperties: false },
+    _meta: { ui: { visibility: ['app'] } },
+  },
+  {
+    name: 'harness_ui_signoff',
+    title: 'Human R3 Signoff',
+    description: 'App-only human signoff for a pending R3 risk scope.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        scopeKey: { type: 'string' },
+        reason: { type: 'string' },
+      },
+      required: ['scopeKey'],
+      additionalProperties: false,
+    },
+    _meta: { ui: { visibility: ['app'] } },
+  },
+  {
+    name: 'harness_ui_reset_gate',
+    title: 'Human Reset Gate',
+    description: 'App-only human reset for verify-gate.json pending/risk state.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        scopeKey: { type: 'string' },
+        reason: { type: 'string' },
+      },
+      additionalProperties: false,
+    },
+    _meta: { ui: { visibility: ['app'] } },
+  },
+  {
+    name: 'harness_ui_maintain',
+    title: 'Run Maintenance',
+    description: 'App-only dry-run or execute for periodic memory maintenance.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        mode: { type: 'string', enum: ['dry-run', 'execute'] },
+        force: { type: 'boolean' },
+      },
+      additionalProperties: false,
+    },
+    _meta: { ui: { visibility: ['app'] } },
+  },
 ];
 
 // ── 工具处理程序 ─────────────────────────────────────────────────────────────
@@ -231,7 +310,44 @@ function resolveProjectPath(params) {
   return resolveProject(projectPath);
 }
 
-function handleToolCall(name, args) {
+function handleToolCall(name, args, opts = {}) {
+  if (name === 'harness_workflows_list') {
+    const workflows = require('../scripts/lib/workflow-runtime.cjs').workflowCatalog();
+    return { content: [{ type: 'text', text: JSON.stringify({ workflows }) }] };
+  }
+  if (name === 'harness_knowledge_query') {
+    const result = require('../scripts/knowledge-answer.cjs').answer(args?.query, { asset: args?.asset });
+    return { content: [{ type: 'text', text: JSON.stringify(result) }] };
+  }
+  if (name === 'harness_console' || name === 'harness_ui_refresh') {
+    const snapshot = consoleBackend.buildConsoleSnapshot(opts);
+    return {
+      content: [{ type: 'text', text: consoleBackend.formatConsoleSummary(snapshot) }],
+      structuredContent: snapshot,
+    };
+  }
+  if (name === 'harness_ui_signoff') {
+    const res = consoleBackend.signoffRisk(args || {}, opts);
+    return {
+      isError: !res.ok,
+      content: [{ type: 'text', text: res.ok ? `Signed off ${args?.scopeKey}` : (res.error || 'signoff failed') }],
+      structuredContent: res,
+    };
+  }
+  if (name === 'harness_ui_reset_gate') {
+    const res = consoleBackend.resetGate(args || {}, opts);
+    return {
+      content: [{ type: 'text', text: `Reset ${res.removed.length} gate entry(s)` }],
+      structuredContent: res,
+    };
+  }
+  if (name === 'harness_ui_maintain') {
+    const res = consoleBackend.runMaintenance(args || {}, opts);
+    return {
+      content: [{ type: 'text', text: `Maintenance ${res.mode} exit=${res.exitCode}` }],
+      structuredContent: res,
+    };
+  }
   const { projectId } = resolveProjectPath(args || {});
 
   switch (name) {
@@ -505,7 +621,7 @@ function formatBlastRadiusResult(result, target) {
 
 // ── MCP 协议引擎 ─────────────────────────────────────────────────────────────
 
-function handleRequest(request) {
+function handleRequest(request, emit = respond, opts = {}) {
   if (!request || request.jsonrpc !== '2.0') return;
 
   const id = request.id;
@@ -514,22 +630,51 @@ function handleRequest(request) {
   try {
     switch (method) {
       case 'tools/list':
-        respond(id, { tools: TOOLS });
+        emit(id, { tools: TOOLS });
         break;
 
       case 'tools/call': {
         const toolName = request.params?.name;
         const toolArgs = request.params?.arguments || {};
-        const result = handleToolCall(toolName, toolArgs);
-        respond(id, result);
+        const result = handleToolCall(toolName, toolArgs, opts);
+        emit(id, result);
+        break;
+      }
+
+      case 'resources/list':
+        emit(id, {
+          resources: [{
+            uri: consoleBackend.APP_URI,
+            name: 'Harness Maintenance Console',
+            description: 'Interactive Harness verification gate, memory health, and plugin ACL console.',
+            mimeType: 'text/html;profile=mcp-app',
+            _meta: { ui: { prefersBorder: false } },
+          }],
+        });
+        break;
+
+      case 'resources/read': {
+        const uri = String(request.params?.uri || '');
+        if (uri !== consoleBackend.APP_URI) {
+          emit(id, { isError: true, content: [{ type: 'text', text: `未知资源: ${uri}` }] });
+          break;
+        }
+        emit(id, {
+          contents: [{
+            uri: consoleBackend.APP_URI,
+            mimeType: 'text/html;profile=mcp-app',
+            text: consoleBackend.loadConsoleHtml(),
+            _meta: { ui: { prefersBorder: false } },
+          }],
+        });
         break;
       }
 
       case 'initialize': {
-        respond(id, {
+        emit(id, {
           protocolVersion: '2024-11-05',
-          capabilities: { tools: {} },
-          serverInfo: { name: 'codegraph-server', version: '1.0.0' },
+          capabilities: { tools: {}, resources: {} },
+          serverInfo: { name: 'codegraph-server', version: '1.1.0' },
         });
         break;
       }
@@ -539,10 +684,10 @@ function handleRequest(request) {
         break;
 
       default:
-        respond(id, { isError: true, content: [{ type: 'text', text: `不支持的方法: ${method}` }] });
+        emit(id, { isError: true, content: [{ type: 'text', text: `不支持的方法: ${method}` }] });
     }
   } catch (err) {
-    respond(id, { isError: true, content: [{ type: 'text', text: `错误: ${err.message}` }] });
+    emit(id, { isError: true, content: [{ type: 'text', text: `错误: ${err.message}` }] });
   }
 }
 
@@ -558,24 +703,28 @@ function respond(id, result) {
 
 // ── 启动 ─────────────────────────────────────────────────────────────────────
 
-// 逐行读取 stdin 的 JSON-RPC 请求
-const readline = require('node:readline');
-const rl = readline.createInterface({ input: process.stdin, terminal: false });
+if (require.main === module) {
+  // 逐行读取 stdin 的 JSON-RPC 请求
+  const readline = require('node:readline');
+  const rl = readline.createInterface({ input: process.stdin, terminal: false });
 
-rl.on('line', (line) => {
-  const trimmed = line.trim();
-  if (!trimmed) return;
-  try {
-    const request = JSON.parse(trimmed);
-    handleRequest(request);
-  } catch (err) {
-    // 解析错误 — 静默忽略格式错误的 JSON
-  }
-});
+  rl.on('line', (line) => {
+    const trimmed = line.trim();
+    if (!trimmed) return;
+    try {
+      const request = JSON.parse(trimmed);
+      handleRequest(request);
+    } catch (err) {
+      // 解析错误 — 静默忽略格式错误的 JSON
+    }
+  });
 
-rl.on('close', () => {
-  process.exit(0);
-});
+  rl.on('close', () => {
+    process.exit(0);
+  });
 
-// 启动时输出日志到 stderr（不干扰 stdout 的 MCP 协议）
-process.stderr.write('[codegraph-server] 启动完成，等待 MCP 请求...\n');
+  // 启动时输出日志到 stderr（不干扰 stdout 的 MCP 协议）
+  process.stderr.write('[codegraph-server] 启动完成，等待 MCP 请求...\n');
+}
+
+module.exports = { TOOLS, handleToolCall, handleRequest };

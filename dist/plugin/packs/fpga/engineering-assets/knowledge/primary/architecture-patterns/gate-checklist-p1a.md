@@ -94,20 +94,22 @@ updated: 2026-07-03
 
 ## 📋 总体判定
 
+运行 `node core/engine/scripts/hdl-evidence-gate.cjs --checklist p1a`，用返回的 `groups` 逐项记录证据，按 `counts` 填分母。命令通过表示清单解析成功，设计结论取决于逐项审查。
+
 ```
 P1a 门禁结果:
-  MUST 通过: ___/18 项 (要求: 全部通过)
-  SHOULD 通过: ___/7 项
-  🔴 红线: ___/3 项 (要求: 全部通过 — 零容忍)
+  MUST 通过: ___ / counts.must (要求: 全部通过)
+  SHOULD 通过: ___ / counts.should
+  🔴 红线: ___ / counts.redline (要求: 全部通过 — 零容忍)
   ⛔ 阻断项: __________
   判定: 🔴 FAIL / 🟢 PASS
 ```
 
 ## 通过 → Phase 1b
 
-以下条件下自动进入 P1b：
+满足以下条件并获 system-review 确认后进入 P1b：
 - 所有 [MUST] 项 ✅
-- [SHOULD] 项至少 4/7 ✅
+- [SHOULD] 项通过数须超过该组半数 ✅
 - **所有 [🔴 红线] 项 ✅（零容忍 — 任意一条不通过退回修改）**
 
 ## 不通过 → 退回修改

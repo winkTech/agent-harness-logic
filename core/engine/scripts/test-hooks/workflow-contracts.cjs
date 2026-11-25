@@ -339,6 +339,20 @@ test('core workflow truth and platform mirror do not drift', () => {
   }
 });
 
+test('HDL design checklist inventory covers each source item exactly once', () => {
+  const { checklistInventory } = require('../hdl-evidence-gate.cjs');
+  for (const phase of ['p1a', 'p1b']) {
+    const doc = read('packs/fpga/engineering-assets/knowledge/primary/architecture-patterns/gate-checklist-' + phase + '.md');
+    const rows = [...doc.matchAll(/^\|\s*(R?\d+)\s*\|/gm)].map(row => row[1]);
+    const { groups, counts, total } = checklistInventory(phase);
+    const ids = Object.values(groups).flat();
+    assert(total === rows.length && new Set(ids).size === total && rows.every(id => ids.includes(id)), 'checklist scope mismatch');
+    assert(Object.entries(groups).every(([group, entries]) => entries.length === counts[group]), 'incorrect group denominator');
+    assert(phase === 'p1a' ? groups.redline.includes('R1') : groups.redline.includes('32'), 'redline misclassified');
+    assert(doc.includes('--checklist ' + phase) && !/___\/\d+ 项/.test(doc), 'summary hardcodes a denominator');
+  }
+});
+
 test('HDL workflow never accepts arbitrary output merely containing PASS', () => {
   const content = read('packs/fpga/workflows/hdl-coding-dag-workflow.js');
   assert(
@@ -752,15 +766,21 @@ test('memory maintenance keeps dry-run read-only and executes only bounded maint
     home: fixture,
     inspectSqlite: () => ({ totalFacts: 1, expiredFacts: 0, consumedEventsPastRetention: 4 }),
     retainEvents: (plan) => { calls.push(['retain', plan]); return { deleted: 4 }; },
+    purgeExpired: () => ({ deleted: 0 }),
     reconcileFacts: (plan) => { calls.push(['reconcile', plan]); return { inserted: 1, removed: 1 }; },
     stageCandidates: (candidates) => { calls.push(['candidates', candidates]); return { staged: candidates.length }; },
+    collectAttributionRetirement: () => ({ actions: [], telemetryLiveSince: null }),
+    retireAttribution: () => ({ downgraded: 0, planned: 0 }),
     rebuildIndex: () => { calls.push(['reindex']); return { status: 0 }; },
     writeWeeklyReport: () => ({}),
     saveState: (state) => { calls.push(['state', state]); },
   };
   const now = new Date('2026-07-28T00:00:00.000Z');
   const common = {
-    ...maintenance.parseArgs(['--force', '--error-days', '1', '--event-retention-days', '14', '--reconcile']),
+    ...maintenance.parseArgs([
+      '--force', '--error-days', '1', '--event-retention-days', '14', '--reconcile',
+      '--home', fixture, '--db-path', path.join(fixture, 'memory.db'),
+    ]),
     reindex: true,
   };
 

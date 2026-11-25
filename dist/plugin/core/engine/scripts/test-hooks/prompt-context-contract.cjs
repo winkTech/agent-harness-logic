@@ -137,6 +137,21 @@ function assertAggregateBudgetAndDeduplication() {
     'budget truncation must be explicit instead of silently cutting context');
 }
 
+function assertWorkflowDiscovery() {
+  const { combinePromptContext } = require(routerPath);
+  const input = { ...promptPayload(), prompt: '' };
+  const deps = { ruleContext: () => null, memoryContext: () => null, frustrationContext: () => null, promptObserver: () => {} };
+  const lookup = prompt => combinePromptContext({ ...input, prompt }, deps)?.hookSpecificOutput.additionalContext;
+  for (const prompt of ['使用工作流开发 FIR', 'Workflow: review changes', '代码质量', 'workflow 有哪些？', '不用工作流']) {
+    const block = lookup(prompt);
+    assert.match(block, /hdl-coding-dag-workflow/);
+    assert.match(block, /询问、否定或示例只答原问题/);
+    assert.match(block, /无执行器/);
+  }
+  assert.equal(lookup('解释一下接口'), undefined);
+  assert.equal(lookup('myworkflowfile.txt'), undefined);
+}
+
 function assertFrustrationContextIsRequireSafeAndReadOnly() {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'prompt-frustration-readonly-'));
   const stateFile = path.join(root, 'runtime-state.json');
@@ -360,6 +375,7 @@ function assertRuleContextIsRequireSafeAndReadOnly() {
 
 try {
   assertSingleParseAndMergedOutput();
+  assertWorkflowDiscovery();
   assertFailOpenIsolation();
   assertAggregateBudgetAndDeduplication();
   assertRuleContextIsRequireSafeAndReadOnly();

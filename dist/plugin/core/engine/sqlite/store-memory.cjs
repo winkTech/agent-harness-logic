@@ -696,14 +696,28 @@ function purgeExpired(opts = {}) {
   const db = resolveDb(opts);
   const now = Date.now();
 
-  // FTS5 需要先删再删主表 (cascade)
-  const expired = db.prepare('SELECT rowid FROM facts WHERE ttl_until IS NOT NULL AND ttl_until < ?').all(now);
-  for (const r of expired) {
-    db.prepare("INSERT INTO facts_fts (facts_fts, rowid) VALUES ('delete', ?)").run(r.rowid);
-  }
+  const expired = db.prepare('SELECT rowid, id FROM facts WHERE ttl_until IS NOT NULL AND ttl_until < ?').all(now);
+  if (expired.length === 0) return 0;
 
-  const result = db.prepare('DELETE FROM facts WHERE ttl_until IS NOT NULL AND ttl_until < ?').run(now);
-  return result.changes;
+  const hasLinks = Boolean(db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='fact_links'").get());
+  const delLinks = hasLinks ? db.prepare('DELETE FROM fact_links WHERE from_id = ? OR to_id = ?') : null;
+  const delFts = db.prepare("INSERT INTO facts_fts (facts_fts, rowid) VALUES ('delete', ?)");
+  const delFact = db.prepare('DELETE FROM facts WHERE id = ?');
+
+  let deleted = 0;
+  db.exec('BEGIN IMMEDIATE');
+  try {
+    for (const r of expired) {
+      if (delLinks) delLinks.run(r.id, r.id);
+      delFts.run(r.rowid);
+      deleted += Number(delFact.run(r.id).changes || 0);
+    }
+    db.exec('COMMIT');
+  } catch (error) {
+    try { db.exec('ROLLBACK'); } catch { /* ignore */ }
+    throw error;
+  }
+  return deleted;
 }
 
 // ── 上下文注入版检索 ──────────────────────────────────────────────────────

@@ -35,11 +35,14 @@ const { execFileSync } = require('node:child_process');
 const { parseArgs } = require('node:util');
 
 const { HARNESS_ROOT } = require('./lib/harness-root.cjs');
+const { resolveEnabledPacks } = require('./lib/pack-config.cjs');
 const { collectSkillSources, deployTarget } = require('./sync-skills.cjs');
 const { parseFrontmatter } = require('./rule-loader.cjs');
 
 const DIST_REL = 'dist/plugin';
 const DIST = path.join(HARNESS_ROOT, DIST_REL);
+const AG_DIST_REL = 'dist/antigravity-plugin';
+const AG_DIST = path.join(HARNESS_ROOT, AG_DIST_REL);
 const PLUGIN_NAME = 'logical-paradox';
 const PROJECT_NAME = 'Agent Harness Logic';
 const DESCRIPTION = 'Runtime-neutral agent harness with safety gates, verification loop, memory and session handoff.';
@@ -63,16 +66,20 @@ function copyFile(src, dest) {
 
 // ── 组装 ────────────────────────────────────────────────────────────────────
 
-function buildDist(output) {
-  const skills = collectSkillSources().filter(skill =>
+function buildDist(output, opts = {}) {
+  const enabledPacks = resolveEnabledPacks({ root: HARNESS_ROOT, packs: opts.packs });
+  const fpgaEnabled = enabledPacks.includes('fpga');
+  const officeEnabled = enabledPacks.includes('office');
+
+  const skills = collectSkillSources(HARNESS_ROOT, { packs: opts.packs }).filter(skill =>
     skill.sources.some(dir => fs.existsSync(path.join(dir, 'SKILL.md')))
   );
   if (!skills.length) throw new Error('找不到可分发的技能真源');
   deployTarget(path.join(output, 'skills'), skills, { quiet: true });
 
-  // agents/：packs/fpga/agents 平铺
+  // agents/：packs/fpga/agents 平铺（仅启用 fpga 域包时打包）
   const agentsSrc = path.join(HARNESS_ROOT, 'packs', 'fpga', 'agents');
-  if (fs.existsSync(agentsSrc)) {
+  if (fpgaEnabled && fs.existsSync(agentsSrc)) {
     copyTree(agentsSrc, path.join(output, 'agents', 'fpga'));
     renderCodexAgents(agentsSrc, path.join(output, 'agents', 'codex'));
   }
@@ -84,6 +91,8 @@ function buildDist(output) {
   );
   copyFile(path.join(HARNESS_ROOT, 'hosts', 'codex', 'patch-hook.cjs'),
     path.join(output, 'hosts', 'codex', 'patch-hook.cjs'));
+  const latencyRegistrations = path.join('hosts', 'claude-code', 'registrations.json');
+  copyFile(path.join(HARNESS_ROOT, latencyRegistrations), path.join(output, latencyRegistrations));
 
   // core/：精简引擎闭包（hooks 命令引用面）
   const sourceEngine = path.join(HARNESS_ROOT, 'core', 'engine');
@@ -92,22 +101,49 @@ function buildDist(output) {
     copyTree(path.join(sourceEngine, dir), path.join(outputEngine, dir));
   }
   copyFile(path.join(sourceEngine, 'config.cjs'), path.join(outputEngine, 'config.cjs'));
+  const { workflowSourceFiles } = require('./lib/workflow-runtime.cjs');
+  for (const file of workflowSourceFiles(HARNESS_ROOT)) {
+    const relPosix = path.relative(HARNESS_ROOT, file).replace(/\\/g, '/');
+    if (!fpgaEnabled && relPosix.startsWith('packs/fpga/')) continue;
+    copyFile(file, path.join(output, path.relative(HARNESS_ROOT, file)));
+    if (fpgaEnabled && path.basename(file) === 'hdl-coding-dag-workflow.js') {
+      for (const parser of ['fpga-util-parser.cjs', 'fpga-timing-parser.cjs']) {
+        const relative = path.join('packs', 'fpga', 'engine', parser);
+        copyFile(path.join(HARNESS_ROOT, relative), path.join(output, relative));
+      }
+    }
+  }
   copyFromObject(codexPluginHooks(output), path.join(output, 'hooks', 'codex.json'));
 
   // 规则层 + 入口渲染产物（审计 P0-2）：harness-root 锚点判定 + rule-loader 都
   // 以 <root>/core/rules 与 <root>/CLAUDE.md|AGENTS.md 为引用面，缺了则
   // "有技能、无规则"——00-core/03-gates/05-harness 全部失效。
   copyTree(path.join(HARNESS_ROOT, 'core', 'rules'), path.join(output, 'core', 'rules'));
-  for (const relative of ['packs/fpga/rules', 'packs/fpga/config']) {
-    const source = path.join(HARNESS_ROOT, relative);
-    if (fs.existsSync(source)) copyTree(source, path.join(output, relative));
-  }
-  const knowledge = 'packs/fpga/engineering-assets/knowledge';
-  if (fs.existsSync(path.join(HARNESS_ROOT, knowledge))) {
-    for (const file of git('ls-files', '-z', '--', knowledge).split('\0').filter(Boolean)) {
-      // 局部 EDA 验证报告含开发机绝对路径，不属于检索正文。
-      if (path.basename(file) === 'verification_report.json') continue;
-      copyFile(path.join(HARNESS_ROOT, file), path.join(output, file));
+  if (fpgaEnabled) {
+    for (const relative of ['packs/fpga/rules', 'packs/fpga/config']) {
+      const source = path.join(HARNESS_ROOT, relative);
+      if (fs.existsSync(source)) copyTree(source, path.join(output, relative));
+    }
+    const knowledge = 'packs/fpga/engineering-assets/knowledge';
+    if (fs.existsSync(path.join(HARNESS_ROOT, knowledge))) {
+      for (const file of git('ls-files', '-z', '--', knowledge).split('\0').filter(Boolean)) {
+        // 局部 EDA 验证报告含开发机绝对路径，不属于检索正文。
+        if (path.basename(file) === 'verification_report.json') continue;
+        copyFile(path.join(HARNESS_ROOT, file), path.join(output, file));
+      }
+    }
+    const assets = path.posix.dirname(knowledge);
+    if (fs.existsSync(path.join(HARNESS_ROOT, assets, 'cbb'))) {
+      for (const file of git('ls-files', '-z', '--', ':(glob)' + assets + '/cbb/*/manifest.json').split('\0').filter(Boolean)) {
+        const manifest = JSON.parse(fs.readFileSync(path.join(HARNESS_ROOT, file), 'utf8'));
+        copyFile(path.join(HARNESS_ROOT, file), path.join(output, file));
+        const id = path.posix.basename(path.posix.dirname(file));
+        if (manifest.asset_uid !== id || !/^[\w-]+$/.test(id) || !/^\d+\.\d+\.\d+(?:[-+][\w.-]+)?$/.test(manifest.version)) {
+          throw new Error('Invalid asset identity in ' + file);
+        }
+        const seal = path.posix.join(assets, 'evidence', id, manifest.version, 'SNAPSHOT.json');
+        if (git('ls-files', '-z', '--', seal)) copyFile(path.join(HARNESS_ROOT, seal), path.join(output, seal));
+      }
     }
   }
   for (const entry of ['CLAUDE.md', 'AGENTS.md']) {
@@ -126,10 +162,12 @@ function buildDist(output) {
     path.join(output, 'package.json'),
   );
 
-  // .mcp.json（脱敏投影：只保留可分发服务器——npx 形与 plugin 相对形）
+  // .mcp.json（脱敏投影：只保留可分发服务器——npx 形与 plugin 相对形，按启用域包裁剪）
   const rootMcp = JSON.parse(fs.readFileSync(path.join(HARNESS_ROOT, '.mcp.json'), 'utf8'));
   const mcpOut = { mcpServers: {} };
   for (const [name, cfg] of Object.entries(rootMcp.mcpServers || {})) {
+    if (!fpgaEnabled && name === 'matlab') continue;
+    if (!officeEnabled && name === 'mcp-pdf') continue;
     const cmd = String(cfg.command || '');
     if (cmd === 'npx' || cmd === 'node') {
       // 审计 P0-3：node 相对路径依赖 cwd，插件模式下 MCP 启动 cwd 不可控——
@@ -156,6 +194,7 @@ function buildDist(output) {
 
   // 三宿主 plugin.json（同名 kebab-case）——版本单一事实源 = 根 .claude-plugin
   // （release-checklist「版本一致」条款；此前硬编码 0.2.0 与根 0.1.0 漂移，审计 P2-6）
+  const keywords = ['harness', 'hooks', 'memory', 'verification', ...(fpgaEnabled ? ['fpga'] : [])];
   const baseManifest = {
     name: PLUGIN_NAME,
     displayName: PLUGIN_NAME,
@@ -163,7 +202,7 @@ function buildDist(output) {
     description: DESCRIPTION,
     author: { name: PROJECT_NAME },
     license: 'MIT',
-    keywords: ['harness', 'hooks', 'memory', 'verification', 'fpga'],
+    keywords,
   };
   copyFromObject(
     { ...baseManifest, hooks: './hooks/hooks.json', mcpServers: mcpOut.mcpServers },
@@ -187,6 +226,41 @@ function buildDist(output) {
     }
   }
   return skills.length;
+}
+
+function normalizeTextLineEndings(dir) {
+  for (const name of fs.readdirSync(dir, { recursive: true })) {
+    const file = path.join(dir, name);
+    if (!fs.statSync(file).isFile()) continue;
+    const bytes = fs.readFileSync(file);
+    if (!bytes.includes(0) && bytes.includes('\r\n') && require('node:buffer').isUtf8(bytes)) {
+      fs.writeFileSync(file, bytes.toString('utf8').replace(/\r\n/g, '\n'));
+    }
+  }
+}
+
+function buildAntigravityDist(stagedPlugin, output, opts = {}) {
+  const agSyncPath = path.join(HARNESS_ROOT, 'hosts', 'antigravity', 'sync-from-claude.cjs');
+  if (!fs.existsSync(agSyncPath)) return false;
+
+  // Reuse already-staged portable engine/rules/packs/entry anchors from buildDist.
+  for (const entry of ['core', 'packs', 'package.json', 'CLAUDE.md', 'AGENTS.md']) {
+    const src = path.join(stagedPlugin, entry);
+    if (!fs.existsSync(src)) continue;
+    if (fs.statSync(src).isDirectory()) copyTree(src, path.join(output, entry));
+    else copyFile(src, path.join(output, entry));
+  }
+
+  const { syncPlugin } = require(agSyncPath);
+  syncPlugin({
+    root: HARNESS_ROOT,
+    target: output,
+    portable: true,
+    copyRuntime: true,
+    packs: opts.packs,
+  });
+  normalizeTextLineEndings(output);
+  return true;
 }
 
 function renderCodexAgents(source, output) {
@@ -283,15 +357,19 @@ function releaseSource(options, files) {
 
 function main() {
   const { values } = parseArgs({ options: { check: { type: 'boolean' }, release: { type: 'boolean' }, local: { type: 'boolean' },
-    'repo-url': { type: 'string' }, owner: { type: 'string' }, commit: { type: 'string' } } });
+    packs: { type: 'string' }, 'repo-url': { type: 'string' }, owner: { type: 'string' }, commit: { type: 'string' } } });
   const tempParent = values.check ? os.tmpdir() : path.dirname(DIST);
   fs.mkdirSync(tempParent, { recursive: true });
   const work = fs.mkdtempSync(path.join(tempParent, 'plugin-build-'));
   const staged = path.join(work, 'plugin');
+  const stagedAg = path.join(work, 'antigravity-plugin');
   const backup = path.join(work, 'previous');
+  const backupAg = path.join(work, 'previous-ag');
   try {
-    buildDist(staged);
+    buildDist(staged, { packs: values.packs });
+    const hasAgDist = buildAntigravityDist(staged, stagedAg, { packs: values.packs });
     const files = filesIn(staged);
+    const agFiles = hasAgDist ? filesIn(stagedAg) : null;
     if (values.release && values.local) throw new Error('Choose either --release or --local');
     const existingPath = path.join(HARNESS_ROOT, '.claude-plugin/marketplace.json');
     const existing = fs.existsSync(existingPath) ? JSON.parse(fs.readFileSync(existingPath, 'utf8')) : null;
@@ -309,6 +387,11 @@ function main() {
     };
     if (values.check) {
       const drift = differences(files, fs.existsSync(DIST) ? filesIn(DIST) : new Map());
+      if (hasAgDist) {
+        for (const item of differences(agFiles, fs.existsSync(AG_DIST) ? filesIn(AG_DIST) : new Map())) {
+          drift.push(`${AG_DIST_REL}/${item}`);
+        }
+      }
       for (const [name, catalog] of Object.entries(catalogs)) {
         const target = path.join(HARNESS_ROOT, name);
         if (!fs.existsSync(target) || fs.readFileSync(target, 'utf8').replace(/\r\n/g, '\n') !== JSON.stringify(catalog, null, 2) + '\n') drift.push(name);
@@ -323,11 +406,19 @@ function main() {
           throw error;
         }
       }
+      if (hasAgDist && (!fs.existsSync(AG_DIST) || differences(agFiles, filesIn(AG_DIST)).length)) {
+        if (fs.existsSync(AG_DIST)) fs.renameSync(AG_DIST, backupAg);
+        try { fs.renameSync(stagedAg, AG_DIST); }
+        catch (error) {
+          if (fs.existsSync(backupAg)) fs.renameSync(backupAg, AG_DIST);
+          throw error;
+        }
+      }
       for (const [name, catalog] of Object.entries(catalogs)) copyFromObject(catalog, path.join(HARNESS_ROOT, name));
     }
     console.log('[sync-plugin-dist] ' + (values.check ? '零漂移' : '插件与目录已生成'));
   } finally {
-    if (fs.existsSync(DIST) || !fs.existsSync(backup)) rmrf(work);
+    if ((fs.existsSync(DIST) || !fs.existsSync(backup)) && (fs.existsSync(AG_DIST) || !fs.existsSync(backupAg))) rmrf(work);
   }
 }
 

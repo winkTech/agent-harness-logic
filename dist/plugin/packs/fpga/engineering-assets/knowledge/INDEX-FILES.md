@@ -115,6 +115,14 @@
 | `references/eda-debug-checklist.md` | eda-debug-checklist |
 | `references/error-recovery.md` | error-recovery |
 | `references/harness-five-layer-analogy.md` | harness-five-layer-analogy |
+| `references/lessons/fix-in-place.md` | 原地修复已有文件 |
+| `references/lessons/fullframe-boundary.md` | 整帧 testbench 中提前出现的帧结束标记 |
+| `references/lessons/functional-verification.md` | 功能验证与语法检查分别证明什么 |
+| `references/lessons/knowledge-retrieval-priority.md` | 既往工程问题的知识库检索优先级 |
+| `references/lessons/memory-retrieval-trust.md` | 记忆检索的信任边界 |
+| `references/lessons/pipeline-stage-evidence.md` | 算法到 RTL 的流水线阶段交接 |
+| `references/lessons/skill-evolution.md` | Skill Evolve 技能演化提案 |
+| `references/lessons/viterbi-traceback.md` | Viterbi 译码器重复回溯 |
 | `references/matlab-rule.md` | matlab-code-rules |
 | `references/mcp-matlab-usage.md` | mcp-matlab-usage |
 | `references/memory-system.md` | memory-system |

@@ -46,6 +46,39 @@ function runNodeResult(args, opts = {}) {
   });
 }
 
+function verifyRetryAfterHandoff(projectScope, tempRoot) {
+  const { mock } = require('node:test');
+  const file = path.join(tempRoot, 'handoff.json');
+  const lock = file + '.lock';
+  const delays = [];
+  fs.writeFileSync(lock, 'first owner', { flag: 'wx' });
+  const older = new Date(Date.now() - 2000);
+  fs.utimesSync(lock, older, older);
+  // Drive the exact sequence without depending on scheduler timing. Both
+  // owners keep the exclusive path occupied until the designated release.
+  const wait = mock.method(Atomics, 'wait', (_array, _index, _value, delay) => {
+    delays.push(delay);
+    if (delays.length === 5) {
+      fs.writeFileSync(lock + '.next', 'second owner', { flag: 'wx' });
+      fs.renameSync(lock + '.next', lock);
+    }
+    if (delays.length === 8) fs.unlinkSync(lock);
+    return 'timed-out';
+  });
+  let entries = 0;
+  try {
+    projectScope.withFileLockSync(file, () => {
+      assert.equal(delays.length, 8, 'a handoff must not let a waiter enter the occupied lock');
+      entries++;
+    }, { initialRetryMs: 5 });
+  } finally {
+    wait.mock.restore();
+  }
+  assert.equal(entries, 1);
+  assert.deepEqual(delays, [5, 10, 15, 20, 25, 5, 10, 15],
+    'after a handoff the next owner must get a fresh retry interval');
+}
+
 async function main() {
   const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'claude-state-concurrency-'));
   const projectScopePath = path.join(ROOT, 'core', 'engine', 'scripts', 'lib', 'project-scope.cjs');
@@ -60,6 +93,7 @@ async function main() {
   const workerPath = path.join(tempRoot, 'worker.cjs');
 
   const projectScope = require(projectScopePath);
+  verifyRetryAfterHandoff(projectScope, tempRoot);
   assert.equal(
     typeof projectScope.updateJsonFileSync,
     'function',
@@ -126,6 +160,30 @@ if (mode === 'counter') {
     ])));
   const verification = JSON.parse(fs.readFileSync(verificationFile, 'utf8'));
   assert.equal(Object.keys(verification.pending || {}).length, workers);
+  const originalGateFile = process.env.HARNESS_VERIFY_GATE_STATE_FILE;
+  process.env.HARNESS_VERIFY_GATE_STATE_FILE = verificationFile;
+  const vs = require(verificationPath);
+  if (originalGateFile === undefined) delete process.env.HARNESS_VERIFY_GATE_STATE_FILE;
+  else process.env.HARNESS_VERIFY_GATE_STATE_FILE = originalGateFile;
+  const visible = vs.pendingForCwd(verification, projectRoot, {sessionId:'verifier'});
+  assert.equal(visible.length, workers, 'a fresh session must see every concurrent writer');
+  assert.deepEqual(visible.flatMap(entry => entry.files).sort(),
+    Array.from({length:workers}, (_,i) => path.join(projectRoot, 'file-' + i + '.txt')).sort());
+
+  const run = {cwd:projectRoot, session_id:'verifier', tool_use_id:'first'};
+  const command = 'pytest -q';
+  vs.startVerification(run, command);
+  await Promise.all(Array.from({length:4}, (_,i) => runNode([workerPath, 'verification', verificationFile,
+    '1', projectRoot, path.join(projectRoot, 'next-' + i + '.py'), 'session-' + i])));
+  const finish = () => vs.markVerifiedForCwd(projectRoot, {sessionId:run.session_id,
+    runKey:vs.verificationRunKey(run, command), correlated:true, passed:true});
+  const first = finish();
+  assert.equal(first.cleared.length, 4);
+  assert.equal(first.state.editCount, 8, 'four newer writer revisions must remain pending');
+  assert.equal(finish().cleared.length, 0, 'replaying the first completion must not clear more edits');
+  run.tool_use_id = 'second';
+  vs.startVerification(run, command);
+  assert.equal(finish().state.editCount, 0, 'a fresh verifier can settle all remaining revisions');
 
   const evidenceFile = path.join(tempRoot, 'evidence.json');
   await Promise.all(Array.from({ length: workers }, (_, index) =>
@@ -205,11 +263,33 @@ if (mode === 'counter') {
   fs.unlinkSync(watchdogLock);
   await Promise.all(Array.from({ length: workers }, (_, index) =>
     runNode([
-      workerPath, 'watchdog', watchdogFile, '1', projectRoot, `watchdog-${index}`, watchdogArchive, '5000',
+      workerPath, 'watchdog', watchdogFile, '1', projectRoot, `watchdog-${index}`, watchdogArchive, '15000',
     ])));
   const watchdog = JSON.parse(fs.readFileSync(watchdogFile, 'utf8'));
   assert.equal(Object.keys(watchdog.sessions || {}).length, workers);
   const { updateProgress } = require(watchdogPath);
+  const { mock } = require('node:test');
+  const failureState = path.join(tempRoot, 'failed-command.json');
+  let lockFlushes = 0;
+  const flush = fs.fsyncSync;
+  const spy = mock.method(fs, 'fsyncSync', (fd) => {
+    const lock = fs.statSync(failureState + '.lock', { bigint: true, throwIfNoEntry: false });
+    if (lock && fs.fstatSync(fd, { bigint: true }).ino === lock.ino) lockFlushes++;
+    return flush(fd);
+  });
+  try {
+    updateProgress({
+      hook_event_name: 'PostToolUseFailure', tool_name: 'Bash',
+      tool_input: { command: 'git status' }, tool_response: { exit_code: 7 },
+      cwd: projectRoot, session_id: 'ordinary-failure',
+    }, { stateFile: failureState });
+  } finally {
+    spy.mock.restore();
+  }
+  const [failedSession] = Object.values(JSON.parse(fs.readFileSync(failureState)).sessions);
+  assert.equal(failedSession.history.at(-1).event, 'PostToolUseFailure');
+  assert.equal(failedSession.trackingScope.kind, 'repair_loop');
+  assert.equal(lockFlushes, 0, 'a watchdog update must not flush the temporary lock token to disk');
   for (let index = 0; index < 70; index += 1) {
     updateProgress({
       hook_event_name: 'PreToolUse',

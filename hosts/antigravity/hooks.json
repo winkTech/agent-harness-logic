@@ -1,0 +1,49 @@
+{
+  "logical-paradox": {
+    "SessionStart": [
+      {
+        "type": "command",
+        "command": "node --no-warnings ./bridge.cjs SessionStart",
+        "timeout": 20
+      }
+    ],
+    "PreInvocation": [
+      {
+        "type": "command",
+        "command": "node --no-warnings ./bridge.cjs PreInvocation",
+        "timeout": 12
+      }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node --no-warnings ./bridge.cjs PreToolUse",
+            "timeout": 20
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "run_command|edit_file|write_file|write_to_file|replace_file_content|multi_replace_file_content|invoke_subagent|run_workflow|Workflow|manage_task|call_mcp_tool|(mcp_.*_)?(evaluate_matlab_code|run_matlab_(test_)?file)",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node --no-warnings ./bridge.cjs PostToolUse",
+            "timeout": 15
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "type": "command",
+        "command": "node --no-warnings ./bridge.cjs Stop",
+        "timeout": 30
+      }
+    ]
+  }
+}

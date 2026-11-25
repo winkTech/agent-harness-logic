@@ -527,6 +527,30 @@ async function assertStoredVerificationChain(router) {
   assert.equal(exposure?.status, 'verified-pass');
 }
 
+function assertOrdinaryVerificationPath() {
+  const gate = require('../hooks/verification-gate.cjs');
+  const { pendingForCwd } = require('../lib/verification-state.cjs');
+  const { mock } = require('node:test');
+  const cwd = HARNESS_ROOT;
+  const input = payload('PostToolUse', 'Bash', {
+    session_id: 'ordinary-lookup-fixture', tool_input: { command: 'git status --short' },
+  });
+  const state = { pending: { edit: { sessionId: 'editor', projectRoot: cwd } } };
+  const calls = mock.method(fs, 'existsSync');
+  try {
+    assert.equal(gate.evaluate(input).decision, 'allow');
+    assert.deepEqual(pendingForCwd({pending:{}}, cwd, { sessionId: input.session_id }), []);
+    assert.ok(!calls.mock.calls.some(c => c.arguments[0] === path.join(cwd, '.git')),
+      'ordinary commands with no applicable pending entries must not scan project markers');
+  } finally {
+    calls.mock.restore();
+  }
+  assert.equal(pendingForCwd(state, cwd, { sessionId: input.session_id }).length, 1,
+    'an ordinary command sees project edits made by another session');
+  assert.ok(!require.cache[require.resolve('../lib/evidence-ledger.cjs')],
+    'ordinary commands must not load the verification evidence writer');
+}
+
 function assertStaticContract() {
   const source = fs.readFileSync(routerPath, 'utf8');
   assert(!/child_process|spawn(?:Sync)?\s*\(|exec(?:File|Sync)?\s*\(|new\s+Worker\s*\(/.test(source),
@@ -554,6 +578,7 @@ function assertCliFailOpen() {
 }
 
 async function main() {
+  assertOrdinaryVerificationPath();
   assert(fs.existsSync(routerPath), 'postflight-router.cjs is missing');
   const router = require(routerPath);
   assert.equal(typeof router.route, 'function');

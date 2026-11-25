@@ -9,6 +9,10 @@ description: 本地 FPGA/通信知识库检索问答。用户要求查知识库�
 
 ## 核心流程
 
+优先把完整问题交给 `harness_knowledge_query`。若当前宿主没有该工具，运行插件根下的 `node core/engine/scripts/knowledge-answer.cjs "完整问题"`。追问中可用 `--asset ldpc_codec` 或 MCP 的 `asset` 传递已确认的资产 ID。
+
+入口会检查并按需重建索引。签核问题只采用当前版本清单与封存摘要匹配的原文，回答须保留综合顶层、适用范围及限制。脚本问题引用实际入口。普通知识问题返回可继续阅读的原文行。返回 `insufficient_evidence` 时说明缺少哪项记录，尤其不能用设计目标代替上板实测。若索引暂时不可用，可继续按下表定位原文。
+
 ```
 用户问题
     │

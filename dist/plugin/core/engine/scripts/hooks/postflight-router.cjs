@@ -263,6 +263,7 @@ async function evaluatePostflightRisk(payload, injected = {}, opts = {}) {
       const riskState = injected.riskState || require('../lib/verification-state.cjs');
       riskState.markRisk({
         cwd: runtime.cwd,
+        workspacePaths:payload.workspacePaths,
         filePath: runtime.filePath,
         sessionId: String(payload?.session_id || payload?.sessionId || ''),
         toolName: runtime.toolName,

@@ -30,6 +30,9 @@ test('SessionStart parses once and routes five lifecycle sources in-process', ()
     const stderr = [];
     const payload = { hook_event_name: 'SessionStart', source, session_id: `session-${source}` };
     const components = {
+      // Real concurrent sessions can enqueue telemetry while this routing test runs.
+      // The spool consumer has its own contract and must not drain the user's queue here.
+      spoolDrain() { return { exitCode: 0 }; },
       stateResume(received) {
         assert.equal(received.source, source);
         calls.push('state-resume');
@@ -173,7 +176,7 @@ test('Stop short-circuits summaries when an active loop requests continuation', 
   assert.equal(result.exitCode, 0, 'Stop continuation uses decision:block, not process failure');
 });
 
-test('Stop delivery risk is shadow-first, enforceable, and permits explicit unverified handoff', () => {
+test('Stop enforces delivery by default, supports explicit shadow and permits unverified handoff', () => {
   const { runDeliveryRisk } = require(STOP_SUMMARY);
   assert.equal(typeof runDeliveryRisk, 'function');
   const payload = { hook_event_name: 'Stop', cwd: ROOT, session_id: 'risk-stop-session' };
@@ -185,6 +188,9 @@ test('Stop delivery risk is shadow-first, enforceable, and permits explicit unve
     targets: [path.join(ROOT, 'core', 'engine', 'scripts', 'hooks', 'postflight-router.cjs')],
   }];
 
+  assert.equal(runDeliveryRisk(payload, { stdout() {}, stderr() {} }, {
+    env: {}, riskEntries: active,
+  }).decision, 'block');
   let stdout = [];
   let stderr = [];
   let result = runDeliveryRisk(payload, {

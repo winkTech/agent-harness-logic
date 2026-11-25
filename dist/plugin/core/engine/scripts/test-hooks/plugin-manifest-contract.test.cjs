@@ -16,7 +16,7 @@
  *   4. 非 `node ` 开头的模板命令必须让渲染器报错（exit 2），不静默降级 —— 插件目标不经 shell；
  *   5. 模拟触发：对每个事件用最小载荷真实 spawn 每条 hook，env 给 CLAUDE_PLUGIN_ROOT 与
  *      HARNESS_STATE_DIR（不设 HARNESS_NO_PERSIST，要真写状态），断言无异常退出码，
- *      且状态落在临时状态根、仓库 var/ 不被写入（插件模式下运行时状态不落插件目录）。
+ *      且状态落在临时状态根，隔离安装的插件目录中不会生成 var/。
  */
 
 const test = require('node:test');
@@ -32,10 +32,8 @@ const PLUGIN_HOOKS = path.join(ROOT, 'core', 'engine', 'hooks', 'plugin.hooks.js
 const RENDERER = path.join(ROOT, 'core', 'engine', 'scripts', 'render-hook-settings.cjs');
 const { renderPluginHooks, toExecForm, PLUGIN_ROOT_PLACEHOLDER } = require(RENDERER);
 
-const POSIX_ROOT = ROOT.replace(/\\/g, '/');
-
-function expandPluginRoot(value) {
-  return String(value).split(PLUGIN_ROOT_PLACEHOLDER).join(POSIX_ROOT);
+function expandPluginRoot(value, root = ROOT) {
+  return String(value).split(PLUGIN_ROOT_PLACEHOLDER).join(root.replace(/\\/g, '/'));
 }
 
 function readPluginManifest() {
@@ -187,21 +185,26 @@ test('every plugin hook survives a minimal payload for its event', { timeout: 30
   fs.mkdirSync(stateDir, { recursive: true });
   fs.mkdirSync(projectDir, { recursive: true });
 
-  const repoVar = path.join(ROOT, 'var');
-  const repoVarBefore = fs.existsSync(repoVar) ? fs.statSync(repoVar).mtimeMs : null;
+  const pluginDir = path.join(workspace, 'installed-plugin');
+  const distDir = fs.existsSync(path.join(ROOT, 'hooks', 'hooks.json'))
+    ? ROOT : path.join(ROOT, 'dist', 'plugin');
 
   // 真写状态：HARNESS_NO_PERSIST 等抑制开关必须**不设**，否则这条测试证明不了
   // "插件模式下状态落在状态根、不落插件目录"。
-  const env = { ...process.env, CLAUDE_PLUGIN_ROOT: ROOT, HARNESS_STATE_DIR: stateDir };
+  const env = { ...process.env, CLAUDE_PLUGIN_ROOT: pluginDir, HARNESS_STATE_DIR: stateDir };
+  delete env.HARNESS_ROOT;
   delete env.HARNESS_NO_PERSIST;
   delete env.HARNESS_VERIFY_READONLY;
   delete env.HARNESS_NO_DIAGNOSTIC_WRITES;
 
   try {
+    fs.cpSync(distDir, pluginDir, { recursive: true });
+    const installedState = path.join(pluginDir, 'var');
+    assert.ok(!fs.existsSync(installedState), 'the plugin package already contains runtime state');
     for (const { event, hook } of flat) {
       const payload = EVENT_PAYLOADS[event];
       assert.ok(payload, `no minimal payload fixture for event ${event}`);
-      const args = hook.args.map(expandPluginRoot);
+      const args = hook.args.map(arg => expandPluginRoot(arg, pluginDir));
       const input = JSON.stringify({
         hook_event_name: event,
         session_id: `plugin-manifest-contract-${event}`,
@@ -234,10 +237,7 @@ test('every plugin hook survives a minimal payload for its event', { timeout: 30
     assert.ok(stateEntries.includes('var') || stateEntries.includes('.wright'),
       `hooks wrote no runtime state under HARNESS_STATE_DIR: ${stateEntries.join(', ') || '<empty>'}`);
 
-    if (repoVarBefore !== null) {
-      assert.equal(fs.statSync(repoVar).mtimeMs, repoVarBefore,
-        'plugin-mode hooks wrote into the repository var/ instead of the state root');
-    }
+    assert.ok(!fs.existsSync(installedState), 'plugin-mode hooks created var/ in the plugin installation');
   } finally {
     fs.rmSync(workspace, { recursive: true, force: true });
   }

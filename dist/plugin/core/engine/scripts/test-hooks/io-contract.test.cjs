@@ -148,8 +148,8 @@ test('transcript: sessionId 大小写不敏感匹配', (t) => {
 
 test('transcript: cwd 近期回退（allowRecentFallback）2 分钟窗口', (t) => {
   const home = makeHome(t);
-  const cwd = 'C:/work/proj';
-  const slug = 'C--work-proj';
+  const cwd = process.platform === 'win32' ? 'C:/work/proj' : '/work/proj';
+  const slug = process.platform === 'win32' ? 'C--work-proj' : '-work-proj';
   const dir = path.join(home, 'projects', slug);
   fs.mkdirSync(dir, { recursive: true });
   const fresh = path.join(dir, 'fresh.jsonl');
@@ -163,10 +163,12 @@ test('transcript: cwd 近期回退（allowRecentFallback）2 分钟窗口', (t) 
 
 test('transcript: 近期回退默认关闭（ledger 语义）', (t) => {
   const home = makeHome(t);
-  const dir = path.join(home, 'projects', 'C--work-proj');
+  const cwd = process.platform === 'win32' ? 'C:/work/proj' : '/work/proj';
+  const slug = process.platform === 'win32' ? 'C--work-proj' : '-work-proj';
+  const dir = path.join(home, 'projects', slug);
   fs.mkdirSync(dir, { recursive: true });
   fs.writeFileSync(path.join(dir, 'fresh.jsonl'), '{}\n');
-  const found = resolveTranscriptPath({ cwd: 'C:/work/proj' }, { home });
+  const found = resolveTranscriptPath({ cwd }, { home });
   assert.equal(found, '');
 });
 

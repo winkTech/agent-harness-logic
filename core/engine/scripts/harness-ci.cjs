@@ -159,13 +159,17 @@ function runRenderFamilyChecks() {
     'core/engine/scripts/render-codex-hooks.cjs',
     // Phase 3.2：Grok 剖面投影零漂移看守。
     'core/engine/scripts/render-grok-hooks.cjs',
-    // Phase 4.1：dist/plugin 组装零漂移看守。
+    // Phase 4.1：dist/plugin + dist/antigravity-plugin 组装零漂移看守。
     'core/engine/scripts/sync-plugin-dist.cjs',
+    // M1：Antigravity 便携分发包契约核对。
+    'hosts/antigravity/connect.cjs',
   ];
   const errors = [];
   const checks = [];
   for (const relative of scripts) {
-    const args = [path.join(HARNESS_ROOT, relative), '--check'];
+    const args = [path.join(HARNESS_ROOT, relative)];
+    if (relative === 'hosts/antigravity/connect.cjs') args.push('--check-dist');
+    else args.push('--check');
     if (relative.endsWith('/render-codex-hooks.cjs')) args.push('--active');
     const result = spawnSync(process.execPath, args, {
       cwd: HARNESS_ROOT,

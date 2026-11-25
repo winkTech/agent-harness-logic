@@ -139,6 +139,7 @@
     },
     {
       "id": "verification-functional",
+      "packagedExpected": ["packs/fpga/engineering-assets/knowledge/references/lessons/functional-verification.md"],
       "query": "验证必须是功能验证 不是语法检查",
       "expected": [
         "personal/learnings/verification-must-be-functional.md"
@@ -147,6 +148,7 @@
     },
     {
       "id": "memory-retrieval-trust",
+      "packagedExpected": ["packs/fpga/engineering-assets/knowledge/references/lessons/memory-retrieval-trust.md"],
       "query": "记忆检索 信任边界 未验证 候选",
       "expected": [
         "personal/learnings/memory-retrieval-trust-boundary.md"
@@ -155,6 +157,7 @@
     },
     {
       "id": "fix-in-place",
+      "packagedExpected": ["packs/fpga/engineering-assets/knowledge/references/lessons/fix-in-place.md"],
       "query": "原地修复 纪律 不新建变体文件",
       "expected": [
         "personal/learnings/2026-06-19-fix-in-place-discipline.md",
@@ -164,6 +167,7 @@
     },
     {
       "id": "knowledge-search-mandate",
+      "packagedExpected": ["packs/fpga/engineering-assets/knowledge/references/lessons/knowledge-retrieval-priority.md"],
       "query": "知识库检索 强制 优先级",
       "expected": [
         "personal/learnings/knowledge-base-search-mandate.md",
@@ -198,6 +202,7 @@
     },
     {
       "id": "pipeline-discipline",
+      "packagedExpected": ["packs/fpga/engineering-assets/knowledge/references/lessons/pipeline-stage-evidence.md"],
       "query": "流水线框架 严格执行 阶段",
       "expected": [
         "personal/learnings/2026-06-02-流水线框架必须严格执行.md",
@@ -224,6 +229,7 @@
     },
     {
       "id": "viterbi-traceback",
+      "packagedExpected": ["packs/fpga/engineering-assets/knowledge/references/lessons/viterbi-traceback.md"],
       "query": "Viterbi 回溯 双回溯 缺陷",
       "expected": [
         "personal/viterbi-double-traceback-fix.md"
@@ -232,6 +238,7 @@
     },
     {
       "id": "frame-boundary-bug",
+      "packagedExpected": ["packs/fpga/engineering-assets/knowledge/references/lessons/fullframe-boundary.md"],
       "query": "整帧 testbench 帧边界 缺陷",
       "expected": [
         "personal/fullframe-tb-frame-boundary-bug.md"
@@ -240,6 +247,7 @@
     },
     {
       "id": "skill-evolve",
+      "packagedExpected": ["packs/fpga/engineering-assets/knowledge/references/lessons/skill-evolution.md"],
       "query": "skill evolve 技能演化 提案",
       "expected": [
         "personal/projects/skill-evolve-harness.md"

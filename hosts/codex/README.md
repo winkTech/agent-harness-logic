@@ -3,6 +3,11 @@
 一分钟接入：
 
 ```bash
+# 推荐：统一插件安装 + 原生 Hook 信任审核
+npm run codex:connect
+npm run codex:connect -- --check
+
+# 或仅渲染用户级 hooks + AGENTS.md（用于 CI / 离线）：
 node core/engine/scripts/render-codex-hooks.cjs          # 渲染 ~/.codex/hooks.json + ~/.codex/AGENTS.md
 node core/engine/scripts/render-codex-hooks.cjs --check  # 期望: 双产物零漂移
 ```

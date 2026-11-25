@@ -214,6 +214,11 @@ async function main() {
   }
   run(process.execPath, [path.join(scripts, 'install-codex-plugin-profile.cjs'), ...(values.check ? ['--check'] : [])]);
   let hooks = await readHooks(cli);
+  const installedHookFile = hooks.find(hook => hook.pluginId === pluginId)?.sourcePath;
+  if (!values.check && installedHookFile) {
+    const installedRoot = path.resolve(path.dirname(installedHookFile), '..');
+    run(process.execPath, [path.join(installedRoot, 'core/engine/scripts/semantic-search.cjs'), 'ensure', '--home', installedRoot]);
+  }
   let status = summarize(hooks, expected);
   if (!values.check && (status.pending || status.disabled) && process.stdin.isTTY && process.stdout.isTTY) {
     if (status.pending && !status.otherPending) console.log('Only this plugin needs review. Codex offers "Trust all and continue".');

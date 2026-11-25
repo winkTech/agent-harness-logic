@@ -371,6 +371,18 @@ function fileFacts(home) {
   return output;
 }
 
+function defaultPurgeExpired(_plan, context) {
+  const { openDb } = require('../sqlite/index.cjs');
+  const { purgeExpired } = require('../sqlite/store-memory.cjs');
+  const wDb = openDb(context.dbPath ? { path: context.dbPath } : {});
+  try {
+    const deleted = Number(purgeExpired({ db: wDb.db }) || 0);
+    return { deleted };
+  } finally {
+    wDb.close();
+  }
+}
+
 function defaultReconcileFacts(_plan, context) {
   const { openDb } = require('../sqlite/index.cjs');
   const { reconcileMemoryFacts, softDeleteMemory } = require('../sqlite/store-memory.cjs');
@@ -611,6 +623,7 @@ function runMaintenance(opts = parseArgs(), now = new Date(), runtime = {}) {
 
   const results = {
     events: (runtime.retainEvents || defaultRetainEvents)(plan, context),
+    purgedExpired: (runtime.purgeExpired || defaultPurgeExpired)(plan, context),
     reconcile: opts.reconcile ? (runtime.reconcileFacts || defaultReconcileFacts)(plan, context) : { skipped: true },
     candidates: (runtime.stageCandidates || defaultStageCandidates)(ruleCandidates, context),
     attributionRetirement: (runtime.retireAttribution || defaultRetireAttribution)(plan, context),
@@ -673,6 +686,7 @@ module.exports = {
   run: runMaintenance,
   defaultInspectSqlite,
   defaultRetainEvents,
+  defaultPurgeExpired,
   defaultReconcileFacts,
   ATTRIBUTION_RETIREMENT,
   collectAttributionRetirement,

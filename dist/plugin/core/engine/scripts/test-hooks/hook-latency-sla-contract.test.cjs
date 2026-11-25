@@ -33,6 +33,12 @@ const {
 } = require(path.join(ROOT, 'core', 'engine', 'scripts', 'lib', 'hook-latency.cjs'));
 const { evaluateSla } = require(path.join(ROOT, 'core', 'engine', 'scripts', 'lib', 'bench-hooks.cjs'));
 
+test('default registration data distinguishes the active router from its async observer', () => {
+  const index = registrationIndex();
+  assert.equal(budgetFor('postflight-router', { index }).registered, true);
+  assert.equal(budgetFor('postflight-observer', { index }).budgetMs, null);
+});
+
 /** 注入的 registrations：同步入口 4 条、async-only 1 条、同步+async 混合 1 条。 */
 function syncHook(script) {
   return { type: 'command', command: `node {{HARNESS_ROOT}}/core/engine/scripts/hooks/${script}.cjs` };

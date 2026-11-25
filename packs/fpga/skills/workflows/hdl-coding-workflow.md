@@ -21,6 +21,26 @@ triggers:
 
 ## 核心原则
 
+**已有 Golden 的开工预检。** 从需求中提取原入口、必测工况和必须实跑的工具。把这些范围作为 `goldenBaseline` 传给执行器。示例为 `{"entry":"04_platform/runMain.m","cases":["QPSK","16QAM","64QAM"],"tools":["仿真器功能自检"]}`。可选工具的结果单列。
+
+手动分阶段时，将上述对象保存为项目的 `var/workflow/golden-scope.json`。运行原入口和各工况，保留原始日志。将结果写入同目录的 `golden-preflight.json`，记录 `entry`、运行时的 `entrySha256`、`exitCode`、`entryLog`，以及 `cases`（每项含 `name, source, compared, criterion, passed, log`）和 `tools`（每项含 `name, exitCode, log`）。日志为项目相对路径。正常工况用 `source: "normal"`，另在 `diagnostics` 记录强制对齐或旁路数据。通信接收机报告写清发收帧数、误码分子和分母、星座图与 EVM 参考、信噪比设定与实测值、工具实际完成的阶段，以及建议先做哪一步。
+
+从当前插件根调用 `node core/engine/scripts/hdl-evidence-gate.cjs --project-root "<项目绝对路径>" --golden`。门禁检查范围、入口摘要、比较样本和佐证文件。审核报告时再核对日志中的测量和判据。
+
+design-review 确认后，P2 与 P3 的 TB 准备可并行。完整模式先用同一脚本执行 `--fixed-point --modules tx,rx`，再生成最终位真向量、运行 TB 和比较脚本的正反例。P4 首次派发前执行 `--rtl-ready --modules tx,rx` 复核两阶段产物。将示例模块替换为实际范围。完整模式指定已有 Golden 时两条命令均加 `--with-baseline`；显式 Lite 跳过 P2，P4 命令加 `--lite`，保留 P3 全部验证。回执格式见 phase2-fixed-point.md 和 phase3-testbench.md。
+
+用户只授权到 P2/P3（如“进入 P2 定点与 P3 验证准备”）时，调用 DAG 传 `stopAfter: 'p3'`。即使开启无人值守，DAG 也只运行到准备门禁，成功返回 `completedThrough: 'p3'` 和 `rtlReady: true`。获得 RTL 开发授权后再按完整模式续跑并复核证据。
+
+在交互式 design-review 签收时，宿主把已审 `06_doc/interface_contract.md` 的 SHA-256 连同确认写入 `checkpoints['design-review'].interfaceContractSha256`。旧任务可用已签收的快照回填。接口发生实质修改时送审新版；宿主仅在获得新签收后更新该值。准备门禁把实际摘要与调用方持有的签收摘要核对。
+
+续跑可复用先前合格的产物。准备门禁返回 `evidence: 'validated-on-disk'`，完整模式还核对 P2 门禁和最终门禁所见的 `fixedPointReceiptSha256` 一致。报告写明哪些步骤本次实跑、哪些复核已有回执；判断首次执行顺序用运行日志、输入摘要和退出码，DAG 的 DISPATCH 行只记录宿主请求。
+
+每个工况还要写 `oracleInputs` 数组，记录本应由被测链路自行恢复、实际却从外部取用的真值。检查帧起点、帧头字段、调制阶数和载荷长度的消费位置。正常独立路径填 `[]`。用于事后评分的发射参考，以及规格明确提供给单个模块的合法输入，可以继续用于对应范围的验证。
+
+报告覆盖量时，从对应结果文件重算。区分配对的修前/修后样本、独立种子回归和边界诊断；给出每组的记录路径、样本单位和去重口径。只有证据能区分独立帧时才汇总帧数。阶段产物应写明实际验收范围，便于下一阶段按相同范围复核。
+
+分组接收机分别统计同步候选、通过 SIGNAL 检查的帧和实际交付的载荷。对多余候选和多交付载荷分别计数。修剪、拼接或复制捕获区段会影响候选数，报告要记录波形边界条件；需求限定某类虚警时，在该工况的 `limits` 中约束对应计数。
+
 - **自顶向下**: 先系统方案 (P1a)，再微架构 (P1b)，再代码
 - **Golden Model 绝对权威**: 定点和 RTL 都围绕 Golden Model 展开
 - **RTL ↔ MATLAB 严格对标**: RTL 每模块必须与 MATLAB 模型的步骤一一对应
@@ -30,7 +50,7 @@ triggers:
 - **验证归逻辑工程师**: 所有 RTL 验证/TB/调试/对比脚本由 logic-engineer 负责；向量生成与定点归 algorithm-engineer；审查归 ce-* 只读审查员
 - **全链联调 [MUST]**: Phase 4.5 通过后方可搭建顶层，全链逐级与 golden model 对比
 - **最终输出 bit-true 对齐**: RTL 最终输出必须与定点 Golden Model 逐比特对齐，允许定点精度损失，不允许算法方向偏离
-- **可恢复检查点**: preflight / design-review / evidence-review 未确认时工作流暂停（抛 `[WorkflowCheckpoint:<name>]`），用户审查后带确认参数 + `resumeFromRunId` 续跑，已完成阶段走缓存
+- **可恢复检查点**: preflight / layout-review / system-review / design-review / evidence-review 未确认时工作流暂停（抛 `[WorkflowCheckpoint:<name>]`），用户审查后带确认参数 + `resumeFromRunId` 续跑，已完成阶段走缓存
 - **目录合规**: Phase 0 按 `cross-project-experience.md` 标准建目录，产出 `var/project-init/directory-contract.json`
 - **用完即清理**: 仿真 transient 文件（work/ transcript *.wlf）在 Phase 后 `make clean`
 - **不可跳越**: Phase N 产出是 Phase N+1 输入；调试循环封顶 5 次，超限转人工审查（复杂调试加载 `debugging` skill）
@@ -60,6 +80,8 @@ triggers:
 | 检查点 | 位置 | 确认方式 |
 |:-------|:-----|:---------|
 | `preflight` | 工作流入口 | `args.confirmed=true` |
+| `layout-review` | P0 目录和构建入口审查后，派发 P1a 前 | `args.checkpoints['layout-review'].confirmed=true` |
+| `system-review` | P1a 系统方案审查后，派发 P1b 前 | `args.checkpoints['system-review'].confirmed=true` |
 | `design-review` | P1b 之后、P2/P3 之前 | `args.checkpoints['design-review'].confirmed=true` |
 | `evidence-review` | P4.5 之后、P5 之前 | `args.checkpoints['evidence-review'].confirmed=true` |
 | `verifier` | 末端（自动） | verifier 返回 pass=true，无需用户确认 |

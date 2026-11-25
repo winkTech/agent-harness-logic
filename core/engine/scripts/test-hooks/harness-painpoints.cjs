@@ -1982,10 +1982,16 @@ test('verification quality gate does not honor completed state scoped to another
 });
 
 test('verification gate does not treat make clean as functional verification', () => {
-  const stateFile = path.join(HOME, 'var/verify-gate.json');
+  const tmpRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'verify-clean-'));
+  const stateFile = path.join(tmpRoot, 'verify-gate.json');
+  const ledgerFile = path.join(tmpRoot, 'verification-ledger.json');
   const gate = path.join(HOME, 'core/engine/scripts/hooks/verification-gate.cjs');
+  const env = {
+    HARNESS_VERIFY_GATE_STATE_FILE: stateFile,
+    HARNESS_VERIFICATION_LEDGER_FILE: ledgerFile,
+  };
 
-  withFileBackup(stateFile, () => {
+  try {
     fs.writeFileSync(stateFile, JSON.stringify({
       edited: true,
       verified: false,
@@ -1998,11 +2004,13 @@ test('verification gate does not treat make clean as functional verification', (
       tool_name: 'Bash',
       tool_input: { command: 'make clean' },
     });
-    const r = runNode(gate, payload);
+    const r = runNode(gate, payload, env);
     const state = readJson(stateFile, {});
     assert(r.status === 2, `make clean should be blocked while verification is pending, exit=${r.status}`);
     assert(state.edited === true && state.verified !== true, 'make clean cleared the pending verification state');
-  });
+  } finally {
+    fs.rmSync(tmpRoot, { recursive: true, force: true });
+  }
 });
 
 test('verification gate only clears after successful PostToolUse evidence', () => {
@@ -2096,7 +2104,7 @@ test('verification gate allows read-only echo chains but blocks echo redirection
   assert(redirected.status === 2, `echo redirection escaped the gate, exit=${redirected.status}`);
 });
 
-test('verification pending is session-scoped and expires by TTL', () => {
+test('verification pending is shared by project and expires by TTL', () => {
   const gate = path.join(HOME, 'core/engine/scripts/hooks/verification-gate.cjs');
   const tmpRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'verify-session-'));
   const stateFile = path.join(tmpRoot, 'verify-gate.json');
@@ -2121,7 +2129,7 @@ test('verification pending is session-scoped and expires by TTL', () => {
     session_id: 'session-b',
     tool_input: { command: 'node build.cjs' },
   }), env);
-  assert(otherSession.status === 0, `session-b inherited session-a pending state, exit=${otherSession.status}`);
+  assert(otherSession.status === 2, `session-b missed an unverified project edit, exit=${otherSession.status}`);
 
   const sameSession = runNode(gate, JSON.stringify({
     hook_event_name: 'PreToolUse',

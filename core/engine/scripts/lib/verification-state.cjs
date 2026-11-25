@@ -1,6 +1,8 @@
 'use strict';
 
 const path = require('node:path');
+const fs = require('node:fs');
+const { randomUUID } = require('node:crypto');
 
 const {
   HOME,
@@ -82,6 +84,34 @@ function pendingKey(projectRoot, sessionId = '') {
   return `${scopeId(projectRoot)}::${sessionId || 'legacy'}`;
 }
 
+function canonicalPath(value) {
+  const absolute = resolvePath(value);
+  try { return fs.realpathSync.native(absolute); }
+  catch (err) {
+    const parent = path.dirname(absolute);
+    if (parent === absolute || !['ENOENT', 'ENOTDIR'].includes(err.code)) return absolute;
+    return path.join(canonicalPath(parent), path.basename(absolute));
+  }
+}
+
+// Markerless workspaces belong to the calling directory, never the whole volume.
+function declaredWorkspace(target, roots) {
+  if (!Array.isArray(roots)) return null;
+  return roots.filter(root => typeof root === 'string' && path.isAbsolute(root))
+    .map(canonicalPath)
+    .filter(root => !isSamePath(root, path.parse(root).root) && isInsidePath(target, root))
+    .sort((a, b) => b.length - a.length)[0];
+}
+
+function pendingProjectRoot(cwd, filePath, roots) {
+  const workspace = canonicalPath(cwd);
+  const file = filePath && canonicalPath(filePath);
+  const marked = findProjectRoot(file || workspace, { fallback: workspace });
+  if (!isSamePath(marked, path.parse(marked).root)) return marked;
+  return declaredWorkspace(file || workspace, roots) ||
+    (file && !isInsidePath(file, workspace) ? path.dirname(file) : workspace);
+}
+
 function expiryFrom(entry, opts = {}) {
   const explicit = Date.parse(entry?.expiresAt || '');
   if (Number.isFinite(explicit)) return new Date(explicit).toISOString();
@@ -113,7 +143,8 @@ function emptyState() {
 }
 
 function normalizePendingEntry(entry, fallbackRoot = HOME, opts = {}) {
-  const projectRoot = resolvePath(entry?.projectRoot || fallbackRoot);
+  const storedRoot = entry?.projectRoot || fallbackRoot;
+  const projectRoot = entry?.revision ? resolvePath(storedRoot) : canonicalPath(storedRoot);
   const sessionId = String(entry?.sessionId || '').trim();
   const files = Array.isArray(entry?.files)
     ? [...new Set(entry.files.map(f => resolvePath(f, projectRoot)).filter(Boolean))]
@@ -125,6 +156,8 @@ function normalizePendingEntry(entry, fallbackRoot = HOME, opts = {}) {
     sessionId,
     files,
     editCount: Number(entry?.editCount || 0),
+    revision: entry?.revision || null,
+    ...(entry?.inferredDirectory ? {inferredDirectory:true} : {}),
     firstEditTime: entry?.firstEditTime || entry?.lastEditTime || null,
     lastEditTime: entry?.lastEditTime || null,
     lastTool: entry?.lastTool || null,
@@ -147,7 +180,7 @@ function riskExpiryFrom(entry, opts = {}) {
 }
 
 function normalizeRiskEntry(entry, fallbackRoot = HOME, opts = {}) {
-  const projectRoot = resolvePath(entry?.projectRoot || fallbackRoot);
+  const projectRoot = canonicalPath(entry?.projectRoot || fallbackRoot);
   const sessionId = String(entry?.sessionId || '').trim();
   const minimumRiskLevel = normalizeRiskLevel(entry?.minimumRiskLevel);
   const effectiveRiskLevel = maxRiskLevel(minimumRiskLevel, entry?.effectiveRiskLevel);
@@ -163,7 +196,7 @@ function normalizeRiskEntry(entry, fallbackRoot = HOME, opts = {}) {
     effectiveRiskLevel,
     riskReasons: normalizeStringArray(entry?.riskReasons),
     targets: normalizeStringArray(entry?.targets)
-      .map(target => resolvePath(target, projectRoot))
+      .map(target => canonicalPath(resolvePath(target, projectRoot)))
       .filter(target => isInsidePath(target, projectRoot)),
     requiredEvidence: normalizeStringArray(entry?.requiredEvidence),
     contractHash: String(entry?.contractHash || '').trim() || null,
@@ -178,7 +211,7 @@ function normalizeRiskEntry(entry, fallbackRoot = HOME, opts = {}) {
 }
 
 function normalizeEvidenceEntry(entry, fallbackRoot = HOME, opts = {}) {
-  const projectRoot = resolvePath(entry?.projectRoot || fallbackRoot);
+  const projectRoot = canonicalPath(entry?.projectRoot || fallbackRoot);
   const verifiedAt = entry?.verifiedAt || entry?.recordedAt || opts.now || new Date().toISOString();
   const explicitExpiry = Date.parse(entry?.expiresAt || '');
   const expiresAt = Number.isFinite(explicitExpiry)
@@ -203,7 +236,28 @@ function summarize(state, opts = {}) {
     if (!entry) continue;
     const normalized = normalizePendingEntry(entry, HOME, opts);
     if (isExpired(normalized, opts)) continue;
-    pending[normalized.pendingKey] = normalized;
+    // Older markerless edits could share a single volume-root entry, even for
+    // sibling projects. Recover each file's scope before exposing it to peers.
+    if (isSamePath(normalized.projectRoot, path.parse(normalized.projectRoot).root) && normalized.files.length) {
+      const groups = new Map();
+      for (const file of normalized.files) {
+        const root = pendingProjectRoot(path.dirname(file), file);
+        const key = scopeId(root);
+        if (!groups.has(key)) groups.set(key, {root, files:[]});
+        groups.get(key).files.push(file);
+      }
+      let extra = Math.max(0, normalized.editCount - normalized.files.length);
+      for (const [scope, {root, files}] of groups) {
+        const key = pendingKey(root, normalized.sessionId);
+        const inferredDirectory = isSamePath(findProjectRoot(root), path.parse(root).root);
+        const migrated = {...normalized, projectRoot:root, scopeId:scope, pendingKey:key, files,
+          inferredDirectory, editCount:files.length + extra};
+        extra = 0;
+        addPending(pending, migrated);
+      }
+    } else {
+      addPending(pending, normalized);
+    }
   }
   const pendingEntries = Object.values(pending);
   const risk = {};
@@ -240,6 +294,14 @@ function summarize(state, opts = {}) {
   };
 }
 
+function addPending(pending, entry) {
+  const prior = pending[entry.pendingKey];
+  if (!prior) { pending[entry.pendingKey] = entry; return; }
+  const latest = prior.lastEditTime > entry.lastEditTime ? prior : entry;
+  pending[entry.pendingKey] = {...latest, files:[...new Set([...prior.files, ...entry.files])].sort(),
+    editCount:prior.editCount + entry.editCount, expiresAt:[prior.expiresAt, entry.expiresAt].sort().at(-1)};
+}
+
 function migrate(raw, opts = {}) {
   if (!raw || typeof raw !== 'object') return emptyState();
   if (raw.version >= 2 && raw.pending && typeof raw.pending === 'object') {
@@ -266,6 +328,19 @@ function migrate(raw, opts = {}) {
 }
 
 function readVerificationState(opts = {}) {
+  if (opts.strict) {
+    let raw;
+    try { raw = JSON.parse(fs.readFileSync(STATE_FILE, 'utf8')); }
+    catch (error) {
+      if (error.code === 'ENOENT') return emptyState();
+      throw error;
+    }
+    const record = value => value !== null && typeof value === 'object' && !Array.isArray(value);
+    if (!record(raw) || (raw.version >= 2
+      ? !record(raw.pending) || !Object.values(raw.pending).every(record)
+      : typeof raw.edited !== 'boolean')) throw new Error('Invalid verification state.');
+    return migrate(raw, opts);
+  }
   return migrate(readJson(STATE_FILE, null), opts);
 }
 
@@ -280,12 +355,12 @@ function resetVerificationState() {
 function markEdited(opts = {}) {
   const cwd = resolvePath(opts.cwd || process.cwd());
   const filePath = opts.filePath ? resolvePath(opts.filePath, cwd) : '';
-  const projectRoot = findProjectRoot(filePath || cwd, { fallback: cwd });
+  const projectRoot = pendingProjectRoot(cwd, filePath, opts.workspacePaths);
   const sessionId = String(opts.sessionId || '').trim();
   const id = pendingKey(projectRoot, sessionId);
-  const now = opts.now || new Date().toISOString();
   const ttlMs = pendingTtlMs(opts);
   return updateJsonFileSync(STATE_FILE, emptyState, (raw) => {
+    const now = opts.now || new Date().toISOString();
     const state = migrate(raw, { ...opts, now, ttlMs });
     const prev = state.pending[id] || {
       pendingKey: id,
@@ -307,6 +382,7 @@ function markEdited(opts = {}) {
       sessionId,
       files: [...files].sort(),
       editCount: (prev.editCount || 0) + 1,
+      revision: randomUUID(),
       firstEditTime: prev.firstEditTime || now,
       lastEditTime: now,
       lastTool: opts.toolName || prev.lastTool || null,
@@ -322,9 +398,9 @@ function markRisk(opts = {}) {
   const effectiveRiskLevel = maxRiskLevel(minimumRiskLevel, assessment.effectiveRiskLevel);
   if (effectiveRiskLevel === 'R0') return readVerificationState(opts);
 
-  const cwd = resolvePath(opts.cwd || process.cwd());
-  const filePath = opts.filePath ? resolvePath(opts.filePath, cwd) : '';
-  const projectRoot = findProjectRoot(filePath || cwd, { fallback: cwd });
+  const cwd = canonicalPath(opts.cwd || process.cwd());
+  const filePath = opts.filePath ? canonicalPath(resolvePath(opts.filePath, cwd)) : '';
+  const projectRoot = pendingProjectRoot(cwd, filePath, opts.workspacePaths);
   const sessionId = String(opts.sessionId || '').trim();
   const id = pendingKey(projectRoot, sessionId);
   const now = opts.now || new Date().toISOString();
@@ -344,7 +420,7 @@ function markRisk(opts = {}) {
     const targets = new Set(prev.targets || []);
     if (filePath && isInsidePath(filePath, projectRoot)) targets.add(filePath);
     for (const target of assessment.targets || []) {
-      const resolved = resolvePath(target, projectRoot);
+      const resolved = canonicalPath(resolvePath(target, projectRoot));
       if (isInsidePath(resolved, projectRoot)) targets.add(resolved);
     }
     const escalated = RISK_LEVELS.indexOf(nextEffective) > RISK_LEVELS.indexOf(prev.effectiveRiskLevel);
@@ -371,33 +447,52 @@ function markRisk(opts = {}) {
 }
 
 function pendingForCwd(state, cwd = process.cwd(), opts = {}) {
-  const resolvedCwd = resolvePath(cwd);
+  const pending = Object.values(summarize(state, opts).pending);
+  if (pending.length === 0) return pending;
+  const resolvedCwd = canonicalPath(cwd);
+  const workspace = declaredWorkspace(resolvedCwd, opts.workspacePaths) || resolvedCwd;
+  if (!pending.some(entry => isInsidePath(resolvedCwd, entry.projectRoot) ||
+      (entry.inferredDirectory && isInsidePath(entry.projectRoot, workspace)) ||
+      isSamePath(entry.projectRoot, path.parse(resolvedCwd).root))) return [];
   const projectRoot = findProjectRoot(resolvedCwd, { fallback: resolvedCwd });
-  const sessionId = String(opts.sessionId || '').trim();
-  return Object.values(summarize(state, opts).pending).filter(entry =>
-    entry.sessionId === sessionId
-    && (isSamePath(entry.projectRoot, projectRoot) || isInsidePath(resolvedCwd, entry.projectRoot))
-  );
+  const markerless = isSamePath(projectRoot, path.parse(projectRoot).root);
+  return pending.filter(entry => {
+    // Old fileless volume receipts carry no project information.
+    if (isSamePath(entry.projectRoot, path.parse(entry.projectRoot).root)) {
+      return markerless && isSamePath(entry.projectRoot, projectRoot) && entry.sessionId === (opts.sessionId || '');
+    }
+    if (!markerless) return isSamePath(entry.projectRoot, projectRoot);
+    return isInsidePath(resolvedCwd, entry.projectRoot) ||
+      (entry.inferredDirectory && isInsidePath(entry.projectRoot, workspace));
+  });
 }
 
 function pendingForPayload(state, payload) {
-  return pendingForCwd(state, payloadCwd(payload), { sessionId: sessionIdFromPayload(payload) });
+  return pendingForCwd(state, payloadCwd(payload), { sessionId: sessionIdFromPayload(payload), workspacePaths:payload.workspacePaths });
 }
 
 function riskForCwd(state, cwd = process.cwd(), opts = {}) {
-  const resolvedCwd = resolvePath(cwd);
-  const projectRoot = findProjectRoot(resolvedCwd, { fallback: resolvedCwd });
+  const resolvedCwd = canonicalPath(cwd);
+  const marked = findProjectRoot(resolvedCwd, { fallback: resolvedCwd });
+  const markerless = isSamePath(marked, path.parse(marked).root);
+  const root = markerless ? (declaredWorkspace(resolvedCwd, opts.workspacePaths) || resolvedCwd) : marked;
   const sessionId = String(opts.sessionId || '').trim();
-  return Object.values(summarize(state, opts).risk || {}).filter(entry =>
-    entry.sessionId === sessionId
-    && (isSamePath(entry.projectRoot, projectRoot) || isInsidePath(resolvedCwd, entry.projectRoot))
-  );
+  return Object.values(summarize(state, opts).risk || {}).filter(entry => {
+    if (entry.sessionId !== sessionId) return false;
+    if (isSamePath(entry.projectRoot, path.parse(entry.projectRoot).root)) {
+      // Legacy markerless records with no target can only be handed back to
+      // the owning session. Evidence from an unrelated project cannot clear them.
+      return isSamePath(resolvedCwd, entry.projectRoot);
+    }
+    return isSamePath(entry.projectRoot, root) || (markerless && isInsidePath(resolvedCwd, entry.projectRoot));
+  });
 }
 
 function riskForPayload(state, payload, opts = {}) {
   return riskForCwd(state, payloadCwd(payload), {
     ...opts,
     sessionId: sessionIdFromPayload(payload),
+    workspacePaths:payload.workspacePaths,
   });
 }
 
@@ -454,7 +549,7 @@ function recordRiskEvidence(opts = {}) {
   if (!/^[a-f0-9]{64}$/.test(evidenceKey)) {
     return { recorded: false, reason: 'invalid-evidence-key' };
   }
-  const projectRoot = resolvePath(opts.projectRoot || process.cwd());
+  const projectRoot = canonicalPath(opts.projectRoot || process.cwd());
   const now = opts.now || new Date().toISOString();
   const ttlMs = evidenceCacheTtlMs(opts);
   const maxEntries = evidenceCacheMaxEntries(opts);
@@ -486,7 +581,7 @@ function recordRiskEvidence(opts = {}) {
 }
 
 function findReusableRiskEvidence(state, opts = {}) {
-  const projectRoot = resolvePath(opts.projectRoot || process.cwd());
+  const projectRoot = canonicalPath(opts.projectRoot || process.cwd());
   const request = {
     evidenceKey: String(opts.evidenceKey || '').trim().toLowerCase(),
     riskLevel: normalizeRiskLevel(opts.riskLevel),
@@ -500,7 +595,7 @@ function findReusableRiskEvidence(state, opts = {}) {
 }
 
 function verificationRunKey(payload, command) {
-  return JSON.stringify([payloadCwd(payload), sessionIdFromPayload(payload), payload.tool_use_id || '', command]);
+  return JSON.stringify([canonicalPath(payloadCwd(payload)), sessionIdFromPayload(payload), payload.tool_use_id || '', command]);
 }
 
 function startVerification(payload, command) {
@@ -512,7 +607,7 @@ function startVerification(payload, command) {
     next.testStarts = Object.fromEntries(starts.slice(-255));
     const previous = next.testStarts[key];
     const pending = pendingForPayload(next, payload);
-    const edits = Object.fromEntries(pending.map(entry => [entry.pendingKey, [entry.lastEditTime, entry.editCount]]));
+    const edits = Object.fromEntries(pending.map(entry => [entry.pendingKey, [entry.lastEditTime, entry.editCount, entry.revision]]));
     next.testStarts[key] = previous
       ? { ...previous, count: previous.count + 1 }
       : { time: now, count: 1, edits };
@@ -529,10 +624,12 @@ function markVerifiedForCwd(cwd = process.cwd(), opts = {}) {
     cleared = opts.passed === false ? [] : pendingForCwd(next, cwd, opts).filter(entry => {
       if (started) {
         const edit = started.edits?.[entry.pendingKey];
-        if (!edit || edit[0] !== entry.lastEditTime || edit[1] !== entry.editCount) return false;
+        if (!edit || edit[0] !== entry.lastEditTime || edit[1] !== entry.editCount ||
+            (entry.revision && edit[2] !== entry.revision)) return false;
       }
       if (Number.isFinite(opts.startedAtMs)) return Date.parse(entry.lastEditTime) < opts.startedAtMs;
-      return Boolean(started) || !opts.correlated;
+      // Legacy post-only events without timing can settle only their own edits.
+      return Boolean(started) || (!opts.correlated && entry.sessionId === (opts.sessionId || ''));
     });
     for (const entry of cleared) delete next.pending[entry.pendingKey];
     if (cleared.length > 0) {
@@ -551,6 +648,7 @@ function markEditedFromPayload(payload, opts = {}) {
   return markEdited({
     cwd,
     filePath,
+    workspacePaths:payload.workspacePaths,
     sessionId: sessionIdFromPayload(payload),
     toolName: opts.toolName,
   });
@@ -565,6 +663,7 @@ module.exports = {
   writeVerificationState,
   resetVerificationState,
   markEdited,
+  pendingProjectRoot,
   markEditedFromPayload,
   startVerification,
   verificationRunKey,

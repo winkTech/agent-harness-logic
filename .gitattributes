@@ -5,6 +5,7 @@
 # 下面强制这些格式始终以 LF 存放, 与它们的解释器一致。
 *.sh    text eol=lf
 *.bash  text eol=lf
+.githooks/* text eol=lf
 
 # Verilog/SystemVerilog 与仿真脚本会被 Linux 侧 EDA 工具直接读取, 统一 LF
 # 可避免跨平台协作时出现整文件级别的假 diff。
