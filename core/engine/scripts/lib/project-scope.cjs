@@ -9,7 +9,7 @@ const { HARNESS_ROOT } = require('./harness-root.cjs');
 
 const HOME = HARNESS_ROOT;
 const LOCK_SLEEP = new Int32Array(new SharedArrayBuffer(4));
-const DEFAULT_LOCK_TIMEOUT_MS = 5000;
+const DEFAULT_LOCK_TIMEOUT_MS = process.platform === 'win32' ? 15000 : 5000;
 const DEFAULT_STALE_LOCK_MS = 30000;
 
 const ROOT_MARKERS = [
@@ -294,7 +294,10 @@ function withFileLockSync(filePath, operation, opts = {}) {
         }
         lastLockStat = stat;
       } catch (statError) {
-        if (statError.code === 'ENOENT') continue;
+        if (statError.code === 'ENOENT'
+            || (process.platform === 'win32' && ['EPERM', 'EACCES', 'EBUSY'].includes(statError.code))) {
+          continue;
+        }
         throw statError;
       }
       if (Date.now() - startedAt >= timeoutMs) {
@@ -335,14 +338,14 @@ function updateJsonFileSync(filePath, fallback, mutator, opts = {}) {
       : initialJsonValue(fallback);
     const next = mutator(current);
     if (next === undefined) throw new TypeError('JSON state mutator must return the next value');
-    atomicWriteJson(filePath, next);
+    atomicWriteJson(filePath, next, { retryBusyRename: true });
     return next;
   }, opts);
 }
 
 function replaceJsonFileSync(filePath, value, opts = {}) {
   return withFileLockSync(filePath, () => {
-    atomicWriteJson(filePath, value);
+    atomicWriteJson(filePath, value, { retryBusyRename: true });
     return value;
   }, opts);
 }

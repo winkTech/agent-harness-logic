@@ -263,7 +263,7 @@ if (mode === 'counter') {
   fs.unlinkSync(watchdogLock);
   await Promise.all(Array.from({ length: workers }, (_, index) =>
     runNode([
-      workerPath, 'watchdog', watchdogFile, '1', projectRoot, `watchdog-${index}`, watchdogArchive, '5000',
+      workerPath, 'watchdog', watchdogFile, '1', projectRoot, `watchdog-${index}`, watchdogArchive, '15000',
     ])));
   const watchdog = JSON.parse(fs.readFileSync(watchdogFile, 'utf8'));
   assert.equal(Object.keys(watchdog.sessions || {}).length, workers);
