@@ -44,7 +44,8 @@ function main() {
   //    且不得残留未展开占位符
   const raw = fs.readFileSync(WORKBUDDY_HOOKS, 'utf8');
   assert.doesNotMatch(raw, /\{\{[A-Z_]+\}\}/, 'workbuddy.hooks.json still contains unexpanded placeholders');
-  assert.match(raw, /node [A-Za-z]:[\\/]/, 'workbuddy.hooks.json must expand {{HARNESS_ROOT}} to an absolute path');
+  const absNodeCmdPattern = process.platform === 'win32' ? /node [A-Za-z]:[\\/]/ : /node \//;
+  assert.match(raw, absNodeCmdPattern, 'workbuddy.hooks.json must expand {{HARNESS_ROOT}} to an absolute path');
 
   // 4. 与 Claude 目标事件名集合一致（hooks 块同构）
   const claudeHooks = renderHooks({ root: ROOT });

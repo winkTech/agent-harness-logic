@@ -427,6 +427,23 @@ function settingsMaintenanceSources(home) {
     });
     if (configured) sources.push(`${name}:SessionStart`);
   }
+  const mainSettings = readJson(path.join(home, 'settings.json'), {});
+  if (mainSettings?.$harnessHookMode === 'plugin-delegated') {
+    const pluginHooks = readJson(path.join(home, 'core', 'engine', 'hooks', 'plugin.hooks.json'), {});
+    const groups = pluginHooks?.hooks?.SessionStart;
+    if (Array.isArray(groups) && groups.some((group) => (
+      group && group.enabled !== false
+      && (group.matcher == null || /startup/i.test(String(group.matcher)))
+      && Array.isArray(group.hooks)
+      && group.hooks.some((hook) => {
+        if (!hook || hook.enabled === false || hook.type !== 'command') return false;
+        const cmd = Array.isArray(hook.args) ? [hook.command, ...hook.args].join(' ') : hook.command;
+        return maintenanceCommandMatches(cmd);
+      })
+    ))) {
+      sources.push('plugin.hooks.json:SessionStart');
+    }
+  }
   return sources;
 }
 

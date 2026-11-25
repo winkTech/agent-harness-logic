@@ -12,7 +12,10 @@
  * Icarus 的 $finish(1) 参数是诊断详细程度而非退出码, 这类 TB 永远 exit 0。
  */
 
+const { stripVTControlCharacters } = require('node:util');
+
 const PASS_MARKERS = [
+  /^[ \t]*[ℹ#] pass [1-9]\d*[ \t]*\r?$/m,
   /\bRESULT:\s*PASS\b/i,
   /\b(?:ALL\s+)?(?:TESTS?|CHECKS?)\s+PASSED\b/i,
   /\bPASSED\b/,
@@ -27,10 +30,20 @@ const PASS_MARKERS = [
   /** 项目自定义通过标记 — 编辑此数组添加 */
 ];
 
+// TAP/spec 输出中的测试名是描述文字。保留诊断行以及 reporter 自己的结果计数。
+function withoutTestTitles(text) {
+  if (!/^[ \t]*(?:TAP version \d+|[ℹ#] (?:tests|pass|fail) \d+)[ \t]*\r?$/m.test(text)) return text;
+  return text.replace(/^[ \t]*(?:# Subtest:|(ok \d+)\b|[✔▶﹣] )[^\r\n]*/gm,
+    (line, tapPass) => tapPass && !/[ \t]#[ \t]*(?:SKIP|TODO)\b/i.test(line) ? 'ok' : '');
+}
+
 /** 输出里的失败标记。返回失败原因, 无失败标记返回 null。 */
 function failureMarker(text) {
-  const combined = String(text || '');
-  if (/\bRESULT:\s*FAIL\b/i.test(combined)) return 'RESULT: FAIL in output';
+  const output = stripVTControlCharacters(String(text || ''));
+  if (/\bRESULT:\s*FAIL\b/i.test(output)) return 'RESULT: FAIL in output';
+  if (/^[ \t]*not ok(?:[ \t]|\r?$)/m.test(output)) return 'not ok in test output';
+  if (/^[ \t]*(?:[ℹ#] fail [1-9]\d*[ \t]*\r?$|✖[ \t])/m.test(output)) return 'failed test in reporter output';
+  const combined = withoutTestTitles(output);
   const failedCount = combined.match(/\b(\d+)\s+failed\b/i);
   if (failedCount && Number(failedCount[1]) > 0) return 'failed test count in output';
   if (/\b(?:FAILURE|FATAL|ASSERTION\s+FAILED)\b/i.test(combined)
@@ -41,7 +54,7 @@ function failureMarker(text) {
 }
 
 function hasPassMarker(text) {
-  const combined = String(text || '');
+  const combined = withoutTestTitles(stripVTControlCharacters(String(text || '')));
   return PASS_MARKERS.some((re) => re.test(combined));
 }
 

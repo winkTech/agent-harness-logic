@@ -192,6 +192,34 @@ const HOST_DIALECTS = Object.freeze({
     }),
     matcherSeparator: '|',
   }),
+  antigravity: Object.freeze({
+    // Antigravity 宿主协议桥接方言：
+    //   - PreInvocation 对应 prompt_submit；工具名走 snake_case 映射到规范形
+    events: Object.freeze({
+      PreToolUse: 'before_tool',
+      PostToolUse: 'after_tool',
+      PreInvocation: 'prompt_submit',
+      SessionStart: 'session_start',
+      Stop: 'turn_end',
+    }),
+    eventTypeToAction: Object.freeze({}),
+    sessionStartSources: Object.freeze(['startup']),
+    toolAliases: Object.freeze({
+      run_command: 'Bash',
+      edit_file: 'Edit',
+      write_file: 'Write',
+      write_to_file: 'Write',
+      replace_file_content: 'Edit',
+      multi_replace_file_content: 'MultiEdit',
+      read_file: 'Read',
+      view_file: 'Read',
+      find_by_name: 'Glob',
+      grep_search: 'Grep',
+      invoke_subagent: 'Agent',
+      run_workflow: 'Workflow',
+    }),
+    matcherSeparator: '|',
+  }),
 });
 
 // ── 查询函数 ────────────────────────────────────────────────────────────────

@@ -842,6 +842,7 @@ try {
   assertGitCommandClassification();
   assertPreflightDoesNotInjectMemoryContext();
   assertRiskAdaptivePreflight();
+  assertFileDataRisk();
   assertCompactDeduplicatedAdvisoryContext();
   assertWriteGatesAreSelectedByTarget();
   assertAdvisoryUsesSingleModelChannel();
@@ -862,4 +863,29 @@ try {
 } catch (error) {
   process.stderr.write(`${error.stack || error.message}\n`);
   process.exitCode = 1;
+}
+function assertFileDataRisk() {
+  const router = require('../hooks/preflight-router.cjs');
+  const facts = (tool_name, tool_input) => router.riskFactsFromRuntime(router.runtimeFrom({tool_name,tool_input}), {fileExists:()=>true});
+  const content = 'const sample = "git reset --hard";';
+  for (const [file_path, flag] of [['fixture/lib/a.cjs','sharedCoreChange'], ['fixture/golden/b.py','goldenChange']]) {
+    assert.equal(facts('Read',{file_path})[flag],false);
+    assert.equal(facts('Edit',{file_path,new_string:'updated'})[flag],true);
+  }
+  const guard = require('../hooks/bash-safety-guard.cjs');
+  for (const command of ['node -e "console.log(\'powershell and node -e\')"',
+    'echo powershell; node -e "console.log(1)"', 'powershell -Command node -e "console.log(1)"']) {
+    assert.equal(guard.scanCommand(command).matched,false,command);
+  }
+  for (const shell of ['powershell','pwsh.exe']) {
+    assert.equal(guard.scanCommand(shell+' -NoProfile -EncodedCommand FIXTURE').info.category,'encoded-payload-execution');
+  }
+  const script = facts('Write',{file_path:'fixture.cjs',content,command:'git reset --hard'});
+  assert.equal(script.destructive,false);
+  assert.equal(script.clockResetCdcChange,false);
+  assert.equal(facts('Edit',{file_path:'unit.sv',new_string:'always_ff @(posedge clk)'}).clockResetCdcChange,true);
+  assert.equal(facts('Bash',{command:'git reset --hard'}).destructive,true);
+  const tempFile = path.join(require('node:os').tmpdir(), 'audit-fixture.cjs');
+  assert.equal(facts('Bash',{command:`Remove-Item -LiteralPath "${tempFile}" -Force`}).destructive,false);
+  assert.equal(facts('Bash',{command:`Remove-Item -LiteralPath "${tempFile}" -Recurse -Force`}).destructive,true);
 }

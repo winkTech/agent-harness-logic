@@ -21,18 +21,23 @@ const { spawn } = require('node:child_process');
 const { HARNESS_ROOT } = require('./lib/harness-root.cjs');
 const eventStore = require('../sqlite/store-events.cjs');
 
+const MAX_CATCHUP_BATCHES = 3;
+const BACKLOG_COOLDOWN_MS = 60_000;
+
 const CONSUMERS = [
   {
     id: 'dream',
     runner: path.join(HARNESS_ROOT, 'core', 'engine', 'scripts', 'dream-consolidate.cjs'),
     // 到期节奏：成功后 24h 再跑（dream 蒸馏不需要高频）
     reDueAfterSuccessMs: 24 * 3600_000,
+    maxBatch: 100,
     timeoutMs: 12_000,
   },
   {
     id: 'skill-evolve',
     runner: path.join(HARNESS_ROOT, 'core', 'engine', 'scripts', 'skill-evolve.cjs'),
     reDueAfterSuccessMs: 24 * 3600_000,
+    maxBatch: 100,
     timeoutMs: 30_000,
   },
   {
@@ -42,11 +47,12 @@ const CONSUMERS = [
     runnerArgs: ['auto-record'],
     script: path.join(HARNESS_ROOT, 'core', 'engine', 'scripts', 'fp-rate-tracker.cjs'),
     reDueAfterSuccessMs: 12 * 3600_000,
+    maxBatch: 100,
     timeoutMs: 15_000,
   },
 ];
 
-function isDue(run, reDueMs, now = Date.now()) {
+function isDue(run, reDueMs, now = Date.now(), opts = {}) {
   if (!run) return true; // 无心跳——从未跑过，到期
   if (run.status === 'running') {
     // 卡死态：上次 started 超 10 分钟视为僵死，允许重跑
@@ -54,10 +60,16 @@ function isDue(run, reDueMs, now = Date.now()) {
     return Number.isFinite(startedAt) ? now - startedAt > 10 * 60_000 : true;
   }
   if (run.status === 'failed') return true;
+  const maxBatch = Number(opts.maxBatch || 100);
+  const completedAt = Date.parse(run.lastCompletedAt || '');
+  const pendingCount = Math.max(Number(run.pending || 0), Number(opts.livePending || 0));
+  // 积压追赶：若实时未消费事件或上次残余 >= maxBatch，不硬睡 24h，允许短冷却后继续追赶
+  if (pendingCount >= maxBatch) {
+    if (!Number.isFinite(completedAt) || now - completedAt >= BACKLOG_COOLDOWN_MS) return true;
+  }
   const nextDue = Date.parse(run.nextDueAt || '');
   if (Number.isFinite(nextDue)) return now >= nextDue;
   // 无 next_due_at：按 lastCompletedAt + reDue 判
-  const completedAt = Date.parse(run.lastCompletedAt || '');
   if (!Number.isFinite(completedAt)) return true;
   return now - completedAt >= reDueMs;
 }
@@ -84,13 +96,24 @@ function runConsumer(consumer) {
   });
 }
 
+function livePendingFor(consumerId) {
+  try {
+    const wm = eventStore.getWatermark({ consumer: consumerId });
+    return Number(eventStore.countSinceWatermark(wm) || 0);
+  } catch {
+    return 0;
+  }
+}
+
 async function main() {
   const auto = process.argv.includes('--auto');
   if (!auto) {
     // 手动模式：列出各消费者到期状态
     for (const c of CONSUMERS) {
       const run = eventStore.getConsumerRun(c.id);
-      console.log(`[consumer-scheduler] ${c.id}: ${isDue(run, c.reDueAfterSuccessMs) ? 'DUE' : 'not-due'} (${run ? `next=${run.nextDueAt || 'n/a'} status=${run.status} pending=${run.pending}` : '无心跳'})`);
+      const livePending = livePendingFor(c.id);
+      const due = isDue(run, c.reDueAfterSuccessMs, Date.now(), { maxBatch: c.maxBatch, livePending });
+      console.log(`[consumer-scheduler] ${c.id}: ${due ? 'DUE' : 'not-due'} (${run ? `next=${run.nextDueAt || 'n/a'} status=${run.status} pending=${livePending}` : `无心跳 pending=${livePending}`})`);
     }
     return;
   }
@@ -98,8 +121,19 @@ async function main() {
   for (const c of CONSUMERS) {
     let run = null;
     try { run = eventStore.getConsumerRun(c.id); } catch { /* 心跳表不可用视为到期 */ }
-    if (!isDue(run, c.reDueAfterSuccessMs)) continue;
-    results.push(await runConsumer(c));
+    const initialPending = livePendingFor(c.id);
+    if (!isDue(run, c.reDueAfterSuccessMs, Date.now(), { maxBatch: c.maxBatch, livePending: initialPending })) continue;
+    for (let batch = 0; batch < MAX_CATCHUP_BATCHES; batch += 1) {
+      const prevThrough = Number(run?.processedThrough || 0);
+      const outcome = await runConsumer(c);
+      results.push(outcome);
+      if (outcome.verdict !== 'ran') break;
+      try { run = eventStore.getConsumerRun(c.id); } catch { break; }
+      const nextThrough = Number(run?.processedThrough || 0);
+      const remaining = Math.max(Number(run?.pending || 0), livePendingFor(c.id));
+      // 仅在水位真实前进且仍有 >= maxBatch 积压时继续有界追赶，防止空转风暴
+      if (nextThrough <= prevThrough || remaining < (c.maxBatch || 100)) break;
+    }
   }
   if (results.length > 0) {
     console.error(`[consumer-scheduler] ${results.map((r) => `${r.id}:${r.verdict}`).join(' ')}`);

@@ -88,22 +88,38 @@ function isReadOnlyShellCommand(command) {
   ].some(pattern => pattern.test(value));
 }
 
+// A literal, nonrecursive deletion beneath the OS temp directory is a write.
+// Restrict this classification to one operand, no expansions or redirections.
+function removesOneTempFile(command) {
+  const match = command.trim().match(/^Remove-Item\s+(?:-Force\s+)?-LiteralPath\s+(?:"([^"`$\r\n]+)"|'([^'\r\n]+)'|([^\s'"`$;&|<>()[\]{}]+))(?:\s+-Force)?$/i);
+  if (!match) return false;
+  const target = match[1] || match[2] || match[3];
+  if (!path.isAbsolute(target) || !path.extname(target)) return false;
+  try {
+    const temp = fs.realpathSync.native(require('node:os').tmpdir());
+    const parent = fs.realpathSync.native(path.dirname(target));
+    const relative = path.relative(temp, parent);
+    if (relative === '..' || relative.startsWith('..' + path.sep) || path.isAbsolute(relative)) return false;
+    const stat = fs.lstatSync(target, {throwIfNoEntry:false});
+    return !stat || stat.isFile();
+  } catch { return false; }
+}
+
 function riskFactsFromRuntime(runtime, opts = {}) {
   const fileExists = opts.fileExists || fs.existsSync;
   const signals = runtime.input?.risk_signals || runtime.payload?.risk_signals || {};
   const isWrite = WRITE_TOOLS.has(runtime.toolKey);
   const isShell = SHELL_TOOLS.has(runtime.toolKey);
-  const command = String(runtime.command || '');
+  const command = isShell ? String(runtime.command || '') : '';
   const readOnly = isReadOnlyTool(runtime.toolName)
     || (isShell && isReadOnlyShellCommand(command));
   const changedText = changedTextFromRuntime(runtime);
-  const semanticText = `${runtime.filePath}\n${changedText}`;
   const destructive = Boolean(signals.destructive) || [
     /\bgit\s+(?:reset\s+--hard|clean\s+-[a-z]*f)/i,
     /\brm\s+-[a-z]*r[a-z]*f|\bRemove-Item\b[^\n]*(?:-Recurse|-Force)/i,
     /\b(?:drop|truncate)\s+(?:database|table)\b/i,
     /\bformat\s+[a-z]:/i,
-  ].some(pattern => pattern.test(command));
+  ].some(pattern => pattern.test(command)) && !removesOneTempFile(command);
   const releaseAction = Boolean(signals.releaseAction) || [
     /\bgit\s+(?:commit|push)\b/i,
     /\b(?:npm|pnpm|yarn)\s+publish\b/i,
@@ -120,18 +136,19 @@ function riskFactsFromRuntime(runtime, opts = {}) {
     /\b(?:input|output|inout)\s+(?:wire|logic|reg|signed|unsigned|\[)/i,
   ].some(pattern => pattern.test(changedText));
   const clockResetCdcChange = Boolean(signals.clockResetCdcChange)
-    || /\b(?:clock|clk|reset|rst|cdc|async_fifo|synchroni[sz]er)\b/i.test(changedText);
+    || (isWrite && /\.(?:svh?|vh?|vhdl?|xdc|sdc|sby)$/i.test(runtime.filePath)
+      && /(?:^|[^a-z0-9])(?:clock|clk|reset|rst|cdc|async_fifo|synchroni[sz]er)(?=[^a-z0-9]|$)/i.test(changedText));
   const goldenChange = Boolean(signals.goldenChange)
-    || /[/\\](?:golden|models?)[/\\]/i.test(runtime.filePath)
-    || /\bgolden\s+model\b/i.test(changedText);
+    || (isWrite && (/[/\\](?:golden|models?)[/\\]/i.test(runtime.filePath)
+      || /\bgolden\s+model\b/i.test(changedText)));
   // Phase 1 拆层修正: 布局根目录更名为 core/ 后, 原 [/\](?:lib|shared|core|cbb)[/\]
   // 会把 core/engine/** 一切编辑误判为 shared-core-change(全仓库 R2 化)。
   // 语义不变: shared-core 指"被多方共享的库/组件目录"(lib/ shared/ cbb/ 及
   // 名为 core 的叶子目录), 不是本仓库的 core/ 布局层。core/engine/** 的普通
   // 修改回归 R1; 引擎文件的 interface-change/golden 等文本信号照旧生效。
   const sharedCoreChange = Boolean(signals.sharedCoreChange)
-    || /[/\\](?:lib|shared|cbb)[/\\]/i.test(runtime.filePath)
-    || /[/\\]core[/\\](?!engine[/\\])/i.test(runtime.filePath);
+    || (isWrite && (/[/\\](?:lib|shared|cbb)[/\\]/i.test(runtime.filePath)
+      || /[/\\]core[/\\](?!engine[/\\])/i.test(runtime.filePath)));
   const repeatedFailure = Boolean(signals.repeatedFailure)
     || Number(runtime.payload?.failure_count || runtime.payload?.failureCount || 0) >= 2;
   return {

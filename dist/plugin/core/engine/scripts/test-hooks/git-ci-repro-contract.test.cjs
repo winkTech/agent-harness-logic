@@ -17,6 +17,14 @@ const MCP_CONFIG = path.join(ROOT, '.mcp.json');
 const PLUGIN_LOCK = path.join(ROOT, 'hosts', 'claude-code', 'plugins.lock.json');
 const PLUGIN_LOCK_SCHEMA = path.join(ROOT, 'core', 'engine', 'schemas', 'plugin-lock.schema.json');
 
+test('layer boundary detects literal pack and host imports', () => {
+  const { REQUIRE_PACK_PATTERNS } = require('../layer-boundary.cjs');
+  const detects = text => REQUIRE_PACK_PATTERNS.some(pattern => pattern.test(text));
+  assert.equal(detects("require('../packs/fpga/logic.cjs')"), true);
+  assert.equal(detects('require ( "../hosts/grok/adapter.cjs" )'), true);
+  assert.equal(detects("require('../lib/adapter.cjs')"), false);
+});
+
 function runScriptWithStubs(name, stubs, overrides = {}) {
   const file = path.join(ROOT, 'core', 'engine', 'scripts', name);
   const requireScript = createRequire(file);
@@ -361,9 +369,7 @@ test('pre-commit checks staged Python content instead of unstaged edits', (t) =>
 test('CI is least-privilege, immutable, cross-platform, and uploads provenance', () => {
   const workflow = fs.readFileSync(WORKFLOW, 'utf8');
   assert.match(workflow, /^permissions:\s*\n\s+contents:\s*read\s*$/m);
-  // matrix 仅 windows（ubuntu 腿 gate 47s 挂，用户裁决 2026-11-17 暂时屏蔽；
-  // 恢复 ubuntu 时把本断言与 workflow matrix 一并改回双 OS）
-  assert.match(workflow, /matrix:[\s\S]*?os:\s*\[windows-latest\]/);
+  assert.match(workflow, /matrix:[\s\S]*?os:\s*\[windows-latest,\s*ubuntu-latest\]/);
   assert.match(workflow, /runs-on:\s*\$\{\{\s*matrix\.os\s*\}\}/);
   assert.match(workflow, /actions\/checkout@11bd71901bbe5b1630ceea73d27597364c9af683\s+# v4\.2\.2/);
   assert.match(workflow, /persist-credentials:\s*false/);

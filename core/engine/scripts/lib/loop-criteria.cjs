@@ -13,7 +13,7 @@
  *
  * 支持的判据:
  *   { "type": "no_pending_verification" }
- *       var/verify-gate.json 里本 scope+session 没有未过期的待验证条目
+ *       var/verify-gate.json 里本项目的所有会话均无未过期的待验证条目
  *   { "type": "evidence_passed", "contractHash": "...", "commandPattern": "..." }
  *       verification-ledger 里有 status=passed 且匹配的条目 (默认只认循环创建后的)
  *   { "type": "gate_green", "gate": "requirements-gate" }
@@ -60,7 +60,7 @@ function evalNoPendingVerification(criterion, ctx) {
   try {
     const vs = require('./verification-state.cjs');
     state = vs.readVerificationState();
-    const pending = vs.pendingForCwd(state, ctx.projectRoot, { sessionId: ctx.sessionId || '' });
+    const pending = vs.pendingForCwd(state, ctx.verificationCwd, { sessionId: ctx.sessionId || '' });
     return pending.length === 0
       ? { met: true, detail: '无未过期的待验证条目' }
       : {
@@ -304,7 +304,7 @@ function evaluate(criteria, ctx = {}) {
   const projectRoot = ctx.projectRoot
     ? findProjectRoot(resolvePath(ctx.projectRoot), { fallback: resolvePath(ctx.projectRoot) })
     : HARNESS_ROOT;
-  const scoped = { ...ctx, projectRoot };
+  const scoped = { ...ctx, projectRoot, verificationCwd: ctx.projectRoot || projectRoot };
 
   if (list.length === 0) {
     // 空判据不得视为收敛 —— 否则"没写判据"就成了万能通行证。

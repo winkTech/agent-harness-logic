@@ -1,0 +1,297 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Logical Paradox Harness Console</title>
+  <style>
+    :root {
+      color-scheme: light dark;
+      --bg: var(--color-background-primary, #ffffff);
+      --bg-card: var(--color-background-secondary, #f6f8fa);
+      --fg: var(--color-text-primary, #1f2328);
+      --fg-muted: var(--color-text-secondary, #59636e);
+      --border: var(--color-border-primary, #d0d7de);
+      --ok: var(--color-text-success, #1a7f37);
+      --warn: var(--color-text-warning, #9a6700);
+      --danger: var(--color-text-danger, #cf222e);
+      --accent: var(--color-text-info, #0969da);
+      --font: var(--font-sans, system-ui, -apple-system, Segoe UI, Roboto, sans-serif);
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      padding: 14px;
+      font-family: var(--font);
+      font-size: 13px;
+      line-height: 1.45;
+      background: var(--bg);
+      color: var(--fg);
+    }
+    header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 12px;
+      padding-bottom: 8px;
+      border-bottom: 1px solid var(--border);
+    }
+    h1 { margin: 0; font-size: 15px; font-weight: 600; }
+    .meta { font-size: 11px; color: var(--fg-muted); }
+    .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 10px; margin-bottom: 12px; }
+    .card {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 10px 12px;
+    }
+    .card h2 { margin: 0 0 6px; font-size: 12px; text-transform: uppercase; letter-spacing: .04em; color: var(--fg-muted); }
+    .metric { font-size: 22px; font-weight: 700; margin-bottom: 4px; }
+    .ok { color: var(--ok); }
+    .warn { color: var(--warn); }
+    .danger { color: var(--danger); }
+    .badge {
+      display: inline-block;
+      padding: 2px 7px;
+      border-radius: 10px;
+      font-size: 11px;
+      font-weight: 600;
+      border: 1px solid var(--border);
+      margin-right: 4px;
+    }
+    .list { list-style: none; padding: 0; margin: 6px 0 0; }
+    .list li {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 8px;
+      padding: 6px 0;
+      border-top: 1px solid var(--border);
+    }
+    .mono { font-family: ui-monospace, SFMono-Regular, Consolas, monospace; font-size: 11px; word-break: break-all; }
+    .actions { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+    button {
+      cursor: pointer;
+      border: 1px solid var(--border);
+      background: var(--bg);
+      color: var(--fg);
+      border-radius: 6px;
+      padding: 5px 10px;
+      font-size: 12px;
+      font-weight: 500;
+    }
+    button:hover:not(:disabled) { border-color: var(--accent); color: var(--accent); }
+    button.danger-btn:hover:not(:disabled) { border-color: var(--danger); color: var(--danger); }
+    button:disabled { opacity: .5; cursor: not-allowed; }
+    pre {
+      margin: 8px 0 0;
+      padding: 8px;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      font-size: 11px;
+      max-height: 180px;
+      overflow: auto;
+      white-space: pre-wrap;
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <div>
+      <h1>Logical Paradox Harness</h1>
+      <div class="meta" id="updated">等待宿主数据…</div>
+    </div>
+    <button id="btn-refresh">刷新状态</button>
+  </header>
+
+  <section class="grid">
+    <div class="card">
+      <h2>Memory Health</h2>
+      <div class="metric" id="health-score">--</div>
+      <div id="health-meta" class="meta"></div>
+      <ul class="list" id="health-issues"></ul>
+    </div>
+    <div class="card">
+      <h2>Verify Gate &amp; R3 Signoff</h2>
+      <div class="metric" id="gate-count">--</div>
+      <div class="meta">以下签核/重置按钮仅人类在侧边栏可点（对模型隐藏）</div>
+      <ul class="list" id="gate-list"></ul>
+      <div class="actions">
+        <button id="btn-reset-all" class="danger-btn">清空全部待验门禁</button>
+      </div>
+    </div>
+    <div class="card">
+      <h2>Antigravity Plugin &amp; ACL</h2>
+      <div id="plugin-meta"></div>
+      <div class="actions">
+        <button id="btn-maint-dry">维护预览 (dry-run)</button>
+        <button id="btn-maint-exec">执行维护 (execute)</button>
+      </div>
+    </div>
+  </section>
+
+  <section class="card">
+    <h2>Consumers &amp; Action Output</h2>
+    <ul class="list" id="consumer-list"></ul>
+    <pre id="action-log">就绪（所有敏感配置与密钥均隔离在本面板之外）。</pre>
+  </section>
+
+  <script>
+    (function () {
+      let nextId = 1;
+      const pending = new Map();
+      const logEl = document.getElementById('action-log');
+
+      function setLog(obj) {
+        logEl.textContent = typeof obj === 'string' ? obj : JSON.stringify(obj, null, 2);
+      }
+
+      function applyHostContext(ctx) {
+        if (!ctx) return;
+        if (ctx.theme) document.documentElement.dataset.theme = ctx.theme;
+        const vars = ctx.styles && ctx.styles.variables;
+        if (vars && typeof vars === 'object') {
+          for (const [k, v] of Object.entries(vars)) {
+            if (typeof v === 'string') document.documentElement.style.setProperty(k, v);
+          }
+        }
+      }
+
+      function rpcRequest(method, params) {
+        const id = nextId++;
+        return new Promise((resolve, reject) => {
+          pending.set(id, { resolve, reject });
+          window.parent.postMessage({ jsonrpc: '2.0', id, method, params: params || {} }, '*');
+        });
+      }
+
+      function rpcNotify(method, params) {
+        window.parent.postMessage({ jsonrpc: '2.0', method, params: params || {} }, '*');
+      }
+
+      async function callAppTool(name, args) {
+        setLog('正在执行 ' + name + ' ...');
+        try {
+          const res = await rpcRequest('tools/call', { name, arguments: args || {} });
+          const sc = res && res.structuredContent;
+          if (sc && sc.snapshot) render(sc.snapshot);
+          else if (sc && sc.health) render(sc);
+          setLog(sc || res);
+        } catch (err) {
+          setLog('调用失败: ' + (err && err.message ? err.message : String(err)));
+        }
+      }
+
+      function el(tag, cls, text) {
+        const node = document.createElement(tag);
+        if (cls) node.className = cls;
+        if (text !== undefined) node.textContent = text;
+        return node;
+      }
+
+      function render(data) {
+        if (!data) return;
+        document.getElementById('updated').textContent = '更新于 ' + (data.generatedAt || '');
+
+        const h = data.health || {};
+        const scoreEl = document.getElementById('health-score');
+        scoreEl.textContent = (h.score ?? '--') + ' / 100';
+        scoreEl.className = 'metric ' + (h.score >= 85 ? 'ok' : h.score >= 70 ? 'warn' : 'danger');
+        document.getElementById('health-meta').textContent =
+          '状态: ' + (h.status || 'unknown') + ' · 活跃事实: ' + (h.facts?.active ?? 0) + ' (零命中 ' + (h.facts?.neverHit ?? 0) + ')';
+
+        const issuesEl = document.getElementById('health-issues');
+        issuesEl.textContent = '';
+        for (const item of h.issues || []) {
+          const li = el('li');
+          li.appendChild(el('span', 'mono', item.code));
+          li.appendChild(el('span', 'badge ' + (item.severity === 'high' || item.severity === 'critical' ? 'danger' : 'warn'), '-' + item.penalty));
+          issuesEl.appendChild(li);
+        }
+        if (!(h.issues || []).length) issuesEl.appendChild(el('li', 'ok', '全部健康检查通过'));
+
+        const g = data.gate || {};
+        const totalGate = (g.pendingCount || 0) + (g.riskCount || 0);
+        const gateCountEl = document.getElementById('gate-count');
+        gateCountEl.textContent = totalGate + ' 项待处理';
+        gateCountEl.className = 'metric ' + (totalGate === 0 ? 'ok' : 'warn');
+
+        const gateList = document.getElementById('gate-list');
+        gateList.textContent = '';
+        for (const r of g.risks || []) {
+          const li = el('li');
+          li.appendChild(el('span', 'mono', '[' + r.level + '] ' + r.key));
+          const btn = el('button', '', '人工签核');
+          btn.onclick = () => callAppTool('harness_ui_signoff', { scopeKey: r.key, reason: 'Human R3 signoff from side pane' });
+          li.appendChild(btn);
+          gateList.appendChild(li);
+        }
+        for (const p of g.pending || []) {
+          const li = el('li');
+          li.appendChild(el('span', 'mono', p.projectRoot + ' (' + p.editCount + ' edits)'));
+          const btn = el('button', 'danger-btn', '重置');
+          btn.onclick = () => callAppTool('harness_ui_reset_gate', { scopeKey: p.key, reason: 'Human per-project reset' });
+          li.appendChild(btn);
+          gateList.appendChild(li);
+        }
+        if (!totalGate) gateList.appendChild(el('li', 'ok', '无挂起门禁'));
+
+        const p = data.plugin || {};
+        const pluginMeta = document.getElementById('plugin-meta');
+        pluginMeta.textContent = '';
+        pluginMeta.appendChild(el('div', '', '模式: ' + (p.mode || 'unknown') + ' · 版本: v' + (p.version || '?')));
+        pluginMeta.appendChild(el('div', p.sealed ? 'ok' : 'warn', 'OS 只读 ACL 封固: ' + (p.sealed ? '已封固 (RX)' : '未封固')));
+        pluginMeta.appendChild(el('div', 'meta mono', p.pluginDir || ''));
+
+        const consumersEl = document.getElementById('consumer-list');
+        consumersEl.textContent = '';
+        for (const c of h.consumers || []) {
+          const li = el('li');
+          li.appendChild(el('span', 'mono', c.consumer));
+          li.appendChild(el('span', 'meta', 'status=' + c.status + ' · pending=' + c.pending));
+          consumersEl.appendChild(li);
+        }
+      }
+
+      window.addEventListener('message', (event) => {
+        const msg = event.data;
+        if (!msg || msg.jsonrpc !== '2.0') return;
+        if (msg.id !== undefined && !msg.method) {
+          const slot = pending.get(msg.id);
+          if (slot) {
+            pending.delete(msg.id);
+            if (msg.error) slot.reject(msg.error);
+            else slot.resolve(msg.result);
+          }
+          return;
+        }
+        if (msg.method === 'ping' && msg.id !== undefined) {
+          window.parent.postMessage({ jsonrpc: '2.0', id: msg.id, result: {} }, '*');
+        } else if (msg.method === 'ui/notifications/host-context-changed') {
+          applyHostContext(msg.params);
+        } else if (msg.method === 'ui/notifications/tool-result') {
+          const sc = msg.params && msg.params.structuredContent;
+          if (sc) render(sc.snapshot || sc);
+        }
+      });
+
+      document.getElementById('btn-refresh').onclick = () => callAppTool('harness_ui_refresh', {});
+      document.getElementById('btn-reset-all').onclick = () => callAppTool('harness_ui_reset_gate', { scopeKey: '*', reason: 'Human clear-all via console' });
+      document.getElementById('btn-maint-dry').onclick = () => callAppTool('harness_ui_maintain', { mode: 'dry-run' });
+      document.getElementById('btn-maint-exec').onclick = () => callAppTool('harness_ui_maintain', { mode: 'execute' });
+
+      rpcRequest('ui/initialize', {
+        appInfo: { name: 'logical-paradox-console', version: '1.0.0' },
+        appCapabilities: {},
+        protocolVersion: '2026-01-26',
+      }).then((initResult) => {
+        if (initResult && initResult.hostContext) applyHostContext(initResult.hostContext);
+        rpcNotify('ui/notifications/initialized', {});
+      }).catch((err) => {
+        setLog('初始化提示: ' + (err && err.message ? err.message : String(err)));
+      });
+    })();
+  </script>
+</body>
+</html>

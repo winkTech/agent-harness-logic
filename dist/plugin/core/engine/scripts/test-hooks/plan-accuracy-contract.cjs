@@ -68,6 +68,29 @@ function main() {
     }, {}), null, 'missing acceptance criteria must not produce a snapshot');
     assert.equal(planAccuracy.snapshotFromGate(null, {}), null);
 
+    // v2 requirements-gate.json 契约兼容（taskId / targets / dimensions.D1/D3/D6）
+    const v2Gate = {
+      version: 2,
+      status: 'completed',
+      taskId: 'v2-contract-task',
+      targets: ['core/a.cjs', 'core/b.cjs'],
+      dimensions: {
+        D1: 'only update plan accuracy parser',
+        D3: 'v2 snapshot validates; existing v1 remains green',
+        D6: 'legacy planId hash stays stable',
+      },
+    };
+    const v2Snapshot = planAccuracy.snapshotFromGate(v2Gate, { now: NOW });
+    assert.ok(v2Snapshot, 'v2 completed gate must produce a snapshot');
+    assert.equal(planAccuracy.validateSnapshot(v2Snapshot).ok, true,
+      JSON.stringify(planAccuracy.validateSnapshot(v2Snapshot).failures));
+    assert.equal(v2Snapshot.task, 'v2-contract-task');
+    assert.equal(v2Snapshot.goal, 'only update plan accuracy parser');
+    assert.equal(v2Snapshot.expectedScope, 2);
+    assert.deepEqual(v2Snapshot.expectedScopeFiles, ['core/a.cjs', 'core/b.cjs']);
+    assert.equal(v2Snapshot.acceptance.length, 2);
+    assert.equal(v2Snapshot.risks.length, 1);
+
     // ── 2. 持久化幂等 + 首次时间为权威窗口起点 ──
     const first = planAccuracy.persistSnapshot({ ...snapshot }, { db, writeFile: false, now: NOW });
     assert.equal(first.createdAt, NOW, 'stored createdAt must be the snapshot time');

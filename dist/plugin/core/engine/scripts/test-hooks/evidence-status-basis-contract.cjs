@@ -34,7 +34,46 @@ const verificationState = require(path.join(ROOT, 'core/engine/scripts/lib/verif
 
 const CMD = 'node core/engine/scripts/test-hooks/run-all-tests.cjs';
 
+function assertNodeTestReporters() {
+  const title = 'propagates watchdog failure';
+  const spec = ['✔ ' + title + ' (1ms)', 'ℹ tests 1', 'ℹ pass 1', 'ℹ fail 0'].join('\r\n');
+  const tap = ['TAP version 13', '# Subtest: ' + title, 'ok 1 - ' + title,
+    '1..1', '# tests 1', '# pass 1', '# fail 0'].join('\n');
+  for (const [reporter, stdout] of [['spec', spec], ['tap', tap]]) {
+    const command = 'node --test --test-reporter=' + reporter + ' example.test.cjs';
+    const verdict = (output, exitCode, stderr = '') => verificationGate.evaluate({
+      hook_event_name: 'PostToolUse', tool_name: 'Bash', session_id: 'node-test', cwd: ROOT,
+      tool_input: { command }, tool_response: { stdout: output, stderr, exit_code: exitCode },
+    }).verification;
+    assert.equal(verdict(stdout, 0)?.ok, true, reporter + ' passing title');
+    assert.equal(commandEvidence(command, { stdout }).status, 'passed');
+    assert.equal(verdict(stdout, 7).reason, 'exit=7');
+    for (const diagnostic of ['not ok 2 - second case', 'RESULT: FAIL', 'fatal: test worker died']) {
+      assert.equal(verdict(stdout, 0, diagnostic).ok, false, diagnostic);
+      assert.equal(commandEvidence(command, { stdout, stderr: diagnostic }).status, 'failed');
+    }
+    assert.equal(verdict(stdout.replace('fail 0', 'fail 1'), 0).ok, false);
+  }
+  assert.equal(markers.markerVerdict('ℹ tests 0\nℹ pass 0\nℹ fail 0').status, 'unknown');
+  const tapPlan = 'TAP version 13\n1..1\nok 1 - ' + title;
+  assert.equal(markers.markerVerdict(tapPlan).status, 'passed');
+  assert.equal(markers.markerVerdict(tapPlan + ' # SKIP').status, 'unknown');
+}
+
 function main() {
+  const unscoped = (exit_code, stdout) => verificationGate.evaluate({
+    hook_event_name:'PostToolUse', tool_name:'Bash', cwd:TMP, workspaceCwdUnknown:true,
+    tool_input:{command:'node --test "'+path.join(ROOT,'example.test.cjs')+'"'},
+    tool_response:{exit_code, stdout},
+  });
+  const observation = unscoped(0,'1 passed');
+  assert.deepEqual(observation.diagnostics, []);
+  assert.equal(observation.stateUpdated,false);
+  assert.equal(observation.verification,undefined);
+  assert.equal(observation.observedVerification.ok,true);
+  assert.match(unscoped(9,'1 passed').diagnostics.join(' '),/exit=9/);
+  assert.equal(fs.existsSync(process.env.HARNESS_VERIFICATION_LEDGER_FILE),false);
+  assertNodeTestReporters();
   // 1. 退出码未知 + 正面 PASS 标记 → passed, 依据 markers
   const observedPass = commandEvidence(CMD, { stdout: 'RESULT: PASS 370/370', stderr: '' });
   assert.equal(observedPass.exitCodeKnown, false);

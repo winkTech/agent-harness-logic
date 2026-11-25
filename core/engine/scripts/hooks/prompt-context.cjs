@@ -2,6 +2,7 @@
 'use strict';
 
 const fs = require('node:fs');
+const path = require('node:path');
 const { ingest } = require('../transport/index.cjs');
 const { renderDecision } = require('../transport/render.cjs');
 
@@ -66,6 +67,19 @@ function combinePromptContext(payload = {}, deps = {}) {
     },
   ];
   const blocks = [];
+  if (payload.hook_event_name === 'UserPromptSubmit' && typeof payload.prompt === 'string'
+      && /工作流|\bworkflows?\b|质量|\bquality\b/i.test(payload.prompt)) {
+    try {
+      const files = require('../lib/workflow-runtime.cjs').workflowSourceFiles();
+      const names = files.map(file => path.basename(file, '.js'));
+      blocks.push('[workflows] 插件工作流：' + (names.join('、') || '目录为空') +
+        '。按完整任务意图匹配。执行请求且唯一匹配时，用 harness_workflows_list 核对路径与输入，调用当前宿主 Workflow 并保留检查点。' +
+        '询问、否定或示例只答原问题；意图不清只问差异。无匹配或无执行器，分别说明事实并给建议。读取技能、发现脚本均不代表已启动。');
+    } catch (error) {
+      blocks.push('[workflows] 插件工作流目录读取失败。先用 harness_workflows_list 核实，仍失败则说明原因。');
+      if (typeof deps.onDiagnostic === 'function') deps.onDiagnostic('workflow-catalog', error);
+    }
+  }
 
   for (const provider of providers) {
     try {

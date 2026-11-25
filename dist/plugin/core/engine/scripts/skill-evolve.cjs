@@ -875,7 +875,9 @@ function runSkillEvolve(opts = {}) {
         processedThrough: watermarkAfter,
         processed,
         pending: result.pending,
-        nextDueAt: result.pending > 0 ? Date.now() + 86_400_000 : null,
+        nextDueAt: result.pending >= 100
+          ? Date.now() + 60_000
+          : result.pending > 0 ? Date.now() + 86_400_000 : null,
         at: opts.now,
       });
     }

@@ -76,7 +76,7 @@ const MATRIX = [
 
 let checks = 0;
 
-for (const transport of ['claude-code', 'workbuddy']) {
+for (const transport of ['claude-code', 'workbuddy', 'grok']) {
   for (const { label, input } of MATRIX) {
     const actual = renderDecision(transport, input);
     const baseline = preflightEmitBaseline(input);
@@ -128,7 +128,7 @@ for (const eventName of ['PostToolUse', 'PostToolUseFailure', 'Stop', 'SessionSt
 
 // ── 3. postflight 形态：block 时仍输出 additionalContext ───────────────────
 
-for (const transport of ['claude-code', 'workbuddy']) {
+for (const transport of ['claude-code', 'workbuddy', 'grok']) {
   for (const decision of ['allow', 'block']) {
     const input = { decision, eventName: 'PostToolUseFailure', additionalContext: CONTEXT, diagnostics: DIAGNOSTICS };
     assert.deepEqual(

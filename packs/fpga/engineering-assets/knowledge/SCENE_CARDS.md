@@ -262,6 +262,8 @@ UC 框架:
 
 ## 09 🎯 设计 LDPC 编解码器
 
+复用或签核请先查[当前 LDPC 资产清单](../cbb/ldpc_codec/manifest.json)。分别读取编码与译码的证据及限制。下面的历史设计资料用于解释实现。
+
 **适用**: 802.11n QC-LDPC 或 5G NR BG1/BG2
 
 ```
@@ -270,7 +272,7 @@ UC 框架:
   2. encoding_spec                ← 双对角编码架构
   3. stage3_fixed_point_report    ← 量化策略 (6-bit 协议)
   4. stage4_resource_estimation   ← BRAM/DSP 预算
-  5. rtl/01_rtl/                  ← RTL 源文件 (~12 模块)
+  5. cbb/ldpc_codec/manifest.json  ← 当前 RTL 顶层、源文件和签核范围
   6. stage7_fpga_implementation   ← 实现报告
   7. uvm_tb/                      ← UVM 验证 (1-bit 译码输出)
   8. nr-ldpc                      ← 5G NR LDPC 对比

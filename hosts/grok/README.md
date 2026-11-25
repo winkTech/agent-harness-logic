@@ -1,8 +1,13 @@
 # hosts/grok — Grok 宿主接入
 
-一分钟接入：
+一分钟接入（支持 `--packs core | core,office | all`）：
 
 ```bash
+# 推荐：一键同步技能 + 渲染剖面 hooks + 8/8 冒烟
+npm run connect -- grok --packs core
+npm run connect -- grok --check
+
+# 或分步执行：
 node core/engine/scripts/render-grok-hooks.cjs          # claude settings 真源 → 剖面投影 → ~/.grok/hooks.json
 node core/engine/scripts/render-grok-hooks.cjs --check  # 期望: 零漂移
 node hosts/grok/smoke.cjs                               # 静态 8 检查全绿

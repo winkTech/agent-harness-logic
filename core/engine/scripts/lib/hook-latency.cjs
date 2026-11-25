@@ -42,7 +42,7 @@ const SCRIPT_BUDGETS_MS = {
 const DEFAULT_SYNC_BUDGET_MS = 500;
 /** 兼容既有导出名: 现在含义是"未列档位的同步入口预算"。 */
 const P95_BUDGET_MS = DEFAULT_SYNC_BUDGET_MS;
-const REGISTRATIONS_FILE = path.join(HARNESS_ROOT, 'core', 'engine', 'hooks', 'registrations.json');
+const REGISTRATIONS_FILE = path.join(HARNESS_ROOT, 'hosts', 'claude-code', 'registrations.json');
 
 function persistenceDisabled() {
   return envFlag('HARNESS_NO_PERSIST')

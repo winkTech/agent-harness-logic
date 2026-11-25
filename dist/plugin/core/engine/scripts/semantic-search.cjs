@@ -10,6 +10,7 @@
  */
 
 const fs = require('node:fs');
+const crypto = require('node:crypto');
 const path = require('node:path');
 const { kbPath } = require('../config.cjs');
 const { HARNESS_ROOT } = require('./lib/harness-root.cjs');
@@ -43,7 +44,9 @@ const STOP_WORDS = new Set([
 
 function pathsFor(home = HARNESS_ROOT) {
   const knowledgeDir = kbPath(home);
-  const indexDir = varUnder(home, 'index');
+  const packaged = fs.existsSync(path.join(home, '.codex-plugin', 'plugin.json'));
+  const indexDir = packaged ? varPath('index', 'packages', crypto.createHash('sha256').update(path.resolve(home)).digest('hex'))
+    : varUnder(home, 'index');
   return {
     home,
     memoryDir: path.join(home, 'personal'),
@@ -110,7 +113,7 @@ function pathAffinity(queryTerms, relativePath) {
   return hits / meaningful.length;
 }
 
-function buildIndex(fileList) {
+function buildIndex(fileList, hashes = {}) {
   const df = {};
   const tf = {};
 
@@ -118,6 +121,7 @@ function buildIndex(fileList) {
     let content;
     try { content = fs.readFileSync(filePath, 'utf8'); }
     catch { continue; }
+    hashes[filePath] = crypto.createHash('sha256').update(content).digest('hex');
     const termCounts = {};
     const seen = new Set();
     for (const token of tokenize(content)) {
@@ -147,8 +151,8 @@ function buildIndex(fileList) {
     const norm = Math.sqrt(normSquared);
     if (norm > 0) {
       for (const term of Object.keys(vector)) vector[term] /= norm;
-      vectors[filePath] = vector;
     }
+    vectors[filePath] = vector;
   }
   return vectors;
 }
@@ -183,24 +187,33 @@ function buildSemanticIndex(opts = {}) {
   const files = eligibleFiles(home);
   const now = opts.now ?? Date.now();
   const builtAt = new Date(now).toISOString();
-  const vectors = buildIndex(files);
+  const before = files.map(file => fs.statSync(file));
+  const hashes = {};
+  const vectors = buildIndex(files, hashes);
+  const after = eligibleFiles(home);
+  if (after.length !== files.length || after.some((file, i) => {
+    const stat = fs.statSync(file);
+    return file !== files[i] || before[i].mtimeMs !== stat.mtimeMs || before[i].size !== stat.size || !vectors[file];
+  })) throw new Error('Knowledge sources changed while indexing; retry retrieval');
   const meta = {
     type: 'tfidf-charngram',
-    version: 4,          // v4 起 files[] 带 size；读取侧对无 size 的旧 meta 向下兼容
+    version: 5,
     builtAt,
     fileCount: files.length,
     // size 与 mtime 一起记: 仅靠 mtime 判漂移有个 1ms 盲窗 (见 inspectIndexFreshness),
     // 而"建完索引马上改文件"恰恰最常落进这个窗口。size 对追加/截断是精确判据。
-    files: files.map((filePath) => {
-      const st = fs.statSync(filePath);
+    files: files.map((filePath, i) => {
+      const st = before[i];
       return {
         path: slash(path.relative(home, filePath)),
         mtime: st.mtimeMs,
         size: st.size,
+        sha256: hashes[filePath],
       };
     }),
   };
   const index = {
+    meta,
     vectors,
     type: meta.type,
     version: meta.version,
@@ -208,8 +221,14 @@ function buildSemanticIndex(opts = {}) {
     fileCount: files.length,
   };
   fs.mkdirSync(locations.indexDir, { recursive: true });
-  fs.writeFileSync(locations.indexFile, JSON.stringify(index), 'utf8');
-  fs.writeFileSync(locations.metaFile, JSON.stringify(meta), 'utf8');
+  // Readers use one complete generation. Keep the small metadata mirror for legacy dashboards.
+  for (const [file, value] of [[locations.indexFile, index], [locations.metaFile, meta]]) {
+    const tmp = file + '.' + crypto.randomUUID() + '.tmp';
+    try {
+      fs.writeFileSync(tmp, JSON.stringify(value), { flag: 'wx' });
+      fs.renameSync(tmp, file);
+    } finally { fs.rmSync(tmp, { force: true }); }
+  }
   return {
     ok: true,
     status: 'indexed',
@@ -230,10 +249,14 @@ function inspectIndexFreshness(opts = {}) {
     return [slash(path.relative(home, filePath)), { mtime: st.mtimeMs, size: st.size }];
   }));
 
-  let meta;
-  try { meta = JSON.parse(fs.readFileSync(locations.metaFile, 'utf8')); }
-  catch { meta = null; }
-  const indexFound = fs.existsSync(locations.indexFile);
+  let meta, index = opts.index;
+  try {
+    index ??= JSON.parse(fs.readFileSync(locations.indexFile, 'utf8'));
+    meta = index.meta || JSON.parse(fs.readFileSync(locations.metaFile, 'utf8'));
+  } catch { meta = null; }
+  const indexFound = index?.vectors && index.builtAt === meta?.builtAt && Array.isArray(meta?.files)
+    && Object.keys(index.vectors).length === meta.files.length
+    && meta.files.every(f => typeof f?.path === 'string' && Object.hasOwn(index.vectors, path.resolve(home, f.path)));
   if (!meta || !Array.isArray(meta.files) || !indexFound) {
     return {
       found: false,
@@ -251,6 +274,7 @@ function inspectIndexFreshness(opts = {}) {
 
   const recorded = new Map(meta.files.map((item) => [slash(item.path), {
     mtime: Number(item.mtime),
+    sha256: item.sha256,
     // v3 及更早的 meta 没有 size —— 记为 null 表示"该文件无 size 判据可用",
     // 而不是伪造一个 0 (那会把所有旧索引里的文件误判成被截断)。
     size: Number.isFinite(Number(item.size)) ? Number(item.size) : null,
@@ -268,7 +292,8 @@ function inspectIndexFreshness(opts = {}) {
     const rec = recorded.get(item);
     if (!rec) return false;
     if (rec.size !== null && rec.size !== cur.size) return true;
-    return Math.abs(cur.mtime - rec.mtime) > 1;
+    if (Math.abs(cur.mtime - rec.mtime) > 1) return true;
+    return !!rec.sha256 && rec.sha256 !== crypto.createHash('sha256').update(fs.readFileSync(path.resolve(home, item), 'utf8')).digest('hex');
   }).length;
   const builtMs = Date.parse(meta.builtAt || '');
   const ageDays = Number.isFinite(builtMs) ? (now - builtMs) / DAY_MS : null;
@@ -276,6 +301,7 @@ function inspectIndexFreshness(opts = {}) {
   const stale = missing > 0 || unindexed > 0 || changed > 0 || staleByAge;
   return {
     found: true,
+    version: meta.version,
     stale,
     // 漂移和过期是两回事: 前者要重建索引, 后者可能只是没人动过仓库。
     // 原先一律报 index_drift, 于是出现过 "missing/unindexed/changed 全为 0 却说 drift"
@@ -321,8 +347,11 @@ function extractSnippet(filePath, query) {
 
 function querySemantic(query, opts = {}) {
   const home = path.resolve(opts.home || HARNESS_ROOT);
+  const locations = pathsFor(home);
+  let index;
+  try { index = JSON.parse(fs.readFileSync(locations.indexFile, 'utf8')); } catch { /* missing or corrupt */ }
   const freshness = inspectIndexFreshness({
-    home,
+    home, index,
     now: opts.now,
     maxAgeDays: opts.maxAgeDays,
   });
@@ -330,10 +359,7 @@ function querySemantic(query, opts = {}) {
     return { ok: false, status: 'stale_index', freshness, results: [] };
   }
 
-  const locations = pathsFor(home);
-  let index;
-  try { index = JSON.parse(fs.readFileSync(locations.indexFile, 'utf8')); }
-  catch {
+  if (!index?.vectors) {
     return { ok: false, status: 'index_missing', freshness, results: [] };
   }
   const counts = {};
@@ -381,6 +407,12 @@ function optionValue(argv, name, fallback = null) {
   return index >= 0 && argv[index + 1] !== undefined ? argv[index + 1] : fallback;
 }
 
+function ensureIndex(home = HARNESS_ROOT) {
+  const freshness = inspectIndexFreshness({ home });
+  if (!freshness.stale && freshness.version >= 5) return { status: 'fresh', fileCount: freshness.indexed };
+  return buildSemanticIndex({ home });
+}
+
 const DEFAULT_EVAL_CASES = path.join(
   'core', 'engine', 'scripts', 'test-hooks', 'fixtures', 'retrieval-eval-cases.json',
 );
@@ -402,8 +434,12 @@ function evaluateRetrieval(opts = {}) {
   const freshness = inspectIndexFreshness({ home, now: opts.now, maxAgeDays: opts.maxAgeDays });
 
   const perCase = [];
+  // Installed plugins and clean checkouts without personal/ ship reviewed references for engineering lessons.
+  const usePackagedExpected = fs.existsSync(path.join(home, '.codex-plugin', 'plugin.json'))
+    || !fs.existsSync(path.join(home, 'personal'));
   for (const testCase of cases) {
-    const expected = (testCase.expected || []).map(slash);
+    const targets = usePackagedExpected ? (testCase.packagedExpected ?? testCase.expected) : testCase.expected;
+    const expected = (targets || []).map(slash);
     if (expected.length === 0) throw new Error(`${testCase.id}: expected documents are required`);
     const result = querySemantic(testCase.query, { home, topK, allowStale: opts.allowStale, now: opts.now });
     const returned = (result.results || []).map((entry) => slash(entry.path));
@@ -462,6 +498,10 @@ function evaluateRetrieval(opts = {}) {
 function main(argv = process.argv.slice(2)) {
   const command = argv[0];
   const home = optionValue(argv, '--home', HARNESS_ROOT);
+  if (command === 'ensure') {
+    console.log(JSON.stringify(ensureIndex(home)));
+    return 0;
+  }
   if (command === 'index') {
     const result = buildSemanticIndex({ home });
     console.log(JSON.stringify(result, null, 2));
@@ -513,6 +553,7 @@ if (require.main === module) {
 }
 
 module.exports = {
+  ensureIndex,
   DEFAULT_EVAL_CASES,
   tokenize,
   buildIndex,

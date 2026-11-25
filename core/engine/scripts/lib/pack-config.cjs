@@ -35,13 +35,74 @@ function configDir() {
 }
 
 /** pack 整体禁用（P-4 可卸性烟测：core 不得依赖 packs 存在）。 */
-function packsDisabled() {
-  return ['1', 'true'].includes(String(process.env.HARNESS_PACKS_DISABLED || ''));
+function packsDisabled(env = process.env) {
+  return ['1', 'true'].includes(String(env.HARNESS_PACKS_DISABLED || ''));
+}
+
+/** 列出仓库 packs/ 下所有可用域包名（排序稳定）。 */
+function discoverAvailablePacks(root = HARNESS_ROOT) {
+  const packsDir = path.join(root, 'packs');
+  if (!fs.existsSync(packsDir)) return [];
+  return fs.readdirSync(packsDir, { withFileTypes: true })
+    .filter((entry) => entry.isDirectory() && !entry.name.startsWith('.'))
+    .map((entry) => entry.name)
+    .sort();
+}
+
+/**
+ * 解析当前启用的域包列表（支持通用裁剪：core / core,office / fpga / all）。
+ *
+ * 优先级：
+ *   1. HARNESS_PACKS_DISABLED=1 → []（全部域包禁用，仅保留 core）
+ *   2. 显式 opts.packs 或 env.HARNESS_PACKS：
+ *      - 空 / 'all' / '*' → 全部已发现域包（默认，向后兼容）
+ *      - 'core' / 'none'  → []（纯通用软件工程核心，不含任何域包）
+ *      - 逗号分隔列表（如 'core,office' / 'office' / 'fpga,office'）→ 去重校验后返回
+ *
+ * @param {{ packs?: string|string[]|null, root?: string, env?: object }} [opts]
+ * @returns {string[]}
+ */
+function resolveEnabledPacks(opts = {}) {
+  const env = opts.env || process.env;
+  const root = opts.root || HARNESS_ROOT;
+  const available = discoverAvailablePacks(root);
+  if (packsDisabled(env)) return [];
+
+  const raw = opts.packs !== undefined && opts.packs !== null
+    ? opts.packs
+    : env.HARNESS_PACKS;
+  if (raw === undefined || raw === null || String(raw).trim() === '') return available;
+
+  const tokens = (Array.isArray(raw) ? raw : String(raw).split(','))
+    .map((item) => String(item || '').trim().toLowerCase())
+    .filter(Boolean);
+  if (tokens.length === 0 || tokens.includes('all') || tokens.includes('*')) return available;
+
+  const selected = new Set();
+  for (const token of tokens) {
+    if (token === 'core' || token === 'none') continue;
+    if (!available.includes(token)) {
+      throw new Error(`Unknown pack "${token}". Available packs: core, ${available.join(', ')}, all`);
+    }
+    selected.add(token);
+  }
+  return [...selected].sort();
+}
+
+/** 检查某个域包在当前配置下是否启用。 */
+function isPackEnabled(packName, opts = {}) {
+  const enabled = resolveEnabledPacks(opts);
+  return enabled.includes(String(packName || '').toLowerCase());
 }
 
 /** 读一份规则表；禁用/缺失/坏 JSON → null（调用方降级空规则）。 */
 function loadPackConfig(name) {
   if (packsDisabled()) return null;
+  try {
+    if (!isPackEnabled('fpga')) return null;
+  } catch {
+    return null;
+  }
   const dir = configDir();
   if (!dir) return null;
   const file = path.join(dir, `${name}.json`);
@@ -91,6 +152,9 @@ function compileRegexField(config, field) {
 
 module.exports = {
   packsDisabled,
+  discoverAvailablePacks,
+  resolveEnabledPacks,
+  isPackEnabled,
   configDir,
   loadPackConfig,
   compileRegexRules,

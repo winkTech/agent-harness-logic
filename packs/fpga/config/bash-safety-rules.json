@@ -1,0 +1,20 @@
+{
+  "version": 1,
+  "description": "FPGA domain bash safety rules externalized from core/engine/scripts/hooks/bash-safety-guard.cjs.",
+  "groups": [
+    {
+      "category": "no-bit-cfgmem",
+      "severity": "CRITICAL",
+      "message": "No-bit/cfgmem gate: bitstream, cfgmem, hardware-programming, and debug-probe artifacts are forbidden in agent project work.",
+      "patterns": [
+        { "pattern": "\\bwrite_bitstream\\b", "flags": "i" },
+        { "pattern": "\\bwrite_cfgmem\\b", "flags": "i" },
+        { "pattern": "\\bbootgen\\b", "flags": "i" },
+        { "pattern": "\\bprogram_flash\\b", "flags": "i" },
+        { "pattern": "\\bopen_hw(?:_manager)?\\b", "flags": "i" },
+        { "pattern": "(?:>|>>|Out-File|Set-Content|Add-Content|New-Item|touch|copy|cp|mv)\\b[\\s\\S]*\\.(?:bit|mcs|ltx)\\b", "flags": "i" },
+        { "pattern": "(?:>|>>|Out-File|Set-Content|Add-Content|New-Item|touch|copy|cp|mv)\\b[\\s\\S]*\\.(?:bin)\\b[\\s\\S]*(?:bitstream|cfgmem|boot|flash)", "flags": "i" }
+      ]
+    }
+  ]
+}

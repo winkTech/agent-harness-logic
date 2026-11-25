@@ -128,8 +128,52 @@ function writeSettings(opts = {}) {
   }
 
   const merged = { ...existing, hooks };
+  delete merged.$harnessHookMode;
   fs.writeFileSync(target, `${JSON.stringify(merged, null, 2)}\n`, 'utf8');
   return { target, hooks, created: !Object.keys(existing).length };
+}
+
+/**
+ * 切到 Claude Code 插件模式时移除用户级 settings.json 的 hooks 块：
+ *   - 保留 env / model / statusLine / permissions / theme 等全部本机配置与密钥；
+ *   - 写入显式委派标记 `$harnessHookMode: "plugin-delegated"`，使 `--check` 不判漂移；
+ *   - 改动前写 0600 原子备份（settings.json.pre-plugin-hooks.bak）。
+ */
+function removeUserHooks(opts = {}) {
+  const root = opts.root || HARNESS_ROOT;
+  const target = opts.settingsPath || settingsPath(root);
+  if (!fs.existsSync(target)) {
+    return { target, removed: false, existed: false, backupPath: null };
+  }
+  const raw = fs.readFileSync(target, 'utf8');
+  let existing;
+  try {
+    existing = JSON.parse(raw);
+  } catch (err) {
+    const e = new Error(`已有 settings.json 不可解析，拒绝修改: ${target} (${err.message})`);
+    e.exitCode = 2;
+    throw e;
+  }
+  if (!existing || typeof existing !== 'object' || Array.isArray(existing)) {
+    const e = new Error(`已有 settings.json 根节点不是对象，拒绝修改: ${target}`);
+    e.exitCode = 2;
+    throw e;
+  }
+  const hadHooks = Object.prototype.hasOwnProperty.call(existing, 'hooks');
+  let backupPath = null;
+  if (hadHooks) {
+    backupPath = `${target}.pre-plugin-hooks.bak`;
+    fs.writeFileSync(backupPath, raw, { encoding: 'utf8', mode: 0o600 });
+  }
+  const updated = { ...existing, $harnessHookMode: 'plugin-delegated' };
+  delete updated.hooks;
+  fs.writeFileSync(target, `${JSON.stringify(updated, null, 2)}\n`, { encoding: 'utf8', mode: 0o600 });
+  return { target, removed: hadHooks, existed: true, backupPath };
+}
+
+/** 恢复用户级 settings.json 的 hooks 块并清除委派标记（保留其余本机配置）。 */
+function restoreUserHooks(opts = {}) {
+  return writeSettings(opts);
 }
 
 /**
@@ -160,12 +204,16 @@ function checkDrift(opts = {}) {
     return { drift: false, reason: null, settingsExists: false, rendered };
   }
 
-  let actual;
+  let parsed;
   try {
-    actual = JSON.parse(fs.readFileSync(target, 'utf8')).hooks || {};
+    parsed = JSON.parse(fs.readFileSync(target, 'utf8'));
   } catch (err) {
     return { drift: true, reason: `settings.json 不可解析: ${err.message}`, settingsExists: true, rendered };
   }
+  if (parsed && parsed.$harnessHookMode === 'plugin-delegated' && !parsed.hooks) {
+    return { drift: false, reason: null, settingsExists: true, delegated: true, rendered };
+  }
+  const actual = parsed?.hooks || {};
 
   if (canonical(rendered) === canonical(actual)) {
     return { drift: false, reason: null, settingsExists: true, rendered };
@@ -405,6 +453,18 @@ function main() {
       return 0;
     }
 
+    if (args.includes('--remove-user-hooks')) {
+      const res = removeUserHooks();
+      process.stdout.write(`[render-hook-settings] ${res.removed ? '已移除用户级 hooks 块并切换为插件委派模式' : '用户级 hooks 块已为空，已标记插件委派模式'} (${res.target}${res.backupPath ? `，备份: ${res.backupPath}` : ''})\n`);
+      return 0;
+    }
+
+    if (args.includes('--restore-user-hooks')) {
+      const res = restoreUserHooks();
+      process.stdout.write(`[render-hook-settings] 已恢复用户级 hooks 块 (${res.target})\n`);
+      return 0;
+    }
+
     if (args.includes('--check')) {
       const claude = checkDrift();
       const workbuddy = checkWorkbuddyDrift();
@@ -426,8 +486,9 @@ function main() {
         return 1;
       }
       const bits = [];
-      if (claude.settingsExists) bits.push('settings.json 的 hooks 与模板一致');
-      else bits.push('settings.json 不存在，跳过漂移比对');
+      if (claude.settingsExists) {
+        bits.push(claude.delegated ? 'settings.json 已显式委派给插件模式' : 'settings.json 的 hooks 与模板一致');
+      } else bits.push('settings.json 不存在，跳过漂移比对');
       if (workbuddy.targetExists) bits.push('workbuddy.hooks.json 与模板一致');
       else bits.push('workbuddy.hooks.json 不存在，跳过漂移比对');
       if (plugin.targetExists) bits.push('plugin.hooks.json 与模板一致');
@@ -472,6 +533,8 @@ module.exports = {
   pluginHooksPath,
   renderHooks,
   writeSettings,
+  removeUserHooks,
+  restoreUserHooks,
   checkDrift,
   renderWorkbuddyHooks,
   writeWorkbuddyHooks,

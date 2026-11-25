@@ -7,6 +7,14 @@
   },
   "scripts": {
     "check": "node core/engine/scripts/harness-ci.cjs",
-    "codex:connect": "node hosts/codex/connect.cjs"
+    "doctor": "node scripts/connect.cjs --doctor",
+    "connect": "node scripts/connect.cjs",
+    "dist:build": "node core/engine/scripts/sync-plugin-dist.cjs",
+    "claude:connect": "node scripts/connect.cjs claude-code",
+    "codex:connect": "node hosts/codex/connect.cjs",
+    "grok:connect": "node scripts/connect.cjs grok",
+    "antigravity:connect": "node hosts/antigravity/connect.cjs",
+    "workbuddy:connect": "node scripts/connect.cjs workbuddy",
+    "antigravity:test": "node hosts/antigravity/regression-check.cjs"
   }
 }

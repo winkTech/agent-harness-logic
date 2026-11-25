@@ -64,10 +64,11 @@ function costUsd(usage, pricing) {
  * 坏行/无关行静默跳过。返回按模型分组的累计值。
  * 文件不存在或整体不可读时抛错 (调用方回退 estimate)。
  */
-function parseTranscriptUsage(transcriptPath) {
+function parseTranscriptUsage(transcriptPath, opts = {}) {
   const raw = fs.readFileSync(transcriptPath, 'utf8');
   const byMessage = new Map();
   let anonymous = 0;
+  const defaultModel = String(opts.defaultModel || 'antigravity-model');
   for (const line of raw.split('\n')) {
     const trimmed = line.trim();
     if (!trimmed) continue;
@@ -75,17 +76,33 @@ function parseTranscriptUsage(transcriptPath) {
     try { obj = JSON.parse(trimmed); } catch { continue; }
     const message = obj && obj.message;
     const usage = message && message.usage;
-    if (!usage || typeof usage !== 'object') continue;
-    const model = String(message.model || 'unknown');
-    if (model === '<synthetic>') continue;
-    const key = message.id ? String(message.id) : `anon-${anonymous += 1}`;
-    byMessage.set(key, {
-      model,
-      inputTokens: Number(usage.input_tokens || 0),
-      outputTokens: Number(usage.output_tokens || 0),
-      cacheReadTokens: Number(usage.cache_read_input_tokens || 0),
-      cacheWriteTokens: Number(usage.cache_creation_input_tokens || 0),
-    });
+    if (usage && typeof usage === 'object') {
+      const model = String(message.model || 'unknown');
+      if (model === '<synthetic>') continue;
+      const key = message.id ? String(message.id) : `anon-${anonymous += 1}`;
+      byMessage.set(key, {
+        model,
+        inputTokens: Number(usage.input_tokens || 0),
+        outputTokens: Number(usage.output_tokens || 0),
+        cacheReadTokens: Number(usage.cache_read_input_tokens || 0),
+        cacheWriteTokens: Number(usage.cache_creation_input_tokens || 0),
+      });
+      continue;
+    }
+    // Antigravity transcript JSONL shape: PLANNER_RESPONSE rows carry top-level token counts.
+    if (obj && (obj.type === 'PLANNER_RESPONSE' || obj.source === 'MODEL')
+        && (Number.isFinite(Number(obj.input_tokens)) || Number.isFinite(Number(obj.output_tokens)))
+        && (obj.input_tokens !== undefined || obj.output_tokens !== undefined)) {
+      const model = String(obj.model || obj.modelName || defaultModel);
+      const key = obj.step_index !== undefined ? `step-${obj.step_index}` : `anon-${anonymous += 1}`;
+      byMessage.set(key, {
+        model,
+        inputTokens: Number(obj.input_tokens || 0),
+        outputTokens: Number(obj.output_tokens || 0),
+        cacheReadTokens: Number(obj.cache_read_tokens || obj.cache_read_input_tokens || 0),
+        cacheWriteTokens: Number(obj.cache_write_tokens || obj.cache_creation_input_tokens || 0),
+      });
+    }
   }
   const byModel = new Map();
   for (const entry of byMessage.values()) {
@@ -111,7 +128,7 @@ function recordTranscriptUsage(entry, opts = {}) {
   const sessionId = String(entry.sessionId || '');
   const transcriptPath = String(entry.transcriptPath || '');
   if (!sessionId || !transcriptPath) throw new Error('recordTranscriptUsage requires sessionId and transcriptPath');
-  const usages = parseTranscriptUsage(transcriptPath);
+  const usages = parseTranscriptUsage(transcriptPath, { defaultModel: entry.model || opts.defaultModel });
   if (usages.length === 0) return { recorded: 0, models: [], totalUsd: 0 };
 
   const pricing = loadPricing(opts);

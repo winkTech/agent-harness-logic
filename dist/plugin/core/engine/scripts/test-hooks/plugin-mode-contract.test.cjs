@@ -250,6 +250,49 @@ test('5b. registrationOverlap warns on a dev checkout too (that is the double ru
   const result = registrationOverlap({}, io, { env: { CLAUDE_PLUGIN_ROOT: devRoot }, homeDir });
   assert.equal(result.exitCode, 0);
   assert.match(result.context, /各跑一次/);
+
+  // 5c. Non-Claude hosts (antigravity/codex/grok) do not read ~/.claude/settings.json, so no false overlap warning.
+  for (const host of ['antigravity', 'codex', 'grok']) {
+    const res = registrationOverlap({}, io, {
+      env: { HARNESS_PLUGIN_ROOT: devRoot, HARNESS_HOST: host },
+      homeDir,
+    });
+    assert.deepEqual(res, { exitCode: 0 }, `${host} must not warn about ~/.claude/settings.json overlap`);
+  }
+});
+
+test('5d. render-hook-settings --remove-user-hooks preserves secrets/config and checkDrift accepts plugin-delegated mode', () => {
+  const renderer = require('../render-hook-settings.cjs');
+  const base = makeCase('remove-user-hooks');
+  const settingsFile = path.join(base, 'settings.json');
+  const original = {
+    env: { ANTHROPIC_API_KEY: 'fixture-secret-must-stay', CUSTOM_FLAG: '1' },
+    model: 'claude-sonnet',
+    theme: 'dark',
+    hooks: { PreToolUse: [{ matcher: '*', hooks: [{ type: 'command', command: 'node /x/preflight-router.cjs' }] }] },
+  };
+  fs.writeFileSync(settingsFile, `${JSON.stringify(original, null, 2)}\n`, 'utf8');
+
+  const removed = renderer.removeUserHooks({ root: ROOT, settingsPath: settingsFile });
+  assert.equal(removed.removed, true);
+  assert.ok(removed.backupPath && fs.existsSync(removed.backupPath));
+
+  const after = JSON.parse(fs.readFileSync(settingsFile, 'utf8'));
+  assert.equal(after.hooks, undefined);
+  assert.equal(after.$harnessHookMode, 'plugin-delegated');
+  assert.deepEqual(after.env, original.env, 'env/secrets must remain untouched');
+  assert.equal(after.model, original.model);
+  assert.equal(after.theme, original.theme);
+
+  const check = renderer.checkDrift({ root: ROOT, settingsPath: settingsFile });
+  assert.equal(check.drift, false);
+  assert.equal(check.delegated, true);
+
+  renderer.restoreUserHooks({ root: ROOT, settingsPath: settingsFile });
+  const restored = JSON.parse(fs.readFileSync(settingsFile, 'utf8'));
+  assert.equal(restored.$harnessHookMode, undefined);
+  assert.ok(restored.hooks && restored.hooks.PreToolUse);
+  assert.deepEqual(restored.env, original.env, 'env/secrets must remain untouched after restore');
 });
 
 // ── 6. 两个组件 fail-open ──────────────────────────────────────────────────

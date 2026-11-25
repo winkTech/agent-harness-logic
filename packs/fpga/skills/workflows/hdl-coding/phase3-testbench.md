@@ -25,8 +25,11 @@ module tb_module;
   // 预期输出加载（从 MATLAB golden 向量读取）
 
   integer cycle_count;
+  integer error_count = 0;
+  integer compared_points = 0;
   always @(posedge clk) begin
     if (compare_enable) begin
+      compared_points++;
       if (dout !== expected_dout) begin
         $display("[FAIL] cycle=%0d dout=%h expected=%h",
                  cycle_count, dout, expected_dout);
@@ -42,7 +45,9 @@ module tb_module;
     $display("=== Test Start ===");
     // 加载测试向量 → 驱动 DUT → 比对 golden
     #1000;
-    $display("=== Test End: %0d errors ===", error_count);
+    if (compared_points == 0 || error_count != 0)
+      $fatal(1, "compared=%0d mismatches=%0d", compared_points, error_count);
+    $display("PASS compared=%0d mismatches=0", compared_points);
     $finish;
   end
 endmodule
@@ -115,7 +120,10 @@ assert property (@(posedge clk) fifo_full |-> !fifo_wr);
 **关联 Skill**: `hdl-coding`（Testbench 结构模板、SVA 编写参考）
 **数据输入**: `06_doc/architecture.yaml` + `06_doc/interface_contract.md`（Phase 1b 输出，含端口列表和握手协议）
 
-**可执行检查点**:
-```bash
-source .claude/checkpoints/hdl-checkpoints.sh && check_phase_3
-```
+**机器回执与放行。** TB 与比较脚本可先行准备。完整模式的最终向量使用已通过 P2 的模块模型；Lite 使用指定的独立 Golden。正式 RTL 尚未编写时，用测试目录内的回放驱动或接口替身编译、运行实际 TB，将正确输出和故意改错的输出分别喂给 TB 与比较脚本。负例必须在完成实际比较后因错点失败。编译报错、零样本或超时均不能充当该负例。
+
+1. 从已审查的 `06_doc/verification_strategy.md` 提取各模块适用场景，写入 `var/workflow/p3-plan.json` 的 `modules` 映射（值为场景 ID 数组），以及该策略文件的 `strategySha256`。按设计覆盖握手/反压、边界、复位、数值极限等适用项。
+2. 每个模块生成 `var/workflow/p3/<module>.json`。字段有 `module`、`reference`（生成向量的模型路径）、`probes` 和 `hashes`。`probes.tb.good, probes.tb.fault, probes.checker.good, probes.checker.fault` 分别指向四份项目内实跑结果 JSON。
+   项目有 `06_doc/interface_contract.md` 时，计划的 `interfaceContractSha256` 取自 design-review 签收的版本，回执登记该文件摘要，并在 `openInterfaceIssues` 数组中列出本模块未解决的接口问题。只有复核过输出字段来源且问题已清零才写空数组。回放能驱动期望输出，不能据此证明 DUT 有端口可取得载荷或帧元数据。修订接口后重新签收并更新受影响的向量和自测。
+3. 每份结果写 `module, component, kind, exitCode, compared_points, mismatches`；component 为 `tb` 或 `checker`，kind 为 `good` 或 `fault`。good 还需以 `scenarios` 映射记录每个计划场景的实测比较点数。由运行器采集实际退出码、日志和计数，保留原始记录以供审查。
+4. `hashes` 记录运行时的架构、策略、场景计划、reference、实际 TB、比较脚本、向量、四份结果及所用依赖文件的 SHA-256。完整模式还须记录 P2 回执的摘要。执行 `node core/engine/scripts/hdl-evidence-gate.cjs --project-root "<项目>" --rtl-ready --modules a,b`；仅显式 Lite 调用加 `--lite`。该检查证明验证环境具备开工条件，DUT 的比对在 P4 单独运行。

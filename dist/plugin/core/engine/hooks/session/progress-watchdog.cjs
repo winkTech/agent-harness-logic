@@ -762,6 +762,8 @@ function updateProgress(payload, opts = {}) {
     {
       timeoutMs: opts.lockTimeoutMs,
       staleMs: opts.staleLockMs,
+      // The token only coordinates live processes. A reboot ends all owners.
+      syncLockToken: false,
     },
   );
 }

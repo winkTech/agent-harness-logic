@@ -15,7 +15,7 @@
  * 键顺序固定为 hookEventName、additionalContext，与两个 emit() 的对象字面量一致。
  */
 
-const HOOK_TRANSPORTS = new Set(['claude-code', 'workbuddy']);
+const HOOK_TRANSPORTS = new Set(['claude-code', 'workbuddy', 'grok']);
 const VERDICT_SCHEMA = 'harness.verdict';
 const VERDICT_VERSION = 1;
 
@@ -23,7 +23,7 @@ const VERDICT_VERSION = 1;
 const DEFAULT_HOOK_EVENT_NAME = 'PreToolUse';
 
 function invalidTransport(name) {
-  const error = new Error(`render: unsupported transport '${name}' (expected one of claude-code, workbuddy, codex)`);
+  const error = new Error(`render: unsupported transport '${name}' (expected one of ${[...HOOK_TRANSPORTS, 'codex'].join(', ')})`);
   error.code = 'EVENT_INVALID';
   return error;
 }
@@ -31,7 +31,7 @@ function invalidTransport(name) {
 /**
  * 把中立判定渲染为该 transport 的输出。
  *
- * @param {string} transport 'claude-code' | 'workbuddy' | 'codex'
+ * @param {string} transport 'claude-code' | 'workbuddy' | 'grok' | 'codex'
  * @param {object} decisionInput
  * @param {'allow'|'block'} decisionInput.decision 中立判定（非 'block' 一律按 allow 处理）
  * @param {string} [decisionInput.eventName] 原生事件名（用于 hookEventName；缺省 'PreToolUse'）

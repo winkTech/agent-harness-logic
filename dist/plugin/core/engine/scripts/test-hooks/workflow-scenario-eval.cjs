@@ -144,12 +144,12 @@ async function runWorkflow(name, args = {}, opts = {}) {
     if (label === 'p4-fix-plan') {
       return { p0: [], p1: [], p2: [], verificationSteps: ['rerun scan'], summary: 'clean' };
     }
-    if (label === 'rag-search') {
+    if (label === 'rag-search' || label === 'rag-verify') {
       return {
-        answer: 'Use the cited rule.',
+        status: 'references', answer: 'Use the cited rule.',
         citations: opts.badRagCitation
           ? ['not-a-file-reference']
-          : ['docs/rules/00-core.md:1'],
+          : [{ file: 'docs/rules/00-core.md', line: 1, quote: label === 'rag-verify' && opts.changedSource ? 'Updated rule' : 'Use the cited rule.' }],
       };
     }
     return {};
@@ -190,6 +190,11 @@ function hdlDeepStubAgent(overrides = {}) {
     if (label === 'p1b-arch-evidence') {
       return { executed: true, ok: true, failures: [], gateJson: '{"gate":"hdl-evidence-gate","ok":true,"arch":{"exists":true}}' };
     }
+    if (label === 'rtl-ready') {
+      const mode = prompt.includes('--lite') ? 'lite' : 'full';
+      return { executed: true, ok: true, failures: [], gateJson: JSON.stringify({ gate: 'hdl-evidence-gate', ok: true, mode, fixedPointReceiptSha256: 'a'.repeat(64), withBaseline: prompt.includes('--with-baseline'), rtlReady: ['demo'] }) };
+    }
+    if (label === 'p2-evidence') return { executed: true, ok: true, failures: [], gateJson: JSON.stringify({ gate: 'hdl-evidence-gate', ok: true, mode: 'full', fixedPointReceiptSha256: 'a'.repeat(64), withBaseline: prompt.includes('--with-baseline'), fixedPoint: ['demo'] }) };
     if (label === 'p45-evidence') {
       return {
         executed: true, ok: true, failures: [],
@@ -271,14 +276,26 @@ test('rag workflow rejects non-file citations instead of counting arbitrary stri
     'rag workflow did not expose the rejected citation');
 });
 
+test('rag workflow rejects changed evidence at an otherwise valid location', async () => {
+  const run = await runWorkflow('rag-skill-workflow', { query: 'reset rule' }, { changedSource: true });
+  assert(run.ok && !run.result.pass, 'changed source was accepted');
+});
+
 test('hdl dag workflow blocks until the preflight checkpoint is confirmed', async () => {
   const run = await runWorkflow('hdl-coding-dag-workflow', { modules: ['demo'] });
   assert(!run.ok, 'hdl workflow should throw without preflight confirmation');
   assert(String(run.error.message).includes('WorkflowCheckpoint:preflight'), 'missing checkpoint error was not explicit');
 });
 
-test('hdl dag workflow pauses at design-review checkpoint after preflight confirmed', async () => {
-  const run = await runWorkflow('hdl-coding-dag-workflow', { modules: ['demo'], confirmed: true }, {
+test('hdl dag waits for each design approval before dispatching the next phase', async () => {
+  const checkpoints = {};
+  for (const [gate, forbidden] of [['layout-review', 'p1a-system-design'], ['system-review', 'p1b-algo-arch']]) {
+    const step = await runWorkflow('hdl-coding-dag-workflow', { modules: ['demo'], confirmed: true, checkpoints }, { agent: hdlDeepStubAgent() });
+    assert(!step.ok && step.error.message.includes('WorkflowCheckpoint:' + gate), 'missing checkpoint: ' + gate);
+    assert(!step.calls.some(call => call.opts.label === forbidden || call.opts.label === 'p1b-logic-arch'), 'premature dispatch at ' + gate);
+    checkpoints[gate] = { confirmed: true };
+  }
+  const run = await runWorkflow('hdl-coding-dag-workflow', { modules: ['demo'], confirmed: true, checkpoints }, {
     agent: hdlDeepStubAgent(),
   });
   assert(!run.ok, 'workflow should pause (throw) at design-review checkpoint');
@@ -288,6 +305,201 @@ test('hdl dag workflow pauses at design-review checkpoint after preflight confir
     'checkpoint error must carry resume instructions');
   const labels = run.calls.map((c) => c.opts.label || '');
   assert(labels.includes('p1b-arch-evidence'), 'P1b must route arch check through the evidence gate agent');
+});
+
+test('existing Golden and RTL dispatch enforce on-disk evidence in lite and unattended runs', async () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'hdl-preflight-'));
+  const write = (file, value) => {
+    const dst = path.join(root, file);
+    fs.mkdirSync(path.dirname(dst), { recursive: true });
+    fs.writeFileSync(dst, value);
+  };
+  const gate = (...flags) => {
+    const { stdout, status } = require('node:child_process').spawnSync(process.execPath,
+      [path.join(HOME, 'core/engine/scripts/hdl-evidence-gate.cjs'), '--project-root', root, ...flags],
+      { encoding: 'utf8', env: { ...process.env, HARNESS_NO_PERSIST: '1' } });
+    const json = JSON.parse(stdout.slice(0, stdout.lastIndexOf('RESULT:')));
+    assert((status === 0) === json.ok, 'CLI exit code disagrees with report');
+    return { executed: true, ok: json.ok, failures: json.failures, gateJson: JSON.stringify(json) };
+  };
+  const entry = 'model/main.m';
+  const row = name => ({ name, source: 'normal', oracleInputs: [], compared: 24, metrics: { measuredSnrDb: 20 },
+    criterion: 'matches 24 reference symbols', passed: true, log: 'audit/cases.log' });
+  const baseline = { entry, cases: ['QPSK', '16QAM'], tools: ['sim'], limits: [{ case: '16QAM', metric: 'measuredSnrDb', min: 19.9, max: 20.1 }] };
+  const receipt = { entry, entrySha256: require('node:crypto').createHash('sha256').update('model').digest('hex'),
+    exitCode: 0, entryLog: 'audit/entry.log', cases: baseline.cases.map(row), tools: [{ name: 'sim', exitCode: 0, log: 'audit/sim.log' }] };
+  const save = data => write('var/workflow/golden-preflight.json', JSON.stringify(data));
+  const run = (lite = true, options = {}, beforeReady) => runWorkflow('hdl-coding-dag-workflow',
+    { modules: ['demo'], lite, resourceLimits: lite ? {} : { DSP: 1 }, confirmAllCheckpoints: true, projectRoot: root, goldenBaseline: baseline, ...options },
+    { agent: hdlDeepStubAgent({ 'golden-preflight-evidence': () => gate('--golden'),
+      'p2-evidence': prompt => gate('--fixed-point', '--with-baseline', ...(prompt.includes('--hard-limit DSP=1 ') ? ['--hard-limit', 'DSP=1'] : []), '--modules', 'demo'),
+      'rtl-ready': prompt => {
+        beforeReady?.();
+        return gate('--rtl-ready', lite ? '--lite' : '--with-baseline', ...(prompt.includes('--hard-limit DSP=1 ') ? ['--hard-limit', 'DSP=1'] : []), '--modules', 'demo');
+      } }) });
+  try {
+    write(entry, 'model');
+    write('var/workflow/golden-scope.json', JSON.stringify(baseline));
+    for (const name of ['entry', 'cases', 'sim']) write('audit/' + name + '.log', name + ' run fixture');
+    for (const change of [
+      { exitCode: 1 }, { cases: [row('QPSK')] }, { cases: [row('QPSK'), { ...row('16QAM'), source: 'diagnostic' }] },
+      { cases: [row('QPSK'), { ...row('16QAM'), compared: 0 }] }, { tools: [] }, { entryLog: 'audit/missing' },
+      { entrySha256: 'old' }, { entryLog: entry },
+      { cases: [row('QPSK'), { ...row('16QAM'), oracleInputs: ['tx.SIGNAL.MCS'] }] },
+      { cases: [row('QPSK'), { ...row('16QAM'), oracleInputs: undefined }] },
+      { cases: [row('QPSK'), { ...row('16QAM'), metrics: { configuredSnrDb: 20, measuredSnrDb: 12 } }] },
+      { cases: [row('QPSK'), { ...row('16QAM'), metrics: { configuredSnrDb: 20 } }] },
+    ]) {
+      save({ ...receipt, ...change });
+      const result = await run();
+      assert(!result.ok && result.error.message.includes('Golden preflight blocked'), 'unqualified Golden was accepted: ' + JSON.stringify(change));
+      assert(!result.calls.some(c => c.opts.label === 'p0-infra'), 'dispatched beyond preflight');
+    }
+    save(receipt);
+    write('var/workflow/golden-scope.json', JSON.stringify({ ...baseline, limits: [] }));
+    const weakened = await run();
+    assert(!weakened.ok && weakened.error.message.includes('unchecked measurement'), 'caller limits lost during handoff');
+    write('var/workflow/golden-scope.json', JSON.stringify(baseline));
+    const files = ['06_doc/architecture.yaml', '06_doc/verification_strategy.md', '02_sim/demo/tb_demo.sv',
+      '02_sim/check_demo.py', '02_sim/tv/demo_tv.txt'];
+    for (const file of files) write(file, 'fixture');
+    const early = await run(false);
+    assert(!early.ok && early.error.message.includes('P2') && !early.calls.some(c => ['p3-vectors', 'rtl-code-demo'].includes(c.opts.label)),
+      'full workflow dispatched final vectors or RTL without P2');
+    for (const file of files) {
+      write(file, '');
+      const result = await run();
+      assert(!result.ok && result.error.message.includes(file), 'missing prerequisite not identified: ' + file);
+      assert(!result.calls.some(c => c.opts.label.startsWith('rtl-code-')), 'dispatched RTL without ' + file);
+      write(file, 'fixture');
+    }
+    const json = (file, object) => write(file, JSON.stringify(object));
+    const digest = file => require('node:crypto').createHash('sha256').update(fs.readFileSync(path.join(root, file))).digest('hex');
+    const hashes = paths => Object.fromEntries(paths.map(f => [f, digest(f)]));
+    const model = 'model/fixed.m', measurement = 'audit/widths.json', fixed = 'var/workflow/p2-fixed-point.json';
+    const p2Paths = [files[0], '06_doc/fixed_point_report.md', '06_doc/resource_budget_tracking.md', entry, model, measurement];
+    for (const file of p2Paths.slice(1, 3).concat(model)) write(file, file);
+    const widths = { module: 'demo', compared_points: 8, selected_width: 10, max_error_limit: 1, rounding: 'nearest', overflow: 'saturate',
+      trials: [{ width: 8, max_error: 2 }, { width: 10, max_error: 1 }] };
+    const systemCases = {};
+    p2Paths.push('var/workflow/golden-scope.json', 'var/workflow/golden-preflight.json');
+    for (const name of baseline.cases) {
+      const file = 'audit/' + name + '.json';
+      systemCases[name] = file;
+      const checks = [{ metric: 'error', float: 0, fixed: 0.5, max: 1 }];
+      if (name === '16QAM') checks.push({ metric: 'measuredSnrDb', float: 20, fixed: 20, min: 19.9, max: 20.1 });
+      json(file, { case: name, source: 'normal', oracleInputs: [], compared_points: 24, checks });
+      p2Paths.push(file);
+    }
+    const sealP2 = () => json(fixed, { modules: { demo: { model, reference: entry, measurement } }, systemCases, hashes: hashes(p2Paths),
+      resources: Object.fromEntries(['DSP', 'LUT', 'BRAM'].map(k => [k, { estimate: 0, limit: 1 }])) });
+    json(measurement, widths); sealP2();
+    const plan = 'var/workflow/p3-plan.json', p3 = 'var/workflow/p3/demo.json';
+    json(plan, { strategySha256: digest(files[1]), modules: { demo: ['normal', 'boundary'] } });
+    const probes = { tb: {}, checker: {} };
+    const p3Paths = [...files, model, plan];
+    for (const component of Object.keys(probes)) for (const kind of ['good', 'fault']) {
+      const file = 'audit/' + component + '-' + kind + '.json';
+      probes[component][kind] = file;
+      p3Paths.push(file);
+      json(file, { module: 'demo', component, kind, compared_points: 8, mismatches: +(kind === 'fault'), exitCode: +(kind === 'fault'),
+        scenarios: { normal: 7, boundary: 1 } });
+    }
+    const sealP3 = (full = true) => json(p3, { module: 'demo', reference: model, probes, hashes: hashes(full ? [...p3Paths, fixed] : p3Paths) });
+    sealP3();
+    for (const lite of [false, true]) {
+      const result = await run(lite);
+      assert(result.ok && result.calls.some(c => c.opts.label === 'rtl-code-demo'), 'qualified scenario did not dispatch RTL: ' + result.error?.message);
+      const labels = result.calls.map(c => c.opts.label);
+      if (!lite) assert(labels.indexOf('p2-evidence') < labels.indexOf('p3-vectors'), 'vectors preceded P2 qualification');
+      assert(labels.indexOf('p3-selftest') < labels.indexOf('rtl-ready') && labels.indexOf('rtl-ready') < labels.indexOf('rtl-code-demo'), 'P4 ran early');
+      const prep = await run(lite, { stopAfter: 'p3' });
+      assert(prep.ok && prep.result.completedThrough === 'p3' && prep.result.rtlReady === true && prep.result.evidence === 'validated-on-disk' && !prep.result.verifier
+        && prep.calls.some(c => c.opts.label === 'rtl-ready') && !prep.calls.some(c => c.opts.label.startsWith('rtl-code-')),
+        'P2/P3-only scope must end after readiness and before any RTL dispatch');
+    }
+    assert(!gate('--rtl-ready', '--modules', 'demo,missing').ok, 'partial module scope passed');
+    const changedDuringP3 = await run(false, {}, () => {
+      fs.appendFileSync(path.join(root, fixed), '\n'); sealP3();
+    });
+    assert(!changedDuringP3.ok && changedDuringP3.error.message.includes('P2 changed')
+      && !changedDuringP3.calls.some(c => c.opts.label.startsWith('rtl-code-')), 'a new P2 generation slipped into P4');
+    sealP2(); sealP3();
+    const expectBlocked = async (reason, lite = false) => {
+      const result = await run(lite);
+      assert(!result.ok && !result.calls.some(c => c.opts.label === 'rtl-code-demo') && result.error.message.includes(reason), 'failed to block: ' + reason);
+    };
+    const measuredPath = systemCases['16QAM'];
+    const measured = JSON.parse(fs.readFileSync(path.join(root, measuredPath), 'utf8'));
+    const signal = measured.checks[1];
+    for (const change of [
+      { checks: [measured.checks[0]] },
+      { checks: [{ ...signal, fixed: 12, min: 0 }] },
+      { checks: [{ ...signal, float: 12 }] },
+      { source: 'diagnostic' },
+      { oracleInputs: ['tx.SIGNAL'] },
+    ]) {
+      json(measuredPath, { ...measured, ...change }); sealP2();
+      await expectBlocked('P2');
+    }
+    json(measuredPath, measured); sealP2(); sealP3();
+    // The OFDM fixture uses a thin per-module TB and checker over shared implementations.
+    write(files[2], '`include "scoreboard.svh"\n');
+    write(files[3], 'from shared_runner import main\n');
+    const sharedTb = '02_sim/scoreboard.svh', sharedChecker = '02_sim/shared_runner.py';
+    write(sharedTb, '// scoreboard'); write(sharedChecker, 'def main(): return 0\n');
+    sealP3(); await expectBlocked('missing artifact digest');
+    p3Paths.push(sharedTb); sealP3(); await expectBlocked('missing artifact digest');
+    p3Paths.push(sharedChecker); sealP3();
+    assert((await run(false, { stopAfter: 'p3' })).ok, 'qualified shared test support was rejected');
+    write(sharedTb, '// replaced scoreboard'); await expectBlocked('artifact changed');
+    write(sharedTb, '// scoreboard');
+    const contract = '06_doc/interface_contract.md';
+    write(contract, 'payload requires memory read; first_sample comes from frame metadata');
+    const scenarioPlan = JSON.parse(fs.readFileSync(path.join(root, plan), 'utf8'));
+    sealP3(); await expectBlocked('interface contract');
+    json(plan, { ...scenarioPlan, interfaceContractSha256: digest(contract) });
+    p3Paths.push(contract); sealP3(); await expectBlocked('interface review');
+    const reviewed = JSON.parse(fs.readFileSync(path.join(root, p3), 'utf8'));
+    json(p3, { ...reviewed, openInterfaceIssues: ['payload handle has no read port'] });
+    await expectBlocked('payload handle has no read port');
+    json(p3, { ...reviewed, openInterfaceIssues: [] });
+    assert((await run(false, { stopAfter: 'p3' })).ok, 'reviewed interface was rejected');
+    const approval = { 'design-review': { confirmed: true, interfaceContractSha256: digest(contract) } };
+    assert((await run(false, { stopAfter: 'p3', checkpoints: approval })).ok, 'accepted interface digest was rejected');
+    const oldApproval = await run(false, { checkpoints: { 'design-review': { confirmed: true, interfaceContractSha256: 'obsolete' } } });
+    assert(!oldApproval.ok && oldApproval.error.message.includes('design-review interface digest')
+      && !oldApproval.calls.some(c => c.opts.label.startsWith('rtl-code-')), 're-sealed inputs bypassed an older design approval');
+    write(contract, 'different ports'); await expectBlocked('interface_contract.md');
+    fs.unlinkSync(path.join(root, contract)); p3Paths.pop();
+    json(plan, scenarioPlan); sealP3();
+    write(model, 'different implementation');
+    await expectBlocked('artifact changed');
+    write(model, fs.readFileSync(path.join(root, entry), 'utf8')); sealP2();
+    await expectBlocked('model and independent reference are identical');
+    write(model, model);
+    sealP2();
+    write(files[4], 'new vectors');
+    await expectBlocked('artifact changed');
+    write(files[4], 'fixture');
+    const fault = probes.tb.fault, original = fs.readFileSync(path.join(root, fault), 'utf8');
+    json(fault, { ...JSON.parse(original), compared_points: 0, mismatches: 0 });
+    sealP3(); await expectBlocked('unproven P3 comparison', true);
+    write(fault, original);
+    const good = probes.checker.good, goodRun = JSON.parse(fs.readFileSync(path.join(root, good), 'utf8'));
+    json(good, { ...goodRun, scenarios: { normal: 8 } }); sealP3(); await expectBlocked('unexercised planned scenario');
+    json(good, goodRun); sealP3();
+    json(measurement, { ...widths, selected_width: 8 }); sealP2(); await expectBlocked('out-of-budget');
+    json(measurement, widths); sealP2();
+    delete systemCases['16QAM']; sealP2(); await expectBlocked('unmeasured P2 baseline case');
+    systemCases['16QAM'] = 'audit/16QAM.json'; sealP2();
+    const over = JSON.parse(fs.readFileSync(path.join(root, fixed), 'utf8'));
+    over.resources.DSP = { estimate: 2, limit: 10, acceptedRisk: files[0] };
+    json(fixed, over); await expectBlocked('hard limit exceeded: DSP');
+    fs.unlinkSync(path.join(root, fixed)); sealP3(false);
+    assert((await run(true)).ok, 'explicit Lite should support independent Golden without P2');
+    await expectBlocked('P2');
+  } finally { fs.rmSync(root, { recursive: true, force: true }); }
 });
 
 test('hdl dag workflow deep run completes with deterministic evidence gates', async () => {

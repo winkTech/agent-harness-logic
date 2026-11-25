@@ -15,6 +15,31 @@
 
 'use strict';
 
+const { loadPackConfig } = require('../lib/pack-config.cjs');
+
+function loadExternalBashGroups() {
+  const cfg = loadPackConfig('bash-safety-rules');
+  if (!cfg || !Array.isArray(cfg.groups)) return [];
+  const out = [];
+  for (const group of cfg.groups) {
+    if (!group || !group.category || !Array.isArray(group.patterns)) continue;
+    const compiled = [];
+    for (const entry of group.patterns) {
+      if (!entry || typeof entry.pattern !== 'string') continue;
+      try { compiled.push(new RegExp(entry.pattern, entry.flags || '')); } catch { /* skip invalid regex */ }
+    }
+    if (compiled.length > 0) {
+      out.push({
+        category: group.category,
+        severity: group.severity || 'CRITICAL',
+        patterns: compiled,
+        message: group.message || `Blocked by pack safety rule (${group.category})`,
+      });
+    }
+  }
+  return out;
+}
+
 // ── 受保护模型路径 ─────────────────────────────────────────────────────────
 //
 // 重定向/tee 写入受保护路径的判据。目标路径必须**紧跟**重定向符。
@@ -68,16 +93,11 @@ const DANGEROUS_PATTERNS = [
       // Python shutil copy to matlab/
       /shutil\.copy.*matlab/i,
       /shutil\.copy.*golden/i,
-      // PowerShell 写入 cmdlet —— 本 guard 注册在 "Bash|PowerShell", 但上面这批
-      // 模式全是 POSIX/脚本语言写法。缺了这一段, 在以 PowerShell 为主 shell 的
-      // 机器上, `Set-Content matlab/gm.m` 一类命令直接放行, 等于黄金模型保护
-      // 在 Bash 侧硬、PowerShell 侧空。source-write-bypass 那组虽然含
-      // Set-Content/Out-File, 但要求路径里有 src|rtl|tb|tests 目录段,
-      // matlab/ 与 golden*/ 都不在其中, 覆盖不到。
+      // Keep the existing fallback for embedded scripts; shellRisk also checks
+      // native cmdlet destinations and directory mutations regardless of extension.
       /(?:Set-Content|Add-Content|Out-File|New-Item|Copy-Item|Move-Item)[\s\S]*matlab[\\/][^"'\s]*\.(?:m|py|sh|mat)\b/i,
       /(?:Set-Content|Add-Content|Out-File|New-Item|Copy-Item|Move-Item)[\s\S]*golden[^"'\s]*[\\/][^"'\s]*\.(?:m|py|sh|mat)\b/i,
       /(?:Set-Content|Add-Content|Out-File|New-Item|Copy-Item|Move-Item)[\s\S]*fixed_point[^"'\s]*\.(?:m|py|sh|mat)\b/i,
-      // 管道形式: "content" | Out-File matlab/gm.m
       /\|\s*(?:Out-File|Set-Content|Add-Content)[\s\S]*(?:matlab|golden|fixed_point)/i,
     ],
     message: '绕过黄金模型保护: 脚本子进程写入受保护路径',
@@ -114,8 +134,6 @@ const DANGEROUS_PATTERNS = [
       // 解码后直接送进 shell / 解释器
       /\b(?:base64|base32)\b[^|\r\n]*(?:-d|--decode)[^|\r\n]*\|\s*(?:sh|bash|zsh|dash|python\d?|node|perl|ruby)\b/i,
       /\b(?:xxd\s+-r|od\s+-|certutil\s+(?:-decode|\/decode))\b[^|\r\n]*\|\s*(?:sh|bash|zsh|python\d?|node)\b/i,
-      // PowerShell 的编码命令入口
-      /\bpowershell(?:\.exe)?\b[^\r\n]*-(?:e|ec|enc|encoded|encodedcommand)\b/i,
       /\[(?:System\.)?Convert\]::FromBase64String[\s\S]*\|\s*(?:iex|Invoke-Expression)\b/i,
       // 管道进 shell 的 here-string / 变量求值
       /\becho\s+\$\{?[A-Za-z_][A-Za-z0-9_]*\}?\s*\|\s*(?:sh|bash|zsh)\b/i,
@@ -139,20 +157,7 @@ const DANGEROUS_PATTERNS = [
   },
 
   // ===== 2. 数据泄露 =====
-  {
-    category: 'no-bit-cfgmem',
-    severity: 'CRITICAL',
-    patterns: [
-      /\bwrite_bitstream\b/i,
-      /\bwrite_cfgmem\b/i,
-      /\bbootgen\b/i,
-      /\bprogram_flash\b/i,
-      /\bopen_hw(?:_manager)?\b/i,
-      /(?:>|>>|Out-File|Set-Content|Add-Content|New-Item|touch|copy|cp|mv)\b[\s\S]*\.(?:bit|mcs|ltx)\b/i,
-      /(?:>|>>|Out-File|Set-Content|Add-Content|New-Item|touch|copy|cp|mv)\b[\s\S]*\.(?:bin)\b[\s\S]*(?:bitstream|cfgmem|boot|flash)/i,
-    ],
-    message: 'No-bit/cfgmem gate: bitstream, cfgmem, hardware-programming, and debug-probe artifacts are forbidden in agent project work.',
-  },
+  // 注: 域特定 bash 安全规则（如 no-bit-cfgmem）已外置，经 pack-config 动态加载
 
   {
     category: 'data-exfiltration',
@@ -212,9 +217,9 @@ const DANGEROUS_PATTERNS = [
       /\bsudo\s+(?:rm|del|mv|chmod\s+777|chown)\s/i,
       // chmod -R 777 on sensitive dirs
       /chmod\s+-R\s+777\s+\/{0,1}(?:etc|usr|bin|boot|dev)/i,
-      // Windows: takeown / icacls full control on system dirs
-      /takeown\s+\/f\s+(?:C:)?\\\\(?:Windows|Program\s*Files|System32)/i,
-      /icacls\s+.*(?:C:)?\\\\(?:Windows|System32)\s*\/grant.*:F/i,
+      // Windows: takeown / icacls full control on system dirs (accept single backslash or forward slash)
+      /takeown\s+\/f\s+["']?(?:[A-Za-z]:)?[\\/](?:Windows|Program\s*Files|System32)\b/i,
+      /icacls\s+.*["']?(?:[A-Za-z]:)?[\\/](?:Windows|System32)\b.*\/grant\b.*:F/i,
       // Windows: disable security
       /netsh\s+advfirewall\s+set\s+allprofiles\s+state\s+off/i,
       /reg\s+add.*CurrentVersion\\Run/i,
@@ -232,7 +237,7 @@ const DANGEROUS_PATTERNS = [
     severity: 'HIGH',
     patterns: [
       // C 盘安装检测
-      /^(?:pip|npm|apt|choco|scoop)\s+install\b/i,
+      /^(?:pip|apt|choco|scoop)\s+install\b/i,
       /^cargo\s+install\b/i,
       /^gem\s+install\b/i,
       /^brew\s+install\b/i,
@@ -290,7 +295,7 @@ function blockDiagnostics(info, command) {
 
 // ── 受保护分支推送 ──────────────────────────────────────────────────────────
 //
-// 策略 (用户 2026-07-30 明确): main/master 不许推, 其他分支都放行。
+// 分支规则禁止直接推送 main/master。其他分支仍受独立的强推规则约束。
 //
 // 为什么不靠 settings 的 deny glob: 实测 deny 里的 `Bash(git tag -d:*)` 没有
 // 拦住 `git tag -d <tag>`(裸命令与带管道两种形式都执行了)。glob 匹配对变形
@@ -338,6 +343,118 @@ const PROTECTED_BRANCH_INFO = {
   message: '受保护分支推送: main/master 只能经 PR 合入, 不接受直接推送',
 };
 
+const DESTRUCTIVE_GIT_INFO = {
+  category: 'destructive-git',
+  severity: 'CRITICAL',
+  message: '强制推送或硬重置会覆盖 Git 历史或工作树',
+};
+
+// Preserve quoted operands (including inline interpreter programs). Only unquoted
+// pipeline, list and newline separators begin another command.
+function* commandGroups(command) {
+  let words = [];
+  for (const [token] of command.matchAll(/(?:"[^"]*"|'[^']*'|[^\s"';&|]+)+|[;&|\r\n]+/g)) {
+    if (/^[;&|\r\n]/.test(token)) {
+      if (words.length) yield words;
+      words = [];
+    } else {
+      words.push(token.replace(/^(["'])([\s\S]*)\1$/, '$2'));
+    }
+  }
+  if (words.length) yield words;
+}
+
+function isRootTarget(arg) {
+  const value = arg.replace(/\\/g,'/').replace(/\/(?:\*|\*\.\*)?$/,'').toLowerCase();
+  return /^(?:[a-z]:|~|%userprofile%|\$(?:home|\{home\}|env:userprofile))$/.test(value)
+    || (value === '' && arg.startsWith('/'))
+    || value === require('node:os').homedir().replace(/\\/g,'/').toLowerCase();
+}
+const modelTarget = /(?:^|[\\/])(?:matlab|golden(?:[_-][^\\/]*)?|fixed_point)(?:[\\/]|$)/i;
+
+function modelWrite(cmd, args) {
+  const named = new Map();
+  const positional = [];
+  for (let i = 0; i < args.length; i++) {
+    const flag = args[i].toLowerCase();
+    if (/^-(?:literalpath|path|filepath|destination|value|encoding|itemtype|name|filter|include|exclude|erroraction)$/.test(flag)) {
+      named.set(flag, args[++i]);
+    } else if (!flag.startsWith('-')) positional.push(args[i]);
+  }
+  const source = named.get('-literalpath') ?? named.get('-path');
+  const target = source ?? named.get('-filepath') ?? positional[0];
+  const destination = named.get('-destination') ?? positional[source !== undefined ? 0 : 1];
+  if (cmd === 'copy-item') return modelTarget.test(destination || '');
+  if (cmd === 'move-item' && modelTarget.test(destination || '')) return true;
+  if (cmd === 'remove-item') return [source,...positional].some(p => modelTarget.test(p || ''));
+  return modelTarget.test(target || '') || (cmd === 'new-item' && modelTarget.test(named.get('-name') || ''));
+}
+
+function shellRisk(words, depth = 0) {
+  const [executable, ...args] = words;
+  const cmd = executable.split(/[\\/]/).pop().toLowerCase().replace(/\.(?:exe|cmd)$/,'');
+  const has = pattern => args.some(arg => pattern.test(arg));
+  const powershell = /^(?:pwsh|powershell)$/.test(cmd);
+  if (powershell) {
+    for (const arg of args) {
+      // Later arguments belong to the invoked script or command.
+      if (/^-(?:command|c|file|f)$/i.test(arg)) break;
+      if (/^-(?:e|ec|enc|encoded|encodedcommand)$/i.test(arg)) return 'encoded-payload-execution';
+    }
+  }
+  const posixShell = /^(?:sh|bash|zsh|dash)$/.test(cmd);
+  if (depth < 8 && (cmd === 'cmd' || powershell || posixShell)) {
+    const commandFlag = powershell ? /^-(?:command|c)$/i : posixShell ? /^-[a-z]*c$/ : /^\/[ck]$/i;
+    const start = args.findIndex(arg => commandFlag.test(arg));
+    if (start >= 0 && args[start + 1]) {
+      const tail = args.slice(start + 1);
+      const groups = posixShell || tail.length === 1 ? commandGroups(tail[0]) : [tail];
+      for (const group of groups) {
+        const risk = shellRisk(group, depth + 1);
+        if (risk) return risk;
+      }
+    }
+  }
+  if (/^(?:rd|rmdir|del|erase)$/.test(cmd) && has(/^\/s$/i) && args.some(isRootTarget)) return 'catastrophic-delete';
+  if (cmd === 'remove-item' && has(/^-(?:r|recurse)$/i) && args.some(isRootTarget)) return 'catastrophic-delete';
+  if (cmd === 'format-volume') return 'catastrophic-delete';
+  if (/^(?:node|python(?:\d+(?:\.\d+)?)?|py)$/.test(cmd)) {
+    const flag = args.findIndex(arg => /^(?:-c|-e|--eval)$/.test(arg));
+    const program = flag >= 0 ? args[flag + 1] || '' : '';
+    if (/\b(?:rmSync|rm)\s*\(\s*(?:process\.env\.(?:HOME|USERPROFILE)|(?:\w+\.)?homedir\(\)|["'](?:\/|[a-z]:[\\/]+)["'])\s*,/i.test(program)
+        && /\brecursive\s*:\s*true\b/i.test(program)) return 'catastrophic-delete';
+    if (/\brmtree\s*\(\s*(?:[\w.]*expanduser\(\s*["']~["']\s*\)|[\w.]*Path\.home\(\)|["'](?:\/|[a-z]:[\\/]+)["'])\s*[,)]/i.test(program)) return 'catastrophic-delete';
+  }
+  if (/^(?:iex|invoke-expression)(?:$|\()/i.test(executable) &&
+      /::FromBase64String\s*\(/i.test(words.join(' '))) return 'encoded-payload-execution';
+  if (cmd === 'set-mppreference' && /(?:^|\s)-DisableRealtimeMonitoring(?:\s+|:)\$?(?:true|1)(?:\s|$)/i.test(args.join(' '))) {
+    return 'privilege-escalation';
+  }
+  if (/^(?:set-content|add-content|out-file|new-item|copy-item|move-item|remove-item)$/.test(cmd) && modelWrite(cmd,args)) {
+    return 'golden-model-bypass';
+  }
+  if (cmd === 'git') {
+    // Global options that consume the following token precede the subcommand.
+    let i = 0;
+    while (i < args.length && args[i].startsWith('-')) {
+      i += /^(?:-C|-c|--git-dir|--work-tree|--namespace|--config-env)$/.test(args[i]) ? 2 : 1;
+    }
+    const end = args.indexOf('--',i + 1);
+    const options = args.slice(i + 1,end === -1 ? undefined : end);
+    if (args[i] === 'reset' && options.includes('--hard')) return 'destructive-git';
+    if (args[i] === 'push' && !options.some(v => /^(?:--dry-run|-[a-z]*n[a-z]*)$/.test(v)) &&
+        options.some(v => /^(?:--force|-[a-z]*f[a-z]*)$/.test(v))) return 'destructive-git';
+  }
+  if (cmd === 'npm') {
+    const end = args.indexOf('--');
+    const options = args.slice(0,end === -1 ? undefined : end);
+    const global = options.some((v,i) => /^(?:-g|--global(?:=true)?|--location=global)$/.test(v) ||
+      (v === '--location' && options[i + 1] === 'global'));
+    if (global && options.some(v => /^(?:i|install|add)$/.test(v))) return 'system-install';
+  }
+  return null;
+}
+
 /**
  * 扫描命令是否匹配任何危险模式。
  * @param {string} command
@@ -351,8 +468,18 @@ function scanCommand(command) {
   if (protectedBranchPush(command)) {
     return { matched: true, info: PROTECTED_BRANCH_INFO };
   }
+  const allowSystemInstall = ['1', 'true'].includes(String(process.env.HARNESS_ALLOW_SYSTEM_INSTALL || '').toLowerCase());
+  const allGroups = [...DANGEROUS_PATTERNS, ...loadExternalBashGroups()];
 
-  for (const group of DANGEROUS_PATTERNS) {
+  for (const group of commandGroups(command)) {
+    const category = shellRisk(group);
+    if (category === 'system-install' && allowSystemInstall) continue;
+    if (category) return { matched: true, info: category === 'destructive-git' ? DESTRUCTIVE_GIT_INFO :
+      allGroups.find(rule => rule.category === category) };
+  }
+
+  for (const group of allGroups) {
+    if (group.category === 'system-install' && allowSystemInstall) continue;
     for (const regex of group.patterns) {
       if (regex.test(command)) {
         return { matched: true, info: group };

@@ -20,6 +20,10 @@ const os = require('node:os');
 const path = require('node:path');
 
 const { detectPluginMode } = require('../lib/plugin-mode.cjs');
+const { envOf } = require('../io/env.cjs');
+
+/** 实际读取用户级 settings.json 的宿主白名单（其余宿主不会与之双跑） */
+const USER_SETTINGS_HOSTS = new Set(['', 'claude-code', 'workbuddy']);
 
 /** 核心胶囊注入上限（字符） */
 const CAPSULE_LIMIT = 6000;
@@ -117,6 +121,9 @@ function registrationOverlap(_payload, io, deps = {}) {
     const mode = detectPluginMode({ env: deps.env, homeDir: deps.homeDir });
     if (!mode.isPlugin) return { exitCode: 0 };
 
+    const host = envOf(deps.env || process.env).host;
+    if (!USER_SETTINGS_HOSTS.has(host)) return { exitCode: 0 };
+
     const homeDir = String(deps.homeDir || os.homedir());
     const settingsDir = path.join(homeDir, '.claude');
     let overlapped = false;
@@ -135,7 +142,7 @@ function registrationOverlap(_payload, io, deps = {}) {
       context: '[logical-paradox] 检测到用户级 settings.json 也注册了 harness hook，'
         + '插件副本与用户副本会各跑一次；请二选一：卸载插件，或运行 '
         + `node ${remove} --remove-user-hooks`
-        + '（M2 暂未实现，先手工从 settings.json 删除 hooks 块）',
+        + '（自动备份后移除用户级 hooks，保留其余配置与密钥）',
     };
   } catch (error) {
     warn(io, 'registrationOverlap', error.message);

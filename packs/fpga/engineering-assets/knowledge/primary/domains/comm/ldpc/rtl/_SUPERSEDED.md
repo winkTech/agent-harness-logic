@@ -17,14 +17,13 @@ related: [ldpc-codec]
 
 - 控制器缺写回相位(PASS2 无消费者),msg 寻址越界读 X —— 10 组黄金向量
   全部失败(324/324 bit 错),证据见
-  `incubator/intake/ldpc_codec/ARCHITECTURE-GAP.md`
+  仓库内 `packs/fpga/engineering-assets/cbb/ldpc_codec/ARCHITECTURE-GAP.md`
 - `02_sim/tb_ldpc_decoder_top.v` 是**假绿历史版本**:向量路径截断导致
   `$readmemh` 静默失败、空对空比对报 PASS(commit `10b9901` 修复)
 
 ## 权威版本
 
-`engineering-assets/incubator/intake/ldpc_codec/`
-— QUALIFICATION 级,bit-true 10 向量 3240 样点 0 失配,17/18 门绿。
+查看[当前 CBB 签核清单](../../../../../../cbb/ldpc_codec/manifest.json)的版本、协议范围、顶层和已接受限制；按清单中的资产 ID 与版本核对封存记录。
 
 ## 为什么不直接删除
 

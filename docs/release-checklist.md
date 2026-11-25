@@ -31,6 +31,14 @@ npm.cmd run codex:connect
 npm.cmd run codex:connect -- --check
 ```
 
+本机 Antigravity 安装或更新插件时（方案 A 瘦链接，本体位于 `hosts/antigravity/`），从 Harness 源码根运行：
+
+```powershell
+npm.cmd run antigravity:connect
+npm.cmd run antigravity:connect -- --check
+npm.cmd run antigravity:test
+```
+
 从本地源码更新同版本插件时，运行 `npm.cmd run codex:connect -- --refresh`。入口比较生成产物和安装缓存，有内容变化才重新安装。首次使用、Hook 定义变化或宿主在重装后要求重新审核时，Codex 会提示确认。若待审列表还包含其他来源，选择 **Review hooks**，只确认目标插件。使用过独立版 Harness 的机器，可在接入命令后加上 `-- --dedupe`。入口等插件 Hook 全部获准后，使用 Codex 的配置接口停用已核实的重叠 User 条目。跳过审核后可再次执行接入命令。
 
 ## 结构合规

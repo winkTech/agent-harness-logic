@@ -50,6 +50,8 @@
  *     lite: false,                              // 可选 Lite 模式
  *     confirmed: true,                          // 确认 preflight 检查点
  *     checkpoints: {                            // 逐检查点确认 (配合 resumeFromRunId)
+ *       'layout-review': {confirmed: true},
+ *       'system-review': {confirmed: true},
  *       'design-review': {confirmed: true},
  *       'evidence-review': {confirmed: true},
  *     },
@@ -102,7 +104,7 @@ function _requireUserCheckpoint(name, detail) {
 // 已在需求门禁 D6 记录; agent 的 bash 调用会进透明度账本, 且 Phase 4.5 与
 // Phase 4 是相互独立的上下文, 末端 verifier 再做交叉核对。
 
-const EVIDENCE_GATE_SCRIPT = args?.evidenceGateScript || 'engine/scripts/hdl-evidence-gate.cjs';
+const EVIDENCE_GATE_SCRIPT = args?.evidenceGateScript || 'core/engine/scripts/hdl-evidence-gate.cjs';
 
 const EVIDENCE_SCHEMA = {
   type: 'object',
@@ -116,7 +118,7 @@ const EVIDENCE_SCHEMA = {
 };
 
 async function _evidenceGate(flags, label, phaseName) {
-  const cmd = `node ${EVIDENCE_GATE_SCRIPT} --project-root "${projectRoot}" ${flags}`;
+  const cmd = `node "${EVIDENCE_GATE_SCRIPT}" --project-root "${projectRoot}" ${flags}`;
   const res = await agent(
     `你是**证据搬运者**。你的唯一任务是执行下面的确定性证据门禁命令, 并把它的输出原样带回。
 
@@ -124,8 +126,7 @@ async function _evidenceGate(flags, label, phaseName) {
   ${cmd}
 
 说明:
-- 脚本位于 Claude harness 根目录 (通常 ~/.claude)。相对路径找不到时改用
-  ~/.claude/${EVIDENCE_GATE_SCRIPT} 的绝对路径重试一次。
+- 从本次工作流所在插件根目录解析脚本，项目根目录使用实际项目绝对路径。以独立字面参数调用 Node。
 - 命令会输出一个 JSON 对象和末行 RESULT: PASS 或 RESULT: FAIL。
 
 结构化返回 (禁止改写脚本输出的任何数值):
@@ -150,7 +151,7 @@ async function _evidenceGate(flags, label, phaseName) {
 // 代码图里有真实的例化层次, 拿它核对: 父模块不得排在它例化的子模块之前。
 //
 // 工作流跑在受限 JS 沙箱 (没有 require/fs), 所以查询由 CLI 承担, 这里只搬运结果。
-const MODULE_ORDER_SCRIPT = args?.moduleOrderScript || 'engine/scripts/module-order.cjs';
+const MODULE_ORDER_SCRIPT = args?.moduleOrderScript || 'core/engine/scripts/module-order.cjs';
 
 const TOPOLOGY_SCHEMA = {
   type: 'object',
@@ -176,7 +177,7 @@ async function _checkModuleOrder(label, phaseName, reindex) {
   if (modules.length === 0) return { skipped: true, reason: 'no_modules' };
 
   const syncCmd = reindex
-    ? `node engine/scripts/code-graph-index.cjs sync "${projectRoot}" && `
+    ? `node core/engine/scripts/code-graph-index.cjs sync "${projectRoot}" && `
     : '';
   const cmd = `${syncCmd}node ${MODULE_ORDER_SCRIPT} --project "${projectRoot}" `
     + `--modules ${moduleOrder.join(',')} --check`;
@@ -272,11 +273,12 @@ async function _dagExecute(nodes, opts) {
 
     const failures = ready.map(([name]) => results[name]).filter(r => r.status === 'fail');
     if (failures.length > 0) {
-      for (const f of failures) logFn(`  ❌ ${f.name}: ${String(f.error).slice(0, 200)}`);
       const checkpointFailure = failures.find(f => String(f.error).includes('[WorkflowCheckpoint:'));
       if (checkpointFailure && failures.length === 1) {
+        logFn(`  暂停: ${checkpointFailure.error}`);
         throw new Error(checkpointFailure.error); // 保留检查点原始消息与续跑指引
       }
+      for (const f of failures) logFn(`  ❌ ${f.name}: ${String(f.error).slice(0, 200)}`);
       throw new Error(`[DAG] 节点失败: ${failures.map(f => f.name).join(', ')} — ${String(failures[0].error).slice(0, 400)}`);
     }
   }
@@ -308,10 +310,10 @@ export const meta = {
   contract: {
     version: 2,
     strict: true,
-    inputs: ['modules', 'projectRoot', 'confirmed/checkpoints.<name>.confirmed', 'confirmAllCheckpoints (无人值守)'],
-    checkpoints: ['preflight', 'design-review', 'evidence-review', 'verifier'],
+    inputs: ['modules', 'projectRoot', 'goldenBaseline: {entry, cases, tools?, limits?} (原入口、必测工况、必需工具、逐工况的实测数值约束)', 'stopAfter: p3 (仅授权 P2/P3 准备时设置)', 'resourceLimits: {DSP?, LUT?, BRAM?} (已确认的 P2 硬上限，按项目统一单位)', 'confirmed/checkpoints.<name>.confirmed', 'confirmAllCheckpoints (无人值守)'],
+    checkpoints: ['preflight', 'layout-review', 'system-review', 'design-review', 'evidence-review', 'verifier'],
     evidence: [
-      'engine/scripts/hdl-evidence-gate.cjs (确定性判定 + RESULT: PASS/FAIL)',
+      'core/engine/scripts/hdl-evidence-gate.cjs (确定性判定 + RESULT: PASS/FAIL)',
       '06_doc/architecture.yaml',
       '02_sim/check_results/*.json',
       'Phase 4.5 evidence gate',
@@ -319,7 +321,7 @@ export const meta = {
     ],
     completionCriteria: [
       'preflight user checkpoint is confirmed',
-      'design-review and evidence-review checkpoints confirmed (or confirmAllCheckpoints)',
+      'layout-review, system-review, design-review and evidence-review checkpoints confirmed (or confirmAllCheckpoints)',
       'hdl-evidence-gate.cjs returns ok=true for all modules',
       'Phase 6b: Vivado 可用时 critical+errors=0 且 WNS>=0; 不可用时报告显式标注未验证',
       'verifier returns valid JSON with pass=true',
@@ -347,6 +349,27 @@ const modules = args?.modules || [];
 // 例化层次核对并在矛盾时纠正 (见 _checkModuleOrder), 所以这里必须是 let。
 let moduleOrder = args?.moduleOrder || modules;
 const liteMode = args?.lite === true;
+if (args?.stopAfter !== undefined && args.stopAfter !== 'p3') throw new Error('stopAfter must be p3 when limiting execution to verification preparation');
+const preparationOnly = args?.stopAfter === 'p3';
+let verifiedFixedPointDigest;
+const resourceLimits = args?.resourceLimits ?? {};
+if (typeof resourceLimits !== 'object' || Array.isArray(resourceLimits) ||
+    Object.entries(resourceLimits).some(([name, limit]) => !['DSP', 'LUT', 'BRAM'].includes(name) || !Number.isFinite(limit) || limit < 0)) {
+  throw new Error('resourceLimits must contain nonnegative numeric DSP, LUT or BRAM limits');
+}
+const limitFlags = Object.entries(resourceLimits).map(([name, limit]) => `--hard-limit ${name}=${limit} `).join('');
+if (liteMode && limitFlags) throw new Error('P2 hard resource limits require full mode; Lite skips P2');
+function checkedHardLimits(report) {
+  return Object.entries(resourceLimits).every(([name, limit]) => report?.hardLimits?.[name] === limit);
+}
+function checkedBaselineScope(report) {
+  const expected = args?.goldenBaseline;
+  if (!expected) return true;
+  const scope = report?.fixedBaseline;
+  return scope?.entry === expected.entry && expected.cases.every(name => scope.cases?.includes(name))
+    && (expected.limits ?? []).every(l => scope.limits?.some(s => s.case === l.case && s.metric === l.metric
+      && s.min === l.min && s.max === l.max));
+}
 const projectRoot = args?.projectRoot || '.';  // v3.5.1: process.cwd() 不可用
 const fpgaPart = args?.part || args?.device || '';  // v3.7: Phase 6b Vivado 体检的目标器件
 
@@ -415,7 +438,10 @@ nodes.p0_infra = {
 3. .gitignore: 必须排除所有 transient 文件
    work/ transcript *.wlf vsim.wlf __pycache__/ *.pyc *.vcd *.vcd.lxt *.ini
 
-4. 验证 make lint / make compile 可用
+4. 用临时正常/错误 HDL 探针验证 lint 和 compile 的成功、失败路径，探针不写入项目 RTL。
+   缺少 RTL 根目录必须报错。空工程单列“无设计源文件”，保留工具自检结果。
+5. 使用 Git 的项目在隔离的干净检出中，从受版本管理的目录契约恢复布局，逐项核对所需目录。
+   已冻结的 Golden 逐文件复核字节摘要，含启用 autocrlf 的检出；检查不能改变原工程。
 
 模块: ${modules.join(', ') || '项目默认'}
 输出检查清单:
@@ -423,10 +449,10 @@ nodes.p0_infra = {
 - var/project-init/directory-contract.json 存在且记录 canonical HDL layout
 - Makefile 存在且 lint/compile/sim/clean 目标完整
 - .gitignore 排除 transient
-- make lint 通过
+- 目录可恢复；工具探针的正反例和项目实际源码状态均有记录
 
 ━━━ 检查点 ━━━
-产出以上目录结构后暂停，用户审查确认目录合规后再进入 Phase 1a。
+返回目录清单、实际运行的工具和结果。调度器在派发 P1a 前等待用户确认目录。
 ━━━━━━━━━━━`, { label: 'p0-infra' });
     return result;
   },
@@ -438,6 +464,7 @@ nodes.p1a_sys_design = {
   // 依赖 p0_topology 只是为了保证顺序纠正发生在 Phase 4 读取 moduleOrder 之前
   deps: ['p0_infra', 'p0_topology'],
   run: async () => {
+    _requireUserCheckpoint('layout-review', 'Review the P0 directory manifest and build entry points before system design.');
     const result = await agent(`执行 HDL 工作流 Phase 1a: 系统级方案设计
 
 前提: 基础设施已就绪, 项目目录已建。
@@ -506,6 +533,7 @@ nodes.p1a_sys_design = {
 nodes.p1b_micro_arch = {
   deps: ['p1a_sys_design'],
   run: async (ctx) => {
+    _requireUserCheckpoint('system-review', 'Review the six P1a design documents against the system checklist before microarchitecture.');
     const sysDesign = ctx.p1a_sys_design?.data || '';
     const sysHint = String(sysDesign).slice(0, 500);
 
@@ -562,11 +590,14 @@ ${sysHint}
 === B4 — 接口契约审查 ===
 审查 06_doc/interface_contract.md（算法工程师产出），确认:
      - 握手协议可综合、背压传播可行、反压链长度可控
+     - 对每个数据输出及其帧元数据，追溯到实际输入端口、可访问的存储或可推导的本地状态。输入为句柄时，列出读请求/响应、所有者和数据有效期；scoreboard 中的真值不能补 DUT 的输入接口。
      - [MUST - 红线] 所有复位信号必须为 i_rst (同步高有效)，禁止异步/低有效复位。
 
 === B5 — 验证策略 ===
 写入 06_doc/verification_strategy.md:
 每模块的自检方法、关键信号可观察性、调试 hook、覆盖率收集策略。
+在 var/workflow/p3-plan.json 记录 strategySha256 和各模块可执行场景 ID（modules 对象）；与策略一同送 design-review。续跑旧设计时可从审过的文档逐项转录。
+将送审接口契约的 SHA-256 记为 interfaceContractSha256。P3 发现端口或字段来源缺失时记录为未解决项，并将接口修订退回 design-review 签收后再更新摘要。
 
 === B6 — 时钟域分析 ===
 写入 06_doc/clock_domain.md:
@@ -644,20 +675,28 @@ nodes.p2_fixedpt = {
 3. DSP/LUT/BRAM 预算表
 
 模块: ${modules.join(', ') || '项目默认'}
+已确认的硬资源上限（按设计审查约定单位）：${JSON.stringify(resourceLimits)}。
+按本插件 workflows/hdl-coding/phase2-fixed-point.md 的机器回执合同写 var/workflow/p2-fixed-point.json：
+逐模块实跑独立参考与位真模型，对应位宽试验、设计误差上限、选定位宽、舍入和溢出方式，登记模型、输入依赖、定点报告、资源预算和测量文件 SHA-256。
 输出: fixed_point_report + resource_estimate`, { agentType: 'algorithm-engineer', label: 'p2-fixed-point', phase: 'Phase 2 定点量化' });
+    if (!modules.length || modules.some(mod => typeof mod !== 'string' || !/^[A-Za-z_][A-Za-z0-9_$]*$/.test(mod))) throw new Error('P2 requires explicit target modules');
+    const evidence = await _evidenceGate(`--fixed-point ${args?.goldenBaseline ? '--with-baseline ' : ''}${limitFlags}--modules '${modules.join(',')}'`, 'p2-evidence', 'Phase 2 定点量化');
+    const json = _parseStrictJsonObject(evidence.gateJson);
+    if (!evidence.ok || json?.gate !== 'hdl-evidence-gate' || json.ok !== true || json.mode !== 'full'
+        || !checkedHardLimits(json) || !checkedBaselineScope(json) || json.withBaseline !== Boolean(args?.goldenBaseline) || JSON.stringify(json.fixedPoint) !== JSON.stringify(modules)) throw new Error('P2 evidence: ' + (evidence.failures || []).join('; '));
+    if (!/^[0-9a-f]{64}$/.test(json.fixedPointReceiptSha256 || '')) throw new Error('P2 evidence: missing verified receipt digest');
+    verifiedFixedPointDigest = json.fixedPointReceiptSha256;
     return result;
   },
 };
 
 // ── Phase 3: TB + MATLAB 向量生成 ──────────────────────────────────────────
 
-nodes.p3_tb = {
+nodes.p3_tb_build = {
   deps: ['cp_design_review'],
   run: async (ctx) => {
     const arch = ctx.p1b_micro_arch?.data || '';
-    const [tbResult, vecResult] = await parallel([
-      // ── 子任务 1: 逻辑工程师 — Testbench ─────────────────────────
-      () => agent(`执行 HDL 工作流 Phase 3 (TB): 编写 Testbench (逻辑工程师)
+    return agent(`执行 HDL 工作流 Phase 3 (TB): 编写 Testbench (逻辑工程师)
 
 架构设计: ${String(arch).slice(0, 300)}
 模块: ${modules.join(', ') || '项目默认'}
@@ -665,7 +704,7 @@ nodes.p3_tb = {
 任务:
 [NEW TB 收敛规则 — 违反即阻断]
 a) [MUST] 仅允许一个 tb_<module>.sv 文件。如果已有 → 读取后覆盖, 不创建新文件
-b) [MUST] Testbench 必须使用 AXI-Stream VIP
+b) [MUST] 按实际接口契约驱动并检查握手；AXI-Stream 接口覆盖反压、顺序与帧界。
 c) [MUST] TB 必须有自动对比逻辑 (读 golden 向量 + scoreboard 比对 + JSON 输出)
 d) [SHOULD] TB 自检通过: compile + 自动 PASS/FAIL 结论
 
@@ -677,19 +716,22 @@ d) [SHOULD] TB 自检通过: compile + 自动 PASS/FAIL 结论
    - 读 RTL 仿真输出 02_sim/<module>_out.txt
    - 逐点数值对比 → 输出 JSON 到 02_sim/check_results/<module>.json
 
-输出: TB 编译通过, 自检逻辑完整, 对比脚本骨架就绪`, { agentType: 'logic-engineer', label: 'p3-tb', phase: 'Phase 3 TB+向量生成' }),
+输出: 自检 TB 和可执行的比较脚本，编译与对照试验在向量就绪后进行。`, { agentType: 'logic-engineer', label: 'p3-tb', phase: 'Phase 3 TB+向量生成' });
+  },
+};
 
-      // ── 子任务 2: 算法工程师 — 向量生成 ──────────────────────────
-      () => agent(`执行 HDL 工作流 Phase 3 (向量): 生成测试向量 (算法工程师)
+nodes.p3_vectors = {
+  deps: liteMode ? ['cp_design_review'] : ['p2_fixedpt'],
+  run: async (ctx) => {
+    const arch = ctx.p1b_micro_arch?.data || '';
+    return agent(`执行 HDL 工作流 Phase 3 (向量): 生成测试向量 (算法工程师)
 
 架构设计: ${String(arch).slice(0, 300)}
 模块: ${modules.join(', ') || '项目默认'}
 
 ━━━ [MUST] 第 0 步: Golden Model 自检 ━━━
-先生成并运行 Golden Model 自检脚本:
-   - 检查 check_<module>.py 是否存在
-   - 运行 python3 check_<module>.py
-   - 确认所有 check status=PASS, compared_points>0
+先按模型的独立参考或已知向量运行 Golden 自检，记录参考来源、判据、实际比较点数与结果。
+   - 本阶段不读取尚未生成的 RTL 仿真输出；check_<module>.py 在 P4 有仿真数据后执行。
    - 如果任何 check FAIL → 立即停止, 修复 GM 后再继续
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
@@ -699,17 +741,25 @@ d) [SHOULD] TB 自检通过: compile + 自动 PASS/FAIL 结论
    - 存入 02_sim/tv/<module>_tv.txt
    - 每条向量标注 golden 预期值
 2. 覆盖 corner case: 全零、全一、脉冲、随机、边界值、溢出
-3. 向量格式: 每行 1 bit (ASCII '0'/'1'), .hex 后缀
+3. 使用 TB 约定的字/位宽、进制与事务顺序；完整模式从本轮已核验的 P2 位真模型生成最终向量。Lite 从指定独立 Golden 生成。
 
 [MUST]:
    - 必须用 MATLAB/Python golden 生成黄金参考向量
    - 禁止自闭环验证 (编码→译码对比)
    - 向量存入 02_sim/tv/ 目录
 
-输出: 02_sim/tv/<module>_tv.txt, 覆盖所有 corner case`, { agentType: 'algorithm-engineer', label: 'p3-vectors', phase: 'Phase 3 TB+向量生成' }),
-    ]);
+输出: 02_sim/tv/<module>_tv.txt, 覆盖适用的 corner case`, { agentType: 'algorithm-engineer', label: 'p3-vectors', phase: 'Phase 3 TB+向量生成' });
+  },
+};
 
-    return `[TB]\n${tbResult}\n\n[VECTORS]\n${vecResult}`;
+nodes.p3_tb = {
+  deps: ['p3_tb_build', 'p3_vectors'],
+  run: async () => {
+    return agent(`对 ${modules.join(', ')} 的最终 TB、比较脚本及向量运行 P3 验证。
+用隔离的替身或回放驱动 TB，实际编译、运行正确输出与注入已知错误输出两个试验；对比较脚本也实跑这两个试验。记录比较点数、错点数和进程退出码。
+按本插件 workflows/hdl-coding/phase3-testbench.md 的机器回执合同逐模块生成 var/workflow/p3/<module>.json。模式=${liteMode ? 'lite' : 'full'}。
+验证适用的边界与握手场景，报告覆盖范围。此阶段只检验验证环境，不创建产品 RTL 或宣称 DUT 仿真通过。`,
+      { agentType: 'logic-engineer', label: 'p3-selftest', phase: 'Phase 3 TB+向量生成' });
   },
 };
 
@@ -717,9 +767,34 @@ d) [SHOULD] TB 自检通过: compile + 自动 PASS/FAIL 结论
 // Phase 4: 逐模块 RTL + 脚本化对比 — 3-stage pipeline (编码→调试循环→终验)
 // ═════════════════════════════════════════════════════════════════════════════
 
+async function verifyRtlReadiness() {
+  if (!moduleOrder.length || moduleOrder.some(mod => typeof mod !== 'string' || !/^[A-Za-z_][A-Za-z0-9_$]*$/.test(mod))
+      || moduleOrder.length !== new Set(moduleOrder).size || moduleOrder.length !== modules.length
+      || modules.some(mod => !moduleOrder.includes(mod))) throw new Error('P4 requires an explicit order covering every target module');
+  const modeFlag = liteMode ? '--lite ' : args?.goldenBaseline ? '--with-baseline ' : '';
+  const ready = await _evidenceGate(`--rtl-ready ${modeFlag}${liteMode ? '' : limitFlags}--modules '${moduleOrder.join(',')}'`, 'rtl-ready', preparationOnly ? 'Phase 3 TB+向量生成' : 'Phase 4 RTL编码');
+  const readyJson = _parseStrictJsonObject(ready.gateJson);
+  if (ready.ok && !liteMode && readyJson?.fixedPointReceiptSha256 !== verifiedFixedPointDigest) {
+    throw new Error('RTL prerequisites: P2 changed after the qualified fixed-point run; revalidate P2 and its dependent vectors');
+  }
+  const signedInterface = args?.checkpoints?.['design-review']?.interfaceContractSha256;
+  if (ready.ok && (signedInterface !== undefined || (readyJson?.interfaceContractSha256 && args?.confirmAllCheckpoints !== true))
+      && (!signedInterface || readyJson?.interfaceContractSha256 !== signedInterface)) {
+    throw new Error('RTL prerequisites: design-review interface digest differs or is missing; supply checkpoints["design-review"].interfaceContractSha256 from the accepted snapshot');
+  }
+  if (!ready.ok || readyJson?.gate !== 'hdl-evidence-gate' || readyJson.ok !== true
+      || (!liteMode && (!checkedHardLimits(readyJson) || !checkedBaselineScope(readyJson))) || readyJson.mode !== (liteMode ? 'lite' : 'full') || readyJson.withBaseline !== Boolean(!liteMode && args?.goldenBaseline)
+      || JSON.stringify(readyJson.rtlReady) !== JSON.stringify(moduleOrder)) {
+    throw new Error('RTL prerequisites: ' + (ready.failures || []).join('; '));
+  }
+  return readyJson;
+}
+
+const preparationNodes = { ...nodes, p3_ready: { deps: ['p3_tb'], run: verifyRtlReadiness } };
 nodes.p4_rtl = {
   deps: ['p2_fixedpt', 'p3_tb'],
   run: async (ctx) => {
+    await verifyRtlReadiness();
     const fixedpt = ctx.p2_fixedpt?.data || '';
     const tb = ctx.p3_tb?.data || '';
     const moduleList = modules.length > 0 ? modules : ['模块_1'];
@@ -1402,19 +1477,19 @@ nodes.p6b_vivado_check = {
 模块: ${modules.join(', ') || '项目默认'}
 ${partHint}
 
-执行入口: vivado-flow 技能 (packs/fpga/skills/vivado-flow/SKILL.md)
+执行入口: 当前安装的 vivado-flow 技能 (插件 skills/vivado-flow/SKILL.md，源码 packs/fpga/skills/vivado-flow/SKILL.md)
 规范依据: packs/fpga/skills/hdl-coding/references/ug949-rtl-methodology.md (§4 Know What You Infer)
 
 ━━━ 步骤 ━━━
 1. 探测工具链:
-   node engine/scripts/eda-detect.cjs --json
-   (脚本在 harness 根目录, 相对路径找不到时用 ~/.claude/ 前缀重试一次)
+   node core/engine/scripts/eda-detect.cjs --json
+   (以下工具和技能均从当前插件根解析绝对路径，工程输入输出从项目根解析。)
    vivado 不可用 → tool_available=false, skip_reason 写明, 其余字段置 0/空, **直接结束**。
    [MUST] 禁止在无 Vivado 时凭读代码给出资源/时序/推断结论。
 
 2. 跑 rtlcheck → synth (**一条命令覆盖两个阶段, 脚本自动分趟处理 elaborate 与综合**):
    vivado -mode batch -nojournal -nolog \\
-     -source ~/.claude/packs/fpga/skills/vivado-flow/scripts/vivado_flow.tcl \\
+     -source <vivado-flow技能目录>/scripts/vivado_flow.tcl \\
      -tclargs -top top -part <part> -src 01_src/00_hdl -xdc 03_xdc \\
               -out 04_prj -from rtlcheck -to synth
    读 04_prj/rpt/flow_summary.json
@@ -1426,8 +1501,8 @@ ${partHint}
    - 关键路径起点是 BRAM 组合输出 → 输出寄存器未吸收, 列进 blocking_items
 
 4. 用解析器复核数字 (禁止从 .rpt 里用眼睛抄):
-   node engine/scripts/fpga-util-parser.cjs   04_prj/rpt/synth_utilization.rpt --json
-   node engine/scripts/fpga-timing-parser.cjs 04_prj/rpt/synth_timing.rpt      --json
+   node packs/fpga/engine/fpga-util-parser.cjs   04_prj/rpt/synth_utilization.rpt --json
+   node packs/fpga/engine/fpga-timing-parser.cjs 04_prj/rpt/synth_timing_summary.rpt --json
    (报告文件名以 flow_summary.json 的 report_dir 下实际存在的为准)
 
 ━━━ 结构化返回 (字段全部取自 flow_summary.json 原值, 禁止改写或估算) ━━━
@@ -1652,7 +1727,7 @@ if (liteMode) {
   nodes.p2_fixedpt.run = async () => '[SKIPPED] Lite 模式 — 定点量化跳过';
   nodes.p6_regression.run = async () => '[SKIPPED] Lite 模式 — 覆盖率回归跳过';
 
-  log('   依赖链: P0→P1a→P1b→CP(design)→P3→P4→P45→CP(evidence)→P5→P6b/P7并行→P8→Verifier');
+  log('   依赖链: P0→CP(layout)→P1a→CP(system)→P1b→CP(design)→P3→P4→P45→CP(evidence)→P5→P6b/P7并行→P8→Verifier');
   log('   (跳过节点: P2 定点量化, P6 覆盖率回归; P6b Vivado 体检保留 — 成本低且是唯一的综合级证据)');
 }
 
@@ -1679,8 +1754,10 @@ const preflightSummary = [
   '',
   '📋 检查点体系 (每个未确认时工作流暂停, 带确认参数 + resumeFromRunId 续跑):',
   '  preflight       — 本清单 (args.confirmed=true)',
+  '  layout-review   — P0 目录与构建入口确认后才派发 P1a',
+  '  system-review   — P1a 系统方案审查后才派发 P1b',
   '  design-review   — P1a/P1b 设计产出审查, 按 gate-checklist-p1a/p1b.md 核对',
-  '                    (args.checkpoints["design-review"].confirmed=true)',
+  '                    (args.checkpoints["design-review"].confirmed=true，有接口契约时同时传入签收的 interfaceContractSha256)',
   '  evidence-review — Phase 4.5 证据门禁报告审查',
   '                    (args.checkpoints["evidence-review"].confirmed=true)',
   '  verifier        — 末端自动终验 (pass=true 才算完成, 无需用户确认)',
@@ -1688,9 +1765,11 @@ const preflightSummary = [
   '  Phase 4.5 判定由确定性脚本 engine/scripts/hdl-evidence-gate.cjs 完成',
   '',
   'DAG 依赖链:',
-  liteMode
-    ? '  P0→P1a→P1b→CP(design)→P3→P4→P45→CP(evidence)→P5→P6b/P7并行→P8→Verifier (跳过 P2,P6)'
-    : '  P0→P1a→P1b→CP(design)→P2/P3并行→P4→P45→CP(evidence)→P5→P6/P6b/P7并行→P8→Verifier',
+  preparationOnly
+    ? '  P0→P1a→P1b→CP(design)→验证准备→rtl-ready，结束本次执行'
+    : liteMode
+    ? '  P0→CP(layout)→P1a→CP(system)→P1b→CP(design)→P3→P4→P45→CP(evidence)→P5→P6b/P7并行→P8→Verifier (跳过 P2,P6)'
+    : '  P0→CP(layout)→P1a→CP(system)→P1b→CP(design)→P2/P3并行→P4→P45→CP(evidence)→P5→P6/P6b/P7并行→P8→Verifier',
   '',
   `Vivado 综合体检 (P6b): 目标器件=${fpgaPart || '(未指定 — 传 args.part 可省去自动查找)'}`,
   '  Vivado 不可用时该节点如实降级为 skipped, 综合级结论一律标注"未验证"',
@@ -1698,6 +1777,38 @@ const preflightSummary = [
 ].join('\n');
 
 log(preflightSummary);
+
+if (args?.goldenBaseline !== undefined) {
+  const baseline = args.goldenBaseline;
+  const names = value => Array.isArray(value) && value.every(v => typeof v === 'string' && v.trim()) && new Set(value).size === value.length;
+  if (!baseline || typeof baseline.entry !== 'string' || !baseline.entry.trim() || !names(baseline.cases)
+      || !baseline.cases.length || !names(baseline.tools ?? []) || !Array.isArray(baseline.limits ?? [])) {
+    throw new Error('goldenBaseline requires entry, named cases and optional tools/limits arrays');
+  }
+  const summary = await agent(`在项目 ${projectRoot} 对现有 Golden 做开工预检，仅运行原模型和必要工具的小例程，保留原模型。
+将本次调用给定的范围逐字保存为 var/workflow/golden-scope.json，然后按此范围运行：${JSON.stringify(baseline)}
+写 var/workflow/golden-preflight.json，包含 entry (项目相对路径)、实跑时入口文件的 entrySha256、原入口的 exitCode 和 entryLog，
+cases 逐项覆盖必测工况，每项含 name、source（正常路径 normal）、oracleInputs、实际 compared 样本数、验收条件 criterion、实测是否达标 passed 和 log。
+检查运行时数据来源。oracleInputs 列出被测链路内部实际使用的外部真值（例如已知帧起点、从发端取得而应由接收机解出的 MCS 或长度）；纯 scoreboard 参考和规格定义的模块输入不计入。独立运行时填空数组。附加的注入或旁路实验单列 diagnostics。
+tools 数组每项含 name、实际小例程的 exitCode 和 log；日志使用项目内相对路径。保留失败和无样本的工况。
+各工况的 metrics 写实测数值，供 limits 中的 {case,metric,min?,max?} 核对，不能用配置值代填。
+返回供用户审核的报告，逐项列出原入口/替代入口、判据、实测值、日志、工具实跑阶段及开工建议。
+对通信接收机列出发/收帧、星座图、EVM 参照、BER 分子与分母。涉及噪声时列出配置 SNR 与测得 SNR、测量位置和功率口径。单列注入诊断；零分母写“无样本”。`,
+    { label: 'golden-preflight-run', phase: 'Pre-flight 检查', agentType: 'algorithm-engineer' });
+  log(String(summary));
+  const evidence = await _evidenceGate('--golden', 'golden-preflight-evidence', 'Pre-flight 检查');
+  const json = _parseStrictJsonObject(evidence.gateJson);
+  const actual = json?.golden;
+  const missing = (expected, seen) => expected.filter(name => !Array.isArray(seen) || !seen.includes(name));
+  const gaps = [...missing(baseline.cases, actual?.passedCases), ...missing(baseline.tools ?? [], actual?.passedTools)];
+  for (const limit of baseline.limits ?? []) {
+    if (!limit || !actual?.checkedLimits?.some(l => l.case === limit.case && l.metric === limit.metric
+        && l.min === limit.min && l.max === limit.max)) gaps.push('unchecked measurement: ' + JSON.stringify(limit));
+  }
+  if (!evidence.ok || json?.gate !== 'hdl-evidence-gate' || json.ok !== true || actual?.entry !== baseline.entry || gaps.length) {
+    throw new Error('Golden preflight blocked: ' + [...(evidence.failures || []), ...gaps].join('; ') + '\n' + String(summary));
+  }
+}
 
 _requireUserCheckpoint(
   'preflight',
@@ -1712,10 +1823,14 @@ if (modules.length === 0) {
 // ── 执行 DAG ──────────────────────────────────────────────────────────────
 
 phase('DAG 执行');
-const dagResult = await _dagExecute(nodes, {
+const dagResult = await _dagExecute(preparationOnly ? preparationNodes : nodes, {
   onProgress: (layer, total, names) => log(`[层 ${layer}/${total}] ${names}`),
   log,
 });
+if (preparationOnly) {
+  log('P3 验证准备已通过，已达到本次授权的结束阶段。');
+  return { completedThrough: 'p3', rtlReady: true, evidence: 'validated-on-disk', modules: moduleOrder };
+}
 
 // ── 输出摘要 ──────────────────────────────────────────────────────────────
 

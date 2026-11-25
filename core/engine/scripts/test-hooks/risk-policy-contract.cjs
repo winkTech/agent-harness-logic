@@ -398,6 +398,17 @@ function assertStickyRiskState(policy) {
       'content-addressed evidence cache must be bounded');
     assert.equal(boundedState.evidenceCache[inserted[0]], undefined,
       'bounded cache must evict the oldest evidence first');
+    // The same session can visit two unrelated workspaces without repository markers.
+    const markerless = fs.mkdtempSync(path.join(os.tmpdir(), 'risk-markerless-'));
+    try {
+      const a = path.join(markerless, 'a'), b = path.join(markerless, 'b');
+      fs.mkdirSync(a);
+      fs.mkdirSync(b);
+      const sessionId = 'two-workspaces';
+      const scoped = state.markRisk({ cwd:a, sessionId, assessment: { effectiveRiskLevel:'R3' } });
+      assert.equal(state.riskForCwd(scoped, a, { sessionId })[0]?.projectRoot, fs.realpathSync.native(a));
+      assert.deepEqual(state.riskForCwd(scoped, b, { sessionId }), []);
+    } finally { fs.rmSync(markerless, { recursive:true, force:true }); }
   } finally {
     if (previousStateFile === undefined) delete process.env.HARNESS_VERIFY_GATE_STATE_FILE;
     else process.env.HARNESS_VERIFY_GATE_STATE_FILE = previousStateFile;

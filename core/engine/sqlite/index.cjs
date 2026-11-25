@@ -31,7 +31,6 @@ const DEFAULT_DB_DIR = WRIGHT_DIR;
 // 为主名，HARNESS_SQLITE_PATH 保留为兼容别名（io/ 翻译层负责宿主变量归一）。
 function defaultDbPath() {
   return process.env.HARNESS_SQLITE_PATH
-    || process.env.HARNESS_SQLITE_PATH
     || path.join(DEFAULT_DB_DIR, 'memory.db');
 }
 
@@ -93,7 +92,7 @@ function openDb(opts = {}) {
   }
 
   const configuredBusyTimeout = Number.parseInt(
-    opts.busyTimeoutMs ?? process.env.HARNESS_SQLITE_BUSY_TIMEOUT_MS ?? process.env.HARNESS_SQLITE_BUSY_TIMEOUT_MS ?? '5000',
+    opts.busyTimeoutMs ?? process.env.HARNESS_SQLITE_BUSY_TIMEOUT_MS ?? '5000',
     10,
   );
   const busyTimeoutMs = Number.isFinite(configuredBusyTimeout)

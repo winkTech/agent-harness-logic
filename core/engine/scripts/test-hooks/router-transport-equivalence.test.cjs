@@ -164,8 +164,8 @@ const POSTFLIGHT_PAIRS = [
     },
   ),
   pair(
-    'PostToolUseFailure Bash —— allow（观察者路径）',
-    'allow',
+    'PostToolUseFailure Bash —— warn（功能测试执行失败）',
+    'warn',
     {
       hook_event_name: 'PostToolUseFailure',
       tool_name: 'Bash',
@@ -260,7 +260,11 @@ test('preflight-router：Read 无 context，Write 新模块有 advisory context'
 test('postflight-router：两个 transport 判定等价', async () => {
   const decisions = [];
   for (const entry of POSTFLIGHT_PAIRS) {
-    decisions.push((await assertRouterEquivalence(postflight, entry)).decision);
+    const result = await assertRouterEquivalence(postflight, entry);
+    if (entry.claude.hook_event_name === 'PostToolUseFailure') {
+      assert.ok(result.diagnosticsSources.includes('verification-gate'), '失败的测试命令须产生验证门禁诊断');
+    }
+    decisions.push(result.decision);
   }
   assert.ok(decisions.includes('warn'),
     'postflight 用例必须含一个非 allow 判定，否则等价断言没有区分力');

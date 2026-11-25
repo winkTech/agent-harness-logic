@@ -1,0 +1,209 @@
+{
+  "schema_version": "1.1",
+  "asset_uid": "sb_align",
+  "name": "sb_align",
+  "version": "1.0.0",
+  "owner": "lihan",
+  "kind": "primitive",
+  "maturity": {
+    "level": "certified",
+    "evidence_ref": "engineering-assets/evidence/sb_align/1.0.0/"
+  },
+  "requirement_ref": "engineering-assets/knowledge/primary/domains/comm/ofdm/algorithm_spec.md",
+  "doc_refs": [
+    "engineering-assets/docs/governance/adr/ADR-001-axis-tready-and-output-registration.md",
+    "engineering-assets/docs/governance/adr/ADR-002-channel-est-estimation-basis.md"
+  ],
+  "protocol_anchor": {
+    "standard": "none",
+    "baseline_relation": "neutral",
+    "scope": "纯时序适配件: 把推流式 (无 ready) 的侧带+样点流, 适配成 AXIS + 独立 frame_start 且 frame_start 领先 1 拍的形式。**不含任何协议语义** —— 不解析帧结构、不做算术、不依赖 802.11 的任何参数, 换协议一样能用。",
+    "anchor_basis": "neutral 的依据是接口本身: 端口只有 valid/data/sideband 与 AXIS, 无任何协议相关参数 (无 n_fft / cp_len / 子载波一类)。其存在动因来自两个 802.11 资产的时序错配, 但错配本身是时序问题不是协议问题 —— 故锚点为 neutral 而非 baseline。"
+  },
+  "fidelity": {
+    "status": "na"
+  },
+  "ports": [
+    {
+      "name": "i_clk",
+      "direction": "input",
+      "width": 1
+    },
+    {
+      "name": "i_rst",
+      "direction": "input",
+      "width": 1
+    },
+    {
+      "name": "i_valid",
+      "direction": "input",
+      "width": 1
+    },
+    {
+      "name": "i_re",
+      "direction": "input",
+      "width": 16
+    },
+    {
+      "name": "i_im",
+      "direction": "input",
+      "width": 16
+    },
+    {
+      "name": "i_sb",
+      "direction": "input",
+      "width": 1
+    },
+    {
+      "name": "o_frame_start",
+      "direction": "output",
+      "width": 1
+    },
+    {
+      "name": "m_axis_tvalid",
+      "direction": "output",
+      "width": 1,
+      "bus": "axi-stream"
+    },
+    {
+      "name": "m_axis_tready",
+      "direction": "input",
+      "width": 1,
+      "bus": "axi-stream"
+    },
+    {
+      "name": "m_axis_tdata",
+      "direction": "output",
+      "width": 32,
+      "bus": "axi-stream"
+    },
+    {
+      "name": "o_overflow",
+      "direction": "output",
+      "width": 1
+    }
+  ],
+  "device": {
+    "part": "xc7k325tffg900-2",
+    "family": "kintex7",
+    "note": "与上下游同域资产一致"
+  },
+  "clock": {
+    "name": "i_clk",
+    "period_ns": 10
+  },
+  "reset": {
+    "name": "i_rst",
+    "polarity": "active_high",
+    "type": "sync",
+    "async_release_synchronized": true
+  },
+  "top": "sb_align",
+  "params": [
+    {
+      "name": "DATA_W",
+      "value": 16,
+      "rationale": "I/Q 样点位宽; m_axis_tdata = {Q, I} 共 32 位"
+    },
+    {
+      "name": "P_DEPTH",
+      "value": 4,
+      "rationale": "只需吸收瞬态积压与每帧一个气泡拍。M1 实测下游零反压、理想无限深 FIFO 峰值占用 1, 故 4 绰绰有余; 上游节奏若变化, 实测所需上界 23, 调到 32 即可"
+    }
+  ],
+  "sources": [
+    {
+      "path": "rtl/sb_align.sv",
+      "role": "rtl",
+      "sha256": "2e1af3ec8bd8def7cc25c26dd103f9d1c2a4d581576722f96f70c8998ec373a2",
+      "note": "小深度 FIFO + 先报后送; 输出全部寄存"
+    },
+    {
+      "path": "constraints/sb_align.xdc",
+      "role": "constraint",
+      "sha256": "102eb2f7c5a8607ef3c2cffd4058a8b49fed143d945b227252564c860464dd8b",
+      "note": "OOC 综合约束 100MHz"
+    },
+    {
+      "path": "tb/tb_sb_align.sv",
+      "role": "tb",
+      "sha256": "56cc65420d9d67680330a9b987147baaeafa0bfa04c9d97e0d1ee5bdaab43866",
+      "note": "单模块: 侧带领先/透传/瞬态反压/溢出可见/复位"
+    },
+    {
+      "path": "tb/integration/tb_ce_aligned.sv",
+      "role": "tb",
+      "sha256": "3ff584cf1fe0e41cb6fedf267eb2269b0631d737409cbec3508a1579e23bb732",
+      "note": "**存在意义的直接判据**: 接真实 channel_est_top, 同一激励同一参考, 372/384 的差异归零 (需 xsim)"
+    },
+    {
+      "path": "tb/tb_sb_align_reset.sv",
+      "role": "tb",
+      "sha256": "017112918df1992dd5c7bbef169b96bc70bacaf9f88146fd108ec7aa29c8f0da",
+      "note": "G-C-04: 跑起来后复位, 7 个受复位寄存器逐项比对 + 存储阵列免复位断言"
+    },
+    {
+      "path": "tb/tb_sb_align_stability.sv",
+      "role": "tb",
+      "sha256": "066b13514083bf72b52e83ef0d37caff820f8187ef5bb5c14dea84a0f59cfff3",
+      "note": "G-C-05: boundary (含吸收能力实测) / stress / backpressure"
+    },
+    {
+      "path": "run_sim.cjs",
+      "role": "harness",
+      "sha256": "54ad2346d34e790f48802c9004bd708c28fc2bffea70563bf2a3eb02b0610ab6",
+      "note": "可复现仿真入口 (G-GATE-02); --install 由实跑结果写 tb-selfcheck.json, 不构造 pass"
+    },
+    {
+      "path": "README.md",
+      "role": "doc",
+      "sha256": "3245386e1fca7f549cb17f93716f425203796511a694bf2395776d3bb80591c1"
+    },
+    {
+      "path": "CHANGELOG.md",
+      "role": "doc",
+      "sha256": "7d585a7ad9e992ff6513b45dfd08e934f63c6f312ef8fb64fb27997095b9fe6c"
+    },
+    {
+      "path": "docs/limitations.md",
+      "role": "doc",
+      "sha256": "479e4d8ab5f2319edbc325a0ec926640b0403913b9953031482a474dc9c46dc3"
+    }
+  ],
+  "constraints": {
+    "target": {
+      "fmax": "100MHz",
+      "fmax_mhz": 100,
+      "lut": 80,
+      "ff": 90,
+      "bram": 1,
+      "dsp": 0
+    }
+  },
+  "alignment": {
+    "compare_mode": "cycle_accurate"
+  },
+  "reproduce": {
+    "sim": "node engineering-assets/cbb/sb_align/run_sim.cjs --install",
+    "synth": "node engineering-assets/tools/pg-synth.cjs cbb/sb_align",
+    "gate": "node engineering-assets/tools/gate-runner.cjs cbb/sb_align --repo-root .",
+    "note": "run_sim.cjs 跑 3 个单模块 TB (iverilog) 并由实跑结果写 tb-selfcheck.json / reset-sim.json / stability/*.json —— 结构原语的 G-B-03 判据就是自检 TB 实跑证据 (决策⑦)。**链路级判据不在其中**: tb/integration/tb_ce_aligned 需 channel_est_top 的 RTL 且必须用 xsim (iverilog 编译不了它), 属跨包集成验证, 复现命令见 README 6。"
+  },
+  "signoff": {
+    "by": "lihan",
+    "at": "2026-08-04",
+    "scope": [
+      "证据已复核 (全部由 run_sim.cjs --install 实跑落盘, 仿真器 Icarus Verilog 12.0): tb-selfcheck.json (结构原语的 G-B-03 判据 = 自检 TB 实跑 PASS, 5 个场景) / reset-sim.json (FIFO 堆满且溢出置起后复位保持 3 拍, 7 个受复位寄存器逐项比对全过; 存储阵列 r_mem 按设计免复位, 已断言复位期间保持不变而非被清零) / stability 四子结果 (boundary 28 拍 / stress 5120 拍 / backpressure 1344 拍 / regression) / timing-summary.rpt + utilization.rpt + envelope-check.json (OOC @xc7k325tffg900-2: WNS +8.100ns @10ns 即约 526MHz, WHS +0.090ns, 0 失败端点; LUT 37/80, FF 42/90, BRAM 0/1, DSP 0/0) / cdc-report.json (单时钟域 i_clk 结构扫描, cdc_tool=na —— 无具名 CDC 工具, 按规范降级且不声称 clean)",
+      "**存在意义的直接判据** (tb/integration/tb_ce_aligned, xsim): 接真实 channel_est_top, 同一套激励、同一个参考, 只把 frame_start 时机换成\"经本件\", H 输出的逐点差异由 **372/384 变为 0/384**, 且未溢出。不是\"看起来能跑\"。",
+      "第二仿真器交叉验证: 3 个单模块判据 TB 在 Vivado xsim 2023.1 上用同一份 TB、同一套判据复跑全过 (3/3) —— 这条是前两包 1.0.0 时的短板, 本件从一开始就还清。",
+      "协议锚点 neutral (显式声明, 非缺省): 端口只有 valid/data/sideband 与 AXIS, 无任何协议相关参数。存在动因来自两个 802.11 资产的时序错配, 但错配本身是时序问题不是协议问题。",
+      "**已接受限制 (集成方必须落实)**: 上游 fft64_sdf 无 ready 不可停顿 + 下游 channel_est_top 有 tready = **持续反压必然溢出, 任何有限深度都挡不住**。这不是缺陷, 是链路的物理事实。本件只能吸收瞬态积压并**让溢出可见** —— o_overflow 粘滞, **集成方必须把它接出去看**。不看它, 丢样点就是静默的, 正是本件所修复的那类陷阱的同一形态。",
+      "已接受限制: 吸收能力 **5 拍** = P_DEPTH(4) 的 FIFO + 1 级输出寄存 —— 该门限由 boundary 子结果**逐拍测出**而非声明。M1 实测下游零反压故绰绰有余; 上游节奏若变化 (CP 间隙消失), 实测所需上界 23, 把 P_DEPTH 调到 32 即可, 不必新起件。",
+      "已接受限制: 每个带 sb 的样点前插一拍气泡 (tvalid=0), 帧首吞吐少一拍。对下游无影响 (channel_est_top 按符号计数不按拍计数), 已由链路级判据实测确认。",
+      "未覆盖: 板级验证。"
+    ]
+  },
+  "waivers": [],
+  "superseded_by": null,
+  "notes": "M1 链路最后一个已知开口。fft64_sdf 的 o_sb 与首个输出同拍, 而 channel_est_top 要求 frame_start 领先 >=1 拍 —— 直连不报错但静默出错 (实测 H 输出点数同为 384 而 372 点值不同)。两边时序各自明文且已签字, 冲突在它们之间, 故新起本件在中间解 (owner 裁定 2026-08-04)。链路级判据实测 372->0 且未溢出。**结构性限制**: 上游不可停顿 + 下游可反压 = 持续反压必然溢出, 任何深度都挡不住; 故 o_overflow 粘滞且集成方必须接出去看 —— 不看它丢样点就是静默的。写 TB 时纠正过一次自己的判据: T3 初版要求\"任意反压不丢数据\", 那是模块结构上给不了的, 改为测瞬态吸收 + 由 T4 兜底溢出可见性。综合取证已做 (OOC @xc7k325tffg900-2): WNS +8.100ns @10ns (约 526MHz), WHS +0.090ns, 0 失败端点; LUT 37 / FF 42 / BRAM 0 / DSP 0 —— 纯时序适配, 资源与预期一致。包络按实测加余量。复位/CDC (G-C-04)、边界压力回归 (G-C-05) 与签字未做。"
+}

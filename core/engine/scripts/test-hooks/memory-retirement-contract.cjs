@@ -155,20 +155,52 @@ function main() {
     const again = maintenance.defaultRetireAttribution({ attributionRetirement: plan }, context);
     assert.equal(again.downgraded, 0, 'second execute must be a no-op');
 
-    // ── dry-run 不得调用退役写接口 ──
+    // ── dry-run 不得调用退役写接口或过期清理 ──
+    const liveSeedDb = openDb({ path: dbPath }).db;
+    const expiredFact = seedFact(liveSeedDb, 'already-expired-fact', { createdAt: NOW - 30 * DAY, ttlUntil: NOW - 1000 });
+    liveSeedDb.prepare("INSERT INTO fact_links (from_id, to_id, relation, created_at) VALUES (?, ?, 'related', ?)").run(expiredFact, mixedFact, NOW);
     let retireCalls = 0;
+    let purgeCalls = 0;
     const dry = maintenance.runMaintenance(
       { ...maintenance.parseArgs([]), home: tmp, dbPath, execute: false, dryRun: true, auto: false, force: true },
       new Date(NOW),
       {
         home: tmp,
+        purgeExpired: () => { purgeCalls += 1; return { deleted: 0 }; },
         retireAttribution: () => { retireCalls += 1; return {}; },
         inspectSqlite: () => ({}),
       },
     );
     assert.equal(retireCalls, 0, 'dry-run must not invoke retirement writes');
+    assert.equal(purgeCalls, 0, 'dry-run must not purge expired facts');
     assert.ok(dry.plan.attributionRetirement, 'dry-run plan must carry retirement plan');
     assert.equal(dry.results, null, 'dry-run must not produce execute results');
+
+    // ── execute 会物理清理已过期事实 ──
+    const execRes = maintenance.runMaintenance(
+      {
+        ...maintenance.parseArgs(['--force', '--execute', '--no-reconcile', '--no-reindex']),
+        home: tmp,
+        dbPath,
+      },
+      new Date(NOW),
+      {
+        home: tmp,
+        retainEvents: () => ({ deleted: 0 }),
+        retireAttribution: () => ({ downgraded: 0, planned: 0 }),
+        writeWeeklyReport: () => ({}),
+        saveState: () => {},
+      },
+    );
+    assert.ok(execRes.results.purgedExpired.deleted >= 1,
+      `execute maintenance must purge expired facts: ${JSON.stringify(execRes.results.purgedExpired)}`);
+    const verifyHandle = openDb({ path: dbPath });
+    try {
+      const afterPurge = verifyHandle.db.prepare('SELECT id FROM facts WHERE id = ?').get(expiredFact);
+      assert.equal(afterPurge, undefined, 'expired fact must be removed after execute maintenance');
+    } finally {
+      verifyHandle.close();
+    }
 
     console.log('memory-retirement-contract: all assertions passed');
   } finally {

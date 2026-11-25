@@ -2466,6 +2466,7 @@ define('PainpointRegression', 'harness-painpoints.cjs 全部通过', () => {
 });
 
 const AUDIT_REMEDIATION_CONTRACTS = [
+  ['knowledge source and signoff retrieval', 'knowledge-answer.test.cjs', 60000],
   ['DAG cancellation', 'dag-cancellation.cjs', 30000],
   ['controlled gate bypass', 'gate-bypass-contract.test.cjs', 30000],
   ['risk-adaptive policy', 'risk-policy-contract.cjs', 30000],
@@ -2522,6 +2523,10 @@ const AUDIT_REMEDIATION_CONTRACTS = [
   ['claude code plugin manifest', 'plugin-manifest-contract.test.cjs', 300000],
   ['harness state root and migration', 'harness-state-contract.test.cjs', 60000],
   ['plugin mode session context', 'plugin-mode-contract.test.cjs', 30000],
+  ['plugin OS read-only ACL sealing', 'plugin-acl.test.cjs', 60000],
+  ['MCP App maintenance console', 'mcp-app-console.test.cjs', 60000],
+  ['M5 telemetry prune and Vivado evidence gate', 'm5-governance-vivado.test.cjs', 60000],
+  ['unified connect CLI and pack profiles', 'connect-and-packs.test.cjs', 60000],
   ['git integrity guard', 'git-integrity-guard-contract.cjs', 120000],
   ['hook latency SLA tiers', 'hook-latency-sla-contract.test.cjs', 30000],
 ];

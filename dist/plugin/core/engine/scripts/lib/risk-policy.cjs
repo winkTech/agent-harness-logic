@@ -24,9 +24,9 @@ function raiseRiskLevel(value, steps = 1) {
   return RISK_LEVELS[Math.min(RISK_LEVELS.length - 1, start + distance)];
 }
 
-function riskPolicyMode(env = process.env) {
-  const mode = String(env?.HARNESS_RISK_POLICY_MODE || 'shadow').trim().toLowerCase();
-  return POLICY_MODES.includes(mode) ? mode : 'shadow';
+function riskPolicyMode(env = process.env, defaultMode = 'shadow') {
+  const mode = String(env?.HARNESS_RISK_POLICY_MODE || '').trim().toLowerCase();
+  return POLICY_MODES.includes(mode) ? mode : defaultMode;
 }
 
 function requiredEvidenceForRisk(value) {

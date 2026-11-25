@@ -182,7 +182,7 @@ function findCachedEvidence(entry, state, riskState, policy, opts = {}) {
 function runDeliveryRisk(payload, io, opts = {}) {
   const policy = require('../lib/risk-policy.cjs');
   const env = opts.env || process.env;
-  const mode = policy.riskPolicyMode(env);
+  const mode = policy.riskPolicyMode(env, 'enforce');
   if (mode === 'off') return { exitCode: 0, decision: 'allow', status: 'off' };
 
   let entries;
@@ -193,8 +193,17 @@ function runDeliveryRisk(payload, io, opts = {}) {
       entries = opts.riskEntries;
     } else {
       riskState = opts.riskState || require('../lib/verification-state.cjs');
-      state = opts.state || riskState.readVerificationState();
-      entries = riskState.riskForPayload(state, payload);
+      state = opts.state || riskState.readVerificationState({ strict: true });
+      // An unscoped host Stop may report outstanding work of the same session
+      // only. It cannot spend one project's evidence on another project's debt.
+      entries = opts.sessionOnlyHandoff
+        ? Object.values(state.risk || {}).filter(entry => entry.sessionId === payload.session_id)
+        : riskState.riskForPayload(state, payload);
+      if (mode === 'enforce' && riskState.pendingForPayload(state, payload).length) {
+        const reason = 'Project edits are pending verification. Run the applicable checks before finishing.';
+        io.stdout(JSON.stringify({ decision: 'block', reason }));
+        return { exitCode: 0, decision: 'block', status: 'pending-verification', stopRouting: true, reason, entries };
+      }
     }
   } catch (error) {
     io.stderr(JSON.stringify({
@@ -203,6 +212,11 @@ function runDeliveryRisk(payload, io, opts = {}) {
       status: 'state-unreadable',
       reason: error.message,
     }));
+    if (mode === 'enforce') {
+      const reason = 'Verification state is unavailable. Check the hook diagnostics before finishing.';
+      io.stdout(JSON.stringify({ decision: 'block', reason }));
+      return { exitCode: 0, decision: 'block', status: 'state-unreadable', stopRouting: true, reason };
+    }
     return { exitCode: 0, decision: 'allow', status: 'state-unreadable' };
   }
   if (!Array.isArray(entries) || entries.length === 0) {
@@ -219,7 +233,7 @@ function runDeliveryRisk(payload, io, opts = {}) {
     || 'proportional verification';
   const unavailable = entries.every(entry => entry.verificationStatus === 'unavailable');
 
-  if (level !== 'R3') {
+  if (level !== 'R3' && !opts.sessionOnlyHandoff) {
     const findCacheEvidence = opts.findCacheEvidence
       || (entry => findCachedEvidence(entry, state, riskState, policy, opts));
     const hits = entries.map(entry => findCacheEvidence(entry));
@@ -327,6 +341,9 @@ function runStopSummary(raw, opts = {}) {
   const components = opts.components || defaultComponents({ ...opts, transport });
   const route = ['loopController', 'deliveryRisk', 'contextPressure', 'progressWatchdog'];
   const componentsRun = [];
+  let deliveryStatus;
+  let humanSignoff = false;
+  let verificationUnavailable = false;
   let exitCode = 0;
   for (const name of route) {
     const component = components[name];
@@ -341,12 +358,18 @@ function runStopSummary(raw, opts = {}) {
       continue;
     }
     const componentResult = component(payload, io);
+    if (name === 'deliveryRisk') {
+      deliveryStatus = componentResult?.status;
+      const active = componentResult?.entries || [];
+      humanSignoff = highestRiskLevel(active) === 'R3';
+      verificationUnavailable = active.length > 0 && active.every(entry => entry.verificationStatus === 'unavailable');
+    }
     componentsRun.push(name);
     exitCode = Math.max(exitCode, normalizeExitCode(componentResult));
     if (componentResult?.stopRouting === true) break;
   }
 
-  return { exitCode, payload, componentsRun };
+  return { exitCode, payload, componentsRun, deliveryStatus, humanSignoff, verificationUnavailable };
 }
 
 function readStdin() {

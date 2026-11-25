@@ -183,13 +183,24 @@ function readJson(filePath, fallback = null) {
   }
 }
 
-function atomicWriteJson(filePath, value) {
+function atomicWriteJson(filePath, value, { retryBusyRename = false } = {}) {
   const dir = path.dirname(filePath);
   if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
   const tmp = `${filePath}.${process.pid}.${Date.now()}.tmp`;
   try {
     fs.writeFileSync(tmp, JSON.stringify(value, null, 2), { encoding: 'utf8', mode: 0o600 });
-    fs.renameSync(tmp, filePath);
+    // A concurrent Windows reader can briefly prevent replacement. Keep the
+    // completed temporary file and retry only the rename under the writer lock.
+    for (let attempt = 0; ; attempt++) {
+      try {
+        fs.renameSync(tmp, filePath);
+        break;
+      } catch (error) {
+        if (!retryBusyRename || process.platform !== 'win32' || attempt >= 8
+            || !['EPERM', 'EACCES', 'EBUSY'].includes(error.code)) throw error;
+        sleepSync(5 * (attempt + 1));
+      }
+    }
   } finally {
     try {
       if (fs.existsSync(tmp)) fs.unlinkSync(tmp);
@@ -249,13 +260,19 @@ function withFileLockSync(filePath, operation, opts = {}) {
     : DEFAULT_STALE_LOCK_MS;
   const startedAt = Date.now();
   const token = lockToken();
+  // Short transactions can retry sooner; sustained contention backs off to
+  // the usual 25 ms interval. The caller's timeout still bounds every sleep.
+  const initialRetryMs = Number.isFinite(opts.initialRetryMs)
+    ? Math.min(25, Math.max(1, Math.ceil(opts.initialRetryMs))) : 25;
+  let retryMs = initialRetryMs;
+  let lastLockStat;
   let fd;
 
   while (fd === undefined) {
     try {
       fd = fs.openSync(lockPath, 'wx', 0o600);
       fs.writeFileSync(fd, JSON.stringify({ token, pid: process.pid, createdAt: new Date().toISOString() }), 'utf8');
-      fs.fsyncSync(fd);
+      if (opts.syncLockToken !== false) fs.fsyncSync(fd);
     } catch (error) {
       const lockExists = (() => {
         try { return fs.existsSync(lockPath); } catch { return false; }
@@ -264,11 +281,18 @@ function withFileLockSync(filePath, operation, opts = {}) {
         || (error.code === 'EPERM' && (process.platform === 'win32' || lockExists));
       if (!contention) throw error;
       try {
-        const ageMs = Date.now() - fs.statSync(lockPath).mtimeMs;
+        const stat = fs.statSync(lockPath);
+        const ageMs = Date.now() - stat.mtimeMs;
         if (ageMs > staleMs) {
           fs.unlinkSync(lockPath);
           continue;
         }
+        // A different lock generation signals progress. Use it only to reset
+        // the polling delay; exclusive open still decides who may enter.
+        if (lastLockStat && (stat.ino !== lastLockStat.ino || stat.mtimeMs !== lastLockStat.mtimeMs)) {
+          retryMs = initialRetryMs;
+        }
+        lastLockStat = stat;
       } catch (statError) {
         if (statError.code === 'ENOENT') continue;
         throw statError;
@@ -278,7 +302,8 @@ function withFileLockSync(filePath, operation, opts = {}) {
         timeout.code = 'STATE_LOCK_TIMEOUT';
         throw timeout;
       }
-      sleepSync(Math.min(25, Math.max(1, timeoutMs - (Date.now() - startedAt))));
+      sleepSync(Math.min(retryMs, Math.max(1, timeoutMs - (Date.now() - startedAt))));
+      retryMs = Math.min(25, retryMs + initialRetryMs);
     }
   }
 
