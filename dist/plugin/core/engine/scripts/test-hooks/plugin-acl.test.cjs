@@ -45,6 +45,12 @@ test('plugin-acl blocks external Node subprocess writes while keeping read/requi
   assert.equal(sealed.sealed, true);
   assert.equal(acl.isSealed(pluginDir), true);
 
+  if (process.platform === 'win32') {
+    const icaclsOut = spawnSync('icacls', [pluginDir], { encoding: 'utf8', windowsHide: true }).stdout || '';
+    assert.doesNotMatch(icaclsOut, /BUILTIN\\Administrators:.*[(,](?:F|M|W|WD|AD)[,)]/i,
+      `sealed plugin dir must not grant write/full control to Administrators: ${icaclsOut}`);
+  }
+
   // Reading & require() must continue working while sealed.
   assert.equal(JSON.parse(fs.readFileSync(hooksFile, 'utf8')).ok, true);
   assert.equal(require(modFile).answer, 42);

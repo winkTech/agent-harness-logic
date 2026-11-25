@@ -7,8 +7,10 @@
  * （node helper.js / python helper.py）在运行期修改 hooks.json / bridge.cjs 等文件。
  *
  * 机制：
- *   - Windows：保留所有者 WRITE_DAC，通过 icacls 对目标目录施加 `(OI)(CI)(W,D,DC)` Deny ACE
- *     并置位只读属性（无需管理员权限）；`unsealWritable` 通过 `/remove:d` 原子解封。
+ *   - Windows：通过 icacls 禁用继承（`/inheritance:r`），仅授予当前主体 `(OI)(CI)(RX,WDAC)`、
+ *     `BUILTIN\Administrators` 只读 `(OI)(CI)(RX)`、`NT AUTHORITY\SYSTEM` `(OI)(CI)(F)`，
+ *     再对子项 `/reset` 继承只读权限（即便是提权管理员会话如 GitHub Actions `runneradmin`
+ *     也无法直接写/删，同时保留所有者 `WDAC` 以便 `unsealWritable` 无提权原子解封）。
  *   - POSIX：目录置 `0o555`、文件置 `0o444`（可执行文件保留 `0o555`）；`unsealWritable`
  *     先自顶向下恢复目录 `0o755`，再恢复文件 `0o644`/`0o755`。
  *
@@ -115,7 +117,8 @@ function isSealed(targetDir) {
     ));
     const userLines = aceLines.filter((line) => user && line.toLowerCase().includes(user));
     if (userLines.length === 0) return false;
-    const hasWrite = userLines.some((line) => /[(,](?:F|M|W|WD|AD)[,)]/i.test(line));
+    const adminLines = aceLines.filter((line) => /builtin\\administrators/i.test(line));
+    const hasWrite = [...userLines, ...adminLines].some((line) => /[(,](?:F|M|W|WD|AD)[,)]/i.test(line));
     const hasRead = userLines.some((line) => /[(,](?:RX|R)[,)]/i.test(line));
     return hasRead && !hasWrite;
   }
@@ -171,14 +174,16 @@ function sealReadOnly(targetDir) {
   if (process.platform === 'win32') {
     const principal = currentWindowsPrincipal();
     const { files } = walkTree(resolved);
-    // 1) Set non-inherited (OI)(CI)(RX,WDAC) on the root directory ONLY (no /T — files reject OI/CI).
+    // 1) Set non-inherited (OI)(CI)(RX,WDAC) for current user and (RX) for Administrators on the root directory ONLY
+    //    (no /T — files reject OI/CI). Keeping Administrators read-only ensures elevated Windows runners (e.g. GitHub
+    //    Actions runneradmin) still receive OS kernel EPERM/EACCES on direct writes, while WDAC lets unsealWritable work.
     // 2) Reset immediate children recursively so all files/subdirs cleanly inherit (I)(RX,WDAC).
     runIcacls([
       resolved,
       '/inheritance:r',
       '/grant:r', `${principal}:(OI)(CI)(RX,WDAC)`,
       '/grant', '*S-1-5-18:(OI)(CI)(F)',
-      '/grant', '*S-1-5-32-544:(OI)(CI)(F)',
+      '/grant', '*S-1-5-32-544:(OI)(CI)(RX)',
       '/Q',
     ]);
     for (const entry of fs.readdirSync(resolved)) {
