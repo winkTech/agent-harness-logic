@@ -10,7 +10,7 @@
         "source": "git-subdir",
         "url": "https://github.com/winkTech/agent-harness-logic.git",
         "path": "dist/plugin",
-        "sha": "4d533f14f5af76258d472037f218c283826789f3"
+        "sha": "efb175e57c2c5bb1de397bccf11cd483ea4dcf52"
       },
       "description": "Runtime-neutral agent harness with safety gates, verification loop, memory and session handoff."
     }
