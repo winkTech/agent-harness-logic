@@ -26,6 +26,15 @@ const os = require('node:os');
 const path = require('node:path');
 const { spawnSync } = require('node:child_process');
 
+function winSystemBin(...segments) {
+  const root = process.env.SystemRoot || process.env.WINDIR || 'C:\\Windows';
+  return path.join(root, ...segments);
+}
+
+const WIN_WHOAMI = winSystemBin('System32', 'whoami.exe');
+const WIN_ICACLS = winSystemBin('System32', 'icacls.exe');
+const WIN_POWERSHELL = winSystemBin('System32', 'WindowsPowerShell', 'v1.0', 'powershell.exe');
+
 function canonicalTarget(targetDir) {
   const resolved = path.resolve(targetDir);
   try {
@@ -65,7 +74,7 @@ function assertSafeTarget(targetDir) {
 }
 
 function currentWindowsIdentity() {
-  const who = spawnSync('whoami', ['/user', '/fo', 'csv', '/nh'], {
+  const who = spawnSync(WIN_WHOAMI, ['/user', '/fo', 'csv', '/nh'], {
     encoding: 'utf8',
     windowsHide: true,
     timeout: 5000,
@@ -102,7 +111,7 @@ function stripIcaclsPathPrefix(line, candidates) {
 }
 
 function runIcacls(args) {
-  const res = spawnSync('icacls', args, {
+  const res = spawnSync(WIN_ICACLS, args, {
     encoding: 'utf8',
     windowsHide: true,
     timeout: 15000,
@@ -141,7 +150,7 @@ function applyWindowsKernelWriteDeny(resolvedDir) {
     "$acl.AddAccessRule((New-Object System.Security.AccessControl.FileSystemAccessRule($adminSid, $rights, $inh, $prop, 'Deny')))",
     '[System.IO.Directory]::SetAccessControl($dir, $acl)',
   ].join('; ');
-  const res = spawnSync('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', psScript], {
+  const res = spawnSync(WIN_POWERSHELL, ['-NoProfile', '-NonInteractive', '-Command', psScript], {
     encoding: 'utf8',
     windowsHide: true,
     timeout: 15000,
@@ -181,7 +190,7 @@ function isSealed(targetDir) {
   const resolved = canonicalTarget(targetDir);
   if (!fs.existsSync(resolved)) return false;
   if (process.platform === 'win32') {
-    const res = spawnSync('icacls', [resolved], {
+    const res = spawnSync(WIN_ICACLS, [resolved], {
       encoding: 'utf8',
       windowsHide: true,
       timeout: 5000,

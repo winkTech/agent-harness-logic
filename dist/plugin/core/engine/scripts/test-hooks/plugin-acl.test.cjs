@@ -11,6 +11,81 @@ const { spawnSync } = require('node:child_process');
 const acl = require('../lib/plugin-acl.cjs');
 const bashGuard = require('../hooks/bash-safety-guard.cjs');
 
+const WIN_ROOT = process.env.SystemRoot || process.env.WINDIR || 'C:\\Windows';
+const WIN_WHOAMI = path.join(WIN_ROOT, 'System32', 'whoami.exe');
+const WIN_ICACLS = path.join(WIN_ROOT, 'System32', 'icacls.exe');
+const WIN_POWERSHELL = path.join(WIN_ROOT, 'System32', 'WindowsPowerShell', 'v1.0', 'powershell.exe');
+
+/**
+ * Elevated Git Bash / MSYS2 (msys-2.0.dll, used by GitHub Actions `windows-latest` with
+ * `shell: bash`) enables SeBackupPrivilege and SeRestorePrivilege on startup to emulate
+ * Unix root. Because Node.js/libuv passes FILE_FLAG_BACKUP_SEMANTICS on fs.open/fs.chmod,
+ * an enabled SeRestorePrivilege makes the Windows kernel skip all NTFS DACL checks
+ * (Windows equivalent of POSIX uid 0 / CAP_DAC_OVERRIDE).
+ *
+ * Rather than skipping write assertions on elevated Git Bash, drop SeRestorePrivilege and
+ * SeBackupPrivilege on the probe wrapper's own token via AdjustTokenPrivileges before
+ * spawning the untrusted Node helper so every single write/chmodWrite/unlink/inject
+ * assertion still executes against the real NTFS DACL.
+ */
+function runWriteProbe(probeScript, hooksFile) {
+  if (process.platform === 'win32') {
+    const privs = spawnSync(WIN_WHOAMI, ['/priv', '/fo', 'csv', '/nh'], {
+      encoding: 'utf8',
+      windowsHide: true,
+      timeout: 5000,
+    });
+    if (privs.status === 0 && /SeRestorePrivilege/i.test(privs.stdout || '')) {
+      const dropAndRun = [
+        "$ErrorActionPreference = 'Stop'",
+        "Add-Type -TypeDefinition @'",
+        'using System;',
+        'using System.Runtime.InteropServices;',
+        'public static class TokenPrivDrop {',
+        '  [StructLayout(LayoutKind.Sequential)] public struct LUID { public uint LowPart; public int HighPart; }',
+        '  [StructLayout(LayoutKind.Sequential)] public struct TOKEN_PRIVILEGES { public uint PrivilegeCount; public LUID Luid; public uint Attributes; }',
+        '  [DllImport("advapi32.dll", SetLastError=true)] static extern bool OpenProcessToken(IntPtr ProcessHandle, uint DesiredAccess, out IntPtr TokenHandle);',
+        '  [DllImport("advapi32.dll", SetLastError=true, CharSet=CharSet.Unicode)] static extern bool LookupPrivilegeValue(string lpSystemName, string lpName, out LUID lpLuid);',
+        '  [DllImport("advapi32.dll", SetLastError=true)] static extern bool AdjustTokenPrivileges(IntPtr TokenHandle, bool DisableAllPrivileges, ref TOKEN_PRIVILEGES NewState, uint BufferLength, IntPtr PreviousState, IntPtr ReturnLength);',
+        '  [DllImport("kernel32.dll", SetLastError=true)] static extern bool CloseHandle(IntPtr hObject);',
+        '  public static void Disable(string[] names) {',
+        '    IntPtr tok;',
+        '    if (!OpenProcessToken(System.Diagnostics.Process.GetCurrentProcess().Handle, 0x0028, out tok)) return;',
+        '    try {',
+        '      foreach (var name in names) {',
+        '        LUID luid;',
+        '        if (!LookupPrivilegeValue(null, name, out luid)) continue;',
+        '        var tp = new TOKEN_PRIVILEGES { PrivilegeCount = 1, Luid = luid, Attributes = 0 };',
+        '        AdjustTokenPrivileges(tok, false, ref tp, 0, IntPtr.Zero, IntPtr.Zero);',
+        '      }',
+        '    } finally { CloseHandle(tok); }',
+        '  }',
+        '}',
+        "'@",
+        "[TokenPrivDrop]::Disable(@('SeRestorePrivilege', 'SeBackupPrivilege'))",
+        "& $env:HARNESS_PROBE_NODE -e 'eval(process.env.HARNESS_PROBE_SCRIPT)' $env:HARNESS_PROBE_HOOKS",
+        'exit $LASTEXITCODE',
+      ].join('\n');
+      return spawnSync(WIN_POWERSHELL, ['-NoProfile', '-NonInteractive', '-Command', dropAndRun], {
+        encoding: 'utf8',
+        windowsHide: true,
+        timeout: 20000,
+        env: {
+          ...process.env,
+          HARNESS_PROBE_NODE: process.execPath,
+          HARNESS_PROBE_SCRIPT: probeScript,
+          HARNESS_PROBE_HOOKS: hooksFile,
+        },
+      });
+    }
+  }
+  return spawnSync(process.execPath, ['-e', probeScript, hooksFile], {
+    encoding: 'utf8',
+    windowsHide: true,
+    timeout: 10000,
+  });
+}
+
 test('plugin-acl refuses dangerous targets (fs root, home, git root, var)', (t) => {
   assert.throws(() => acl.assertSafeTarget(path.parse(os.tmpdir()).root), /filesystem root/);
   assert.throws(() => acl.assertSafeTarget(os.homedir()), /home directory/);
@@ -44,7 +119,7 @@ test('plugin-acl blocks external Node subprocess writes while keeping read/requi
   if (process.platform === 'win32') {
     // Regression guard: simulate elevated Windows Server / GitHub Actions runner where
     // CREATOR OWNER materializes an explicit BUILTIN\Administrators:(OI)(CI)(F) ACE before sealing.
-    const preSeed = spawnSync('icacls', [pluginDir, '/grant', '*S-1-5-32-544:(OI)(CI)(F)', '/Q'], {
+    const preSeed = spawnSync(WIN_ICACLS, [pluginDir, '/grant', '*S-1-5-32-544:(OI)(CI)(F)', '/Q'], {
       encoding: 'utf8',
       windowsHide: true,
     });
@@ -56,7 +131,7 @@ test('plugin-acl blocks external Node subprocess writes while keeping read/requi
   assert.equal(acl.isSealed(pluginDir), true);
 
   if (process.platform === 'win32') {
-    const icaclsOut = spawnSync('icacls', [pluginDir], { encoding: 'utf8', windowsHide: true }).stdout || '';
+    const icaclsOut = spawnSync(WIN_ICACLS, [pluginDir], { encoding: 'utf8', windowsHide: true }).stdout || '';
     const adminAllowLines = icaclsOut
       .split(/\r?\n/)
       .filter((line) => /BUILTIN\\Administrators:/i.test(line) && !/\(DENY\)/i.test(line));
@@ -94,16 +169,12 @@ test('plugin-acl blocks external Node subprocess writes while keeping read/requi
       'console.log(JSON.stringify(results));',
     ].join('\n');
 
-    const res = spawnSync(process.execPath, ['-e', probeScript, hooksFile], {
-      encoding: 'utf8',
-      windowsHide: true,
-      timeout: 10000,
-    });
+    const res = runWriteProbe(probeScript, hooksFile);
     assert.equal(res.status, 0, res.stderr);
     const outcomes = JSON.parse(res.stdout.trim());
     // On non-root POSIX and Windows NTFS, OS kernel denies write/unlink/inject.
     // Note: on POSIX the file owner can still chmod their own file unless directory is immutable,
-    // while Windows NTFS (RX,WDAC) blocks chmod+write too.
+    // while Windows NTFS (RX,WDAC + DENY) blocks chmod+write too.
     const requiredKeys = process.platform === 'win32'
       ? ['write', 'chmodWrite', 'unlink', 'inject']
       : ['write', 'unlink', 'inject'];
@@ -111,9 +182,9 @@ test('plugin-acl blocks external Node subprocess writes while keeping read/requi
       if (!/EPERM|EACCES/.test(String(outcomes[key]))) {
         let diag = '';
         if (process.platform === 'win32') {
-          const dirAcl = spawnSync('icacls', [pluginDir], { encoding: 'utf8', windowsHide: true }).stdout || '';
-          const fileAcl = spawnSync('icacls', [hooksFile], { encoding: 'utf8', windowsHide: true }).stdout || '';
-          const who = spawnSync('whoami', ['/user'], { encoding: 'utf8', windowsHide: true }).stdout || '';
+          const dirAcl = spawnSync(WIN_ICACLS, [pluginDir], { encoding: 'utf8', windowsHide: true }).stdout || '';
+          const fileAcl = spawnSync(WIN_ICACLS, [hooksFile], { encoding: 'utf8', windowsHide: true }).stdout || '';
+          const who = spawnSync(WIN_WHOAMI, ['/user'], { encoding: 'utf8', windowsHide: true }).stdout || '';
           diag = ` | who=${who.trim()} | dirAcl=${dirAcl.trim()} | fileAcl=${fileAcl.trim()}`;
         }
         assert.match(String(outcomes[key]), /EPERM|EACCES/, `expected OS kernel deny for ${key}, got ${outcomes[key]}${diag}`);
