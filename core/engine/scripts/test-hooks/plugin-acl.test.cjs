@@ -41,6 +41,16 @@ test('plugin-acl blocks external Node subprocess writes while keeping read/requi
     fs.rmSync(parent, { recursive: true, force: true });
   });
 
+  if (process.platform === 'win32') {
+    // Regression guard: simulate elevated Windows Server / GitHub Actions runner where
+    // CREATOR OWNER materializes an explicit BUILTIN\Administrators:(OI)(CI)(F) ACE before sealing.
+    const preSeed = spawnSync('icacls', [pluginDir, '/grant', '*S-1-5-32-544:(OI)(CI)(F)', '/Q'], {
+      encoding: 'utf8',
+      windowsHide: true,
+    });
+    assert.equal(preSeed.status, 0, preSeed.stderr || preSeed.stdout);
+  }
+
   const sealed = acl.sealReadOnly(pluginDir);
   assert.equal(sealed.sealed, true);
   assert.equal(acl.isSealed(pluginDir), true);

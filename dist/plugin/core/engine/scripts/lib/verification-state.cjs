@@ -180,7 +180,7 @@ function riskExpiryFrom(entry, opts = {}) {
 }
 
 function normalizeRiskEntry(entry, fallbackRoot = HOME, opts = {}) {
-  const projectRoot = resolvePath(entry?.projectRoot || fallbackRoot);
+  const projectRoot = canonicalPath(entry?.projectRoot || fallbackRoot);
   const sessionId = String(entry?.sessionId || '').trim();
   const minimumRiskLevel = normalizeRiskLevel(entry?.minimumRiskLevel);
   const effectiveRiskLevel = maxRiskLevel(minimumRiskLevel, entry?.effectiveRiskLevel);
@@ -196,7 +196,7 @@ function normalizeRiskEntry(entry, fallbackRoot = HOME, opts = {}) {
     effectiveRiskLevel,
     riskReasons: normalizeStringArray(entry?.riskReasons),
     targets: normalizeStringArray(entry?.targets)
-      .map(target => resolvePath(target, projectRoot))
+      .map(target => canonicalPath(resolvePath(target, projectRoot)))
       .filter(target => isInsidePath(target, projectRoot)),
     requiredEvidence: normalizeStringArray(entry?.requiredEvidence),
     contractHash: String(entry?.contractHash || '').trim() || null,
@@ -211,7 +211,7 @@ function normalizeRiskEntry(entry, fallbackRoot = HOME, opts = {}) {
 }
 
 function normalizeEvidenceEntry(entry, fallbackRoot = HOME, opts = {}) {
-  const projectRoot = resolvePath(entry?.projectRoot || fallbackRoot);
+  const projectRoot = canonicalPath(entry?.projectRoot || fallbackRoot);
   const verifiedAt = entry?.verifiedAt || entry?.recordedAt || opts.now || new Date().toISOString();
   const explicitExpiry = Date.parse(entry?.expiresAt || '');
   const expiresAt = Number.isFinite(explicitExpiry)
@@ -398,8 +398,8 @@ function markRisk(opts = {}) {
   const effectiveRiskLevel = maxRiskLevel(minimumRiskLevel, assessment.effectiveRiskLevel);
   if (effectiveRiskLevel === 'R0') return readVerificationState(opts);
 
-  const cwd = resolvePath(opts.cwd || process.cwd());
-  const filePath = opts.filePath ? resolvePath(opts.filePath, cwd) : '';
+  const cwd = canonicalPath(opts.cwd || process.cwd());
+  const filePath = opts.filePath ? canonicalPath(resolvePath(opts.filePath, cwd)) : '';
   const projectRoot = pendingProjectRoot(cwd, filePath, opts.workspacePaths);
   const sessionId = String(opts.sessionId || '').trim();
   const id = pendingKey(projectRoot, sessionId);
@@ -420,7 +420,7 @@ function markRisk(opts = {}) {
     const targets = new Set(prev.targets || []);
     if (filePath && isInsidePath(filePath, projectRoot)) targets.add(filePath);
     for (const target of assessment.targets || []) {
-      const resolved = resolvePath(target, projectRoot);
+      const resolved = canonicalPath(resolvePath(target, projectRoot));
       if (isInsidePath(resolved, projectRoot)) targets.add(resolved);
     }
     const escalated = RISK_LEVELS.indexOf(nextEffective) > RISK_LEVELS.indexOf(prev.effectiveRiskLevel);
@@ -549,7 +549,7 @@ function recordRiskEvidence(opts = {}) {
   if (!/^[a-f0-9]{64}$/.test(evidenceKey)) {
     return { recorded: false, reason: 'invalid-evidence-key' };
   }
-  const projectRoot = resolvePath(opts.projectRoot || process.cwd());
+  const projectRoot = canonicalPath(opts.projectRoot || process.cwd());
   const now = opts.now || new Date().toISOString();
   const ttlMs = evidenceCacheTtlMs(opts);
   const maxEntries = evidenceCacheMaxEntries(opts);
@@ -581,7 +581,7 @@ function recordRiskEvidence(opts = {}) {
 }
 
 function findReusableRiskEvidence(state, opts = {}) {
-  const projectRoot = resolvePath(opts.projectRoot || process.cwd());
+  const projectRoot = canonicalPath(opts.projectRoot || process.cwd());
   const request = {
     evidenceKey: String(opts.evidenceKey || '').trim().toLowerCase(),
     riskLevel: normalizeRiskLevel(opts.riskLevel),
@@ -595,7 +595,7 @@ function findReusableRiskEvidence(state, opts = {}) {
 }
 
 function verificationRunKey(payload, command) {
-  return JSON.stringify([payloadCwd(payload), sessionIdFromPayload(payload), payload.tool_use_id || '', command]);
+  return JSON.stringify([canonicalPath(payloadCwd(payload)), sessionIdFromPayload(payload), payload.tool_use_id || '', command]);
 }
 
 function startVerification(payload, command) {

@@ -22,17 +22,32 @@ const os = require('node:os');
 const path = require('node:path');
 const { spawnSync } = require('node:child_process');
 
+function canonicalTarget(targetDir) {
+  const resolved = path.resolve(targetDir);
+  try {
+    return fs.realpathSync.native(resolved);
+  } catch {
+    return resolved;
+  }
+}
+
+function sameTargetPath(a, b) {
+  return process.platform === 'win32'
+    ? a.toLowerCase() === b.toLowerCase()
+    : a === b;
+}
+
 function assertSafeTarget(targetDir) {
   if (typeof targetDir !== 'string' || !targetDir.trim()) {
     throw new Error('plugin-acl: target directory is required');
   }
-  const resolved = path.resolve(targetDir);
+  const resolved = canonicalTarget(targetDir);
   const parsed = path.parse(resolved);
-  if (resolved === parsed.root) {
+  if (sameTargetPath(resolved, parsed.root)) {
     throw new Error(`plugin-acl: refusing to modify filesystem root: ${resolved}`);
   }
-  const home = path.resolve(os.homedir());
-  if (resolved === home) {
+  const home = canonicalTarget(os.homedir());
+  if (sameTargetPath(resolved, home)) {
     throw new Error(`plugin-acl: refusing to modify user home directory: ${resolved}`);
   }
   if (fs.existsSync(path.join(resolved, '.git'))) {
@@ -45,20 +60,41 @@ function assertSafeTarget(targetDir) {
   return resolved;
 }
 
-function currentWindowsPrincipal() {
+function currentWindowsIdentity() {
   const who = spawnSync('whoami', ['/user', '/fo', 'csv', '/nh'], {
     encoding: 'utf8',
     windowsHide: true,
     timeout: 5000,
   });
+  let account = '';
+  let sid = '';
   if (who.status === 0 && who.stdout) {
-    const match = /"(S-1-5-[0-9-]+)"/.exec(who.stdout);
-    if (match) return `*${match[1]}`;
+    const csvMatch = /"([^"]+)","(S-1-5-[0-9-]+)"/.exec(who.stdout);
+    if (csvMatch) {
+      account = csvMatch[1];
+      sid = csvMatch[2];
+    } else {
+      const sidMatch = /"(S-1-5-[0-9-]+)"/.exec(who.stdout);
+      if (sidMatch) sid = sidMatch[1];
+    }
   }
-  if (process.env.USERDOMAIN && process.env.USERNAME) {
-    return `${process.env.USERDOMAIN}\\${process.env.USERNAME}`;
+  const fallbackUser = process.env.USERNAME || os.userInfo().username || '';
+  const principal = sid
+    ? `*${sid}`
+    : (account || (process.env.USERDOMAIN && fallbackUser ? `${process.env.USERDOMAIN}\\${fallbackUser}` : fallbackUser));
+  const userName = (account ? account.split('\\').pop() : fallbackUser).toLowerCase();
+  return { principal, account: account.toLowerCase(), userName, sid };
+}
+
+function stripIcaclsPathPrefix(line, candidates) {
+  const lower = line.toLowerCase();
+  for (const prefix of candidates) {
+    if (prefix && lower.startsWith(prefix.toLowerCase())) {
+      const rest = line.slice(prefix.length);
+      if (!rest || /^\s/.test(rest)) return rest.trim();
+    }
   }
-  return process.env.USERNAME || os.userInfo().username;
+  return line.trim();
 }
 
 function runIcacls(args) {
@@ -98,7 +134,8 @@ function walkTree(dir) {
 }
 
 function isSealed(targetDir) {
-  const resolved = path.resolve(targetDir);
+  const rawResolved = path.resolve(targetDir);
+  const resolved = canonicalTarget(targetDir);
   if (!fs.existsSync(resolved)) return false;
   if (process.platform === 'win32') {
     const res = spawnSync('icacls', [resolved], {
@@ -108,17 +145,22 @@ function isSealed(targetDir) {
     });
     if (res.status !== 0) return false;
     const out = res.stdout || '';
-    const user = (process.env.USERNAME || os.userInfo().username || '').toLowerCase();
-    // Strip the leading path from line 1 so username inside path (e.g., C:\Users\<user>) never matches Administrators:(F).
-    const aceLines = out.split(/\r?\n/).map((line, idx) => (
-      idx === 0 && line.toLowerCase().startsWith(resolved.toLowerCase())
-        ? line.slice(resolved.length).trim()
-        : line.trim()
-    ));
-    const userLines = aceLines.filter((line) => user && line.toLowerCase().includes(user));
+    const identity = currentWindowsIdentity();
+    // Strip the leading path from line 1 (matching either canonical or 8.3 short form) so a
+    // username inside the path (e.g., C:\Users\<user>) never matches another principal's ACE.
+    const aceLines = out.split(/\r?\n/)
+      .map((line, idx) => (idx === 0 ? stripIcaclsPathPrefix(line, [resolved, rawResolved]) : line.trim()))
+      .filter((line) => line && !/^Successfully processed /i.test(line));
+    const userLines = aceLines.filter((line) => {
+      const lower = line.toLowerCase();
+      return (identity.account && lower.startsWith(`${identity.account}:`))
+        || (identity.userName && lower.includes(`\\${identity.userName}:`))
+        || (identity.userName && lower.startsWith(`${identity.userName}:`));
+    });
     if (userLines.length === 0) return false;
-    const adminLines = aceLines.filter((line) => /builtin\\administrators/i.test(line));
-    const hasWrite = [...userLines, ...adminLines].some((line) => /[(,](?:F|M|W|WD|AD)[,)]/i.test(line));
+    // Any non-SYSTEM ACE granting write, modify, full control, or delete means not sealed.
+    const nonSystemLines = aceLines.filter((line) => !/^nt authority\\system:/i.test(line));
+    const hasWrite = nonSystemLines.some((line) => /[(,](?:F|M|W|WD|AD|WA|D|DC)[,)]/i.test(line));
     const hasRead = userLines.some((line) => /[(,](?:RX|R)[,)]/i.test(line));
     return hasRead && !hasWrite;
   }
@@ -135,7 +177,7 @@ function unsealWritable(targetDir) {
   if (!fs.existsSync(resolved)) return { target: resolved, unsealed: false, existed: false };
 
   if (process.platform === 'win32') {
-    const principal = currentWindowsPrincipal();
+    const { principal } = currentWindowsIdentity();
     // Restore inheritance on the root dir and reset children to inherit full control.
     runIcacls([resolved, '/inheritance:e', '/grant:r', `${principal}:(OI)(CI)(F)`, '/Q']);
     runIcacls([resolved, '/reset', '/T', '/C', '/Q']);
@@ -172,20 +214,29 @@ function sealReadOnly(targetDir) {
   }
 
   if (process.platform === 'win32') {
-    const principal = currentWindowsPrincipal();
+    const identity = currentWindowsIdentity();
+    const { principal } = identity;
     const { files } = walkTree(resolved);
-    // 1) Set non-inherited (OI)(CI)(RX,WDAC) for current user and (RX) for Administrators on the root directory ONLY
-    //    (no /T — files reject OI/CI). Keeping Administrators read-only ensures elevated Windows runners (e.g. GitHub
-    //    Actions runneradmin) still receive OS kernel EPERM/EACCES on direct writes, while WDAC lets unsealWritable work.
-    // 2) Reset immediate children recursively so all files/subdirs cleanly inherit (I)(RX,WDAC).
-    runIcacls([
+    // 1) Reset explicit ACEs on the root directory first so any pre-existing explicit ACEs
+    //    (e.g. CREATOR OWNER-expanded BUILTIN\Administrators:(F) on elevated Windows runners)
+    //    cannot survive /inheritance:r.
+    // 2) Disable inheritance and REPLACE (/grant:r) ACEs on the root directory ONLY (no /T —
+    //    files reject OI/CI). Keeping Administrators read-only ensures elevated Windows runners
+    //    (e.g. GitHub Actions runneradmin) still receive OS kernel EPERM/EACCES on direct writes,
+    //    while WDAC lets unsealWritable work without elevation.
+    // 3) Reset immediate children recursively so all files/subdirs cleanly inherit (I)(RX,WDAC).
+    runIcacls([resolved, '/reset', '/Q']);
+    const grantArgs = [
       resolved,
       '/inheritance:r',
       '/grant:r', `${principal}:(OI)(CI)(RX,WDAC)`,
-      '/grant', '*S-1-5-18:(OI)(CI)(F)',
-      '/grant', '*S-1-5-32-544:(OI)(CI)(RX)',
-      '/Q',
-    ]);
+      '/grant:r', '*S-1-5-32-544:(OI)(CI)(RX)',
+    ];
+    if (identity.sid !== 'S-1-5-18') {
+      grantArgs.push('/grant:r', '*S-1-5-18:(OI)(CI)(F)');
+    }
+    grantArgs.push('/Q');
+    runIcacls(grantArgs);
     for (const entry of fs.readdirSync(resolved)) {
       runIcacls([path.join(resolved, entry), '/reset', '/T', '/C', '/Q']);
     }

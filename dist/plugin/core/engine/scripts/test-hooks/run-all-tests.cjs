@@ -2365,7 +2365,7 @@ function failingLines(text, maxLines = 40, maxChars = 1500) {
   const lines = String(text || '').replace(/\x1b\[[0-9;]*m/g, '').split(/\r?\n/);
   const picked = [];
   for (let i = 0; i < lines.length && picked.length < maxLines; i += 1) {
-    if (!/FAIL|❌|✖/.test(lines[i])) continue;
+    if (!/FAIL|❌|✖|^\s*not ok\b|AssertionError/.test(lines[i])) continue;
     picked.push(lines[i].trim());
     // 详情是缩进续行; 遇到下一条结果行或非缩进行即停。
     for (let j = i + 1; j < lines.length && j <= i + 8 && picked.length < maxLines; j += 1) {
@@ -2555,7 +2555,7 @@ for (const [name, relative, timeout, extraArgs = []] of AUDIT_REMEDIATION_CONTRA
       pass: passed,
       detail: passed
         ? `exit=0 (${relative})`
-        : `exit=${r.status} signal=${r.signal || 'none'} ${headTail([r.stderr, r.stdout, r.error?.message].filter(Boolean).join('\n'))}`,
+        : `exit=${r.status} signal=${r.signal || 'none'} ${failingLines([r.stderr, r.stdout, r.error?.message].filter(Boolean).join('\n'))}`,
     };
   });
 }
@@ -4863,7 +4863,8 @@ function runSuite() {
           passed++;
         } else {
           console.log(fail('失败'));
-          console.log(`    ${C.dim}${headTail(result.detail)}${C.reset}`);
+          const body = headTail(result.detail).split('\n').join('\n    ');
+          console.log(`    ${C.dim}${body}${C.reset}`);
           failed++;
         }
       } catch (e) {
