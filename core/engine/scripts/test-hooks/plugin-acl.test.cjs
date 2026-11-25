@@ -57,8 +57,15 @@ test('plugin-acl blocks external Node subprocess writes while keeping read/requi
 
   if (process.platform === 'win32') {
     const icaclsOut = spawnSync('icacls', [pluginDir], { encoding: 'utf8', windowsHide: true }).stdout || '';
-    assert.doesNotMatch(icaclsOut, /BUILTIN\\Administrators:.*[(,](?:F|M|W|WD|AD)[,)]/i,
-      `sealed plugin dir must not grant write/full control to Administrators: ${icaclsOut}`);
+    const adminAllowLines = icaclsOut
+      .split(/\r?\n/)
+      .filter((line) => /BUILTIN\\Administrators:/i.test(line) && !/\(DENY\)/i.test(line));
+    for (const line of adminAllowLines) {
+      assert.doesNotMatch(line, /[(,](?:F|M|W|WD|AD)[,)]/i,
+        `sealed plugin dir must not grant write/full control to Administrators: ${icaclsOut}`);
+    }
+    assert.match(icaclsOut, /BUILTIN\\Administrators:.*\(DENY\)/i,
+      `sealed plugin dir must include explicit kernel DENY for Administrators: ${icaclsOut}`);
   }
 
   // Reading & require() must continue working while sealed.
@@ -101,7 +108,16 @@ test('plugin-acl blocks external Node subprocess writes while keeping read/requi
       ? ['write', 'chmodWrite', 'unlink', 'inject']
       : ['write', 'unlink', 'inject'];
     for (const key of requiredKeys) {
-      assert.match(String(outcomes[key]), /EPERM|EACCES/, `expected OS kernel deny for ${key}, got ${outcomes[key]}`);
+      if (!/EPERM|EACCES/.test(String(outcomes[key]))) {
+        let diag = '';
+        if (process.platform === 'win32') {
+          const dirAcl = spawnSync('icacls', [pluginDir], { encoding: 'utf8', windowsHide: true }).stdout || '';
+          const fileAcl = spawnSync('icacls', [hooksFile], { encoding: 'utf8', windowsHide: true }).stdout || '';
+          const who = spawnSync('whoami', ['/user'], { encoding: 'utf8', windowsHide: true }).stdout || '';
+          diag = ` | who=${who.trim()} | dirAcl=${dirAcl.trim()} | fileAcl=${fileAcl.trim()}`;
+        }
+        assert.match(String(outcomes[key]), /EPERM|EACCES/, `expected OS kernel deny for ${key}, got ${outcomes[key]}${diag}`);
+      }
     }
     assert.equal(fs.readFileSync(hooksFile, 'utf8'), '{"ok":true}\n');
   }

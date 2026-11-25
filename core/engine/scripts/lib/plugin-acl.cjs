@@ -7,10 +7,14 @@
  * （node helper.js / python helper.py）在运行期修改 hooks.json / bridge.cjs 等文件。
  *
  * 机制：
- *   - Windows：通过 icacls 禁用继承（`/inheritance:r`），仅授予当前主体 `(OI)(CI)(RX,WDAC)`、
- *     `BUILTIN\Administrators` 只读 `(OI)(CI)(RX)`、`NT AUTHORITY\SYSTEM` `(OI)(CI)(F)`，
- *     再对子项 `/reset` 继承只读权限（即便是提权管理员会话如 GitHub Actions `runneradmin`
- *     也无法直接写/删，同时保留所有者 `WDAC` 以便 `unsealWritable` 无提权原子解封）。
+ *   - Windows：先 `/reset` 清理残留显式 ACE，再通过 icacls 禁用继承（`/inheritance:r`），
+ *     仅授予当前主体 `(OI)(CI)(RX,WDAC)`、`BUILTIN\Administrators` `(OI)(CI)(RX)`、
+ *     `NT AUTHORITY\SYSTEM` `(OI)(CI)(F)`，并通过 .NET `Directory::SetAccessControl` 写入
+ *     不含 `SYNCHRONIZE` 位的内核级显式拒绝 ACE `DENY(WD,AD,WEA,WA,DE,DC)`（避开
+ *     `icacls /deny` 误带 `SYNCHRONIZE` 导致 `readFileSync` 失败的 Windows 缺陷），
+ *     再对子项自顶向下 `/reset` 继承只读权限（即便提权管理员会话如 GitHub Actions
+ *     `runneradmin` 也受内核 `DENY` 强阻断，同时保留 `WDAC` 以便 `unsealWritable`
+ *     无提权原子解封）。
  *   - POSIX：目录置 `0o555`、文件置 `0o444`（可执行文件保留 `0o555`）；`unsealWritable`
  *     先自顶向下恢复目录 `0o755`，再恢复文件 `0o644`/`0o755`。
  *
@@ -110,6 +114,45 @@ function runIcacls(args) {
   return res.stdout || '';
 }
 
+/**
+ * Add an explicit kernel DENY ACE for write/delete rights WITHOUT the SYNCHRONIZE bit.
+ * `icacls /deny` on Windows always sets SYNCHRONIZE (0x00100000), which breaks synchronous
+ * file reads (`fs.readFileSync`). Using .NET `GetAccessControl('Access')` +
+ * `Directory::SetAccessControl` writes the exact 0x00010156 mask without needing elevation
+ * or SeSecurityPrivilege, blocking writes even for elevated Administrators while preserving
+ * read/execute and WDAC (ChangePermissions) so `unsealWritable` works without elevation.
+ */
+function applyWindowsKernelWriteDeny(resolvedDir) {
+  const psScript = [
+    "$ErrorActionPreference = 'Stop'",
+    '$dir = $env:HARNESS_ACL_TARGET',
+    "$acl = (Get-Item -LiteralPath $dir).GetAccessControl('Access')",
+    '$rights = [System.Security.AccessControl.FileSystemRights]::WriteData'
+      + ' -bor [System.Security.AccessControl.FileSystemRights]::AppendData'
+      + ' -bor [System.Security.AccessControl.FileSystemRights]::WriteExtendedAttributes'
+      + ' -bor [System.Security.AccessControl.FileSystemRights]::WriteAttributes'
+      + ' -bor [System.Security.AccessControl.FileSystemRights]::Delete'
+      + ' -bor [System.Security.AccessControl.FileSystemRights]::DeleteSubdirectoriesAndFiles',
+    '$inh = [System.Security.AccessControl.InheritanceFlags]::ContainerInherit -bor [System.Security.AccessControl.InheritanceFlags]::ObjectInherit',
+    '$prop = [System.Security.AccessControl.PropagationFlags]::None',
+    '$userSid = [System.Security.Principal.WindowsIdentity]::GetCurrent().User',
+    '$adminSid = New-Object System.Security.Principal.SecurityIdentifier("S-1-5-32-544")',
+    "$acl.AddAccessRule((New-Object System.Security.AccessControl.FileSystemAccessRule($userSid, $rights, $inh, $prop, 'Deny')))",
+    "$acl.AddAccessRule((New-Object System.Security.AccessControl.FileSystemAccessRule($adminSid, $rights, $inh, $prop, 'Deny')))",
+    '[System.IO.Directory]::SetAccessControl($dir, $acl)',
+  ].join('; ');
+  const res = spawnSync('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', psScript], {
+    encoding: 'utf8',
+    windowsHide: true,
+    timeout: 15000,
+    env: { ...process.env, HARNESS_ACL_TARGET: resolvedDir },
+  });
+  if (res.error) throw res.error;
+  if (res.status !== 0) {
+    throw new Error(`SetAccessControl deny failed (${res.status}): ${(res.stderr || res.stdout || '').trim()}`);
+  }
+}
+
 function walkTree(dir) {
   const dirs = [];
   const files = [];
@@ -158,10 +201,14 @@ function isSealed(targetDir) {
         || (identity.userName && lower.startsWith(`${identity.userName}:`));
     });
     if (userLines.length === 0) return false;
-    // Any non-SYSTEM ACE granting write, modify, full control, or delete means not sealed.
-    const nonSystemLines = aceLines.filter((line) => !/^nt authority\\system:/i.test(line));
-    const hasWrite = nonSystemLines.some((line) => /[(,](?:F|M|W|WD|AD|WA|D|DC)[,)]/i.test(line));
-    const hasRead = userLines.some((line) => /[(,](?:RX|R)[,)]/i.test(line));
+    // Any non-SYSTEM ALLOW ACE granting write, modify, full control, or delete means not sealed.
+    // Ignore explicit (DENY) ACEs when checking for write grants.
+    const nonSystemAllowLines = aceLines.filter(
+      (line) => !/^nt authority\\system:/i.test(line) && !/\(DENY\)/i.test(line)
+    );
+    const userAllowLines = userLines.filter((line) => !/\(DENY\)/i.test(line));
+    const hasWrite = nonSystemAllowLines.some((line) => /[(,](?:F|M|W|WD|AD|WA|D|DC)[,)]/i.test(line));
+    const hasRead = userAllowLines.some((line) => /[(,](?:RX|R)[,)]/i.test(line));
     return hasRead && !hasWrite;
   }
   try {
@@ -178,9 +225,10 @@ function unsealWritable(targetDir) {
 
   if (process.platform === 'win32') {
     const { principal } = currentWindowsIdentity();
-    // Restore inheritance on the root dir and reset children to inherit full control.
+    // Remove explicit DENY ACEs, restore inheritance on root, and reset children to inherit full control.
+    runIcacls([resolved, '/remove:d', principal, '/remove:d', '*S-1-5-32-544', '/Q']);
     runIcacls([resolved, '/inheritance:e', '/grant:r', `${principal}:(OI)(CI)(F)`, '/Q']);
-    runIcacls([resolved, '/reset', '/T', '/C', '/Q']);
+    runIcacls([resolved, '/reset', '/T', '/Q']);
     const { files } = walkTree(resolved);
     for (const file of files) {
       try { fs.chmodSync(file, 0o666); } catch { /* ignore */ }
@@ -217,14 +265,18 @@ function sealReadOnly(targetDir) {
     const identity = currentWindowsIdentity();
     const { principal } = identity;
     const { files } = walkTree(resolved);
+    // 0) Set DOS read-only bit while still writable for defense-in-depth (cleared by unsealWritable).
+    for (const file of files) {
+      try { fs.chmodSync(file, 0o444); } catch { /* ignore */ }
+    }
     // 1) Reset explicit ACEs on the root directory first so any pre-existing explicit ACEs
     //    (e.g. CREATOR OWNER-expanded BUILTIN\Administrators:(F) on elevated Windows runners)
     //    cannot survive /inheritance:r.
     // 2) Disable inheritance and REPLACE (/grant:r) ACEs on the root directory ONLY (no /T —
-    //    files reject OI/CI). Keeping Administrators read-only ensures elevated Windows runners
-    //    (e.g. GitHub Actions runneradmin) still receive OS kernel EPERM/EACCES on direct writes,
-    //    while WDAC lets unsealWritable work without elevation.
-    // 3) Reset immediate children recursively so all files/subdirs cleanly inherit (I)(RX,WDAC).
+    //    files reject OI/CI), then add explicit kernel DENY ACEs (0x00010156, no SYNCHRONIZE)
+    //    for current user and BUILTIN\Administrators so even elevated runners receive OS EPERM.
+    // 3) Reset immediate children (files without /T, subdirectories with /T) so every item
+    //    cleanly inherits the sealed DACL without swallowing errors via /C.
     runIcacls([resolved, '/reset', '/Q']);
     const grantArgs = [
       resolved,
@@ -237,8 +289,15 @@ function sealReadOnly(targetDir) {
     }
     grantArgs.push('/Q');
     runIcacls(grantArgs);
-    for (const entry of fs.readdirSync(resolved)) {
-      runIcacls([path.join(resolved, entry), '/reset', '/T', '/C', '/Q']);
+    applyWindowsKernelWriteDeny(resolved);
+    for (const entry of fs.readdirSync(resolved, { withFileTypes: true })) {
+      if (entry.isSymbolicLink()) continue;
+      const childPath = path.join(resolved, entry.name);
+      if (entry.isDirectory()) {
+        runIcacls([childPath, '/reset', '/T', '/Q']);
+      } else {
+        runIcacls([childPath, '/reset', '/Q']);
+      }
     }
     return { target: resolved, sealed: true, platform: 'win32', filesSealed: files.length };
   }
