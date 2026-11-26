@@ -256,3 +256,18 @@ test('route stage accepts fresh project route_status.rpt, rejects stale reports 
   assert.equal(placeErr.ok,false);
   assert.equal(placeErr.errors,2);
 });
+
+test('NODE_V8_COVERAGE instrumentation does not mutate input digest env across tool preflight',async t => {
+  const f = fixture(t);
+  const covDir = fs.mkdtempSync(path.join(os.tmpdir(),'hdl-v8cov-'));
+  const savedCov = process.env.NODE_V8_COVERAGE;
+  t.after(() => {
+    if (savedCov === undefined) delete process.env.NODE_V8_COVERAGE;
+    else process.env.NODE_V8_COVERAGE = savedCov;
+    fs.rmSync(covDir,{recursive:true,force:true,maxRetries:5,retryDelay:100});
+  });
+  process.env.NODE_V8_COVERAGE = covDir;
+  f.file('case.json',JSON.stringify({report:pass}));
+  const res = await f.action();
+  assert.equal(res.verified,true,res.reason);
+});

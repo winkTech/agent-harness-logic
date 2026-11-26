@@ -92,7 +92,7 @@ function submitJob({stateDir,cwd,action,executable,args = [],inputDigest,attempt
     }
     write(path.join(dir,'request.json'),request);
     const worker = spawn(process.execPath,[__filename,'--supervise',stateDir,jobId],{
-      stdio:'ignore',detached:true,windowsHide:true,env:childEnv,shell:false});
+      stdio:'ignore',detached:true,windowsHide:true,env:{...childEnv},shell:false});
     worker.once('error',failedLaunch);
     worker.unref();
   } catch (error) { failedLaunch(error); }

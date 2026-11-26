@@ -140,7 +140,7 @@ function createHdlWorkflowBindings({projectRoot,stateDir,runId,signoffId = runId
       const file = fs.realpathSync.native(tool.executable);
       const key = JSON.stringify([file,fs.statSync(file).mtimeMs,tool.versionArgs,tool.expectedVersion,hash(JSON.stringify(env))]);
       if (!observed.has(key)) {
-        const p = spawnSync(file,tool.versionArgs,{cwd:root,env,windowsHide:true,shell:false,encoding:'utf8',timeout:15000,maxBuffer:1024*1024});
+        const p = spawnSync(file,tool.versionArgs,{cwd:root,env:{...env},windowsHide:true,shell:false,encoding:'utf8',timeout:15000,maxBuffer:1024*1024});
         const line = (p.stdout+'\n'+p.stderr).split(/\r?\n/).find(s => s.includes(tool.expectedVersion));
         if (p.status !== 0 || !line) throw new Error('Tool preflight failed: '+file+' expected '+tool.expectedVersion);
         observed.set(key,{file,version:line.trim().slice(0,220)});
