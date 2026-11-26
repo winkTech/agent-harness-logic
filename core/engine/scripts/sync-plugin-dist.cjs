@@ -107,7 +107,7 @@ function buildDist(output, opts = {}) {
     if (!fpgaEnabled && relPosix.startsWith('packs/fpga/')) continue;
     copyFile(file, path.join(output, path.relative(HARNESS_ROOT, file)));
     if (fpgaEnabled && path.basename(file) === 'hdl-coding-dag-workflow.js') {
-      for (const parser of ['fpga-util-parser.cjs', 'fpga-timing-parser.cjs']) {
+      for (const parser of ['fpga-util-parser.cjs', 'fpga-timing-parser.cjs', 'hdl-redline-scanner.cjs']) {
         const relative = path.join('packs', 'fpga', 'engine', parser);
         copyFile(path.join(HARNESS_ROOT, relative), path.join(output, relative));
       }

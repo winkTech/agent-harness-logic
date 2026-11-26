@@ -53,6 +53,8 @@ echo "=DIFF_STAT=" && git diff --stat "$(git rev-parse origin/main 2>/dev/null |
 Use Edit tool to update specific YAML fields. Keep the YAML structure intact — do not convert to markdown.
 
 **3b Session Log (Write)** — `~/.claude/var/work/{date}-{slug}.md`. Template at `var/work/TEMPLATE.md`. Reference-don't-duplicate + redact.
+Also sync the cross-host envelope when switching hosts or pausing an HDL workflow (`runId`/`signoffId`):
+`node ~/.claude/core/engine/scripts/handoff-protocol.cjs write --project "$(pwd)" --host "${HARNESS_HOST:-manual}" --summary "{last_session_summary}" --next "{step1};{step2}"`
 
 ### Step 3.4 Claim-Evidence Gate (pure reasoning, no test re-run, no script)
 

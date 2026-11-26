@@ -144,13 +144,29 @@ function stageCandidate(input, opts = {}) {
   return candidate;
 }
 
-function candidateCompleteness(candidate) {
+function suggestAtomicTriggers(triggerConditions = []) {
+  const atoms = new Set();
+  for (const raw of triggerConditions) {
+    const s = singleLine(raw);
+    if (!s) continue;
+    if (s.length <= 20 && !/[，。；：]/.test(s)) atoms.add(s);
+    if (/\bnode\s+-e\b/i.test(s)) atoms.add('node -e');
+    for (const token of s.match(/[A-Za-z0-9_]+(?:[-./][A-Za-z0-9_]+)+/g) || []) {
+      if (token.length >= 5) atoms.add(token);
+    }
+  }
+  return [...atoms];
+}
+
+function candidateCompleteness(candidate, opts = {}) {
   const missing = [];
   for (const field of ['title', 'rootCause', 'verifiedFix', 'prevention']) {
     if (!text(candidate[field])) missing.push(field);
   }
   if (!Array.isArray(candidate.triggerConditions) || candidate.triggerConditions.length === 0) {
     missing.push('triggerConditions');
+  } else if (opts.requireAtomicTrigger && suggestAtomicTriggers(candidate.triggerConditions).length === 0) {
+    missing.push('triggerConditions.atomicToken');
   }
   if (candidate.enforcement?.mode === 'block') {
     if (!Array.isArray(candidate.enforcement.tools) || candidate.enforcement.tools.length === 0) missing.push('enforcement.tools');
@@ -504,6 +520,7 @@ module.exports = {
   approveCandidate,
   promoteCandidate,
   candidateCompleteness,
+  suggestAtomicTriggers,
   validateBehavioralEvidence,
   renderRule,
   promotedRulePath,

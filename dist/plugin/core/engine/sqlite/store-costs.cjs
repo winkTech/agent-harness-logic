@@ -102,6 +102,47 @@ function parseTranscriptUsage(transcriptPath, opts = {}) {
         cacheReadTokens: Number(obj.cache_read_tokens || obj.cache_read_input_tokens || 0),
         cacheWriteTokens: Number(obj.cache_write_tokens || obj.cache_creation_input_tokens || 0),
       });
+      continue;
+    }
+    // Codex CLI rollout/session JSONL: cumulative token_count events carry total_token_usage.
+    const tokenPayload = obj?.type === 'token_count' ? obj : (obj?.type === 'event_msg' && obj?.payload?.type === 'token_count' ? obj.payload : null);
+    const totalUsage = tokenPayload?.info?.total_token_usage || tokenPayload?.total_token_usage;
+    if (totalUsage && typeof totalUsage === 'object') {
+      const model = String(tokenPayload?.model || obj?.model || opts.defaultModel || 'codex-model');
+      const totalIn = Number(totalUsage.input_tokens || 0);
+      const cachedIn = Number(totalUsage.cached_input_tokens || totalUsage.cache_read_input_tokens || 0);
+      byMessage.set(`codex-cumulative-${model}`, {
+        model,
+        inputTokens: Math.max(0, totalIn - cachedIn),
+        outputTokens: Number(totalUsage.output_tokens || 0),
+        cacheReadTokens: cachedIn,
+        cacheWriteTokens: Number(totalUsage.cache_creation_input_tokens || 0),
+      });
+      continue;
+    }
+    // OpenAI Responses / Grok Chat-Completions JSONL rows (response.completed or top-level usage).
+    const respObj = obj?.response && typeof obj.response === 'object' ? obj.response : obj;
+    const oaiUsage = respObj?.usage;
+    if (oaiUsage && typeof oaiUsage === 'object'
+        && (oaiUsage.input_tokens !== undefined || oaiUsage.prompt_tokens !== undefined)) {
+      const model = String(respObj.model || obj?.model || opts.defaultModel || 'openai-model');
+      const rawIn = Number(oaiUsage.input_tokens ?? oaiUsage.prompt_tokens ?? 0);
+      const cached = Number(
+        oaiUsage.input_tokens_details?.cached_tokens
+          ?? oaiUsage.prompt_tokens_details?.cached_tokens
+          ?? oaiUsage.cache_read_input_tokens
+          ?? 0,
+      );
+      const key = respObj.id ? `resp-${respObj.id}` : `anon-${anonymous += 1}`;
+      byMessage.set(key, {
+        model,
+        inputTokens: oaiUsage.prompt_tokens !== undefined || oaiUsage.input_tokens_details !== undefined
+          ? Math.max(0, rawIn - cached)
+          : rawIn,
+        outputTokens: Number(oaiUsage.output_tokens ?? oaiUsage.completion_tokens ?? 0),
+        cacheReadTokens: cached,
+        cacheWriteTokens: Number(oaiUsage.cache_creation_input_tokens || 0),
+      });
     }
   }
   const byModel = new Map();

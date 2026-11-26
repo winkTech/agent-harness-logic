@@ -62,6 +62,7 @@
 const { join: pathJoin } = { join: (...p) => p.join('/').replace(/\/+/g, '/') };
 
 function _parseStrictJsonObject(raw) {
+  if (raw && typeof raw === 'object') return Array.isArray(raw) ? null : raw;
   let text = String(raw || '').trim();
   const fenced = text.match(/^```(?:json)?\s*([\s\S]*?)\s*```$/i);
   if (fenced) text = fenced[1].trim();
@@ -93,16 +94,30 @@ function _requireUserCheckpoint(name, detail) {
   throw new Error(
     `[WorkflowCheckpoint:${name}] user confirmation required before continuing. ${detail || ''}\n` +
     `确认方式: 用户审查后, 以 args.checkpoints['${name}'].confirmed=true + resumeFromRunId 重跑 ` +
-    `(已完成阶段自动走缓存); 无人值守场景用 args.confirmAllCheckpoints=true。`
+    `(宿主仅复用经回执校验的步骤); 无人值守场景用 args.confirmAllCheckpoints=true。`
   );
 }
 
-// ── 证据门禁 (确定性脚本 + 证据 agent) ──────────────────────────────────────
-// 判定逻辑全部在 engine/scripts/hdl-evidence-gate.cjs 里 (纯 Node, 读磁盘,
-// 输出 JSON + RESULT: PASS/FAIL)。证据 agent 只负责执行命令并把输出按 schema
-// 原样带回 —— 它不做任何判断。残余风险 (agent 理论上可伪造 schema 匹配的返回)
-// 已在需求门禁 D6 记录; agent 的 bash 调用会进透明度账本, 且 Phase 4.5 与
-// Phase 4 是相互独立的上下文, 末端 verifier 再做交叉核对。
+// Capabilities come from the workflow host, never from project arguments.
+function hasAction(kind) {
+  return typeof workflowAction === 'function' &&
+    (typeof workflowAction.supports !== 'function' || workflowAction.supports(kind) === true);
+}
+
+function hasExplicitAction(kind) {
+  return typeof workflowAction === 'function' &&
+    typeof workflowAction.supports === 'function' && workflowAction.supports(kind) === true;
+}
+
+async function modelStep(instructions, options, {kind = 'handoff', required = {}, evidence = []} = {}) {
+  // The host may change recipients or compact history between any two dispatches.
+  const packet = {kind,scope:projectRoot,required:{instructions,...required},evidence};
+  const prompt = typeof workflowContext === 'function' ? workflowContext(packet,options).prompt :
+    [instructions, ...Object.entries(required).map(([key,value]) => key + ': ' + JSON.stringify(value)),
+      ...evidence.map(item => [item.ref,item.summary].filter(Boolean).join(' — '))].join('\n');
+  if (typeof prompt !== 'string' || !prompt.trim()) throw new Error('Workflow context did not contain an actionable prompt');
+  return agent(prompt,options);
+}
 
 const EVIDENCE_GATE_SCRIPT = args?.evidenceGateScript || 'core/engine/scripts/hdl-evidence-gate.cjs';
 
@@ -117,9 +132,10 @@ const EVIDENCE_SCHEMA = {
   required: ['executed', 'ok', 'failures'],
 };
 
-async function _evidenceGate(flags, label, phaseName) {
+async function _evidenceGate(argv, label, phaseName) {
+  const flags = argv.map((value,i) => argv[i-1] === '--modules' ? "'" + value + "'" : value).join(' ');
   const cmd = `node "${EVIDENCE_GATE_SCRIPT}" --project-root "${projectRoot}" ${flags}`;
-  const res = await agent(
+  const res = hasAction('evidence') ? await workflowAction({kind:'evidence',projectRoot,label,argv}) : await agent(
     `你是**证据搬运者**。你的唯一任务是执行下面的确定性证据门禁命令, 并把它的输出原样带回。
 
 命令:
@@ -182,7 +198,7 @@ async function _checkModuleOrder(label, phaseName, reindex) {
   const cmd = `${syncCmd}node ${MODULE_ORDER_SCRIPT} --project "${projectRoot}" `
     + `--modules ${moduleOrder.join(',')} --check`;
 
-  const res = await agent(
+  const res = hasAction('module-order') ? await workflowAction({kind:'module-order',projectRoot,label,modules:[...moduleOrder],reindex}) : await agent(
     `你是**命令搬运者**。执行下面的命令, 把输出原样带回, 不做任何判断。
 
 命令:
@@ -357,8 +373,8 @@ if (typeof resourceLimits !== 'object' || Array.isArray(resourceLimits) ||
     Object.entries(resourceLimits).some(([name, limit]) => !['DSP', 'LUT', 'BRAM'].includes(name) || !Number.isFinite(limit) || limit < 0)) {
   throw new Error('resourceLimits must contain nonnegative numeric DSP, LUT or BRAM limits');
 }
-const limitFlags = Object.entries(resourceLimits).map(([name, limit]) => `--hard-limit ${name}=${limit} `).join('');
-if (liteMode && limitFlags) throw new Error('P2 hard resource limits require full mode; Lite skips P2');
+const limitFlags = Object.entries(resourceLimits).flatMap(([name, limit]) => ['--hard-limit',name+'='+limit]);
+if (liteMode && limitFlags.length) throw new Error('P2 hard resource limits require full mode; Lite skips P2');
 function checkedHardLimits(report) {
   return Object.entries(resourceLimits).every(([name, limit]) => report?.hardLimits?.[name] === limit);
 }
@@ -415,45 +431,18 @@ nodes.p0_topology = {
 nodes.p0_infra = {
   deps: [],
   run: async () => {
-    const result = await agent(`执行 HDL 工作流 Phase 0: 基础设施 + 建目录
-
-[MUST] 按跨项目标准建目录 (engineering-assets/knowledge/primary/cross-project-experience.md):
-<project_root>/
-├── 01_src/00_hdl/      # RTL 源码 (每个模块独立子目录)
-├── 01_src/01_ip/        # IP 核
-├── 02_sim/              # 仿真 (含 tv/ 和 check_results/)
-│   ├── tv/              # 测试向量
-│   └── check_results/   # JSON 证据文件
-├── 03_xdc/              # 约束 (可空)
-├── 04_prj/              # 工程文件 (可空)
-├── 05_bin/              # 比特流 (可空)
-├── 06_doc/              # 设计文档
-├── 07_mat/              # MATLAB golden model
-├── 08_py/               # Python 脚本
-└── README.md
-
-2. Makefile: 必须包含 lint / compile / sim / clean 目标
-   [MUST] make clean 删除: work/ transcript *.wlf vsim.wlf __pycache__/ *.vcd
-
-3. .gitignore: 必须排除所有 transient 文件
-   work/ transcript *.wlf vsim.wlf __pycache__/ *.pyc *.vcd *.vcd.lxt *.ini
-
-4. 用临时正常/错误 HDL 探针验证 lint 和 compile 的成功、失败路径，探针不写入项目 RTL。
-   缺少 RTL 根目录必须报错。空工程单列“无设计源文件”，保留工具自检结果。
-5. 使用 Git 的项目在隔离的干净检出中，从受版本管理的目录契约恢复布局，逐项核对所需目录。
-   已冻结的 Golden 逐文件复核字节摘要，含启用 autocrlf 的检出；检查不能改变原工程。
-
-模块: ${modules.join(', ') || '项目默认'}
-输出检查清单:
-- 目录结构符合跨项目标准
-- var/project-init/directory-contract.json 存在且记录 canonical HDL layout
-- Makefile 存在且 lint/compile/sim/clean 目标完整
-- .gitignore 排除 transient
-- 目录可恢复；工具探针的正反例和项目实际源码状态均有记录
-
-━━━ 检查点 ━━━
-返回目录清单、实际运行的工具和结果。调度器在派发 P1a 前等待用户确认目录。
-━━━━━━━━━━━`, { label: 'p0-infra' });
+    if (hasExplicitAction('infra')) {
+      const receipt = await workflowAction({kind:'infra',projectRoot,label:'p0-infra',modules});
+      if (!receipt || receipt.executed !== true || receipt.ok !== true) {
+        throw new Error('P0 deterministic infra failed: ' + (receipt?.reason || 'missing contract receipt'));
+      }
+      return receipt.summary || 'canonical HDL layout verified';
+    }
+    const result = await modelStep(`Phase 0 基础设施 (${modules.join(', ') || '项目默认'}):
+1. 建标准目录: 01_src/{00_hdl,01_ip} 02_sim/{tv,check_results} 03_xdc 04_prj 05_bin 06_doc 07_mat 08_py README.md，写 var/project-init/directory-contract.json。
+2. Makefile 含 lint/compile/sim/clean (clean 删 work/ transcript *.wlf vsim.wlf *.wdb xsim.dir/ __pycache__/ *.vcd)；.gitignore 排除上述瞬态物。
+3. 临时正/反 HDL 探针验 lint/compile (不写项目 RTL；缺 RTL 根报错；空工程记“无设计源文件”)。Git 工程在隔离检出核对目录恢复与冻结 Golden 摘要。
+返回目录清单、工具探针结果与源码状态。`, { label: 'p0-infra', modelTier: 'fast' });
     return result;
   },
 };
@@ -465,65 +454,15 @@ nodes.p1a_sys_design = {
   deps: ['p0_infra', 'p0_topology'],
   run: async () => {
     _requireUserCheckpoint('layout-review', 'Review the P0 directory manifest and build entry points before system design.');
-    const result = await agent(`执行 HDL 工作流 Phase 1a: 系统级方案设计
-
-前提: 基础设施已就绪, 项目目录已建。
-
-【核心方法论 — 系统级思维】
-不要在写代码前就直接拆模块。先理解系统, 再推导算法, 再对比选型, 最后才拆模块。
-每一步的产出都写入 06_doc/ 目录。
-
-=== A1 — 系统上下文分析 ===
-回答并写入 06_doc/system_context.md:
-- 这个算法在全局链路中的位置？前级是什么？输出给谁？
-- 输入信号特性: 信噪比范围、带宽、符号率、最大/最小幅度
-- 系统约束: Fclk、最大延迟(cycles)、最低吞吐(samples/s)、面积预算
-- 输出要求: EVM(dB)、BER、锁定时间
-
-=== A2 — 数学原理推导 ===
-写入 06_doc/algorithm_derivation.md:
-从第一性原理导出算法，不靠记忆。完整推导链。
-关键的近似/简化及其误差分析。
-
-=== A3 — 多方案对比选型 ===
-写入 06_doc/tradeoff_analysis.md:
-至少 2-3 候选，从性能/复杂度/存储/收敛速度/数值稳定性五维对比，表格呈现。
-
-=== A4 — 信号链分析 ===
-写入 06_doc/signal_chain_analysis.md:
-每级处理后的信号形态、幅度范围、SNR变化、需要的动态余量。标注瓶颈级。
-
-=== A5 — 定界分析 ===
-写入 06_doc/performance_bounds.md:
-理论性能界(CRLB/Shannon限等) vs 预期性能的差距。
-
-=== A6 — 定点策略 ===
-写入 06_doc/fixed_point_strategy.md:
-每级的预期位宽范围、溢出/截断策略、Q格式草案。
-
-=== 🔴 复位约定 (红线 — 全项目统一) ===
-[MUST] 所有模块的复位信号必须为: 同步高有效, 信号名 i_rst
-[MUST] 禁止使用异步复位或低有效复位 (rst_n / reset_n)
-[MUST] 所有时序逻辑必须用 always_ff @(posedge clk) 触发, 在块内用 if(i_rst) 做复位
-
-每级的预期位宽范围、溢出/截断策略、Q格式草案。
-
-模块: ${modules.join(', ') || '项目默认'}
-
-━━━ 检查点 (P1a 门禁) ━━━
-产出 06_doc/ 下 6 份文档后暂停。
-
-调度层将使用 engineering-assets/knowledge/primary/architecture-patterns/gate-checklist-p1a.md 检查:
-  [MUST] A1 系统上下文: 链路位置+信号特性+系统约束+性能指标
-  [MUST] A2 数学推导: 完整链+每步公式+近似误差
-  [MUST] A3 多方案对比: ≥2 候选+4 维对比表+否选理由
-  [MUST] A4 信号链: 每级形态+幅度范围+位宽+瓶颈标注
-  [MUST] A5 定界: 理论界+差值 dB+瓶颈识别
-  [MUST] A6 定点策略: 每级位宽+Q 格式+溢出/截断策略
-  [🔴 红线] 复位约定: 全部模块必须使用同步高有效 i_rst (禁止 rst_n/reset_n)
-
-用户审查系统方案 + 门禁通过后再进 P1b。
-━━━━━━━━━━━`, { agentType: 'algorithm-engineer', label: 'p1a-system-design', phase: 'Phase 1a 系统方案设计' });
+    const result = await modelStep(`Phase 1a 系统方案设计 (${modules.join(', ') || '项目默认'}) — 产出 06_doc/ 六份文档并满足 gate-checklist-p1a.md:
+- A1 system_context.md: 链路位置、前后级、输入特性(SNR/带宽/符号率/幅度)、约束(Fclk/延迟/吞吐/面积)、指标(EVM/BER/锁定时间)
+- A2 algorithm_derivation.md: 第一性原理完整推导与近似误差分析
+- A3 tradeoff_analysis.md: ≥2 候选方案在性能/复杂度/存储/收敛/数值稳定性五维表格对比及否选理由
+- A4 signal_chain_analysis.md: 逐级信号形态、幅度、SNR、动态余量与瓶颈标注
+- A5 performance_bounds.md: 理论界(CRLB/Shannon等)与预期差值 dB
+- A6 fixed_point_strategy.md: 逐级位宽、Q 格式草案、溢出/截断策略
+[红线] 全项目统一同步高有效复位 i_rst (always_ff @(posedge clk) if (i_rst))，禁 rst_n/异步复位。`,
+      { agentType: 'algorithm-engineer', label: 'p1a-system-design', phase: 'Phase 1a 系统方案设计', modelTier: 'deep' });
     return result;
   },
 };
@@ -535,80 +474,33 @@ nodes.p1b_micro_arch = {
   run: async (ctx) => {
     _requireUserCheckpoint('system-review', 'Review the six P1a design documents against the system checklist before microarchitecture.');
     const sysDesign = ctx.p1a_sys_design?.data || '';
-    const sysHint = String(sysDesign).slice(0, 500);
+    const sysHint = String(sysDesign).slice(0, 400);
+    const sysEvidence = sysHint ? [{id:'p1a-summary',ref:'06_doc/system_context.md',summary:sysHint}] : [{id:'p1a-summary',ref:'06_doc/system_context.md'}];
 
     const [algoArch, logicArch] = await parallel([
       // ── 算法工程师: 模块分解 + 接口定义 ──────────────────────
-      () => agent(`执行 HDL 工作流 Phase 1b: 微架构 (算法工程师 — 模块分解/接口)
-
-系统方案参考:
-${sysHint}
-
-任务:
-1. 划分模块: 根据信号链分析, 将系统拆为 RTL 模块
-2. 模块接口定义: 每个模块的端口信号、位宽、握手协议
-3. **写入 06_doc/architecture.yaml [MUST]**:
-   modules:
-     - name: <模块名>
-       type: <datapath/control/memory>
-       matlab_ref: <Golden Model 路径>
-       symmetric_with: <对称模块>
-       pipeline_stages:
-         - {name, function, latency, bit_width, q_format}
-       fsm_states:
-         - {name, description, transitions}
-   pair_conventions:
-     - <对称对分析>
-4. **写入 06_doc/interface_contract.md**: 每个端口握手协议、时序波形
-5. **写入 06_doc/algorithm_spec.md**: 细化到每模块的算法步骤
-6. **写入 06_doc/pipeline_diagram.md**: 流水线图 + 数据流
-
-7. **[MUST — 红线]** 所有模块复位信号必须为 i_rst (同步高有效)，禁止 rst_n/reset_n/arst_n。所有时序 always_ff @(posedge clk) + if(i_rst)
-模块: ${modules.join(', ') || '项目默认'}
-微架构是 RTL 实现的刚性契约，逻辑工程师将严格按此编码。`, { agentType: 'algorithm-engineer', label: 'p1b-algo-arch', phase: 'Phase 1b 微架构设计' }),
+      () => modelStep(`Phase 1b 微架构-算法 (${modules.join(', ') || '项目默认'}):
+1. 按信号链拆模块并定义端口/位宽/握手；全模块统一同步高有效 i_rst。
+2. 写 06_doc/architecture.yaml [MUST]: modules[{name,type,matlab_ref,symmetric_with,pipeline_stages[{name,function,latency,bit_width,q_format}],fsm_states[{name,description,transitions}]}], pair_conventions。
+3. 写 06_doc/interface_contract.md (握手与时序)、06_doc/algorithm_spec.md (逐模块步骤)、06_doc/pipeline_diagram.md。`,
+        { agentType: 'algorithm-engineer', label: 'p1b-algo-arch', phase: 'Phase 1b 微架构设计', modelTier: 'deep' },
+        { required: { modules }, evidence: sysEvidence }),
 
       // ── 逻辑工程师: 架构评估 + 资源/时序预估 ────────────────
-      () => agent(`执行 HDL 工作流 Phase 1b: 微架构 (逻辑工程师 — 资源/时序/CDC)
-
-系统方案参考:
-${sysHint}
-
-任务 — 在写任何 RTL 之前完成以下分析:
-
-=== B1 — 架构空间探索 ===
-写入 06_doc/architecture_tradeoff.md:
-至少 2 种微架构对比（全并行/半折叠/全串行），从面积/延迟/吞吐/预估 Fmax 四维比较。
-
-=== B2 — 资源预算跟踪 ===
-写入 06_doc/resource_budget_tracking.md:
-根据算法工程师的预算(DSP48×N/LUT×M/BRAM×K)出发，预估每个数据通路的资源消耗。
-
-=== B3 — 时序预估 ===
-写入 06_doc/timing_estimate.md:
-每级组合逻辑级数估算、关键路径标注、pipeline 插入策略。
-
-=== B4 — 接口契约审查 ===
-审查 06_doc/interface_contract.md（算法工程师产出），确认:
-     - 握手协议可综合、背压传播可行、反压链长度可控
-     - 对每个数据输出及其帧元数据，追溯到实际输入端口、可访问的存储或可推导的本地状态。输入为句柄时，列出读请求/响应、所有者和数据有效期；scoreboard 中的真值不能补 DUT 的输入接口。
-     - [MUST - 红线] 所有复位信号必须为 i_rst (同步高有效)，禁止异步/低有效复位。
-
-=== B5 — 验证策略 ===
-写入 06_doc/verification_strategy.md:
-每模块的自检方法、关键信号可观察性、调试 hook、覆盖率收集策略。
-在 var/workflow/p3-plan.json 记录 strategySha256 和各模块可执行场景 ID（modules 对象）；与策略一同送 design-review。续跑旧设计时可从审过的文档逐项转录。
-将送审接口契约的 SHA-256 记为 interfaceContractSha256。P3 发现端口或字段来源缺失时记录为未解决项，并将接口修订退回 design-review 签收后再更新摘要。
-
-=== B6 — 时钟域分析 ===
-写入 06_doc/clock_domain.md:
-时钟域图、CDC 信号清单及方案、异步 FIFO 深度计算。
-
-模块: ${modules.join(', ') || '项目默认'}`, { agentType: 'logic-engineer', label: 'p1b-logic-arch', phase: 'Phase 1b 微架构设计' }),
+      () => modelStep(`Phase 1b 微架构-逻辑 (${modules.join(', ') || '项目默认'}) — 满足 gate-checklist-p1b.md:
+- B1 06_doc/architecture_tradeoff.md: ≥2 架构(并行/折叠/串行)四维定量对比(面积/延迟/吞吐/Fmax)
+- B2 06_doc/resource_budget_tracking.md: DSP/LUT/BRAM 逐级预估与预算核对
+- B3 06_doc/timing_estimate.md: 组合级数、关键路径与流水插入策略
+- B4 审 06_doc/interface_contract.md: 握手可综合、反压可行、输出均可由实际输入/本地存储推导(禁靠 scoreboard 补输入)、统一同步高有效 i_rst
+- B5 06_doc/verification_strategy.md + var/workflow/p3-plan.json (记 strategySha256、modules 场景 ID、interfaceContractSha256；缺失来源退回 design-review)
+- B6 06_doc/clock_domain.md: 时钟域图、CDC 方案与异步 FIFO 深度`,
+        { agentType: 'logic-engineer', label: 'p1b-logic-arch', phase: 'Phase 1b 微架构设计', modelTier: 'deep' },
+        { required: { modules }, evidence: sysEvidence }),
     ]);
 
     // ── 校验 architecture.yaml 完整性 (确定性脚本判定) ─────────
     log(`🔍 校验 architecture.yaml (hdl-evidence-gate --arch)`);
-    const archGate = await _evidenceGate('--arch', 'p1b-arch-evidence', 'Phase 1b 微架构设计');
+    const archGate = await _evidenceGate(['--arch'], 'p1b-arch-evidence', 'Phase 1b 微架构设计');
     if (archGate.ok !== true) {
       throw new Error(`❌ architecture.yaml 校验失败:\n   ${archGate.failures.join('\n   ')}\n   P1b 未产出微架构文件, 请确保写入 06_doc/architecture.yaml`);
     }
@@ -664,23 +556,17 @@ nodes.cp_design_review = {
 nodes.p2_fixedpt = {
   deps: ['cp_design_review'],
   run: async (ctx) => {
-    const arch = ctx.p1b_micro_arch?.data || '';
-    const result = await agent(`执行 HDL 工作流 Phase 2: 定点量化
-
-架构设计: ${String(arch).slice(0, 300)}
-
-任务:
-1. 位宽扫描 (MATLAB Golden Model)
-2. bit-true 定点模型
-3. DSP/LUT/BRAM 预算表
-
-模块: ${modules.join(', ') || '项目默认'}
-已确认的硬资源上限（按设计审查约定单位）：${JSON.stringify(resourceLimits)}。
-按本插件 workflows/hdl-coding/phase2-fixed-point.md 的机器回执合同写 var/workflow/p2-fixed-point.json：
-逐模块实跑独立参考与位真模型，对应位宽试验、设计误差上限、选定位宽、舍入和溢出方式，登记模型、输入依赖、定点报告、资源预算和测量文件 SHA-256。
-输出: fixed_point_report + resource_estimate`, { agentType: 'algorithm-engineer', label: 'p2-fixed-point', phase: 'Phase 2 定点量化' });
+    const arch = String(ctx.p1b_micro_arch?.data || '').slice(0, 300);
+    const archEv = arch ? [{id:'arch',ref:'06_doc/architecture.yaml',summary:arch}] : [{id:'arch',ref:'06_doc/architecture.yaml'}];
+    const result = await modelStep(`Phase 2 定点量化 (${modules.join(', ') || '项目默认'}):
+1. 位宽扫描与 bit-true 定点模型；DSP/LUT/BRAM 预算表 (硬上限: ${JSON.stringify(resourceLimits)})。
+2. 按 workflows/hdl-coding/phase2-fixed-point.md 写 var/workflow/p2-fixed-point.json: 实跑独立参考与位真模型，记录位宽试验、误差上限、选定位宽、舍入/溢出及依赖文件 SHA-256。
+输出: 06_doc/fixed_point_report.md + resource_estimate`,
+      { agentType: 'algorithm-engineer', label: 'p2-fixed-point', phase: 'Phase 2 定点量化', modelTier: 'deep' },
+      { required: { modules, hardLimits: resourceLimits }, evidence: archEv });
     if (!modules.length || modules.some(mod => typeof mod !== 'string' || !/^[A-Za-z_][A-Za-z0-9_$]*$/.test(mod))) throw new Error('P2 requires explicit target modules');
-    const evidence = await _evidenceGate(`--fixed-point ${args?.goldenBaseline ? '--with-baseline ' : ''}${limitFlags}--modules '${modules.join(',')}'`, 'p2-evidence', 'Phase 2 定点量化');
+    const evidence = await _evidenceGate(['--fixed-point', ...(args?.goldenBaseline ? ['--with-baseline'] : []),
+      ...limitFlags, '--modules', modules.join(',')], 'p2-evidence', 'Phase 2 定点量化');
     const json = _parseStrictJsonObject(evidence.gateJson);
     if (!evidence.ok || json?.gate !== 'hdl-evidence-gate' || json.ok !== true || json.mode !== 'full'
         || !checkedHardLimits(json) || !checkedBaselineScope(json) || json.withBaseline !== Boolean(args?.goldenBaseline) || JSON.stringify(json.fixedPoint) !== JSON.stringify(modules)) throw new Error('P2 evidence: ' + (evidence.failures || []).join('; '));
@@ -693,73 +579,47 @@ nodes.p2_fixedpt = {
 // ── Phase 3: TB + MATLAB 向量生成 ──────────────────────────────────────────
 
 nodes.p3_tb_build = {
-  deps: ['cp_design_review'],
+  deps: hasExplicitAction('p3-selftest') ? ['p3_vectors'] : ['cp_design_review'],
   run: async (ctx) => {
-    const arch = ctx.p1b_micro_arch?.data || '';
-    return agent(`执行 HDL 工作流 Phase 3 (TB): 编写 Testbench (逻辑工程师)
-
-架构设计: ${String(arch).slice(0, 300)}
-模块: ${modules.join(', ') || '项目默认'}
-
-任务:
-[NEW TB 收敛规则 — 违反即阻断]
-a) [MUST] 仅允许一个 tb_<module>.sv 文件。如果已有 → 读取后覆盖, 不创建新文件
-b) [MUST] 按实际接口契约驱动并检查握手；AXI-Stream 接口覆盖反压、顺序与帧界。
-c) [MUST] TB 必须有自动对比逻辑 (读 golden 向量 + scoreboard 比对 + JSON 输出)
-d) [SHOULD] TB 自检通过: compile + 自动 PASS/FAIL 结论
-
-1. 自检 Testbench (模块级, 单模块验证)
-2. SVA 断言 (关键接口时序)
-3. 结构化日志 + 波形配置 ($dumpvars)
-4. 对比脚本骨架: 02_sim/check_<module>.py
-   - 读 02_sim/tv/<module>_tv.txt (MATLAB golden 向量)
-   - 读 RTL 仿真输出 02_sim/<module>_out.txt
-   - 逐点数值对比 → 输出 JSON 到 02_sim/check_results/<module>.json
-
-输出: 自检 TB 和可执行的比较脚本，编译与对照试验在向量就绪后进行。`, { agentType: 'logic-engineer', label: 'p3-tb', phase: 'Phase 3 TB+向量生成' });
+    const arch = String(ctx.p1b_micro_arch?.data || '').slice(0, 300);
+    const archEv = arch ? [{id:'arch',ref:'06_doc/architecture.yaml',summary:arch}] : [{id:'arch',ref:'06_doc/architecture.yaml'}];
+    const inlineProbeHint = hasExplicitAction('p3-selftest')
+      ? '\n5. 向量已就位: 顺带用替身驱动完成正确/注入故障双试验，按 workflows/hdl-coding/phase3-testbench.md 写妥 var/workflow/p3/<module>.json (模式=' + (liteMode ? 'lite' : 'full') + ')。'
+      : '';
+    return modelStep(`Phase 3 编写 Testbench (${modules.join(', ') || '项目默认'}):
+1. 唯一 02_sim/<mod>/tb_<mod>.sv (已有则原地覆盖): 含 SVA 握手断言、反压/帧界覆盖、$dumpvars、读 02_sim/tv/<mod>_tv.txt 自动 scoreboard 比对。
+2. 对比脚本 02_sim/check_<mod>.py: 比对 02_sim/<mod>_out.txt 与 golden 向量并输出 02_sim/check_results/<mod>.json。${inlineProbeHint}`,
+      { agentType: 'logic-engineer', label: 'p3-tb', phase: 'Phase 3 TB+向量生成', modelTier: 'standard' },
+      { required: { modules, mode: liteMode ? 'lite' : 'full' }, evidence: archEv });
   },
 };
 
 nodes.p3_vectors = {
   deps: liteMode ? ['cp_design_review'] : ['p2_fixedpt'],
   run: async (ctx) => {
-    const arch = ctx.p1b_micro_arch?.data || '';
-    return agent(`执行 HDL 工作流 Phase 3 (向量): 生成测试向量 (算法工程师)
-
-架构设计: ${String(arch).slice(0, 300)}
-模块: ${modules.join(', ') || '项目默认'}
-
-━━━ [MUST] 第 0 步: Golden Model 自检 ━━━
-先按模型的独立参考或已知向量运行 Golden 自检，记录参考来源、判据、实际比较点数与结果。
-   - 本阶段不读取尚未生成的 RTL 仿真输出；check_<module>.py 在 P4 有仿真数据后执行。
-   - 如果任何 check FAIL → 立即停止, 修复 GM 后再继续
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-任务 (GM 自检通过后):
-1. MATLAB golden model 测试向量生成:
-   - 从每个子模块的 MATLAB 函数提取输入/输出对
-   - 存入 02_sim/tv/<module>_tv.txt
-   - 每条向量标注 golden 预期值
-2. 覆盖 corner case: 全零、全一、脉冲、随机、边界值、溢出
-3. 使用 TB 约定的字/位宽、进制与事务顺序；完整模式从本轮已核验的 P2 位真模型生成最终向量。Lite 从指定独立 Golden 生成。
-
-[MUST]:
-   - 必须用 MATLAB/Python golden 生成黄金参考向量
-   - 禁止自闭环验证 (编码→译码对比)
-   - 向量存入 02_sim/tv/ 目录
-
-输出: 02_sim/tv/<module>_tv.txt, 覆盖适用的 corner case`, { agentType: 'algorithm-engineer', label: 'p3-vectors', phase: 'Phase 3 TB+向量生成' });
+    const arch = String(ctx.p1b_micro_arch?.data || '').slice(0, 300);
+    const archEv = arch ? [{id:'arch',ref:'06_doc/architecture.yaml',summary:arch}] : [{id:'arch',ref:'06_doc/architecture.yaml'}];
+    return modelStep(`Phase 3 生成测试向量 (${modules.join(', ') || '项目默认'}):
+1. 先跑 Golden 自检 (对照独立参考/已知向量，记录比较点数；失败立即停止修复 GM；不读未生成的 RTL 输出)。
+2. 从已核验 P2 位真模型 (Lite 从指定独立 Golden) 生成 02_sim/tv/<module>_tv.txt，覆盖全零/全一/脉冲/随机/边界/溢出，禁编码→译码自闭环。`,
+      { agentType: 'algorithm-engineer', label: 'p3-vectors', phase: 'Phase 3 TB+向量生成', modelTier: 'standard' },
+      { required: { modules, mode: liteMode ? 'lite' : 'full' }, evidence: archEv });
   },
 };
 
 nodes.p3_tb = {
   deps: ['p3_tb_build', 'p3_vectors'],
   run: async () => {
-    return agent(`对 ${modules.join(', ')} 的最终 TB、比较脚本及向量运行 P3 验证。
-用隔离的替身或回放驱动 TB，实际编译、运行正确输出与注入已知错误输出两个试验；对比较脚本也实跑这两个试验。记录比较点数、错点数和进程退出码。
-按本插件 workflows/hdl-coding/phase3-testbench.md 的机器回执合同逐模块生成 var/workflow/p3/<module>.json。模式=${liteMode ? 'lite' : 'full'}。
-验证适用的边界与握手场景，报告覆盖范围。此阶段只检验验证环境，不创建产品 RTL 或宣称 DUT 仿真通过。`,
-      { agentType: 'logic-engineer', label: 'p3-selftest', phase: 'Phase 3 TB+向量生成' });
+    if (hasExplicitAction('p3-selftest')) {
+      const check = await workflowAction({
+        kind:'p3-selftest',projectRoot,label:'p3-selftest',modules,
+        lite:liteMode,withBaseline:Boolean(args?.goldenBaseline),limitFlags,
+      });
+      if (check?.ok === true) return check.summary || 'P3 selftest verified on disk';
+    }
+    return modelStep(`P3 验证环境自检 (${modules.join(', ')}, 模式=${liteMode ? 'lite' : 'full'}):
+用隔离替身或回放驱动 TB 与 check_<mod>.py，实跑正确输出与注入故障双试验，记录比较点数/错点数/退出码，按 workflows/hdl-coding/phase3-testbench.md 写 var/workflow/p3/<module>.json (不创建产品 RTL)。`,
+      { agentType: 'logic-engineer', label: 'p3-selftest', phase: 'Phase 3 TB+向量生成', modelTier: 'fast' });
   },
 };
 
@@ -771,8 +631,9 @@ async function verifyRtlReadiness() {
   if (!moduleOrder.length || moduleOrder.some(mod => typeof mod !== 'string' || !/^[A-Za-z_][A-Za-z0-9_$]*$/.test(mod))
       || moduleOrder.length !== new Set(moduleOrder).size || moduleOrder.length !== modules.length
       || modules.some(mod => !moduleOrder.includes(mod))) throw new Error('P4 requires an explicit order covering every target module');
-  const modeFlag = liteMode ? '--lite ' : args?.goldenBaseline ? '--with-baseline ' : '';
-  const ready = await _evidenceGate(`--rtl-ready ${modeFlag}${liteMode ? '' : limitFlags}--modules '${moduleOrder.join(',')}'`, 'rtl-ready', preparationOnly ? 'Phase 3 TB+向量生成' : 'Phase 4 RTL编码');
+  const modeFlags = liteMode ? ['--lite'] : args?.goldenBaseline ? ['--with-baseline'] : [];
+  const ready = await _evidenceGate(['--rtl-ready',...modeFlags,...limitFlags,'--modules',moduleOrder.join(',')],
+    'rtl-ready', preparationOnly ? 'Phase 3 TB+向量生成' : 'Phase 4 RTL编码');
   const readyJson = _parseStrictJsonObject(ready.gateJson);
   if (ready.ok && !liteMode && readyJson?.fixedPointReceiptSha256 !== verifiedFixedPointDigest) {
     throw new Error('RTL prerequisites: P2 changed after the qualified fixed-point run; revalidate P2 and its dependent vectors');
@@ -795,232 +656,94 @@ nodes.p4_rtl = {
   deps: ['p2_fixedpt', 'p3_tb'],
   run: async (ctx) => {
     await verifyRtlReadiness();
-    const fixedpt = ctx.p2_fixedpt?.data || '';
-    const tb = ctx.p3_tb?.data || '';
     const moduleList = modules.length > 0 ? modules : ['模块_1'];
-    const fixedptHint = fixedpt ? String(fixedpt).slice(0, 200) : '[Lite] 无定点报告';
+    const signedInterface = args?.checkpoints?.['design-review']?.interfaceContractSha256 ?? null;
     const prjRoot = projectRoot;
     const cascadeResults = {};  // modName → { stage2Pass, stage3Pass } — cascade tracking across modules
 
     log(`[Phase 4] 3-stage pipeline: RTL编码 → 仿真调试循环 → 独立终验`);
     log(`  模块: ${moduleList.join(', ')}`);
-    log(`  Stage 2 内置 Debugger↔Verifier 双视角调试循环, max 5 次`);
+    log('  Stage 2 按新证据复验，单模块最多五次仿真；Stage 3 独立签核。');
 
     const results = await pipeline(
       moduleOrder,
 
       // ── Stage 1: RTL 编码 ──────────────────────────────────────────────────
       async (mod) => {
-        await agent(
-          `执行 RTL 编码: ${mod}
-
-目标文件: 01_src/00_hdl/${mod}/${mod}.sv
-如果文件已存在 → 读取后原地覆盖。禁止创建 ${mod}_v2.sv 等变体。
-
-参考: architecture.yaml 中 ${mod} 的微架构方案
-定点参考: ${fixedptHint}
-TB: 02_sim/${mod}/tb_${mod}.sv (唯一 TB, 直接覆盖)
-
-[MUST 完成标准]
-1. 按 architecture.yaml 微架构编码 (流水线/FSM/位宽一致)
-2. make lint 通过
-3. make compile 通过
-4. 输出 RTL 源码到目标文件
-
-[Vivado 可综合性 — UG949 Know What You Infer]
-推断失败是**静默的**: 仿真全对, 综合完 BRAM 用了 0 块 / DSP 没吸收流水 / SRL 掉成 FF 链,
-工具不报任何错。编码时避开这四种写法 (细则 packs/fpga/skills/hdl-coding/references/ug949-rtl-methodology.md §4):
-  - 给 BRAM 读数据/输出寄存器加复位 → 输出寄存器吸收失败, Fmax 崩
-  - BRAM 输出寄存器多扇出 → 同上 (每个消费者复制一份自己的输出寄存器)
-  - 给 DSP 内部流水寄存器加复位 → MREG/PREG 吸收失败
-  - 给移位链/延时线加复位或取中间抽头 → SRL 掉成 FF 链, 面积膨胀数十倍
-这是红线 3 (同步复位 i_rst) 的**唯一豁免**: 数据通路上这几类寄存器不加复位, 无效数据由
-valid 通道屏蔽 (valid 通道必须有 i_rst), 且必须在该寄存器上方写 "// [复位豁免] ... 见
-vivado-synthesis-ug901.md §5.1"。不写注释的"顺手不加复位" = 违反红线, 审查 FAIL。
-另: 禁止门控时钟 (always @(posedge (clk & en))), 改用 BUFGCE 的时钟使能。`,
-          { agentType: 'logic-engineer', label: `rtl-code-${mod}`, phase: 'Phase 4 RTL编码' }
+        await modelStep(
+          `RTL 编码: ${mod} -> 01_src/00_hdl/${mod}/${mod}.sv (原地覆盖，禁变体；TB: 02_sim/${mod}/tb_${mod}.sv)
+1. 严格按 06_doc/architecture.yaml 流水/FSM/位宽与已核验 P2 舍入编码，make lint/compile 通过。
+2. UG949 推断防退化: BRAM 读/输出寄存器、DSP 内部流水、SRL 链禁加复位且禁多扇出，无效数据由带 i_rst 的 valid 屏蔽并标 "// [复位豁免]"；禁门控时钟与 NBA 左值函数下标。`,
+          { agentType: 'logic-engineer', affinityKey: `rtl-${mod}`, label: `rtl-code-${mod}`, phase: 'Phase 4 RTL编码', modelTier: 'standard' },
+          {required:{module:mod,signedInterface,hardLimits:resourceLimits,authorization:'仅本模块 RTL；不得改变已签收接口或验收工况。'},
+           evidence:[{id:'design',ref:'06_doc/interface_contract.md'},{id:'verification',ref:`var/workflow/p3/${mod}.json`}] }
         );
         return { mod, stage1: 'done' };
       },
 
       // ── Stage 2: 仿真调试循环 ──────────────────────────────────────────────
       async (prev, mod) => {
-        let pass = false;
-        let attempts = 0;
         const MAX_ATTEMPTS = 5;
-        let lastError = '';
-        let needUserReview = false;
-
-        // ── Cascade context: upstream module verification status ──
-        const modIndex = moduleOrder.indexOf(mod);
-        const upstreamModules = moduleOrder.slice(0, Math.max(0, modIndex));
-        const upstreamVerified = upstreamModules.length === 0 || upstreamModules.every(u => cascadeResults[u]?.stage2Pass === true);
-        const upstreamFailedNames = upstreamModules.filter(u => cascadeResults[u] && !cascadeResults[u].stage2Pass);
-        if (upstreamModules.length > 0 && !upstreamVerified) {
-          log(`  🔗 ${mod}: 上游 ${upstreamModules.length} 个模块中 ${upstreamFailedNames.length} 个未通过 — 输入信号可能异常`);
-        }
-
-        // 仿真 agent 的结构化返回契约: gate_* 字段必须原样复制自
-        // hdl-evidence-gate.cjs 的输出, agent 不做判定。
-        const SIM_SCHEMA = {
-          type: 'object',
-          properties: {
-            gate_executed: { type: 'boolean' },
-            gate_ok: { type: 'boolean' },
-            compared_points: { type: 'number' },
-            log_tail: { type: 'string' },
-          },
-          required: ['gate_executed', 'gate_ok', 'log_tail'],
-        };
-        const gateCmd = `node ${EVIDENCE_GATE_SCRIPT} --project-root "${prjRoot}" --modules ${mod}`;
-
-        while (!pass && attempts < MAX_ATTEMPTS && !needUserReview) {
-          attempts++;
-
-          // Run simulation & compare with golden
-          const simRes = await agent(
-            `运行仿真并对比 Golden 向量: ${mod}
-
-1. 运行仿真 (make sim 或 vsim 命令)
-2. 自动对比 golden 向量: 02_sim/tv/${mod}_tv.txt
-3. 输出 JSON 证据到 02_sim/check_results/${mod}.json
-   {"module":"${mod}","status":"PASS|FAIL","compared_points":N}
-4. [MUST] 最后执行确定性证据门禁 (脚本在 harness 根目录, 找不到用 ~/.claude/ 前缀):
-   ${gateCmd}
-5. 结构化返回: gate_executed=门禁命令是否执行; gate_ok/compared_points=门禁 JSON 原值
-   (禁止改写); log_tail=仿真日志尾部 (FAIL 时含错误日志前 100 行)`,
-            { agentType: 'logic-engineer', label: `sim-run-${mod}-try${attempts}`, phase: 'Phase 4 仿真调试', schema: SIM_SCHEMA }
-          );
-
-          if (simRes?.gate_executed === true && simRes?.gate_ok === true && (simRes?.compared_points || 0) > 0) {
-            pass = true;
-            log(`  ✅ ${mod}: 仿真通过 (第${attempts}次, ${simRes.compared_points}点)`);
-            // Cleanup
-            await agent(`清理仿真产物: ${mod}\nrm -f wlft* transcript *.wlf vsim.wlf 2>/dev/null; true`,
-              { agentType: 'logic-engineer', label: `clean-${mod}-try${attempts}`, phase: 'Phase 4 仿真调试' });
-            break;
-          }
-          lastError = String(simRes?.log_tail || '').slice(0, 2000);
-
-          if (attempts >= MAX_ATTEMPTS) {
-            log(`  ⚠️ ${mod}: 达到最大尝试次数 ${MAX_ATTEMPTS}`);
-            break;
-          }
-
-          // ── Debugger: 分析根因 + 修复 (全新 context) ─────────────────
-          const debugOut = String(await agent(
-            `你是 **RTL Debugger**。分析并修复仿真错误。
-
-模块: ${mod}
-RTL 源码: 01_src/00_hdl/${mod}/${mod}.sv
-仿真错误日志:
-\`\`\`
-${lastError.slice(0, 1500)}
-\`\`\`
-
-[级联调试上下文]
-模块链位置: 第 ${modIndex + 1}/${moduleOrder.length} 级
-上游模块: ${upstreamModules.length > 0 ? upstreamModules.join(' → ') : '(无)'}
-上游验证状态: ${upstreamVerified ? '全部通过 ✅' : upstreamFailedNames.map(u => u + ' ❌').join(', ') + ' — 输入信号可能不可靠'}
-
-注意: 如果上游未通过验证，本模块输入数据可能异常。
-先检查输入驱动信号 (i_data, i_valid 等) 是否在合理范围内，
-再分析模块内部逻辑。如果怀疑是上游问题，标记 "CASCADE_ISSUE"。
-
-[新 context — 全新视角, 不受之前尝试影响]
-1. 读取 RTL 源码, 独立分析根因
-2. 读取仿真日志, 定位错误信号和时间
-3. 提出修复方案并**直接修改 RTL** (原地编辑)
-4. 确认 make lint 通过
-5. 输出 JSON:
-{"root_cause":"...","fix":"...","file":"01_src/00_hdl/${mod}/${mod}.sv","line":N}`,
-            { agentType: 'logic-engineer', label: `debug-${mod}-try${attempts}`, phase: 'Phase 4 仿真调试' }
-          ) || '');
-
-          // Re-run simulation after fix
-          const recheckRes = await agent(
-            `重新运行仿真验证修复: ${mod}
-
-1. make compile (确认修复后编译通过)
-2. 运行仿真, 对比 golden 向量
-3. 输出 JSON 证据到 02_sim/check_results/${mod}.json
-4. [MUST] 最后执行确定性证据门禁:
-   ${gateCmd}
-5. 结构化返回: gate_executed / gate_ok / compared_points 为门禁 JSON 原值 (禁止改写);
-   log_tail=仿真日志尾部 (仍 FAIL 时含错误日志前 100 行)`,
-            { agentType: 'logic-engineer', label: `sim-recheck-${mod}-try${attempts}`, phase: 'Phase 4 仿真调试', schema: SIM_SCHEMA }
-          );
-
-          if (recheckRes?.gate_executed === true && recheckRes?.gate_ok === true && (recheckRes?.compared_points || 0) > 0) {
-            pass = true;
-            log(`  ✅ ${mod}: 修复后通过 (第${attempts}次, ${recheckRes.compared_points}点)`);
-            break;
-          }
-          // ── 仍 FAIL → Verifier (独立视角) ────────────────────────────
-          if (!pass && attempts < MAX_ATTEMPTS) {
-            const errInfo = String(recheckRes?.log_tail || lastError || '').slice(0, 1000);
-
-            const verdict = String(await agent(
-              `你是 **独立 Verifier**。审查以下 RTL 修复是否正确。
-
-模块: ${mod}
-RTL 源码: 01_src/00_hdl/${mod}/${mod}.sv
-仿真错误:
-\`\`\`
-${errInfo}
-\`\`\`
-
-Debugger 的分析和修复:
-\`\`\`
-${String(debugOut).slice(0, 800)}
-\`\`\`
-
-[级联上下文 — 上游模块验证状态]
-上游通过: ${upstreamVerified ? '是 ✅' : '否 — ' + upstreamFailedNames.join(', ') + ' 未通过 ❌'}
-如果 Debugger 的修复涉及本模块的输入驱动或上游接口，请额外审查该部分是否正确。
-怀疑是上游问题 → 输出 "CASCADE_ISSUE: <上游模块名> <原因>"。
-
-[独立判断 — 不受 Debugger 影响]
-1. 独立阅读 RTL 源码
-2. Debugger 的分析是否正确? 修复是否正确?
-3. 输出 JSON:
-{"agree":true|false,"verdict":"correct|wrong","reason":"...","alternative_fix":"..."}
-
-重要: 你是只读审查者, 不修改任何文件。如果 agree=false, 必须在 alternative_fix
-中给出具体到信号/行号的正确修复方向 (由逻辑工程师在下一轮实施)。`,
-              { agentType: 'ce-correctness-reviewer', label: `verify-${mod}-try${attempts}`, phase: 'Phase 4 仿真调试' }
-            ) || '');
-
-            const vn = verdict.toLowerCase();
-            if (vn.includes('"agree":true') || vn.includes('"verdict":"correct"')) {
-              // Debugger + Verifier 一致 → 再跑一次最终确认
-              const finalRes = await agent(
-                `Debugger 与 Verifier 均同意修复方案。最终验证: ${mod}
-
-1. make compile && make sim
-2. 对比 golden 向量
-3. 输出 JSON 证据到 02_sim/check_results/${mod}.json
-4. [MUST] 最后执行确定性证据门禁:
-   ${gateCmd}
-5. 清理: rm -f wlft* transcript *.wlf vsim.wlf
-6. 结构化返回: gate_executed / gate_ok / compared_points 为门禁 JSON 原值 (禁止改写)`,
-                { agentType: 'logic-engineer', label: `sim-final-${mod}-try${attempts}`, phase: 'Phase 4 仿真调试', schema: SIM_SCHEMA }
-              );
-
-              if (finalRes?.gate_executed === true && finalRes?.gate_ok === true && (finalRes?.compared_points || 0) > 0) {
-                pass = true;
-                log(`  ✅ ${mod}: 双验证后通过 (第${attempts}次, ${finalRes.compared_points}点)`);
-              }
+        const native = hasAction('simulate');
+        const redlineLocal = hasExplicitAction('redline');
+        const gateCmd = `node "${EVIDENCE_GATE_SCRIPT}" --project-root "${prjRoot}" --modules '${mod}'`;
+        const simSchema = {type:'object',properties:{
+          gate_executed:{type:'boolean'},gate_ok:{type:'boolean'},compared_points:{type:'number'},log_tail:{type:'string'},
+          failureKind:{type:'string'},failureSignature:{type:'string'},inputSha256:{type:'string'},evidencePath:{type:'string'},
+        },required:['gate_executed','gate_ok','log_tail']};
+        let previous;
+        const rejected = [];
+        for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+          const label = `sim-run-${mod}-try${attempt}`;
+          let sim = native ? await workflowAction({kind:'simulate',projectRoot,label,module:mod,attempt}) :
+            await agent(`执行已有的 ${mod} 编译、仿真、Golden 比较入口。留存本次编译/仿真日志和 02_sim/check_results/${mod}.json。执行门禁 ${gateCmd}，按原值返回 gate_executed、gate_ok、compared_points。失败时返回首个错误、日志引用、失败类别（functional/environment/invalid/insufficient）和可用的输入摘要。仅清理可确认归属本次运行的临时文件，保留证据。`,
+              {agentType:'logic-engineer',label,phase:'Phase 4 仿真调试',schema:simSchema,modelTier:'fast'});
+          const simPassed = !sim?.failureKind && sim?.gate_executed === true && sim.gate_ok === true && Number.isInteger(sim.compared_points) &&
+              (sim.compared_points || 0) > 0 && (!native || (sim.verified === true && sim.evidencePath));
+          let redlineClean = false;
+          if (simPassed && redlineLocal) {
+            const red = await workflowAction({kind:'redline',projectRoot,label:`redline-${mod}-try${attempt}`,modules:[mod]});
+            if (red?.ok === true) {
+              redlineClean = true;
             } else {
-              log(`  ⚠️ ${mod}: Debugger 与 Verifier 分歧 (第${attempts}次), 标记需审查`);
-              needUserReview = true;
+              const redMsg = (red?.failures || ['static redline violation']).join('; ');
+              sim = {...sim, failureKind:'functional', gate_ok:false, log_tail:redMsg, failureSignature:'redline:'+redMsg,
+                inputSha256:sim.inputSha256 || '0'.repeat(64)};
             }
           }
+          if (simPassed && (!redlineLocal || redlineClean)) {
+            cascadeResults[mod] = {stage2Pass:true};
+            return {mod,pass:true,attempts:attempt,comparedPoints:sim.compared_points,evidencePath:sim.evidencePath,redlineVerified:redlineClean};
+          }
+          const kind = sim?.failureKind || (!native && sim?.gate_executed && sim.gate_ok === false ? 'functional' : 'insufficient');
+          const detail = String(sim?.log_tail || sim?.reason || sim?.failureSignature || '').trim().slice(0,600);
+          const failure = String(sim?.failureSignature || detail).trim();
+          if (kind !== 'functional' || !failure || (native && !/^[a-f0-9]{64}$/i.test(sim?.inputSha256 || ''))) {
+            throw new Error(`[${mod}] ${kind}: ${detail || 'missing qualified simulation evidence'} ${sim?.evidencePath || ''}`);
+          }
+          if (previous) {
+            if (previous.input && previous.input === sim.inputSha256 && previous.failure === failure) {
+              throw new Error(`[${mod}] simulation inputs and failure are unchanged: ${detail}`);
+            }
+            rejected.push({hypothesis:previous.hypothesis,failure,detail});
+            if (rejected.filter(row => row.hypothesis === previous.hypothesis && row.failure === failure).length >= 2) {
+              throw new Error(`[${mod}] repeated hypothesis without progress: ${previous.hypothesis}; evidence: ${sim.evidencePath || failure.slice(0,300)}`);
+            }
+          }
+          if (attempt === MAX_ATTEMPTS) throw new Error(`[${mod}] repair budget exhausted: ${detail}`);
+          const repair = await modelStep('诊断首个偏差，给出可证伪假设并直接修复授权范围内的 RTL。返回 {hypothesis,change}。如需改变签收的接口或 Golden，返回 {needsDecision:true,reason} 并停止。验证由本轮后的统一仿真执行。',
+            {agentType:'logic-engineer',affinityKey:`rtl-${mod}`,label:`debug-${mod}-try${attempt}`,phase:'Phase 4 仿真调试',modelTier:'deep'},
+            {kind:'repair',required:{module:mod,attempt,firstFailure:detail,previousHypotheses:rejected,
+              target:`01_src/00_hdl/${mod}/${mod}.sv`,passCriterion:'门禁通过且比较点 > 0',signedInterface,
+              authorization:'保持已签收接口、数据格式及流水延迟；不得改 Golden、TB 或验收阈值。'},
+             evidence:[{id:'simulation',ref:sim.evidencePath || `02_sim/check_results/${mod}.json`,summary:String(sim.log_tail || '').slice(0,900)}]});
+          const finding = typeof repair === 'string' ? _parseStrictJsonObject(repair) : repair;
+          const hypothesis = String(finding?.hypothesis || finding?.root_cause || '').trim();
+          if (finding?.needsDecision || !hypothesis || !(finding?.change || finding?.fix)) {
+            throw new Error(`[${mod}] repair needs a decision: ${finding?.reason || 'no concrete hypothesis and change'}`);
+          }
+          previous = {input:sim.inputSha256,hypothesis,failure};
         }
-
-        cascadeResults[mod] = { ...(cascadeResults[mod] || {}), stage2Pass: pass };
-        log(`  📋 ${mod}: 调试结束 pass=${pass}, attempts=${attempts}${needUserReview ? ', 需审查' : ''}`);
-        return { mod, pass, attempts, needUserReview, error: lastError.slice(0, 500) };
       },
 
       // ── Stage 3: 独立终验 ──────────────────────────────────────────────────
@@ -1033,39 +756,36 @@ ${String(debugOut).slice(0, 800)}
 
         // ── Cascade: skip if any upstream module failed Stage 3 ──
         const modIdx = moduleOrder.indexOf(mod);
-        const upstreamFailedS3 = moduleOrder.slice(0, Math.max(0, modIdx)).some(u => !cascadeResults[u]?.stage3Pass);
+        const upstreamFailedS3 = moduleOrder.slice(0, Math.max(0, modIdx)).some(u => cascadeResults[u]?.stage3Pass === false);
         if (upstreamFailedS3 && modIdx > 0) {
           log(`  ⏭️ ${mod}: 上游模块未全部通过终验, 跳过本模块终验 (等待上游修复)`);
           cascadeResults[mod] = { ...(cascadeResults[mod] || {}), stage3Pass: false };
           return { mod, pass: false, skipped: true, upstreamFailed: true };
         }
 
-        const finalV = String(await agent(
-          `最终独立验证: ${mod}
+        // 标准模块且已通过本地仿真收据 + 静态红线扫描时，无假阴性放行风险，语义审查交由 P5 集成审查与 P7 双盲审查统一执行；高安全模块仍保留逐模块独立模型终验
+        if (!highSecModules.includes(mod) && prev.redlineVerified === true && hasAction('simulate')) {
+          cascadeResults[mod] = { ...(cascadeResults[mod] || {}), stage3Pass: true };
+          return { mod, pass: true, deterministicStage3: true };
+        }
 
-1. 读取 JSON 证据: 02_sim/check_results/${mod}.json
-2. 验证: status=PASS 且 compared_points>0
-3. 读取 RTL 独立检查:
-   - initial: 仅允许 RAM/ROM 存储器阵列初值（$readmemh 可）；禁止标量/FF initial；禁止 disable/force
-   - 端口命名: i_/o_ 前缀
-   - 复位: 凡复位须 i_rst 同步高有效；数据通路推荐少复位；BRAM/DSP/SRL 级须复位豁免注释
-4. 最终清理: rm -f wlft* transcript *.wlf vsim.wlf
-5. 输出 JSON:
-{"module":"${mod}","pass":true|false,"evidence_ok":true|false,"checks":["..."],"issues":["..."]}`,
-          { agentType: 'ce-correctness-reviewer', label: `final-verify-${mod}`, phase: 'Phase 4 终验' }
+        const finalV = String(await modelStep(
+          `独立终验 ${mod}: 核对 02_sim/check_results/${mod}.json (status=PASS, compared_points>0) 与 RTL (initial 仅限阵列、i_/o_ 前缀、i_rst 同步高有效及豁免注释)。输出 JSON: {"module":"${mod}","pass":true|false,"evidence_ok":true|false,"checks":["..."],"issues":["..."]}`,
+          { agentType: 'ce-correctness-reviewer', label: `final-verify-${mod}`, phase: 'Phase 4 终验', modelTier: 'fast' },
+          {kind:'decision',required:{module:mod,signedInterface,authorization:'独立只读终验。证据缺失或不匹配必须返回 pass=false。'},
+           evidence:[{id:'verification',ref:prev.evidencePath || `02_sim/check_results/${mod}.json`}] }
         ) || '');
 
         const finalVerdict = _parseStrictJsonObject(finalV);
-        const fPass = finalVerdict?.pass === true && finalVerdict?.evidence_ok === true;
+        const fPass = finalVerdict?.module === mod && finalVerdict?.pass === true && finalVerdict?.evidence_ok === true;
         cascadeResults[mod] = { ...(cascadeResults[mod] || {}), stage3Pass: fPass };
         return { mod, pass: fPass };
       },
     );
 
     const passed = results.filter(r => r && r.pass).length;
-    const needReview = results.filter(r => r && r.needUserReview).length;
-    log(`[Phase 4 汇总] 通过: ${passed}/${moduleList.length}${needReview ? `, 需审查: ${needReview}` : ''}`);
-    return `Phase 4 完成: ${passed}/${moduleList.length} (${needReview ? `${needReview} 需审查` : '全部通过'})`;
+    if (passed !== moduleList.length) throw new Error(`Phase 4 独立终验未通过: ${passed}/${moduleList.length}`);
+    return `Phase 4 完成: ${passed}/${moduleList.length}`;
   },
 };
 // ═════════════════════════════════════════════════════════════════════════════
@@ -1102,7 +822,7 @@ nodes.p45_evidence_gate = {
     if (modules.length === 0) {
       log('⚠️ [证据门禁] 模块列表为空 — 无模块级证据可查, 仅在初始化空项目时可接受。');
     } else {
-      const gateRes = await _evidenceGate(`--modules ${modules.join(',')}`, 'p45-evidence', 'Phase 4.5 证据门禁');
+      const gateRes = await _evidenceGate(['--modules',modules.join(',')], 'p45-evidence', 'Phase 4.5 证据门禁');
       const gateReport = _parseStrictJsonObject(gateRes.gateJson) || {};
       allResults = Array.isArray(gateReport.modules) ? gateReport.modules : [];
 
@@ -1114,10 +834,12 @@ nodes.p45_evidence_gate = {
         }
       }
 
-      if (gateRes.ok !== true) {
+      if (gateRes.ok !== true || gateReport.gate !== 'hdl-evidence-gate' || gateReport.ok !== true ||
+          allResults.length !== modules.length || !modules.every(mod => allResults.some(row =>
+            row.module === mod && row.pass === true && Number.isInteger(row.compared_points) && row.compared_points > 0))) {
         throw new Error(
           `❌ [证据门禁] hdl-evidence-gate FAIL:\n${
-            gateRes.failures.map(f => `   - ${f}`).join('\n')
+            (gateRes.failures || []).map(f => `   - ${f}`).join('\n')
           }\nPhase 4 验证未通过, 无法进入 Phase 5 集成。请修复后重试。`
         );
       }
@@ -1133,7 +855,7 @@ nodes.p45_evidence_gate = {
       log(`⚠️ [高安全模式] 以下模块需要独立对抗验证: ${activeHighSec.join(', ')}`);
       log('    将独立读取 RTL + MATLAB golden 源码进行逻辑差异分析...');
 
-      const advResult = await agent(`你是**对抗验证者**。以下模块声称已与 MATLAB golden model 逐周期一致。
+      const advResult = await modelStep(`你是**对抗验证者**。以下模块声称已与 MATLAB golden model 逐周期一致。
 
 你的任务: 独立找茬。读 RTL 源码, 读 MATLAB golden, 找任何逻辑差异。
 
@@ -1155,7 +877,10 @@ nodes.p45_evidence_gate = {
 
       try {
         const issues = typeof advResult === 'string' ? JSON.parse(advResult) : advResult;
-        if (Array.isArray(issues) && issues.length > 0) {
+        if (!Array.isArray(issues) || issues.some(i => !activeHighSec.includes(i?.module) || typeof i.pass !== 'boolean')) {
+          throw new Error('独立审查缺少有效的结构化结论');
+        }
+        if (issues.length > 0) {
           const fails = issues.filter(i => i.pass === false);
           if (fails.length > 0) {
             throw new Error(
@@ -1169,11 +894,7 @@ nodes.p45_evidence_gate = {
           log(`✅ [对抗验证] 全部通过`);
         }
       } catch (e) {
-        if (e instanceof SyntaxError) {
-          log(`⚠️ [对抗验证] JSON 解析失败, 原始输出:\n${String(advResult).slice(0, 500)}`);
-        } else {
-          throw e;
-        }
+        throw new Error('[对抗验证] ' + e.message);
       }
     } else if (activeHighSec.length > 0 && liteMode) {
       log(`ℹ️ [高安全模块] Lite 模式跳过对抗验证, 仅文件检查。`);
@@ -1220,150 +941,94 @@ nodes.p5_top_integration = {
     log(`  证据门禁: ${isTrusted ? '✅ 通过' : '⚠️ 状态未知'}`);
     log(`  模块: ${modList.join(', ') || '项目默认'}`);
 
-    // ── Step 1: 并行发散 4 路 Agent ──────────────────────────────────────
-    log('  Step 1: 并行分析 (接口/数据通路/Golden/时序)...');
+    // ── 单模块确定性快速集成 (无跨模块级联接线时免除 5 路冗余评审) ──
+    let synthesis = '';
+    if (modList.length === 1 && hasExplicitAction('single-top')) {
+      const singleTop = await workflowAction({kind:'single-top',projectRoot,label:'p5-single-top',modules:modList});
+      if (singleTop?.ok === true) {
+        synthesis = JSON.stringify({overall:'pass',issues:[],root_cause:'none',fix_suggestion:'none'});
+      } else if (singleTop && Array.isArray(singleTop.issues)) {
+        synthesis = JSON.stringify({
+          overall:singleTop.overall || 'fail',
+          issues:singleTop.issues,
+          root_cause:singleTop.root_cause || modList[0],
+          fix_suggestion:singleTop.fix_suggestion || 'fix single-module top wrapper or redline issue',
+        });
+      }
+    }
 
-    const [interfaceR, dataPathR, goldenR, timingR] = await parallel([
-      // Agent 1: 接口检查 (只读审查 — 顶层缺失由 Agent 3 负责创建, 这里如实报 fail)
-      () => agent(
-        `[顶层接口检查] 检查所有子模块的接口连接正确性。
+    if (!synthesis) {
+      // ── Step 1: 并行发散 4 路 Agent ──────────────────────────────────────
+      log('  Step 1: 并行分析 (接口/数据通路/Golden/时序)...');
 
-模块列表: ${modList.join(', ')}
-顶层文件: 01_src/00_hdl/top/top.sv (如果不存在 → 输出 status=fail 说明缺失, 不要创建)
+      const [interfaceR, dataPathR, goldenR, timingR] = await parallel([
+        // Agent 1: 接口检查 (只读审查)
+        () => modelStep(
+          `顶层接口检查 (${modList.join(', ')}, 01_src/00_hdl/top/top.sv; 缺失则报 fail 不创建): 核查端口悬空/漏连、valid/ready 贯穿、位宽匹配、CDC 同步与 i_rst 同步高有效。输出 JSON 数组: [{"interface":"<A→B>","status":"pass|fail|warn","detail":"..."}]`,
+          { agentType: 'ce-api-contract-reviewer', label: 'p5-interface', phase: 'Phase 5 顶层集成', modelTier: 'fast' }
+        ),
 
-检查项:
-1. 每个子模块的端口连接是否完整 (无悬空/漏连)
-2. valid/ready 握手链是否贯穿所有模块
-3. 位宽匹配: 所有模块间连接信号位宽一致
-4. CDC 边界: 跨时钟域信号是否已同步
-5. 复位信号: 所有模块使用 i_rst (同步高有效)
+        // Agent 2: 数据通路追踪
+        () => modelStep(
+          `顶层数据通路追踪 (${modList.join(' → ')}, top.sv): 逐级核查位宽/格式传递、截断扩展标注与流水延迟对齐。输出 JSON: [{"stage":"input→${modList[0] || 'mod1'}","status":"pass|warn","width":N,"format":"...","notes":"..."}]`,
+          { agentType: 'ce-architecture-strategist', label: 'p5-datapath', phase: 'Phase 5 顶层集成', modelTier: 'fast' }
+        ),
 
-输出 JSON 数组:
-[{"interface":"<模块A→模块B>","status":"pass|fail|warn","detail":"..."}]`,
-        { agentType: 'ce-api-contract-reviewer', label: 'p5-interface', phase: 'Phase 5 顶层集成' }
-      ),
+        // Agent 3: Golden Model 比对
+        () => modelStep(
+          `顶层全链对拍 (${modList.join(' → ')}): 创建/验证 01_src/00_hdl/top/top.sv, 编译并跑全链仿真对标 07_mat|08_py 定点 Golden; 按链路从首级向前定位首个偏差模块(first_deviation.stage)。输出 JSON: {"overall":"pass|fail","first_deviation":{"stage":"...","signal":"...","time":N,"expected":"...","got":"..."},"compared_points":N,"max_error_lsb":N,"algo_consistent":true|false}`,
+          { agentType: 'logic-engineer', label: 'p5-golden', phase: 'Phase 5 顶层集成', modelTier: 'standard' }
+        ),
 
-      // Agent 2: 数据通路追踪
-      () => agent(
-        `[顶层数据通路追踪] 从顶层输入到顶层输出追踪数据流。
+        // Agent 4: 资源/时序预估
+        () => modelStep(
+          `顶层资源与时序评估 (${modList.join(', ')}, top.sv): 汇总资源、关键组合路径、跨时钟同步与流水对齐。输出 JSON: {"resource":{"lut_est":N,"dsp_est":N,"bram_est":N},"timing":{"critical_path":"...","fmax_est":"...MHz"},"cdc_issues":["..."],"pipeline_issues":["..."]}`,
+          { agentType: 'ce-performance-oracle', label: 'p5-timing', phase: 'Phase 5 顶层集成', modelTier: 'fast' }
+        ),
+      ]);
 
-模块列表: ${modList.join(', ')}
-顶层文件: 01_src/00_hdl/top/top.sv
+      // ── Step 2: 确定性快速聚合 (4 路结构化全绿时免除 LLM 汇总调用) ──────
+      const parseJsonAny = (raw) => {
+        if (raw && typeof raw === 'object') return raw;
+        try { return JSON.parse(String(raw || '').trim()); } catch { return null; }
+      };
+      const ifArr = parseJsonAny(interfaceR);
+      const dpArr = parseJsonAny(dataPathR);
+      const gdObj = _parseStrictJsonObject(goldenR);
+      const tmObj = _parseStrictJsonObject(timingR);
+      const allCleanJson = Array.isArray(ifArr) && ifArr.length > 0 && ifArr.every(x => x?.status === 'pass') &&
+        Array.isArray(dpArr) && dpArr.length > 0 && dpArr.every(x => x?.status === 'pass') &&
+        gdObj?.overall === 'pass' && gdObj.algo_consistent === true && Number.isFinite(gdObj.compared_points) && gdObj.compared_points > 0 &&
+        tmObj && Array.isArray(tmObj.cdc_issues) && tmObj.cdc_issues.length === 0 &&
+        Array.isArray(tmObj.pipeline_issues) && tmObj.pipeline_issues.length === 0;
 
-任务:
-1. 读取 top.sv 和每个子模块的端口定义
-2. 逐级追踪数据流: 顶层输入 → 模块A → 模块B → ... → 顶层输出
-3. 每级检查:
-   - 数据格式/位宽传递正确
-   - 截断/扩展点已标注
-   - 流水线延迟对齐
-4. 标注首个数据格式变化的点
-
-输出 JSON:
-[{"stage":"input→${modList[0] || 'mod1'}","status":"pass|warn","width":N,"format":"...","notes":"..."}]`,
-        { agentType: 'ce-architecture-strategist', label: 'p5-datapath', phase: 'Phase 5 顶层集成' }
-      ),
-
-      // Agent 3: Golden Model 比对
-      () => agent(
-        `[顶层 Golden 比对] 检查全链仿真与 Golden Model 的一致性。
-
-模块列表: ${modList.join(', ')}
-顶层文件: 01_src/00_hdl/top/top.sv
-Golden Model 参考: 07_mat/ 或 08_py/
-
-任务:
-1. 创建顶层模块 (top.sv), 例化所有子模块
-2. 确认 AXI4-Stream 握手链完整
-3. make compile 通过
-4. 运行全链仿真, 注入测试向量
-5. 逐级捕获中间结果并与 Golden Model 对比
-6. 定位: 第一个偏差出现在哪一级?什么信号?什么时间?
-
-[级联追踪 — MUST]
-模块链顺序 (从输入到输出): ${modList.join(' → ') || '(未知)'}
-从模块 0 (${modList[0] || '首级'}) 开始向前逐级追踪:
-  - 如果模块 N 输出错误 → 先检查模块 N-1 的输出是否正确
-  - 第一个偏差出现的位置 = 真正的根因模块
-  - 下游模块的错误很可能是上游偏差传播的结果
-记录 first_deviation.stage 为实际出错的模块名, 而不是最后一级。
-
-7. RTL vs Golden Model 最终对齐:
-   - 最终输出必须与定点 Golden Model 逐比特对齐
-   - 允许: 定点精度损失 (截位/饱和, 须在报告中注明)
-   - 不允许: 算法方向偏离、使用容差掩盖逻辑差异
-8. 输出 JSON:
-{"overall":"pass|fail","first_deviation":{"stage":"...","signal":"...","time":N,"expected":"...","got":"..."},"compared_points":N,"max_error_lsb":N,"algo_consistent":true|false}
-
-如果没有 EDA 工具环境, 至少检查 architecture.yaml 中的 pipeline 定义与顶层连接的一致性。`,
-        { agentType: 'logic-engineer', label: 'p5-golden', phase: 'Phase 5 顶层集成' }
-      ),
-
-      // Agent 4: 资源/时序预估
-      () => agent(
-        `[顶层资源/时序预估] 评估顶层集成的资源和时序风险。
-
-模块列表: ${modList.join(', ')}
-顶层文件: 01_src/00_hdl/top/top.sv
-
-任务:
-1. 读取每个子模块接口, 估算顶层总资源
-2. 检查关键路径: longest combinational path
-3. 复位域/时钟域拓扑:
-   - 是否存在跨时钟域路径未同步?
-   - 所有模块复位一致 (i_rst 同步高有效)?
-4. 流水线完整性: 各级延迟是否匹配?
-5. 输出 JSON:
-{"resource":{"lut_est":N,"dsp_est":N,"bram_est":N},"timing":{"critical_path":"...","fmax_est":"...MHz"},"cdc_issues":["..."],"pipeline_issues":["..."]}`,
-        { agentType: 'ce-performance-oracle', label: 'p5-timing', phase: 'Phase 5 顶层集成' }
-      ),
-    ]);
-
-    // ── Step 2: 合成分析 ─────────────────────────────────────────────────
-    log('  Step 2: 合成分析结果...');
-
-    const synthesis = String(await agent(
-      `[顶层集成合成分析] 聚合以下 4 路分析结果, 锁定根因。
-
-===== 接口检查 =====
-${String(interfaceR || 'N/A').slice(0, 1000)}
-===== 数据通路 =====
-${String(dataPathR || 'N/A').slice(0, 1000)}
-===== Golden 比对 =====
-${String(goldenR || 'N/A').slice(0, 1000)}
-===== 资源/时序 =====
-${String(timingR || 'N/A').slice(0, 1000)}
-
-任务:
-1. 评估以上 4 路结果
-2. 如果有问题 → 锁定根因模块/信号/接口
-3. 区分: "接口连接错误" vs "模块逻辑错误" vs "Golden 模型不一致"
-
-[级联根因分析 — MUST]
-模块链: ${modList.join(' → ') || '(未知)'}
-当多个级联模块同时出现错误时:
-  - 最可能的根因是链中首个出错的模块 (离输入最近)
-  - 下游模块的"错误"通常是上游错误传播的结果
-  - 在 issues 中标注每个问题是 "根因" 还是 "传播性错误"
-root_cause 必须指向链中最上游的故障模块。
-
-4. 输出 JSON:
-{
-  "overall":"pass|fail|warn",
-  "issues":[{"severity":"critical|warning","module":"...","signal":"...","description":"..."}],
-  "root_cause":"...",
-  "fix_suggestion":"..."
-}`,
-      { label: 'p5-synthesis', phase: 'Phase 5 顶层集成' }
-    ) || '');
+      if (allCleanJson) {
+        log('  Step 2: 4 路结构化结论全绿，本地确定性聚合通过 (免除 p5-synthesis 模型调用)');
+        synthesis = JSON.stringify({overall:'pass',issues:[],root_cause:'none',fix_suggestion:'none'});
+      } else {
+        log('  Step 2: 合成分析结果...');
+        synthesis = String(await modelStep(
+          `顶层集成根因合成 (${modList.join(' → ')}, 级联故障指向最上游根因模块):
+接口=${String(interfaceR || 'N/A').slice(0, 800)}
+通路=${String(dataPathR || 'N/A').slice(0, 800)}
+Golden=${String(goldenR || 'N/A').slice(0, 800)}
+时序=${String(timingR || 'N/A').slice(0, 800)}
+输出 JSON: {"overall":"pass|fail|warn","issues":[{"severity":"critical|warning","module":"...","signal":"...","description":"..."}],"root_cause":"...","fix_suggestion":"..."}`,
+          { label: 'p5-synthesis', phase: 'Phase 5 顶层集成', modelTier: 'fast' }
+        ) || '');
+      }
+    }
 
     // ── Step 3: 定向修复 (如果发现问题) ──────────────────────────────────
-    const synthLower = synthesis.toLowerCase();
+    const integration = _parseStrictJsonObject(synthesis);
+    if (!['pass','warn','fail'].includes(integration?.overall) || !Array.isArray(integration.issues)) {
+      throw new Error('Phase 5 requires a structured top integration verdict');
+    }
 
-    if (synthLower.includes('"overall":"fail"') || synthLower.includes('"overall":"warn"')) {
+    if (integration.overall !== 'pass') {
       log('  Step 3: 发现顶层问题, 执行定向修复...');
 
-      const fixOut = String(await agent(
+      const fixOut = String(await modelStep(
         `[顶层定向修复] 根据合成分析的根因定位, 只修复问题模块。
 
 合成分析 (根因):
@@ -1379,7 +1044,7 @@ ${synthesis.slice(0, 1500)}
       ) || '');
 
       // 修复验证
-      const verifyFix = String(await agent(
+      const verifyFix = String(await modelStep(
         `[修复验证] 验证顶层修复是否生效。
 
 修复内容:
@@ -1395,7 +1060,8 @@ ${fixOut.slice(0, 1000)}
 
       const verifyFixVerdict = _parseStrictJsonObject(verifyFix);
       const verifyFixPass = verifyFixVerdict?.pass === true && verifyFixVerdict?.evidence_ok === true;
-      log(`  修复验证: ${verifyFixPass ? '✅ 通过' : '⚠️ 可能需要再次迭代'}`);
+      if (!verifyFixPass) throw new Error('Phase 5 top integration fix unverified: ' + (verifyFixVerdict?.reason || 'missing evidence'));
+      return '顶层修复经全链验证通过: ' + String(verifyFixVerdict.reason || '');
     } else {
       log('  ✅ 顶层分析通过, 无需修复');
     }
@@ -1406,7 +1072,7 @@ ${fixOut.slice(0, 1000)}
     log('保留原因: 全链仿真结果是 RTL 与 Golden Model bit-true 对齐的最终证据');
     log('分析维度: 接口检查 / 数据通路 / Golden 比对 / 资源时序');
     log(`模块: ${modList.join(', ') || '项目默认'}`);
-    log('合成结论: ' + (synthLower.includes('"overall":"pass"') ? '✅ 通过' : '⚠️ 见问题列表'));
+    log('合成结论: ' + integration.overall);
     log('=== 保留块结束 ===');
     log('');
 
@@ -1418,7 +1084,15 @@ nodes.p6_regression = {
   deps: ['p5_top_integration'],
   run: async (ctx) => {
     const top = ctx.p5_top_integration?.data || '';
-    const result = await agent(`执行 HDL 工作流 Phase 6: 回归覆盖率
+    if (hasAction('regression')) {
+      const receipt = await workflowAction({kind:'regression',projectRoot,label:'p6-regression',modules,fresh:true});
+      if (receipt?.executed !== true || receipt.verified !== true || receipt.ok !== true || !receipt.evidencePath ||
+          !Number.isInteger(receipt.compared_points) || receipt.compared_points <= 0 || receipt.coverageComplete !== true) {
+        throw new Error('Full regression unverified: ' + (receipt?.reason || 'missing comparison or coverage evidence'));
+      }
+      return receipt;
+    }
+    const result = await modelStep(`执行 HDL 工作流 Phase 6: 回归覆盖率
 
 顶层集成: ${String(top).slice(0, 400)}
 
@@ -1471,7 +1145,9 @@ nodes.p6b_vivado_check = {
       ? `目标器件: ${fpgaPart}`
       : `目标器件: 未由 args.part 指定 — 先从 03_xdc/*.xdc、04_prj/ 工程或 06_doc/ 中找器件型号; 仍找不到就只跑到 rtlcheck 阶段 (它也需要 -part, 可用同系列任一型号做方法学检查并在 skip_reason 里注明)。`;
 
-    const res = await agent(`执行 HDL 工作流 Phase 6b: Vivado 综合体检 (证据收集, 不做判定改写)
+    const localVivado = hasAction('vivado');
+    const res = localVivado ? await workflowAction({kind:'vivado',projectRoot,label:'p6b-vivado-check',part:fpgaPart,modules}) :
+      await agent(`执行 HDL 工作流 Phase 6b: Vivado 综合体检 (证据收集, 不做判定改写)
 
 项目根: ${projectRoot}
 模块: ${modules.join(', ') || '项目默认'}
@@ -1518,37 +1194,59 @@ ${partHint}
       { agentType: 'logic-engineer', label: 'p6b-vivado-check', phase: 'Phase 6b Vivado 综合体检', schema: VIVADO_SCHEMA }
     );
 
-    if (!res || res.tool_available !== true) {
-      const why = res?.skip_reason || 'Vivado 不可用';
+    if (res?.tool_available === false && res.flow_ran !== true && res.executed !== true && res.exitCode == null &&
+        !res.failureKind && !res.blocking_items?.length && typeof res.skip_reason === 'string' && res.skip_reason.trim()) {
+      const why = res.skip_reason;
       log(`⏭️ [Phase 6b] 跳过 Vivado 综合体检 — ${why}`);
       log('   ⚠️ 本次运行**没有**综合级证据: 资源/Fmax/时序/推断成功与否均为未验证。');
       return { skipped: true, reason: why, toolAvailable: false };
     }
 
-    const crit = Number(res.critical || 0);
-    const errs = Number(res.errors || 0);
-    const wns = (res.wns_ns === null || res.wns_ns === undefined) ? null : Number(res.wns_ns);
-    const blockers = Array.isArray(res.blocking_items) ? res.blocking_items : [];
+    const evidencePath = localVivado ? res?.evidencePath : '04_prj/rpt/flow_summary.json';
+    const raw = localVivado ? res?.report : _parseStrictJsonObject(res?.summary_json);
+    const stages = Array.isArray(raw?.stages_run) ? raw.stages_run : [];
+    const timedStage = stages.includes('route') ? 'route' : 'synth';
+    const timed = raw?.[timedStage];
+    const checkedStages = ['rtlcheck','synth','route'].filter(stage => stages.includes(stage));
+    const optionalStages = ['opt','place'].filter(stage => stages.includes(stage));
+    const validCount = count => Number.isInteger(count) && count >= 0;
+    if (res?.tool_available !== true || res.flow_ran !== true || res.failureKind || (res.exitCode != null && res.exitCode !== 0) ||
+        typeof evidencePath !== 'string' || !evidencePath.trim() || typeof raw?.top !== 'string' || !raw.top.trim() ||
+        typeof raw.part !== 'string' || !raw.part.trim() || (fpgaPart && fpgaPart !== raw.part) || typeof raw.ok !== 'boolean' ||
+        !stages.includes('synth') || ![timed?.wns,timed?.whs].every(Number.isFinite) ||
+        !Array.isArray(raw.blocking) || !Array.isArray(res.blocking_items) ||
+        ![res.critical,res.errors].every(validCount) ||
+        !checkedStages.every(stage => validCount(raw[stage]?.critical) && validCount(raw[stage]?.error)) ||
+        !optionalStages.every(stage => (raw[stage]?.critical === undefined || validCount(raw[stage]?.critical)) &&
+          (raw[stage]?.error === undefined || validCount(raw[stage]?.error)))) {
+      throw new Error('Vivado evidence insufficient: ' + (res?.reason || 'missing completed stage, scope, setup/hold or diagnostics') +
+        ' ' + (evidencePath || res?.logPath || ''));
+    }
+    const allStages = [...checkedStages,...optionalStages];
+    const crit = Math.max(res.critical,allStages.reduce((n,stage) => n + (raw[stage]?.critical || 0),0));
+    const errs = Math.max(res.errors,allStages.reduce((n,stage) => n + (raw[stage]?.error || 0),0));
+    const wns = timed.wns;
+    const whs = timed.whs;
+    const blockers = [...new Set([...raw.blocking,...res.blocking_items])];
     const waived = Array.isArray(res.waived_items) ? res.waived_items : [];
-    const stages = Array.isArray(res.stages_run) ? res.stages_run : [];
 
     log(`[Phase 6b] vivado_flow 阶段: ${stages.join(' → ') || '(未报告)'}  脚本判定 ok=${res.ok}`);
     log(`  违规: error=${errs}, critical=${crit}`);
-    log(`  时序: WNS=${wns === null ? '(未跑到综合/无约束)' : wns + 'ns'}, WHS=${res.whs_ns ?? '-'}`);
+    log(`  时序: ${timedStage}.wns=${wns}ns, ${timedStage}.whs=${whs}ns`);
     if (res.resources) log(`  资源: ${JSON.stringify(res.resources)}`);
     for (const w of waived.slice(0, 10)) log(`  ⚠️ 豁免(不阻断): ${w}`);
     for (const s of (res.skipped_reports || []).slice(0, 10)) log(`  ℹ️ 跳过的报告: ${s}`);
     for (const b of blockers.slice(0, 20)) log(`  ❌ ${b}`);
 
-    const timingFail = wns !== null && wns < 0;
+    const timingFail = wns < 0 || whs < 0;
     // 脚本自身的门禁判定 (ok) 与本节点的独立复核取"或"—— 任一判失败即阻断
-    const scriptFail = res.ok === false;
+    const scriptFail = res.ok !== true || raw.ok !== true;
     if (scriptFail || crit + errs > 0 || timingFail || blockers.length > 0) {
       throw new Error(
         `❌ [Phase 6b Vivado 体检] 未通过: script_ok=${res.ok}, error=${errs}, critical=${crit}` +
-        (timingFail ? `, WNS=${wns}ns (< 0)` : '') +
+        (timingFail ? `, WNS=${wns}ns, WHS=${whs}ns` : '') +
         (blockers.length ? `\n   阻断项:\n   - ${blockers.slice(0, 20).join('\n   - ')}` : '') +
-        `\n   完整证据: 04_prj/rpt/flow_summary.json` +
+        `\n   完整证据: ${evidencePath}` +
         `\n   处理指引: methodology/DRC 违规家族对照见 ug949-rtl-methodology.md §8.1;` +
         ` 推断失败见 §4; 复位豁免细则见 vivado-synthesis-ug901.md §5.1。` +
         `\n   修完后可从检查点续跑, 不必重综合: vivado_flow.tcl -from opt -to route`
@@ -1556,18 +1254,21 @@ ${partHint}
     }
 
     log('✅ [Phase 6b] Vivado 综合体检通过 (无 Critical/Error, 时序满足)');
-    return {
-      pass: true,
-      toolAvailable: true,
-      stagesRun: stages,
-      critical: crit,
-      errors: errs,
-      wns_ns: wns,
-      whs_ns: res.whs_ns ?? null,
-      resources: res.resources || {},
-      waived,
-      summaryJson: String(res.summary_json || '').slice(0, 2000),
-    };
+    const report = {top:raw.top,part:raw.part,ok:raw.ok,stages_run:stages};
+    for (const key of ['tool','vivado_version','aborted','constrained','io_constrained','report_dir']) {
+      if (raw[key] !== undefined) report[key] = raw[key];
+    }
+    if (Array.isArray(raw.blocking)) report.blocking = raw.blocking;
+    for (const stage of stages.filter(s => ['rtlcheck','synth','opt','place','route'].includes(s))) {
+      if (!raw[stage] || typeof raw[stage] !== 'object') continue;
+      report[stage] = {};
+      for (const field of ['wns','whs','lut','ff','bram','uram','dsp','srl','control_sets','critical','error','cdc_critical','waived']) {
+        const value = raw[stage]?.[field];
+        if (Number.isFinite(value) || (field === 'waived' && Array.isArray(value))) report[stage][field] = value;
+      }
+    }
+    if (Array.isArray(raw.skipped_reports) && raw.skipped_reports.length) report.skipped_reports = raw.skipped_reports;
+    return {pass:true,toolAvailable:true,evidencePath,report};
   },
 };
 
@@ -1576,49 +1277,32 @@ ${partHint}
 nodes.p7_review = {
   deps: ['p5_top_integration'],
   run: async (ctx) => {
-    const top = ctx.p5_top_integration?.data || '';
+    const top = String(ctx.p5_top_integration?.data || '').slice(0, 300);
+    const topEv = top ? [{id:'top',ref:'06_doc/architecture.yaml',summary:top}] : [{id:'top',ref:'06_doc/architecture.yaml'}];
+    const schema = {type:'object',properties:{pass:{type:'boolean'},summary:{type:'string'},
+      evidence:{type:'array',items:{type:'string'}}},required:['pass','summary','evidence']};
     const [correctness, contract] = await parallel([
-      () => agent(`执行 HDL 工作流 Phase 7: 代码审查 (正确性维度)
+      () => modelStep(`Phase 7 正确性审查 (${modules.join(', ') || '项目默认'}):
+核查 (1) ri_/ro_ 寄存与 CDC (ASYNC_REG/XPM) (2) 命名规范 (3) 三段式 FSM+default (4) lint/位宽/无锁存器/无组合环 (5) 与 Golden/P2/architecture.yaml 一致 (6) 工具链禁令(NBA 左值禁函数下标) (7) UG949: 禁门控时钟；未复位寄存器仅限 BRAM/DSP/SRL 且须带 "// [复位豁免]"；综合属性须带理由注释。
+输出 pass、简要事实与证据定位(file:line)；任何阻断项 pass=false。`,
+        { agentType: 'ce-correctness-reviewer', label: 'p7-review-correctness', phase: 'Phase 7 代码审查', schema, modelTier: 'standard' },
+        { required: { modules }, evidence: topEv }),
 
-顶层集成: ${String(top).slice(0, 400)}
-
-审查维度:
-1. 时序安全 (输入寄存/输出寄存/CDC)
-2. 命名规范 (ri_/ro_/i_/o_)
-3. 状态机 (三段式 + default)
-4. Lint 门禁 (make lint pass)
-5. 位宽匹配 / latch 推断 / 组合环路
-6. 模型一致性检查:
-   - 关键信号命名是否与 MATLAB golden model 对应变量一致?
-   - 位宽/定点格式是否与 Phase 2 报告一致?
-   - 模块命名是否与 architecture.yaml 一致?
-7. [工具链] 如有 EDA 工具链约束 (如 ModelSim 10.6c 禁令),
-   检查 RTL 是否违规
-8. [Vivado 可综合性] 依据 packs/fpga/skills/hdl-coding/references/ug949-rtl-methodology.md:
-   - 门控时钟 always @(posedge (clk & en)) → 违规, 必须改 BUFGCE 时钟使能
-   - 未加复位的寄存器: 是否属于 §5.1 豁免场景 (BRAM 输出/DSP 流水/SRL 链)?
-     属于 → 必须有 "// [复位豁免] ..." 注释; 不属于 → 违反红线 3
-   - 综合属性 (RAM_STYLE/USE_DSP/MAX_FANOUT/DONT_TOUCH/ASYNC_REG 等):
-     每个是否有注释说明为什么加? 无注释 → 标记为待清理
-   - CDC 同步链是否带 ASYNC_REG (或改用 XPM_CDC 宏)?
-
-输出: 审查报告 PASS/FAIL + 修改建议`, { agentType: 'ce-correctness-reviewer', label: 'p7-review-correctness', phase: 'Phase 7 代码审查' }),
-
-      () => agent(`执行 HDL 工作流 Phase 7: 代码审查 (接口契约维度)
-
-顶层集成: ${String(top).slice(0, 400)}
-
-审查维度:
-1. valid-ready 握手时序 (valid 不得依赖 ready)
-2. 端口位宽与 architecture.yaml / interface_contract.md 一致
-3. AXI-Stream 合规 (tvalid/tready/tlast/tkeep)
-4. CDC 边界完整性 (跨时钟信号清单 vs clock_domain.md)
-5. 例化悬空端口
-
-输出: 审查报告 PASS/FAIL + 修改建议`, { agentType: 'ce-api-contract-reviewer', label: 'p7-review-contract', phase: 'Phase 7 代码审查' }),
+      () => modelStep(`Phase 7 接口契约审查 (${modules.join(', ') || '项目默认'}):
+核查 (1) valid/ready 握手(valid 不依赖 ready) (2) 端口位宽与 architecture.yaml/interface_contract.md 一致 (3) AXI-Stream 合规 (4) CDC 边界对齐 clock_domain.md (5) 无例化悬空端口。
+输出 pass、简要事实与证据定位(file:line)；任何阻断项 pass=false。`,
+        { agentType: 'ce-api-contract-reviewer', label: 'p7-review-contract', phase: 'Phase 7 代码审查', schema, modelTier: 'standard' },
+        { required: { modules }, evidence: topEv }),
     ]);
 
-    return `[正确性审查]\n${String(correctness || 'N/A').slice(0, 1200)}\n\n[接口契约审查]\n${String(contract || 'N/A').slice(0, 1200)}`;
+    const reviews = {correctness:_parseStrictJsonObject(correctness),contract:_parseStrictJsonObject(contract)};
+    for (const [name,result] of Object.entries(reviews)) {
+      if (result?.pass !== true || typeof result.summary !== 'string' || !result.summary.trim() ||
+          !Array.isArray(result.evidence) || !result.evidence.length || result.evidence.some(ref => typeof ref !== 'string' || !ref.trim())) {
+        throw new Error(`P7 ${name} review blocked: ${result?.summary || 'missing independent review evidence'}`);
+      }
+    }
+    return reviews;
   },
 };
 
@@ -1628,35 +1312,31 @@ nodes.p8_report = {
   deps: ['p6_regression', 'p6b_vivado_check', 'p7_review'],
   run: async (ctx) => {
     const regression = ctx.p6_regression?.data || '';
-    const review = ctx.p7_review?.data || '';
+    const reviews = ctx.p7_review.data;
     const vivado = ctx.p6b_vivado_check?.data || {};
-    const result = await agent(`生成 HDL 工作流 Phase 8: 总结报告 + 清理
-
-回归结果: ${String(regression).slice(0, 300)}
-审查结果: ${String(review).slice(0, 300)}
-Vivado 综合体检: ${JSON.stringify(vivado).slice(0, 600)}
-  → 报告须包含"综合级证据"一节: 资源实测 vs 预算、WNS、methodology/CDC 违规数。
-  → 若 skipped=true, 必须在报告里写明"无 EDA 环境, 综合级结论未验证", 不得省略。
-
-输出:
-1. 汇总实现报告 (含全链验证矩阵)
-2. 文档归档
-3. 经验记录
-
-━━━ 清理 [MUST] ━━━
-4. 运行 make clean 删除以下 transient 文件:
-   - wlft*           (ModelSim 随机名波形文件)
-   - transcript      (ModelSim 日志)
-   - *.wlf vsim.wlf  (波形文件)
-   - vish_stacktrace.vstf vsim_stacktrace.vstf
-   - 02_sim/work*/   (Vivado 仿真缓存)
-   - work/           (ModelSim 编译库)
-   - transcript      (ModelSim 日志)
-   - *.wlf vsim.wlf  (波形文件)
-   - *.vcd *.vcd.lxt (VCD dump)
-   - __pycache__/ *.pyc (Python 缓存)
-5. 确认仅保留: 01_src/ 02_sim/tv/ 02_sim/check_results/ 06_doc/ 07_mat/ 08_py/ 下的必要文件
-━━━━━━━━━━━━`, { label: 'p8-report' });
+    if (hasExplicitAction('report')) {
+      const rep = await workflowAction({
+        kind:'report',projectRoot,label:'p8-report',modules,
+        mode:liteMode ? 'lite' : 'full',
+        hardLimits:resourceLimits,
+        moduleComparisons:ctx.p45_evidence_gate?.data?.fileCheck || [],
+        regressionPath:regression?.evidencePath || '02_sim/',
+        regressionSummary:typeof regression === 'string' ? regression.slice(0,240) : 'verified receipt',
+        synthesis:vivado,
+        reviews,
+      });
+      if (rep?.executed === true && rep.ok === true) return rep.summary || '06_doc/workflow-verification.md generated';
+    }
+    const result = await modelStep('汇总实现报告到 06_doc/workflow-verification.md。逐项列出验收标准、已测范围、指标、证据文件及复用来源。引用完整的回归/审查报告。综合级结论说明资源实测与预算、建立/保持时序和 DRC；未运行则标注未验证。保留复验日志、检查点与签收产物，临时文件归其运行者管理。',
+      {label:'p8-report', modelTier:'fast'},
+      {kind:'decision',required:{modules,mode:liteMode ? 'lite' : 'full',hardLimits:resourceLimits,
+        synthesis:vivado.toolAvailable === true ? vivado.report :
+          {unverified:true,reason:vivado.reason || 'no synthesis receipt'}},
+       evidence:[...(vivado.evidencePath ? [{id:'synthesis',ref:vivado.evidencePath}] : []),
+         ...Object.entries(reviews).flatMap(([name,result]) =>
+         result.evidence.map((ref,index) => ({id:`review-${name}-${index}`,ref,summary:result.summary}))),
+         {id:'regression',ref:regression?.evidencePath || '02_sim/',summary:typeof regression === 'string' ? regression.slice(0,400) : '读取回执'},
+         ...modules.map(mod=>({id:'sim-'+mod,ref:`02_sim/check_results/${mod}.json`}))]});
     return result;
   },
 };
@@ -1669,51 +1349,23 @@ nodes.verifier = {
     const report = ctx.p8_report?.data || '';
     const gateResult = ctx.p45_evidence_gate?.data || {};
 
-    const summary = [
-      '## Phase 0 基础设施',     ctx.p0_infra?.data || 'N/A',
-      '## Phase 1a 系统方案',   ctx.p1a_sys_design?.data?.slice(0, 300) || 'N/A',
-      '## Phase 1b 微架构',     ctx.p1b_micro_arch?.data || 'N/A',
-      '## Phase 2 定点量化',     ctx.p2_fixedpt?.data || 'N/A',
-      '## Phase 3 TB+向量生成',  ctx.p3_tb?.data || 'N/A',
-      '## Phase 4 RTL+脚本对比', ctx.p4_rtl?.data || 'N/A',
-      '## Phase 4.5 证据门禁',   JSON.stringify(gateResult).slice(0, 500) || 'N/A',
-      '## Phase 5 全链仿真',     ctx.p5_top_integration?.data || 'N/A',
-      '## Phase 6 回归',         ctx.p6_regression?.data || 'N/A',
-      '## Phase 6b Vivado 体检', JSON.stringify(ctx.p6b_vivado_check?.data || {}).slice(0, 600) || 'N/A',
-      '## Phase 7 审查',         ctx.p7_review?.data || 'N/A',
-      '## Phase 8 报告',         report,
-    ].join('\n\n');
+    const synthesis = ctx.p6b_vivado_check?.data || {};
+    const required = {modules,mode:liteMode ? 'lite' : 'full',hardLimits:resourceLimits,
+      signedInterface:args?.checkpoints?.['design-review']?.interfaceContractSha256 ?? null,
+      moduleComparisons:(gateResult.fileCheck || []).map(row=>({module:row.module,points:row.compared_points,passed:row.pass})),
+      synthesis:synthesis.skipped ? {unverified:true,reason:synthesis.reason} : synthesis.report};
+    const evidence = [
+      {id:'report',ref:'06_doc/workflow-verification.md',summary:String(report).slice(0,500)},
+      {id:'design',ref:'06_doc/architecture.yaml'},{id:'contracts',ref:'06_doc/interface_contract.md'},
+      ...modules.map(mod=>({id:'sim-'+mod,ref:`02_sim/check_results/${mod}.json`})),
+    ];
+    if (ctx.p6_regression?.data?.evidencePath) evidence.push({id:'regression',ref:ctx.p6_regression.data.evidencePath});
+    if (!synthesis.skipped) evidence.push({id:'synthesis',ref:synthesis.evidencePath});
 
-    const result = await agent(`你是一个**跨阶段校验者**。审以下 HDL 开发工作流的全链路结果是否满足要求。
-
-逐条检查:
-1. 所有 10 个 Phase 是否都有输出
-2. Phase 4 验证矩阵: 所有模块 ✅?
-3. **Phase 4.5 证据门禁**: check_results/*.json 文件:
-   - 所有模块都有对应 .json 文件?
-   - 所有 status==PASS?
-   - compared_points > 0?
-4. Phase 5 全链仿真各中间级与 MATLAB golden model 一致?
-5. Phase 6 回归是否通过 (要求真实编译/仿真)
-5b. **Phase 6b Vivado 综合体检**:
-   - toolAvailable=true → critical+errors 必须为 0, WNS 必须 >= 0 (或无时序约束时注明)
-   - skipped=true → 报告中**必须**显式写明"无 EDA 环境, 综合级结论未验证";
-     若报告里出现了未标注的资源/Fmax/时序断言 → pass=false (把静态推断当结论是本仓库禁止项)
-6. Phase 7 审查是否通过
-7. **对照 architecture.yaml 模块列表**: 有没有模块遗漏验证?
-8. 是否适用于模块: ${modules.join(', ') || '项目默认'}
-
-结果摘要:
-${summary.slice(0, 3000)}
-
-输出 JSON:
-{
-  "pass": true/false,
-  "reason": "通过 或 说明缺哪条要求",
-  "missing": ["缺失项列表"],
-  "strongest_phase": "表现最好的阶段",
-  "weakest_phase": "需改进的阶段"
-}`, { label: 'verifier' });
+    const result = await modelStep(`跨阶段终验 (${modules.join(', ') || '项目默认'}):
+核对 (1) 各阶段产物齐备且与 architecture.yaml 模块一致无遗漏 (2) P4/P4.5 全部模块 check_results/*.json status=PASS 且 compared_points>0 (3) P5 全链与 Golden 对齐 (4) P6 真实回归通过(非 Lite) (5) P6b: toolAvailable=true 时 critical+errors=0 且 WNS/WHS>=0；skipped=true 时报告须明写“无 EDA 环境, 综合级结论未验证”，禁把静态推断当结论 (6) P7 双审通过。
+输出 JSON: {"pass":true|false,"reason":"...","missing":[...],"strongest_phase":"...","weakest_phase":"..."}`,
+      { label: 'verifier', modelTier: 'standard' }, {kind:'decision',required,evidence});
     return result;
   },
 };
@@ -1785,7 +1437,9 @@ if (args?.goldenBaseline !== undefined) {
       || !baseline.cases.length || !names(baseline.tools ?? []) || !Array.isArray(baseline.limits ?? [])) {
     throw new Error('goldenBaseline requires entry, named cases and optional tools/limits arrays');
   }
-  const summary = await agent(`在项目 ${projectRoot} 对现有 Golden 做开工预检，仅运行原模型和必要工具的小例程，保留原模型。
+  const goldenAction = hasAction('golden');
+  const summary = goldenAction ? await workflowAction({kind:'golden',projectRoot,label:'golden-preflight-run',baseline}) :
+    await agent(`在项目 ${projectRoot} 对现有 Golden 做开工预检，仅运行原模型和必要工具的小例程，保留原模型。
 将本次调用给定的范围逐字保存为 var/workflow/golden-scope.json，然后按此范围运行：${JSON.stringify(baseline)}
 写 var/workflow/golden-preflight.json，包含 entry (项目相对路径)、实跑时入口文件的 entrySha256、原入口的 exitCode 和 entryLog，
 cases 逐项覆盖必测工况，每项含 name、source（正常路径 normal）、oracleInputs、实际 compared 样本数、验收条件 criterion、实测是否达标 passed 和 log。
@@ -1795,8 +1449,11 @@ tools 数组每项含 name、实际小例程的 exitCode 和 log；日志使用�
 返回供用户审核的报告，逐项列出原入口/替代入口、判据、实测值、日志、工具实跑阶段及开工建议。
 对通信接收机列出发/收帧、星座图、EVM 参照、BER 分子与分母。涉及噪声时列出配置 SNR 与测得 SNR、测量位置和功率口径。单列注入诊断；零分母写“无样本”。`,
     { label: 'golden-preflight-run', phase: 'Pre-flight 检查', agentType: 'algorithm-engineer' });
-  log(String(summary));
-  const evidence = await _evidenceGate('--golden', 'golden-preflight-evidence', 'Pre-flight 检查');
+  if (goldenAction && (summary?.executed !== true || summary.ok !== true)) {
+    throw new Error('Golden preflight blocked: ' + (summary?.reason || 'missing execution receipt'));
+  }
+  log(goldenAction ? [summary.summary,summary.evidencePath].filter(Boolean).join(' ') : String(summary));
+  const evidence = await _evidenceGate(['--golden'], 'golden-preflight-evidence', 'Pre-flight 检查');
   const json = _parseStrictJsonObject(evidence.gateJson);
   const actual = json?.golden;
   const missing = (expected, seen) => expected.filter(name => !Array.isArray(seen) || !seen.includes(name));

@@ -9,7 +9,7 @@ const path = require('node:path');
 
 const { openDb } = require('../../sqlite/index.cjs');
 const { analyzeTelemetry } = require('../harness-telemetry-prune.cjs');
-const { checkVivadoSummary } = require('../hdl-evidence-gate.cjs');
+const { checkModule, checkVivadoSummary } = require('../hdl-evidence-gate.cjs');
 const { recordTranscriptUsage } = require('../../sqlite/store-costs.cjs');
 
 test('telemetry-prune identifies zero-hit tentative facts and zero-load rules strictly read-only', (t) => {
@@ -68,6 +68,79 @@ test('hdl-evidence-gate --vivado-summary validates WNS, WHS, inferred latches, a
   assert.match(bad.failures.join('\n'), /WHS -0\.02/);
   assert.match(bad.failures.join('\n'), /inferred latches 3/);
   assert.match(bad.failures.join('\n'), /CDC critical violations 2/);
+
+  // Real vivado_flow.tcl / p6b stage-nested schema (synth & route)
+  const realSynthFile = path.join(tmp, 'flow_synth.json');
+  fs.writeFileSync(realSynthFile, JSON.stringify({
+    tool: 'vivado_flow',
+    vivado_version: '2023.1.1',
+    top: 'mac_pipe',
+    part: 'xc7a35tcpg236-1',
+    constrained: true,
+    aborted: false,
+    ok: true,
+    stages_run: ['rtlcheck', 'synth'],
+    rtlcheck: { critical: 0, error: 0, waived: [] },
+    synth: { lut: 4, ff: 5, bram: 0, uram: 0, dsp: 1, srl: 0, wns: 0.559, whs: 0.262, critical: 0, error: 0, cdc_critical: 0 },
+    blocking: [],
+  }));
+  const realOk = checkVivadoSummary(tmp, 'flow_synth.json');
+  assert.equal(realOk.pass, true, realOk.failures.join('; '));
+  assert.equal(realOk.metrics.stage, 'synth');
+  assert.equal(realOk.metrics.wns, 0.559);
+  assert.equal(realOk.metrics.whs, 0.262);
+
+  const realFailFile = path.join(tmp, 'flow_route_fail.json');
+  fs.writeFileSync(realFailFile, JSON.stringify({
+    tool: 'vivado_flow',
+    vivado_version: '2023.1.1',
+    top: 'mac_pipe',
+    part: 'xc7a35tcpg236-1',
+    constrained: true,
+    aborted: false,
+    ok: false,
+    stages_run: ['rtlcheck', 'synth', 'opt', 'place', 'route'],
+    rtlcheck: { critical: 0, error: 0 },
+    synth: { wns: 0.2, whs: 0.1, critical: 0, error: 0 },
+    place: { wns: 0.05, whs: 0.02, error: 1 },
+    route: { wns: -0.08, whs: 0.01, critical: 1, error: 0, cdc_critical: 1 },
+    blocking: ['route WNS < 0'],
+  }));
+  const realBad = checkVivadoSummary(tmp, 'flow_route_fail.json');
+  assert.equal(realBad.pass, false);
+  assert.match(realBad.failures.join('\n'), /ok=false/);
+  assert.match(realBad.failures.join('\n'), /stage errors=1/);
+  assert.match(realBad.failures.join('\n'), /stage critical warnings=1/);
+  assert.match(realBad.failures.join('\n'), /blocking items/);
+  assert.match(realBad.failures.join('\n'), /WNS -0\.08/);
+  assert.match(realBad.failures.join('\n'), /CDC critical violations 1/);
+});
+
+test('hdl-evidence-gate checkModule rejects post-simulation edits to RTL or transitive includes', (t) => {
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'mod-freshness-'));
+  t.after(() => fs.rmSync(tmp, { recursive: true, force: true }));
+
+  const hdlDir = path.join(tmp, '01_src', '00_hdl', 'alu');
+  const resDir = path.join(tmp, '02_sim', 'check_results');
+  fs.mkdirSync(hdlDir, { recursive: true });
+  fs.mkdirSync(resDir, { recursive: true });
+
+  const defsPath = path.join(hdlDir, 'alu_defs.svh');
+  const rtlPath = path.join(hdlDir, 'alu.sv');
+  const resPath = path.join(resDir, 'alu.json');
+  fs.writeFileSync(defsPath, '`define ALU_W 16\n');
+  fs.writeFileSync(rtlPath, '`include "alu_defs.svh"\nmodule alu; endmodule\n');
+  fs.writeFileSync(resPath, JSON.stringify({ module: 'alu', status: 'PASS', compared_points: 64, mismatches: 0 }));
+
+  assert.equal(checkModule(tmp, 'alu').pass, true);
+
+  // Editing transitive header after check_results invalidates module evidence
+  const future = (Date.now() + 5000) / 1000;
+  fs.writeFileSync(defsPath, '`define ALU_W 8\n');
+  fs.utimesSync(defsPath, future, future);
+  const stale = checkModule(tmp, 'alu');
+  assert.equal(stale.pass, false);
+  assert.match(stale.reason, /stale evidence.*alu_defs\.svh/);
 });
 
 test('store-costs parses Antigravity PLANNER_RESPONSE transcript token usage idempotently', (t) => {

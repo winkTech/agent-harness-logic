@@ -13,6 +13,7 @@ const DEFAULT_WORKFLOW_DIR = path.join(HOME, 'workflows');
 
 const STRICT_WORKFLOWS = new Set([
   'architecture-review-workflow',
+  'blind-audit-workflow',
   'code-review-workflow',
   'hdl-coding-dag-workflow',
   'rag-skill-workflow',

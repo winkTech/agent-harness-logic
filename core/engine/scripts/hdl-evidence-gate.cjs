@@ -32,7 +32,9 @@
 
 const fs = require('node:fs');
 const path = require('node:path');
-const { projectFile, checkFixedPoint, checkVerification } = require('./lib/hdl-phase-readiness.cjs');
+const crypto = require('node:crypto');
+const { projectFile, checkFixedPoint, checkVerification, expandLocalSources } = require('./lib/hdl-phase-readiness.cjs');
+const { resolvePackAsset } = require('./lib/pack-config.cjs');
 
 // Phase 2.4：防写开关双名兼容（宿主名映射集中在 io/env.cjs，本文件不出现宿主词）。
 const { envValue } = require('./io/env.cjs');
@@ -75,6 +77,7 @@ function parseArgs(argv) {
       out.hardLimits[pair[1]] = Number(pair[2]);
     }
     else if (a === '--lite') out.lite = true;
+    else if (a === '--redlines') out.redlines = true;
     else if (a === '--modules') out.modules = String(argv[++i] || '').split(',').map(s => s.trim()).filter(Boolean);
     else if (a === '--vivado-summary') {
       const next = argv[i + 1];
@@ -109,8 +112,8 @@ function parseArgs(argv) {
   if ((out.rtlReady || out.fixedPoint) && (!out.modules.length || out.modules.some(mod => !/^[A-Za-z_][A-Za-z0-9_$]*$/.test(mod)))) {
     return { error: 'phase readiness requires --modules with explicit HDL identifiers' };
   }
-  if (!out.arch && !out.golden && !out.checklist && !out.vivadoSummary && out.modules.length === 0) {
-    return { error: 'nothing to check: pass --arch, --vivado-summary and/or --modules a,b,c' };
+  if (!out.arch && !out.golden && !out.checklist && !out.vivadoSummary && !out.redlines && out.modules.length === 0) {
+    return { error: 'nothing to check: pass --arch, --redlines, --vivado-summary and/or --modules a,b,c' };
   }
   return out;
 }
@@ -137,14 +140,16 @@ function checklistInventory(phase) {
   return { phase, groups, counts, total: seen.size };
 }
 
-function checkGolden(root) {
+function checkGolden(root, candidate) {
   const receipt = 'var/workflow/golden-preflight.json';
   const failures = [];
   let data;
   try {
-    const file = projectFile(root, receipt);
-    if (!file) throw new Error('missing receipt');
-    data = JSON.parse(readTextNoBom(file));
+    if (candidate === undefined) {
+      const file = projectFile(root, receipt);
+      if (!file) throw new Error('missing receipt');
+      data = JSON.parse(readTextNoBom(file));
+    } else data = candidate;
     if (!data || typeof data !== 'object') throw new Error('invalid receipt');
   } catch (err) {
     return { failures: [receipt + ': ' + err.message] };
@@ -250,11 +255,74 @@ function checkModule(projectRoot, mod) {
     entry.reason = `status=${data.status ?? 'MISSING'}, first_fail_at=${data.first_fail_at ?? 'N/A'}`;
     return entry;
   }
+  if (data.mismatches !== undefined && (!Number.isSafeInteger(Number(data.mismatches)) || Number(data.mismatches) !== 0)) {
+    entry.reason = `mismatches=${data.mismatches} — PASS result cannot contain mismatches`;
+    return entry;
+  }
   const points = Number(data.compared_points || 0);
   if (!(points > 0)) {
     entry.reason = `compared_points=${data.compared_points ?? 0} — comparison script likely never executed`;
     return entry;
   }
+
+  const sha256File = (abs) => crypto.createHash('sha256').update(fs.readFileSync(abs)).digest('hex');
+  if (data.hashes && typeof data.hashes === 'object' && !Array.isArray(data.hashes)) {
+    for (const [rel, expected] of Object.entries(data.hashes)) {
+      const target = projectFile(projectRoot, rel);
+      if (!target || sha256File(target) !== expected) {
+        entry.reason = `stale evidence: input digest mismatch for ${rel}`;
+        return entry;
+      }
+    }
+  }
+
+  const candidateRels = [
+    `01_src/00_hdl/${mod}/${mod}.sv`,
+    `01_src/00_hdl/${mod}/${mod}.v`,
+    `01_src/00_hdl/${mod}.sv`,
+    `01_src/00_hdl/${mod}.v`,
+    `rtl/${mod}.sv`,
+    `rtl/${mod}.v`,
+    `02_sim/${mod}/tb_${mod}.sv`,
+    `02_sim/${mod}/tb_${mod}.v`,
+    `02_sim/tb_${mod}.sv`,
+    `02_sim/tb_${mod}.v`,
+    `02_sim/check_${mod}.py`,
+    `02_sim/tv/${mod}_tv.txt`,
+  ];
+  const modHdlDir = path.join(projectRoot, '01_src', '00_hdl', mod);
+  if (fs.existsSync(modHdlDir) && fs.statSync(modHdlDir).isDirectory()) {
+    for (const name of fs.readdirSync(modHdlDir)) {
+      if (/\.(?:sv|svh|v|vh)$/i.test(name)) candidateRels.push(`01_src/00_hdl/${mod}/${name}`);
+    }
+  }
+  const existingRels = [];
+  for (const rel of [...new Set(candidateRels)]) {
+    const abs = path.resolve(projectRoot, rel);
+    if (!fs.existsSync(abs)) continue;
+    const st = fs.statSync(abs);
+    if (!st.isFile()) continue;
+    if (st.size === 0) {
+      entry.reason = `empty module input: ${rel}`;
+      return entry;
+    }
+    if (projectFile(projectRoot, rel)) existingRels.push(rel);
+  }
+  if (typeof data.rtlSha256 === 'string') {
+    const primaryRtl = existingRels.find((r) => r.startsWith('01_src/00_hdl/') || r.startsWith('rtl/'));
+    if (primaryRtl && sha256File(projectFile(projectRoot, primaryRtl)) !== data.rtlSha256) {
+      entry.reason = `stale evidence: RTL digest mismatch for ${primaryRtl}`;
+      return entry;
+    }
+  }
+  for (const rel of expandLocalSources(projectRoot, existingRels)) {
+    const abs = projectFile(projectRoot, rel);
+    if (abs && fs.statSync(abs).mtimeMs > stat.mtimeMs) {
+      entry.reason = `stale evidence: ${rel} modified after check_results/${mod}.json — re-run simulation`;
+      return entry;
+    }
+  }
+
   entry.pass = true;
   entry.compared_points = points;
   entry.max_error_lsb = data.max_error_lsb ?? 0;
@@ -262,9 +330,10 @@ function checkModule(projectRoot, mod) {
 }
 
 /**
- * 结构化硬件指标门禁（M5）：消费 vivado-flow 的 flow_summary.json。
- * 支持嵌套结构（timing.wns_ns / methodology.inferred_latches / cdc.critical_violations）
- * 以及扁平字段（wns / whs / inferred_latches / cdc_critical）。
+ * 结构化硬件指标门禁（M5）：消费 vivado-flow 的 flow_summary.json 或 p6b 结构化摘要。
+ * 同时兼容：
+ *   1. vivado_flow.tcl / p6b 阶段结构（synth/route.{wns,whs,critical,error,cdc_critical}, ok, aborted, blocking）
+ *   2. 传统嵌套/扁平字段（timing.wns_ns / methodology.inferred_latches / cdc.critical_violations）
  */
 function checkVivadoSummary(projectRoot, summaryRelOrAbs = '03_impl/flow_summary.json', thresholds = {}) {
   const minWns = thresholds.minWns ?? 0;
@@ -302,25 +371,77 @@ function checkVivadoSummary(projectRoot, summaryRelOrAbs = '03_impl/flow_summary
     }
     return null;
   };
+  const stagesRun = Array.isArray(data.stages_run) ? data.stages_run : [];
+  const timedStageName = (stagesRun.includes('route') || (data.route && typeof data.route === 'object'))
+    ? 'route'
+    : 'synth';
+  const timedStage = data[timedStageName];
   const status = String(data.status || '').toUpperCase();
-  const wns = pickNum(data.timing?.wns_ns, data.timing?.wns, data.wns_ns, data.wns);
-  const whs = pickNum(data.timing?.whs_ns, data.timing?.whs, data.whs_ns, data.whs);
+  const wns = pickNum(
+    data.timing?.wns_ns,
+    data.timing?.wns,
+    data.wns_ns,
+    data.wns,
+    timedStage?.wns_ns,
+    timedStage?.wns,
+  );
+  const whs = pickNum(
+    data.timing?.whs_ns,
+    data.timing?.whs,
+    data.whs_ns,
+    data.whs,
+    timedStage?.whs_ns,
+    timedStage?.whs,
+  );
   const latches = pickNum(
     data.methodology?.inferred_latches,
     data.synthesis?.inferred_latches,
+    data.synth?.inferred_latches,
+    data.synth?.latches,
     data.inferred_latches,
     data.latches,
   );
+  const stageCdc = ['synth', 'route']
+    .map((s) => pickNum(data[s]?.cdc_critical))
+    .filter((v) => v !== null);
   const cdcCritical = pickNum(
     data.cdc?.critical_violations,
     data.cdc?.critical,
     data.methodology?.cdc_critical,
     data.cdc_critical,
+    stageCdc.length ? Math.max(...stageCdc) : null,
   );
+  const stageNames = ['rtlcheck', 'synth', 'opt', 'place', 'route'];
+  const stageErrors = stageNames.reduce((n, s) => n + (pickNum(data[s]?.error) || 0), 0);
+  const stageCriticals = stageNames.reduce((n, s) => n + (pickNum(data[s]?.critical) || 0), 0);
 
-  result.metrics = { status: status || null, wns, whs, inferred_latches: latches, cdc_critical: cdcCritical };
+  result.metrics = {
+    status: status || (typeof data.ok === 'boolean' ? (data.ok ? 'PASS' : 'FAIL') : null),
+    stage: (timedStage && typeof timedStage === 'object') ? timedStageName : null,
+    wns,
+    whs,
+    inferred_latches: latches,
+    cdc_critical: cdcCritical,
+    stage_errors: stageErrors,
+    stage_criticals: stageCriticals,
+  };
   if (status === 'FAIL' || status === 'ERROR') {
     result.failures.push(`vivado flow status=${status}`);
+  }
+  if (data.ok === false) {
+    result.failures.push('vivado flow ok=false');
+  }
+  if (data.aborted === true) {
+    result.failures.push('vivado flow aborted=true');
+  }
+  if (stageErrors > 0) {
+    result.failures.push(`stage errors=${stageErrors}`);
+  }
+  if (stageCriticals > 0) {
+    result.failures.push(`stage critical warnings=${stageCriticals}`);
+  }
+  if (Array.isArray(data.blocking) && data.blocking.length > 0) {
+    result.failures.push(`blocking items (${data.blocking.length}): ${data.blocking.slice(0, 5).join('; ')}`);
   }
   if (wns === null) result.failures.push('vivado summary missing numeric WNS');
   else if (wns < minWns) result.failures.push(`WNS ${wns} ns < threshold ${minWns} ns (timing violation)`);
@@ -365,6 +486,42 @@ function recordPhaseDelivery(report, opts, deps = {}) {
   } catch {
     return { skipped: true, reason: 'delivery-record-failed' };
   }
+}
+
+function checkRedlines(projectRoot, modules = []) {
+  const scannerPath = resolvePackAsset('fpga', 'engine', 'hdl-redline-scanner.cjs');
+  if (!scannerPath) {
+    return { available: false, ok: true, filesScanned: 0, findings: [] };
+  }
+  const { scanTarget } = require(scannerPath);
+  const targets = [];
+  if (Array.isArray(modules) && modules.length > 0) {
+    for (const mod of modules) {
+      for (const rel of [`01_src/00_hdl/${mod}`, `01_src/00_hdl/${mod}.sv`, `01_src/00_hdl/${mod}.v`, `rtl/${mod}.sv`, `rtl/${mod}.v`]) {
+        const abs = path.join(projectRoot, rel);
+        if (fs.existsSync(abs)) { targets.push(abs); break; }
+      }
+    }
+  } else {
+    for (const rel of ['01_src/00_hdl', 'rtl']) {
+      const abs = path.join(projectRoot, rel);
+      if (fs.existsSync(abs)) targets.push(abs);
+    }
+  }
+  const reports = targets.flatMap((t) => scanTarget(t));
+  const findings = reports.flatMap((r) => r.findings.map((f) => ({
+    file: path.relative(projectRoot, r.filePath).replace(/\\/g, '/'),
+    ...f,
+  })));
+  const errors = findings.filter((f) => f.severity === 'error');
+  return {
+    available: true,
+    ok: errors.length === 0,
+    filesScanned: reports.length,
+    errorCount: errors.length,
+    warningCount: findings.length - errors.length,
+    findings,
+  };
 }
 
 function main() {
@@ -440,8 +597,17 @@ function main() {
     }
   }
 
+  if (opts.redlines) {
+    report.redlines = checkRedlines(opts.projectRoot, opts.modules);
+    if (!report.redlines.ok) {
+      for (const err of report.redlines.findings.filter((f) => f.severity === 'error')) {
+        report.failures.push(`redline(${err.rule}): ${err.file}:${err.line} — ${err.message}`);
+      }
+    }
+  }
+
   report.ok = report.failures.length === 0;
-  if (!opts.golden && !opts.rtlReady && !opts.fixedPoint && !opts.checklist && !opts.vivadoSummary) recordPhaseDelivery(report, opts);
+  if (!opts.golden && !opts.rtlReady && !opts.fixedPoint && !opts.checklist && !opts.vivadoSummary && !opts.redlines) recordPhaseDelivery(report, opts);
 
   console.log(JSON.stringify(report, null, 2));
   console.log(report.ok ? 'RESULT: PASS' : 'RESULT: FAIL');
@@ -450,4 +616,4 @@ function main() {
 
 if (require.main === module) main();
 
-module.exports = { checkArch, checkModule, checkVivadoSummary, parseArgs, recordPhaseDelivery, checklistInventory };
+module.exports = { checkArch, checkModule, checkGolden, checkVivadoSummary, checkRedlines, parseArgs, recordPhaseDelivery, checklistInventory };

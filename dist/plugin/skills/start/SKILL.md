@@ -16,6 +16,7 @@ version: "3.1.0"
 
 > **Project files referenced below** (harness v4.0 paths):
 > - **next-steps file** — `var/active-task.yaml` (任务协议), YAML 格式
+> - **cross-host envelope** — `var/handoff/latest.json` (`node ~/.claude/core/engine/scripts/handoff-protocol.cjs read --project .`)
 > - **session notes** — `~/.claude/var/work/*.md` (工作记忆)
 > - **error journal** — `~/.claude/memory/errors/`
 

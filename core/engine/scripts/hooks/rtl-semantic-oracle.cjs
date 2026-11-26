@@ -9,6 +9,7 @@ const {
   payloadCwd,
   payloadFilePath,
 } = require('../lib/project-scope.cjs');
+const { resolvePackAsset } = require('../lib/pack-config.cjs');
 
 function toolNameFrom(payload) {
   if (typeof payload?.tool === 'string') return payload.tool;
@@ -248,6 +249,17 @@ function analyzeRtl(content, filePath = '') {
   if (hasClockedLogic && !/\b(rst|reset|ri_rst|ri_reset|ri_rst_n|ri_reset_n)\b/i.test(code)) {
     add('warning', 'reset-audit', 'Clocked RTL did not expose an obvious reset signal.');
   }
+
+  // FPGA 域包实战红线扫描器（域包启用时生效；--packs core 下静默跳过）
+  try {
+    const scannerPath = resolvePackAsset('fpga', 'engine', 'hdl-redline-scanner.cjs');
+    if (scannerPath) {
+      const redlines = require(scannerPath).scanContent(content, filePath);
+      for (const item of redlines.findings) {
+        add(item.severity, item.rule, item.message);
+      }
+    }
+  } catch { /* optional pack scanner */ }
 
   return {
     ok: !findings.some((finding) => finding.severity === 'error'),

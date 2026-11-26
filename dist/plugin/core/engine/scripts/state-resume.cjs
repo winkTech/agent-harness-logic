@@ -163,11 +163,21 @@ function main(opts = {}) {
     }
   } catch { /* 工作记忆初始化失败不阻塞 */ }
 
+  let crossHostCapsule = '';
+  try {
+    const { readHandoffForCwd, formatHandoffCapsule } = require('./handoff-protocol.cjs');
+    const crossHost = readHandoffForCwd(process.cwd());
+    if (crossHost && (!currentSessionId || crossHost.sessionId !== currentSessionId)) {
+      crossHostCapsule = formatHandoffCapsule(crossHost);
+    }
+  } catch { /* optional cross-host handoff */ }
+
   const output = {
     ...summary,
     taskSummary,
     taskStale,
     ...(workMemory ? { workMemory } : {}),
+    ...(crossHostCapsule ? { crossHostCapsule } : {}),
     handoffBrief: hoursSinceLast > 24
       ? `上次活动在 ${hoursSinceLast} 小时前。前 session 失败 ${state.failureCount || 0} 次，最后模式为 ${state.currentMode || '闭环'}。${taskStale ? 'active-task.yaml 可能已过期。' : ''}`
       : `前 session 失败 ${state.failureCount || 0} 次，最后模式为 ${state.currentMode || '闭环'}。`,
@@ -183,7 +193,7 @@ if (require.main === module) {
   if (process.argv.includes('--session-start')) {
     const state = main({ emit: false });
     if (state) console.log(JSON.stringify({ hookSpecificOutput: {
-      hookEventName: 'SessionStart', additionalContext: [state.handoffBrief, state.taskSummary].filter(Boolean).join('\n'),
+      hookEventName: 'SessionStart', additionalContext: [state.handoffBrief, state.taskSummary, state.crossHostCapsule].filter(Boolean).join('\n'),
     } }));
   } else main();
 }

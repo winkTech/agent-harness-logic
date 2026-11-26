@@ -150,6 +150,18 @@ function compileRegexField(config, field) {
   } catch { return null; }
 }
 
+/** 解析启用域包内的引擎、工作流或资产路径；域包禁用或文件不存在时返回 null（P-4 可卸性）。 */
+function resolvePackAsset(packName, ...segments) {
+  if (packsDisabled()) return null;
+  try {
+    if (!isPackEnabled(packName)) return null;
+  } catch {
+    return null;
+  }
+  const target = path.join(HARNESS_ROOT, 'packs', String(packName || '').toLowerCase(), ...segments);
+  return fs.existsSync(target) ? target : null;
+}
+
 module.exports = {
   packsDisabled,
   discoverAvailablePacks,
@@ -159,4 +171,5 @@ module.exports = {
   loadPackConfig,
   compileRegexRules,
   compileRegexField,
+  resolvePackAsset,
 };

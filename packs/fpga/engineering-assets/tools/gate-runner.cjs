@@ -537,7 +537,8 @@ function runGates(pkgDir, manifest, repoRoot) {
         add({ id: 'G-C-01', name: '目标 fmax 收敛', level: 'certified', must: true, status: 'blocked', severity: 'high', detail: `约束合规 (${clk.period_ns}ns ≤ ${requiredPeriod.toFixed(3)}ns) 但无 timing-summary.rpt — 先跑 tools/pg-synth.tcl` });
         return;
       }
-      const trpt = fs.readFileSync(timingRpt, 'utf8').split(/\r?\n/);
+      const rawTimingTxt = fs.readFileSync(timingRpt, 'utf8');
+      const trpt = rawTimingTxt.split(/\r?\n/);
       // Clock Summary: "<name>  {0.000 2.000}   4.000   250.000"
       let rptPeriod = null;
       for (const l of trpt) {
@@ -549,6 +550,20 @@ function runGates(pkgDir, manifest, repoRoot) {
       for (const l of trpt) {
         const m = l.match(/^(\S+)\s+(-?\d+\.\d+)\s+(-?\d+\.\d+)\s+(\d+)\s+(\d+)\s+(-?\d+\.\d+)/);
         if (m && (!clk.name || m[1] === clk.name || m[1] === clk.port)) { wns = Number(m[2]); failEp = Number(m[4]); whs = Number(m[6]); break; }
+      }
+      // 全局 Design Timing Summary / 多时钟与跨时钟最差 WNS 交叉兜底 (堵首行/单时钟盲区)
+      let globalParsed = null;
+      try {
+        globalParsed = require('../../engine/fpga-timing-parser.cjs').parseTimingReport(rawTimingTxt, timingRpt);
+      } catch {}
+      const globalWns = globalParsed?.setup?.wns;
+      const globalSetupFailEp = globalParsed?.setup?.failingEndpoints;
+      if (Number.isFinite(globalWns) && (wns === null || globalWns < wns)) {
+        wns = globalWns;
+        if (Number.isInteger(globalSetupFailEp)) failEp = Math.max(failEp || 0, globalSetupFailEp);
+      }
+      if (Number.isFinite(globalParsed?.hold?.whs) && (whs === null || globalParsed.hold.whs < whs)) {
+        whs = globalParsed.hold.whs;
       }
       if (wns === null) {
         envelope.timing.status = 'blocked';

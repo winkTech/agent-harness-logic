@@ -146,7 +146,8 @@ async function main() {
     },
   });
 
-  const targetDir = path.resolve(values.target || DEFAULT_PLUGIN_DIR);
+  const rawTarget = path.resolve(values.target || DEFAULT_PLUGIN_DIR);
+  const targetDir = fs.existsSync(rawTarget) ? fs.realpathSync.native(rawTarget) : rawTarget;
   const acl = loadAcl();
 
   if (values['check-dist']) {

@@ -14,6 +14,8 @@ description: 当用户说“使用工作流”“workflow”、点名工作流�
 
 跨会话续跑时核对目录返回的 `scriptPath` 和 `sha256`。预检、后续节点和证据脚本应来自同一版插件。明确选择仓库开发版时，记录该版本的来源与摘要。发现内容已改变时，保留既有证据，重审变化涉及的检查点；更新哈希本身不会完成审核。使用手动步骤或仅覆盖部分阶段的适配器时，报告实际执行方式、已覆盖阶段与停止位置。
 
+HDL 长任务区分默认 `Workflow` 宿主模式与显式主机绑定模式：默认 `Workflow` 调用自动生效结构化上下文交接预算与确定性证据门禁（含模块源码/传递依赖 `mtime` 新鲜度检查），但仿真、回归和 Vivado 动作仍经模型步骤派发；支持 `workflowAction` 和 `workflowContext` 的宿主或显式调用插件的 `core/engine/scripts/run-hdl-workflow.cjs --host <adapter.cjs>` 时，才会启用本地确定性作业去重、`contextHistory` 增量证据省略与 `agentReceipts` 产物重用（可用 `--help` 查看入口）。用同一运行 ID 和签收 ID 接回进行中的作业；若脱离守护进程异常终止（`lost` / `cancelled` / `timed_out`），可传 `--recover` 在同一运行 ID 下归档旧作业并重投，或在保持同一 `--signoff-id` 的前提下更换 `--run-id` 继续重用已验产物。交接时传本轮首个偏差、已尝试的假设、签收条件和报告位置。报告区分模型派发、实际模型响应、本地执行、重接和复用。源码仓 `core/workflows/README.md` 提供接入示例。
+
 HDL 项目指定了已有 Golden 时，从任务和规格提取原入口、必测工况和必需工具，填入 `goldenBaseline: {entry, cases, tools}`。新建模型时说明它在哪一阶段建立。手动分阶段也要展示原入口实跑、逐工况样本、诊断与正常路径的差异、工具小例程和开工建议，然后停在用户检查点。设计审查通过后核对验证策略、各模块 TB、比较脚本与向量；这些证据齐备后才可派发 RTL。用桩运行脚本只可标为工作流测试。
 
 同一模式需要多种条件时，展开成独立工况，例如「16QAM 无噪」和「16QAM 实测 20 dB」。需求中可量化的范围填入 `goldenBaseline.limits`，每项为 `{case, metric, min?, max?}`；报告的 `cases[].metrics` 保存对应测量值与约定单位。容差取自规格或与用户约定。

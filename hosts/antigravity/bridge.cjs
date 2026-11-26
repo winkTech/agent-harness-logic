@@ -777,10 +777,43 @@ async function handlePreInvocation(raw, state) {
   return response;
 }
 
+function hasMaintainerSelfEditLease(sourceRoot, workspacePath) {
+  if (!sourceRoot || !workspacePath) return false;
+  try {
+    const leaseFile = path.join(os.homedir(), '.logical-paradox', 'maintainer-unlock.json');
+    if (!fs.existsSync(leaseFile)) return false;
+    const raw = JSON.parse(fs.readFileSync(leaseFile, 'utf8'));
+    if (!raw || raw.version !== 1 || raw.active !== true) return false;
+    const expected = crypto.createHash('sha256').update(JSON.stringify({
+      version: 1,
+      workspace: raw.workspace,
+      issuedAt: raw.issuedAt,
+      expiresAt: raw.expiresAt,
+      actor: raw.actor,
+      reason: raw.reason,
+    })).digest('hex');
+    if (raw.sha256 !== expected) return false;
+    const issuedMs = Date.parse(raw.issuedAt);
+    const expiresMs = Date.parse(raw.expiresAt);
+    if (!Number.isFinite(issuedMs) || !Number.isFinite(expiresMs) || expiresMs - issuedMs > 120 * 60 * 1000) return false;
+    if (Date.now() >= expiresMs) return false;
+    const realSource = fs.realpathSync.native(sourceRoot);
+    const realWorkspace = fs.realpathSync.native(workspacePath);
+    const realLeaseWorkspace = fs.realpathSync.native(raw.workspace);
+    return realSource === realWorkspace && realSource === realLeaseWorkspace;
+  } catch {
+    return false;
+  }
+}
+
 async function handlePreToolUse(raw, state) {
   const payload = translatePayload(raw, 'PreToolUse');
   const capability = policy.execution(payload.tool_name, payload.tool_input);
-  const restriction = policy.protect(payload, capability, {source:CLAUDE_ROOT,state:STATE_ROOT,cwd:hostWorkspace(raw)});
+  const workspace = hostWorkspace(raw);
+  const protectRoots = hasMaintainerSelfEditLease(CLAUDE_ROOT, workspace)
+    ? { source: __dirname, state: path.join(os.homedir(), '.logical-paradox'), cwd: workspace }
+    : { source: CLAUDE_ROOT, state: STATE_ROOT, cwd: workspace };
+  const restriction = policy.protect(payload, capability, protectRoots);
   if (restriction?.decision === 'deny') return restriction;
   if (capability && payload.session_id === 'unknown-session') throw new Error('Execution requires an identified session.');
   policy.verifyReadable(process.env.HARNESS_VERIFY_GATE_STATE_FILE || varPath('verify-gate.json'));

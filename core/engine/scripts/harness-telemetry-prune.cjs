@@ -16,7 +16,17 @@ const path = require('node:path');
 const { HARNESS_ROOT } = require('./lib/harness-root.cjs');
 const { openDb } = require('../sqlite/index.cjs');
 
-const DAY_MS = 86_400_000;
+function parseTimestampMs(raw) {
+  if (typeof raw === 'number' && Number.isFinite(raw)) return raw;
+  const s = String(raw ?? '').trim();
+  if (!s) return NaN;
+  if (/^\d+$/.test(s)) return Number(s);
+  return Date.parse(s);
+}
+
+function isDreamTelemetryNoise(name) {
+  return /^dream-\d{4}-\d{2}-\d{2}-(?:tool-fail|transition)-/i.test(String(name || ''));
+}
 
 function tableExists(db, name) {
   return Boolean(db.prepare("SELECT 1 FROM sqlite_master WHERE type IN ('table','view') AND name = ?").get(name));
@@ -38,7 +48,9 @@ function analyzeTelemetry(dbOrHandle, opts = {}) {
   const db = dbOrHandle && dbOrHandle.db ? dbOrHandle.db : dbOrHandle;
   const days = Math.max(1, Number(opts.days || 90));
   const now = Number(opts.now ?? Date.now());
-  const cutoffIso = new Date(now - days * DAY_MS).toISOString();
+  const DAY_MS = 86_400_000;
+  const cutoffMs = now - days * DAY_MS;
+  const cutoffIso = new Date(cutoffMs).toISOString();
   const root = opts.root || HARNESS_ROOT;
 
   const summary = {
@@ -71,18 +83,22 @@ function analyzeTelemetry(dbOrHandle, opts = {}) {
         ? confVal < 0.8
         : String(row.confidence || 'tentative').toLowerCase() === 'tentative';
       const hits = Number(row.hit_count || 0);
-      const createdMs = Date.parse(row.created_at || '');
+      const createdMs = parseTimestampMs(row.created_at);
       const ageDays = Number.isFinite(createdMs) ? Number(((now - createdMs) / DAY_MS).toFixed(1)) : null;
       const neverExposed = !exposedIds.has(String(row.id));
+      const telemetryNoise = row.source === 'script:dream' && isDreamTelemetryNoise(row.name);
       if (isTentative && hits === 0) {
         summary.facts.zeroHitTentative += 1;
-        if (neverExposed && (ageDays === null || ageDays >= days)) {
+        if (neverExposed && (telemetryNoise || ageDays === null || ageDays >= days)) {
           candidates.push({
             id: row.id,
             name: row.name,
             source: row.source,
             ageDays,
-            reason: `tentative fact with 0 hits and 0 exposures over >=${days}d`,
+            telemetryNoise,
+            reason: telemetryNoise
+              ? 'unanalyzed Dream telemetry counter with 0 hits and 0 exposures'
+              : `tentative fact with 0 hits and 0 exposures over >=${days}d`,
           });
         }
       }
@@ -114,15 +130,13 @@ function analyzeTelemetry(dbOrHandle, opts = {}) {
 
   if (tableExists(db, 'memory_outcomes')) {
     summary.outcomes.available = true;
-    const rows = db.prepare(`
-      SELECT verdict, COUNT(*) AS c FROM memory_outcomes
-      WHERE observed_at >= ?
-      GROUP BY verdict
-    `).all(cutoffIso);
+    const rows = db.prepare('SELECT verdict, observed_at FROM memory_outcomes').all();
     for (const row of rows) {
+      const ts = parseTimestampMs(row.observed_at);
+      if (Number.isFinite(ts) && ts < cutoffMs) continue;
       const key = String(row.verdict || '').toLowerCase();
       if (Object.prototype.hasOwnProperty.call(summary.outcomes, key)) {
-        summary.outcomes[key] = Number(row.c || 0);
+        summary.outcomes[key] += 1;
       }
     }
   }
@@ -130,10 +144,36 @@ function analyzeTelemetry(dbOrHandle, opts = {}) {
   return summary;
 }
 
+function retireDreamNoiseFacts(dbOrHandle, opts = {}) {
+  const db = dbOrHandle && dbOrHandle.db ? dbOrHandle.db : dbOrHandle;
+  const dryRun = opts.dryRun !== false;
+  if (!tableExists(db, 'facts')) return { dryRun, retired: 0, ids: [] };
+  const exposedIds = new Set();
+  if (tableExists(db, 'memory_retrieval_exposures')) {
+    for (const row of db.prepare('SELECT DISTINCT memory_id FROM memory_retrieval_exposures WHERE memory_id IS NOT NULL').all()) {
+      exposedIds.add(String(row.memory_id));
+    }
+  }
+  const rows = db.prepare(`
+    SELECT id, name FROM facts
+    WHERE COALESCE(status, 'active') = 'active'
+      AND source = 'script:dream'
+      AND COALESCE(hit_count, 0) = 0
+  `).all();
+  const targets = rows.filter((r) => isDreamTelemetryNoise(r.name) && !exposedIds.has(String(r.id)));
+  if (!dryRun && targets.length > 0) {
+    const stmt = db.prepare("UPDATE facts SET status = 'tombstone', updated_at = ? WHERE id = ?");
+    const nowIso = new Date().toISOString();
+    for (const item of targets) stmt.run(nowIso, item.id);
+  }
+  return { dryRun, retired: targets.length, ids: targets.map((t) => t.id) };
+}
+
 function parseCli(argv) {
-  const out = { days: 90, json: false };
+  const out = { days: 90, json: false, retireNoise: false };
   for (let i = 0; i < argv.length; i += 1) {
     if (argv[i] === '--json') out.json = true;
+    else if (argv[i] === '--retire-noise') out.retireNoise = true;
     else if (argv[i] === '--days') {
       const v = Number(argv[++i]);
       if (Number.isFinite(v) && v > 0) out.days = v;
@@ -146,10 +186,13 @@ function main() {
   const opts = parseCli(process.argv.slice(2));
   const db = openDb();
   try {
+    const retired = opts.retireNoise ? retireDreamNoiseFacts(db, { dryRun: false }) : null;
     const report = analyzeTelemetry(db, { days: opts.days });
+    if (retired) report.retiredDreamNoise = retired;
     if (opts.json) {
       process.stdout.write(`${JSON.stringify(report, null, 2)}\n`);
     } else {
+      if (retired) console.log(`[telemetry-prune] Retired ${retired.retired} zero-hit Dream telemetry noise row(s) via tombstone`);
       console.log(`[telemetry-prune] Window: ${report.windowDays}d | Active facts: ${report.facts.totalActive} (zero-hit tentative: ${report.facts.zeroHitTentative}, prune candidates: ${report.facts.pruneCandidates.length})`);
       console.log(`[telemetry-prune] Core rules tracked: ${report.rules.tracked} | Zero-load rules: ${report.rules.zeroLoadRules.length ? report.rules.zeroLoadRules.join(', ') : 'none'}`);
       console.log(`[telemetry-prune] Outcomes (${report.windowDays}d): pass=${report.outcomes.pass} fail=${report.outcomes.fail} inconclusive=${report.outcomes.inconclusive}`);
@@ -161,4 +204,4 @@ function main() {
 
 if (require.main === module) main();
 
-module.exports = { analyzeTelemetry, listRuleFiles };
+module.exports = { analyzeTelemetry, listRuleFiles, parseTimestampMs, retireDreamNoiseFacts };

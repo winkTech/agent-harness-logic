@@ -21,6 +21,7 @@
 
 const fs = require('node:fs');
 const path = require('node:path');
+const { createHash } = require('node:crypto');
 const { HARNESS_ROOT } = require('./lib/harness-root.cjs');
 const { varPath } = require('./lib/harness-state.cjs');
 
@@ -97,14 +98,197 @@ const AGENT_BUDGETS = {
   'context-compressor': 'tight',
   'memory-manager':   'tight',
   'code-simplifier':  'tight',
+  'ce-correctness-reviewer': 'tight',
+  'ce-api-contract-reviewer': 'tight',
+  'ce-architecture-strategist': 'tight',
+  'ce-performance-oracle': 'tight',
+  'blind-auditor':    'tight',
   'advanced-debugging': 'relaxed',
 
   // Orchestrators — need full context for coordination
   'master-orchestrator': 'full',
 };
 
+const WORKFLOW_MODEL_TIERS = Object.freeze({
+  'p1a-system-design': 'deep',
+  'p1b-algo-arch': 'deep',
+  'p1b-logic-arch': 'deep',
+  'p2-fixed-point': 'deep',
+  'p45-adversarial': 'deep',
+  'p5-fix': 'deep',
+  'p3-tb': 'standard',
+  'p3-vectors': 'standard',
+  'p5-golden': 'standard',
+  'p5-verify-fix': 'standard',
+  'p7-review-correctness': 'standard',
+  'p7-review-contract': 'standard',
+  verifier: 'standard',
+  'p0-infra': 'fast',
+  'p3-selftest': 'fast',
+  'p5-interface': 'fast',
+  'p5-datapath': 'fast',
+  'p5-timing': 'fast',
+  'p5-synthesis': 'fast',
+  'p8-report': 'fast',
+});
+
+function resolveWorkflowModelTier(options = {}) {
+  if (options && ['deep', 'standard', 'fast'].includes(options.modelTier)) return options.modelTier;
+  const label = String(options?.label || '');
+  if (Object.hasOwn(WORKFLOW_MODEL_TIERS, label)) return WORKFLOW_MODEL_TIERS[label];
+  if (label.startsWith('debug-')) return 'deep';
+  if (label.startsWith('rtl-code-')) return 'standard';
+  if (label.startsWith('final-verify-')) return 'fast';
+  return 'standard';
+}
+
 const DEFAULT_TIER = 'normal';
 const TIER_ORDER = ['tight', 'normal', 'relaxed', 'full'];
+
+const WORKFLOW_BUDGETS = Object.freeze({handoff:1000, repair:4000, decision:8000});
+
+function workflowJson(value) {
+  return JSON.stringify(value, function validateField(key, field) {
+    const original = this[key];
+    if (original && typeof original === 'object' &&
+        (typeof original.toJSON === 'function' ||
+         (!Array.isArray(original) && Object.prototype.toString.call(original) !== '[object Object]'))) {
+      throw new TypeError('Workflow context objects must contain plain JSON data');
+    }
+    if (typeof field === 'undefined' || typeof field === 'function' || typeof field === 'symbol'
+        || (typeof field === 'number' && !Number.isFinite(field))) {
+      throw new TypeError('Workflow context fields must be losslessly representable as JSON');
+    }
+    return field;
+  });
+}
+
+/**
+ * Pack one decision for any workflow host. Required fields and evidence locators
+ * always survive. Evidence summaries are optional and ordered by caller priority.
+ * Full artifacts stay at ref. The token estimate covers only this emitted prompt.
+ * Hosts may pass a receipt only after delivery, with historyAvailable:true and a
+ * scope unique to this run, recipient and uninterrupted conversation.
+ */
+function buildWorkflowContext({kind, required, evidence = [], scope = ''}, options = {}) {
+  if (!Object.hasOwn(WORKFLOW_BUDGETS, kind)) throw new TypeError('Unknown workflow context kind');
+  if (!required || typeof required !== 'object' || Array.isArray(required) || !Object.keys(required).length) {
+    throw new TypeError('A workflow decision requires named mandatory fields');
+  }
+  if (typeof scope !== 'string' || !Array.isArray(evidence)) throw new TypeError('Invalid workflow evidence or scope');
+  const budgetTokens = options.budgetTokens ?? WORKFLOW_BUDGETS[kind];
+  if (!Number.isSafeInteger(budgetTokens) || budgetTokens < 1) throw new RangeError('Invalid workflow token budget');
+
+  const previous = options.previous;
+  const continuous = options.historyAvailable === true && scope && previous?.scope === scope && previous.kind === kind;
+  const prior = new Map(continuous ? previous.shown : []);
+  const summaries = new Map();
+  const refs = [];
+  for (const {id, ref, summary} of evidence) {
+    if (typeof id !== 'string' || !id.trim() || typeof ref !== 'string' || !ref.trim()) {
+      throw new TypeError('Evidence requires a nonempty id and retrievable ref');
+    }
+    const encoded = summary === undefined ? undefined : workflowJson(summary);
+    if (summaries.has(id)) {
+      const existing = summaries.get(id);
+      if (existing.ref !== ref || existing.encoded !== encoded) throw new Error('Conflicting workflow evidence ID: ' + id);
+      continue;
+    }
+    refs.push({id, ref});
+    summaries.set(id, {ref, summary, encoded});
+  }
+
+  const body = {kind, required, evidence:refs};
+  let utf8Bytes = Buffer.byteLength(workflowJson(body));
+  const shown = [];
+  for (const item of refs) {
+    const {summary, encoded} = summaries.get(item.id);
+    if (encoded === undefined) continue;
+    const digest = createHash('sha256').update(workflowJson([item.ref, summary])).digest('hex');
+    if (prior.get(item.id) !== digest) {
+      const extra = Buffer.byteLength(',"summary":' + encoded);
+      if (Math.ceil((utf8Bytes + extra) / 3) > budgetTokens) continue;
+      utf8Bytes += extra;
+      item.summary = summary;
+    }
+    shown.push([item.id, digest]);
+  }
+  const prompt = workflowJson(body);
+  const estimatedInputTokens = Math.ceil(utf8Bytes / 3);
+  const overBudget = estimatedInputTokens > budgetTokens;
+  return {
+    prompt, receipt:{kind, scope, shown},
+    metrics:{budgetTokens, utf8Bytes, estimatedInputTokens, estimateMethod:'ceil(utf8Bytes/3)', overBudget,
+      expansion:overBudget ? {reason:'required-fields-and-evidence-refs', effectiveBudgetTokens:estimatedInputTokens,
+        additionalEstimatedTokens:estimatedInputTokens-budgetTokens, requiredFields:Object.keys(required)} : null},
+  };
+}
+
+// Normalized, per-response observations from all participants in an acceptance item.
+// Adapters must separate cache hits from uncached input; cumulative session counters
+// and plugin-prompt estimates cannot be used as measured per-response usage.
+function summarizeWorkflowUsage(observations) {
+  const fields = ['uncachedInputTokens','cachedInputTokens','outputTokens'];
+  const calls = new Map();
+  const reportedDispatches = new Set();
+  for (const {acceptanceId, executor, callId, usage, evidenceReads, estimatedInputTokens, reason, dispatchId, provenance} of observations) {
+    const identity = [acceptanceId, executor, callId];
+    if (identity.some(id => typeof id !== 'string' || !id.trim())) throw new TypeError('Missing workflow usage identity');
+    const key = JSON.stringify(identity);
+    const call = calls.get(key) || {acceptanceId};
+    if (dispatchId) {
+      const dispatch = JSON.stringify([acceptanceId,dispatchId]);
+      if (provenance === 'unreported-dispatch') call.placeholder = dispatch;
+      else reportedDispatches.add(dispatch);
+    }
+    if (usage != null) {
+      if (fields.some(field => !Number.isSafeInteger(usage[field]) || usage[field] < 0)) {
+        throw new TypeError('Measured usage requires three disjoint non-negative token counts');
+      }
+      if (call.usage && fields.some(field => call.usage[field] !== usage[field])) throw new Error('Conflicting measured usage for ' + key);
+      call.usage = usage;
+    }
+    if (estimatedInputTokens != null) {
+      if (!Number.isSafeInteger(estimatedInputTokens) || estimatedInputTokens < 0 ||
+          (call.estimate != null && call.estimate !== estimatedInputTokens)) throw new TypeError('Invalid or conflicting prompt estimate');
+      call.estimate = estimatedInputTokens;
+    }
+    if (evidenceReads != null) {
+      if (!Number.isSafeInteger(evidenceReads) || evidenceReads < 0 ||
+          (call.evidenceReads != null && call.evidenceReads !== evidenceReads)) {
+        throw new TypeError('Invalid or conflicting per-response evidenceReads');
+      }
+      call.evidenceReads = evidenceReads;
+    }
+    if (reason === 'unchanged-wait') call.unchangedWait = true;
+    calls.set(key, call);
+  }
+  const groups = new Map();
+  for (const call of calls.values()) {
+    if (call.placeholder && reportedDispatches.has(call.placeholder)) continue;
+    const row = groups.get(call.acceptanceId) || {acceptanceId:call.acceptanceId, calls:0, unchangedWaitCalls:0,
+      measuredCalls:0, measuredSubtotal:null, estimatedCalls:0, estimatedPromptSubtotal:null,
+      evidenceReadsReportedCalls:0,evidenceReadsSubtotal:null};
+    row.calls++;
+    if (call.unchangedWait) row.unchangedWaitCalls++;
+    if (call.usage) {
+      row.measuredCalls++;
+      row.measuredSubtotal ??= Object.fromEntries(fields.map(field => [field, 0]));
+      for (const field of fields) row.measuredSubtotal[field] += call.usage[field];
+    }
+    if (call.estimate != null) {
+      row.estimatedCalls++;
+      row.estimatedPromptSubtotal = (row.estimatedPromptSubtotal ?? 0) + call.estimate;
+    }
+    if (call.evidenceReads != null) {
+      row.evidenceReadsReportedCalls++;
+      row.evidenceReadsSubtotal = (row.evidenceReadsSubtotal ?? 0) + call.evidenceReads;
+    }
+    groups.set(call.acceptanceId, row);
+  }
+  return [...groups.values()].map(row => ({...row, measuredTotal:row.calls === row.measuredCalls ? row.measuredSubtotal : null,
+    evidenceReadsTotal:row.calls === row.evidenceReadsReportedCalls ? row.evidenceReadsSubtotal : null}));
+}
 
 // ── Agent Compression Bridge ─────────────────────────────────────────────
 // Path to ECC's agent-compress.js
@@ -463,6 +647,13 @@ function main() {
     case 'list':
       console.log(JSON.stringify(AGENT_BUDGETS, null, 2));
       break;
+    case 'workflow-usage': {
+      const inputs = args.length > 1 ? args.slice(1) : ['-'];
+      const observations = inputs.flatMap(file => fs.readFileSync(file === '-' ? 0 : file, 'utf8')
+        .split(/\r?\n/).filter(line => line.trim()).map(line => JSON.parse(line)));
+      console.log(JSON.stringify(summarizeWorkflowUsage(observations), null, 2));
+      break;
+    }
     case 'compress': {
       // Read prompt from stdin, compress and output
       let input = '';
@@ -499,7 +690,8 @@ function main() {
   node agent-context-budget.cjs max-chars <agentType>  — show max chars
   node agent-context-budget.cjs list                    — list all budgets
   node agent-context-budget.cjs compress <type> [tier]  — compress prompt from stdin
-  node agent-context-budget.cjs catalog <type>          — build compressed catalog`);
+  node agent-context-budget.cjs catalog <type>          — build compressed catalog
+  node agent-context-budget.cjs workflow-usage [jsonl ...] — aggregate per-response observations by acceptance item`);
   }
 }
 
@@ -508,6 +700,10 @@ if (require.main === module) {
 }
 
 module.exports = {
+  buildWorkflowContext,
+  summarizeWorkflowUsage,
+  WORKFLOW_MODEL_TIERS,
+  resolveWorkflowModelTier,
   TIERS,
   AGENT_BUDGETS,
   getTier,
