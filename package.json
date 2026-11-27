@@ -15,6 +15,9 @@
     "grok:connect": "node scripts/connect.cjs grok",
     "antigravity:connect": "node hosts/antigravity/connect.cjs",
     "workbuddy:connect": "node scripts/connect.cjs workbuddy",
-    "antigravity:test": "node hosts/antigravity/regression-check.cjs"
+    "antigravity:test": "node hosts/antigravity/regression-check.cjs",
+    "harness:unlock": "node scripts/harness-unlock.cjs",
+    "release:pin": "node scripts/release-pin.cjs",
+    "hdl:autogen": "node core/engine/scripts/hdl-host-autogen.cjs"
   }
 }

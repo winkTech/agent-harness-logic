@@ -2,6 +2,7 @@
 'use strict';
 
 const { HARNESS_ROOT } = require('../lib/harness-root.cjs');
+const { buildWorkflowContext } = require('../agent-context-budget.cjs');
 
 const fs = require('node:fs');
 const os = require('node:os');
@@ -30,7 +31,7 @@ function compileWorkflow(name) {
     .replace(/export\s+const\s+meta\s*=/, 'const meta =');
   // 注入面与真实 Workflow 运行时对齐: 缺 pipeline 曾让 hdl 工作流的深路径
   // 在本 eval 中根本不可执行 (ReferenceError), 假绿掩盖了 fs 桥缺失。
-  return new AsyncFunction('args', 'agent', 'parallel', 'pipeline', 'phase', 'log', 'workflow', source);
+  return new AsyncFunction('args', 'agent', 'parallel', 'pipeline', 'phase', 'log', 'workflow', 'workflowAction', 'workflowContext', source);
 }
 
 // pipeline(items, ...stages): 每个 item 独立走完所有 stage, stage 收
@@ -170,7 +171,9 @@ async function runWorkflow(name, args = {}, opts = {}) {
       pipelineImpl,
       (name) => phases.push(name),
       (message) => logs.push(String(message)),
-      workflow
+      workflow,
+      opts.workflowAction,
+      opts.workflowContext
     );
     return { ok: true, result, calls, phases, logs };
   } catch (error) {
@@ -209,6 +212,8 @@ function hdlDeepStubAgent(overrides = {}) {
     }
     if (label === 'p45-adversarial') return '[]';
     if (label === 'p5-synthesis') return '{"overall":"pass","issues":[],"root_cause":"","fix_suggestion":""}';
+    if (label === 'p6b-vivado-check') return {tool_available:false,flow_ran:false,skip_reason:'optional tool absent in fixture',blocking_items:[]};
+    if (label.startsWith('p7-review-')) return {pass:true,summary:'reviewed timing and ports',evidence:['01_src/00_hdl/demo/demo.sv:6']};
     if (label === 'verifier') return '{"pass":true,"reason":"all phases produced evidence"}';
     return 'stub-output';
   };
@@ -515,8 +520,150 @@ test('hdl dag workflow deep run completes with deterministic evidence gates', as
   const simCall = run.calls.find((c) => (c.opts.label || '').startsWith('sim-run-'));
   assert(simCall && simCall.opts.schema, 'sim agents must use structured-output schema');
   assert(simCall.opts.agentType === 'logic-engineer', 'sim agents must be wired to logic-engineer');
+  assert(!labels.some(label => label.startsWith('clean-')), 'successful module dispatched a separate cleanup agent');
   const advCall = run.calls.find((c) => c.opts.label === 'p45-adversarial');
   assert(!advCall, 'standard module must not trigger adversarial review');
+});
+
+test('HDL local actions compact handoffs, keep signed checkpoints and preserve independent signoff', async () => {
+  const actions = [], packets = [];
+  const legacy = hdlDeepStubAgent();
+  const simReceipt = {verified:true, gate_executed:true, gate_ok:true, compared_points:2, evidencePath:'02_sim/check_results/demo.json'};
+  const action = async req => {
+    actions.push(req);
+    if (req.kind === 'evidence') return legacy(req.argv.join(' '), {label:req.label});
+    if (req.kind === 'simulate') return simReceipt;
+    if (req.kind === 'vivado') return {tool_available:false,skip_reason:'optional tool unavailable'};
+    if (req.kind === 'regression') return {executed:true,verified:true,ok:true,coverageComplete:true,compared_points:2,evidencePath:'logs/full.json'};
+    if (req.kind === 'module-order') return {executed:true,ok:true};
+    throw new Error('unexpected action '+req.kind);
+  };
+  const options = {agent:legacy, workflowAction:action, workflowContext:packet => {
+    packets.push(packet);
+    return buildWorkflowContext(packet);
+  }};
+  const args = {modules:['demo'],confirmAllCheckpoints:true};
+  const run = await runWorkflow('hdl-coding-dag-workflow', args, options);
+  assert(run.ok && run.result.verifier.pass, 'did not finish enhanced run: '+run.error?.message);
+  const labels = run.calls.map(c => c.opts.label);
+  assert(actions.some(a => a.kind === 'simulate') && actions.some(a => a.label === 'p45-evidence'), 'missing local actions');
+  assert(actions.some(a => a.kind === 'regression' && a.fresh === true), 'signoff reused module evidence');
+  assert(!labels.some(l => /^(?:clean-|sim-run-|rtl-ready$|p45-evidence$|p6b-vivado-check$)/.test(l)), 'mechanical action woke a model');
+  assert(labels.includes('final-verify-demo') && labels.includes('verifier'), 'independent review lost');
+  assert(packets.some(p => p.kind === 'handoff') && packets.some(p => p.kind === 'decision'), 'phase context builder not used');
+  const old = await runWorkflow('hdl-coding-dag-workflow',args,{agent:legacy});
+  assert(old.ok && run.calls.length < old.calls.length, 'trusted dispatch failed to reduce model calls');
+  console.log(`  HDL one-module fixture: compatibility ${old.calls.length} model dispatches; bound tools ${run.calls.length} model dispatches, ${actions.length} actions`);
+  actions.length = 0;
+  const boundary = await runWorkflow('hdl-coding-dag-workflow',{...args,stopAfter:'p3'},options);
+  assert(boundary.ok && boundary.result.completedThrough === 'p3' && !actions.some(a => a.kind === 'simulate'), 'P3 boundary lost');
+  const checks = await runWorkflow('hdl-coding-dag-workflow',{modules:['demo']},options);
+  assert(!checks.ok && checks.error.message.includes('WorkflowCheckpoint:preflight'), 'preflight confirmation was bypassed');
+});
+
+test('HDL repair loop stops at unchanged evidence and hands off infrastructure failures without RTL edits', async () => {
+  const args = {modules:['demo'],confirmAllCheckpoints:true};
+  for (const failureKind of ['functional','environment','invalid','insufficient']) {
+    let runs=0;
+    const action = async () => {
+      runs++;
+      return {gate_executed:true,gate_ok:false,compared_points:0,log_tail:'fixture',failureKind,
+        failureSignature:'same failure',inputSha256:'a'.repeat(64),evidencePath:'logs/fixture.log'};
+    };
+    action.supports = kind => kind === 'simulate';
+    const run = await runWorkflow('hdl-coding-dag-workflow',args,{workflowAction:action,
+      agent:hdlDeepStubAgent({'debug-*':()=>({hypothesis:'registered ready',change:'repaired register'})})});
+    assert(!run.ok, 'unfinished repair was accepted: '+failureKind);
+    assert(runs === (failureKind === 'functional' ? 2 : 1), 'unexpected attempts '+failureKind+': '+runs);
+    assert(run.calls.filter(c => c.opts.label.startsWith('debug-')).length === (failureKind === 'functional' ? 1 : 0), 'wrong repair dispatch');
+    assert(!run.calls.some(c => c.opts.label === 'p45-evidence' || c.opts.label.startsWith('sim-run-')), 'unqualified evidence or fallback');
+  }
+});
+
+test('HDL verification keeps coverage, synthesis timing and independent pass criteria', async () => {
+  const args = {modules:['demo'],confirmAllCheckpoints:true};
+  const raw = {top:'demo',part:'fixture',ok:true,stages_run:['rtlcheck','synth'],
+    rtlcheck:{critical:0,error:0},synth:{wns:0.2,whs:0.12,critical:0,error:0},blocking:[]};
+  const synth = {tool_available:true,flow_ran:true,ok:true,evidencePath:'jobs/current/verified.json',
+    critical:0,errors:0,report:raw,blocking_items:[]};
+  for (const [kind,receipt,expectedError] of [
+    ['simulate',{gate_executed:true,gate_ok:true,verified:false,compared_points:3,evidencePath:'log.json'},'insufficient'],
+    ['regression',{executed:true,ok:true,verified:true,compared_points:2,coverageComplete:false,evidencePath:'unit.json'},'regression unverified'],
+    ['vivado',{...synth,report:{...raw,synth:{wns:0.2}}},'evidence insufficient'],
+    ['vivado',{...synth,report:{...raw,synth:{...raw.synth,whs:-0.01}}},'WHS=-0.01'],
+    ['vivado',{...synth,report:{...raw,synth:{...raw.synth,error:1}}},'error=1'],
+    ['vivado',{...synth,report:{...raw,stages_run:['synth','route'],route:{wns:0.1}}},'evidence insufficient'],
+    ['vivado',{...synth,evidencePath:null},'evidence insufficient'],
+    ['vivado',{...synth,tool_available:false,flow_ran:false,executed:true,exitCode:1,skip_reason:'unavailable'},'evidence insufficient'],
+    ['vivado',{...synth,ok:false},'script_ok=false'],
+  ]) {
+    const action = async () => receipt;
+    action.supports = capability => capability === kind;
+    const run = await runWorkflow('hdl-coding-dag-workflow',args,{agent:hdlDeepStubAgent(),workflowAction:action,workflowContext:buildWorkflowContext});
+    assert(!run.ok && run.error.message.includes(expectedError), kind+' missing signoff reason: '+run.error?.message);
+    assert(!run.calls.some(c=>c.opts.label === 'verifier'), 'incomplete gate reached final verifier');
+  }
+  const reviewFail = await runWorkflow('hdl-coding-dag-workflow',args,{agent:hdlDeepStubAgent({
+    'p7-review-contract':()=>({pass:false,summary:'mismatched input width',evidence:['rtl/demo.sv:12']}),
+  })});
+  assert(!reviewFail.ok && reviewFail.error.message.includes('mismatched input width'), 'P7 failure was lost before final reporting');
+});
+
+test('HDL P8 and final verifier retain the run-specific Vivado report path and source metric names', async () => {
+  for (const mode of ['host-synth','host-route','legacy']) {
+    const args = {modules:['demo'],confirmAllCheckpoints:true};
+    const raw = {top:'fixture_top',part:'fixture_part',ok:true,stages_run:['rtlcheck','synth'],blocking:[],
+      rtlcheck:{critical:0,error:0},synth:{wns:0.257,whs:0.061,lut:21,ff:30,dsp:1,error:0,critical:0}};
+    if (mode === 'host-route') {
+      raw.stages_run.push('opt','place','route');
+      raw.route = {wns:0.109,whs:0.033,error:0,critical:0};
+    }
+    const path = mode === 'legacy' ? '04_prj/rpt/flow_summary.json' : 'private/jobs/current/flow_summary.json';
+    const receipt = {tool_available:true,flow_ran:true,ok:true,blocking_items:[],critical:0,errors:0,
+      ...(mode === 'legacy' ? {summary_json:JSON.stringify(raw)} : {evidencePath:path,report:raw,exitCode:0})};
+    const action = async () => receipt;
+    action.supports = kind => kind === 'vivado';
+    const packets = [];
+    const run = await runWorkflow('hdl-coding-dag-workflow',args,{
+      agent:hdlDeepStubAgent({'p6b-vivado-check':()=>receipt}),workflowAction:mode === 'legacy' ? undefined : action,
+      workflowContext:packet => {packets.push(packet);return buildWorkflowContext(packet);},
+    });
+    assert(run.ok,'Vivado structured handoff failed: '+run.error?.message);
+    const handoffs = packets.filter(p=>p.required.synthesis);
+    assert(handoffs.length === 2,'expected report & independent verifier to receive synthesis');
+    for (const p of handoffs) {
+      const report = p.required.synthesis;
+      assert(report.top === raw.top && report.part === raw.part && report.ok === true &&
+        report.stages_run.join() === raw.stages_run.join() && report.synth.wns === raw.synth.wns &&
+        report.synth.whs === raw.synth.whs && report.synth.lut === raw.synth.lut,'synthesis report lost scope or metrics');
+      if (raw.route) assert(report.route?.wns === raw.route.wns && report.route?.whs === raw.route.whs,'route metrics replaced by synthesis');
+      assert(p.evidence.find(e=>e.id === 'synthesis')?.ref === path, 'wrong Vivado evidence locator');
+    }
+  }
+});
+
+test('HDL retry requires a changed input and abandons a twice disproved hypothesis', async () => {
+  for (const fixed of [true,false]) {
+    let runs = 0;
+    const action = async () => {
+      runs++;
+      const receipt = {gate_executed:true,verified:fixed && runs === 2,evidencePath:'logs/result.json',
+        inputSha256:String(runs).repeat(64),log_tail:'mismatch on first sample'};
+      return receipt.verified ? {...receipt,gate_ok:true,compared_points:2} :
+        {...receipt,gate_ok:false,compared_points:0,failureKind:'functional',failureSignature:'a'.repeat(64)};
+    };
+    action.supports = kind => kind === 'simulate';
+    const run = await runWorkflow('hdl-coding-dag-workflow',{modules:['demo'],confirmAllCheckpoints:true},{
+      workflowAction:action,workflowContext:buildWorkflowContext,
+      agent:hdlDeepStubAgent({'debug-*':()=>({hypothesis:'ready alignment',change:'change pipeline stage'})}),
+    });
+    assert(run.ok === fixed && runs === (fixed ? 2 : 3), 'retry did not converge: '+run.error?.message);
+    const debug = run.calls.find(c => c.opts.label === 'debug-demo-try1');
+    assert(debug?.opts.affinityKey === 'rtl-demo' && JSON.parse(debug.prompt).required.firstFailure === 'mismatch on first sample',
+      'repair owner lost the actionable discrepancy');
+    assert(fixed ? run.calls.some(c=>c.opts.label === 'final-verify-demo') : run.error.message.includes('repeated hypothesis'),
+      'missing independent verification or correction handoff');
+  }
 });
 
 test('hdl dag executor terminates on node failure instead of looping', async () => {

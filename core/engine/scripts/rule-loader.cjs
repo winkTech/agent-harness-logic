@@ -107,8 +107,9 @@ function parseFrontmatter(content) {
 
 function splitFrontmatterList(value) {
   if (!value || typeof value !== 'string') return [];
+  // 保留 ASCII 路径段中的 '/'（如 engineering-assets/cbb），仅切分分隔符或中英文混排斜杠
   return value
-    .split(/[;,，、|/]/)
+    .split(/[;,，、|]|(?<![A-Za-z0-9_.-])\/|\/(?![A-Za-z0-9_.-])/)
     .map(s => s.trim())
     .filter(Boolean);
 }
@@ -197,17 +198,18 @@ function matchRules(input, opts = {}) {
 
   // 规范化输入
   const normalizedInput = (input || '').toLowerCase();
-  const openFiles = (opts.openFiles || []).map(f => f.toLowerCase());
+  const normalizedCommand = String(opts.command || '').toLowerCase();
+  const openFiles = (opts.openFiles || []).map(f => f.replace(/\\/g, '/').toLowerCase());
   const toolNames = (opts.toolNames || []).map(t => t.toLowerCase());
 
   for (const rule of rules) {
     // 1. 检查 skip 条件 — 如果匹配 skip 则跳过
     //    skip 使用严格模式（无 char-seed 模糊匹配），防止过度排除
-    const skipMatch = matchTriggerPatterns(normalizedInput, rule.skips, openFiles, toolNames, true);
+    const skipMatch = matchTriggerPatterns(normalizedInput, rule.skips, openFiles, toolNames, true, '');
     if (skipMatch) continue;
 
     // 2. 检查 trigger 条件
-    const triggerMatch = matchTriggerPatterns(normalizedInput, rule.triggers, openFiles, toolNames, false);
+    const triggerMatch = matchTriggerPatterns(normalizedInput, rule.triggers, openFiles, toolNames, false, normalizedCommand);
     if (triggerMatch) {
       matches.push({
         file: rule.file,
@@ -240,8 +242,38 @@ function matchRules(input, opts = {}) {
  * @param {string[]} toolNames
  * @returns {{ type: string, term: string } | null}
  */
-function matchTriggerPatterns(input, patterns, openFiles, toolNames, strict) {
+const COMPOUND_STOP_TOKENS = new Set([
+  'the', 'and', 'for', 'with', 'from', 'into', 'when', 'phase', 'final', 'tracked', 'regex', 'shell',
+]);
+
+function matchCompoundAnchors(lowPattern, haystack, command, openFiles) {
+  if (!haystack || /^[\w./-]+$/.test(lowPattern)) return false;
+  if (/\bnode\s+-e\b/.test(lowPattern)) {
+    const hasNodeInline = /\bnode(?:\.exe)?\s+(?:-e|--eval)\b/.test(command || haystack);
+    const isComplex = /[\r\n\\`/$]|['"][^'"]*['"]/.test(command || haystack) || (command || '').length > 80;
+    if (hasNodeInline && isComplex) return true;
+  }
+  if (lowPattern.includes('readme') && openFiles.some(f => /(?:^|\/)readme\.md$/i.test(f))) {
+    return true;
+  }
+  const rawTokens = lowPattern.match(/[a-z0-9_]+(?:[-./][a-z0-9_]+)+|\b[a-z_][a-z0-9_]{3,}\b/g) || [];
+  const anchors = rawTokens.filter(t => !COMPOUND_STOP_TOKENS.has(t));
+  if (anchors.length === 0) return false;
+  // 高特异度复合标识符（含路径/连字符/点号或长方法名）任一命中即成立；短词（如 merge + main）需同句全部命中
+  const strong = anchors.filter(t => t.length >= 10 || (/[-./]/.test(t) && t.length >= 7));
+  if (strong.length > 0 && strong.every(t => haystack.includes(t))) return true;
+  if (strong.some(t => t.length >= 12 && haystack.includes(t))) return true;
+  if (anchors.length >= 2 && anchors.every(t => new RegExp(`\\b${t.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`).test(haystack))) {
+    return true;
+  }
+  return false;
+}
+
+function matchTriggerPatterns(input, patterns, openFiles, toolNames, strict, command = '') {
   if (!patterns || patterns.length === 0) return null;
+  const combinedHaystack = strict
+    ? input
+    : [input, command, ...openFiles].filter(Boolean).join('\n');
 
   for (const pattern of patterns) {
     if (!pattern) continue;
@@ -258,13 +290,27 @@ function matchTriggerPatterns(input, patterns, openFiles, toolNames, strict) {
 
     const lowPattern = pattern.toLowerCase();
 
-    // 关键词匹配用户输入
+    // 关键词匹配用户输入或（非 strict 时）当前命令/目标路径
     if (input && input.includes(lowPattern)) {
       return { type: 'keyword', term: pattern };
     }
 
     // 严格模式（skip 使用）— 只用关键词精确匹配，不进入模糊匹配
     if (strict) continue;
+
+    if (command && command.includes(lowPattern)) {
+      return { type: 'command', term: pattern };
+    }
+
+    if ((lowPattern.includes('/') || /\.[a-z0-9]{1,5}$/.test(lowPattern))
+        && !lowPattern.startsWith('.')
+        && openFiles.some(f => f.includes(lowPattern))) {
+      return { type: 'path', term: pattern };
+    }
+
+    if (matchCompoundAnchors(lowPattern, combinedHaystack, command, openFiles)) {
+      return { type: 'anchor', term: pattern };
+    }
 
     // 中文单字种子匹配：对于多字中文触发词（如"搜索"→匹配"搜一下"、"仿真报错"→匹配"仿真跑不通"）
     // 如果触发词中有≥2个中文字且输入中至少包含其中1个 → 匹配
@@ -399,7 +445,8 @@ function shouldIncludeRuleContents(opts = {}) {
 function evaluate(userMessage, opts = {}) {
   const openFiles = opts.openFiles || [];
   const toolNames = opts.toolNames || [];
-  const hasContextSignal = Boolean(userMessage) || openFiles.length > 0 || toolNames.length > 0;
+  const command = opts.command || '';
+  const hasContextSignal = Boolean(userMessage) || Boolean(command) || openFiles.length > 0 || toolNames.length > 0;
   if (!hasContextSignal && process.env.HARNESS_RULE_ALWAYS_LOAD !== '1') {
     return null;
   }
@@ -407,6 +454,7 @@ function evaluate(userMessage, opts = {}) {
   const matches = matchRules(userMessage, {
     openFiles,
     toolNames,
+    command,
   });
 
   if (matches.length === 0) {
@@ -582,19 +630,20 @@ function retrieveContext(payload = {}, deps = {}) {
   const eventName = payload.hook_event_name || '';
   const toolInput = toolInputOf(payload);
 
-  // UserPromptSubmit 是主路径; PreToolUse 时退化为按文件类型匹配。
+  // UserPromptSubmit 是主路径; PreToolUse 时同时消费文件范围与命令文本。
   const userMessage = payload.prompt
     || payload.user_prompt
     || process.env.HARNESS_USER_MESSAGE
     || '';
-  const openFiles = [toolInput.file_path, toolInput.notebook_path]
+  const command = String(toolInput.command || toolInput.CommandLine || payload.command || '').trim();
+  const openFiles = [toolInput.file_path, toolInput.Path, toolInput.notebook_path]
     .filter(Boolean)
     .concat(deps.openFiles || [])
     .concat((process.env.HARNESS_OPEN_FILES || '').split(',').filter(Boolean));
   const toolNames = [payload.tool_name || payload.tool?.name].filter(Boolean);
 
   const evaluateRules = deps.evaluate || evaluate;
-  const result = evaluateRules(userMessage, { openFiles, toolNames });
+  const result = evaluateRules(userMessage, { openFiles, toolNames, command });
   if (!result) return null;
 
   // evaluate() 有两种输出形态:

@@ -30,11 +30,17 @@ const PASS_MARKERS = [
   /** 项目自定义通过标记 — 编辑此数组添加 */
 ];
 
-// TAP/spec 输出中的测试名是描述文字。保留诊断行以及 reporter 自己的结果计数。
+// TAP/spec 及自定义汇总运行器中的通过用例标题是描述文字，不应因其包含 failure/fatal 等词而误判失败。
 function withoutTestTitles(text) {
-  if (!/^[ \t]*(?:TAP version \d+|[ℹ#] (?:tests|pass|fail) \d+)[ \t]*\r?$/m.test(text)) return text;
-  return text.replace(/^[ \t]*(?:# Subtest:|(ok \d+)\b|[✔▶﹣] )[^\r\n]*/gm,
-    (line, tapPass) => tapPass && !/[ \t]#[ \t]*(?:SKIP|TODO)\b/i.test(line) ? 'ok' : '');
+  let out = text;
+  if (/^[ \t]*(?:TAP version \d+|[ℹ#] (?:tests|pass|fail) \d+)[ \t]*\r?$/m.test(out)) {
+    out = out.replace(/^[ \t]*(?:# Subtest:|(ok \d+)\b|[✔▶﹣] )[^\r\n]*/gm,
+      (line, tapPass) => tapPass && !/[ \t]#[ \t]*(?:SKIP|TODO)\b/i.test(line) ? 'ok' : '');
+  }
+  if (/^[ \t]*Summary:\s*[1-9]\d*\/[1-9]\d*\s+passed,\s*0\s+failed\b/m.test(out)) {
+    out = out.replace(/^[ \t]{2,}[^\r\n]*?[ \t]+PASS[ \t]*(?:\r?$)/gm, 'PASS');
+  }
+  return out;
 }
 
 /** 输出里的失败标记。返回失败原因, 无失败标记返回 null。 */

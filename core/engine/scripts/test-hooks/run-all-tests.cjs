@@ -1056,6 +1056,52 @@ define('FPGATimingEvidence', 'scan mode exits nonzero when any timing report fai
   return { pass, detail: `exit=${result.status} statuses=${evidence.map(item => item.status).join(',')}` };
 });
 
+define('FPGATimingEvidence', 'Design Timing Summary setup/hold violations fail even when first intra-clock passes', () => {
+  const parser = path.join(HOME, 'packs/fpga/engine/fpga-timing-parser.cjs');
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'fpga-timing-global-dts-'));
+  const setupFailRpt = path.join(tmp, 'setup-fail-timing.rpt');
+  const holdFailRpt = path.join(tmp, 'hold-fail-timing.rpt');
+  fs.writeFileSync(setupFailRpt, [
+    '| Design Timing Summary',
+    '| ---------------------',
+    '    WNS(ns)      TNS(ns)  TNS Failing Endpoints  TNS Total Endpoints      WHS(ns)      THS(ns)  THS Failing Endpoints  THS Total Endpoints     WPWS(ns)     TPWS(ns)  TPWS Failing Endpoints  TPWS Total Endpoints',
+    '    -------      -------  ---------------------  -------------------      -------      -------  ---------------------  -------------------     --------     --------  ----------------------  --------------------',
+    '     -1.240      -18.600                     15                  120        0.110        0.000                      0                  120        2.500        0.000                       0                    60',
+    'Timing constraints are not met.',
+    '| Intra Clock Table',
+    'Clock             WNS(ns)      TNS(ns)  TNS Failing Endpoints  TNS Total Endpoints      WHS(ns)      THS(ns)  THS Failing Endpoints  THS Total Endpoints     WPWS(ns)     TPWS(ns)  TPWS Failing Endpoints  TPWS Total Endpoints',
+    'clk_fast            0.420        0.000                      0                   60        0.110        0.000                      0                   60        2.500        0.000                       0                    30',
+    'clk_slow           -1.240      -18.600                     15                   60        0.135        0.000                      0                   60        4.500        0.000                       0                    30',
+  ].join('\n'), 'utf8');
+  fs.writeFileSync(holdFailRpt, [
+    '| Design Timing Summary',
+    '| ---------------------',
+    '    WNS(ns)      TNS(ns)  TNS Failing Endpoints  TNS Total Endpoints      WHS(ns)      THS(ns)  THS Failing Endpoints  THS Total Endpoints     WPWS(ns)     TPWS(ns)  TPWS Failing Endpoints  TPWS Total Endpoints',
+    '    -------      -------  ---------------------  -------------------      -------      -------  ---------------------  -------------------     --------     --------  ----------------------  --------------------',
+    '      1.850        0.000                      0                   80       -0.315       -4.200                     12                   80        3.000        0.000                       0                    40',
+    'Timing constraints are not met.',
+    '| Intra Clock Table',
+    'Clock             WNS(ns)      TNS(ns)  TNS Failing Endpoints  TNS Total Endpoints      WHS(ns)      THS(ns)  THS Failing Endpoints  THS Total Endpoints     WPWS(ns)     TPWS(ns)  TPWS Failing Endpoints  TPWS Total Endpoints',
+    'clk_src             1.850        0.000                      0                   40        0.120        0.000                      0                   40        3.000        0.000                       0                    20',
+    '| Inter Clock Table',
+    'From Clock    To Clock          WNS(ns)      TNS(ns)  TNS Failing Endpoints  TNS Total Endpoints      WHS(ns)      THS(ns)  THS Failing Endpoints  THS Total Endpoints',
+    'clk_src       clk_dst             2.100        0.000                      0                   10       -0.315       -4.200                     12                   10',
+  ].join('\n'), 'utf8');
+  const r1 = spawnSync('node', [parser, setupFailRpt, '--json'], { cwd: tmp, encoding: 'utf8', timeout: 10000, windowsHide: true });
+  const r2 = spawnSync('node', [parser, holdFailRpt, '--json'], { cwd: tmp, encoding: 'utf8', timeout: 10000, windowsHide: true });
+  const ev1 = JSON.parse(r1.stdout);
+  const ev2 = JSON.parse(r2.stdout);
+  const pass = r1.status === 2
+    && ev1.status === 'failed'
+    && ev1.failure?.code === 'negative_setup_slack'
+    && ev1.timing?.setup?.wns === -1.24
+    && r2.status === 2
+    && ev2.status === 'failed'
+    && ev2.failure?.code === 'negative_hold_slack'
+    && ev2.timing?.hold?.whs === -0.315;
+  return { pass, detail: `r1=${r1.status}/${ev1.failure?.code} r2=${r2.status}/${ev2.failure?.code}` };
+});
+
 define('GateScope', 'requirements and verification quality gates prefer project-local state', () => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'gate-scope-'));
   try {
@@ -2468,6 +2514,10 @@ define('PainpointRegression', 'harness-painpoints.cjs 全部通过', () => {
 const AUDIT_REMEDIATION_CONTRACTS = [
   ['knowledge source and signoff retrieval', 'knowledge-answer.test.cjs', 60000],
   ['DAG cancellation', 'dag-cancellation.cjs', 30000],
+  ['workflow job ownership and reconnect', 'workflow-job.test.cjs', 60000],
+  ['workflow context and usage', 'workflow-context-contract.test.cjs', 30000],
+  ['HDL authorized tool actions', 'hdl-workflow-host.test.cjs', 60000],
+  ['HDL production workflow entry', 'run-hdl-workflow.test.cjs', 60000],
   ['controlled gate bypass', 'gate-bypass-contract.test.cjs', 30000],
   ['risk-adaptive policy', 'risk-policy-contract.cjs', 30000],
   ['golden protection contract', 'golden-protection-contract.test.cjs', 30000],

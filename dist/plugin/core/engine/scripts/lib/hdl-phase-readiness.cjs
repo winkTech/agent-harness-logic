@@ -124,18 +124,22 @@ function checkFixedPoint(root, modules, withBaseline, hardLimits = {}) {
   return { models: references, baseline, receiptSha256: digest.digest('hex') };
 }
 
-// Resolve local static dependencies of the module TB and checker. Additional search
-// paths and dynamically loaded inputs belong in the producer's hash manifest.
-function localTestSources(root, entrypoints) {
+// Resolve local static dependencies of the module TB, RTL, and checker. Additional
+// search paths and dynamically loaded inputs belong in the producer's hash manifest.
+function localTestSources(root, entrypoints, searchDirs = ['02_sim']) {
   const sources = new Set(entrypoints);
   const scanned = new Set();
   for (const name of sources) {
     const file = projectFile(root, name);
     if (!file || scanned.has(file)) continue;
     scanned.add(file);
+    const lower = name.toLowerCase();
+    const isPy = lower.endsWith('.py');
+    const isHdl = /\.(?:sv|svh|v|vh)$/.test(lower);
+    if (!isPy && !isHdl) continue;
     const content = fs.readFileSync(file, 'utf8');
     const candidates = [];
-    if (name.endsWith('.py')) {
+    if (isPy) {
       for (const match of content.matchAll(/^\s*(?:from\s+([\w.]+)\s+import\b|import\s+([^#;\r\n]+))/gm)) {
         const imports = match[1] ? [match[1]] : match[2].split(',').map(s => s.trim().split(/\s+/)[0]);
         for (const module of imports) {
@@ -147,14 +151,23 @@ function localTestSources(root, entrypoints) {
     } else {
       for (const match of content.matchAll(/^\s*`include\s+"([^"\r\n]+)"/gm)) candidates.push(match[1]);
     }
+    const baseDir = path.posix.dirname(name.replace(/\\/g, '/'));
     for (const relative of candidates) {
-      for (const dir of [path.posix.dirname(name), '02_sim']) {
-        const dependency = path.posix.join(dir, relative);
+      for (const dir of [baseDir, ...searchDirs]) {
+        const dependency = path.posix.normalize(dir === '.' ? relative : path.posix.join(dir, relative));
         if (projectFile(root, dependency)) sources.add(dependency);
       }
     }
   }
   return [...sources];
+}
+
+function expandLocalSources(root, entrypoints) {
+  const normalized = entrypoints.map(p => String(p).replace(/\\/g, '/'));
+  const parentDirs = normalized
+    .map(p => path.posix.dirname(path.posix.dirname(p)))
+    .filter(d => d && d !== '.');
+  return localTestSources(root, normalized, [...new Set([...parentDirs, '01_src/00_hdl', '02_sim', '08_py', '.'])]);
 }
 
 function checkVerification(root, mod, expectedModel) {
@@ -206,4 +219,4 @@ function checkVerification(root, mod, expectedModel) {
   return plan.interfaceContractSha256;
 }
 
-module.exports = { projectFile, checkFixedPoint, checkVerification };
+module.exports = { projectFile, checkFixedPoint, checkVerification, localTestSources, expandLocalSources };

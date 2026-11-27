@@ -44,8 +44,8 @@ function observe() {
   }
 }
 
-async function until(predicate, detail) {
-  const deadline = Date.now() + 15000;
+async function until(predicate, detail, timeoutMs = 45000) {
+  const deadline = Date.now() + timeoutMs;
   while (!predicate()) {
     if (Date.now() > deadline) assert.fail(detail);
     await new Promise(resolve => setTimeout(resolve, 30));

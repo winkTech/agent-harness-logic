@@ -340,12 +340,20 @@ function candidateSourceKey(pattern) {
   return `dream:${digest}`;
 }
 
+function isRawTelemetryCounter(pattern) {
+  const sig = String(pattern?.signal || '');
+  return sig.startsWith('tool_fail(') || sig.startsWith('transition:');
+}
+
 function writeCandidates(patterns, db, isDryRun) {
   const now = new Date();
   const dateStr = now.toISOString().slice(0, 10);
   let written = 0;
 
   for (const p of patterns) {
+    // 05-harness §6: 裸工具失败计数与相邻事件转移概率属于运行遥测，不写入长期记忆 facts；
+    // 仅保留含因果/纠正/跨会话错误指纹的候选。
+    if (isRawTelemetryCounter(p)) continue;
     // 高严重度始终写，中严重度需 count>=3，低严重度需 count>=5
     const shouldWrite = p.severity === 'high' ||
       (p.severity === 'medium' && p.count >= 3) ||

@@ -35,6 +35,30 @@ function findCli() {
   throw new Error('Install Codex CLI with npm.cmd install -g @openai/codex, then retry.');
 }
 
+function syncDirectoryInPlace(srcDir, dstDir) {
+  const { filesIn } = require(path.join(scripts, 'sync-plugin-dist.cjs'));
+  const srcFiles = filesIn(srcDir);
+  const dstFiles = fs.existsSync(dstDir) ? filesIn(dstDir) : new Map();
+  for (const [rel, oid] of srcFiles.entries()) {
+    if (dstFiles.get(rel) === oid) continue;
+    const target = path.join(dstDir, rel);
+    fs.mkdirSync(path.dirname(target), { recursive: true });
+    const tmp = `${target}.${process.pid}.tmp`;
+    fs.copyFileSync(path.join(srcDir, rel), tmp);
+    try {
+      fs.renameSync(tmp, target);
+    } catch {
+      fs.copyFileSync(tmp, target);
+      fs.rmSync(tmp, { force: true });
+    }
+  }
+  for (const rel of dstFiles.keys()) {
+    if (!srcFiles.has(rel)) {
+      fs.rmSync(path.join(dstDir, rel), { force: true });
+    }
+  }
+}
+
 function reinstallVersion({ cache, codexHome, version, pkg, install }) {
   const pluginHome = fs.realpathSync(path.join(codexHome, 'plugins'));
   const expected = path.join(pluginHome, 'cache', market, 'logical-paradox', version);
@@ -47,16 +71,27 @@ function reinstallVersion({ cache, codexHome, version, pkg, install }) {
   const stage = path.join(pluginHome, '.logical-paradox-refresh-' + version);
   fs.mkdirSync(stage); // Exclusive across concurrent recovery attempts. A retained directory contains recovery data.
   const previous = path.join(stage, 'previous');
+  let renamed = false;
   try {
-    fs.renameSync(cache, previous);
-    install();
+    try {
+      fs.renameSync(cache, previous);
+      renamed = true;
+    } catch (renameErr) {
+      if (!['EBUSY', 'EPERM', 'EACCES'].includes(renameErr?.code)) throw renameErr;
+      // Windows directory handle is held open by a live Codex session; stage backup and sync files in place.
+      fs.cpSync(cache, previous, { recursive: true });
+      syncDirectoryInPlace(pkg, cache);
+    }
+    if (renamed) install();
     if (differences(filesIn(pkg), filesIn(cache)).length) throw new Error('Native reinstall produced a different package');
   } catch (error) {
-    if (fs.existsSync(previous)) {
+    if (renamed && fs.existsSync(previous)) {
       if (fs.existsSync(cache)) throw new Error(error.message + '. Previous version retained at ' + previous);
       fs.renameSync(previous, cache);
+    } else if (!renamed && fs.existsSync(previous)) {
+      try { syncDirectoryInPlace(previous, cache); } catch { /* retain previous for manual inspection */ }
     }
-    fs.rmdirSync(stage);
+    fs.rmSync(stage, { recursive: true, force: true });
     throw error;
   }
   fs.rmSync(stage, { recursive: true, force: true });

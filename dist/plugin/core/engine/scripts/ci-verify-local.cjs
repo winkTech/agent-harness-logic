@@ -54,7 +54,7 @@ function run(label, cmd, args, opts = {}) {
   const ok = r.status === 0 && !r.error;
   console.log(`  ${ok ? '✅' : '❌'} ${label} (${secs}s)`);
   if (!ok) {
-    const tail = `${r.stderr || ''}\n${r.stdout || ''}`.trim().split('\n').slice(-12).join('\n');
+    const tail = `${r.stdout || ''}\n${r.stderr || ''}`.trim().split('\n').slice(-20).join('\n');
     console.log(`     └─ exit=${r.status} signal=${r.signal || 'none'} error=${r.error?.message || 'none'}\n${tail.split('\n').map((l) => `     ${l}`).join('\n')}`);
   }
   return ok;

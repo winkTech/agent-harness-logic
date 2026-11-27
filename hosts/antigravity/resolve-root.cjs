@@ -26,13 +26,22 @@ function hasEngine(dir) {
   }
 }
 
+function canonicalPath(dir) {
+  const resolved = path.resolve(dir);
+  try {
+    return fs.realpathSync.native(resolved);
+  } catch {
+    return resolved;
+  }
+}
+
 function readSourcePointer(pluginDir) {
   try {
     const pointerPath = path.join(pluginDir, '.source-root.json');
     if (!fs.existsSync(pointerPath)) return null;
     const parsed = JSON.parse(fs.readFileSync(pointerPath, 'utf8'));
     if (parsed && typeof parsed.sourceRoot === 'string' && parsed.sourceRoot.trim()) {
-      return path.resolve(parsed.sourceRoot.trim());
+      return canonicalPath(parsed.sourceRoot.trim());
     }
   } catch {
     // Ignore malformed pointer and fall through
@@ -43,17 +52,17 @@ function readSourcePointer(pluginDir) {
 function resolveHarnessRoot(pluginDir = __dirname) {
   if (process.env.HARNESS_ROOT && String(process.env.HARNESS_ROOT).trim()) {
     return {
-      root: path.resolve(String(process.env.HARNESS_ROOT).trim()),
+      root: canonicalPath(String(process.env.HARNESS_ROOT).trim()),
       mode: 'env',
     };
   }
   if (hasEngine(pluginDir)) {
     return {
-      root: path.resolve(pluginDir),
+      root: canonicalPath(pluginDir),
       mode: 'portable',
     };
   }
-  const repoCandidate = path.resolve(pluginDir, '..', '..');
+  const repoCandidate = canonicalPath(path.resolve(pluginDir, '..', '..'));
   if (hasEngine(repoCandidate)) {
     return {
       root: repoCandidate,
@@ -68,7 +77,7 @@ function resolveHarnessRoot(pluginDir = __dirname) {
     };
   }
   return {
-    root: path.resolve(path.join(os.homedir(), '.claude')),
+    root: canonicalPath(path.join(os.homedir(), '.claude')),
     mode: 'default',
   };
 }
